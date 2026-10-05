@@ -1,4 +1,4 @@
-// sw.js - Cascade Staff service worker v1.0 (2026-10-05)
+// sw.js - Cascade Staff service worker v1.1 (2026-10-05)
 // Copied from the cleaning checklist's v1.2 strategy and tightened for a staff app:
 //   Supabase (REST, RPC, Storage, Auth, Edge Functions), Telegram -> network-only, NEVER cached or replayed.
 //   Google Fonts files and the pinned supabase-js build (jsDelivr)   -> cache-first (public, no personal data).
@@ -6,13 +6,17 @@
 //   Same-origin shell files                                          -> network-first, cache fallback.
 // Nothing personal is ever stored here: the cache holds the shell (HTML, CSS, JS, fonts, icons) and nothing else.
 // A shell that loads offline says "Live information needs a connection"; guest names exist only in JS memory.
-const CACHE_NAME = 'cs-shell-v1';
+const CACHE_NAME = 'cs-shell-v2';
 const NAV_TIMEOUT_MS = 3000;
+// The self-hosted font files styles.css @font-face points at. Theme v2 changes fonts: edit this one list (and styles.css), nothing else here.
+const SELF_FONTS = ['cormorant-garamond-600.woff2', 'cormorant-garamond-700.woff2'];
+// Every icon the manifest and the pages name (the maskable one is what an Android home screen draws).
+const ICON_FILES = ['icon-192.png', 'icon-512.png', 'icon-512-maskable.png', 'apple-touch-icon-180.png'];
 const SHELL_URLS = [
-  './', './index.html', './styles.css', './app.js', './lib.js', './icons.js', './theme.js',
-  './quick/', './quick/index.html', './pay/', './pay/index.html', './pay/pay.js', './pay/pay-lib.js',
-  './fonts/cormorant-garamond-600.woff2', './fonts/cormorant-garamond-700.woff2',
-  './icons/icon-192.png', './icons/icon-512.png', './icons/apple-touch-icon-180.png'
+  './', './index.html', './styles.css', './app.js', './lib.js', './icons.js', './theme.js', './manifest.webmanifest',
+  './quick/', './quick/index.html', './pay/', './pay/index.html', './pay/pay.js', './pay/pay-lib.js', './pay/bank.html',
+  ...SELF_FONTS.map((f) => './fonts/' + f),
+  ...ICON_FILES.map((f) => './icons/' + f)
 ];
 const NETWORK_ONLY_HOSTS = ['supabase.co', 'supabase.in', 'api.telegram.org', 't.me'];
 const FONT_HOSTS = ['fonts.googleapis.com', 'fonts.gstatic.com', 'cdn.jsdelivr.net']; // public files only: fonts and the pinned supabase-js build

@@ -87,7 +87,9 @@
     return { lines: lines, text: lines.join('\n'), total: total };
   }
 
-  // One key per page load, reused on every retry, so a double tap or a bad signal never makes two requests.
+  // A key names ONE submission: it is kept across retries of a send that failed (so a double tap or a bad signal never makes two
+  // requests) and dropped once the server says ok, so the next request is a new submission, not a replay of the last. A changed
+  // selection is not a retry either, so it gets a new key. Receipt paths are not part of the selection (they upload under the key).
   function newKey(cryptoObj) {
     var c = cryptoObj || (typeof crypto !== 'undefined' ? crypto : null);
     if (c && c.randomUUID) return c.randomUUID();
@@ -97,8 +99,24 @@
     return h.slice(0, 8) + '-' + h.slice(8, 12) + '-' + h.slice(12, 16) + '-' + h.slice(16, 20) + '-' + h.slice(20);
   }
 
+  function keyKeeper(cryptoObj) {
+    var key = null, sig = null;
+    return {
+      forSelection: function (cands, sel) {
+        var c = chosen(cands, sel);
+        var s = JSON.stringify([c.sessions.map(function (x) { return [x.s.id, x.transport]; }), c.claims.map(function (x) { return x.id; }),
+          c.extras.map(function (x) { return [x.description, x.amount]; })]);
+        if (!key || s !== sig) { key = newKey(cryptoObj); sig = s; }
+        return key;
+      },
+      settle: function (res) { if (res && res.ok) { key = null; sig = null; } } // sent (or already sent): the key is spent
+    };
+  }
+
   // The words after a send (SPEC-37 7.A). ok -> {ok:true, refresh:false}; the two taken reasons ask for a refreshed list.
+  // replay:true means the server already had this submission: say "already sent" with the ORIGINAL ref, never a fresh success.
   function resultMessage(res) {
+    if (res && res.ok && res.replay) return { ok: true, replay: true, refresh: false, text: 'This request was already sent, so nothing new was made. Finance has it for ' + peso(res.total) + ' (Ref ' + String(res.ref || '').replace(/^CASCADE-/, '') + '). You will see it in OPS when it is paid.' };
     if (res && res.ok) return { ok: true, refresh: false, text: 'Sent. Finance has your request for ' + peso(res.total) + ' (Ref ' + String(res.ref || '').replace(/^CASCADE-/, '') + '). You will see it in OPS when it is paid.' };
     var r = (res && res.reason) || 'unknown';
     if (r === 'session_taken' || r === 'claim_taken') return { ok: false, refresh: true, text: 'One of these was already sent or paid. The list is refreshed - check and send again.' };
@@ -137,7 +155,7 @@
 
   return {
     peso: peso, plain: plain, dateLabel: dateLabel, shortDate: shortDate, typeLabel: typeLabel, parseExtra: parseExtra, sessionAmount: sessionAmount,
-    chosen: chosen, computeTotal: computeTotal, lineCount: lineCount, buildPayload: buildPayload, reviewBlock: reviewBlock, newKey: newKey,
+    chosen: chosen, computeTotal: computeTotal, lineCount: lineCount, buildPayload: buildPayload, reviewBlock: reviewBlock, newKey: newKey, keyKeeper: keyKeeper,
     resultMessage: resultMessage, requestStatus: requestStatus, fitSize: fitSize, BANK_APPS: BANK_APPS, listedBankApps: listedBankApps,
     bankIntentUrl: bankIntentUrl, MAX_EXTRA: MAX_EXTRA, MAX_LINES: MAX_LINES
   };

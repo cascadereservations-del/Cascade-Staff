@@ -51,7 +51,7 @@ The Staff app uses supabase-js's default storage key on the same origin as the d
 ## Run and test
 
 ```
-npm test                       # lib.js and pay-lib.js: 28 tests
+npm test                       # lib.js, pay-lib.js, service worker shell list and SRI: see tests/
 python -m http.server 8777     # then open http://localhost:8777/
 ```
 

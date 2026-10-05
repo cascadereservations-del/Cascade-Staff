@@ -112,3 +112,47 @@ test('bank page: no unverified app is listed or linked; a verified one builds th
   assert.ok(u.includes('S.browser_fallback_url=' + encodeURIComponent('https://play.google.com/store/apps/details?id=com.example.demo')));
   assert.ok(u.endsWith(';end'));
 });
+
+// ---- idempotency key lifecycle (audit item 2): a second request must never replay the first.
+test('key keeper: same key across retries of a failed send, new key after an ok', () => {
+  const sel = { sessions: { s1: { on: true, transport: false } }, claims: {}, extras: [] };
+  let n = 0; const kk = P.keyKeeper({ randomUUID: () => 'k' + (++n) });
+  const first = kk.forSelection(cands, sel);
+  kk.settle({ ok: false, reason: 'offline' });
+  assert.equal(kk.forSelection(cands, sel), first, 'a failed send is retried under the same key');
+  kk.settle({ ok: false, reason: 'card_failed' });
+  assert.equal(kk.forSelection(cands, sel), first);
+  kk.settle({ ok: true, ref: 'CASCADE-AAAA1111', total: 500 });
+  const second = kk.forSelection(cands, sel);
+  assert.notEqual(second, first, 'the next request is a new submission, never a replay of the last');
+  assert.equal(kk.forSelection(cands, sel), second, 'and it is kept for its own retries');
+});
+
+test('key keeper: a replay result also spends the key; a changed selection is not a retry', () => {
+  let n = 0; const kk = P.keyKeeper({ randomUUID: () => 'k' + (++n) });
+  const a = { sessions: { s1: { on: true, transport: false } }, claims: {}, extras: [] };
+  const k1 = kk.forSelection(cands, a);
+  kk.settle({ ok: true, replay: true, ref: 'CASCADE-AAAA1111', total: 500 });
+  assert.notEqual(kk.forSelection(cands, a), k1);
+  const k2 = kk.forSelection(cands, a);
+  const b = { sessions: { s1: { on: true, transport: true } }, claims: {}, extras: [] };
+  assert.notEqual(kk.forSelection(cands, b), k2, 'transport toggled after a failed send: different request, different key');
+  const withReceipt = { sessions: { s1: { on: true, transport: true } }, claims: {}, extras: [{ description: 'Trash bags', amount: 120 }] };
+  const k3 = kk.forSelection(cands, withReceipt);
+  withReceipt.extras[0].receipt_path = 'abc/def.jpg'; // an upload finishing must not change the key
+  assert.equal(kk.forSelection(cands, withReceipt), k3);
+});
+
+test('replay:true is "already sent" with the original ref, not a new success', () => {
+  const m = P.resultMessage({ ok: true, replay: true, ref: 'CASCADE-ORIG1234', total: 1340 });
+  assert.equal(m.ok, true); assert.equal(m.replay, true); assert.equal(m.refresh, false);
+  assert.match(m.text, /already sent/); assert.match(m.text, /\(Ref ORIG1234\)/); assert.match(m.text, /₱1,340/);
+  assert.doesNotMatch(m.text, /^Sent\./);
+  assert.equal(P.resultMessage({ ok: true, ref: 'CASCADE-NEW00001', total: 40 }).replay, undefined);
+});
+
+test('pay.js sends under the keeper key and never holds a page-long KEY', async () => {
+  const fs = await import('node:fs'); const src = fs.readFileSync(new URL('../pay/pay.js', import.meta.url), 'utf8');
+  assert.doesNotMatch(src, /\bKEY\b/); assert.match(src, /K\.forSelection/); assert.match(src, /K\.settle/);
+  assert.match(src, /'x-cascade-submission-id': key/);
+});

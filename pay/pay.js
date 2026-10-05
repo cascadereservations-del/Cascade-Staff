@@ -10,8 +10,8 @@
   if (!window.supabase) { root.innerHTML = shell('Payment Request', '<div class="errbox">' + ICON('alert') + '<span>Live information needs a connection. Open the app again when you have signal.</span></div>'); return; }
   var sb = window.supabase.createClient(CFG.url, CFG.key, { auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: false } });
 
-  // One key per page load, reused on every retry (a double tap or a bad signal never makes two requests).
-  var KEY = P.newKey();
+  // One key per submission: kept across retries of a failed send, renewed after an ok (see CSPay.keyKeeper).
+  var K = P.keyKeeper();
   var S = { step: 'pick', cands: null, sel: null, err: '', note: '', sending: false, draftOpen: false, askedOnce: false, askOpen: false, draft: { description: '', amount: '', file: null }, result: null, loadErr: '' };
 
   function shell(title, inner, back) {
@@ -141,10 +141,10 @@
       return new Promise(function (res, rej) { cv.toBlob(function (b) { b ? res(b) : rej(new Error('blob')); }, 'image/jpeg', 0.82); });
     });
   }
-  function upload(extra, token) {
+  function upload(extra, token, key) {
     if (!extra.file || extra.receipt_path) return Promise.resolve(true);
     return toJpeg(extra.file).then(function (blob) {
-      return fetch(CFG.url + '/functions/v1/upload-photo', { method: 'POST', headers: { Authorization: 'Bearer ' + token, apikey: CFG.key, 'Content-Type': 'image/jpeg', 'x-cascade-file-name': 'receipt.jpg', 'x-cascade-property-id': CFG.propertyId, 'x-cascade-submission-id': KEY }, body: blob });
+      return fetch(CFG.url + '/functions/v1/upload-photo', { method: 'POST', headers: { Authorization: 'Bearer ' + token, apikey: CFG.key, 'Content-Type': 'image/jpeg', 'x-cascade-file-name': 'receipt.jpg', 'x-cascade-property-id': CFG.propertyId, 'x-cascade-submission-id': key }, body: blob });
     }).then(function (r) { return r.json(); }).then(function (j) { if (!j || !j.ok || !j.path) throw new Error('upload'); extra.receipt_path = j.path; return true; }).catch(function () { return false; });
   }
   function send() {
@@ -153,15 +153,15 @@
     S.sending = true; S.err = ''; S.askOpen = false; renderReview();
     sb.auth.getSession().then(function (s) {
       var token = s.data && s.data.session && s.data.session.access_token; if (!token) throw new Error('signin');
-      var failed = [];
-      return Promise.all(S.sel.extras.map(function (e) { return upload(e, token).then(function (ok) { if (!ok) failed.push(e.description); }); })).then(function () {
-        var body = P.buildPayload(S.cands, S.sel, KEY);
+      var failed = [], key = K.forSelection(S.cands, S.sel);
+      return Promise.all(S.sel.extras.map(function (e) { return upload(e, token, key).then(function (ok) { if (!ok) failed.push(e.description); }); })).then(function () {
+        var body = P.buildPayload(S.cands, S.sel, key);
         return fetch(CFG.url + '/functions/v1/notify-cleaner-payment', { method: 'POST', headers: { Authorization: 'Bearer ' + token, apikey: CFG.key, 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
           .then(function (r) { return r.json().catch(function () { return { ok: false, reason: 'http_' + r.status }; }); })
           .then(function (j) { return { j: j, failed: failed }; });
       });
     }).catch(function () { return { j: { ok: false, reason: 'offline' }, failed: [] }; }).then(function (o) {
-      S.sending = false; var m = P.resultMessage(o.j);
+      S.sending = false; var m = P.resultMessage(o.j); K.settle(o.j);
       if (m.ok) { S.result = m; S.note = o.failed.length ? 'The receipt photo for ' + o.failed.join(', ') + ' did not upload; tell Finance.' : ''; S.sel.extras = []; S.askedOnce = false; return load().then(function () { go('status'); }); }
       if (m.refresh) return load().then(function () { S.step = 'pick'; S.err = ''; render(); renderPickNotice(m.text); });
       S.err = m.text;
