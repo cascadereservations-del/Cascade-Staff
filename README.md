@@ -1,6 +1,6 @@
 # Cascade Staff
 
-The installable staff app for Cascade Hideaway, and the official mobile admin side (D-299.3). Static files on GitHub Pages, no build step, no framework. Sign in once per phone with the Supabase Auth staff account; the role decides the layout.
+The installable staff app for Cascade Hideaway, and the official mobile admin side (D-299.3). Static files on GitHub Pages, no build step, no framework. Pick your name, enter your PIN (or password) once per phone; the role decides the layout.
 
 Specs: SPEC-36 (gateway, calendar info), SPEC-37 sections 4-7 (Payment Request pages), decisions D-296 to D-300, theme DESIGN-cascade-ui-theme-2026-10-05. All in the Obsidian vault, `20-projects/cascade-hideaway/`.
 
@@ -10,7 +10,7 @@ Specs: SPEC-36 (gateway, calendar info), SPEC-37 sections 4-7 (Payment Request p
 |---|---|
 | `index.html`, `app.js` | Sign in, staff home, admin home, Guest Calendar Info (with the guest card), More. Hash routes `#home`, `#calendar`, `#calendar/house`, `#more`. |
 | `lib.js` | Pure helpers (login rules, roles, `assertNoMoney`, Manila dates, month grid, notes, warnings). Browser global `CS`, Node `require`. |
-| `styles.css`, `theme.js`, `icons.js` | The theme sheet applied verbatim (light and dark), Lucide icons inline. |
+| `styles.css`, `theme.js`, `icons.js` | Theme v2 (DESIGN section 8, D-303.1): deep bronze action colour, Raleway / Cormorant Garamond / Style Script, token sheet 8.2 verbatim (light and dark), Lucide icons inline. |
 | `quick/index.html` | The Quick guide: how the team uses Cassy in the Telegram OPS and Finance groups. |
 | `pay/index.html`, `pay/pay.js`, `pay/pay-lib.js` | Payment Request: pick cleans (per-clean transport toggle), expenses with an optional receipt photo, review in Honey's format, status. |
 | `pay/bank.html` | Opens a bank app. Lists only apps whose ids are verified (none yet, so none is offered). |
@@ -25,9 +25,18 @@ Admin home (D-300.6): greeting, a compact Today card with the Returning pill, th
 Staff home: Today card, warnings line, Cleaning checklist, Guest Calendar Info, Cassy, the centred Quick guide button with its one-line sub-context, Cascade Manual, Payment Request. Titles and sub-titles sit on separate lines (D-300.7).
 The other admin screens (bookings, finance, pricing) are wave 2; the Admin dashboard row opens the existing dashboard at `#/today`.
 
-## Sign-in rules
+## Sign-in (D-303.2, D-303.3)
 
-Same as the cleaning checklist and the dashboard: a name becomes `<slug>@staff.cascade.invalid`; four digits get the `8888` prefix; an e-mail is used as typed and its password is sent as typed (owners and admins with a mailbox). Errors never say which part failed.
+Everything on the screen is centred. The name is picked from a dropdown filled by the anon RPC `staff_signin_list_v1()` (active, non-disabled accounts only: `label`, `handle`, `kind`; no roles, no ids). After the pick:
+
+- **PIN account** (`kind = pin`, the handle ends `@staff.cascade.invalid`): a keypad with big digit buttons, four dots and a backspace. The fourth digit signs in. The password sent is `8888` + the four digits, exactly what the cleaning checklist sends.
+- **Password account** (`kind = password`, an owner or admin with a mailbox): a password field and a Sign in button; the password is sent as typed.
+
+The last name picked is remembered in `localStorage` (`cs_last_signin`, guarded by try/catch) and preselected next time. "Ask Lloyd for access" stays on the screen. Errors never say which part failed.
+
+If the list cannot be loaded (offline, or the release is not applied yet) the screen falls back to a typed name or e-mail, the old way, so nobody is locked out.
+
+**Trust this device** (default ON): ON keeps the Supabase session in `localStorage` under supabase-js's default key, so the admin dashboard on the same origin shares it. OFF keeps it in `sessionStorage` only (gone when the browser session ends). One storage adapter (`CS.authStorage`) does both; the key never changes. A reload reads the choice back from where the session is saved.
 
 ## No guest money on this app
 
@@ -37,7 +46,13 @@ Same as the cleaning checklist and the dashboard: a name becomes `<slug>@staff.c
 
 The photo of the guest in the house and the guest arriving next shows right on the guest card. It lives in the private `guest-id-photos` bucket; a storage policy lets a staff session read only that one object (maintenance never). The app signs a 5-minute URL with the user's own session, fetches it with `no-store`, shows it from memory, and offers no download link. Nothing is written to storage or the service worker cache.
 
-## How far single sign-on goes
+## How far single sign-on goes (D-304)
+
+Every door that lives on this origin (the admin dashboard, the cleaning checklist, the Operations Manual) now opens **inside the app**: a full-screen same-origin frame with a thin bar (title and Back) at `#door/<key>`, not a new tab. iPhone Home Screen apps and Android therefore share one storage partition, which is what makes one sign-in possible. A door on another origin, if one is ever added, still opens externally (`CS.doorTarget`). The inventory app (`CH_Inventory`) has no entry in this app yet; when it gets one it is a one-line `DOORS` entry.
+
+**Doors that still ask for their own sign-in today** (converting them is a follow-up, D-304.2): the cleaning checklist (own token store `ch_staff_session_v1` and a device PIN), the Operations Manual (its own PIN map, remembered 30 days), and any door while **Trust this device** is OFF (the session is then in `sessionStorage`; a door only sees it once it reads through the same `CS.authStorage` adapter). The admin dashboard reads supabase-js's default `localStorage` key, so it is already signed in when the box is ON. Whether the checklist and the dashboard render correctly inside a frame is not yet checked on a phone.
+
+The table below was written before the frame: its "Door" links now open in the frame, and its sign-in column is still accurate.
 
 | Door | URL | Its login | SSO from the gateway |
 |---|---|---|---|
@@ -57,7 +72,7 @@ python -m http.server 8777     # then open http://localhost:8777/
 
 ## Deploy (Lloyd's, never the agent's)
 
-1. Apply the `staff_home_v1_20261005` release in stay-site first (the home screen calls `staff_home_v1`; and the Payment Request release for `staff_pay_candidates_v1` and `notify-cleaner-payment`).
+1. Apply the `staff_signin_list_20261005` release (the sign-in name list) and the `staff_home_v1_20261005` release in stay-site first (the home screen calls `staff_home_v1`; and the Payment Request release for `staff_pay_candidates_v1` and `notify-cleaner-payment`).
 2. Create `cascadereservations-del/Cascade-Staff`, push `main`, Pages from `main` `/`. The manifest `scope` and `start_url` assume `/Cascade-Staff/`.
 3. Open it on a phone, sign in, install.
 

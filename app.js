@@ -1,5 +1,5 @@
 /* Cascade Staff - staff app and the official mobile admin side (SPEC-36, D-299.3, D-300). One page, hash routes:
-   #signin, #home, #calendar (or #calendar/house to scroll to the guest card), #more.
+   #signin, #home, #calendar (or #calendar/house to scroll to the guest card), #more, #door/<key> (a same-origin door in a frame, D-304).
    Guest names, notes and ID photos live in memory for the open session only. Nothing personal is written to storage. */
 (function () {
   'use strict';
@@ -15,7 +15,7 @@
     url: 'https://qkgfhsdppslwunarczeq.supabase.co',
     key: 'sb_publishable_JFuRYZ9csmQULcMRmHXDSg_Abo9UeCj',
     propertyId: '6ae230f4-c189-4547-84b1-cb6e0b2cc9bd',
-    version: '2.0.0'
+    version: '2.1.0'
   };
   var LINKS = {
     checklist: 'https://cascadereservations-del.github.io/CH-Cleaners-Checklist/',
@@ -26,17 +26,29 @@
     tgFinance: 'https://t.me/c/3819352746',
     pay: './pay/'
   };
+  // Doors (D-304.3): a door on this origin opens inside the app in a full-screen frame (one storage partition on iPhone Home Screen and
+  // Android alike); a door on another origin would open externally. The frame is addressed by key, never by a URL in the hash.
+  var DOORS = {
+    checklist: { title: 'Cleaning checklist', url: LINKS.checklist },
+    dashboard: { title: 'Admin dashboard', url: LINKS.dashboard },
+    manual: { title: 'Cascade Manual', url: LINKS.manual }
+  };
 
   // supabase-js default storage key on purpose: the dashboard on this origin is then signed in too (SPEC-36 section 5).
-  var sb = window.supabase.createClient(CFG.url, CFG.key, { auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: false } });
+  // "Trust this device" (D-303.3): ON keeps the session in localStorage, OFF in sessionStorage only (CS.authStorage picks, key unchanged).
+  function store(name) { try { return window[name]; } catch (e) { return null; } }
+  var trustOn = CS.trustedFromStorage(store('localStorage'), store('sessionStorage'));
+  var sb = window.supabase.createClient(CFG.url, CFG.key, { auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: false,
+    storage: CS.authStorage(store('localStorage'), store('sessionStorage'), function () { return trustOn; }) } });
 
   var state = { access: null, user: null, name: '', layout: null, payload: null, loadedAt: 0, loading: false, error: '', month: null, cassyOpen: true, payHint: null, photos: {} };
   var $ = function (id) { return document.getElementById(id); };
-  var VIEWS = ['signin', 'home', 'calendar', 'more'];
+  var VIEWS = ['signin', 'home', 'calendar', 'more', 'door'];
 
   // ---------------------------------------------------------------- helpers
   function ext(href, inner, cls, extra) { return '<a class="' + (cls || '') + '" href="' + esc(href) + '" target="_blank" rel="noopener"' + (extra || '') + '>' + inner + '</a>'; }
   function row(opts) { // title and sub-title always on separate lines (D-300.7)
+    if (opts.door) { var dl = CS.doorLink(opts.door, DOORS[opts.door].url, location.origin); opts.href = dl.href; opts.external = dl.external; }
     var inner = '<span class="lead">' + ICON(opts.icon) + '</span><span class="mid"><span class="t">' + esc(opts.title) + '</span><span class="s"' + (opts.subId ? ' id="' + opts.subId + '"' : '') + '>' + esc(opts.sub || '') + '</span></span>' +
       (opts.count ? '<span class="count" aria-label="' + esc(opts.count + ' warnings') + '">' + esc(opts.count) + '</span>' : '') +
       '<span class="chev">' + ICON(opts.external ? 'ext' : 'chev', opts.external ? 's16' : '') + '</span>';
@@ -54,7 +66,7 @@
   }
   function setView(name) {
     VIEWS.forEach(function (v) { $('v-' + v).classList.toggle('on', v === name); });
-    $('tabbar').hidden = name === 'signin' || !state.layout;
+    $('tabbar').hidden = name === 'signin' || name === 'door' || !state.layout;
   }
   function warnCount() { return state.payload ? (state.payload.warnings || []).length : 0; }
   function errBanner() {
@@ -101,7 +113,7 @@
     var w = CS.weatherLine(state.payload.weather, state.payload.today);
     var line = w || CS.dayLong(state.payload.today);
     var stale = state.payload.weather && state.payload.weather.fetched_at && CS.weatherStale(state.payload.weather) ? ' · as of ' + CS.clockLabel(state.payload.weather.fetched_at) : '';
-    return '<div class="greet"><h1 class="dxl">' + esc(CS.greeting() + ', ' + state.name) + '</h1><div class="cap" style="margin-top:4px">' + esc(line + stale) + '</div></div>';
+    return '<div class="greet"><h1 class="dxl"><span class="script">' + esc(CS.greeting() + ',') + '</span> ' + esc(state.name) + '</h1><div class="cap" style="margin-top:4px">' + esc(line + stale) + '</div></div>';
   }
   function footerLine() { return '<div class="help" style="text-align:center;margin-top:16px">v' + CFG.version + ' · <button class="btn btn-ghost btn-sm" type="button" data-act="signout" style="height:28px;padding:0 6px">Sign out</button></div>'; }
 
@@ -112,22 +124,22 @@
     var doors;
     if (staff) {
       doors = '<nav class="card list" aria-label="Staff">' +
-        row({ icon: 'clip', title: 'Cleaning checklist', sub: 'Start or continue today’s turnover', href: LINKS.checklist, external: true }) +
+        row({ icon: 'clip', title: 'Cleaning checklist', sub: 'Start or continue today’s turnover', door: 'checklist' }) +
         row({ icon: 'calendar', title: 'Guest Calendar Info', sub: 'Who is staying, who is next, warnings', href: '#calendar', count: n || '' }) +
         row({ icon: 'chat', title: 'Cassy · Telegram OPS', sub: 'Report, ask, log an expense', href: LINKS.tgOps, external: true }) +
         '<div class="subrow"><a class="btn btn-secondary btn-sm" href="' + LINKS.quick + '">' + ICON('book', 's16') + 'Quick guide</a>' +
         '<span class="help">Two minutes on telling Cassy what happened, asking her anything, and logging what you spent.</span></div>' +
-        row({ icon: 'book', title: 'Cascade Manual', sub: 'How we do things', href: LINKS.manual, external: true }) +
+        row({ icon: 'book', title: 'Cascade Manual', sub: 'How we do things', door: 'manual' }) +
         (LINKS.pay ? row({ icon: 'cash', title: 'Payment Request', sub: state.payHint || 'Ask for your cleaning pay', href: LINKS.pay, subId: 'pay-sub' }) : '') + '</nav>';
     } else {
       doors = '<nav class="card list" aria-label="Admin">' +
-        row({ icon: 'dash', title: 'Admin dashboard', sub: 'Today, bookings, money, operations', href: LINKS.dashboard, external: true }) +
+        row({ icon: 'dash', title: 'Admin dashboard', sub: 'Today, bookings, money, operations', door: 'dashboard' }) +
         row({ icon: 'calendar', title: 'Guest Calendar Info', sub: 'Stays, blocked nights, warnings', href: '#calendar', count: n || '' }) +
         '<button class="rowi" type="button" data-act="cassy" aria-expanded="' + state.cassyOpen + '"><span class="lead">' + ICON('chat') + '</span><span class="mid"><span class="t">Cassy</span><span class="s">Open in Telegram</span></span><span class="chev turn">' + ICON('chev') + '</span></button>' +
         '<div class="submenu" id="cassy-sub"' + (state.cassyOpen ? '' : ' hidden') + '><span class="cap">Open in Telegram</span>' +
         ext(LINKS.tgFinance, ICON('wallet', 's16') + 'Finance', 'chip') + ext(LINKS.tgOps, ICON('wrench', 's16') + 'OPS', 'chip') +
         '<a class="chip" href="' + LINKS.quick + '">' + ICON('book', 's16') + 'Quick guide</a></div>' +
-        row({ icon: 'book', title: 'Cascade Manual', sub: 'Operations manual', href: LINKS.manual, external: true }) + '</nav>';
+        row({ icon: 'book', title: 'Cascade Manual', sub: 'Operations manual', door: 'manual' }) + '</nav>';
     }
     el.innerHTML = appbar({ brand: true, refresh: true }) + '<div class="screen">' + errBanner() + greetBlock() +
       '<div class="stack">' + todayCard(staff) + warnLine() + doors + '</div>' + footerLine() + '</div>';
@@ -257,7 +269,7 @@
     var chip = function (v, t) { return '<button class="chip" type="button" data-theme="' + v + '"' + (theme === v ? ' style="border-color:var(--primary);color:var(--primary)" aria-pressed="true"' : ' aria-pressed="false"') + '>' + t + '</button>'; };
     $('v-more').innerHTML = appbar({ title: 'More' }) + '<div class="screen"><div class="stack">' +
       '<div class="card list">' + row({ icon: 'book', title: 'Quick guide', sub: 'How to use Cassy in Telegram', href: LINKS.quick }) +
-      (staff ? '' : row({ icon: 'wallet', title: 'Cassy · Telegram Finance', sub: 'Open in Telegram', href: LINKS.tgFinance, external: true })) + row({ icon: 'book', title: 'Cascade Manual', sub: 'How we do things', href: LINKS.manual, external: true }) + '</div>' +
+      (staff ? '' : row({ icon: 'wallet', title: 'Cassy · Telegram Finance', sub: 'Open in Telegram', href: LINKS.tgFinance, external: true })) + row({ icon: 'book', title: 'Cascade Manual', sub: 'How we do things', door: 'manual' }) + '</div>' +
       '<div class="card"><h2 class="hd">Appearance</h2><div class="row-wrap" style="margin-top:10px">' + chip('auto', 'Automatic') + chip('light', 'Light') + chip('dark', 'Dark') + '</div></div>' +
       '<div class="card" id="install-card" hidden><h2 class="hd">Install the app</h2><p class="sub" style="margin-top:6px">Put Cascade Staff on your Home Screen.</p><button class="btn btn-secondary" id="install-btn" type="button" style="margin-top:10px">' + ICON('plus', 's16') + 'Install</button></div>' +
       '<div class="card"><h2 class="hd">Signed in as ' + esc(state.name) + '</h2><p class="sub" style="margin-top:4px">' + esc(state.access ? state.access.role : '') + '</p><button class="btn btn-secondary" type="button" data-act="signout" style="margin-top:10px">' + ICON('logout', 's16') + 'Sign out</button>' +
@@ -278,9 +290,10 @@
     return sb.auth.signOut().catch(function () {}).then(function () { showSignin(msg); });
   }
   function showSignin(msg) {
-    setView('signin'); history.replaceState(null, '', '#signin');
+    leaveDoor(); setView('signin'); history.replaceState(null, '', '#signin');
     var e = $('si-err'); e.hidden = !msg; e.innerHTML = msg ? ICON('alert') + '<span>' + esc(msg) + '</span>' : '';
-    $('si-pin').value = '';
+    si.pin = ''; $('si-pass').value = ''; drawDots(msg);
+    if (!si.loaded) { si.loaded = true; loadSigninList(); }
   }
   function loadHome(opts) {
     opts = opts || {};
@@ -331,15 +344,27 @@
     var h = (location.hash || '').replace(/^#/, ''), parts = h.split('/'), v = parts[0] || 'home';
     if (!state.layout) return;
     if (VIEWS.indexOf(v) < 0 || v === 'signin') v = 'home';
-    render(v);
+    if (v === 'door' && !DOORS[parts[1]]) v = 'home';
+    if (v === 'door') { doorKey = parts[1]; render('door'); window.scrollTo(0, 0); return; }
+    leaveDoor(); render(v);
     var t = parts[1] && $(parts[1]); if (t) t.scrollIntoView({ block: 'start' }); else window.scrollTo(0, 0);
   }
-  var current = 'home';
+  var current = 'home', doorKey = '';
   function render(v) {
     v = v || current; current = v;
-    setView(v); renderTabs(v);
+    setView(v);
+    if (v === 'door') { renderDoor(); return; }
+    renderTabs(v);
     if (v === 'home') renderHome(); else if (v === 'calendar') renderCalendar(); else if (v === 'more') renderMore();
   }
+  // A door opens in the frame once per visit; coming back to the same door (a re-render) keeps the page where it is.
+  function renderDoor() {
+    var d = DOORS[doorKey], f = $('door-frame'); if (!d) return;
+    $('door-title').textContent = d.title; f.title = d.title;
+    $('door-back').innerHTML = ICON('back', 's24') + 'Back';
+    if (f.getAttribute('data-door') !== doorKey) { f.setAttribute('data-door', doorKey); f.src = d.url; }
+  }
+  function leaveDoor() { var f = $('door-frame'); if (f && f.getAttribute('data-door')) { f.removeAttribute('data-door'); f.src = 'about:blank'; } }
   function enter() {
     state.layout = CS.layoutForRole(state.access.role);
     state.name = CS.deriveDisplayName(state.user);
@@ -360,22 +385,79 @@
   }
 
   // ---------------------------------------------------------------- events
+  // ---- sign-in screen (D-303.2, D-303.3): name dropdown from staff_signin_list_v1, then a PIN keypad or a password field ----
+  var si = { list: [], entry: null, pin: '', busy: false, typed: false, loaded: false };
+  var PAD = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '', '0', 'back'];
+  $('si-pad').innerHTML = PAD.map(function (k) {
+    if (!k) return '<span class="gap" aria-hidden="true"></span>';
+    return k === 'back' ? '<button type="button" class="fn" data-key="back" aria-label="Delete the last digit">' + ICON('backspace', 's24') + '</button>'
+      : '<button type="button" data-key="' + k + '">' + k + '</button>';
+  }).join('');
   $('si-lock').innerHTML = ICON('lock').replace('class="i"', 'class="i" style="color:var(--fg-3)"');
-  $('signin-form').addEventListener('submit', function (ev) {
-    ev.preventDefault();
-    var name = $('si-name').value, pin = $('si-pin').value, btn = $('si-go');
-    if (!name.trim() || !pin) { showSignin('Type your name and PIN.'); return; }
-    btn.disabled = true;
-    sb.auth.signInWithPassword({ email: CS.staffLoginEmail(name), password: CS.staffAuthPassword(pin) }).then(function (r) {
-      if (r.error) { var offline = /fetch|network/i.test(r.error.message || '') || r.error.status === 0; showSignin(offline ? 'No connection.' : 'That name or PIN is not right.'); return; }
+  function drawDots(bad) {
+    var d = $('si-dots'); d.setAttribute('aria-label', 'PIN, ' + si.pin.length + ' of 4 digits');
+    Array.prototype.forEach.call(d.children, function (dot, i) { dot.className = i < si.pin.length ? 'on' : ''; });
+    d.classList.remove('bad'); if (bad && si.entry && si.entry.kind === 'pin') { void d.offsetWidth; d.classList.add('bad'); }
+  }
+  function setEntry(entry) {
+    si.entry = entry; si.pin = ''; $('si-pass').value = '';
+    var pin = !!entry && entry.kind === 'pin', pw = !!entry && entry.kind === 'password';
+    $('si-pinbox').hidden = !pin; $('si-passbox').hidden = !pw; $('si-go').hidden = !pw;
+    $('si-pinlbl').textContent = entry && entry.label && !si.typed ? 'PIN for ' + entry.label : 'Your PIN';
+    var e = $('si-err'); e.hidden = true; drawDots();
+    if (pw && !si.typed) $('si-pass').focus();
+  }
+  function fillPicker() {
+    var sel = $('si-who');
+    $('si-pick').hidden = si.typed; $('si-typedbox').hidden = !si.typed;
+    if (si.typed) { setEntry(CS.typedEntry($('si-typed').value)); return; }
+    sel.innerHTML = '<option value="">Choose your name</option>' + si.list.map(function (r) { return '<option value="' + esc(r.handle) + '">' + esc(r.label) + '</option>'; }).join('');
+    sel.disabled = false;
+    var last = CS.recalledName(store('localStorage'), si.list);
+    if (last) { sel.value = last; setEntry(si.list.filter(function (r) { return r.handle === last; })[0]); } else setEntry(null);
+  }
+  function loadSigninList() {
+    return sb.rpc('staff_signin_list_v1').then(function (r) {
+      if (r.error) throw r.error;
+      var list = CS.signinList(r.data); if (!list.length) throw new Error('empty');
+      si.list = list; si.typed = false;
+    }).catch(function () { si.list = []; si.typed = true; si.loaded = false; }).then(fillPicker);
+  }
+  function submitSignin() {
+    if (si.busy) return;
+    var entry = si.entry, cred = CS.signinCredentials(entry, entry && entry.kind === 'pin' ? si.pin : $('si-pass').value);
+    if (!cred) { showSignin(!entry ? 'Choose your name first.' : entry.kind === 'pin' ? 'Enter your 4-digit PIN.' : 'Type your password.'); return; }
+    si.busy = true; $('si-go').disabled = true; trustOn = $('si-trust').checked;
+    var bad = entry.kind === 'pin' ? 'That name or PIN is not right.' : 'That name or password is not right.';
+    sb.auth.signInWithPassword(cred).then(function (r) {
+      if (r.error) { var offline = /fetch|network/i.test(r.error.message || '') || r.error.status === 0; showSignin(offline ? 'No connection.' : bad); return; }
+      CS.rememberName(store('localStorage'), entry.handle);
       state.user = r.data.user;
       return loadAccess().then(function (access) {
         var v = CS.accessVerdict(access);
         if (!v.ok) return signOutTo(v.message);
         state.access = access; enter();
       });
-    }).catch(function () { showSignin('No connection.'); }).then(function () { btn.disabled = false; });
+    }).catch(function () { showSignin('No connection.'); }).then(function () { si.busy = false; $('si-go').disabled = false; });
+  }
+  $('si-who').addEventListener('change', function () {
+    var h = this.value; setEntry(si.list.filter(function (r) { return r.handle === h; })[0] || null);
   });
+  $('si-typed').addEventListener('input', function () { setEntry(CS.typedEntry(this.value)); });
+  $('si-pad').addEventListener('click', function (ev) {
+    var b = ev.target.closest('[data-key]'); if (!b || si.busy) return;
+    si.pin = CS.keypadPress(si.pin, b.getAttribute('data-key')); drawDots();
+    if (si.pin.length === 4) submitSignin();
+  });
+  document.addEventListener('keydown', function (ev) { // a hardware keyboard works the pad too
+    if (!$('v-signin').classList.contains('on') || $('si-pinbox').hidden || si.busy || ev.ctrlKey || ev.metaKey || ev.altKey) return;
+    if (/^\d$/.test(ev.key) || ev.key === 'Backspace') {
+      if (ev.target && ev.target.tagName === 'INPUT') return;
+      si.pin = CS.keypadPress(si.pin, ev.key === 'Backspace' ? 'back' : ev.key); drawDots(); if (si.pin.length === 4) submitSignin();
+    }
+  });
+  $('signin-form').addEventListener('submit', function (ev) { ev.preventDefault(); submitSignin(); });
+  $('door-back').addEventListener('click', function () { location.replace(location.pathname + location.search + '#home'); });
   document.addEventListener('click', function (ev) {
     var t = ev.target.closest('[data-act],[data-stay],[data-theme]'); if (!t) return;
     var a = t.getAttribute('data-act');

@@ -30,6 +30,76 @@
     return spaced.replace(/\b\w/g, function (c) { return c.toUpperCase(); }) || 'Staff';
   }
 
+  // ---- sign-in screen (D-303.2, D-303.3) ------------------------------------------------------------------------------
+  var LAST_SIGNIN_KEY = 'cs_last_signin';
+  // 'pin' for the checklist accounts (slug@staff.cascade.invalid, password '8888' + 4 digits); anything else is a mailbox password account.
+  function signinKind(handle) { return /@staff\.cascade\.invalid$/i.test(String(handle || '').trim()) ? 'pin' : 'password'; }
+  // The rows of staff_signin_list_v1() -> [{label, handle, kind}]. Rows without a name or a handle are dropped; the kind is trusted
+  // only when it is one of the two known values, else it is worked out from the handle.
+  function signinList(rows) {
+    return (Array.isArray(rows) ? rows : []).map(function (r) {
+      r = r || {};
+      var handle = String(r.handle == null ? '' : r.handle).trim().toLowerCase(), label = String(r.label == null ? '' : r.label).trim();
+      var kind = r.kind === 'pin' || r.kind === 'password' ? r.kind : signinKind(handle);
+      return { label: label, handle: handle, kind: kind };
+    }).filter(function (r) { return r.label && r.handle.indexOf('@') > 0; });
+  }
+  // Fallback when the list cannot load: a typed name or e-mail still signs in the old way.
+  function typedEntry(text) {
+    var t = String(text == null ? '' : text).trim();
+    if (!t) return null;
+    var handle = staffLoginEmail(t);
+    return handle.charAt(0) === '@' ? null : { label: t, handle: handle, kind: signinKind(handle) };
+  }
+  // The on-screen keypad: a digit appends (at most 4), 'back' removes the last, 'clear' empties.
+  function keypadPress(pin, key) {
+    var p = String(pin == null ? '' : pin);
+    if (key === 'back') return p.slice(0, -1);
+    if (key === 'clear') return '';
+    return /^\d$/.test(String(key)) && p.length < 4 ? p + key : p;
+  }
+  // The pair sent to Supabase Auth, or null while the secret is not complete (a PIN needs exactly 4 digits, a password anything).
+  function signinCredentials(entry, secret) {
+    if (!entry || !entry.handle) return null;
+    var s = String(secret == null ? '' : secret);
+    if (entry.kind === 'pin') return STAFF_PIN_RE.test(s) ? { email: entry.handle, password: staffAuthPassword(s) } : null;
+    return s ? { email: entry.handle, password: s } : null;
+  }
+  // supabase-js storage adapter. Default storage key on purpose (the dashboard on this origin reads the same one). "Trust this device"
+  // ON writes localStorage (persisted); OFF writes sessionStorage (gone when the browser session ends). Reads look in both, and a write
+  // clears the other side so one session never lives in two places. Storage can be missing or throw (private mode): every call is guarded.
+  function authStorage(local, session, isTrusted) {
+    function get(s, k) { try { return s ? s.getItem(k) : null; } catch (e) { return null; } }
+    function put(s, k, v) { try { if (s) s.setItem(k, v); } catch (e) {} }
+    function del(s, k) { try { if (s) s.removeItem(k); } catch (e) {} }
+    return {
+      getItem: function (k) { var v = get(session, k); return v != null ? v : get(local, k); },
+      setItem: function (k, v) { var on = isTrusted(); put(on ? local : session, k, v); del(on ? session : local, k); },
+      removeItem: function (k) { del(local, k); del(session, k); }
+    };
+  }
+  // After a reload: was the live session saved as untrusted (sessionStorage)? Then keep refreshing it there.
+  function trustedFromStorage(local, session) {
+    try { for (var i = 0; session && i < session.length; i++) if (/^sb-.+-auth-token$/.test(session.key(i))) return false; } catch (e) {}
+    return true;
+  }
+  function rememberName(storage, handle) { try { if (handle) storage.setItem(LAST_SIGNIN_KEY, String(handle)); } catch (e) {} }
+  function recalledName(storage, list) {
+    var h = null; try { h = storage.getItem(LAST_SIGNIN_KEY); } catch (e) {}
+    return h && (list || []).some(function (r) { return r.handle === h; }) ? h : null;
+  }
+
+  // ---- doors (D-304.3) --------------------------------------------------------------------------------------------------
+  // A door on this origin opens inside the app (same-origin frame, one storage partition on iPhone Home Screen and Android);
+  // a door on another origin, or not http(s), opens externally.
+  function doorTarget(url, origin) {
+    try { var u = new URL(url, origin); return /^https?:$/.test(u.protocol) && u.origin === origin ? 'frame' : 'external'; } catch (e) { return 'external'; }
+  }
+  // The row link for a door: an in-app route (#door/<key>) for a frame door, the URL itself for an external one.
+  function doorLink(key, url, origin) {
+    return doorTarget(url, origin) === 'frame' ? { href: '#door/' + key, external: false } : { href: url, external: true };
+  }
+
   // ---- roles ---------------------------------------------------------------------------------------------------------
   var ADMIN_ROLES = ['owner', 'admin', 'finance'];
   var STAFF_ROLES = ['cleaner', 'inspector', 'maintenance'];
@@ -251,6 +321,8 @@
 
   return {
     staffAuthPassword: staffAuthPassword, staffLoginEmail: staffLoginEmail, deriveDisplayName: deriveDisplayName,
+    signinKind: signinKind, signinList: signinList, typedEntry: typedEntry, keypadPress: keypadPress, signinCredentials: signinCredentials,
+    authStorage: authStorage, trustedFromStorage: trustedFromStorage, rememberName: rememberName, recalledName: recalledName, doorTarget: doorTarget, doorLink: doorLink,
     layoutForRole: layoutForRole, accessVerdict: accessVerdict, assertNoMoney: assertNoMoney, moneyKeys: moneyKeys,
     manilaToday: manilaToday, manilaParts: manilaParts, addDays: addDays, daysBetween: daysBetween, weekdayIndex: weekdayIndex,
     dayLabel: dayLabel, dayLong: dayLong, dayShort: dayShort, monthTitle: monthTitle, monthShortYear: monthShortYear, greeting: greeting,
