@@ -54,9 +54,11 @@
     </div>
   </section>
 
-  <!-- Home, Calendar, More: filled by app.js -->
+  <!-- Home, Calendar, Tasks, Pay rates, More: filled by app.js -->
   <section class="view" id="v-home" aria-live="polite"></section>
   <section class="view" id="v-calendar" aria-live="polite"></section>
+  <section class="view" id="v-tasks" aria-live="polite"></section>
+  <section class="view" id="v-payrates"></section>
   <section class="view" id="v-more"></section>
 
   <!-- A door (checklist, dashboard, manual) opens here, inside the app (D-304.3) -->
@@ -79,6 +81,7 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.116.0/dist/umd/supabase.js" integrity="sha384-iLddHTLokph6Omwoyid4XKxHaWa6w41BnoEj0q5oOrzmYPpHIKt1wyjReA7s//pP" crossorigin="anonymous"></script>
 <script src="icons.js"></script>
 <script src="lib.js"></script>
+<script src="pay/pay-lib.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

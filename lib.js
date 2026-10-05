@@ -333,7 +333,90 @@
 
   function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
 
+  // ---- tasks (D-301) ----------------------------------------------------------------------------------------------------
+  // tasks_list_v1 returns ONE list over reminders, follow-ups, work orders, cleaning issues and open checks. The server already
+  // limits and redacts it for the role; these helpers only group and word it.
+  var TASK_KIND_LABEL = { reminder: 'Reminder', guest_follow_up: 'Guest follow-up', system: 'System task', cleaning_issue: 'Cleaning issue', guest_report: 'Guest report', work_order: 'Work order', verifier: 'Check needs a person' };
+  function taskKindLabel(kind) { return Object.prototype.hasOwnProperty.call(TASK_KIND_LABEL, kind) ? TASK_KIND_LABEL[kind] : 'Task'; }
+  // The Manila day of a timestamp; null when there is none or it does not parse (never "today").
+  function manilaDayOf(ts) { if (!ts) return null; var t = new Date(ts).getTime(); return isFinite(t) ? manilaToday(new Date(t)) : null; }
+  function taskDue(dueAt, today) { var d = manilaDayOf(dueAt); return d === null ? 'none' : d < today ? 'overdue' : d === today ? 'today' : 'later'; }
+  // "Was due 4 Oct", "Due today 3:00 PM", "Due 9 Oct". A due time of exactly 00:00 Manila means "that day", so no time is shown.
+  function taskDueLabel(dueAt, today) {
+    var d = manilaDayOf(dueAt); if (d === null) return '';
+    var p = manilaParts(new Date(dueAt)), time = p.h === 0 && p.min === 0 ? null : fmtTime(pad(p.h) + ':' + pad(p.min));
+    var day = d === today ? 'today' : d === addDays(today, 1) ? 'tomorrow' : dayLabel(d);
+    return (d < today ? 'Was due ' + dayLabel(d) : 'Due ' + day) + (time ? ' ' + time : '');
+  }
+  // The date input of a reminder form -> the instant for 00:00 Manila that day. null when empty or not a date.
+  function dueFromDate(iso) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(String(iso || ''))) return null;
+    var t = Date.parse(iso + 'T00:00:00+08:00'); return isFinite(t) ? new Date(t).toISOString() : null;
+  }
+  var TASK_GROUPS = [['overdue', 'Overdue'], ['today', 'Today'], ['later', 'Coming up'], ['none', 'No date'], ['done', 'Done recently']];
+  var PRIORITY_RANK = { urgent: 0, high: 1, normal: 2, low: 3 };
+  // Open tasks by due state (overdue first), then the done ones. Empty groups are left out. Inside a group: due time, priority, age.
+  function taskGroups(tasks, today) {
+    var by = {}; TASK_GROUPS.forEach(function (g) { by[g[0]] = []; });
+    (Array.isArray(tasks) ? tasks : []).forEach(function (t) { by[t.status === 'done' ? 'done' : taskDue(t.due_at, today)].push(t); });
+    function cmp(a, b) {
+      var da = a.due_at || '9999', db = b.due_at || '9999';
+      return da < db ? -1 : da > db ? 1 : ((PRIORITY_RANK[a.priority] == null ? 2 : PRIORITY_RANK[a.priority]) - (PRIORITY_RANK[b.priority] == null ? 2 : PRIORITY_RANK[b.priority])) ||
+        (String(a.created_at) < String(b.created_at) ? -1 : 1);
+    }
+    return TASK_GROUPS.map(function (g) { return { key: g[0], label: g[1], tasks: by[g[0]].sort(cmp) }; }).filter(function (g) { return g.tasks.length > 0; });
+  }
+  // The number on the Tasks tab: open tasks that are overdue or due today.
+  function taskDueCount(tasks, today) {
+    return (Array.isArray(tasks) ? tasks : []).filter(function (t) { var s = taskDue(t.due_at, today); return t.status !== 'done' && (s === 'overdue' || s === 'today'); }).length;
+  }
+  function reminderProblem(title) {
+    var t = String(title == null ? '' : title).trim();
+    return t.length < 3 ? 'Give the reminder a short title.' : t.length > 200 ? 'Keep the title under 200 characters.' : '';
+  }
+
+  // ---- pay rates (D-301) ------------------------------------------------------------------------------------------------
+  // cleaner_rate_schedule is the one source; this screen only ADDS a dated row through admin_add_pay_rate_v1 (owner and admin).
+  function canEditRates(role) { return role === 'owner' || role === 'admin'; }
+  // Unknown stays null, never 0.
+  function rateNum(v) { if (v == null || v === '') return null; var n = Number(v); return isFinite(n) ? n : null; }
+  // "₱500 per clean · ₱1,000 per deep clean · ₱150 transport when ticked". peso is the formatter (CSPay.peso).
+  function rateLine(r, peso) {
+    var reg = rateNum(r && r.regular_rate), gen = rateNum(r && r.general_rate), tr = rateNum(r && r.transport_rate);
+    if (gen === null) gen = reg;
+    return (reg === null ? '-' : peso(reg)) + ' per clean · ' + (gen === null ? '-' : peso(gen)) + ' per deep clean · ' + (tr === null ? 'transport included' : peso(tr) + ' transport when ticked');
+  }
+  // The earliest start the server accepts: the day after the latest row if that row starts today or later, else today.
+  function earliestRateStart(history, today) {
+    var latest = null; (Array.isArray(history) ? history : []).forEach(function (h) { if (h && h.effective_from && (latest === null || h.effective_from > latest)) latest = h.effective_from; });
+    return latest !== null && latest >= today ? addDays(latest, 1) : today;
+  }
+  // Mirrors admin_add_pay_rate_v1's checks. '' = fine, else the sentence to show. i = {from, regular, general, transport, note} as typed.
+  function rateProblem(i, earliest, today) {
+    function money(s) { var t = String(s == null ? '' : s).replace(/,/g, '').trim(); return t === '' ? NaN : Number(t); }
+    function fee(n, max) { return isFinite(n) && n >= 1 && n <= max && Math.abs(n * 100 - Math.round(n * 100)) < 1e-6; }
+    var reg = money(i.regular), gen = money(i.general), trText = String(i.transport == null ? '' : i.transport).trim(), tr = money(i.transport), note = String(i.note == null ? '' : i.note).trim();
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(String(i.from || ''))) return 'Pick the date the new rate starts.';
+    if (i.from < earliest) return 'A new rate starts on ' + earliest + ' or later: history is never changed.';
+    if (i.from > addDays(today, 366)) return 'The start date is more than a year away.';
+    if (!fee(reg, 10000)) return 'The cleaning fee is between 1 and 10,000.';
+    if (!fee(gen, 10000)) return 'The deep clean fee is between 1 and 10,000.';
+    if (trText !== '' && tr !== 0 && !fee(tr, 2000)) return 'The transport fee is between 1 and 2,000, or leave it empty when the fee already includes transport.';
+    if (note.length < 3) return 'Say why (a few words), for the audit history.';
+    if (note.length > 500) return 'Keep the note under 500 characters.';
+    return '';
+  }
+  // The RPC arguments for a typed form (transport empty or 0 -> null: the fee already includes it).
+  function rateArgs(propertyId, i) {
+    function money(s) { var t = String(s == null ? '' : s).replace(/,/g, '').trim(); return t === '' ? null : Number(t); }
+    var tr = money(i.transport);
+    return { p_property_id: propertyId, p_effective_from: i.from, p_regular: money(i.regular), p_general: money(i.general), p_transport: tr === 0 ? null : tr, p_note: String(i.note == null ? '' : i.note).trim() };
+  }
+
   return {
+    taskKindLabel: taskKindLabel, manilaDayOf: manilaDayOf, taskDue: taskDue, taskDueLabel: taskDueLabel, dueFromDate: dueFromDate, taskGroups: taskGroups,
+    taskDueCount: taskDueCount, reminderProblem: reminderProblem, canEditRates: canEditRates, rateNum: rateNum, rateLine: rateLine,
+    earliestRateStart: earliestRateStart, rateProblem: rateProblem, rateArgs: rateArgs,
     staffAuthPassword: staffAuthPassword, staffLoginEmail: staffLoginEmail, deriveDisplayName: deriveDisplayName,
     signinKind: signinKind, signinList: signinList, typedEntry: typedEntry, keypadPress: keypadPress, signinCredentials: signinCredentials,
     authStorage: authStorage, trustedFromStorage: trustedFromStorage, rememberName: rememberName, recalledName: recalledName, doorTarget: doorTarget, doorLink: doorLink, doorRule: doorRule, doorFramed: doorFramed,

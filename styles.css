@@ -381,3 +381,9 @@ ol.steps li::before { content: counter(s); position: absolute; left: 0; top: 0; 
 .foot { margin-top: 32px; color: var(--fg-3); font: 400 13px/18px var(--font-ui); text-align: center; }
 
 .signin .trust { align-self: center; }
+
+/* Tasks (D-301): the checkbox keeps its 24 px look but takes a 44 px tap. */
+.taskrow .chk { position: relative; }
+.taskrow .chk::before { content: ""; position: absolute; inset: -10px; }
+.taskrow .t { display: block; }
+.payrow .s.c-danger { color: var(--danger); }

@@ -17,7 +17,7 @@
   function shell(title, inner, back) {
     return '<header class="appbar"><a class="iconbtn" href="' + (back || '../#home') + '" aria-label="Back">' + ICON('back', 's24') + '</a><h1 class="ttl">' + esc(title) + '</h1></header><div class="screen">' + inner + '</div>' +
       '<nav class="tabbar" aria-label="Primary"><a class="tab" href="../#home"><span class="ico">' + ICON('house', 's24') + '</span>Today</a><a class="tab" href="../#calendar"><span class="ico">' + ICON('calendar', 's24') + '</span>Calendar</a>' +
-      '<a class="tab" href="./" aria-current="page"><span class="ico">' + ICON('tasks', 's24') + '</span>Tasks</a><a class="tab" href="../#more"><span class="ico">' + ICON('more', 's24') + '</span>More</a></nav>';
+      '<a class="tab" href="../#tasks"><span class="ico">' + ICON('tasks', 's24') + '</span>Tasks</a><a class="tab" href="../#more"><span class="ico">' + ICON('more', 's24') + '</span>More</a></nav>';
   }
 
   function freshSel(c) {
