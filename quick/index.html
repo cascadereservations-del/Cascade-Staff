@@ -1,0 +1,253 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Cascade Quick Guide</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="description" content="How the Cascade team uses Cassy in the Telegram OPS and Finance groups, in plain words, cleaners first.">
+<meta name="theme-color" content="#F6F3EE" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#141210" media="(prefers-color-scheme: dark)">
+<link rel="icon" type="image/png" sizes="192x192" href="../icons/icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Cormorant+Garamond:ital,wght@0,500;0,600;1,500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../styles.css">
+<script src="../theme.js"></script>
+</head>
+<body>
+<div class="shell">
+<header class="appbar" id="appbar"><a class="iconbtn" href="../#home" aria-label="Back to the app" id="back"></a><h1 class="ttl">Quick guide</h1></header>
+<main class="qg">
+  <p class="intro" style="text-align:center;color:var(--fg-2);margin-top:4px">Two minutes on telling Cassy what happened, asking her anything, and logging what you spent.</p>
+<p class="intro">Cassy is our helper inside Telegram. She reads the house calendar, the stock and the house how-tos, and she answers when you ask her by name. She never sends anything to a guest, and she never saves anything until a person taps a button. Talk to each other normally in the group; she only listens when you call her.</p>
+  <p class="intro">Type <code>/keyboard</code> once and a row of buttons stays above the message box. You do not need to remember commands; tap the button and Cassy asks for what she needs.</p>
+
+  <h2>What do you need to do?</h2>
+
+  <!-- 1. finished cleaning -->
+  <section class="card">
+    <div class="card-head">
+      <div class="disc"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z"/><path d="M20 3v4"/><path d="M22 5h-4"/></svg></div>
+      <h3>I finished cleaning</h3>
+    </div>
+    <div class="who"><span class="pill p-info"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>OPS group</span><span class="pill p-neutral"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>Everyone</span></div>
+    <ol class="steps">
+      <li>Finish the checklist in the Cleaner app and send it. The group gets a <strong>🧹 CLEANING</strong> card by itself; you do not need to type the report again.</li>
+      <li>Say so in the group in your own words, so the office knows the unit is ready.</li>
+      <li>Your fee card comes later. Tap <strong>Acknowledge Payment</strong> when the money is with you.</li>
+    </ol>
+    <div class="inset">
+      <span class="cap up">Example</span>
+      <div class="chat">
+        <div class="bub me"><span class="from">You, in OPS</span>Done cleaning, unit is ready 🌿 Report sent.</div>
+        <div class="bub bot"><span class="from">Cassy</span>🧹 CLEANING · report · Oct 5<br>Completion 100%. Issues flagged: none.</div>
+        <div class="bub bot"><span class="from">Cassy, later</span>🧹 Cleaning Fees Settled<br>Tap to acknowledge you received this payment.<div class="tgbtns"><span class="tgbtn">✅ Acknowledge Payment</span></div></div>
+      </div>
+    </div>
+    <div class="note danger"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg><span>A card called <b>Payment Ready</b> has a <b>Received Payment</b> button. That one books the fee at once, for whoever taps it. Tap it only when the money is in your hand.</span></div>
+  </section>
+
+  <!-- 2. bought something -->
+  <section class="card">
+    <div class="card-head">
+      <div class="disc"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M16 10a4 4 0 0 1-8 0"/><path d="M3.103 6.034h17.794"/><path d="M3.4 5.467a2 2 0 0 0-.4 1.2V20a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6.667a2 2 0 0 0-.4-1.2l-2-2.667A2 2 0 0 0 17 2H7a2 2 0 0 0-1.6.8z"/></svg></div>
+      <h3>I bought something for the house</h3>
+    </div>
+    <div class="who"><span class="pill p-info"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>OPS: cleaners</span><span class="pill p-brand"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M19 7V4a1 1 0 0 0-1-1H5a2 2 0 0 0 0 4h15a1 1 0 0 1 1 1v4h-3a2 2 0 0 0 0 4h3a1 1 0 0 0 1-1v-2a1 1 0 0 0-1-1"/><path d="M3 5v14a2 2 0 0 0 2 2h15a1 1 0 0 0 1-1v-4"/></svg>Finance: office</span></div>
+    <p class="leadp">Cleaners: the OPS group never handles money, so your receipt goes with your cleaning report.</p>
+    <ol class="steps">
+      <li>Keep the receipt and take a photo of it.</li>
+      <li>Add it under <strong>extra expenses</strong> in your cleaning report. The office gets a card that lists it.</li>
+      <li>Say it once in the group so nobody forgets. You get it back with your cleaning fee.</li>
+    </ol>
+    <div class="inset">
+      <span class="cap up">Example, cleaner</span>
+      <div class="chat">
+        <div class="bub me"><span class="from">You, in OPS</span>Bought dishwashing liquid and trash bags for the unit. Receipt is in my report 😊</div>
+      </div>
+    </div>
+    <div class="inset">
+      <span class="cap up">Office, in the Finance group</span>
+      <div class="chat">
+        <div class="bub me"><span class="from">You, in Finance</span>250 supplies Puregold</div>
+        <div class="bub bot"><span class="from">Cassy</span>✅ Expense logged<br>PHP 250 · Supplies · Puregold<br>Ref: SAMPLE01</div>
+      </div>
+      <div class="tap"><span>Or send the receipt photo and tap</span><span class="tgbtn">✅ Confirm</span></div>
+    </div>
+    <div class="note info"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg><span>In Finance, a message that starts with a number is saved as an expense. A photo sent there is read as a receipt and shown to you before anything is saved.</span></div>
+  </section>
+
+  <!-- 3. broken or missing -->
+  <section class="card">
+    <div class="card-head">
+      <div class="disc"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg></div>
+      <h3>Something is broken or missing</h3>
+    </div>
+    <div class="who"><span class="pill p-info"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>OPS group</span><span class="pill p-neutral"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>Everyone</span></div>
+    <ol class="steps">
+      <li>Take a photo of it.</li>
+      <li>Write it in the <strong>issues</strong> part of your cleaning report. An urgent one becomes a work order card for the office.</li>
+      <li>If a guest arrives today, also tell the group now in plain words. Lloyd picks it up from there.</li>
+    </ol>
+    <div class="inset">
+      <span class="cap up">Example</span>
+      <div class="chat">
+        <div class="bub me"><span class="from">You, in OPS</span><span class="photo"><svg class="i s16" viewBox="0 0 24 24" aria-hidden="true"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"/><circle cx="12" cy="13" r="3"/></svg>Photo</span><br>Side table is broken and one small bowl is missing. Already in the report.</div>
+        <div class="bub bot"><span class="from">Cassy, to the office</span>🧹 CLEANING · work order<br>Issue: side table broken. Next guest: today.</div>
+      </div>
+    </div>
+    <div class="note info"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg><span>A plain message is for people. Cassy does not read it, and that is fine. Send the photo as a new message, not as a reply to one of her cards.</span></div>
+  </section>
+
+  <!-- 4. guest asks -->
+  <section class="card">
+    <div class="card-head">
+      <div class="disc"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z"/></svg></div>
+      <h3>A guest asks me something</h3>
+    </div>
+    <div class="who"><span class="pill p-info"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>OPS or Finance</span><span class="pill p-neutral"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>Everyone</span></div>
+    <ol class="steps">
+      <li>Ask Cassy for the house how-to. Type <code>cassy house</code> and the thing: wifi, aircon, hot water, parking.</li>
+      <li>Read her answer and tell the guest in your own words.</li>
+      <li>If the guest wrote on Messenger or Airbnb and you want the words to send: tap <strong>✍️ Guest reply</strong>, then reply to Cassy with the guest's text or a screenshot. Copy her draft and send it yourself.</li>
+    </ol>
+    <div class="inset">
+      <span class="cap up">Example</span>
+      <div class="chat">
+        <div class="bub me"><span class="from">You</span>cassy house aircon</div>
+        <div class="bub bot"><span class="from">Cassy</span>The aircon remote is on the wooden tray on top of the TV cabinet, beside the flower vase. Guests are comfortable at 26 degrees, COOL, fan AUTO.<br>Do: tell the guest where the remote is.</div>
+      </div>
+      <div class="tap"><span>For a reply to copy, tap</span><span class="tgbtn">✍️ Guest reply</span></div>
+    </div>
+    <div class="note danger"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg><span>On a <b>💬 GUEST · handoff</b> card, <b>Send option 1</b> and <b>Send option 2</b> message the guest at once, with your name. There is no undo. Read the text first. Everything else Cassy drafts stays a draft until you paste it yourself.</span></div>
+  </section>
+
+  <!-- 5. power interruption -->
+  <section class="card">
+    <div class="card-head">
+      <div class="disc"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z"/></svg></div>
+      <h3>Power interruption coming</h3>
+    </div>
+    <div class="who"><span class="pill p-info"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>OPS group</span><span class="pill p-neutral"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>Everyone</span></div>
+    <ol class="steps">
+      <li>Take a photo of the SOCOTECO or NGCP notice and send it to the group with the caption <code>brownout</code>.</li>
+      <li>Cassy reads it and lists the times. Tap <strong>Save brownout notice</strong>. It goes on the board and into the morning card.</li>
+      <li>Before the day: charge the EcoFlow and keep the emergency light ready. Guests are told only if they ask.</li>
+    </ol>
+    <div class="inset">
+      <span class="cap up">Example</span>
+      <div class="chat">
+        <div class="bub me"><span class="from">You, in OPS</span><span class="photo"><svg class="i s16" viewBox="0 0 24 24" aria-hidden="true"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"/><circle cx="12" cy="13" r="3"/></svg>Photo of the notice</span><br>brownout</div>
+        <div class="bub bot"><span class="from">Cassy</span>⚡ Power interruption affecting Cascade<br>NGCP · metering work<br>⚡ 2026-10-11 08:00 (8h)<div class="tgbtns"><span class="tgbtn">✅ Save 1 brownout notice</span><span class="tgbtn">❌ Cancel</span></div></div>
+      </div>
+    </div>
+    <div class="note warn"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg><span><b>Saves at once.</b> The same is true if you type <code>/brownout tomorrow 8am 4h power work</code>. There is no Telegram button to remove a notice afterwards; ask Lloyd.</span></div>
+  </section>
+
+  <!-- 6. guest ID -->
+  <section class="card">
+    <div class="card-head">
+      <div class="disc"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M16 10h2"/><path d="M16 14h2"/><path d="M6.17 15a3 3 0 0 1 5.66 0"/><circle cx="9" cy="11" r="2"/><rect x="2" y="5" width="20" height="14" rx="2"/></svg></div>
+      <h3>Saving a guest's ID and companions</h3>
+    </div>
+    <div class="who"><span class="pill p-info"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>OPS or Finance</span><span class="pill p-brand"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>Office accounts only</span></div>
+    <ol class="steps">
+      <li>Send the ID photo, or a screenshot of the guest chat, with the caption <code>/guest</code>.</li>
+      <li>Tap the guest it belongs to. If the name is not on the list, tap <strong>Other guest</strong> and type part of the name.</li>
+      <li>Read the card. It says exactly what will be kept: from an ID, the name and the ID type only, never the number; from a chat, the names and the mobile number. Tap <strong>Save</strong>. Nothing is saved before that.</li>
+    </ol>
+    <div class="inset">
+      <span class="cap up">Example</span>
+      <div class="chat">
+        <div class="bub me"><span class="from">You</span><span class="photo"><svg class="i s16" viewBox="0 0 24 24" aria-hidden="true"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"/><circle cx="12" cy="13" r="3"/></svg>Photo of the ID</span><br>/guest</div>
+        <div class="bub bot"><span class="from">Cassy</span>Nothing is saved yet. Whose photo is this? Tap the guest it belongs to.<div class="tgbtns"><span class="tgbtn">Guest arriving Oct 9</span><span class="tgbtn">🔎 Other guest</span><span class="tgbtn">❌ Cancel</span></div></div>
+      </div>
+    </div>
+    <div class="note info"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg><span>This works only for a Telegram account that Lloyd has linked to an owner or admin login. Anyone else sees "not linked" and nothing is read or saved. Never type an ID number into the chat.</span></div>
+  </section>
+
+  <!-- 7. pay -->
+  <section class="card">
+    <div class="card-head">
+      <div class="disc"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M19 7V4a1 1 0 0 0-1-1H5a2 2 0 0 0 0 4h15a1 1 0 0 1 1 1v4h-3a2 2 0 0 0 0 4h3a1 1 0 0 0 1-1v-2a1 1 0 0 0-1-1"/><path d="M3 5v14a2 2 0 0 0 2 2h15a1 1 0 0 0 1-1v-4"/></svg></div>
+      <h3>Asking for my pay</h3>
+    </div>
+    <div class="who"><span class="pill p-info"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>Staff app</span><span class="pill p-neutral"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>Cleaners</span></div>
+    <ol class="steps">
+      <li>Open <strong>Payment Request</strong> in the Staff app. Your cleans that are not paid yet are listed.</li>
+      <li>Tick the cleans. Switch on <strong>+&#8369;150 transport</strong> only for the ones where you paid for it. Add anything you bought, with a photo of the receipt if you have one.</li>
+      <li>Read the summary, then tap <strong>Send to Finance</strong>. Finance pays you and the office posts <strong>PAID</strong> in the OPS group.</li>
+      <li>Tap <strong>Received</strong> when the money is in your account.</li>
+    </ol>
+    <div class="inset">
+      <span class="t-cap cap up">What Finance sees</span>
+      <div class="chat">
+        <div class="bub bot"><span class="from">Payment request</span>Cleaning services<br>Oct 2 Fri (Guest A) = 650 (500 + 150 transport)<br>Oct 4 Sun (Guest B) = 500<br>Other expenses<br>KitKat x2 = 40<br>Total: &#8369;1,190</div>
+      </div>
+    </div>
+    <div class="note info"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg><span>You cannot request a clean twice, and a clean that is already paid never shows in the list. If the Staff app is not working, send your list in the OPS group the way you did before.</span></div>
+  </section>
+
+  <h2>Which group?</h2>
+  <div class="groups">
+    <section class="card group">
+      <div class="card-head">
+        <div class="disc"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8"/><path d="M3 10a2 2 0 0 1 .709-1.528l7-5.999a2 2 0 0 1 2.582 0l7 5.999A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg></div>
+        <h3>OPS group</h3>
+      </div>
+      <div class="who"><span class="pill p-info"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>Everyone</span></div>
+      <ul>
+        <li>The house, the guests, the cleaning, power and stock.</li>
+        <li>The morning card, guest hand-offs, cleaning cards, rain and brownout notices.</li>
+        <li>Money is never shown here. Only your own fee card shows a fee, because you need it.</li>
+      </ul>
+    </section>
+    <section class="card group">
+      <div class="card-head">
+        <div class="disc"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M19 7V4a1 1 0 0 0-1-1H5a2 2 0 0 0 0 4h15a1 1 0 0 1 1 1v4h-3a2 2 0 0 0 0 4h3a1 1 0 0 0 1-1v-2a1 1 0 0 0-1-1"/><path d="M3 5v14a2 2 0 0 0 2 2h15a1 1 0 0 0 1-1v-4"/></svg></div>
+        <h3>Finance group</h3>
+      </div>
+      <div class="who"><span class="pill p-brand"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>Owner and admin</span></div>
+      <ul>
+        <li>Expenses, receipt photos, cleaner fees to pay, refunds and reports.</li>
+        <li>Booking receipts to confirm, and the weekly system check.</li>
+        <li>Cassy shows money here and can prepare an expense card for one tap.</li>
+      </ul>
+    </section>
+  </div>
+  <div class="note info"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg><span>Unsure? Use OPS. A Finance command typed in OPS gets no reply at all; that is normal, not a fault. Type <code>/menu</code> in either group to see its buttons.</span></div>
+
+  <h2>If Cassy doesn't understand</h2>
+  <section class="card">
+    <div class="card-head">
+      <div class="disc"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><path d="M12 17h.01"/></svg></div>
+      <h3>Try this, in order</h3>
+    </div>
+    <ol class="steps">
+      <li>Ask again in one full sentence that starts with <code>cassy</code>. She remembers only the last few lines, so a short follow-up can lose her.</li>
+      <li>For a house how-to, use <code>cassy house</code> and one word, like <code>cassy house wifi</code>.</li>
+      <li>Tap <code>/menu</code> and use a button instead of typing.</li>
+      <li>If she says <strong>"That card is not waiting for an answer"</strong>, you replied to an old card. Send a new message instead.</li>
+      <li>If she says <strong>"I could not reach the model"</strong>, wait a minute and try again. Still wrong? Tell Lloyd in the group.</li>
+    </ol>
+    <div class="inset">
+      <span class="cap up">Example</span>
+      <div class="chat">
+        <div class="bub me"><span class="from">You</span>and the water?</div>
+        <div class="bub bot"><span class="from">Cassy</span>I am not sure what you mean about the water.<br>Do: ask me in one full sentence, like cassy house hot water.</div>
+        <div class="bub me"><span class="from">You</span>cassy house hot water</div>
+      </div>
+    </div>
+  </section>
+
+  <p class="foot">Cascade Hideaway · Hotel Comfort. Home Warmth.</p>
+</main>
+</div>
+<script src="../icons.js"></script>
+<script>
+document.getElementById('back').innerHTML = ICON('back', 's24');
+var bar = document.getElementById('appbar');
+window.addEventListener('scroll', function () { bar.classList.toggle('scrolled', window.scrollY > 8); }, { passive: true });
+</script>
+</body>
+</html>

@@ -1,0 +1,263 @@
+/* Cascade Staff - pure helpers (no DOM, no network). Loaded as a classic script in the browser (window.CS) and
+   required by node --test (module.exports). Every date here is a Manila calendar date as 'YYYY-MM-DD'. */
+(function (root, factory) {
+  var api = factory();
+  if (typeof module !== 'undefined' && module.exports) module.exports = api;
+  else root.CS = api;
+})(typeof self !== 'undefined' ? self : this, function () {
+  'use strict';
+
+  // ---- sign-in rules (copied from CH-Cleaners-Checklist/index.html:5060-5080) -------------------------------------
+  var STAFF_DOMAIN = 'staff.cascade.invalid';
+  var STAFF_PIN_PREFIX = '8888';
+  var STAFF_PIN_RE = /^\d{4}$/;
+  // 4 digits get the prefix (Supabase Auth wants 8 characters); a mailbox owner's or admin's own password is sent as typed.
+  function staffAuthPassword(pin) { var p = String(pin == null ? '' : pin); return STAFF_PIN_RE.test(p) ? STAFF_PIN_PREFIX + p : p; }
+  function staffLoginEmail(raw) {
+    var v = String(raw == null ? '' : raw).trim();
+    if (v.indexOf('@') >= 0) return v.toLowerCase();
+    var slug = v.normalize('NFKD').replace(/[^ -~]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '.').replace(/^\.+|\.+$/g, '');
+    return slug + '@' + STAFF_DOMAIN;
+  }
+  // The checklist reads display_name; the dashboard reads name. Cover both, then the e-mail's local part.
+  function deriveDisplayName(user) {
+    user = user || {};
+    var um = user.user_metadata || {}, am = user.app_metadata || {};
+    var meta = um.display_name || am.display_name || um.name;
+    if (meta) return String(meta).trim();
+    var local = String(user.email || '').split('@')[0];
+    var spaced = local.replace(/[._]+/g, ' ').trim();
+    return spaced.replace(/\b\w/g, function (c) { return c.toUpperCase(); }) || 'Staff';
+  }
+
+  // ---- roles ---------------------------------------------------------------------------------------------------------
+  var ADMIN_ROLES = ['owner', 'admin', 'finance'];
+  var STAFF_ROLES = ['cleaner', 'inspector', 'maintenance'];
+  function layoutForRole(role) {
+    if (ADMIN_ROLES.indexOf(role) >= 0) return 'admin';
+    if (STAFF_ROLES.indexOf(role) >= 0) return 'staff';
+    return null; // unknown role: stay on the sign-in screen
+  }
+  // current_staff_access() -> {ok, message}. null = no profile; disabled or a revoked session = turned off.
+  function accessVerdict(access) {
+    if (!access) return { ok: false, message: 'This account has no staff profile. Ask Lloyd.' };
+    if (access.disabled || access.session_current === false) return { ok: false, message: 'Your access was turned off. Ask Lloyd.' };
+    if (!layoutForRole(access.role)) return { ok: false, message: 'This account has no staff profile. Ask Lloyd.' };
+    return { ok: true, message: '' };
+  }
+
+  // ---- "no guest money" belt and braces (D-289) ---------------------------------------------------------------------
+  // The client refuses to render a payload that carries a money or contact KEY. Keys are matched as whole words so a key like
+  // "grid_line" or "feels_like" is fine while "total_amount", "guest_phone" or "deposit" is not.
+  var MONEY_TOKEN = /^(amount|deposit|total|phone|mobile|contact|email|price|fee|payout|cost|balance|refund|paid)s?$/;
+  function keyTokens(key) {
+    return String(key).replace(/([a-z0-9])([A-Z])/g, '$1 $2').toLowerCase().split(/[^a-z0-9]+/).filter(Boolean);
+  }
+  function moneyKeys(value, path, out) {
+    out = out || []; path = path || '$';
+    if (Array.isArray(value)) { value.forEach(function (v, i) { moneyKeys(v, path + '[' + i + ']', out); }); return out; }
+    if (value && typeof value === 'object') {
+      Object.keys(value).forEach(function (k) {
+        if (keyTokens(k).some(function (t) { return MONEY_TOKEN.test(t); })) out.push(path + '.' + k);
+        moneyKeys(value[k], path + '.' + k, out);
+      });
+    }
+    return out;
+  }
+  function assertNoMoney(payload) {
+    var bad = moneyKeys(payload);
+    if (bad.length) throw new Error('payload carries money or contact keys: ' + bad.join(', '));
+    return true;
+  }
+
+  // ---- dates (Manila) -------------------------------------------------------------------------------------------------
+  var MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+  var DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+  function manilaParts(now) {
+    var d = new Date((now instanceof Date ? now : new Date(now == null ? Date.now() : now)).getTime() + 8 * 3600 * 1000);
+    return { y: d.getUTCFullYear(), m: d.getUTCMonth() + 1, d: d.getUTCDate(), h: d.getUTCHours(), min: d.getUTCMinutes() };
+  }
+  function pad(n) { return (n < 10 ? '0' : '') + n; }
+  function manilaToday(now) { var p = manilaParts(now); return p.y + '-' + pad(p.m) + '-' + pad(p.d); }
+  function utc(iso) { var a = String(iso).slice(0, 10).split('-'); return Date.UTC(+a[0], +a[1] - 1, +a[2]); }
+  function isoOf(ms) { var d = new Date(ms); return d.getUTCFullYear() + '-' + pad(d.getUTCMonth() + 1) + '-' + pad(d.getUTCDate()); }
+  function addDays(iso, n) { return isoOf(utc(iso) + n * 86400000); }
+  function daysBetween(a, b) { return Math.round((utc(b) - utc(a)) / 86400000); }
+  function weekdayIndex(iso) { return new Date(utc(iso)).getUTCDay(); } // 0 = Sunday
+  function dayLabel(iso) { var a = String(iso).split('-'); return +a[2] + ' ' + MONTHS[+a[1] - 1].slice(0, 3); } // 5 Oct
+  function dayLong(iso) { var a = String(iso).split('-'); return DAYS[weekdayIndex(iso)] + ' ' + +a[2] + ' ' + MONTHS[+a[1] - 1]; } // Monday 5 October
+  function dayShort(iso) { return DAYS[weekdayIndex(iso)].slice(0, 3) + ' ' + dayLabel(iso); } // Thu 8 Oct
+  function monthTitle(y, m) { return MONTHS[m - 1] + ' ' + y; }
+  function monthShortYear(ym) { var a = String(ym).split('-'); return MONTHS[+a[1] - 1].slice(0, 3) + ' ' + a[0]; } // 2026-06 -> Jun 2026
+  function greeting(now) { var h = manilaParts(now).h; return h < 12 ? 'Good morning' : h < 18 ? 'Good afternoon' : 'Good evening'; }
+  // '14:00:00' -> '2:00 PM'; '12:00:00' -> '12:00 noon'; null stays null.
+  function fmtTime(t) {
+    if (!t) return null;
+    var m = /^(\d{1,2}):(\d{2})/.exec(String(t)); if (!m) return null;
+    var h = +m[1], min = m[2];
+    if (h === 12 && min === '00') return '12:00 noon';
+    var ap = h >= 12 ? 'PM' : 'AM'; var h12 = h % 12 === 0 ? 12 : h % 12;
+    return h12 + ':' + min + ' ' + ap;
+  }
+  function fmt24(t) { var m = /^(\d{1,2}):(\d{2})/.exec(String(t || '')); return m ? pad(+m[1]) + ':' + m[2] : null; }
+  function ordinal(n) {
+    var v = n % 100, s = ['th', 'st', 'nd', 'rd'];
+    return n + (s[(v - 20) % 10] || s[v] || s[0]);
+  }
+  function plural(n, one, many) { return n + ' ' + (n === 1 ? one : (many || one + 's')); }
+  function agoLabel(iso, now) {
+    var s = Math.max(0, Math.round(((now instanceof Date ? now.getTime() : (now == null ? Date.now() : now)) - new Date(iso).getTime()) / 1000));
+    if (s < 60) return 'just now';
+    if (s < 3600) return plural(Math.round(s / 60), 'min') + ' ago';
+    if (s < 86400) return plural(Math.round(s / 3600), 'hour') + ' ago';
+    return plural(Math.round(s / 86400), 'day') + ' ago';
+  }
+  function clockLabel(iso) { var p = manilaParts(new Date(iso)); return pad(p.h) + ':' + pad(p.min); }
+
+  // ---- month grid (Monday first) ---------------------------------------------------------------------------------------
+  // Returns [{iso|null}] with leading blanks so index % 7 is the weekday column (Mo = 0).
+  function monthGrid(y, m) {
+    var first = y + '-' + pad(m) + '-01';
+    var lead = (weekdayIndex(first) + 6) % 7;
+    var next = m === 12 ? (y + 1) + '-01-01' : y + '-' + pad(m + 1) + '-01';
+    var n = daysBetween(first, next), cells = [], i;
+    for (i = 0; i < lead; i++) cells.push({ iso: null });
+    for (i = 0; i < n; i++) cells.push({ iso: addDays(first, i) });
+    while (cells.length % 7) cells.push({ iso: null });
+    return cells;
+  }
+  // Classify one day against the calendar rows. A stay holds the nights checkin..checkout-1; the check-out day is free.
+  function dayState(iso, rows) {
+    var out = { stay: null, blocked: false, cont: false, startsHere: false };
+    (rows || []).forEach(function (r) {
+      if (iso < r.checkin_date || iso >= r.checkout_date) return;
+      if (r.status === 'blocked') out.blocked = true;
+      else if (r.status === 'confirmed' && !out.stay) {
+        out.stay = r; out.startsHere = iso === r.checkin_date; out.cont = addDays(iso, 1) < r.checkout_date;
+      }
+    });
+    return out;
+  }
+  // Guest initial for the bar; Airbnb first names only, never more.
+  function initialOf(name) { var s = String(name || '').trim(); return s ? s.charAt(0).toUpperCase() : ''; }
+  function sourceLabel(src) { return src === 'airbnb' ? 'Airbnb' : src === 'direct' ? 'Direct' : src === 'manual' ? 'Manual' : ''; }
+  function stayDates(r) {
+    var a = dayLabel(r.checkin_date) + ' → ' + dayLabel(r.checkout_date);
+    var n = r.nights != null ? r.nights : daysBetween(r.checkin_date, r.checkout_date);
+    return a + ' · ' + plural(n, 'night');
+  }
+  // Month range that holds data: 7 days back to 60 forward (the RPC window).
+  function monthInRange(y, m, today) {
+    var first = y + '-' + pad(m) + '-01';
+    var last = addDays(m === 12 ? (y + 1) + '-01-01' : y + '-' + pad(m + 1) + '-01', -1);
+    return last >= addDays(today, -7) && first <= addDays(today, 60);
+  }
+
+  // ---- guest card helpers ---------------------------------------------------------------------------------------------
+  // Notes are one text field "YYYY-MM-DD: point | point || YYYY-MM-DD: point" (the dashboard's ImportantNotes parses it too).
+  var PRIORITY = [[/security|incident|complaint|damage|dispute|concern/i, 0], [/special request|requested/i, 1], [/courtesy|benefit|goodwill|complimentary/i, 2], [/early check|late check|checkout/i, 3]];
+  function pointPriority(p) { for (var i = 0; i < PRIORITY.length; i++) if (PRIORITY[i][0].test(p)) return PRIORITY[i][1]; return 4; }
+  function parseNotes(text) {
+    if (!text) return [];
+    return String(text).split(' || ').map(function (chunk) {
+      var m = /^(\d{4}-\d{2}-\d{2}):\s*([\s\S]*)$/.exec(chunk);
+      var points = (m ? m[2] : chunk).split(' | ').map(function (p) { return p.trim(); }).filter(Boolean);
+      points = points.map(function (p, i) { return { p: p, i: i }; }).sort(function (a, b) { return pointPriority(a.p) - pointPriority(b.p) || a.i - b.i; }).map(function (x) { return x.p; });
+      return { date: m ? m[1] : null, points: points };
+    }).filter(function (g) { return g.points.length; });
+  }
+  // Returning pill text, or null when the guest is unknown or on a first stay.
+  function returningLabel(g, compact) {
+    if (!g || g.repeat !== true) return null;
+    var tail = g.stay_count ? ' · ' + ordinal(g.stay_count) + ' stay' : '';
+    return (compact ? 'Returning' : 'Returning guest') + tail;
+  }
+  function earlierLine(g) {
+    var e = (g && g.earlier_stays) || [];
+    if (!e.length) return null;
+    return 'Earlier stays: ' + e.map(function (s) { return monthShortYear(s.month) + (s.nights != null ? ' · ' + plural(s.nights, 'night') : ''); }).join(', ');
+  }
+  // What the Today card says about the stay: in the house, arriving today, or nobody.
+  function todayCardState(payload, today) {
+    var cur = payload && payload.current_guest, nxt = payload && payload.next_guest;
+    if (cur) return { kind: 'house', guest: cur, label: 'Today · in the house', pill: { tone: 'ok', text: cur.checkin_date === today ? 'Arrived today' : 'Checked in' } };
+    if (nxt && nxt.checkin_date === today) return { kind: 'arriving', guest: nxt, label: 'Today · arriving', pill: { tone: 'info', text: 'Arrives today' } };
+    if (nxt) return { kind: 'next', guest: nxt, label: 'No guest tonight', pill: { tone: 'neutral', text: 'Next ' + dayLabel(nxt.checkin_date) } };
+    return { kind: 'none', guest: null, label: 'No guest tonight', pill: null };
+  }
+
+  // ---- warnings ---------------------------------------------------------------------------------------------------------
+  // Order: brownouts, then red findings, then low stock, then the other findings; weather is added by the screen, last.
+  function warningRank(w) {
+    if (w.kind === 'brownout') return 0;
+    if (w.kind === 'verifier' && w.severity === 'alert') return 1;
+    if (w.kind === 'inventory') return 2;
+    return 3;
+  }
+  function orderWarnings(list) {
+    return (list || []).map(function (w, i) { return { w: w, i: i }; })
+      .sort(function (a, b) { return warningRank(a.w) - warningRank(b.w) || a.i - b.i; }).map(function (x) { return x.w; });
+  }
+  function brownoutText(w) {
+    var d = w.detail || {}, t = fmt24(d.time);
+    var head = 'Brownout ' + (d.date ? dayShort(d.date) : '') + (t ? ' ' + t : '') + (d.hours ? ', ' + (+d.hours) + ' h' : '');
+    var bits = [];
+    if (w.title && !/^brownout\b/i.test(w.title)) bits.push(w.title);
+    if (d.grid_line) bits.push('feeder ' + d.grid_line);
+    if (d.posted_by) bits.push('posted by ' + d.posted_by);
+    return { head: head.replace(/\s+/g, ' ').trim(), rest: bits.join(' · ') };
+  }
+  function lowStockText(w) {
+    var d = w.detail || {};
+    var name = String(w.title || '').replace(/^Low stock:\s*/i, '');
+    var qty = d.qty != null ? ', ' + (+d.qty) + (d.unit ? ' ' + d.unit : '') : '';
+    var below = d.reorder_below != null ? ' (reorder below ' + (+d.reorder_below) + ')' : '';
+    return { head: 'Low stock', rest: name + qty + below };
+  }
+  // One line for the home screen: "3 warnings · brownouts 11 and 15 Oct · low stock".
+  function warningSummary(list) {
+    var n = (list || []).length;
+    if (!n) return { count: 0, text: 'No warnings today' };
+    var bo = list.filter(function (w) { return w.kind === 'brownout' && w.detail && w.detail.date; }).map(function (w) { return w.detail.date; });
+    var parts = [];
+    if (bo.length) {
+      var days = bo.map(function (d) { return +d.split('-')[2]; });
+      var mon = MONTHS[+bo[0].split('-')[1] - 1].slice(0, 3);
+      parts.push((bo.length === 1 ? 'brownout ' : 'brownouts ') + (days.length > 1 ? days.slice(0, -1).join(', ') + ' and ' + days[days.length - 1] : days[0]) + ' ' + mon);
+    }
+    if (list.some(function (w) { return w.kind === 'inventory'; })) parts.push('low stock');
+    var v = list.filter(function (w) { return w.kind === 'verifier'; }).length;
+    if (v) parts.push(plural(v, 'system check'));
+    return { count: n, text: plural(n, 'warning') + (parts.length ? ' · ' + parts.join(' · ') : '') };
+  }
+  function weatherLine(weather, today) {
+    var c = weather && weather.current;
+    if (!c || c.temp == null) return null;
+    var t = Math.round(+c.temp) + '°' + (c.description ? ' ' + String(c.description).toLowerCase() : '');
+    return (today ? dayLong(today) + ' · ' : '') + t;
+  }
+  function rainLine(weather) {
+    var c = weather && weather.current;
+    if (!c || c.rain_prob == null) return null;
+    var hi = c.today_high != null ? Math.round(+c.today_high) : null, lo = c.today_low != null ? Math.round(+c.today_low) : null;
+    return { head: 'Rain ' + Math.round(+c.rain_prob) + '% today', rest: hi != null && lo != null ? lo + ' to ' + hi + '°' : '' };
+  }
+  function weatherStale(weather, now) {
+    if (!weather || !weather.fetched_at) return true;
+    return ((now instanceof Date ? now.getTime() : (now == null ? Date.now() : now)) - new Date(weather.fetched_at).getTime()) > 90 * 60000;
+  }
+
+  function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+
+  return {
+    staffAuthPassword: staffAuthPassword, staffLoginEmail: staffLoginEmail, deriveDisplayName: deriveDisplayName,
+    layoutForRole: layoutForRole, accessVerdict: accessVerdict, assertNoMoney: assertNoMoney, moneyKeys: moneyKeys,
+    manilaToday: manilaToday, manilaParts: manilaParts, addDays: addDays, daysBetween: daysBetween, weekdayIndex: weekdayIndex,
+    dayLabel: dayLabel, dayLong: dayLong, dayShort: dayShort, monthTitle: monthTitle, monthShortYear: monthShortYear, greeting: greeting,
+    fmtTime: fmtTime, fmt24: fmt24, ordinal: ordinal, plural: plural, agoLabel: agoLabel, clockLabel: clockLabel,
+    monthGrid: monthGrid, dayState: dayState, initialOf: initialOf, sourceLabel: sourceLabel, stayDates: stayDates, monthInRange: monthInRange,
+    parseNotes: parseNotes, returningLabel: returningLabel, earlierLine: earlierLine, todayCardState: todayCardState,
+    orderWarnings: orderWarnings, brownoutText: brownoutText, lowStockText: lowStockText, warningSummary: warningSummary,
+    weatherLine: weatherLine, rainLine: rainLine, weatherStale: weatherStale, esc: esc
+  };
+});
