@@ -99,17 +99,31 @@
     return h.slice(0, 8) + '-' + h.slice(8, 12) + '-' + h.slice(12, 16) + '-' + h.slice(16, 20) + '-' + h.slice(20);
   }
 
-  function keyKeeper(cryptoObj) {
+  // The key is also written to sessionStorage under the selection signature (try/catch, it may be missing or throw): a reload after a
+  // lost reply, then the same lines entered again, must not make a second request. Spent on ok (settle); extras-only requests have no
+  // session or claim for the server to refuse the second time, so the key is their only guard. storage: pass null to turn it off.
+  var STORE_KEY = 'cs-pay-inflight';
+  function keyKeeper(cryptoObj, storage) {
     var key = null, sig = null;
+    var st = storage;
+    if (st === undefined) { try { st = typeof sessionStorage !== 'undefined' ? sessionStorage : null; } catch (e) { st = null; } }
+    function read() { try { var m = st && JSON.parse(st.getItem(STORE_KEY) || '{}'); return m && typeof m === 'object' ? m : {}; } catch (e) { return {}; } }
+    function write(m) { try { if (st) st.setItem(STORE_KEY, JSON.stringify(m)); } catch (e) { /* no storage: the in-memory key still guards this page */ } }
     return {
       forSelection: function (cands, sel) {
         var c = chosen(cands, sel);
         var s = JSON.stringify([c.sessions.map(function (x) { return [x.s.id, x.transport]; }), c.claims.map(function (x) { return x.id; }),
           c.extras.map(function (x) { return [x.description, x.amount]; })]);
-        if (!key || s !== sig) { key = newKey(cryptoObj); sig = s; }
+        if (!key || s !== sig) {
+          var m = read();
+          key = typeof m[s] === 'string' && m[s] ? m[s] : newKey(cryptoObj); sig = s;
+          m[s] = key; write(m);
+        }
         return key;
       },
-      settle: function (res) { if (res && res.ok) { key = null; sig = null; } } // sent (or already sent): the key is spent
+      settle: function (res) {
+        if (res && res.ok) { var m = read(); if (sig) delete m[sig]; write(m); key = null; sig = null; } // sent (or already sent): the key is spent
+      }
     };
   }
 

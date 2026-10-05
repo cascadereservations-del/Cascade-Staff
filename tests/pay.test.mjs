@@ -116,7 +116,7 @@ test('bank page: no unverified app is listed or linked; a verified one builds th
 // ---- idempotency key lifecycle (audit item 2): a second request must never replay the first.
 test('key keeper: same key across retries of a failed send, new key after an ok', () => {
   const sel = { sessions: { s1: { on: true, transport: false } }, claims: {}, extras: [] };
-  let n = 0; const kk = P.keyKeeper({ randomUUID: () => 'k' + (++n) });
+  let n = 0; const kk = P.keyKeeper({ randomUUID: () => 'k' + (++n) }, null);
   const first = kk.forSelection(cands, sel);
   kk.settle({ ok: false, reason: 'offline' });
   assert.equal(kk.forSelection(cands, sel), first, 'a failed send is retried under the same key');
@@ -129,7 +129,7 @@ test('key keeper: same key across retries of a failed send, new key after an ok'
 });
 
 test('key keeper: a replay result also spends the key; a changed selection is not a retry', () => {
-  let n = 0; const kk = P.keyKeeper({ randomUUID: () => 'k' + (++n) });
+  let n = 0; const kk = P.keyKeeper({ randomUUID: () => 'k' + (++n) }, null);
   const a = { sessions: { s1: { on: true, transport: false } }, claims: {}, extras: [] };
   const k1 = kk.forSelection(cands, a);
   kk.settle({ ok: true, replay: true, ref: 'CASCADE-AAAA1111', total: 500 });
@@ -141,6 +141,27 @@ test('key keeper: a replay result also spends the key; a changed selection is no
   const k3 = kk.forSelection(cands, withReceipt);
   withReceipt.extras[0].receipt_path = 'abc/def.jpg'; // an upload finishing must not change the key
   assert.equal(kk.forSelection(cands, withReceipt), k3);
+});
+
+test('key keeper: an extras-only request keeps its key across a reload (sessionStorage), and an ok spends it', () => {
+  const mem = {}; const store = { getItem: (k) => (k in mem ? mem[k] : null), setItem: (k, v) => { mem[k] = String(v); } };
+  const extras = { sessions: {}, claims: {}, extras: [{ description: 'Trash bags', amount: 120 }] };
+  let n = 0; const crypto1 = { randomUUID: () => 'a' + (++n) };
+  const first = P.keyKeeper(crypto1, store).forSelection(cands, extras); // the reply is lost, the page reloads
+  const reloaded = P.keyKeeper({ randomUUID: () => 'b' + (++n) }, store); // a new keeper, same tab session
+  assert.equal(reloaded.forSelection(cands, { sessions: {}, claims: {}, extras: [{ description: 'Trash bags', amount: 120 }] }), first, 'the same extras entered again reuse the in-flight key');
+  assert.notEqual(reloaded.forSelection(cands, { sessions: {}, claims: {}, extras: [{ description: 'Trash bags', amount: 130 }] }), first, 'other lines are another request');
+  reloaded.forSelection(cands, extras); reloaded.settle({ ok: true, ref: 'CASCADE-AAAA1111', total: 120 });
+  assert.notEqual(P.keyKeeper({ randomUUID: () => 'c' + (++n) }, store).forSelection(cands, extras), first, 'after an ok the same lines are a new request');
+});
+
+test('key keeper: storage that throws or is missing never breaks the key', () => {
+  const bad = { getItem() { throw new Error('denied'); }, setItem() { throw new Error('denied'); } };
+  const extras = { sessions: {}, claims: {}, extras: [{ description: 'Ice', amount: 50 }] };
+  let n = 0; const kk = P.keyKeeper({ randomUUID: () => 'k' + (++n) }, bad);
+  const k = kk.forSelection(cands, extras);
+  assert.equal(kk.forSelection(cands, extras), k); kk.settle({ ok: true }); assert.notEqual(kk.forSelection(cands, extras), k);
+  assert.equal(P.keyKeeper({ randomUUID: () => 'z' }, null).forSelection(cands, extras), 'z');
 });
 
 test('replay:true is "already sent" with the original ref, not a new success', () => {
