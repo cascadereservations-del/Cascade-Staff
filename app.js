@@ -28,6 +28,7 @@
   };
   // Doors (D-304.3): a door on this origin opens inside the app in a full-screen frame (one storage partition on iPhone Home Screen and
   // Android alike); a door on another origin would open externally. The frame is addressed by key, never by a URL in the hash.
+  function doorDef(key) { return Object.prototype.hasOwnProperty.call(DOORS, key) ? DOORS[key] : null; }
   var DOORS = {
     checklist: { title: 'Cleaning checklist', url: LINKS.checklist },
     dashboard: { title: 'Admin dashboard', url: LINKS.dashboard },
@@ -48,7 +49,7 @@
   // ---------------------------------------------------------------- helpers
   function ext(href, inner, cls, extra) { return '<a class="' + (cls || '') + '" href="' + esc(href) + '" target="_blank" rel="noopener"' + (extra || '') + '>' + inner + '</a>'; }
   function row(opts) { // title and sub-title always on separate lines (D-300.7)
-    if (opts.door) { var dl = CS.doorLink(opts.door, DOORS[opts.door].url, location.origin); opts.href = dl.href; opts.external = dl.external; }
+    if (opts.door) { var dl = CS.doorLink(opts.door, doorDef(opts.door).url, location.origin, trustOn); opts.href = dl.href; opts.external = dl.external; }
     var inner = '<span class="lead">' + ICON(opts.icon) + '</span><span class="mid"><span class="t">' + esc(opts.title) + '</span><span class="s"' + (opts.subId ? ' id="' + opts.subId + '"' : '') + '>' + esc(opts.sub || '') + '</span></span>' +
       (opts.count ? '<span class="count" aria-label="' + esc(opts.count + ' warnings') + '">' + esc(opts.count) + '</span>' : '') +
       '<span class="chev">' + ICON(opts.external ? 'ext' : 'chev', opts.external ? 's16' : '') + '</span>';
@@ -134,6 +135,7 @@
     } else {
       doors = '<nav class="card list" aria-label="Admin">' +
         row({ icon: 'dash', title: 'Admin dashboard', sub: 'Today, bookings, money, operations', door: 'dashboard' }) +
+        (trustOn ? '' : '<div class="help doornote">Sign-in is kept only on trusted devices</div>') +
         row({ icon: 'calendar', title: 'Guest Calendar Info', sub: 'Stays, blocked nights, warnings', href: '#calendar', count: n || '' }) +
         '<button class="rowi" type="button" data-act="cassy" aria-expanded="' + state.cassyOpen + '"><span class="lead">' + ICON('chat') + '</span><span class="mid"><span class="t">Cassy</span><span class="s">Open in Telegram</span></span><span class="chev turn">' + ICON('chev') + '</span></button>' +
         '<div class="submenu" id="cassy-sub"' + (state.cassyOpen ? '' : ' hidden') + '><span class="cap">Open in Telegram</span>' +
@@ -344,7 +346,7 @@
     var h = (location.hash || '').replace(/^#/, ''), parts = h.split('/'), v = parts[0] || 'home';
     if (!state.layout) return;
     if (VIEWS.indexOf(v) < 0 || v === 'signin') v = 'home';
-    if (v === 'door' && !DOORS[parts[1]]) v = 'home';
+    if (v === 'door' && !(doorDef(parts[1]) && CS.doorFramed(parts[1], state.layout, trustOn))) v = 'home';
     if (v === 'door') { doorKey = parts[1]; render('door'); window.scrollTo(0, 0); return; }
     leaveDoor(); render(v);
     var t = parts[1] && $(parts[1]); if (t) t.scrollIntoView({ block: 'start' }); else window.scrollTo(0, 0);
@@ -359,7 +361,7 @@
   }
   // A door opens in the frame once per visit; coming back to the same door (a re-render) keeps the page where it is.
   function renderDoor() {
-    var d = DOORS[doorKey], f = $('door-frame'); if (!d) return;
+    var d = doorDef(doorKey), f = $('door-frame'); if (!d) return;
     $('door-title').textContent = d.title; f.title = d.title;
     $('door-back').innerHTML = ICON('back', 's24') + 'Back';
     if (f.getAttribute('data-door') !== doorKey) { f.setAttribute('data-door', doorKey); f.src = d.url; }

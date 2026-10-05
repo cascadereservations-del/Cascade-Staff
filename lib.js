@@ -95,9 +95,23 @@
   function doorTarget(url, origin) {
     try { var u = new URL(url, origin); return /^https?:$/.test(u.protocol) && u.origin === origin ? 'frame' : 'external'; } catch (e) { return 'external'; }
   }
+  // Which doors exist, who may open them in the frame, and whether the door reads supabase-js's localStorage session (the dashboard).
+  // A localStorage door only works in the frame while "Trust this device" is ON; OFF keeps the session in sessionStorage, so it opens
+  // externally instead. Looked up by own property only: #door/constructor, #door/__proto__ and #door/toString are nothing.
+  var DOOR_RULES = {
+    checklist: { layouts: ['staff', 'admin'], localKey: false },
+    dashboard: { layouts: ['admin'], localKey: true },
+    manual: { layouts: ['staff', 'admin'], localKey: false }
+  };
+  function doorRule(key) { return Object.prototype.hasOwnProperty.call(DOOR_RULES, key) ? DOOR_RULES[key] : null; }
+  function doorFramed(key, layout, trusted) {
+    var r = doorRule(key);
+    return !!r && r.layouts.indexOf(layout) >= 0 && (!r.localKey || !!trusted);
+  }
   // The row link for a door: an in-app route (#door/<key>) for a frame door, the URL itself for an external one.
-  function doorLink(key, url, origin) {
-    return doorTarget(url, origin) === 'frame' ? { href: '#door/' + key, external: false } : { href: url, external: true };
+  function doorLink(key, url, origin, trusted) {
+    var r = doorRule(key);
+    return doorTarget(url, origin) === 'frame' && r && (!r.localKey || trusted) ? { href: '#door/' + key, external: false } : { href: url, external: true };
   }
 
   // ---- roles ---------------------------------------------------------------------------------------------------------
@@ -322,7 +336,7 @@
   return {
     staffAuthPassword: staffAuthPassword, staffLoginEmail: staffLoginEmail, deriveDisplayName: deriveDisplayName,
     signinKind: signinKind, signinList: signinList, typedEntry: typedEntry, keypadPress: keypadPress, signinCredentials: signinCredentials,
-    authStorage: authStorage, trustedFromStorage: trustedFromStorage, rememberName: rememberName, recalledName: recalledName, doorTarget: doorTarget, doorLink: doorLink,
+    authStorage: authStorage, trustedFromStorage: trustedFromStorage, rememberName: rememberName, recalledName: recalledName, doorTarget: doorTarget, doorLink: doorLink, doorRule: doorRule, doorFramed: doorFramed,
     layoutForRole: layoutForRole, accessVerdict: accessVerdict, assertNoMoney: assertNoMoney, moneyKeys: moneyKeys,
     manilaToday: manilaToday, manilaParts: manilaParts, addDays: addDays, daysBetween: daysBetween, weekdayIndex: weekdayIndex,
     dayLabel: dayLabel, dayLong: dayLong, dayShort: dayShort, monthTitle: monthTitle, monthShortYear: monthShortYear, greeting: greeting,

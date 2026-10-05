@@ -176,3 +176,44 @@ test('Theme v2: deep bronze action, Raleway and Style Script loaded, no Inter, n
     assert.doesNotMatch(h, /family=Inter/, f);
   }
 });
+
+test('Trust OFF: the dashboard (it reads localStorage) opens externally with a note; Trust ON keeps the frame; other doors are unaffected', () => {
+  const dash = 'https://cascadereservations-del.github.io/cascade-admin-dashboard/#/today';
+  assert.deepEqual(CS.doorLink('dashboard', dash, ORIGIN, true), { href: '#door/dashboard', external: false });
+  assert.deepEqual(CS.doorLink('dashboard', dash, ORIGIN, false), { href: dash, external: true });
+  assert.deepEqual(CS.doorLink('dashboard', dash, ORIGIN, undefined), { href: dash, external: true });
+  const man = 'https://cascadereservations-del.github.io/Cascade-Manual/';
+  assert.equal(CS.doorLink('manual', man, ORIGIN, false).external, false);
+  assert.equal(CS.doorFramed('dashboard', 'admin', false), false, 'a hand-typed #door/dashboard with Trust OFF is not framed');
+  assert.equal(CS.doorFramed('dashboard', 'admin', true), true);
+  const app = read('app.js');
+  assert.match(app, /CS\.doorLink\(opts\.door, doorDef\(opts\.door\)\.url, location\.origin, trustOn\)/);
+  assert.match(app, /Sign-in is kept only on trusted devices/);
+});
+
+test('door lookup is by own property: constructor, __proto__, toString and friends are not doors', () => {
+  for (const k of ['constructor', '__proto__', 'toString', 'hasOwnProperty', 'valueOf', '', undefined, null, 'Manual', 'manual/x']) {
+    assert.equal(CS.doorRule(k), null, String(k));
+    for (const layout of ['staff', 'admin']) assert.equal(CS.doorFramed(k, layout, true), false, String(k));
+  }
+  assert.ok(CS.doorRule('manual'));
+  const app = read('app.js');
+  assert.match(app, /function doorDef\(key\) \{ return Object\.prototype\.hasOwnProperty\.call\(DOORS, key\)/);
+  assert.ok(!/DOORS\[(parts|doorKey|opts)/.test(app), 'no raw DOORS[...] lookup with a user-controlled key');
+});
+
+test('door by role: the dashboard is admin-only, the checklist and the manual are open to both layouts, no layout is nothing', () => {
+  assert.equal(CS.doorFramed('dashboard', 'staff', true), false);
+  assert.equal(CS.doorFramed('dashboard', 'admin', true), true);
+  for (const k of ['checklist', 'manual']) for (const l of ['staff', 'admin']) assert.equal(CS.doorFramed(k, l, true), true, k + ' ' + l);
+  for (const k of ['checklist', 'dashboard', 'manual']) { assert.equal(CS.doorFramed(k, null, true), false); assert.equal(CS.doorFramed(k, 'owner', true), false); }
+  assert.match(read('app.js'), /CS\.doorFramed\(parts\[1\], state\.layout, trustOn\)/);
+});
+
+test('sign-in markup a11y: no aria-label on the name select, live dots, 44 px trust row, form posts instead of GET', () => {
+  const html = read('index.html'), css = read('styles.css');
+  assert.doesNotMatch(html, /<select[^>]*aria-label/);
+  assert.match(html, /id="si-dots"[^>]*aria-live="polite"/);
+  assert.match(html, /<form class="signin" id="signin-form" method="post"/);
+  assert.match(css, /\.trust \{[^}]*min-height: var\(--touch\)/);
+});

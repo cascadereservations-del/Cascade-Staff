@@ -28,7 +28,7 @@
   <!-- Sign in -->
   <section class="view" id="v-signin" aria-labelledby="si-h">
     <div class="screen notab">
-      <form class="signin" id="signin-form" autocomplete="on" novalidate>
+      <form class="signin" id="signin-form" method="post" autocomplete="on" novalidate>
         <div>
           <h1 class="word" id="si-h"><b>C</b>ascade</h1>
           <div class="cap up" style="margin-top:8px">Staff</div>
@@ -36,12 +36,12 @@
           <div class="tag" style="margin-top:10px">Hotel Comfort. Home Warmth.</div>
         </div>
         <div class="field" id="si-pick"><label for="si-who">Who is signing in?</label>
-          <select class="sel" id="si-who" aria-label="Your name" disabled><option value="">Loading names...</option></select></div>
+          <select class="sel" id="si-who" disabled><option value="">Loading names...</option></select></div>
         <div class="field" id="si-typedbox" hidden><label for="si-typed">Name or e-mail</label>
           <div class="input"><input id="si-typed" autocomplete="username" autocapitalize="none" autocorrect="off" spellcheck="false"></div></div>
         <div class="field" id="si-pinbox" hidden>
           <label id="si-pinlbl">Your PIN</label>
-          <div class="dots" id="si-dots" role="img" aria-label="PIN, 0 of 4 digits"><i></i><i></i><i></i><i></i></div>
+          <div class="dots" id="si-dots" role="img" aria-live="polite" aria-label="PIN, 0 of 4 digits"><i></i><i></i><i></i><i></i></div>
           <div class="pad" id="si-pad" role="group" aria-labelledby="si-pinlbl"></div>
         </div>
         <div class="field" id="si-passbox" hidden><label for="si-pass">Password</label>

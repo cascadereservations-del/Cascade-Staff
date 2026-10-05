@@ -242,7 +242,8 @@ hr.hair { width: auto; height: 1px; border: 0; background: var(--rule); }
 .pad button.fn { border-color: transparent; background: transparent; box-shadow: none; color: var(--fg-2); }
 .pad button[disabled] { opacity: .35; pointer-events: none; }
 .pad .gap { visibility: hidden; }
-.trust { display: inline-flex; align-items: center; gap: 10px; min-height: 36px; font: 600 13px/18px var(--font-ui); letter-spacing: .02em; color: var(--fg-2); cursor: pointer; }
+.trust { display: inline-flex; align-items: center; gap: 10px; min-height: var(--touch); font: 600 13px/18px var(--font-ui); letter-spacing: .02em; color: var(--fg-2); cursor: pointer; }
+.doornote { padding: 2px 16px 10px 68px; border-bottom: 1px solid var(--border); }
 .trust input { width: 20px; height: 20px; accent-color: var(--primary); margin: 0; }
 .signin .errbox { justify-content: center; text-align: left; max-width: 320px; margin: 0 auto; }
 .signin .btn-block { max-width: 320px; margin: 0 auto; }
