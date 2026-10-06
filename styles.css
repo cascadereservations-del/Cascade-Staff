@@ -9,7 +9,7 @@
   /* text: espresso ink */
   --fg: #2A1F16; --fg-2: #5C4D3F; --fg-3: #74665A;
   /* action: deep bronze (the one tint) */
-  --primary: #7A5A2B; --primary-fg: #FBF7EE; --primary-soft: #F3E9D8; --ring: #B58E5F;
+  --primary: #7A5A2B; --primary-fg: #FBF7EE; --primary-soft: #F3E9D8; --ring: #7A5A2B;
   /* brand accent: the guide's bronze and gold */
   --accent: #B58E5F; --accent-text: #6E4F22; --accent-soft: #F6EEE0;
   --gold: #D7B377; --bronze: #B58E5F; --bronze-deep: #7A5A2B; --espresso: #3D2B1F;
@@ -17,7 +17,7 @@
   --rule: linear-gradient(90deg, transparent 0%, #B58E5F 50%, transparent 100%);
   --hairline: rgba(181, 142, 95, 0.28);
   /* status: always glyph + label (unchanged from v1) */
-  --ok: #287247; --ok-soft: #E2F2E7; --warn: #8A5A00; --warn-soft: #FBEFD3;
+  --ok: #287247; --ok-soft: #E2F2E7; --warn: #9C3F0A; --warn-soft: #FCE6D6;
   --danger: #B3261E; --danger-soft: #FBE3E1; --info: #2F5FA8; --info-soft: #E1EAF7;
   /* desktop sidebar (dashboard only): espresso with gold */
   --sidebar: #1F1711; --sidebar-fg: #EFE6D8; --sidebar-primary: #D7B377; --sidebar-accent: #2E241B; --sidebar-border: rgba(215, 179, 119, 0.14);
@@ -40,6 +40,7 @@
   --motion-fast: 150ms; --motion-base: 200ms; --motion-slow: 300ms; --ease: cubic-bezier(0.2, 0, 0, 1);
   --appbar-h: 56px; --tabbar-h: 64px; --touch: 44px;
   --danger-btn-fg: #FFFFFF;
+  --border-strong: #957F60;
   color-scheme: light;
 }
 
@@ -48,12 +49,12 @@
     --bg: #130E09; --card: #1D1611; --muted: #28201A; --border: rgba(215, 179, 119, 0.18); --overlay: rgba(0, 0, 0, 0.64);
     --fg: #F5EFE4; --fg-2: #C3B5A3; --fg-3: #9A8C7B;
     --primary: #D7B377; --primary-fg: #2A1E0E; --primary-soft: #3A2C18; --ring: #E4C98F;
-    --accent: #D7B377; --accent-text: #E4C98F; --accent-soft: #33291A;
-    --gold: #E4C98F; --bronze: #D7B377; --bronze-deep: #C9963A; --espresso: #130E09;
+    --accent: #EAD3A3; --accent-text: #E4C98F; --accent-soft: #33291A;
+    --gold: #E4C98F; --bronze: #EAD3A3; --bronze-deep: #C9963A; --espresso: #130E09;
     --gilt: linear-gradient(135deg, #EAD3A3 0%, #D7B377 50%, #C9963A 100%);
     --rule: linear-gradient(90deg, transparent 0%, #D7B377 50%, transparent 100%);
     --hairline: rgba(215, 179, 119, 0.22);
-    --ok: #84C79A; --ok-soft: #1E3527; --warn: #E6B65A; --warn-soft: #3A2D12;
+    --ok: #84C79A; --ok-soft: #1E3527; --warn: #F0A05A; --warn-soft: #3E2414;
     --danger: #F28B82; --danger-soft: #44201D; --info: #8FB7F5; --info-soft: #1D2C44;
     --sidebar: #0F0B07; --sidebar-fg: #EFE6D8; --sidebar-primary: #D7B377; --sidebar-accent: #231A12; --sidebar-border: rgba(215, 179, 119, 0.14);
     --chart-1: #D7B377; --chart-2: #63C5C7; --chart-3: #8FB7F5; --chart-4: #84C79A; --chart-5: #F28B82;
@@ -61,6 +62,7 @@
     --shadow-md: 0 2px 6px rgba(0, 0, 0, 0.40), 0 12px 32px rgba(0, 0, 0, 0.40);
     --shadow-lg: 0 8px 16px rgba(0, 0, 0, 0.45), 0 28px 56px rgba(0, 0, 0, 0.50);
     --danger-btn-fg: #44201D;
+    --border-strong: rgba(215, 179, 119, 0.48);
     color-scheme: dark;
   }
 }
@@ -69,12 +71,12 @@
   --bg: #130E09; --card: #1D1611; --muted: #28201A; --border: rgba(215, 179, 119, 0.18); --overlay: rgba(0, 0, 0, 0.64);
   --fg: #F5EFE4; --fg-2: #C3B5A3; --fg-3: #9A8C7B;
   --primary: #D7B377; --primary-fg: #2A1E0E; --primary-soft: #3A2C18; --ring: #E4C98F;
-  --accent: #D7B377; --accent-text: #E4C98F; --accent-soft: #33291A;
-  --gold: #E4C98F; --bronze: #D7B377; --bronze-deep: #C9963A; --espresso: #130E09;
+  --accent: #EAD3A3; --accent-text: #E4C98F; --accent-soft: #33291A;
+  --gold: #E4C98F; --bronze: #EAD3A3; --bronze-deep: #C9963A; --espresso: #130E09;
   --gilt: linear-gradient(135deg, #EAD3A3 0%, #D7B377 50%, #C9963A 100%);
   --rule: linear-gradient(90deg, transparent 0%, #D7B377 50%, transparent 100%);
   --hairline: rgba(215, 179, 119, 0.22);
-  --ok: #84C79A; --ok-soft: #1E3527; --warn: #E6B65A; --warn-soft: #3A2D12;
+  --ok: #84C79A; --ok-soft: #1E3527; --warn: #F0A05A; --warn-soft: #3E2414;
   --danger: #F28B82; --danger-soft: #44201D; --info: #8FB7F5; --info-soft: #1D2C44;
   --sidebar: #0F0B07; --sidebar-fg: #EFE6D8; --sidebar-primary: #D7B377; --sidebar-accent: #231A12; --sidebar-border: rgba(215, 179, 119, 0.14);
   --chart-1: #D7B377; --chart-2: #63C5C7; --chart-3: #8FB7F5; --chart-4: #84C79A; --chart-5: #F28B82;
@@ -82,6 +84,7 @@
   --shadow-md: 0 2px 6px rgba(0, 0, 0, 0.40), 0 12px 32px rgba(0, 0, 0, 0.40);
   --shadow-lg: 0 8px 16px rgba(0, 0, 0, 0.45), 0 28px 56px rgba(0, 0, 0, 0.50);
   --danger-btn-fg: #44201D;
+  --border-strong: rgba(215, 179, 119, 0.48);
   color-scheme: dark;
 }
 
@@ -112,8 +115,9 @@ svg.i.s12 { width: 12px; height: 12px; } svg.i.s16 { width: 16px; height: 16px; 
 .view.on { display: block; }
 
 /* ---- type ---- */
-/* gilt display text (headings 26 px and up only: the light stop is AA-large) */
-.dxl, .dlg, .signin .word { background: var(--gilt); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; color: var(--accent-text); }
+/* gilt gradient text: the sign-in wordmark only; other display text is solid bronze (AA) */
+.dxl, .dlg { color: var(--accent-text); }
+.signin .word { background: var(--gilt); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; color: var(--accent-text); }
 .dxl { font: 600 34px/40px var(--font-display); letter-spacing: .005em; }
 .dxl .script { font: 400 1.18em/1 var(--font-script); background: none; -webkit-text-fill-color: var(--accent-text); color: var(--accent-text); }
 .dlg { font: 600 28px/34px var(--font-display); }
@@ -157,7 +161,7 @@ hr.hair { width: auto; height: 1px; border: 0; background: var(--rule); }
 .mid .t { font: 600 15px/22px var(--font-ui); color: var(--fg); }
 .mid .s { font: 400 13px/18px var(--font-ui); color: var(--fg-2); }
 .chev { color: var(--fg-3); }
-.count { min-width: 20px; height: 20px; padding: 0 6px; border-radius: var(--r-full); background: var(--danger); color: #FFFFFF; font: 600 11px/20px var(--font-ui); text-align: center; }
+.count { min-width: 20px; height: 20px; padding: 0 6px; border-radius: var(--r-full); background: var(--danger); color: var(--danger-btn-fg); font: 600 11px/20px var(--font-ui); text-align: center; }
 .subrow { display: grid; justify-items: center; gap: 6px; padding: 12px 16px 14px; border-bottom: 1px solid var(--border); text-align: center; }
 .subrow .help { display: block; max-width: 280px; }
 .submenu { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 4px 16px 14px 68px; border-bottom: 1px solid var(--border); }
@@ -215,7 +219,7 @@ hr.hair { width: auto; height: 1px; border: 0; background: var(--rule); }
 .tab .ico { width: 40px; height: 28px; border-radius: var(--r-full); display: flex; align-items: center; justify-content: center; }
 .tab[aria-current="page"] { color: var(--primary); }
 .tab[aria-current="page"] .ico { background: var(--primary-soft); }
-.tab .badge { position: absolute; top: 8px; left: calc(50% + 6px); min-width: 16px; height: 16px; padding: 0 4px; border-radius: var(--r-full); background: var(--danger); color: #FFFFFF; font: 600 11px/16px var(--font-ui); text-align: center; }
+.tab .badge { position: absolute; top: 8px; left: calc(50% + 6px); min-width: 16px; height: 16px; padding: 0 4px; border-radius: var(--r-full); background: var(--danger); color: var(--danger-btn-fg); font: 600 11px/16px var(--font-ui); text-align: center; }
 
 /* ---- sign in ---- */
 .signin { flex: 1; display: flex; flex-direction: column; justify-content: center; gap: 18px; text-align: center; padding: 32px 0 24px; min-height: 100vh; }
@@ -347,7 +351,7 @@ hr.hair { width: auto; height: 1px; border: 0; background: var(--rule); }
 .qg { max-width: 480px; margin: 0 auto; padding: 0 var(--gutter) 48px; }
 .qg p.intro { margin: 20px 0 0; }
 .qg p.intro + p.intro { margin-top: 8px; color: var(--fg-2); }
-.qg h2 { font: 600 28px/34px var(--font-display); margin: 32px 0 12px; background: var(--gilt); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; color: var(--accent-text); }
+.qg h2 { font: 600 28px/34px var(--font-display); margin: 32px 0 12px; color: var(--accent-text); }
 .qg h2::after { content: ""; display: block; width: 48px; height: 2px; background: linear-gradient(90deg, #D7B377, #B58E5F, #7A5A2B); margin-top: 6px; border-radius: 1px; }
 .qg .card { margin-top: 12px; }
 .qg code { font: 500 15px/22px var(--font-ui); font-variant-numeric: tabular-nums slashed-zero; background: var(--muted); padding: 1px 6px; border-radius: var(--r-sm); }

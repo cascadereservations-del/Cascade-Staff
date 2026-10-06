@@ -116,7 +116,7 @@
     var w = CS.weatherLine(state.payload.weather, state.payload.today);
     var line = w || CS.dayLong(state.payload.today);
     var stale = state.payload.weather && state.payload.weather.fetched_at && CS.weatherStale(state.payload.weather) ? ' · as of ' + CS.clockLabel(state.payload.weather.fetched_at) : '';
-    return '<div class="greet"><h1 class="dxl"><span class="script">' + esc(CS.greeting() + ',') + '</span> ' + esc(state.name) + '</h1><div class="cap" style="margin-top:4px">' + esc(line + stale) + '</div></div>';
+    return '<div class="greet"><h1 class="dxl"><span class="script">' + esc(CS.greeting() + (CS.greetingName(state.user) ? ',' : '')) + '</span> ' + esc(CS.greetingName(state.user)) + '</h1><div class="cap" style="margin-top:4px">' + esc(line + stale) + '</div></div>';
   }
   function footerLine() { return '<div class="help" style="text-align:center;margin-top:16px">v' + CFG.version + ' · <button class="btn btn-ghost btn-sm" type="button" data-act="signout" style="height:28px;padding:0 6px">Sign out</button></div>'; }
 

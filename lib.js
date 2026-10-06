@@ -30,6 +30,14 @@
     return spaced.replace(/\b\w/g, function (c) { return c.toUpperCase(); }) || 'Staff';
   }
 
+  // Greeting name: the profile's display first name only. An e-mail/handle fallback is never greeted (returns '').
+  function greetingName(user) {
+    user = user || {};
+    var um = user.user_metadata || {}, am = user.app_metadata || {};
+    var meta = um.display_name || am.display_name || um.name;
+    return meta ? String(meta).trim().split(/\s+/)[0] : '';
+  }
+
   // ---- sign-in screen (D-303.2, D-303.3) ------------------------------------------------------------------------------
   var LAST_SIGNIN_KEY = 'cs_last_signin';
   // 'pin' for the checklist accounts (slug@staff.cascade.invalid, password '8888' + 4 digits); anything else is a mailbox password account.
@@ -417,7 +425,7 @@
     taskKindLabel: taskKindLabel, manilaDayOf: manilaDayOf, taskDue: taskDue, taskDueLabel: taskDueLabel, dueFromDate: dueFromDate, taskGroups: taskGroups,
     taskDueCount: taskDueCount, reminderProblem: reminderProblem, canEditRates: canEditRates, rateNum: rateNum, rateLine: rateLine,
     earliestRateStart: earliestRateStart, rateProblem: rateProblem, rateArgs: rateArgs,
-    staffAuthPassword: staffAuthPassword, staffLoginEmail: staffLoginEmail, deriveDisplayName: deriveDisplayName,
+    staffAuthPassword: staffAuthPassword, staffLoginEmail: staffLoginEmail, deriveDisplayName: deriveDisplayName, greetingName: greetingName,
     signinKind: signinKind, signinList: signinList, typedEntry: typedEntry, keypadPress: keypadPress, signinCredentials: signinCredentials,
     authStorage: authStorage, trustedFromStorage: trustedFromStorage, rememberName: rememberName, recalledName: recalledName, doorTarget: doorTarget, doorLink: doorLink, doorRule: doorRule, doorFramed: doorFramed,
     layoutForRole: layoutForRole, accessVerdict: accessVerdict, assertNoMoney: assertNoMoney, moneyKeys: moneyKeys,
