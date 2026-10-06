@@ -35,6 +35,12 @@ test('display name: display_name, then name, then the e-mail local part', () => 
   assert.equal(CS.deriveDisplayName({}), 'Staff');
   assert.equal(CS.greetingName({ user_metadata: { display_name: ' Mary Ann Cruz ' } }), 'Mary');
   assert.equal(CS.greetingName({ email: 'cascadereservations@gmail.com' }), '');
+  assert.equal(CS.greetingName({ email: 'rocloyd87@gmail.com', user_metadata: { display_name: 'rocloyd87' } }), '');
+  assert.equal(CS.greetingName({ email: 'lloyd@gmail.com', app_metadata: { display_name: 'Lloyd' } }), '');
+  assert.equal(CS.greetingName({ user_metadata: { name: 'Lloyd R' } }), 'Lloyd');
+  assert.equal(CS.greetingName(null), '');
+  assert.equal(CS.greetingName({ user_metadata: { display_name: '   ' } }), '');
+  assert.equal(CS.greetingName({ email: 'honey@staff.cascade.invalid', user_metadata: { display_name: 'Honey' } }), 'Honey');
 });
 
 test('assertNoMoney refuses money and contact keys at any depth, and passes the real payload shape', () => {

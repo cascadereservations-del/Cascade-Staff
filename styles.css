@@ -119,7 +119,8 @@ svg.i.s12 { width: 12px; height: 12px; } svg.i.s16 { width: 16px; height: 16px; 
 .dxl, .dlg { color: var(--accent-text); }
 .signin .word { background: var(--gilt); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; color: var(--accent-text); }
 .dxl { font: 600 34px/40px var(--font-display); letter-spacing: .005em; }
-.dxl .script { font: 400 1.18em/1 var(--font-script); background: none; -webkit-text-fill-color: var(--accent-text); color: var(--accent-text); }
+.dxl .script { font: 400 1.18em/1 var(--font-script); color: var(--accent-text); }
+@media (forced-colors: active) { .signin .word { background: none; -webkit-text-fill-color: currentColor; } }
 .dlg { font: 600 28px/34px var(--font-display); }
 .dlg::after { content: ""; display: block; width: 48px; height: 2px; margin-top: 6px; background: linear-gradient(90deg, #D7B377, #B58E5F, #7A5A2B); border-radius: 1px; }
 .ttl { font: 600 22px/28px var(--font-display); letter-spacing: .005em; }

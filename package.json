@@ -1,6 +1,6 @@
 {
   "name": "cascade-staff",
-  "version": "2.2.0",
+  "version": "2.2.1",
   "private": true,
   "description": "Cascade Staff PWA: staff app and the official mobile admin side (SPEC-36, D-299.3). Static files, no build step.",
   "scripts": { "test": "node --test \"tests/*.test.mjs\"" }

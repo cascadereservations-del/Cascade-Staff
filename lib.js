@@ -35,7 +35,12 @@
     user = user || {};
     var um = user.user_metadata || {}, am = user.app_metadata || {};
     var meta = um.display_name || am.display_name || um.name;
-    return meta ? String(meta).trim().split(/\s+/)[0] : '';
+    var w = meta ? String(meta).trim().split(/\s+/)[0] : '';
+    var email = String(user.email || '').toLowerCase(), local = email.split('@')[0];
+    // a handle-like first word (digits, @ . _) or the e-mail local part is not a name; PIN staff slugs are real first names
+    if (!w || /[\d@._]/.test(w)) return '';
+    if (w.toLowerCase() === local && !/@staff\.cascade\.invalid$/.test(email)) return '';
+    return w;
   }
 
   // ---- sign-in screen (D-303.2, D-303.3) ------------------------------------------------------------------------------
