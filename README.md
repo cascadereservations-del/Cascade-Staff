@@ -8,7 +8,7 @@ Specs: SPEC-36 (gateway, calendar info), SPEC-37 sections 4-7 (Payment Request p
 
 | Path | What it is |
 |---|---|
-| `index.html`, `app.js` | Sign in, staff home, admin home, Guest Calendar Info (with the guest card), More. Hash routes `#home`, `#calendar`, `#calendar/house`, `#more`. |
+| `index.html`, `app.js` | Sign in, staff home, admin home, Guest Calendar Info (with the guest card), More. Hash routes `#home`, `#calendar`, `#calendar/house`, `#tasks`, `#payrates` (owner and admin), `#more`. |
 | `lib.js` | Pure helpers (login rules, roles, `assertNoMoney`, Manila dates, month grid, notes, warnings). Browser global `CS`, Node `require`. |
 | `styles.css`, `theme.js`, `icons.js` | Theme v2 (DESIGN section 8, D-303.1): deep bronze action colour, Raleway / Cormorant Garamond / Style Script, token sheet 8.2 verbatim (light and dark), Lucide icons inline. |
 | `quick/index.html` | The Quick guide: how the team uses Cassy in the Telegram OPS and Finance groups. |
@@ -16,6 +16,12 @@ Specs: SPEC-36 (gateway, calendar info), SPEC-37 sections 4-7 (Payment Request p
 | `pay/bank.html` | Opens a bank app. Lists only apps whose ids are verified (none yet, so none is offered). |
 | `sw.js`, `manifest.webmanifest`, `icons/`, `fonts/` | Installable shell. Supabase is network-only; nothing personal is ever cached. |
 | `tests/` | `npm test` (Node 20+, no dependencies). |
+
+## Tasks and Pay rates (D-301)
+
+**Tasks** is a tab in both layouts and one list (`tasks_list_v1`): reminders, follow-ups, work orders, cleaning issues and open checks. No second task store. Staff see their own tasks and the unassigned ones that name no guest, already redacted by the server (no guest id, no money, no contact); owner and admin see everything and add a reminder (title, optional date, who it is for, note). Tap the box to finish a task; the line above the list keeps **Undo** until the next action. A check ("Check needs a person") is acknowledged, not toggled. Tab badge = open tasks that are overdue or due today.
+
+**Pay rates** (`#payrates`, owner and admin only, a row on the admin home) shows the rate in force, any scheduled rate and the history, and ADDS a new dated row through `admin_add_pay_rate_v1` (append-only, audited; history is never changed). The staff app and payment requests read the row in force on the clean's date; nothing in the app hard-codes 500 / 150 / 1,000.
 
 ## Roles
 

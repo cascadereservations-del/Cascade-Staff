@@ -1,9 +1,10 @@
 /* Cascade Staff - staff app and the official mobile admin side (SPEC-36, D-299.3, D-300). One page, hash routes:
-   #signin, #home, #calendar (or #calendar/house to scroll to the guest card), #more, #door/<key> (a same-origin door in a frame, D-304).
+   #signin, #home, #calendar (or #calendar/house to scroll to the guest card), #tasks (D-301), #payrates (owner and admin, D-301), #more,
+   #door/<key> (a same-origin door in a frame, D-304).
    Guest names, notes and ID photos live in memory for the open session only. Nothing personal is written to storage. */
 (function () {
   'use strict';
-  var CS = window.CS, ICON = window.ICON, esc = CS.esc;
+  var CS = window.CS, P = window.CSPay, ICON = window.ICON, esc = CS.esc;
   if (!window.supabase) { // offline on a first visit: the shell is here, the client library is not
     document.getElementById('v-signin').classList.add('on');
     var e0 = document.getElementById('si-err'); e0.hidden = false; e0.textContent = 'Live information needs a connection. Open the app again when you have signal.';
@@ -15,7 +16,7 @@
     url: 'https://qkgfhsdppslwunarczeq.supabase.co',
     key: 'sb_publishable_JFuRYZ9csmQULcMRmHXDSg_Abo9UeCj',
     propertyId: '6ae230f4-c189-4547-84b1-cb6e0b2cc9bd',
-    version: '2.1.0'
+    version: '2.2.0'
   };
   var LINKS = {
     checklist: 'https://cascadereservations-del.github.io/CH-Cleaners-Checklist/',
@@ -42,9 +43,11 @@
   var sb = window.supabase.createClient(CFG.url, CFG.key, { auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: false,
     storage: CS.authStorage(store('localStorage'), store('sessionStorage'), function () { return trustOn; }) } });
 
-  var state = { access: null, user: null, name: '', layout: null, payload: null, loadedAt: 0, loading: false, error: '', month: null, cassyOpen: true, payHint: null, photos: {} };
+  var state = { access: null, user: null, name: '', layout: null, payload: null, loadedAt: 0, loading: false, error: '', month: null, cassyOpen: true, payHint: null, photos: {},
+    tasks: null, tasksErr: '', tasksLoading: false, showDone: false, lastDone: null, add: null, assignees: null, rates: null, ratesErr: '', rateForm: null, rateSaving: false };
   var $ = function (id) { return document.getElementById(id); };
-  var VIEWS = ['signin', 'home', 'calendar', 'more', 'door'];
+  var VIEWS = ['signin', 'home', 'calendar', 'tasks', 'payrates', 'more', 'door'];
+  function pid() { return (state.access && state.access.property_ids && state.access.property_ids[0]) || CFG.propertyId; }
 
   // ---------------------------------------------------------------- helpers
   function ext(href, inner, cls, extra) { return '<a class="' + (cls || '') + '" href="' + esc(href) + '" target="_blank" rel="noopener"' + (extra || '') + '>' + inner + '</a>'; }
@@ -76,13 +79,12 @@
 
   // ---------------------------------------------------------------- tab bar
   function renderTabs(current) {
-    var staff = state.layout === 'staff';
-    var tabs = staff
-      ? [['home', '#home', 'Today', 'house'], ['calendar', '#calendar', 'Calendar', 'calendar', warnCount()], ['pay', LINKS.pay, 'Tasks', 'tasks'], ['more', '#more', 'More', 'more']]
-      : [['home', '#home', 'Home', 'house'], ['calendar', '#calendar', 'Calendar', 'calendar', warnCount()], ['more', '#more', 'More', 'more']];
+    var staff = state.layout === 'staff', due = state.tasks ? CS.taskDueCount(state.tasks.tasks, state.tasks.today) : 0;
+    var tabs = [['home', '#home', staff ? 'Today' : 'Home', 'house'], ['calendar', '#calendar', 'Calendar', 'calendar', warnCount()],
+      ['tasks', '#tasks', 'Tasks', 'tasks', due], ['more', '#more', 'More', 'more']];
     $('tabbar').innerHTML = tabs.map(function (t) {
       return '<a class="tab" href="' + esc(t[1]) + '"' + (t[0] === current ? ' aria-current="page"' : '') + '><span class="ico">' + ICON(t[3], 's24') + '</span>' + esc(t[2]) +
-        (t[4] ? '<span class="badge" aria-label="' + t[4] + ' warnings">' + t[4] + '</span>' : '') + '</a>';
+        (t[4] ? '<span class="badge" aria-label="' + t[4] + (t[0] === 'tasks' ? ' due' : ' warnings') + '">' + t[4] + '</span>' : '') + '</a>';
     }).join('');
   }
 
@@ -136,6 +138,7 @@
       doors = '<nav class="card list" aria-label="Admin">' +
         row({ icon: 'dash', title: 'Admin dashboard', sub: 'Today, bookings, money, operations', door: 'dashboard' }) +
         (trustOn ? '' : '<div class="help doornote">Sign-in is kept only on trusted devices</div>') +
+        (CS.canEditRates(state.access && state.access.role) ? row({ icon: 'cash', title: 'Pay rates', sub: 'What a clean and its transport pay', href: '#payrates' }) : '') +
         row({ icon: 'calendar', title: 'Guest Calendar Info', sub: 'Stays, blocked nights, warnings', href: '#calendar', count: n || '' }) +
         '<button class="rowi" type="button" data-act="cassy" aria-expanded="' + state.cassyOpen + '"><span class="lead">' + ICON('chat') + '</span><span class="mid"><span class="t">Cassy</span><span class="s">Open in Telegram</span></span><span class="chev turn">' + ICON('chev') + '</span></button>' +
         '<div class="submenu" id="cassy-sub"' + (state.cassyOpen ? '' : ' hidden') + '><span class="cap">Open in Telegram</span>' +
@@ -265,6 +268,150 @@
     el.innerHTML = html; loadIdPhotos(el);
   }
 
+  // ---------------------------------------------------------------- Tasks (D-301)
+  // ONE list from tasks_list_v1: reminders, follow-ups, work orders, cleaning issues and open checks. The server limits it to the role
+  // (owner and admin see all, everyone else sees their own, redacted) so this screen only draws it. Tap the box to finish a task; the
+  // Undo line stays until the next action. Owner and admin can add a reminder.
+  function manager() { return !!(state.tasks && state.tasks.manager); }
+  function taskRow(t) {
+    var done = t.status === 'done', due = CS.taskDue(t.due_at, state.tasks.today), key = t.source + ':' + t.id;
+    var meta = [CS.taskKindLabel(t.kind)];
+    if (t.due_at) meta.push(CS.taskDueLabel(t.due_at, state.tasks.today));
+    if (!t.mine && manager()) meta.push(t.assignee_label ? 'for ' + t.assignee_label : 'unassigned');
+    var flags = (t.mine ? pill('info', 'user', 'Yours') : '') + (t.blocks_arrival && !done ? pill('danger', 'alert', 'Blocks arrival') : '') +
+      ((t.priority === 'urgent' || t.priority === 'high') && !done ? pill(t.priority === 'urgent' ? 'danger' : 'warn', 'alert', t.priority) : '');
+    return '<div class="payrow taskrow' + (done ? ' off' : '') + '"><button class="chk" type="button" role="checkbox" aria-checked="' + done + '" aria-label="' + esc((done ? 'Done: ' : 'Mark done: ') + t.title) + '" data-act="' + (done ? 'task-undo' : 'task-done') + '" data-task="' + esc(key) + '">' + ICON('check', 's16') + '</button>' +
+      '<div><div class="t"><span' + (done ? ' style="text-decoration:line-through;color:var(--fg-2)"' : '') + '>' + esc(t.title) + '</span></div>' +
+      (t.detail ? '<span class="s" style="white-space:pre-line">' + esc(t.detail) + '</span>' : '') +
+      '<span class="s' + (due === 'overdue' && !done ? ' c-danger' : '') + '">' + esc(meta.join(' · ')) + '</span>' +
+      (flags ? '<div class="row-wrap" style="margin-top:6px">' + flags + '</div>' : '') + '</div></div>';
+  }
+  function addReminderCard() {
+    var a = state.add, opts = '<option value="">Anyone / nobody yet</option>' + (state.assignees || []).map(function (u) { return '<option value="' + esc(u.user_id) + '"' + (a.who === u.user_id ? ' selected' : '') + '>' + esc(u.label + ' (' + u.role + ')') + '</option>'; }).join('');
+    return '<div class="card"><h2 class="hd">Add a reminder</h2><div class="stack" style="margin-top:10px">' +
+      '<div class="field"><label for="t-title">What needs doing</label><div class="input"><input id="t-title" maxlength="200" value="' + esc(a.title) + '" autocomplete="off"></div></div>' +
+      '<div class="field"><label for="t-due">Due (optional)</label><div class="input"><input id="t-due" type="date" value="' + esc(a.due) + '"></div></div>' +
+      '<div class="field"><label for="t-who">For</label><select class="sel" id="t-who" style="max-width:none;text-align:left;text-align-last:left">' + opts + '</select></div>' +
+      '<div class="field"><label for="t-note">Note (optional)</label><div class="input"><input id="t-note" maxlength="1000" value="' + esc(a.note) + '" autocomplete="off"></div></div>' +
+      (a.err ? '<div class="errbox" role="alert">' + ICON('alert') + '<span>' + esc(a.err) + '</span></div>' : '') +
+      '<div class="row-wrap"><button class="btn btn-primary" type="button" data-act="task-add-save"' + (a.busy ? ' disabled' : '') + '>' + (a.busy ? 'Adding…' : 'Add reminder') + '</button><button class="btn btn-ghost" type="button" data-act="task-add-cancel">Cancel</button></div></div></div>';
+  }
+  function renderTasks() {
+    var el = $('v-tasks'), head = appbar({ title: 'Tasks', refresh: true });
+    if (!state.tasks) { el.innerHTML = head + '<div class="screen">' + (state.tasksErr ? '<div class="errbox" role="alert">' + ICON('alert') + '<span>' + esc(state.tasksErr) + ' <button class="btn btn-ghost btn-sm" type="button" data-act="refresh">Try again</button></span></div>' : loadingBlock()) + '</div>'; return; }
+    var T = state.tasks, groups = CS.taskGroups(T.tasks.filter(function (t) { return state.showDone || t.status !== 'done'; }), T.today), body = '';
+    if (state.lastDone) body += '<div class="okbox" role="status">' + ICON('check') + '<span>' + esc(state.lastDone.done ? 'Marked done: ' : 'Back on the list: ') + esc(state.lastDone.title) +
+      (state.lastDone.source === 'verifier_findings' ? '' : ' <button class="btn btn-ghost btn-sm" type="button" data-act="task-' + (state.lastDone.done ? 'undo' : 'done') + '" data-task="' + esc(state.lastDone.source + ':' + state.lastDone.id) + '">' + (state.lastDone.done ? 'Undo' : 'Done again') + '</button>') + '</span></div>';
+    if (state.tasksErr) body += '<div class="errbox" role="alert">' + ICON('alert') + '<span>' + esc(state.tasksErr) + '</span></div>';
+    if (manager()) body += state.add ? addReminderCard() : '<button class="btn btn-secondary" type="button" data-act="task-add-open">' + ICON('plus', 's16') + 'Add a reminder</button>';
+    if (!groups.length) body += '<div class="card empty"><div class="disc">' + ICON('checks') + '</div><h2 class="hd">Nothing to do</h2><p>' + (manager() ? 'Add a reminder, or wait for a cleaning issue or a check to land here.' : 'Nothing is waiting for you.') + '</p></div>';
+    groups.forEach(function (g) { body += '<div><div class="cap up" style="margin-bottom:6px">' + esc(g.label) + ' (' + g.tasks.length + ')</div><div class="card list">' + g.tasks.map(taskRow).join('') + '</div></div>'; });
+    body += '<label class="trust"><input type="checkbox" data-act="tasks-showdone"' + (state.showDone ? ' checked' : '') + '> Show what was done in the last 14 days</label>';
+    el.innerHTML = head + '<div class="screen"><p class="sub" style="margin:0 0 12px">' + (manager() ? 'Everything that needs a person. Tap the box when it is done.' : 'What is yours to do. Tap the box when it is done.') + '</p><div class="stack">' + body + '</div></div>';
+  }
+  function loadTasks() {
+    if (!state.access) return Promise.resolve();
+    state.tasksLoading = true;
+    return sb.rpc('tasks_list_v1', { p_property_id: pid(), p_include_done: state.showDone }).then(function (r) {
+      if (r.error) throw r.error;
+      var d = r.data; if (!d || d.ok === false) throw new Error('denied');
+      CS.assertNoMoney(d.tasks || []);
+      state.tasks = { manager: d.manager === true, today: d.today || CS.manilaToday(), tasks: d.tasks || [] }; state.tasksErr = '';
+    }).catch(function (e) {
+      state.tasksErr = e && e.message === 'denied' ? 'Tasks are not available for this account.' : state.tasks ? 'Live information needs a connection. Showing the last update.' : 'Live information needs a connection.';
+    }).then(function () { state.tasksLoading = false; if (state.layout && current !== 'door') { if (current === 'tasks') renderTasks(); renderTabs(current); } });
+  }
+  function findTask(key) {
+    var i = key.indexOf(':'), src = key.slice(0, i), id = key.slice(i + 1), list = state.tasks ? state.tasks.tasks : [];
+    for (var k = 0; k < list.length; k++) if (list[k].source === src && list[k].id === id) return list[k];
+    return null;
+  }
+  function setTaskDone(key, done) {
+    var t = findTask(key), L = state.lastDone;
+    // The server hides a finished task once the list reloads, so Undo works from the remembered one.
+    if (!t && L && L.source + ':' + L.id === key) t = { source: L.source, id: L.id, title: L.title, status: done ? 'open' : 'done' };
+    if (!t || t.status === (done ? 'done' : 'open')) return;
+    t.status = done ? 'done' : 'open'; state.lastDone = { source: t.source, id: t.id, title: t.title, done: done }; state.tasksErr = ''; renderTasks(); renderTabs('tasks');
+    var call = t.source === 'verifier_findings' ? sb.rpc('ack_verifier_finding_v1', { p_key: t.id })
+      : sb.rpc('task_set_done_v1', { p_property_id: pid(), p_source: t.source, p_id: t.id, p_done: done });
+    var msg = '';
+    call.then(function (r) { if (r.error) throw r.error; }).catch(function (e) {
+      t.status = done ? 'open' : 'done'; state.lastDone = null;
+      msg = e && (e.code === '42501' || e.code === 'P0002') ? 'That task is not yours to change.' : 'That did not save. Check your signal and try again.';
+    }).then(function () { return loadTasks(); }).then(function () { if (msg) { state.tasksErr = msg; renderTasks(); } });
+  }
+  function openAdd() {
+    state.add = { title: '', due: '', who: '', note: '', err: '', busy: false, key: 'rem-' + (window.crypto && crypto.randomUUID ? crypto.randomUUID() : Date.now() + '-' + Math.random().toString(16).slice(2)) };
+    if (!state.assignees) sb.rpc('task_assignees_v1', { p_property_id: pid() }).then(function (r) { if (!r.error && r.data && r.data.staff) { state.assignees = r.data.staff; if (state.add) renderTasks(); } });
+    renderTasks(); var t = $('t-title'); if (t) t.focus();
+  }
+  function saveAdd() {
+    var a = state.add; if (!a || a.busy) return;
+    var bad = CS.reminderProblem(a.title); if (bad) { a.err = bad; renderTasks(); return; }
+    a.busy = true; a.err = ''; renderTasks();
+    sb.rpc('task_add_reminder_v1', { p_property_id: pid(), p_title: a.title.trim(), p_due_at: CS.dueFromDate(a.due), p_assignee_user_id: a.who || null, p_note: a.note.trim() || null, p_idempotency_key: a.key }).then(function (r) {
+      if (r.error) throw r.error;
+      state.add = null; state.lastDone = null; return loadTasks();
+    }).catch(function (e) {
+      a.busy = false; a.err = e && e.code === '42501' ? 'Only the owner and admins can add reminders.' : e && e.code === '22023' && e.message ? e.message : 'That did not save. Check your signal and try again.'; renderTasks();
+    });
+  }
+
+  // ---------------------------------------------------------------- Pay rates (D-301, owner and admin)
+  // One source: cleaner_rate_schedule. The staff app and payment requests read the row in force on the clean's date. This screen only
+  // ADDS a dated row (admin_add_pay_rate_v1: append-only, audited); history is never changed.
+  function renderPayRates() {
+    var el = $('v-payrates'), head = appbar({ title: 'Pay rates', back: '#home', refresh: true });
+    if (!state.rates) { el.innerHTML = head + '<div class="screen">' + (state.ratesErr ? '<div class="errbox" role="alert">' + ICON('alert') + '<span>' + esc(state.ratesErr) + ' <button class="btn btn-ghost btn-sm" type="button" data-act="refresh">Try again</button></span></div>' : loadingBlock()) + '</div>'; return; }
+    var R = state.rates, f = state.rateForm, earliest = CS.earliestRateStart(R.history, R.today), cur = R.in_force;
+    var fld = function (id, label, val, extra) { return '<div class="field"><label for="' + id + '">' + label + '</label><div class="input"><input id="' + id + '" value="' + esc(val) + '" ' + (extra || '') + '></div></div>'; };
+    el.innerHTML = head + '<div class="screen"><p class="sub" style="margin:0 0 12px">The staff app and payment requests use these rates. A request reads the rate in force on the date of the clean.</p><div class="stack">' +
+      '<div class="card"><span class="cap up">In force today</span>' + (cur ? '<p class="strong num" style="margin:8px 0 0">' + esc(CS.rateLine(cur, P.peso)) + '</p><p class="help" style="margin:4px 0 0">Since ' + esc(CS.dayLabel(cur.effective_from) + ' ' + cur.effective_from.slice(0, 4)) + (cur.note ? ' · ' + esc(cur.note) : '') + '</p>' : '<p class="sub" style="margin-top:8px">No rate is in force today. Add one below.</p>') +
+      (R.next ? '<p class="sub num" style="margin:10px 0 0">' + pill('info', 'clock', 'Scheduled') + ' ' + esc(CS.rateLine(R.next, P.peso)) + ' · starts ' + esc(CS.dayLabel(R.next.effective_from)) + '</p>' : '') + '</div>' +
+      '<div class="card"><h2 class="hd">Add a new rate</h2><p class="help" style="margin:4px 0 10px">It starts on the date you pick. Earlier dates keep their rate; nothing is overwritten.</p><div class="stack">' +
+      fld('r-from', 'Starts on', f.from, 'type="date" min="' + esc(earliest) + '"') +
+      fld('r-regular', 'Per clean (PHP)', f.regular, 'inputmode="decimal" placeholder="' + esc(cur && cur.regular_rate != null ? cur.regular_rate : '') + '"') +
+      fld('r-general', 'Per deep clean (PHP)', f.general, 'inputmode="decimal" placeholder="' + esc(cur && cur.general_rate != null ? cur.general_rate : '') + '"') +
+      fld('r-transport', 'Transport (PHP, empty if included)', f.transport, 'inputmode="decimal" placeholder="included"') +
+      fld('r-note', 'Why (kept in the audit history)', f.note, 'maxlength="500" autocomplete="off"') +
+      '<div class="errbox" id="r-problem" role="alert" hidden></div>' +
+      '<button class="btn btn-primary" type="button" data-act="rate-save" disabled>' + (state.rateSaving ? 'Saving…' : 'Save new rate') + '</button></div></div>' +
+      '<div><div class="cap up" style="margin-bottom:6px">History</div><div class="card list">' + (R.history || []).map(function (h) {
+        return '<div class="rowi" style="cursor:default"><span class="lead">' + ICON('cash') + '</span><span class="mid"><span class="t num">' + esc(CS.dayLabel(h.effective_from) + ' ' + h.effective_from.slice(0, 4)) + '</span><span class="s num">' + esc(CS.rateLine(h, P.peso)) + (h.note ? ' · ' + esc(h.note) : '') + '</span></span></div>';
+      }).join('') + '</div></div></div></div>';
+    syncRate();
+  }
+  // The save button and the one-line reason follow the typed values without redrawing the form (a redraw would drop the keyboard).
+  function syncRate() {
+    var f = state.rateForm, R = state.rates; if (!f || !R) return;
+    var bad = CS.rateProblem(f, CS.earliestRateStart(R.history, R.today), R.today), typed = !!(f.regular || f.general || f.transport || f.note), msg = f.err || (typed ? bad : '');
+    var box = $('r-problem'); if (box) { box.hidden = !msg; box.innerHTML = msg ? ICON('alert') + '<span>' + esc(msg) + '</span>' : ''; }
+    var b = document.querySelector('#v-payrates [data-act="rate-save"]'); if (b) b.disabled = !!bad || state.rateSaving;
+  }
+  function loadRates() {
+    if (!state.access || !CS.canEditRates(state.access.role)) return Promise.resolve();
+    return sb.rpc('admin_pay_rates_v1', { p_property_id: pid() }).then(function (r) {
+      if (r.error) throw r.error;
+      var d = r.data; if (!d || d.ok === false) throw new Error('denied');
+      state.rates = d; state.ratesErr = '';
+      if (!state.rateForm) state.rateForm = { from: CS.earliestRateStart(d.history, d.today), regular: '', general: '', transport: '', note: '', err: '', };
+      else if (state.rateForm.from < CS.earliestRateStart(d.history, d.today)) state.rateForm.from = CS.earliestRateStart(d.history, d.today);
+    }).catch(function (e) {
+      state.ratesErr = e && (e.code === '42501' || e.message === 'denied') ? 'Only the owner and admins can see pay rates.' : 'Live information needs a connection.';
+    }).then(function () { if (current === 'payrates') renderPayRates(); });
+  }
+  function saveRate() {
+    var f = state.rateForm, R = state.rates; if (!f || !R || state.rateSaving) return;
+    if (CS.rateProblem(f, CS.earliestRateStart(R.history, R.today), R.today)) { syncRate(); return; }
+    state.rateSaving = true; f.err = ''; syncRate();
+    sb.rpc('admin_add_pay_rate_v1', CS.rateArgs(pid(), f)).then(function (r) {
+      if (r.error) throw r.error;
+      state.rateForm = null; state.rateSaving = false; return loadRates();
+    }).catch(function (e) {
+      state.rateSaving = false; f.err = e && e.code === '42501' ? 'Only the owner and admins can change pay rates.' : e && e.code === '22023' && e.message ? e.message : 'That did not save. Check your signal and try again.'; syncRate();
+    });
+  }
+
   // ---------------------------------------------------------------- More
   function renderMore() {
     var theme = window.CSTheme.get(), staff = state.layout === 'staff';
@@ -347,6 +494,7 @@
     if (!state.layout) return;
     if (VIEWS.indexOf(v) < 0 || v === 'signin') v = 'home';
     if (v === 'door' && !(doorDef(parts[1]) && CS.doorFramed(parts[1], state.layout, trustOn))) v = 'home';
+    if (v === 'payrates' && !CS.canEditRates(state.access && state.access.role)) v = 'home';
     if (v === 'door') { doorKey = parts[1]; render('door'); window.scrollTo(0, 0); return; }
     leaveDoor(); render(v);
     var t = parts[1] && $(parts[1]); if (t) t.scrollIntoView({ block: 'start' }); else window.scrollTo(0, 0);
@@ -357,7 +505,7 @@
     setView(v);
     if (v === 'door') { renderDoor(); return; }
     renderTabs(v);
-    if (v === 'home') renderHome(); else if (v === 'calendar') renderCalendar(); else if (v === 'more') renderMore();
+    if (v === 'home') renderHome(); else if (v === 'calendar') renderCalendar(); else if (v === 'tasks') renderTasks(); else if (v === 'payrates') { renderPayRates(); if (!state.rates) loadRates(); } else if (v === 'more') renderMore();
   }
   // A door opens in the frame once per visit; coming back to the same door (a re-render) keeps the page where it is.
   function renderDoor() {
@@ -370,8 +518,8 @@
   function enter() {
     state.layout = CS.layoutForRole(state.access.role);
     state.name = CS.deriveDisplayName(state.user);
-    if (!/^#(home|calendar|more)/.test(location.hash)) history.replaceState(null, '', '#home');
-    route(); loadHome(); maybeIosHint();
+    if (!/^#(home|calendar|tasks|payrates|more)/.test(location.hash)) history.replaceState(null, '', '#home');
+    route(); loadHome(); loadTasks(); maybeIosHint();
   }
   function boot() {
     sb.auth.getSession().then(function (s) {
@@ -461,9 +609,14 @@
   $('signin-form').addEventListener('submit', function (ev) { ev.preventDefault(); submitSignin(); });
   $('door-back').addEventListener('click', function () { location.replace(location.pathname + location.search + '#home'); });
   document.addEventListener('click', function (ev) {
-    var t = ev.target.closest('[data-act],[data-stay],[data-theme]'); if (!t) return;
+    var t = ev.target.closest('[data-act],[data-stay],[data-theme]'); if (!t || t.getAttribute('data-act') === 'tasks-showdone') return;
     var a = t.getAttribute('data-act');
-    if (a === 'refresh') { loadHome(); }
+    if (a === 'refresh') { loadHome(); loadTasks(); if (current === 'payrates') loadRates(); }
+    else if (a === 'task-done' || a === 'task-undo') setTaskDone(t.getAttribute('data-task'), a === 'task-done');
+    else if (a === 'task-add-open') openAdd();
+    else if (a === 'task-add-cancel') { state.add = null; renderTasks(); }
+    else if (a === 'task-add-save') saveAdd();
+    else if (a === 'rate-save') saveRate();
     else if (a === 'signout') { signOutTo(''); }
     else if (a === 'prev') shiftMonth(-1);
     else if (a === 'next') shiftMonth(1);
@@ -472,10 +625,20 @@
       var el = $('stay-' + t.getAttribute('data-stay')); if (el) { el.scrollIntoView({ block: 'center', behavior: 'smooth' }); el.classList.add('flash'); setTimeout(function () { el.classList.remove('flash'); }, 1400); }
     } else if (t.hasAttribute('data-theme')) { window.CSTheme.set(t.getAttribute('data-theme')); renderMore(); }
   });
+  // Reminder and pay-rate forms: remember what is typed (a refresh must not lose it) without redrawing under the keyboard.
+  document.addEventListener('input', function (ev) {
+    var id = ev.target && ev.target.id, a = state.add, f = state.rateForm;
+    if (a && id === 't-title') a.title = ev.target.value; else if (a && id === 't-due') a.due = ev.target.value; else if (a && id === 't-note') a.note = ev.target.value; else if (a && id === 't-who') a.who = ev.target.value;
+    else if (f && /^r-(from|regular|general|transport|note)$/.test(id || '')) { f[id.slice(2)] = ev.target.value; f.err = ''; syncRate(); }
+  });
+  document.addEventListener('change', function (ev) {
+    if (ev.target && ev.target.id === 't-who' && state.add) state.add.who = ev.target.value;
+    else if (ev.target && ev.target.getAttribute && ev.target.getAttribute('data-act') === 'tasks-showdone') { state.showDone = ev.target.checked; loadTasks(); renderTasks(); }
+  });
   window.addEventListener('hashchange', route);
   window.addEventListener('scroll', function () { var b = document.querySelector('.view.on .appbar'); if (b) b.classList.toggle('scrolled', window.scrollY > 8); }, { passive: true });
   document.addEventListener('visibilitychange', function () {
-    if (document.visibilityState === 'visible' && state.layout && Date.now() - state.loadedAt > 60000) loadHome();
+    if (document.visibilityState === 'visible' && state.layout && Date.now() - state.loadedAt > 60000) { loadHome(); loadTasks(); }
   });
 
   // ---------------------------------------------------------------- install: iOS hint once, Android install button
