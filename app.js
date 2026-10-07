@@ -1,5 +1,5 @@
 /* Cascade Staff - staff app and the official mobile admin side (SPEC-36, D-299.3, D-300). One page, hash routes:
-   #signin, #home, #calendar (or #calendar/house to scroll to the guest card), #tasks (D-301), #payrates (owner and admin, D-301), #more,
+   #signin, #home, #calendar (or #calendar/house to scroll to the guest card), #tasks (D-301), #payrates (owner and admin, D-301), #reply (owner and admin, s76), #more,
    #door/<key> (a same-origin door in a frame, D-304).
    Guest names, notes and ID photos live in memory for the open session only. Nothing personal is written to storage. */
 (function () {
@@ -16,7 +16,7 @@
     url: 'https://qkgfhsdppslwunarczeq.supabase.co',
     key: 'sb_publishable_JFuRYZ9csmQULcMRmHXDSg_Abo9UeCj',
     propertyId: '6ae230f4-c189-4547-84b1-cb6e0b2cc9bd',
-    version: '2.2.1'
+    version: '2.3.0'
   };
   var LINKS = {
     checklist: 'https://cascadereservations-del.github.io/CH-Cleaners-Checklist/',
@@ -44,10 +44,11 @@
     storage: CS.authStorage(store('localStorage'), store('sessionStorage'), function () { return trustOn; }) } });
 
   var state = { access: null, user: null, name: '', layout: null, payload: null, loadedAt: 0, loading: false, error: '', month: null, cassyOpen: true, payHint: null, photos: {},
-    tasks: null, tasksErr: '', tasksLoading: false, showDone: false, lastDone: null, add: null, assignees: null, rates: null, ratesErr: '', rateForm: null, rateSaving: false };
+    tasks: null, tasksErr: '', tasksLoading: false, showDone: false, lastDone: null, add: null, assignees: null, rates: null, ratesErr: '', rateForm: null, rateSaving: false, reply: null };
   var $ = function (id) { return document.getElementById(id); };
-  var VIEWS = ['signin', 'home', 'calendar', 'tasks', 'payrates', 'more', 'door'];
+  var VIEWS = ['signin', 'home', 'calendar', 'tasks', 'payrates', 'more', 'door', 'reply'];
   function pid() { return (state.access && state.access.property_ids && state.access.property_ids[0]) || CFG.propertyId; }
+  function canReply() { return CS.canDraftReply(state.access && state.access.role); }
 
   // ---------------------------------------------------------------- helpers
   function ext(href, inner, cls, extra) { return '<a class="' + (cls || '') + '" href="' + esc(href) + '" target="_blank" rel="noopener"' + (extra || '') + '>' + inner + '</a>'; }
@@ -139,6 +140,7 @@
         row({ icon: 'dash', title: 'Admin dashboard', sub: 'Today, bookings, money, operations', door: 'dashboard' }) +
         (trustOn ? '' : '<div class="help doornote">Sign-in is kept only on trusted devices</div>') +
         (CS.canEditRates(state.access && state.access.role) ? row({ icon: 'cash', title: 'Pay rates', sub: 'What a clean and its transport pay', href: '#payrates' }) : '') +
+        (canReply() ? row({ icon: 'sparkles', title: 'Cassy reply', sub: 'Draft a warm reply to a guest message', href: '#reply' }) : '') +
         row({ icon: 'calendar', title: 'Guest Calendar Info', sub: 'Stays, blocked nights, warnings', href: '#calendar', count: n || '' }) +
         '<button class="rowi" type="button" data-act="cassy" aria-expanded="' + state.cassyOpen + '"><span class="lead">' + ICON('chat') + '</span><span class="mid"><span class="t">Cassy</span><span class="s">Open in Telegram</span></span><span class="chev turn">' + ICON('chev') + '</span></button>' +
         '<div class="submenu" id="cassy-sub"' + (state.cassyOpen ? '' : ' hidden') + '><span class="cap">Open in Telegram</span>' +
@@ -412,12 +414,118 @@
     });
   }
 
+  // ---------------------------------------------------------------- Cassy reply (s76, owner and admin)
+  // The guest's message (typed, or a screenshot shrunk here to a JPEG) goes to guest-reply-draft with the user's own session token; the
+  // function re-checks the role. What the guest sent and the drafts live in memory for the open session only, never in storage.
+  var RP_NAME = { messenger: 'Messenger', airbnb: 'Airbnb' };
+  function newReply() { return { step: 'pick', mode: 'text', text: '', name: '', platform: 'messenger', image: null, imageName: '', busy: false, err: '', result: null, copied: -1 }; }
+  function rpErr(msg) { return msg ? '<div class="errbox" role="alert">' + ICON('alert') + '<span>' + esc(msg) + '</span></div>' : ''; }
+  function rpPlatform(R) {
+    return '<div class="field"><span class="lbl" id="rp-pl">Where did the guest write?</span><div class="seg" role="group" aria-labelledby="rp-pl">' +
+      ['messenger', 'airbnb'].map(function (p) { return '<button class="btn btn-secondary" type="button" data-act="reply-platform" data-platform="' + p + '" aria-pressed="' + (R.platform === p) + '">' + RP_NAME[p] + '</button>'; }).join('') + '</div></div>';
+  }
+  function renderReply() {
+    var el = $('v-reply'), R = state.reply || (state.reply = newReply()), head = appbar({ title: 'Cassy reply', back: '#home' }), body;
+    if (R.busy) {
+      body = '<div class="card" role="status" aria-live="polite"><h2 class="hd">Cassy is writing</h2><p class="sub" style="margin-top:6px">This takes a few seconds. Please keep this screen open.</p><div class="skel" style="height:96px;margin-top:12px"></div></div>';
+    } else if (R.step === 'done' && R.result) {
+      var X = R.result, who = (X.guestName ? X.guestName + ' · ' : '') + RP_NAME[X.platform];
+      body = rpErr(R.err) + '<div class="card"><span class="cap up">Replying to · ' + esc(who) + '</span><p class="rp-quote">' + esc(CS.clampText(X.guestText, 280)) + '</p></div>' +
+        (X.header ? '<p class="sub" style="margin:0">' + esc(X.header) + '</p>' : '') +
+        X.replies.map(function (r, i) {
+          return '<div class="card"><span class="cap up">' + (X.replies.length > 1 ? 'Reply ' + (i + 1) : 'Reply') + '</span><p class="rp-reply">' + esc(r) + '</p>' +
+            '<button class="btn btn-primary btn-block" type="button" data-act="reply-copy" data-i="' + i + '" style="margin-top:12px">' + (R.copied === i ? ICON('check', 's16') + 'Copied' : 'Copy') + '</button></div>';
+        }).join('') +
+        '<button class="btn btn-secondary btn-block" type="button" data-act="reply-reset">Start over</button>';
+    } else if (R.step === 'pick') {
+      body = '<h2 class="dlg">What did the guest send?</h2><div class="rp-pick">' +
+        '<button class="btn btn-secondary rp-big" type="button" data-act="reply-mode" data-mode="text">' + ICON('chat', 's24') + 'Text</button>' +
+        '<button class="btn btn-secondary rp-big" type="button" data-act="reply-mode" data-mode="image">' + ICON('image', 's24') + 'Screenshot</button></div>' +
+        '<p class="help" style="margin:0">Cassy writes the drafts in her own voice. You copy one and send it yourself.</p>';
+    } else {
+      var shot = R.mode === 'image';
+      body = rpErr(R.err) +
+        (shot ? '<div class="field"><span class="lbl">Screenshot of the guest’s message</span><label class="btn btn-secondary btn-block rp-file">' + ICON('image', 's16') + (R.image ? 'Choose another' : 'Choose a screenshot') +
+            '<input class="sr" id="rp-file" type="file" accept="image/*"></label>' + (R.image ? '<div class="okbox" role="status">' + ICON('check') + '<span>Ready: ' + esc(R.imageName || 'screenshot') + '</span></div>' : '') + '</div>'
+          : '<div class="field"><label for="rp-text">What the guest sent</label><textarea class="ta" id="rp-text" rows="7" maxlength="4000" placeholder="Paste the guest’s message here">' + esc(R.text) + '</textarea></div>') +
+        '<div class="field"><label for="rp-name">Guest name (optional)</label><div class="input"><input id="rp-name" maxlength="80" value="' + esc(R.name) + '" autocomplete="off"></div></div>' +
+        rpPlatform(R) +
+        '<button class="btn btn-primary btn-block" type="button" data-act="reply-send">Write the reply</button>' +
+        '<button class="btn btn-ghost btn-block" type="button" data-act="reply-back">Back</button>';
+    }
+    el.innerHTML = head + '<div class="screen"><div class="stack">' + body + '</div></div>';
+  }
+  function readBlobAsBase64(blob) {
+    return new Promise(function (res, rej) {
+      var fr = new FileReader(); fr.onload = function () { res(String(fr.result).replace(/^data:[^,]*,/, '')); }; fr.onerror = function () { rej(new Error('read')); }; fr.readAsDataURL(blob);
+    });
+  }
+  // The longest edge is capped at 1600 px and the picture re-encoded as a JPEG (quality .82): a phone screenshot becomes a few hundred KB.
+  function shrinkShot(file) {
+    return new Promise(function (res, rej) {
+      var u = URL.createObjectURL(file), img = new Image();
+      img.onload = function () { URL.revokeObjectURL(u); res(img); }; img.onerror = function () { URL.revokeObjectURL(u); rej(new Error('image')); }; img.src = u;
+    }).then(function (img) {
+      var z = CS.shrinkSize(img.naturalWidth, img.naturalHeight), cv = document.createElement('canvas'); cv.width = z.w; cv.height = z.h;
+      cv.getContext('2d').drawImage(img, 0, 0, z.w, z.h);
+      return new Promise(function (res, rej) { cv.toBlob(function (b) { b ? res(b) : rej(new Error('blob')); }, 'image/jpeg', 0.82); });
+    }).then(function (blob) {
+      if (blob.size > CS.REPLY_MAX_IMAGE_BYTES) throw new Error('large');
+      return readBlobAsBase64(blob).then(function (b64) { return { base64: b64, mime: 'image/jpeg' }; });
+    });
+  }
+  function pickShot(file) {
+    var R = state.reply; if (!R || !file) return;
+    R.err = ''; R.image = null; R.imageName = '';
+    shrinkShot(file).then(function (img) { R.image = img; R.imageName = file.name || 'screenshot'; }).catch(function (e) {
+      R.err = CS.replyErrorText(0, e && e.message === 'large' ? 'image_too_large' : 'bad_image');
+    }).then(function () { if (current === 'reply' && state.reply === R) renderReply(); });
+  }
+  function sendReply() {
+    var R = state.reply; if (!R || R.busy) return;
+    var bad = CS.replyProblem({ mode: R.mode, text: R.text, image: R.image });
+    if (bad) { R.err = bad; renderReply(); return; }
+    R.busy = true; R.err = ''; renderReply(); window.scrollTo(0, 0);
+    var body = JSON.stringify(CS.replyBody({ mode: R.mode, text: R.text, image: R.image, guestName: R.name, platform: R.platform }));
+    sb.auth.getSession().then(function (s) {
+      var token = s.data && s.data.session && s.data.session.access_token; if (!token) return { status: 401, j: null };
+      return fetch(CFG.url + '/functions/v1/guest-reply-draft', { method: 'POST', headers: { Authorization: 'Bearer ' + token, apikey: CFG.key, 'Content-Type': 'application/json' }, body: body })
+        .then(function (r) { return r.json().catch(function () { return null; }).then(function (j) { return { status: r.status, j: j }; }); });
+    }).catch(function () { return { status: 0, j: null }; }).then(function (o) {
+      if (state.reply !== R) return; // signed out meanwhile
+      R.busy = false;
+      var X = o.status === 200 ? CS.replyResult(o.j) : null;
+      if (X) { R.result = X; R.step = 'done'; R.copied = -1; R.err = ''; }
+      else R.err = CS.replyErrorText(o.status === 200 ? 502 : o.status, o.j && o.j.error);
+      if (current === 'reply') { renderReply(); window.scrollTo(0, 0); }
+    });
+  }
+  function copyText(t) {
+    if (navigator.clipboard && navigator.clipboard.writeText) return navigator.clipboard.writeText(t).catch(function () { return copyFallback(t); });
+    return copyFallback(t);
+  }
+  function copyFallback(t) {
+    return new Promise(function (res, rej) {
+      var ta = document.createElement('textarea'); ta.value = t; ta.setAttribute('readonly', ''); ta.style.cssText = 'position:fixed;top:0;left:0;opacity:0';
+      document.body.appendChild(ta); ta.select(); ta.setSelectionRange(0, t.length);
+      var ok = false; try { ok = document.execCommand('copy'); } catch (e) {} document.body.removeChild(ta); ok ? res() : rej(new Error('copy'));
+    });
+  }
+  var copyTimer = 0;
+  function copyReply(i) {
+    var R = state.reply, t = R && R.result && R.result.replies[i]; if (t == null) return;
+    copyText(t).then(function () {
+      R.copied = i; R.err = ''; if (current === 'reply') renderReply();
+      clearTimeout(copyTimer); copyTimer = setTimeout(function () { if (R.copied === i) { R.copied = -1; if (current === 'reply' && state.reply === R) renderReply(); } }, 2000);
+    }).catch(function () { R.err = 'Copy did not work on this phone. Press and hold the text to copy it.'; if (current === 'reply') renderReply(); });
+  }
+
   // ---------------------------------------------------------------- More
   function renderMore() {
     var theme = window.CSTheme.get(), staff = state.layout === 'staff';
     var chip = function (v, t) { return '<button class="chip" type="button" data-theme="' + v + '"' + (theme === v ? ' style="border-color:var(--primary);color:var(--primary)" aria-pressed="true"' : ' aria-pressed="false"') + '>' + t + '</button>'; };
     $('v-more').innerHTML = appbar({ title: 'More' }) + '<div class="screen"><div class="stack">' +
-      '<div class="card list">' + row({ icon: 'book', title: 'Quick guide', sub: 'How to use Cassy in Telegram', href: LINKS.quick }) +
+      '<div class="card list">' + (canReply() ? row({ icon: 'sparkles', title: 'Cassy reply', sub: 'Draft a warm reply to a guest message', href: '#reply' }) : '') + row({ icon: 'book', title: 'Quick guide', sub: 'How to use Cassy in Telegram', href: LINKS.quick }) +
       (staff ? '' : row({ icon: 'wallet', title: 'Cassy · Telegram Finance', sub: 'Open in Telegram', href: LINKS.tgFinance, external: true })) + row({ icon: 'book', title: 'Cascade Manual', sub: 'How we do things', door: 'manual' }) + '</div>' +
       '<div class="card"><h2 class="hd">Appearance</h2><div class="row-wrap" style="margin-top:10px">' + chip('auto', 'Automatic') + chip('light', 'Light') + chip('dark', 'Dark') + '</div></div>' +
       '<div class="card" id="install-card" hidden><h2 class="hd">Install the app</h2><p class="sub" style="margin-top:6px">Put Cascade Staff on your Home Screen.</p><button class="btn btn-secondary" id="install-btn" type="button" style="margin-top:10px">' + ICON('plus', 's16') + 'Install</button></div>' +
@@ -435,7 +543,7 @@
     });
   }
   function signOutTo(msg) {
-    dropPhotos(); state.payload = null; state.access = null; state.layout = null; state.month = null; state.error = '';
+    dropPhotos(); state.reply = null; state.payload = null; state.access = null; state.layout = null; state.month = null; state.error = '';
     return sb.auth.signOut().catch(function () {}).then(function () { showSignin(msg); });
   }
   function showSignin(msg) {
@@ -495,6 +603,7 @@
     if (VIEWS.indexOf(v) < 0 || v === 'signin') v = 'home';
     if (v === 'door' && !(doorDef(parts[1]) && CS.doorFramed(parts[1], state.layout, trustOn))) v = 'home';
     if (v === 'payrates' && !CS.canEditRates(state.access && state.access.role)) v = 'home';
+    if (v === 'reply' && !canReply()) v = 'home';
     if (v === 'door') { doorKey = parts[1]; render('door'); window.scrollTo(0, 0); return; }
     leaveDoor(); render(v);
     var t = parts[1] && $(parts[1]); if (t) t.scrollIntoView({ block: 'start' }); else window.scrollTo(0, 0);
@@ -505,7 +614,7 @@
     setView(v);
     if (v === 'door') { renderDoor(); return; }
     renderTabs(v);
-    if (v === 'home') renderHome(); else if (v === 'calendar') renderCalendar(); else if (v === 'tasks') renderTasks(); else if (v === 'payrates') { renderPayRates(); if (!state.rates) loadRates(); } else if (v === 'more') renderMore();
+    if (v === 'home') renderHome(); else if (v === 'calendar') renderCalendar(); else if (v === 'tasks') renderTasks(); else if (v === 'payrates') { renderPayRates(); if (!state.rates) loadRates(); } else if (v === 'reply') renderReply(); else if (v === 'more') renderMore();
   }
   // A door opens in the frame once per visit; coming back to the same door (a re-render) keeps the page where it is.
   function renderDoor() {
@@ -617,6 +726,12 @@
     else if (a === 'task-add-cancel') { state.add = null; renderTasks(); }
     else if (a === 'task-add-save') saveAdd();
     else if (a === 'rate-save') saveRate();
+    else if (a === 'reply-mode') { var R1 = state.reply || (state.reply = newReply()); R1.mode = t.getAttribute('data-mode') === 'image' ? 'image' : 'text'; R1.step = 'form'; R1.err = ''; renderReply(); window.scrollTo(0, 0); }
+    else if (a === 'reply-platform') { if (state.reply) { state.reply.platform = t.getAttribute('data-platform') === 'airbnb' ? 'airbnb' : 'messenger'; Array.prototype.forEach.call(document.querySelectorAll('#v-reply [data-act="reply-platform"]'), function (b) { b.setAttribute('aria-pressed', String(b === t)); }); } }
+    else if (a === 'reply-send') sendReply();
+    else if (a === 'reply-copy') copyReply(+t.getAttribute('data-i'));
+    else if (a === 'reply-back') { if (state.reply) { state.reply.step = 'pick'; state.reply.err = ''; } renderReply(); }
+    else if (a === 'reply-reset') { state.reply = newReply(); renderReply(); window.scrollTo(0, 0); }
     else if (a === 'signout') { signOutTo(''); }
     else if (a === 'prev') shiftMonth(-1);
     else if (a === 'next') shiftMonth(1);
@@ -628,10 +743,12 @@
   // Reminder and pay-rate forms: remember what is typed (a refresh must not lose it) without redrawing under the keyboard.
   document.addEventListener('input', function (ev) {
     var id = ev.target && ev.target.id, a = state.add, f = state.rateForm;
+    if (state.reply && id === 'rp-text') { state.reply.text = ev.target.value; state.reply.err = ''; } else if (state.reply && id === 'rp-name') state.reply.name = ev.target.value;
     if (a && id === 't-title') a.title = ev.target.value; else if (a && id === 't-due') a.due = ev.target.value; else if (a && id === 't-note') a.note = ev.target.value; else if (a && id === 't-who') a.who = ev.target.value;
     else if (f && /^r-(from|regular|general|transport|note)$/.test(id || '')) { f[id.slice(2)] = ev.target.value; f.err = ''; syncRate(); }
   });
   document.addEventListener('change', function (ev) {
+    if (ev.target && ev.target.id === 'rp-file') { var f0 = ev.target.files && ev.target.files[0]; if (f0) pickShot(f0); return; }
     if (ev.target && ev.target.id === 't-who' && state.add) state.add.who = ev.target.value;
     else if (ev.target && ev.target.getAttribute && ev.target.getAttribute('data-act') === 'tasks-showdone') { state.showDone = ev.target.checked; loadTasks(); renderTasks(); }
   });

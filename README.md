@@ -21,6 +21,8 @@ Specs: SPEC-36 (gateway, calendar info), SPEC-37 sections 4-7 (Payment Request p
 
 **Tasks** is a tab in both layouts and one list (`tasks_list_v1`): reminders, follow-ups, work orders, cleaning issues and open checks. No second task store. Staff see their own tasks and the unassigned ones that name no guest, already redacted by the server (no guest id, no money, no contact); owner and admin see everything and add a reminder (title, optional date, who it is for, note). Tap the box to finish a task; the line above the list keeps **Undo** until the next action. A check ("Check needs a person") is acknowledged, not toggled. Tab badge = open tasks that are overdue or due today.
 
+**Cassy reply** (`#reply`, owner and admin only, a row on the admin home and in More; the role comes from `current_staff_access`, gated by `CS.canDraftReply`) drafts one or two warm guest replies from pasted text or a screenshot (shrunk in the browser to a JPEG, longest edge 1600 px) through the `guest-reply-draft` edge function. Nothing is stored; the service worker never touches the POST.
+
 **Pay rates** (`#payrates`, owner and admin only, a row on the admin home) shows the rate in force, any scheduled rate and the history, and ADDS a new dated row through `admin_add_pay_rate_v1` (append-only, audited; history is never changed). The staff app and payment requests read the row in force on the clean's date; nothing in the app hard-codes 500 / 150 / 1,000.
 
 ## Roles

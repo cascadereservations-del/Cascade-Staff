@@ -392,3 +392,17 @@ ol.steps li::before { content: counter(s); position: absolute; left: 0; top: 0; 
 .taskrow .chk::before { content: ""; position: absolute; inset: -10px; }
 .taskrow .t { display: block; }
 .payrow .s.c-danger { color: var(--danger); }
+
+/* ---- Cassy reply (s76): two big choices, a roomy textarea, a segmented platform toggle, copy cards ---- */
+.rp-pick { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.rp-big { flex-direction: column; height: auto; min-height: 120px; font-size: 15px; line-height: 22px; border-radius: var(--r-lg); }
+.field .lbl { font: 600 13px/18px var(--font-ui); letter-spacing: .02em; color: var(--fg-2); }
+.ta { width: 100%; min-height: 168px; padding: 12px; background: var(--card); border: 1px solid var(--border); border-radius: var(--r-md); color: var(--fg); font: 400 16px/24px var(--font-ui); resize: vertical; }
+.ta:focus { border-color: var(--primary); outline: 2px solid var(--ring); outline-offset: 2px; }
+.seg { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.seg .btn { height: 48px; }
+.seg .btn[aria-pressed="true"] { background: var(--primary-soft); color: var(--primary); border-color: var(--primary); }
+.rp-file { position: relative; cursor: pointer; }
+.rp-file:focus-within { outline: 2px solid var(--ring); outline-offset: 2px; }
+.rp-quote { margin: 6px 0 0; color: var(--fg); white-space: pre-line; overflow-wrap: anywhere; }
+.rp-reply { margin: 6px 0 0; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 16px; line-height: 24px; }

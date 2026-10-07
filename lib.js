@@ -426,10 +426,64 @@
     return { p_property_id: propertyId, p_effective_from: i.from, p_regular: money(i.regular), p_general: money(i.general), p_transport: tr === 0 ? null : tr, p_note: String(i.note == null ? '' : i.note).trim() };
   }
 
+  // ---- Cassy reply (s76): owner and admin draft warm guest replies from pasted text or a screenshot ---------------------------
+  // The drafts carry prices and booking terms, so the button is owner and admin only; the function re-checks (403 staff_access_denied).
+  var REPLY_MAX_TEXT = 4000, REPLY_MAX_IMAGE_BYTES = 4000000, REPLY_MAX_EDGE = 1600, REPLY_NAME_MAX = 80;
+  function canDraftReply(role) { return role === 'owner' || role === 'admin'; }
+  // Longest edge capped at max, aspect kept, never enlarged, never 0.
+  function shrinkSize(w, h, max) {
+    max = max || REPLY_MAX_EDGE; w = Math.max(1, Math.round(Number(w) || 0)); h = Math.max(1, Math.round(Number(h) || 0));
+    var long = Math.max(w, h); if (long <= max) return { w: w, h: h };
+    var k = max / long; return { w: Math.max(1, Math.round(w * k)), h: Math.max(1, Math.round(h * k)) };
+  }
+  // '' = fine, else the sentence to show before anything is sent. i = {mode: 'text'|'image', text, image: {base64, mime}|null}
+  function replyProblem(i) {
+    i = i || {};
+    if (i.mode === 'image') return i.image && i.image.base64 ? '' : 'Choose a screenshot first.';
+    var t = String(i.text == null ? '' : i.text).trim();
+    return !t ? 'Paste what the guest sent first.' : t.length > REPLY_MAX_TEXT ? 'That message is longer than 4,000 characters. Paste just the guest’s latest messages.' : '';
+  }
+  // The request body for guest-reply-draft: exactly one of text or image, guest_name null when empty, platform messenger unless airbnb.
+  function replyBody(i) {
+    i = i || {}; var name = String(i.guestName == null ? '' : i.guestName).trim().slice(0, REPLY_NAME_MAX);
+    var b = i.mode === 'image' ? { image: { base64: String(i.image && i.image.base64 || ''), mime: i.image && i.image.mime || 'image/jpeg' } } : { text: String(i.text == null ? '' : i.text).trim() };
+    b.guest_name = name || null; b.platform = i.platform === 'airbnb' ? 'airbnb' : 'messenger';
+    return b;
+  }
+  // Error code (or status, or 'network') -> one warm sentence. Never shows the raw code.
+  var REPLY_ERRORS = {
+    empty: 'Paste what the guest sent first.',
+    both: 'Send either the text or a screenshot, not both.',
+    too_long: 'That message is longer than 4,000 characters. Paste just the guest’s latest messages.',
+    bad_image: 'That picture could not be read. Try another screenshot, or paste the text instead.',
+    bad_json: 'That did not send properly. Try again.',
+    invalid_or_expired_session: 'Your sign-in has run out. Sign out, then sign in again.',
+    staff_access_denied: 'Only owner and admin accounts can draft guest replies.',
+    image_too_large: 'That picture is too large. Try a smaller screenshot, or paste the text instead.',
+    no_guest_message: 'No guest message could be found in that. Try a clearer screenshot, or paste the text instead.',
+    draft_failed: 'Cassy could not write a draft just now. Wait a moment and try again.',
+    network: 'No connection. Check your signal and try again.'
+  };
+  var REPLY_STATUS = { 401: 'invalid_or_expired_session', 403: 'staff_access_denied', 413: 'image_too_large', 422: 'no_guest_message', 502: 'draft_failed' };
+  function replyErrorText(status, code) {
+    var k = REPLY_ERRORS[code] ? code : REPLY_STATUS[status] || (status === 0 || status == null ? 'network' : '');
+    return REPLY_ERRORS[k] || 'That did not work. Try again in a moment.';
+  }
+  // A 200 body -> what the screen draws, or null when the shape is wrong (the screen then says draft_failed).
+  function replyResult(j) {
+    if (!j || j.ok !== true || !Array.isArray(j.replies)) return null;
+    var replies = j.replies.filter(function (r) { return typeof r === 'string' && r.trim(); });
+    if (!replies.length) return null;
+    return { guestName: typeof j.guest_name === 'string' && j.guest_name ? j.guest_name : '', platform: j.platform === 'airbnb' ? 'airbnb' : 'messenger', guestText: String(j.guest_text == null ? '' : j.guest_text), header: typeof j.header === 'string' ? j.header : '', replies: replies.slice(0, 2) };
+  }
+  function clampText(s, n) { s = String(s == null ? '' : s).replace(/\s+/g, ' ').trim(); return s.length > n ? s.slice(0, n - 1).trimEnd() + '…' : s; }
+
   return {
     taskKindLabel: taskKindLabel, manilaDayOf: manilaDayOf, taskDue: taskDue, taskDueLabel: taskDueLabel, dueFromDate: dueFromDate, taskGroups: taskGroups,
     taskDueCount: taskDueCount, reminderProblem: reminderProblem, canEditRates: canEditRates, rateNum: rateNum, rateLine: rateLine,
     earliestRateStart: earliestRateStart, rateProblem: rateProblem, rateArgs: rateArgs,
+    canDraftReply: canDraftReply, shrinkSize: shrinkSize, replyProblem: replyProblem, replyBody: replyBody, replyErrorText: replyErrorText, replyResult: replyResult, clampText: clampText,
+    REPLY_MAX_IMAGE_BYTES: REPLY_MAX_IMAGE_BYTES, REPLY_MAX_EDGE: REPLY_MAX_EDGE,
     staffAuthPassword: staffAuthPassword, staffLoginEmail: staffLoginEmail, deriveDisplayName: deriveDisplayName, greetingName: greetingName,
     signinKind: signinKind, signinList: signinList, typedEntry: typedEntry, keypadPress: keypadPress, signinCredentials: signinCredentials,
     authStorage: authStorage, trustedFromStorage: trustedFromStorage, rememberName: rememberName, recalledName: recalledName, doorTarget: doorTarget, doorLink: doorLink, doorRule: doorRule, doorFramed: doorFramed,

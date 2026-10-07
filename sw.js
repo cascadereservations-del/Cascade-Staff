@@ -1,4 +1,4 @@
-// sw.js - Cascade Staff service worker v1.1 (2026-10-05)
+// sw.js - Cascade Staff service worker v1.2 (2026-10-08)
 // Copied from the cleaning checklist's v1.2 strategy and tightened for a staff app:
 //   Supabase (REST, RPC, Storage, Auth, Edge Functions), Telegram -> network-only, NEVER cached or replayed.
 //   Google Fonts files and the pinned supabase-js build (jsDelivr)   -> cache-first (public, no personal data).
@@ -6,7 +6,7 @@
 //   Same-origin shell files                                          -> network-first, cache fallback.
 // Nothing personal is ever stored here: the cache holds the shell (HTML, CSS, JS, fonts, icons) and nothing else.
 // A shell that loads offline says "Live information needs a connection"; guest names exist only in JS memory.
-const CACHE_NAME = 'cs-shell-v4';
+const CACHE_NAME = 'cs-shell-v5';
 const NAV_TIMEOUT_MS = 3000;
 // The self-hosted font files styles.css @font-face points at. Theme v2 changes fonts: edit this one list (and styles.css), nothing else here.
 const SELF_FONTS = ['cormorant-garamond-600.woff2', 'cormorant-garamond-700.woff2'];
