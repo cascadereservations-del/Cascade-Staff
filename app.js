@@ -417,20 +417,26 @@
   // ---------------------------------------------------------------- Cassy reply (s76, owner and admin)
   // The guest's message (typed, or a screenshot shrunk here to a JPEG) goes to guest-reply-draft with the user's own session token; the
   // function re-checks the role. What the guest sent and the drafts live in memory for the open session only, never in storage.
+  // #v-reply holds a persistent live region (#rp-live) and the redrawn body (#rp-body): announcements survive every redraw.
   var RP_NAME = { messenger: 'Messenger', airbnb: 'Airbnb' };
-  function newReply() { return { step: 'pick', mode: 'text', text: '', name: '', platform: 'messenger', image: null, imageName: '', busy: false, err: '', result: null, copied: -1 }; }
-  function rpErr(msg) { return msg ? '<div class="errbox" role="alert">' + ICON('alert') + '<span>' + esc(msg) + '</span></div>' : ''; }
+  function newReply() { return { step: 'pick', mode: 'text', text: '', name: '', platform: 'messenger', image: null, imageName: '', shrinking: false, busy: false, err: '', signout: false, result: null, copied: -1 }; }
+  function rpErr(R) {
+    return R.err ? '<div class="errbox" id="rp-err" role="alert" tabindex="-1">' + ICON('alert') + '<span>' + esc(R.err) + (R.signout ? ' <button class="btn btn-ghost btn-sm" type="button" data-act="signout">Sign out</button>' : '') + '</span></div>' : '';
+  }
+  function rpLive(msg) { var l = $('rp-live'); if (l) l.textContent = msg || ''; }
+  function rpFocus(id) { var f = $(id); if (f && f.focus) f.focus(); }
   function rpPlatform(R) {
     return '<div class="field"><span class="lbl" id="rp-pl">Where did the guest write?</span><div class="seg" role="group" aria-labelledby="rp-pl">' +
       ['messenger', 'airbnb'].map(function (p) { return '<button class="btn btn-secondary" type="button" data-act="reply-platform" data-platform="' + p + '" aria-pressed="' + (R.platform === p) + '">' + RP_NAME[p] + '</button>'; }).join('') + '</div></div>';
   }
-  function renderReply() {
-    var el = $('v-reply'), R = state.reply || (state.reply = newReply()), head = appbar({ title: 'Cassy reply', back: '#home' }), body;
+  // focus: 'heading' (the new screen's heading), 'error' (the error message), or nothing (the user is mid-typing).
+  function renderReply(focus) {
+    var el = $('rp-body'), R = state.reply || (state.reply = newReply()), head = appbar({ title: 'Cassy reply', back: '#home' }), body;
     if (R.busy) {
-      body = '<div class="card" role="status" aria-live="polite"><h2 class="hd">Cassy is writing</h2><p class="sub" style="margin-top:6px">This takes a few seconds. Please keep this screen open.</p><div class="skel" style="height:96px;margin-top:12px"></div></div>';
+      body = '<div class="card" role="status"><h2 class="hd" id="rp-h" tabindex="-1">Cassy is writing</h2><p class="sub" style="margin-top:6px">This takes a few seconds. Please keep this screen open.</p><div class="skel" style="height:96px;margin-top:12px"></div></div>';
     } else if (R.step === 'done' && R.result) {
       var X = R.result, who = (X.guestName ? X.guestName + ' · ' : '') + RP_NAME[X.platform];
-      body = rpErr(R.err) + '<div class="card"><span class="cap up">Replying to · ' + esc(who) + '</span><p class="rp-quote">' + esc(CS.clampText(X.guestText, 280)) + '</p></div>' +
+      body = rpErr(R) + '<div class="card"><h2 class="cap up" id="rp-h" tabindex="-1">Replying to · ' + esc(who) + '</h2><p class="rp-quote">' + esc(CS.clampText(X.guestText, 280)) + '</p></div>' +
         (X.header ? '<p class="sub" style="margin:0">' + esc(X.header) + '</p>' : '') +
         X.replies.map(function (r, i) {
           return '<div class="card"><span class="cap up">' + (X.replies.length > 1 ? 'Reply ' + (i + 1) : 'Reply') + '</span><p class="rp-reply">' + esc(r) + '</p>' +
@@ -438,22 +444,23 @@
         }).join('') +
         '<button class="btn btn-secondary btn-block" type="button" data-act="reply-reset">Start over</button>';
     } else if (R.step === 'pick') {
-      body = '<h2 class="dlg">What did the guest send?</h2><div class="rp-pick">' +
+      body = '<h2 class="dlg" id="rp-h" tabindex="-1">What did the guest send?</h2><div class="rp-pick">' +
         '<button class="btn btn-secondary rp-big" type="button" data-act="reply-mode" data-mode="text">' + ICON('chat', 's24') + 'Text</button>' +
         '<button class="btn btn-secondary rp-big" type="button" data-act="reply-mode" data-mode="image">' + ICON('image', 's24') + 'Screenshot</button></div>' +
         '<p class="help" style="margin:0">Cassy writes the drafts in her own voice. You copy one and send it yourself.</p>';
     } else {
       var shot = R.mode === 'image';
-      body = rpErr(R.err) +
+      body = rpErr(R) +
         (shot ? '<div class="field"><span class="lbl">Screenshot of the guest’s message</span><label class="btn btn-secondary btn-block rp-file">' + ICON('image', 's16') + (R.image ? 'Choose another' : 'Choose a screenshot') +
-            '<input class="sr" id="rp-file" type="file" accept="image/*"></label>' + (R.image ? '<div class="okbox" role="status">' + ICON('check') + '<span>Ready: ' + esc(R.imageName || 'screenshot') + '</span></div>' : '') + '</div>'
+            '<input class="sr" id="rp-file" type="file" accept="image/*"></label>' + (R.shrinking ? '<p class="help" role="status" style="margin:0">Preparing the screenshot…</p>' : R.image ? '<div class="okbox">' + ICON('check') + '<span>Ready: ' + esc(R.imageName || 'screenshot') + '</span></div>' : '') + '</div>'
           : '<div class="field"><label for="rp-text">What the guest sent</label><textarea class="ta" id="rp-text" rows="7" maxlength="4000" placeholder="Paste the guest’s message here">' + esc(R.text) + '</textarea></div>') +
         '<div class="field"><label for="rp-name">Guest name (optional)</label><div class="input"><input id="rp-name" maxlength="80" value="' + esc(R.name) + '" autocomplete="off"></div></div>' +
         rpPlatform(R) +
-        '<button class="btn btn-primary btn-block" type="button" data-act="reply-send">Write the reply</button>' +
+        '<button class="btn btn-primary btn-block" type="button" data-act="reply-send"' + (R.shrinking ? ' disabled' : '') + '>Write the reply</button>' +
         '<button class="btn btn-ghost btn-block" type="button" data-act="reply-back">Back</button>';
     }
     el.innerHTML = head + '<div class="screen"><div class="stack">' + body + '</div></div>';
+    if (focus === 'error') rpFocus('rp-err'); else if (focus === 'heading') rpFocus('rp-h');
   }
   function readBlobAsBase64(blob) {
     return new Promise(function (res, rej) {
@@ -461,13 +468,14 @@
     });
   }
   // The longest edge is capped at 1600 px and the picture re-encoded as a JPEG (quality .82): a phone screenshot becomes a few hundred KB.
+  // JPEG has no alpha, so the canvas is filled white first: a transparent PNG must not turn black.
   function shrinkShot(file) {
     return new Promise(function (res, rej) {
       var u = URL.createObjectURL(file), img = new Image();
       img.onload = function () { URL.revokeObjectURL(u); res(img); }; img.onerror = function () { URL.revokeObjectURL(u); rej(new Error('image')); }; img.src = u;
     }).then(function (img) {
-      var z = CS.shrinkSize(img.naturalWidth, img.naturalHeight), cv = document.createElement('canvas'); cv.width = z.w; cv.height = z.h;
-      cv.getContext('2d').drawImage(img, 0, 0, z.w, z.h);
+      var z = CS.shrinkSize(img.naturalWidth, img.naturalHeight), cv = document.createElement('canvas'), cx; cv.width = z.w; cv.height = z.h;
+      cx = cv.getContext('2d'); cx.fillStyle = '#FFFFFF'; cx.fillRect(0, 0, z.w, z.h); cx.drawImage(img, 0, 0, z.w, z.h);
       return new Promise(function (res, rej) { cv.toBlob(function (b) { b ? res(b) : rej(new Error('blob')); }, 'image/jpeg', 0.82); });
     }).then(function (blob) {
       if (blob.size > CS.REPLY_MAX_IMAGE_BYTES) throw new Error('large');
@@ -476,16 +484,19 @@
   }
   function pickShot(file) {
     var R = state.reply; if (!R || !file) return;
-    R.err = ''; R.image = null; R.imageName = '';
+    R.err = ''; R.signout = false; R.image = null; R.imageName = ''; R.shrinking = true; renderReply(); rpLive('Preparing the screenshot');
+    var failed = false;
     shrinkShot(file).then(function (img) { R.image = img; R.imageName = file.name || 'screenshot'; }).catch(function (e) {
-      R.err = CS.replyErrorText(0, e && e.message === 'large' ? 'image_too_large' : 'bad_image');
-    }).then(function () { if (current === 'reply' && state.reply === R) renderReply(); });
+      failed = true; R.err = CS.replyErrorText(0, e && e.message === 'large' ? 'image_too_large' : 'bad_image');
+    }).then(function () {
+      R.shrinking = false; if (current === 'reply' && state.reply === R) { renderReply(failed ? 'error' : ''); rpLive(failed ? '' : 'Screenshot ready'); }
+    });
   }
   function sendReply() {
-    var R = state.reply; if (!R || R.busy) return;
+    var R = state.reply; if (!R || R.busy || R.shrinking) return;
     var bad = CS.replyProblem({ mode: R.mode, text: R.text, image: R.image });
-    if (bad) { R.err = bad; renderReply(); return; }
-    R.busy = true; R.err = ''; renderReply(); window.scrollTo(0, 0);
+    if (bad) { R.err = bad; R.signout = false; renderReply('error'); return; }
+    R.busy = true; R.err = ''; R.signout = false; renderReply('heading'); rpLive('Cassy is writing'); window.scrollTo(0, 0);
     var body = JSON.stringify(CS.replyBody({ mode: R.mode, text: R.text, image: R.image, guestName: R.name, platform: R.platform }));
     sb.auth.getSession().then(function (s) {
       var token = s.data && s.data.session && s.data.session.access_token; if (!token) return { status: 401, j: null };
@@ -495,9 +506,9 @@
       if (state.reply !== R) return; // signed out meanwhile
       R.busy = false;
       var X = o.status === 200 ? CS.replyResult(o.j) : null;
-      if (X) { R.result = X; R.step = 'done'; R.copied = -1; R.err = ''; }
-      else R.err = CS.replyErrorText(o.status === 200 ? 502 : o.status, o.j && o.j.error);
-      if (current === 'reply') { renderReply(); window.scrollTo(0, 0); }
+      if (X) { R.result = X; R.step = 'done'; R.copied = -1; R.err = ''; R.signout = false; }
+      else { R.err = CS.replyErrorText(o.status === 200 ? 502 : o.status, o.j && o.j.error); R.signout = o.status === 401; }
+      if (current === 'reply') { renderReply(X ? 'heading' : 'error'); rpLive(X ? 'The replies are ready' : ''); window.scrollTo(0, 0); }
     });
   }
   function copyText(t) {
@@ -512,12 +523,14 @@
     });
   }
   var copyTimer = 0;
+  // The button is changed in place (no redraw), so keyboard focus stays on it.
+  function copyBtn(i) { return document.querySelector('#v-reply [data-act="reply-copy"][data-i="' + i + '"]'); }
   function copyReply(i) {
     var R = state.reply, t = R && R.result && R.result.replies[i]; if (t == null) return;
     copyText(t).then(function () {
-      R.copied = i; R.err = ''; if (current === 'reply') renderReply();
-      clearTimeout(copyTimer); copyTimer = setTimeout(function () { if (R.copied === i) { R.copied = -1; if (current === 'reply' && state.reply === R) renderReply(); } }, 2000);
-    }).catch(function () { R.err = 'Copy did not work on this phone. Press and hold the text to copy it.'; if (current === 'reply') renderReply(); });
+      var b = copyBtn(i); R.copied = i; R.err = ''; if (b) b.innerHTML = ICON('check', 's16') + 'Copied'; rpLive('Copied');
+      clearTimeout(copyTimer); copyTimer = setTimeout(function () { if (R.copied === i) { R.copied = -1; var b2 = copyBtn(i); if (b2) b2.textContent = 'Copy'; rpLive(''); } }, 2000);
+    }).catch(function () { R.err = 'Copy did not work on this phone. Press and hold the text to copy it.'; R.signout = false; if (current === 'reply') renderReply('error'); });
   }
 
   // ---------------------------------------------------------------- More
@@ -543,7 +556,7 @@
     });
   }
   function signOutTo(msg) {
-    dropPhotos(); state.reply = null; state.payload = null; state.access = null; state.layout = null; state.month = null; state.error = '';
+    dropPhotos(); state.reply = null; var rb = $('rp-body'); if (rb) rb.innerHTML = ''; rpLive(''); state.payload = null; state.access = null; state.layout = null; state.month = null; state.error = '';
     return sb.auth.signOut().catch(function () {}).then(function () { showSignin(msg); });
   }
   function showSignin(msg) {
@@ -627,7 +640,7 @@
   function enter() {
     state.layout = CS.layoutForRole(state.access.role);
     state.name = CS.deriveDisplayName(state.user);
-    if (!/^#(home|calendar|tasks|payrates|more)/.test(location.hash)) history.replaceState(null, '', '#home');
+    if (!/^#(home|calendar|tasks|payrates|reply|more)/.test(location.hash)) history.replaceState(null, '', '#home');
     route(); loadHome(); loadTasks(); maybeIosHint();
   }
   function boot() {
@@ -726,12 +739,12 @@
     else if (a === 'task-add-cancel') { state.add = null; renderTasks(); }
     else if (a === 'task-add-save') saveAdd();
     else if (a === 'rate-save') saveRate();
-    else if (a === 'reply-mode') { var R1 = state.reply || (state.reply = newReply()); R1.mode = t.getAttribute('data-mode') === 'image' ? 'image' : 'text'; R1.step = 'form'; R1.err = ''; renderReply(); window.scrollTo(0, 0); }
+    else if (a === 'reply-mode') { var R1 = state.reply || (state.reply = newReply()); R1.mode = t.getAttribute('data-mode') === 'image' ? 'image' : 'text'; R1.step = 'form'; R1.err = ''; R1.signout = false; renderReply(); window.scrollTo(0, 0); if (R1.mode === 'text') rpFocus('rp-text'); }
     else if (a === 'reply-platform') { if (state.reply) { state.reply.platform = t.getAttribute('data-platform') === 'airbnb' ? 'airbnb' : 'messenger'; Array.prototype.forEach.call(document.querySelectorAll('#v-reply [data-act="reply-platform"]'), function (b) { b.setAttribute('aria-pressed', String(b === t)); }); } }
     else if (a === 'reply-send') sendReply();
     else if (a === 'reply-copy') copyReply(+t.getAttribute('data-i'));
-    else if (a === 'reply-back') { if (state.reply) { state.reply.step = 'pick'; state.reply.err = ''; } renderReply(); }
-    else if (a === 'reply-reset') { state.reply = newReply(); renderReply(); window.scrollTo(0, 0); }
+    else if (a === 'reply-back') { if (state.reply) { state.reply.step = 'pick'; state.reply.err = ''; state.reply.signout = false; } renderReply('heading'); }
+    else if (a === 'reply-reset') { state.reply = newReply(); renderReply('heading'); rpLive(''); window.scrollTo(0, 0); }
     else if (a === 'signout') { signOutTo(''); }
     else if (a === 'prev') shiftMonth(-1);
     else if (a === 'next') shiftMonth(1);

@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import vm from 'node:vm';
 import { createRequire } from 'node:module';
 const CS = createRequire(import.meta.url)('../lib.js');
 const root = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -91,4 +92,48 @@ test('wiring: the reply view is gated by role in the route, the home and More ro
   // the service worker never touches a POST or a function call
   assert.match(sw, /request\.method !== 'GET'\) return/);
   assert.match(sw, /'\/functions\/v1\/'/);
+});
+
+// DOM shim: run the Cassy reply section of app.js against a stub page and read back the HTML it would draw.
+
+function replyHarness() {
+  const app = read('app.js').replace(/\r\n/g, '\n'), a = app.indexOf('var RP_NAME'), b = app.indexOf('// ---------------------------------------------------------------- More');
+  assert.ok(a > 0 && b > a, 'reply section found');
+  const els = { 'rp-body': { innerHTML: '' }, 'rp-live': { textContent: '' } };
+  const ctx = { CS, esc: CS.esc, ICON: (n) => '[' + n + ']', appbar: () => '<hdr/>', $: (id) => els[id] || null, state: { reply: null }, current: 'reply',
+    window: { scrollTo() {} }, document: { querySelector: () => null }, navigator: {}, setTimeout, clearTimeout, console };
+  vm.createContext(ctx); vm.runInContext(app.slice(a, b), ctx);
+  return { els, run: (code) => vm.runInContext(code, ctx) };
+}
+const HOSTILE = '<img src=x onerror=alert(1)>';
+
+test('render: a hostile reply, guest text, header, name and file name are drawn escaped, never as markup', () => {
+  const h = replyHarness();
+  h.run("renderReply(); state.reply.step='done'; state.reply.result=CS.replyResult({ ok: true, guest_name: " + JSON.stringify(HOSTILE) + ", platform: 'airbnb', guest_text: " + JSON.stringify(HOSTILE) + ", header: " + JSON.stringify(HOSTILE) + ", replies: [" + JSON.stringify(HOSTILE) + ", '<script>alert(2)</script>'] }); renderReply('heading')");
+  const html = h.els['rp-body'].innerHTML;
+  assert.ok(!/<img|<script/i.test(html), 'no live tag from the data: ' + html);
+  assert.ok(html.includes('&lt;img src=x onerror=alert(1)&gt;') && html.includes('&lt;script&gt;alert(2)&lt;/script&gt;'));
+  h.run("state.reply.step='form'; state.reply.mode='image'; state.reply.imageName=" + JSON.stringify(HOSTILE) + "; state.reply.image={base64:'QQ==',mime:'image/jpeg'}; state.reply.name=" + JSON.stringify('"><' + 'img src=x>') + "; renderReply()");
+  assert.ok(!/<img/i.test(h.els['rp-body'].innerHTML));
+  assert.ok(!/ value="[^"]*"><img/i.test(h.els['rp-body'].innerHTML), 'name cannot break out of the attribute');
+});
+
+test('render: Write the reply is disabled while the screenshot shrinks; a 401 offers Sign out; other errors do not', () => {
+  const h = replyHarness();
+  h.run("renderReply(); state.reply.step='form'; state.reply.mode='image'; state.reply.shrinking=true; renderReply()");
+  assert.match(h.els['rp-body'].innerHTML, /data-act="reply-send" disabled/);
+  assert.match(h.els['rp-body'].innerHTML, /Preparing the screenshot/);
+  h.run("state.reply.shrinking=false; state.reply.err=CS.replyErrorText(401,'invalid_or_expired_session'); state.reply.signout=true; renderReply('error')");
+  assert.match(h.els['rp-body'].innerHTML, /id="rp-err" role="alert"[^>]*>.*data-act="signout">Sign out</s);
+  assert.doesNotMatch(h.els['rp-body'].innerHTML, /data-act="reply-send" disabled/);
+  h.run("state.reply.err=CS.replyErrorText(502,'draft_failed'); state.reply.signout=false; renderReply('error')");
+  assert.doesNotMatch(h.els['rp-body'].innerHTML, /data-act="signout"/);
+});
+
+test('wiring: sign-out clears the drawn view, #reply survives a reload, transparent PNGs are filled white, the live region is persistent', () => {
+  const app = read('app.js'), html = read('index.html');
+  assert.match(app, /\/\^#\(home\|calendar\|tasks\|payrates\|reply\|more\)\//);
+  assert.match(app, /state\.reply = null; var rb = \$\('rp-body'\); if \(rb\) rb\.innerHTML = ''/);
+  assert.match(app, /fillStyle = '#FFFFFF'; cx\.fillRect\([^)]*\); cx\.drawImage/);
+  assert.match(html, /id="v-reply"><div class="sr" id="rp-live" role="status" aria-live="polite"><\/div><div id="rp-body">/);
 });
