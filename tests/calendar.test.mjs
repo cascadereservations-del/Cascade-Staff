@@ -101,3 +101,17 @@ test('rpc missing and day-flag roles', () => {
   assert.equal(CS.rpcMissing(null), false);
   assert.deepEqual(['owner', 'admin', 'finance', 'cleaner'].map(CS.canFlagDays), [true, true, false, false]);
 });
+
+test('guest contact: what to show, a safe Messenger link, and the contact guard scoped to owner/admin guest cards', () => {
+  assert.equal(CS.guestContact({}), null); assert.equal(CS.guestContact(null), null);
+  assert.deepEqual(CS.guestContact({ phone: ' 0917-123-4567 ', email: '' }), { phone: '0917-123-4567', tel: 'tel:09171234567', email: null, messenger: null });
+  assert.equal(CS.guestContact({ phone: 'n/a' }).tel, null, 'no dial link without digits');
+  assert.equal(CS.guestContact({ messenger: { thread_url: 'javascript:alert(1)' } }).messenger, CS.MESSENGER_INBOX);
+  assert.equal(CS.guestContact({ messenger: { thread_url: 'https://m.me/x' } }).messenger, 'https://m.me/x');
+  const p = { current_guest: { phone: '1', email: 'e' }, next_guest: { phone: '2' } };
+  assert.equal(CS.assertNoMoney(p, { allowContact: true }), true);
+  assert.throws(() => CS.assertNoMoney(p), /contact keys/);
+  assert.throws(() => CS.assertNoMoney({ current_guest: { phone: '1', amount: 5 } }, { allowContact: true }), /amount/, 'money is never allowed');
+  assert.throws(() => CS.assertNoMoney({ calendar: [{ phone: '1' }] }, { allowContact: true }), /phone/, 'contact only on the guest cards');
+  assert.deepEqual(['owner', 'admin', 'finance', 'cleaner'].map(CS.canSeeGuestContact), [true, true, false, false]);
+});

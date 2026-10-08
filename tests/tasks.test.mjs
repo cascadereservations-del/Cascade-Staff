@@ -123,7 +123,7 @@ function el() {
     querySelectorAll: () => [], querySelector: () => null, focus() {}, scrollIntoView() {}, closest: () => null, appendChild() {}, onclick: null };
   return e;
 }
-async function boot({ role, hash, handlers }) {
+async function boot({ role, hash, handlers, nav }) {
   const els = {}, listeners = {}, calls = [];
   const location = { hash, pathname: '/', search: '', origin: 'https://staff.example', replace() {} };
   const docObj = {
@@ -139,7 +139,7 @@ async function boot({ role, hash, handlers }) {
     supabase: { createClient: () => sb }, CS, P, CSPay: P, ICON: (n, c) => `<svg class="i ${c || ''}" data-i="${n}"></svg>`, CSTheme: { get: () => 'auto', set() {} },
     addEventListener() {}, matchMedia: () => ({ matches: false }), scrollTo() {}, scrollY: 0, localStorage: { getItem: () => null, setItem() {}, removeItem() {} }, sessionStorage: { getItem: () => null, setItem() {}, removeItem() {} },
   };
-  const ctx = { window: win, document: docObj, location, history: { replaceState(a, b, h) { location.hash = h; } }, navigator: { userAgent: 'test' }, localStorage: win.localStorage,
+  const ctx = { window: win, document: docObj, location, history: { replaceState(a, b, h) { location.hash = h; } }, navigator: { userAgent: 'test', ...(nav || {}) }, localStorage: win.localStorage,
     matchMedia: () => ({ matches: false }), fetch: () => Promise.resolve({ ok: false }), setTimeout, clearTimeout, console, URL, Image: function () {}, Date, Math, JSON, Promise, crypto: { randomUUID: () => 'uuid-fixed-0001' } };
   win.crypto = ctx.crypto;
   vm.createContext(ctx);
@@ -274,4 +274,43 @@ test('shell: the Tasks tab is a hash route in both layouts, the Payment Request 
   assert.match(pay, /href="\.\.\/#tasks"/);
   assert.doesNotMatch(pay, /href="\.\/" aria-current="page"><span class="ico">' \+ ICON\('tasks'/);
   assert.match(app, /'tasks', 'payrates', 'more', 'door'/);
+});
+
+// ------------------------------------------------------------------------------------------------ s77 guest card contact
+const GUEST = { uid: 'u1', guest_name: 'Ana <b>', source: 'direct', checkin_date: TODAY, checkout_date: '2026-10-09', nights: 3 };
+const homeWith = (g) => ({ error: null, data: { ...HOME.data, current_guest: g } });
+
+test('guest card: owner/admin see phone (copy, Call), e-mail (copy) and Messenger; everything is escaped', async () => {
+  const g = { ...GUEST, phone: '+63 917 <123> 4567', email: 'ana"x@example.com', messenger: { psid: '1', thread_url: 'https://business.facebook.com/latest/inbox/all?selected_item_id=1' } };
+  const app = await boot({ role: 'admin', hash: '#calendar', handlers: { current_staff_access: () => ACCESS('admin'), staff_home_v1: () => homeWith(g), tasks_list_v1: () => ({ error: null, data: ADMIN_TASKS }) } });
+  const html = app.els['v-calendar'].innerHTML;
+  assert.match(html, /data-act="copy" data-copy="\+63 917 &lt;123&gt; 4567"/);
+  assert.match(html, /href="tel:\+639171234567"/);
+  assert.match(html, /data-copy="ana&quot;x@example.com"/);
+  assert.match(html, /href="https:\/\/business\.facebook\.com\/latest\/inbox\/all\?selected_item_id=1" target="_blank" rel="noopener"/);
+  assert.match(html, /Open in Messenger/);
+  assert.doesNotMatch(html, /<123>|Ana <b>/, 'nothing raw');
+});
+
+test('guest card: no contact fields means no contact block; a contact key for a cleaner still blocks the page', async () => {
+  const bare = await boot({ role: 'admin', hash: '#calendar', handlers: { current_staff_access: () => ACCESS('admin'), staff_home_v1: () => homeWith(GUEST), tasks_list_v1: () => ({ error: null, data: ADMIN_TASKS }) } });
+  assert.doesNotMatch(bare.els['v-calendar'].innerHTML, /ctbox|Open in Messenger|tel:/);
+  const onlyM = await boot({ role: 'owner', hash: '#calendar', handlers: { current_staff_access: () => ACCESS('owner'), staff_home_v1: () => homeWith({ ...GUEST, messenger: { psid: '1' } }), tasks_list_v1: () => ({ error: null, data: ADMIN_TASKS }) } });
+  assert.match(onlyM.els['v-calendar'].innerHTML, /href="https:\/\/business\.facebook\.com\/latest\/inbox\/all"/, 'no thread url: the Page inbox');
+  assert.doesNotMatch(onlyM.els['v-calendar'].innerHTML, /tel:|data-act="copy"/);
+  const cleaner = await boot({ role: 'cleaner', hash: '#calendar', handlers: { current_staff_access: () => ACCESS('cleaner'), staff_home_v1: () => homeWith({ ...GUEST, phone: '0917' }), tasks_list_v1: () => ({ error: null, data: STAFF_TASKS }) } });
+  assert.match(cleaner.els['v-calendar'].innerHTML, /blocked because the data carried an amount or a contact detail/);
+});
+
+test('copy: tapping a value writes it to the clipboard and says Copied; a refused clipboard says how to copy by hand', async () => {
+  const wrote = [];
+  const app = await boot({ role: 'admin', hash: '#calendar', nav: { clipboard: { writeText: (t) => { wrote.push(t); return Promise.resolve(); } } },
+    handlers: { current_staff_access: () => ACCESS('admin'), staff_home_v1: () => homeWith({ ...GUEST, phone: '0917 123 4567' }), tasks_list_v1: () => ({ error: null, data: ADMIN_TASKS }) } });
+  await app.click({ 'data-act': 'copy', 'data-copy': '0917 123 4567' });
+  assert.deepEqual(wrote, ['0917 123 4567']);
+  assert.equal(app.els['cs-toast'].textContent, 'Copied');
+  const no = await boot({ role: 'admin', hash: '#calendar', nav: { clipboard: { writeText: () => Promise.reject(new Error('denied')) } },
+    handlers: { current_staff_access: () => ACCESS('admin'), staff_home_v1: () => homeWith(GUEST), tasks_list_v1: () => ({ error: null, data: ADMIN_TASKS }) } });
+  await no.click({ 'data-act': 'copy', 'data-copy': 'x' });
+  assert.match(no.els['cs-toast'].textContent, /Press and hold/);
 });

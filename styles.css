@@ -440,3 +440,12 @@ ol.steps li::before { content: counter(s); position: absolute; left: 0; top: 0; 
 .sheet.calsheet { max-height: 86vh; overflow-y: auto; overscroll-behavior: contain; }
 .sheet.calsheet #cs-h:focus { outline: none; }
 .sheet.calsheet .wlist li { align-items: center; }
+
+/* ---- s77 guest card contact (owner/admin): tap the value to copy, Call, Open in Messenger; a short polite toast ---- */
+.ctbox { display: grid; gap: 6px; margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border); }
+.ctrow { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; }
+.ctrow .cap { min-width: 44px; }
+.ctval { min-height: 36px; padding: 0 4px; background: none; border: 0; color: var(--fg); font: 500 15px/22px var(--font-ui); text-align: left; cursor: pointer; overflow-wrap: anywhere; text-decoration: underline dotted var(--fg-3); text-underline-offset: 3px; }
+.ctval:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; border-radius: var(--r-sm); }
+.toast { position: fixed; left: 50%; bottom: calc(var(--tabbar-h) + env(safe-area-inset-bottom) + 12px); transform: translateX(-50%); z-index: 30; max-width: calc(100% - 32px); padding: 8px 14px; border-radius: var(--r-full); background: var(--fg); color: var(--bg); font: 600 13px/18px var(--font-ui); box-shadow: var(--shadow-md); opacity: 0; pointer-events: none; transition: opacity var(--motion-base) var(--ease); }
+.toast.on { opacity: 1; }

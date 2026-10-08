@@ -170,7 +170,7 @@
     var info = '<div class="card" id="' + (kind === 'house' ? 'house' : 'next') + '"><div class="row-between"><span class="cap up">' + label + '</span>' + st + '</div>' +
       '<h3 class="ttl" style="margin-top:8px">' + esc(g.guest_name || 'Guest') + '</h3>' +
       '<div class="row-wrap" style="margin-top:6px">' + (ret ? pill('brand', 'repeat', ret) : '') + (src ? '<span class="pill p-neutral">' + esc(src) + '</span>' : '') + '</div>' +
-      '<p class="sub num" style="margin:8px 0 0">' + esc(datesLine(g)) + '</p>' + (earlier ? '<p class="help num" style="margin:2px 0 0">' + esc(earlier) + '</p>' : '') + '</div>';
+      '<p class="sub num" style="margin:8px 0 0">' + esc(datesLine(g)) + '</p>' + (earlier ? '<p class="help num" style="margin:2px 0 0">' + esc(earlier) + '</p>' : '') + contactBlock(g) + '</div>';
     var groups = CS.parseNotes(g.notes), notes = '';
     if (groups.length) {
       notes = '<div class="card"><h3 class="hd">Notes from earlier stays</h3><div style="margin-top:10px">' + groups.map(function (gr) {
@@ -184,6 +184,29 @@
       (g.id_photo_path ? '<div class="idphoto" data-idpath="' + esc(g.id_photo_path) + '"><span class="help">Loading the photo…</span></div><p class="help" style="margin:10px 0 0">Check the face and the name against the guest at the door.</p>'
         : '<div class="idphoto empty">No ID photo to show for this guest.</div>') + '</div></div>';
     return info + notes + idcard;
+  }
+
+  // Phone, e-mail and Messenger (owner/admin only; the server sends nothing to cleaners, and the guard blocks it if it ever did).
+  // Tap the value or Copy to copy it; Call dials; Messenger opens the guest's thread or the Page inbox.
+  function contactBlock(g) {
+    var c = CS.guestContact(g); if (!c) return '';
+    var copyBtns = function (label, val) {
+      return '<button class="ctval num" type="button" data-act="copy" data-copy="' + esc(val) + '" aria-label="' + esc('Copy ' + label.toLowerCase() + ' ' + val) + '">' + esc(val) + '</button>' +
+        '<button class="btn btn-ghost btn-sm" type="button" data-act="copy" data-copy="' + esc(val) + '" aria-label="' + esc('Copy ' + label.toLowerCase()) + '">Copy</button>';
+    };
+    var html = '<div class="ctbox">';
+    if (c.phone) html += '<div class="ctrow"><span class="cap">Phone</span>' + copyBtns('Phone', c.phone) + (c.tel ? '<a class="btn btn-ghost btn-sm" href="' + esc(c.tel) + '" aria-label="' + esc('Call ' + c.phone) + '">Call</a>' : '') + '</div>';
+    if (c.email) html += '<div class="ctrow"><span class="cap">Email</span>' + copyBtns('Email', c.email) + '</div>';
+    if (c.messenger) html += '<div class="ctrow">' + ext(c.messenger, ICON('chat', 's16') + 'Open in Messenger', 'btn btn-secondary btn-sm') + '</div>';
+    return html + '</div>';
+  }
+  // A short "Copied" note: visible for 2 s and read out by screen readers (polite). Made once, outside every redrawn view.
+  var toastTimer = 0;
+  function toast(msg) {
+    var t = $('cs-toast');
+    if (!t) { t = document.createElement('div'); t.id = 'cs-toast'; t.className = 'toast'; t.setAttribute('role', 'status'); t.setAttribute('aria-live', 'polite'); document.body.appendChild(t); }
+    t.textContent = msg; t.classList.add('on');
+    clearTimeout(toastTimer); toastTimer = setTimeout(function () { t.classList.remove('on'); t.textContent = ''; }, 2000);
   }
 
   // The ID photo comes from the private guest-id-photos bucket through a 5-minute signed URL made with the user's own session
@@ -701,7 +724,7 @@
         if (r.error.code === '42501' || /forbidden/i.test(r.error.message || '')) return signOutTo('Your access was turned off. Ask Lloyd.');
         throw r.error;
       }
-      try { CS.assertNoMoney(r.data); } catch (e) { state.payload = null; state.error = 'This page was blocked because the data carried an amount or a contact detail. Tell Lloyd.'; return; }
+      try { CS.assertNoMoney(r.data, { allowContact: CS.canSeeGuestContact(state.access && state.access.role) }); } catch (e) { state.payload = null; state.error = 'This page was blocked because the data carried an amount or a contact detail. Tell Lloyd.'; return; }
       state.payload = r.data; state.loadedAt = Date.now(); state.error = '';
       refreshWeather(); loadPayHint(); loadBookingsToConfirm();
     }).catch(function () {
@@ -886,6 +909,7 @@
     else if (a === 'reply-reset') { state.reply = newReply(); renderReply('heading'); rpLive(''); window.scrollTo(0, 0); }
     else if (a === 'signout') { signOutTo(''); }
     else if (a === 'sheet-close') closeSheet();
+    else if (a === 'copy') copyText(t.getAttribute('data-copy') || '').then(function () { toast('Copied'); }, function () { toast('Copy did not work on this phone. Press and hold the text to copy it.'); });
     else if (a === 'flag-save') flagSave();
     else if (a === 'flag-clear') sheetCall('calendar_day_flag_clear_v1', { p_property_id: pid(), p_id: t.getAttribute('data-id') }, 'Note removed.');
     else if (a === 'warn-ack') warnAck();

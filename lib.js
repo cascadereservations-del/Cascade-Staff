@@ -161,8 +161,13 @@
     }
     return out;
   }
-  function assertNoMoney(payload) {
-    var bad = moneyKeys(payload);
+  // s77: owner and admin may receive the guest's phone and e-mail on the two guest cards, nowhere else. Money keys stay refused for
+  // every role, and a contact key anywhere else (or for any other role) still blocks the page.
+  var CONTACT_OK = /^\$\.(current_guest|next_guest)\.(phone|email)$/;
+  function canSeeGuestContact(role) { return role === 'owner' || role === 'admin'; }
+  function assertNoMoney(payload, opts) {
+    var allow = !!(opts && opts.allowContact);
+    var bad = moneyKeys(payload).filter(function (p) { return !(allow && CONTACT_OK.test(p)); });
     if (bad.length) throw new Error('payload carries money or contact keys: ' + bad.join(', '));
     return true;
   }
@@ -284,6 +289,18 @@
   function canFlagDays(role) { return role === 'owner' || role === 'admin'; }
   // A missing RPC (not deployed yet): PostgREST says PGRST202, or the gateway answers 404.
   function rpcMissing(err) { return !!err && (err.code === 'PGRST202' || err.status === 404 || err.code === '404' || /could not find the function/i.test(err.message || '')); }
+
+  // Guest card contact (owner/admin payload only): what to show, or null when the payload has none of it.
+  // Messenger opens the guest's thread when the payload has one, else the Page inbox; only an https thread URL is used.
+  var MESSENGER_INBOX = 'https://business.facebook.com/latest/inbox/all';
+  function guestContact(g) {
+    if (!g) return null;
+    var phone = String(g.phone == null ? '' : g.phone).trim(), email = String(g.email == null ? '' : g.email).trim();
+    var m = g.messenger && typeof g.messenger === 'object' ? g.messenger : null, tel = phone.replace(/[^\d+]/g, '');
+    var out = { phone: phone || null, tel: tel.replace(/\D/g, '').length >= 5 ? 'tel:' + tel : null, email: email || null,
+      messenger: m ? (/^https:\/\/[^\s"'<>]+$/i.test(String(m.thread_url || '')) ? m.thread_url : MESSENGER_INBOX) : null };
+    return out.phone || out.email || out.messenger ? out : null;
+  }
 
   // Telegram: the app link first (tg://), the t.me web page as the fallback when the app does not open.
   function tgLink(channelId, post) {
@@ -615,7 +632,7 @@
     dayLabel: dayLabel, dayLong: dayLong, dayShort: dayShort, monthTitle: monthTitle, monthShortYear: monthShortYear, greeting: greeting,
     fmtTime: fmtTime, fmt24: fmt24, ordinal: ordinal, plural: plural, agoLabel: agoLabel, clockLabel: clockLabel,
     monthGrid: monthGrid, dayState: dayState, dayStatus: dayStatus, blockWhy: blockWhy, flagName: flagName, FLAG_KINDS: FLAG_KINDS, blockedLines: blockedLines, blockedLineText: blockedLineText,
-    canFlagDays: canFlagDays, rpcMissing: rpcMissing, tgLink: tgLink, warningInfo: warningInfo, findingKey: findingKey, initialOf: initialOf, sourceLabel: sourceLabel, stayDates: stayDates, monthInRange: monthInRange,
+    canFlagDays: canFlagDays, guestContact: guestContact, canSeeGuestContact: canSeeGuestContact, MESSENGER_INBOX: MESSENGER_INBOX, rpcMissing: rpcMissing, tgLink: tgLink, warningInfo: warningInfo, findingKey: findingKey, initialOf: initialOf, sourceLabel: sourceLabel, stayDates: stayDates, monthInRange: monthInRange,
     parseNotes: parseNotes, returningLabel: returningLabel, earlierLine: earlierLine, todayCardState: todayCardState,
     orderWarnings: orderWarnings, brownoutText: brownoutText, lowStockText: lowStockText, warningSummary: warningSummary,
     weatherLine: weatherLine, rainLine: rainLine, weatherStale: weatherStale, esc: esc
