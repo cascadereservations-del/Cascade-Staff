@@ -143,11 +143,13 @@ test('door URL: same origin opens in the frame, another origin or scheme opens e
   assert.equal(CS.doorTarget('https://cascadereservations-del.github.io/cascade-admin-dashboard/#/today', ORIGIN), 'frame');
   assert.equal(CS.doorTarget('https://other.example.com/inventory/', ORIGIN), 'external');
   assert.equal(CS.doorTarget('https://t.me/c/3798341977', ORIGIN), 'external');
+  assert.equal(CS.doorTarget('tg://privatepost?channel=3798341977', ORIGIN), 'external', 'the Telegram app link is external');
   assert.equal(CS.doorTarget('http://cascadereservations-del.github.io/x/', ORIGIN), 'external', 'a different scheme is a different origin');
   assert.equal(CS.doorTarget('javascript:alert(1)', ORIGIN), 'external');
   assert.equal(CS.doorTarget('not a url at all', 'null'), 'external');
   assert.deepEqual(CS.doorLink('manual', 'https://cascadereservations-del.github.io/Cascade-Manual/', ORIGIN), { href: '#door/manual', external: false });
   assert.deepEqual(CS.doorLink('x', 'https://t.me/c/1', ORIGIN), { href: 'https://t.me/c/1', external: true });
+  assert.deepEqual(CS.doorLink('x', 'tg://privatepost?channel=1', ORIGIN), { href: 'tg://privatepost?channel=1', external: true });
 });
 
 test('app.js wiring: the three doors are same-origin (so they frame), the rows use the door key, the frame view exists', () => {

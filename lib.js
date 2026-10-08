@@ -235,6 +235,104 @@
     });
     return out;
   }
+  // ---- calendar day status (s77 contract): one primary per night, booked > blocked > free, plus any number of secondary flags.
+  // dayFlags is payload.day_flags; when the payload has none (older SQL) brownouts come from the warnings as before.
+  var FLAG_KINDS = ['brownout', 'maintenance', 'deep_clean', 'other'];
+  var FLAG_NAME = { brownout: 'Brownout', maintenance: 'Maintenance', deep_clean: 'Deep cleaning', other: 'Note' };
+  function blockWhy(r) { var l = r && String(r.block_label || '').trim(); return l || 'Blocked'; }
+  function flagsFor(iso, dayFlags, warnings) {
+    if (Array.isArray(dayFlags)) return dayFlags.filter(function (f) { return f && f.date === iso && FLAG_KINDS.indexOf(f.kind) >= 0; });
+    return (warnings || []).filter(function (w) { return w.kind === 'brownout' && w.detail && w.detail.date === iso; })
+      .map(function () { return { date: iso, kind: 'brownout', label: 'Brownout', source: 'auto', id: null }; });
+  }
+  function dayStatus(iso, rows, dayFlags, warnings) {
+    var s = dayState(iso, rows), block = null;
+    (rows || []).forEach(function (r) { if (!block && r.status === 'blocked' && iso >= r.checkin_date && iso < r.checkout_date) block = r; });
+    var primary = s.stay ? 'booked' : block ? 'blocked' : 'free';
+    return { primary: primary, stay: s.stay, block: block, startsHere: s.startsHere, cont: s.cont,
+      why: s.stay ? (s.stay.guest_name || 'Guest') : block ? blockWhy(block) : 'Open for a booking', flags: flagsFor(iso, dayFlags, warnings) };
+  }
+  function flagName(kind) { return FLAG_NAME[kind] || 'Note'; }
+  // "Blocked nights" list: the nights a block holds with no confirmed stay on them, said with the reason.
+  // A block that mirrors a stay (Airbnb copy of a direct booking) shows only its extra nights, e.g. one night after checkout.
+  function nightsWord(n) { return n === 1 ? 'one night' : n === 2 ? 'two nights' : n + ' nights'; }
+  function blockedLines(rows, today) {
+    var stays = (rows || []).filter(function (r) { return r.status === 'confirmed'; }), out = [];
+    function stayOn(d) { for (var i = 0; i < stays.length; i++) if (d >= stays[i].checkin_date && d < stays[i].checkout_date) return stays[i]; return null; }
+    (rows || []).filter(function (r) { return r.status === 'blocked' && r.checkout_date > (today || ''); }).forEach(function (r) {
+      var segs = [], cur = null, covered = 0, d;
+      for (d = r.checkin_date; d < r.checkout_date; d = addDays(d, 1)) {
+        if (stayOn(d)) { covered++; cur = null; continue; }
+        if (cur && addDays(cur.to, 1) === d) cur.to = d; else { cur = { from: d, to: d }; segs.push(cur); }
+      }
+      if (!segs.length) { out.push({ from: r.checkin_date, to: addDays(r.checkout_date, -1), why: blockWhy(r), note: 'same nights as the stay', extra: false }); return; }
+      segs.forEach(function (sg) {
+        var n = daysBetween(sg.from, sg.to) + 1, note = '';
+        if (covered) {
+          var after = stays.some(function (st) { return st.checkout_date === sg.from; }), before = stays.some(function (st) { return st.checkin_date === addDays(sg.to, 1); });
+          note = after ? nightsWord(n) + ' after checkout' : before ? nightsWord(n) + ' before check-in' : '';
+        }
+        out.push({ from: sg.from, to: sg.to, why: blockWhy(r), note: note, extra: !!covered });
+      });
+    });
+    return out.sort(function (a, b) { return a.from < b.from ? -1 : a.from > b.from ? 1 : 0; });
+  }
+  function blockedLineText(l) {
+    return (l.from === l.to ? dayLabel(l.from) : dayLabel(l.from) + ' to ' + dayLabel(l.to)) + ' · ' + l.why + (l.note ? ' · ' + l.note : '');
+  }
+  function canFlagDays(role) { return role === 'owner' || role === 'admin'; }
+  // A missing RPC (not deployed yet): PostgREST says PGRST202, or the gateway answers 404.
+  function rpcMissing(err) { return !!err && (err.code === 'PGRST202' || err.status === 404 || err.code === '404' || /could not find the function/i.test(err.message || '')); }
+
+  // Telegram: the app link first (tg://), the t.me web page as the fallback when the app does not open.
+  function tgLink(channelId, post) {
+    var id = String(channelId).replace(/\D/g, ''), p = post != null && post !== '' ? String(post).replace(/\D/g, '') : '';
+    return { app: 'tg://privatepost?channel=' + id + (p ? '&post=' + p : ''), web: 'https://t.me/c/' + id + (p ? '/' + p : '') };
+  }
+
+  // What a warning means in plain words, where to go to fix it, and whether it can be marked handled here.
+  var DASH = 'https://cascadereservations-del.github.io/cascade-admin-dashboard/#/';
+  var CHECKS = [
+    [/overlap/i, 'Two confirmed stays share at least one night, so one guest may have no room. Moving or cancelling one booking clears it.', 'Bookings calendar', 'bookings/calendar'],
+    [/no calendar block/i, 'A booking is confirmed but its nights are still open on a booking calendar. Blocking those nights keeps a second guest from taking them.', 'Bookings calendar', 'bookings/calendar'],
+    [/calendar hold/i, 'Nights are held on the calendar with no live booking behind them. Releasing the hold opens them for sale again.', 'Bookings calendar', 'bookings/calendar'],
+    [/ledger/i, 'The same money appears more than once in the ledger, so totals may read high until the copy is removed.', 'Finance transactions', 'finance/transactions'],
+    [/clean/i, 'A guest has checked out and no cleaning is logged for that turnover yet.', 'Operations', 'operations'],
+    [/\bID\b/, 'A guest arrives soon and no ID photo is on file yet. The guest card shows what is there.', 'the guest card', '#calendar/next']
+  ];
+  function warningInfo(w, role) {
+    var admin = role === 'owner' || role === 'admin' || role === 'finance', d = (w && w.detail) || {}, out = { head: '', meaning: '', details: [], go: null, resolvable: false };
+    if (w.kind === 'brownout') {
+      var b = brownoutText(w); out.head = b.head; out.details = b.rest ? b.rest.split(' · ') : [];
+      out.meaning = 'SOCOTECO has scheduled a power interruption. A charged EcoFlow and a short note to the guest ahead of time keep the stay comfortable.';
+      if (admin) out.go = { label: 'Go to Notices', href: DASH + 'operations/notices', external: true };
+      return out;
+    }
+    if (w.kind === 'inventory') {
+      var l = lowStockText(w); out.head = l.head; out.details = [l.rest];
+      out.meaning = 'This item is below its reorder level. A restock before the next turnover keeps the house ready.';
+      if (admin) out.go = { label: 'Go to Inventory', href: DASH + 'inventory', external: true };
+      return out;
+    }
+    out.head = 'System check'; out.details = [w.title].concat(d.check_id ? ['Check ' + d.check_id] : [], d.status === 'acknowledged' ? ['Marked as seen, not fixed yet'] : []);
+    out.meaning = 'An automatic check found something that needs a person.';
+    for (var i = 0; i < CHECKS.length; i++) if (CHECKS[i][0].test(w.title || '')) {
+      out.meaning = CHECKS[i][1];
+      var internal = CHECKS[i][3].charAt(0) === '#';
+      if (internal || admin) out.go = { label: 'Go to ' + CHECKS[i][2], href: internal ? CHECKS[i][3] : DASH + CHECKS[i][3], external: !internal };
+      break;
+    }
+    if (!out.go && admin) out.go = { label: 'Go to System health', href: DASH + 'settings/health', external: true };
+    out.resolvable = (role === 'owner' || role === 'admin') && d.status !== 'acknowledged';
+    return out;
+  }
+  // The finding key for ack_verifier_finding_v1: from the warning when the payload carries it, else the matching Tasks row.
+  function findingKey(w, tasks) {
+    if (w.key) return w.key; if (w.detail && w.detail.key) return w.detail.key;
+    var hit = (tasks || []).filter(function (t) { return t.source === 'verifier_findings' && t.title === w.title && t.status !== 'done'; });
+    return hit.length === 1 ? hit[0].id : null;
+  }
+
   // Guest initial for the bar; Airbnb first names only, never more.
   function initialOf(name) { var s = String(name || '').trim(); return s ? s.charAt(0).toUpperCase() : ''; }
   function sourceLabel(src) { return src === 'airbnb' ? 'Airbnb' : src === 'direct' ? 'Direct' : src === 'manual' ? 'Manual' : ''; }
@@ -502,7 +600,8 @@
     manilaToday: manilaToday, manilaParts: manilaParts, addDays: addDays, daysBetween: daysBetween, weekdayIndex: weekdayIndex,
     dayLabel: dayLabel, dayLong: dayLong, dayShort: dayShort, monthTitle: monthTitle, monthShortYear: monthShortYear, greeting: greeting,
     fmtTime: fmtTime, fmt24: fmt24, ordinal: ordinal, plural: plural, agoLabel: agoLabel, clockLabel: clockLabel,
-    monthGrid: monthGrid, dayState: dayState, initialOf: initialOf, sourceLabel: sourceLabel, stayDates: stayDates, monthInRange: monthInRange,
+    monthGrid: monthGrid, dayState: dayState, dayStatus: dayStatus, blockWhy: blockWhy, flagName: flagName, FLAG_KINDS: FLAG_KINDS, blockedLines: blockedLines, blockedLineText: blockedLineText,
+    canFlagDays: canFlagDays, rpcMissing: rpcMissing, tgLink: tgLink, warningInfo: warningInfo, findingKey: findingKey, initialOf: initialOf, sourceLabel: sourceLabel, stayDates: stayDates, monthInRange: monthInRange,
     parseNotes: parseNotes, returningLabel: returningLabel, earlierLine: earlierLine, todayCardState: todayCardState,
     orderWarnings: orderWarnings, brownoutText: brownoutText, lowStockText: lowStockText, warningSummary: warningSummary,
     weatherLine: weatherLine, rainLine: rainLine, weatherStale: weatherStale, esc: esc

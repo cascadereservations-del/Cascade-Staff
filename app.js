@@ -16,15 +16,15 @@
     url: 'https://qkgfhsdppslwunarczeq.supabase.co',
     key: 'sb_publishable_JFuRYZ9csmQULcMRmHXDSg_Abo9UeCj',
     propertyId: '6ae230f4-c189-4547-84b1-cb6e0b2cc9bd',
-    version: '2.3.1'
+    version: '2.4.0'
   };
   var LINKS = {
     checklist: 'https://cascadereservations-del.github.io/CH-Cleaners-Checklist/',
     dashboard: 'https://cascadereservations-del.github.io/cascade-admin-dashboard/#/today',
     manual: 'https://cascadereservations-del.github.io/Cascade-Manual/',
     quick: './quick/',
-    tgOps: 'https://t.me/c/3798341977',
-    tgFinance: 'https://t.me/c/3819352746',
+    tgOps: CS.tgLink('3798341977'), // {app: tg://..., web: https://t.me/c/...}; tgA() opens the app, the web page is the fallback
+    tgFinance: CS.tgLink('3819352746'),
     pay: './pay/'
   };
   // Doors (D-304.3): a door on this origin opens inside the app in a full-screen frame (one storage partition on iPhone Home Screen and
@@ -52,11 +52,14 @@
 
   // ---------------------------------------------------------------- helpers
   function ext(href, inner, cls, extra) { return '<a class="' + (cls || '') + '" href="' + esc(href) + '" target="_blank" rel="noopener"' + (extra || '') + '>' + inner + '</a>'; }
+  // Telegram links open the Telegram app (tg://); if this page is still showing ~1.2 s later the app did not open, so the web page opens.
+  function tgA(link, inner, cls) { return '<a class="' + (cls || '') + '" href="' + esc(link.app) + '" data-tgweb="' + esc(link.web) + '">' + inner + '</a>'; }
   function row(opts) { // title and sub-title always on separate lines (D-300.7)
     if (opts.door) { var dl = CS.doorLink(opts.door, doorDef(opts.door).url, location.origin, trustOn); opts.href = dl.href; opts.external = dl.external; }
     var inner = '<span class="lead">' + ICON(opts.icon) + '</span><span class="mid"><span class="t">' + esc(opts.title) + '</span><span class="s"' + (opts.subId ? ' id="' + opts.subId + '"' : '') + '>' + esc(opts.sub || '') + '</span></span>' +
       (opts.count ? '<span class="count" aria-label="' + esc(opts.count + (opts.countLabel || ' warnings')) + '">' + esc(opts.count) + '</span>' : '') +
       '<span class="chev">' + ICON(opts.external ? 'ext' : 'chev', opts.external ? 's16' : '') + '</span>';
+    if (opts.tg) return tgA(opts.tg, inner, 'rowi');
     if (opts.href && opts.external) return ext(opts.href, inner, 'rowi');
     if (opts.href) return '<a class="rowi" href="' + esc(opts.href) + '">' + inner + '</a>';
     return '<button class="rowi" type="button" id="' + esc(opts.id || '') + '">' + inner + '</button>';
@@ -111,7 +114,7 @@
     var s = CS.warningSummary(state.payload.warnings);
     if (!s.count) return '<a class="warnline calm" href="#calendar">' + ICON('check') + '<span><b>No warnings today</b></span><span class="chev">' + ICON('chev') + '</span></a>';
     var parts = s.text.split(' · ');
-    return '<a class="warnline" href="#calendar">' + ICON('alert') + '<span><b>' + esc(parts[0]) + '</b>' + (parts.length > 1 ? ' · ' + esc(parts.slice(1).join(' · ')) : '') + '</span><span class="chev">' + ICON('chev') + '</span></a>';
+    return '<a class="warnline" href="#calendar/warnings">' + ICON('alert') + '<span><b>' + esc(parts[0]) + '</b>' + (parts.length > 1 ? ' · ' + esc(parts.slice(1).join(' · ')) : '') + '</span><span class="chev">' + ICON('chev') + '</span></a>';
   }
   function greetBlock() {
     var w = CS.weatherLine(state.payload.weather, state.payload.today);
@@ -130,7 +133,7 @@
       doors = '<nav class="card list" aria-label="Staff">' +
         row({ icon: 'clip', title: 'Cleaning checklist', sub: 'Start or continue today’s turnover', door: 'checklist' }) +
         row({ icon: 'calendar', title: 'Guest Calendar Info', sub: 'Who is staying, who is next, warnings', href: '#calendar', count: n || '' }) +
-        row({ icon: 'chat', title: 'Cassy · Telegram OPS', sub: 'Report, ask, log an expense', href: LINKS.tgOps, external: true }) +
+        row({ icon: 'chat', title: 'Cassy · Telegram OPS', sub: 'Report, ask, log an expense', tg: LINKS.tgOps, external: true }) +
         '<div class="subrow"><a class="btn btn-secondary btn-sm" href="' + LINKS.quick + '">' + ICON('book', 's16') + 'Quick guide</a>' +
         '<span class="help">Two minutes on telling Cassy what happened, asking her anything, and logging what you spent.</span></div>' +
         row({ icon: 'book', title: 'Cascade Manual', sub: 'How we do things', door: 'manual' }) +
@@ -145,7 +148,7 @@
         row({ icon: 'calendar', title: 'Guest Calendar Info', sub: 'Stays, blocked nights, warnings', href: '#calendar', count: n || '' }) +
         '<button class="rowi" type="button" data-act="cassy" aria-expanded="' + state.cassyOpen + '"><span class="lead">' + ICON('chat') + '</span><span class="mid"><span class="t">Cassy</span><span class="s">Open in Telegram</span></span><span class="chev turn">' + ICON('chev') + '</span></button>' +
         '<div class="submenu" id="cassy-sub"' + (state.cassyOpen ? '' : ' hidden') + '><span class="cap">Open in Telegram</span>' +
-        ext(LINKS.tgFinance, ICON('wallet', 's16') + 'Finance', 'chip') + ext(LINKS.tgOps, ICON('wrench', 's16') + 'OPS', 'chip') +
+        tgA(LINKS.tgFinance, ICON('wallet', 's16') + 'Finance', 'chip') + tgA(LINKS.tgOps, ICON('wrench', 's16') + 'OPS', 'chip') +
         '<a class="chip" href="' + LINKS.quick + '">' + ICON('book', 's16') + 'Quick guide</a></div>' +
         row({ icon: 'book', title: 'Cascade Manual', sub: 'Operations manual', door: 'manual' }) + '</nav>';
     }
@@ -159,7 +162,7 @@
     var label = kind === 'house' ? 'In the house' : 'Next arrival';
     var st = kind === 'house' ? pill('ok', 'check', g.checkin_date === state.payload.today ? 'Arrived today' : 'Checked in') : pill('info', 'info', 'Arrives ' + CS.dayLabel(g.checkin_date));
     var ret = CS.returningLabel(g, false), src = CS.sourceLabel(g.source), earlier = CS.earlierLine(g);
-    var info = '<div class="card"' + (kind === 'house' ? ' id="house"' : '') + '><div class="row-between"><span class="cap up">' + label + '</span>' + st + '</div>' +
+    var info = '<div class="card" id="' + (kind === 'house' ? 'house' : 'next') + '"><div class="row-between"><span class="cap up">' + label + '</span>' + st + '</div>' +
       '<h3 class="ttl" style="margin-top:8px">' + esc(g.guest_name || 'Guest') + '</h3>' +
       '<div class="row-wrap" style="margin-top:6px">' + (ret ? pill('brand', 'repeat', ret) : '') + (src ? '<span class="pill p-neutral">' + esc(src) + '</span>' : '') + '</div>' +
       '<p class="sub num" style="margin:8px 0 0">' + esc(datesLine(g)) + '</p>' + (earlier ? '<p class="help num" style="margin:2px 0 0">' + esc(earlier) + '</p>' : '') + '</div>';
@@ -214,27 +217,41 @@
     if (!CS.monthInRange(y, mm, state.payload.today)) return;
     state.month = { y: y, m: mm }; renderCalendar();
   }
+  var FLAG_ICON = { brownout: 'zap', maintenance: 'wrench', deep_clean: 'sparkles', other: 'note' };
+  var BLOCK_ICON = { brownout: 'zapoff', maintenance: 'wrench', deep_clean: 'sparkles', owner: 'house', direct: 'calendar' };
+  function dayStatusOf(iso) { var p = state.payload; return CS.dayStatus(iso, p.calendar || [], p.day_flags, p.warnings); }
+  // Three primary looks that differ by pattern, not only colour: free = outlined card, blocked = hatched with the reason icon,
+  // booked = filled with the brand bar. Secondary flags sit top-right as small icons. Every day opens the day sheet.
   function calendarGrid() {
-    var p = state.payload, m = monthState(), rows = p.calendar || [], cells = CS.monthGrid(m.y, m.m), idx = {};
-    var bo = {}; (p.warnings || []).forEach(function (w) { if (w.kind === 'brownout' && w.detail && w.detail.date) bo[w.detail.date] = 1; });
-    var stays = rows.filter(function (r) { return r.status === 'confirmed'; }); stays.forEach(function (r, i) { idx[r.uid] = i; });
+    var p = state.payload, m = monthState(), cells = CS.monthGrid(m.y, m.m);
     var dows = ['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su'].map(function (d) { return '<div class="dow" aria-hidden="true">' + d + '</div>'; }).join('');
     var body = cells.map(function (c) {
-      if (!c.iso) return '<div class="d off"></div>';
-      var ds = CS.dayState(c.iso, rows), cls = 'd' + (c.iso < p.today ? ' past' : '') + (c.iso === p.today ? ' today' : '') + (ds.stay ? ' stay' : '') + (ds.stay && ds.cont ? ' cont' : '') + (ds.blocked && !ds.stay ? ' blk' : '');
-      var day = +c.iso.slice(8), inner = day + (ds.stay && ds.startsHere ? '<span class="ini">' + esc(CS.initialOf(ds.stay.guest_name)) + '</span>' : '') +
-        (ds.blocked && !ds.stay ? '<span class="g">' + ICON('zapoff', 's12') + '</span>' : (bo[c.iso] ? '<span class="g bo">' + ICON('zap', 's12') + '</span>' : ''));
-      var label = CS.dayLong(c.iso) + (ds.stay ? ', stay' : ds.blocked ? ', blocked' : '') + (bo[c.iso] ? ', brownout' : '');
-      if (ds.stay) return '<button class="' + cls + '" type="button" data-stay="' + idx[ds.stay.uid] + '" aria-label="' + esc(label) + '">' + inner + '</button>';
-      return '<div class="' + cls + '" role="gridcell" aria-label="' + esc(label) + '">' + inner + '</div>';
+      if (!c.iso) return '<div class="d off" aria-hidden="true"></div>';
+      var ds = dayStatusOf(c.iso), booked = ds.primary === 'booked', blk = ds.primary === 'blocked';
+      var cls = 'd s-' + ds.primary + (c.iso < p.today ? ' past' : '') + (c.iso === p.today ? ' today' : '') + (booked ? ' stay' : '') + (booked && ds.cont ? ' cont' : '') + (blk ? ' blk' : '');
+      var fl = ds.flags.length ? '<span class="fl" aria-hidden="true">' + ds.flags.slice(0, 3).map(function (f) { return ICON(FLAG_ICON[f.kind] || 'note', 's12'); }).join('') + '</span>' : '';
+      var inner = '<span class="n">' + (+c.iso.slice(8)) + '</span>' + (booked && ds.startsHere ? '<span class="ini">' + esc(CS.initialOf(ds.stay.guest_name)) + '</span>' : '') +
+        (blk ? '<span class="g">' + ICON(BLOCK_ICON[ds.block.block_reason] || 'lock', 's12') + '</span>' : '') + fl;
+      var label = CS.dayLong(c.iso) + (c.iso === p.today ? ', today' : '') + ', ' + (booked ? 'booked, ' + ds.why : blk ? 'blocked, ' + ds.why : 'free') +
+        (ds.flags.length ? '; ' + ds.flags.map(function (f) { return CS.flagName(f.kind); }).join(', ') : '');
+      return '<button class="' + cls + '" type="button" data-day="' + c.iso + '" aria-label="' + esc(label) + '" aria-haspopup="dialog">' + inner + '</button>';
     }).join('');
-    return '<div class="cal" role="grid" aria-label="' + esc(CS.monthTitle(m.y, m.m)) + '">' + dows + body + '</div>';
+    return '<div class="cal" role="group" aria-label="' + esc(CS.monthTitle(m.y, m.m)) + '">' + dows + body + '</div>';
   }
+  function legend() {
+    var it = function (cls, t) { return '<span><i class="lg ' + cls + '"></i>' + t + '</span>'; };
+    var fi = function (k) { return '<span>' + ICON(FLAG_ICON[k], 's12') + CS.flagName(k) + '</span>'; };
+    return '<div class="legend">' + it('lg-free', 'Free') + it('lg-blk', 'Blocked') + it('lg-booked', 'Booked') + it('lg-today', 'Today') + '</div>' +
+      '<div class="legend legend2">' + CS.FLAG_KINDS.map(fi).join('') + '<span class="help">Tap a day for details</span></div>';
+  }
+  function warnKey(w) { return w.kind + '|' + (w.title || '') + '|' + ((w.detail && w.detail.date) || ''); }
   function warningItems() {
     var p = state.payload, items = CS.orderWarnings(p.warnings).map(function (w) {
-      if (w.kind === 'brownout') { var b = CS.brownoutText(w); return '<li>' + ICON('zap', '').replace('class="i"', 'class="i c-warn"') + '<span class="num"><b>' + esc(b.head) + '</b>' + (b.rest ? ' · ' + esc(b.rest) : '') + '</span></li>'; }
-      if (w.kind === 'inventory') { var l = CS.lowStockText(w); return '<li>' + ICON('box').replace('class="i"', 'class="i c-danger"') + '<span><b>' + esc(l.head) + '</b> · ' + esc(l.rest) + '</span></li>'; }
-      return '<li>' + ICON(w.severity === 'alert' ? 'alert' : 'info').replace('class="i"', 'class="i ' + (w.severity === 'alert' ? 'c-danger' : 'c-warn') + '"') + '<span><b>System check</b> · ' + esc(w.title) + '</span></li>';
+      var ico, body;
+      if (w.kind === 'brownout') { var b = CS.brownoutText(w); ico = ICON('zap', '').replace('class="i"', 'class="i c-warn"'); body = '<span class="num"><b>' + esc(b.head) + '</b>' + (b.rest ? ' · ' + esc(b.rest) : '') + '</span>'; }
+      else if (w.kind === 'inventory') { var l = CS.lowStockText(w); ico = ICON('box').replace('class="i"', 'class="i c-danger"'); body = '<span><b>' + esc(l.head) + '</b> · ' + esc(l.rest) + '</span>'; }
+      else { ico = ICON(w.severity === 'alert' ? 'alert' : 'info').replace('class="i"', 'class="i ' + (w.severity === 'alert' ? 'c-danger' : 'c-warn') + '"'); body = '<span><b>System check</b> · ' + esc(w.title) + '</span>'; }
+      return '<li><button class="wbtn" type="button" data-warn="' + esc(warnKey(w)) + '" aria-haspopup="dialog">' + ico + body + '<span class="chev">' + ICON('chev', 's16') + '</span></button></li>';
     });
     var r = CS.rainLine(p.weather);
     if (r) items.push('<li>' + ICON('rain').replace('class="i"', 'class="i c-info"') + '<span class="num"><b>' + esc(r.head) + '</b>' + (r.rest ? ' · ' + esc(r.rest) : '') + '</span></li>');
@@ -246,12 +263,12 @@
     var p = state.payload, m = monthState(), rows = p.calendar || [];
     var prevOk = CS.monthInRange(m.m === 1 ? m.y - 1 : m.y, m.m === 1 ? 12 : m.m - 1, p.today), nextOk = CS.monthInRange(m.m === 12 ? m.y + 1 : m.y, m.m === 12 ? 1 : m.m + 1, p.today);
     var upcoming = rows.filter(function (r) { return r.status === 'confirmed' && r.checkout_date >= p.today; }).slice(0, 10);
-    var blocked = rows.filter(function (r) { return r.status === 'blocked' && r.checkout_date >= p.today; });
+    var blocked = CS.blockedLines(rows, p.today);
     var confirmedAll = rows.filter(function (r) { return r.status === 'confirmed'; });
     var html = appbar({ title: 'Guest Calendar Info', back: '#home', refresh: true }) + '<div class="screen">' + errBanner() +
       '<div class="calhdr"><button class="iconbtn" type="button" data-act="prev" aria-label="Previous month"' + (prevOk ? '' : ' disabled style="opacity:.35"') + '>' + ICON('back', 's24') + '</button><h2 class="dlg">' + esc(CS.monthTitle(m.y, m.m)) + '</h2><button class="iconbtn" type="button" data-act="next" aria-label="Next month"' + (nextOk ? '' : ' disabled style="opacity:.35"') + '>' + ICON('chev', 's24') + '</button></div>' +
       calendarGrid() +
-      '<div class="legend"><span><i style="background:var(--primary-soft);border-bottom:3px solid var(--primary)"></i>Guest stay</span><span><i style="background:var(--muted);border:1px solid var(--border)"></i>Blocked</span><span><i style="box-shadow:inset 0 0 0 2px var(--primary);background:var(--card)"></i>Today</span></div>';
+      legend();
     html += '<div class="sect"><span class="cap up">In the house</span>' + (p.current_guest ? '<div class="stack">' + guestBlock(p.current_guest, 'house') + '</div>' : '<div class="card"><p class="sub">No guest in the house tonight.</p></div>') + '</div>';
     html += '<div class="sect"><span class="cap up">Next</span>' + (p.next_guest ? '<div class="stack">' + guestBlock(p.next_guest, 'next') + '</div>' : '<div class="card"><p class="sub">No arrival in the next 60 days.</p></div>') + '</div>';
     if (upcoming.length) {
@@ -261,14 +278,117 @@
       }).join('') + '</div></div>';
     }
     if (blocked.length) {
-      html += '<div class="sect"><span class="cap up">Blocked nights</span><ul class="wlist">' + blocked.map(function (r) {
-        return '<li>' + ICON('zapoff').replace('class="i"', 'class="i c-fg2"') + '<span class="num"><b>' + esc(CS.dayLabel(r.checkin_date) + ' to ' + CS.dayLabel(CS.addDays(r.checkout_date, -1))) + '</b> · Blocked</span></li>';
+      html += '<div class="sect"><span class="cap up">Blocked nights</span><ul class="wlist">' + blocked.map(function (l) {
+        return '<li>' + ICON(l.extra ? 'alert' : 'lock').replace('class="i"', 'class="i ' + (l.extra ? 'c-warn' : 'c-fg2') + '"') + '<span class="num">' + esc(CS.blockedLineText(l)) + '</span></li>';
       }).join('') + '</ul></div>';
     }
     var wi = warningItems();
-    html += '<div class="sect"><span class="cap up">Warnings</span>' + (wi.length ? '<ul class="wlist">' + wi.join('') + '</ul>' : '<div class="card"><p class="sub">No warnings today.</p></div>') + '</div>';
+    html += '<div class="sect" id="warnings"><span class="cap up">Warnings</span>' + (wi.length ? '<ul class="wlist">' + wi.join('') + '</ul>' : '<div class="card"><p class="sub">No warnings today.</p></div>') + '</div>';
     html += '<div class="help" style="text-align:center;margin-top:14px">Updated ' + esc(CS.agoLabel(p.generated_at)) + '</div></div>';
     el.innerHTML = html; loadIdPhotos(el);
+  }
+
+  // ---------------------------------------------------------------- day and warning sheets (s77): the .sheet/.scrim pattern of the iOS hint.
+  // One sheet element, made once; its content is redrawn from state.sheet so a reload under it keeps it current. The status line lives
+  // outside the redrawn part so screen readers hear "Note added" and errors.
+  function sheetEls() {
+    var sh = $('cal-sheet');
+    if (!sh) {
+      var sc = document.createElement('div'); sc.className = 'scrim'; sc.id = 'cal-scrim'; sc.addEventListener('click', closeSheet); document.body.appendChild(sc);
+      sh = document.createElement('div'); sh.className = 'sheet calsheet'; sh.id = 'cal-sheet'; sh.setAttribute('role', 'dialog'); sh.setAttribute('aria-modal', 'true');
+      sh.setAttribute('aria-labelledby', 'cs-h'); sh.setAttribute('aria-hidden', 'true');
+      sh.innerHTML = '<div class="sr" id="cs-live" role="status" aria-live="polite"></div><div id="cs-body"></div>'; document.body.appendChild(sh);
+    }
+    return { sheet: sh, scrim: $('cal-scrim') };
+  }
+  function openSheet(kind, key) {
+    state.sheet = { kind: kind, key: key, form: { kind: 'brownout', label: '' }, busy: false, err: '', msg: '', missing: false };
+    var e = sheetEls(); $('cs-live').textContent = ''; drawSheet();
+    e.sheet.classList.add('on'); e.sheet.setAttribute('aria-hidden', 'false'); e.scrim.classList.add('on');
+    var h = $('cs-h'); if (h) h.focus();
+  }
+  function closeSheet() {
+    var S = state.sheet; if (!S) return; state.sheet = null;
+    var e = sheetEls(), attr = S.kind === 'day' ? 'data-day' : 'data-warn';
+    e.sheet.classList.remove('on'); e.sheet.setAttribute('aria-hidden', 'true'); e.scrim.classList.remove('on');
+    var back = Array.prototype.filter.call(document.querySelectorAll('[' + attr + ']'), function (b) { return b.getAttribute(attr) === S.key; })[0];
+    if (back) back.focus();
+  }
+  function sheetLive(msg) { var l = $('cs-live'); if (l) l.textContent = msg || ''; }
+  function findWarn(key) { return ((state.payload && state.payload.warnings) || []).filter(function (w) { return warnKey(w) === key; })[0] || null; }
+  function role() { return state.access && state.access.role; }
+  function daySheet(S) {
+    var p = state.payload, ds = dayStatusOf(S.key), canFlag = CS.canFlagDays(role());
+    var prim = ds.primary === 'booked' ? pill('brand', 'house', 'Booked') : ds.primary === 'blocked' ? pill('neutral', 'lock', 'Blocked') : pill('ok', 'check', 'Free');
+    var html = '<h2 class="ttl" id="cs-h" tabindex="-1">' + esc(CS.dayLong(S.key)) + '</h2><div class="row-wrap" style="margin-top:8px">' + prim + '<span class="sub">' + esc(ds.why) + '</span></div>';
+    if (ds.stay) {
+      var all = (p.calendar || []).filter(function (r) { return r.status === 'confirmed'; }), src = CS.sourceLabel(ds.stay.source);
+      html += '<p class="sub num" style="margin:8px 0 0">' + esc(CS.stayDates(ds.stay) + (src ? ' · ' + src : '')) + '</p>' +
+        (ds.stay.checkout_date >= p.today ? '<button class="btn btn-ghost btn-sm" type="button" data-stay="' + all.indexOf(ds.stay) + '" style="margin:4px 0 0 -12px">Show the stay' + ICON('chev', 's16') + '</button>' : '');
+      if (ds.block) html += '<p class="help" style="margin-top:4px">Also held on the calendar: ' + esc(CS.blockWhy(ds.block)) + '</p>';
+    }
+    html += '<div class="cap up" style="margin:14px 0 6px">Also on this day</div>';
+    html += ds.flags.length ? '<ul class="wlist">' + ds.flags.map(function (f) {
+      var lbl = f.label && f.label !== CS.flagName(f.kind) ? ' · ' + esc(f.label) : '';
+      return '<li>' + ICON(FLAG_ICON[f.kind] || 'note').replace('class="i"', 'class="i ' + (f.kind === 'brownout' ? 'c-warn' : 'c-fg2') + '"') + '<span style="flex:1"><b>' + esc(CS.flagName(f.kind)) + '</b>' + lbl +
+        (f.source === 'auto' ? ' <span class="help">(added automatically)</span>' : '') + '</span>' +
+        (canFlag && f.source === 'manual' && f.id ? '<button class="btn btn-ghost btn-sm" type="button" data-act="flag-clear" data-id="' + esc(f.id) + '"' + (S.busy ? ' disabled' : '') + ' aria-label="' + esc('Remove ' + CS.flagName(f.kind) + (f.label ? ': ' + f.label : '')) + '">Remove</button>' : '') + '</li>';
+    }).join('') + '</ul>' : '<p class="help">Nothing else noted.</p>';
+    if (canFlag) {
+      html += '<div class="cap up" style="margin:14px 0 6px">Add a note for this day</div>';
+      if (S.missing) html += '<p class="help">Available after the next update.</p>';
+      else html += '<div class="stack"><div class="field"><label for="df-kind">Kind</label><select class="sel" id="df-kind" style="max-width:none;text-align:left;text-align-last:left">' +
+        CS.FLAG_KINDS.map(function (k) { return '<option value="' + k + '"' + (S.form.kind === k ? ' selected' : '') + '>' + esc(CS.flagName(k)) + '</option>'; }).join('') + '</select></div>' +
+        '<div class="field"><label for="df-label">Short note (optional)</label><div class="input"><input id="df-label" maxlength="60" autocomplete="off" value="' + esc(S.form.label) + '" placeholder="e.g. Aircon service 2 pm"></div></div>' +
+        '<button class="btn btn-primary" type="button" data-act="flag-save"' + (S.busy ? ' disabled' : '') + '>' + (S.busy ? 'Saving…' : 'Add note') + '</button></div>';
+    }
+    return html;
+  }
+  function warnSheet(S) {
+    var w = findWarn(S.key);
+    if (!w) return '<h2 class="ttl" id="cs-h" tabindex="-1">Warning</h2><p class="sub" style="margin-top:8px">This warning has cleared.</p>';
+    var info = CS.warningInfo(w, role()), html = '<h2 class="ttl" id="cs-h" tabindex="-1">' + esc(info.head) + '</h2><p class="sub" style="margin-top:8px">' + esc(info.meaning) + '</p>';
+    var key = w.kind === 'verifier' ? CS.findingKey(w, state.tasks && state.tasks.tasks) : null;
+    var task = key && state.tasks ? state.tasks.tasks.filter(function (t) { return t.source === 'verifier_findings' && t.id === key; })[0] : null;
+    var details = info.details.concat(task && task.detail ? [task.detail] : []);
+    if (details.length) html += '<ul class="notes" style="margin-top:10px">' + details.map(function (d) { return '<li>' + ICON('info') + '<span style="white-space:pre-line">' + esc(d) + '</span></li>'; }).join('') + '</ul>';
+    var acts = '';
+    if (w.kind === 'verifier' && info.resolvable) acts += key ? '<button class="btn btn-primary" type="button" data-act="warn-ack"' + (S.busy ? ' disabled' : '') + '>' + ICON('check', 's16') + (S.busy ? 'Saving…' : 'Mark as handled') + '</button>'
+      : '<a class="btn btn-secondary" href="#tasks" data-act="sheet-close">Mark it in Tasks</a>';
+    if (info.go) acts += info.go.external ? ext(info.go.href, esc(info.go.label) + ICON('ext', 's16'), 'btn btn-secondary', ' data-act="sheet-close"') : '<a class="btn btn-secondary" href="' + esc(info.go.href) + '" data-act="sheet-close">' + esc(info.go.label) + '</a>';
+    if (acts) html += '<div class="row-wrap" style="margin-top:14px">' + acts + '</div>';
+    if (w.kind === 'verifier' && info.resolvable && key) html += '<p class="help" style="margin-top:6px">It stays listed as seen until the next check finds it fixed.</p>';
+    return html;
+  }
+  function drawSheet() {
+    var S = state.sheet; if (!S || !state.payload) return;
+    var e = sheetEls(), had = e.sheet.contains(document.activeElement);
+    $('cs-body').innerHTML = (S.kind === 'day' ? daySheet(S) : warnSheet(S)) +
+      (S.err ? '<div class="errbox" style="margin-top:12px">' + ICON('alert') + '<span>' + esc(S.err) + '</span></div>' : '') +
+      (S.msg ? '<div class="okbox" style="margin-top:12px">' + ICON('check') + '<span>' + esc(S.msg) + '</span></div>' : '') +
+      '<button class="btn btn-ghost btn-block" type="button" data-act="sheet-close" style="margin-top:12px">Close</button>';
+    if (had && !e.sheet.contains(document.activeElement)) { var h = $('cs-h'); if (h) h.focus(); }
+  }
+  function sheetCall(name, args, okMsg) {
+    var S = state.sheet; if (!S || S.busy) return;
+    S.busy = true; S.err = ''; S.msg = ''; drawSheet();
+    sb.rpc(name, args).then(function (r) {
+      if (r.error) throw r.error;
+      if (r.data && r.data.ok === false) throw { message: r.data.error || 'not ok' };
+      S.msg = okMsg; S.form.label = ''; sheetLive(okMsg);
+      return Promise.all([loadHome(), loadTasks()]);
+    }).catch(function (e) {
+      if (CS.rpcMissing(e)) { S.missing = true; sheetLive('Available after the next update.'); return; }
+      S.err = e && e.code === '42501' ? 'Only an owner or admin can change this.' : 'That did not save. Check your signal and try again.'; sheetLive(S.err);
+    }).then(function () { S.busy = false; if (state.sheet === S) drawSheet(); });
+  }
+  function flagSave() {
+    var S = state.sheet; if (!S) return;
+    sheetCall('calendar_day_flag_set_v1', { p_property_id: pid(), p_date: S.key, p_kind: S.form.kind, p_label: S.form.label.trim() || CS.flagName(S.form.kind) }, 'Note added.');
+  }
+  function warnAck() {
+    var S = state.sheet, w = S && findWarn(S.key), key = w && CS.findingKey(w, state.tasks && state.tasks.tasks); if (!key) return;
+    sheetCall('ack_verifier_finding_v1', { p_key: key }, 'Marked as handled.');
   }
 
   // ---------------------------------------------------------------- Tasks (D-301)
@@ -540,7 +660,7 @@
     var chip = function (v, t) { return '<button class="chip" type="button" data-theme="' + v + '"' + (theme === v ? ' style="border-color:var(--primary);color:var(--primary)" aria-pressed="true"' : ' aria-pressed="false"') + '>' + t + '</button>'; };
     $('v-more').innerHTML = appbar({ title: 'More' }) + '<div class="screen"><div class="stack">' +
       '<div class="card list">' + (canReply() ? row({ icon: 'sparkles', title: 'Cassy reply', sub: 'Draft a warm reply to a guest message', href: '#reply' }) : '') + row({ icon: 'book', title: 'Quick guide', sub: 'How to use Cassy in Telegram', href: LINKS.quick }) +
-      (staff ? '' : row({ icon: 'wallet', title: 'Cassy · Telegram Finance', sub: 'Open in Telegram', href: LINKS.tgFinance, external: true })) + row({ icon: 'book', title: 'Cascade Manual', sub: 'How we do things', door: 'manual' }) + '</div>' +
+      (staff ? '' : row({ icon: 'wallet', title: 'Cassy · Telegram Finance', sub: 'Open in Telegram', tg: LINKS.tgFinance, external: true })) + row({ icon: 'book', title: 'Cascade Manual', sub: 'How we do things', door: 'manual' }) + '</div>' +
       '<div class="card"><h2 class="hd">Appearance</h2><div class="row-wrap" style="margin-top:10px">' + chip('auto', 'Automatic') + chip('light', 'Light') + chip('dark', 'Dark') + '</div></div>' +
       '<div class="card" id="install-card" hidden><h2 class="hd">Install the app</h2><p class="sub" style="margin-top:6px">Put Cascade Staff on your Home Screen.</p><button class="btn btn-secondary" id="install-btn" type="button" style="margin-top:10px">' + ICON('plus', 's16') + 'Install</button></div>' +
       '<div class="card"><h2 class="hd">Signed in as ' + esc(state.name) + '</h2><p class="sub" style="margin-top:4px">' + esc(state.access ? state.access.role : '') + '</p><button class="btn btn-secondary" type="button" data-act="signout" style="margin-top:10px">' + ICON('logout', 's16') + 'Sign out</button>' +
@@ -557,7 +677,7 @@
     });
   }
   function signOutTo(msg) {
-    dropPhotos(); state.reply = null; var rb = $('rp-body'); if (rb) rb.innerHTML = ''; rpLive(''); state.payload = null; state.bookings = null; state.access = null; state.layout = null; state.month = null; state.error = '';
+    closeSheet(); dropPhotos(); state.reply = null; var rb = $('rp-body'); if (rb) rb.innerHTML = ''; rpLive(''); state.payload = null; state.bookings = null; state.access = null; state.layout = null; state.month = null; state.error = '';
     return sb.auth.signOut().catch(function () {}).then(function () { showSignin(msg); });
   }
   function showSignin(msg) {
@@ -640,6 +760,7 @@
     if (v === 'door') { renderDoor(); return; }
     renderTabs(v);
     if (v === 'home') renderHome(); else if (v === 'calendar') renderCalendar(); else if (v === 'tasks') renderTasks(); else if (v === 'payrates') { renderPayRates(); if (!state.rates) loadRates(); } else if (v === 'reply') renderReply(); else if (v === 'more') renderMore();
+    if (state.sheet) { if (v === 'calendar') drawSheet(); else closeSheet(); }
   }
   // A door opens in the frame once per visit; coming back to the same door (a re-render) keeps the page where it is.
   function renderDoor() {
@@ -743,7 +864,7 @@
   $('signin-form').addEventListener('submit', function (ev) { ev.preventDefault(); submitSignin(); });
   $('door-back').addEventListener('click', function () { location.replace(location.pathname + location.search + '#home'); });
   document.addEventListener('click', function (ev) {
-    var t = ev.target.closest('[data-act],[data-stay],[data-theme]'); if (!t || t.getAttribute('data-act') === 'tasks-showdone') return;
+    var t = ev.target.closest('[data-act],[data-stay],[data-theme],[data-day],[data-warn]'); if (!t || t.getAttribute('data-act') === 'tasks-showdone') return;
     var a = t.getAttribute('data-act');
     if (a === 'refresh') { loadHome(); loadTasks(); if (current === 'payrates') loadRates(); }
     else if (a === 'task-done' || a === 'task-undo') setTaskDone(t.getAttribute('data-task'), a === 'task-done');
@@ -758,24 +879,43 @@
     else if (a === 'reply-back') { if (state.reply) { state.reply.step = 'pick'; state.reply.err = ''; state.reply.signout = false; } renderReply('heading'); }
     else if (a === 'reply-reset') { state.reply = newReply(); renderReply('heading'); rpLive(''); window.scrollTo(0, 0); }
     else if (a === 'signout') { signOutTo(''); }
+    else if (a === 'sheet-close') closeSheet();
+    else if (a === 'flag-save') flagSave();
+    else if (a === 'flag-clear') sheetCall('calendar_day_flag_clear_v1', { p_property_id: pid(), p_id: t.getAttribute('data-id') }, 'Note removed.');
+    else if (a === 'warn-ack') warnAck();
+    else if (t.hasAttribute('data-day')) openSheet('day', t.getAttribute('data-day'));
+    else if (t.hasAttribute('data-warn')) openSheet('warn', t.getAttribute('data-warn'));
     else if (a === 'prev') shiftMonth(-1);
     else if (a === 'next') shiftMonth(1);
     else if (a === 'cassy') { state.cassyOpen = !state.cassyOpen; t.setAttribute('aria-expanded', state.cassyOpen); var s = $('cassy-sub'); if (s) s.hidden = !state.cassyOpen; }
     else if (t.hasAttribute('data-stay')) {
-      var el = $('stay-' + t.getAttribute('data-stay')); if (el) { el.scrollIntoView({ block: 'center', behavior: 'smooth' }); el.classList.add('flash'); setTimeout(function () { el.classList.remove('flash'); }, 1400); }
+      closeSheet(); var el = $('stay-' + t.getAttribute('data-stay')); if (el) { el.scrollIntoView({ block: 'center', behavior: 'smooth' }); el.classList.add('flash'); setTimeout(function () { el.classList.remove('flash'); }, 1400); }
     } else if (t.hasAttribute('data-theme')) { window.CSTheme.set(t.getAttribute('data-theme')); renderMore(); }
   });
   // Reminder and pay-rate forms: remember what is typed (a refresh must not lose it) without redrawing under the keyboard.
   document.addEventListener('input', function (ev) {
     var id = ev.target && ev.target.id, a = state.add, f = state.rateForm;
+    if (state.sheet && id === 'df-label') state.sheet.form.label = ev.target.value; else if (state.sheet && id === 'df-kind') state.sheet.form.kind = ev.target.value;
     if (state.reply && id === 'rp-text') { state.reply.text = ev.target.value; state.reply.err = ''; } else if (state.reply && id === 'rp-name') state.reply.name = ev.target.value;
     if (a && id === 't-title') a.title = ev.target.value; else if (a && id === 't-due') a.due = ev.target.value; else if (a && id === 't-note') a.note = ev.target.value; else if (a && id === 't-who') a.who = ev.target.value;
     else if (f && /^r-(from|regular|general|transport|note)$/.test(id || '')) { f[id.slice(2)] = ev.target.value; f.err = ''; syncRate(); }
   });
   document.addEventListener('change', function (ev) {
     if (ev.target && ev.target.id === 'rp-file') { var f0 = ev.target.files && ev.target.files[0]; if (f0) pickShot(f0); return; }
+    if (ev.target && ev.target.id === 'df-kind' && state.sheet) { state.sheet.form.kind = ev.target.value; return; }
     if (ev.target && ev.target.id === 't-who' && state.add) state.add.who = ev.target.value;
     else if (ev.target && ev.target.getAttribute && ev.target.getAttribute('data-act') === 'tasks-showdone') { state.showDone = ev.target.checked; loadTasks(); renderTasks(); }
+  });
+  document.addEventListener('keydown', function (ev) { if (ev.key === 'Escape' && state.sheet) closeSheet(); });
+  // Telegram: the tg:// link opens the app. If the page is still in front ~1.2 s later the app did not open, so t.me opens instead.
+  document.addEventListener('click', function (ev) {
+    var a = ev.target.closest && ev.target.closest('a[data-tgweb]'), web = a && a.getAttribute('data-tgweb'); if (!web) return;
+    var left = false, gone = function () { if (document.visibilityState === 'hidden') left = true; };
+    document.addEventListener('visibilitychange', gone); window.addEventListener('pagehide', gone);
+    setTimeout(function () {
+      document.removeEventListener('visibilitychange', gone); window.removeEventListener('pagehide', gone);
+      if (!left && document.visibilityState === 'visible') { var w = window.open(web, '_blank'); if (w) w.opener = null; else location.href = web; }
+    }, 1200);
   });
   window.addEventListener('hashchange', route);
   window.addEventListener('scroll', function () { var b = document.querySelector('.view.on .appbar'); if (b) b.classList.toggle('scrolled', window.scrollY > 8); }, { passive: true });

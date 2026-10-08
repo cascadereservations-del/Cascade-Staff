@@ -67,7 +67,7 @@ The table below was written before the frame: its "Door" links now open in the f
 | Admin dashboard | `https://cascadereservations-del.github.io/cascade-admin-dashboard/#/today` | supabase-js, default storage key, localStorage | **Yes on Android** (installed PWA links open a Chrome custom tab = same profile, same origin, same key). **iOS: asks once** - a Home Screen web app has its own storage partition, out-of-scope links open Safari, which keeps its own session after the first sign-in. |
 | Cleaning checklist | `https://cascadereservations-del.github.io/CH-Cleaners-Checklist/` | own token store `ch_staff_session_v1` (raw `/auth/v1/token` fetch) + device PIN unlock | **No** - different storage shape; sharing one refresh token between two clients trips Supabase's refresh-token rotation. The checklist remembers its device anyway. |
 | Operations Manual | `https://cascadereservations-del.github.io/Cascade-Manual/` | local PIN map, remembered 30 days | **No** (not Supabase). Remembered per device. |
-| Telegram | `https://t.me/c/3798341977` (OPS), `https://t.me/c/3819352746` (Finance) | Telegram's own | n/a. `t.me/c/<id>` carries no secret and opens only for members. |
+| Telegram | `tg://privatepost?channel=3798341977` (OPS), `tg://privatepost?channel=3819352746` (Finance), built by `CS.tgLink` | Telegram's own | n/a. The `tg://` link opens the Telegram app; if the page is still showing after ~1.2 s, `https://t.me/c/<id>` opens as the fallback (s77). Neither carries a secret; both open only for members. |
 
 The Staff app uses supabase-js's default storage key on the same origin as the dashboard, so signing out here signs the dashboard out too (and the reverse). Deep links carry nothing secret.
 
