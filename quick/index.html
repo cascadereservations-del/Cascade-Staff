@@ -13,19 +13,52 @@
 <link href="https://fonts.googleapis.com/css2?family=Raleway:wght@400;500;600;700&family=Cormorant+Garamond:ital,wght@0,500;0,600;0,700;1,500;1,600&family=Style+Script&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="../styles.css">
 <script src="../theme.js"></script>
+<style>
+.qg .tiles { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 12px; }
+.tile { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; min-height: 132px; padding: 14px; background: var(--card); border: 1px solid var(--border); border-radius: var(--r-lg); box-shadow: var(--shadow-sm); color: var(--fg); text-decoration: none; transition: background var(--motion-fast) var(--ease), border-color var(--motion-fast) var(--ease); }
+.tile:hover, .tile:active { background: var(--muted); border-color: var(--border-strong); }
+.tile:focus-visible, .backlink:focus-visible, .tglink:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
+.tile .disc { margin-bottom: 6px; }
+.tile .tt { font: 600 15px/20px var(--font-ui); overflow-wrap: anywhere; }
+.tile .tb { font: 400 13px/18px var(--font-ui); color: var(--fg-2); }
+.tile.wide { grid-column: 1 / -1; min-height: 0; }
+.backlink { display: inline-flex; align-items: center; gap: 6px; min-height: var(--touch); margin-top: 8px; color: var(--accent-text); font: 600 14px/20px var(--font-ui); text-decoration: none; }
+.qv[hidden], .landing[hidden] { display: none; }
+.qv > h2:first-child { margin-top: 8px; }
+.tgrow { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.tglink { display: inline-flex; align-items: center; justify-content: center; min-height: var(--touch); padding: 0 16px; border-radius: var(--r-md); background: var(--primary-soft); border: 1px solid var(--border-strong); color: var(--accent-text); font: 600 14px/20px var(--font-ui); text-decoration: none; }
+.faq-q { margin-top: 12px; }
+.faq-q h3 { font: 600 17px/24px var(--font-ui); }
+.faq-q .hand { margin-top: 10px; font: 400 13px/18px var(--font-ui); color: var(--fg-2); }
+.faq-q .hand b { color: var(--accent-text); font-weight: 600; }
+.hand-list { margin: 8px 0 0 18px; color: var(--fg-2); font: 400 14px/20px var(--font-ui); }
+.hand-list li + li { margin-top: 4px; }
+</style>
 </head>
 <body>
 <div class="shell">
-<header class="appbar" id="appbar"><a class="iconbtn" href="../#home" aria-label="Back to the app" id="back"></a><h1 class="ttl">Quick guide</h1></header>
+<header class="appbar" id="appbar"><a class="iconbtn" href="../#home" aria-label="Back to the app" id="back"></a><h1 class="ttl" id="ttl">Quick guide</h1></header>
 <main class="qg">
+  <div class="landing" id="landing">
   <p class="intro" style="text-align:center;color:var(--fg-2);margin-top:4px">Two minutes on telling Cassy what happened, asking her anything, and logging what you spent.</p>
 <p class="intro">Cassy is our helper inside Telegram. She reads the house calendar, the stock and the house how-tos, and she answers when you ask her by name. She never sends anything to a guest, and she never saves anything until a person taps a button. Talk to each other normally in the group; she only listens when you call her.</p>
   <p class="intro">Type <code>/keyboard</code> once and a row of buttons stays above the message box. You do not need to remember commands; tap the button and Cassy asks for what she needs.</p>
-
   <h2>What do you need to do?</h2>
+  <nav class="tiles" aria-label="Guides">
+    <a class="tile" href="#/cleaning"><span class="disc"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z"/><path d="M20 3v4"/><path d="M22 5h-4"/></svg></span><span class="tt">I finished cleaning</span><span class="tb">Report, group card, your fee</span></a>
+    <a class="tile" href="#/buying"><span class="disc"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M16 10a4 4 0 0 1-8 0"/><path d="M3.103 6.034h17.794"/><path d="M3.4 5.467a2 2 0 0 0-.4 1.2V20a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6.667a2 2 0 0 0-.4-1.2l-2-2.667A2 2 0 0 0 17 2H7a2 2 0 0 0-1.6.8z"/></svg></span><span class="tt">I bought something</span><span class="tb">Receipts for cleaners and the office</span></a>
+    <a class="tile" href="#/broken"><span class="disc"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg></span><span class="tt">Something is broken</span><span class="tb">Photo, report, tell the group</span></a>
+    <a class="tile" href="#/guest"><span class="disc"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z"/></svg></span><span class="tt">A guest asks me</span><span class="tb">House how-tos and reply drafts</span></a>
+    <a class="tile" href="#/power"><span class="disc"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z"/></svg></span><span class="tt">Power interruption</span><span class="tb">Brownout notice to the board</span></a>
+    <a class="tile" href="#/id"><span class="disc"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M16 10h2"/><path d="M16 14h2"/><path d="M6.17 15a3 3 0 0 1 5.66 0"/><circle cx="9" cy="11" r="2"/><rect x="2" y="5" width="20" height="14" rx="2"/></svg></span><span class="tt">Guest's ID and companions</span><span class="tb">Saved only after you tap Save</span></a>
+    <a class="tile" href="#/pay"><span class="disc"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M19 7V4a1 1 0 0 0-1-1H5a2 2 0 0 0 0 4h15a1 1 0 0 1 1 1v4h-3a2 2 0 0 0 0 4h3a1 1 0 0 0 1-1v-2a1 1 0 0 0-1-1"/><path d="M3 5v14a2 2 0 0 0 2 2h15a1 1 0 0 0 1-1v-4"/></svg></span><span class="tt">Asking for my pay</span><span class="tb">Payment Request in the Staff app</span></a>
+    <a class="tile" href="#/groups"><span class="disc"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8"/><path d="M3 10a2 2 0 0 1 .709-1.528l7-5.999a2 2 0 0 1 2.582 0l7 5.999A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg></span><span class="tt">Which group?</span><span class="tb">What goes in OPS and in Finance</span></a>
+    <a class="tile wide" href="#/help"><span class="disc"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><path d="M12 17h.01"/></svg></span><span class="tt">If Cassy doesn't understand</span><span class="tb">Five things to try, in order</span></a>
+    <a class="tile wide" href="#/faq"><span class="disc"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z"/><path d="M9.1 9a3 3 0 0 1 5.8 1c0 2-3 3-3 3"/><path d="M12 17h.01"/></svg></span><span class="tt">How Cassy answers common FAQs</span><span class="tb">What guests ask, how she replies, and when the host takes over</span></a>
+  </nav>
+  </div>
 
-  <!-- 1. finished cleaning -->
-  <section class="card">
+  <div class="qv" id="v-cleaning" data-title="I finished cleaning" hidden>  <section class="card">
     <div class="card-head">
       <div class="disc"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z"/><path d="M20 3v4"/><path d="M22 5h-4"/></svg></div>
       <h3>I finished cleaning</h3>
@@ -46,9 +79,10 @@
     </div>
     <div class="note danger"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg><span>A card called <b>Payment Ready</b> has a <b>Received Payment</b> button. That one books the fee at once, for whoever taps it. Tap it only when the money is in your hand.</span></div>
   </section>
+  <a class="backlink" href="#/">&larr; All guides</a>
+  </div>
 
-  <!-- 2. bought something -->
-  <section class="card">
+  <div class="qv" id="v-buying" data-title="I bought something" hidden>  <section class="card">
     <div class="card-head">
       <div class="disc"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M16 10a4 4 0 0 1-8 0"/><path d="M3.103 6.034h17.794"/><path d="M3.4 5.467a2 2 0 0 0-.4 1.2V20a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6.667a2 2 0 0 0-.4-1.2l-2-2.667A2 2 0 0 0 17 2H7a2 2 0 0 0-1.6.8z"/></svg></div>
       <h3>I bought something for the house</h3>
@@ -76,9 +110,10 @@
     </div>
     <div class="note info"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg><span>In Finance, a message that starts with a number is saved as an expense. A photo sent there is read as a receipt and shown to you before anything is saved.</span></div>
   </section>
+  <a class="backlink" href="#/">&larr; All guides</a>
+  </div>
 
-  <!-- 3. broken or missing -->
-  <section class="card">
+  <div class="qv" id="v-broken" data-title="Something is broken" hidden>  <section class="card">
     <div class="card-head">
       <div class="disc"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg></div>
       <h3>Something is broken or missing</h3>
@@ -98,9 +133,10 @@
     </div>
     <div class="note info"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg><span>A plain message is for people. Cassy does not read it, and that is fine. Send the photo as a new message, not as a reply to one of her cards.</span></div>
   </section>
+  <a class="backlink" href="#/">&larr; All guides</a>
+  </div>
 
-  <!-- 4. guest asks -->
-  <section class="card">
+  <div class="qv" id="v-guest" data-title="A guest asks me" hidden>  <section class="card">
     <div class="card-head">
       <div class="disc"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z"/></svg></div>
       <h3>A guest asks me something</h3>
@@ -121,9 +157,10 @@
     </div>
     <div class="note danger"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg><span>On a <b>💬 GUEST · handoff</b> card, <b>Send option 1</b> and <b>Send option 2</b> message the guest at once, with your name. There is no undo. Read the text first. Everything else Cassy drafts stays a draft until you paste it yourself.</span></div>
   </section>
+  <a class="backlink" href="#/">&larr; All guides</a>
+  </div>
 
-  <!-- 5. power interruption -->
-  <section class="card">
+  <div class="qv" id="v-power" data-title="Power interruption" hidden>  <section class="card">
     <div class="card-head">
       <div class="disc"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z"/></svg></div>
       <h3>Power interruption coming</h3>
@@ -143,9 +180,10 @@
     </div>
     <div class="note warn"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg><span><b>Saves at once.</b> The same is true if you type <code>/brownout tomorrow 8am 4h power work</code>. There is no Telegram button to remove a notice afterwards; ask Lloyd.</span></div>
   </section>
+  <a class="backlink" href="#/">&larr; All guides</a>
+  </div>
 
-  <!-- 6. guest ID -->
-  <section class="card">
+  <div class="qv" id="v-id" data-title="Guest's ID and companions" hidden>  <section class="card">
     <div class="card-head">
       <div class="disc"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M16 10h2"/><path d="M16 14h2"/><path d="M6.17 15a3 3 0 0 1 5.66 0"/><circle cx="9" cy="11" r="2"/><rect x="2" y="5" width="20" height="14" rx="2"/></svg></div>
       <h3>Saving a guest's ID and companions</h3>
@@ -165,9 +203,10 @@
     </div>
     <div class="note info"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg><span>This works only for a Telegram account that Lloyd has linked to an owner or admin login. Anyone else sees "not linked" and nothing is read or saved. Never type an ID number into the chat.</span></div>
   </section>
+  <a class="backlink" href="#/">&larr; All guides</a>
+  </div>
 
-  <!-- 7. pay -->
-  <section class="card">
+  <div class="qv" id="v-pay" data-title="Asking for my pay" hidden>  <section class="card">
     <div class="card-head">
       <div class="disc"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M19 7V4a1 1 0 0 0-1-1H5a2 2 0 0 0 0 4h15a1 1 0 0 1 1 1v4h-3a2 2 0 0 0 0 4h3a1 1 0 0 0 1-1v-2a1 1 0 0 0-1-1"/><path d="M3 5v14a2 2 0 0 0 2 2h15a1 1 0 0 0 1-1v-4"/></svg></div>
       <h3>Asking for my pay</h3>
@@ -187,9 +226,10 @@
     </div>
     <div class="note info"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg><span>You cannot request a clean twice, and a clean that is already paid never shows in the list. If the Staff app is not working, send your list in the OPS group the way you did before.</span></div>
   </section>
+  <a class="backlink" href="#/">&larr; All guides</a>
+  </div>
 
-  <h2>Which group?</h2>
-  <div class="groups">
+  <div class="qv" id="v-groups" data-title="Which group?" hidden>  <div class="groups">
     <section class="card group">
       <div class="card-head">
         <div class="disc"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8"/><path d="M3 10a2 2 0 0 1 .709-1.528l7-5.999a2 2 0 0 1 2.582 0l7 5.999A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg></div>
@@ -216,9 +256,11 @@
     </section>
   </div>
   <div class="note info"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg><span>Unsure? Use OPS. A Finance command typed in OPS gets no reply at all; that is normal, not a fault. Type <code>/menu</code> in either group to see its buttons.</span></div>
+  <div class="tgrow"><a class="tglink" href="https://t.me/c/3798341977" data-tg="3798341977">Open OPS in Telegram</a><a class="tglink" href="https://t.me/c/3819352746" data-tg="3819352746">Open Finance in Telegram</a></div>
+  <a class="backlink" href="#/">&larr; All guides</a>
+  </div>
 
-  <h2>If Cassy doesn't understand</h2>
-  <section class="card">
+  <div class="qv" id="v-help" data-title="If Cassy doesn't understand" hidden>  <section class="card">
     <div class="card-head">
       <div class="disc"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><path d="M12 17h.01"/></svg></div>
       <h3>Try this, in order</h3>
@@ -239,15 +281,189 @@
       </div>
     </div>
   </section>
+  <a class="backlink" href="#/">&larr; All guides</a>
+  </div>
+
+  <div class="qv" id="v-faq" data-title="How Cassy answers FAQs" hidden>
+  <p class="intro">This is what Cassy tells a guest or prospect on Messenger, from the facts she is given. The wording below is a faithful sketch: she rephrases it every time, in the guest's own language, and signs <em>Cassy, Cascade Concierge</em>. Her voice is calm and precise; she guides and never commands, and she uses no exclamation words.</p>
+  <section class="card">
+    <div class="card-head"><div class="disc"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg></div><h3>When the host takes over</h3></div>
+    <!-- source: messenger-concierge/policy.ts classify and gate; persona.ts HANDOFF; facts.ts HARD LINES; index.ts and s76-takeover.test.ts (D-317) -->
+    <p class="leadp">Cassy answers from her facts only. If a detail is not in them, she says the host will confirm it personally. She hands over, and the host is alerted, for:</p>
+    <ul class="hand-list">
+      <li>Payments and receipts, refunds, cancellations and date changes.</li>
+      <li>Complaints, safety reports, and anything about the door or access.</li>
+      <li>Pets, parties, extra guests and price requests.</li>
+      <li>Anything she cannot resolve or that her facts do not cover.</li>
+    </ul>
+    <div class="note info"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg><span><b>Once Marifel or Lloyd replies on a chat, Cassy goes quiet.</b> She sends nothing more to that guest for 30 days; the host only gets notices in the app and Telegram. A safety report or a door problem still raises a card for the host, with no line to the guest.</span></div>
+  </section>
+
+  <section class="card faq-q">
+    <!-- source: _shared/cascade-core/facts.ts TIMES &amp; POLICIES line 53 and BOOKING &amp; PAYMENT line 36; messenger-concierge/policy.ts rule access; persona.ts HANDOFF.access -->
+    <h3>What time is check-in and check-out?</h3>
+    <div class="inset">
+      <div class="chat">
+        <div class="bub bot"><span class="from">Cassy</span>Check-in is from 2:00 PM and check-out is at 12:00 noon. It is a self check-in by smart lock, so a late arrival is easy. Quiet hours run from 10 PM to 6 AM, so we ask for a gentle arrival after 10 PM.</div>
+      </div>
+    </div>
+    <p class="hand"><b>Host takes over:</b> The door PIN is never given in chat. The host sends it at least 24 hours before arrival, once IDs and full payment are in. A guest locked out or asking for the code raises a card to the host at once.</p>
+  </section>
+
+  <section class="card faq-q">
+    <!-- source: facts.ts lines 42 and 55-57; policy.ts needsDatesFirst (TIMING_ASK) -->
+    <h3>Can we check in early or check out late?</h3>
+    <div class="inset">
+      <div class="chat">
+        <div class="bub bot"><span class="from">Cassy</span>Early check-in is complimentary from 12 noon when no guest checks out that day. Before noon it is PHP 100 per hour, so 9 AM comes to PHP 300. On a same-day turnover we will do our best to have the unit ready ahead of 2:00 PM and will keep you posted. Late check-out is possible when no one arrives that day; otherwise check-out stays at 12 noon.</div>
+      </div>
+    </div>
+    <p class="hand"><b>Host takes over:</b> Cassy promises nothing until the guest's dates are known and the calendar shows no other guest that day. If there are no dates yet, she asks for them first. The host confirms the actual time.</p>
+  </section>
+
+  <section class="card faq-q">
+    <!-- source: facts.ts line 35 (Lloyd 2026-09-17: a parking answer never stops at the facts) -->
+    <h3>Is there parking?</h3>
+    <div class="inset">
+      <div class="chat">
+        <div class="bub bot"><span class="from">Cassy</span>Yes, parking is free right in front of the unit, inside the gated village, with a security team at the entry points and a camera watching the parking area through the night. It is one vehicle per reservation. The roadside spaces are shared with residents, first come first served. If you arrive after 8 PM, tell us ahead and we will see a space kept for you.</div>
+      </div>
+    </div>
+    <p class="hand"><b>Host takes over:</b> Cassy says plainly that the roadside is shared. A guest who needs a guaranteed slot is asked to let the team know ahead of arrival.</p>
+  </section>
+
+  <section class="card faq-q">
+    <!-- source: facts.ts line 33 and HARD LINES line 170; _shared/cascade-core/house.ts (tiers public, guest, staff; matchHouse locked) -->
+    <h3>What is the Wi-Fi like, and what is the password?</h3>
+    <div class="inset">
+      <div class="chat">
+        <div class="bub bot"><span class="from">Cassy</span>The unit has fiber Wi-Fi, steady enough for video calls and streaming, with a dedicated workspace.</div>
+      </div>
+    </div>
+    <p class="hand"><b>Host takes over:</b> Cassy never gives the Wi-Fi password to a prospect. The host shares it after confirmation, and it is released to a verified stay only. Staff can ask Cassy in Telegram: cassy house wifi.</p>
+  </section>
+
+  <section class="card faq-q">
+    <!-- source: facts.ts lines 48 and 50; persona.ts LAST_MINUTE and HANDOFF.payment; policy.ts rule payment -->
+    <h3>How and when do we pay?</h3>
+    <div class="inset">
+      <div class="chat">
+        <div class="bub bot"><span class="from">Cassy</span>A 50% reservation fee holds the dates once reviewed. The balance and a PHP 1,000 refundable security deposit are due at least one day before check-in, and the deposit is returned after the check-out inspection. Payment is by GCash: the QR already carries the exact amount, and Maya or a bank app can scan it too. When check-in is less than five days away, the full amount and the deposit are requested up front instead of the fee.</div>
+      </div>
+    </div>
+    <p class="hand"><b>Host takes over:</b> Cassy does not confirm a payment. A receipt screenshot or a claim of payment goes to the host, who verifies it and sends the confirmation. A bank transfer (UnionBank InstaPay) is sent by the host by hand.</p>
+  </section>
+
+  <section class="card faq-q">
+    <!-- source: facts.ts line 50; persona.ts HANDOFF.refund and HANDOFF.cancellation; policy.ts rules refund and cancellation -->
+    <h3>What if we need to cancel?</h3>
+    <div class="inset">
+      <div class="chat">
+        <div class="bub bot"><span class="from">Cassy</span>For a direct booking, the reservation fee is fully refunded when you cancel 5 or more days before check-in. Within 5 days it is retained to cover the reserved dates. Airbnb bookings follow Airbnb's own policy.</div>
+      </div>
+    </div>
+    <p class="hand"><b>Host takes over:</b> Cassy states the policy only. A guest asking for money back, or changing or cancelling an actual booking, goes to the host, who reviews it personally.</p>
+  </section>
+
+  <section class="card faq-q">
+    <!-- source: persona.ts houseRule pets; policy.ts houseRuleKind and rule policy_exception; facts.ts line 58 -->
+    <h3>Are pets allowed?</h3>
+    <div class="inset">
+      <div class="chat">
+        <div class="bub bot"><span class="from">Cassy</span>We are a pet-free home, which keeps it fresh and allergy-friendly for every guest. If you would like to ask about your pet, we have shared your message with our host, who will reply here personally.</div>
+      </div>
+    </div>
+    <p class="hand"><b>Host takes over:</b> Always. A pet question is a policy exception: Cassy gives the house rule, then the host hears it and decides.</p>
+  </section>
+
+  <section class="card faq-q">
+    <!-- source: persona.ts CAPACITY and houseRule guests, party; facts.ts lines 32 and 59 -->
+    <h3>Can we bring extra guests?</h3>
+    <div class="inset">
+      <div class="chat">
+        <div class="bub bot"><span class="from">Cassy</span>The home is most comfortable for up to 3 adults, or 2 adults with 2 children. Overnight stays are for the guests on the booking, and day visitors are welcome with advance notice. For anything beyond that, we have shared your message with our host.</div>
+      </div>
+    </div>
+    <p class="hand"><b>Host takes over:</b> For 4 adults she suggests a larger place and never says she can accommodate them. Anything past the headcount rules goes to the host. Parties and events get the same treatment: a quiet retreat, then the host.</p>
+  </section>
+
+  <section class="card faq-q">
+    <!-- source: facts.ts lines 30, 63-65, 68-69 and HARD LINES line 170 -->
+    <h3>Where exactly is it, and how do we get there?</h3>
+    <div class="inset">
+      <div class="chat">
+        <div class="bub bot"><span class="from">Cassy</span>Cascade Hideaway is inside Bria Homes, Conel Road, Barangay San Isidro, General Santos City, a quiet gated subdivision. Robinsons Place is about 3.7 km (around 10 minutes) and SM City GenSan about 4.1 km. Without a car, Grab Taxi is PHP 120-180 to the malls, Move It or Maxim PHP 10-50, and tricycles wait outside the gate.</div>
+      </div>
+    </div>
+    <p class="hand"><b>Host takes over:</b> The block, lot and map pin are sent by the host after confirmation, never in the first chat. For a fare or landmark she has no figure for, she says the Grab app shows the exact fare, or that the host will confirm.</p>
+  </section>
+
+  <section class="card faq-q">
+    <!-- source: facts.ts lines 34 and 60; persona.ts HANDOFF.complaint; policy.ts rule complaint (brownout) -->
+    <h3>What about brownouts, and does the aircon keep running?</h3>
+    <div class="inset">
+      <div class="chat">
+        <div class="bub bot"><span class="from">Cassy</span>The area has occasional scheduled power interruptions. The EcoFlow backup station covers essential devices and keeps the internet equipment running, so you stay connected. It is meant for essentials and connectivity, not for the whole unit, so the aircon does not keep running.</div>
+      </div>
+    </div>
+    <p class="hand"><b>Host takes over:</b> Said plainly before booking. A guest reporting an outage during a stay counts as a complaint: the host is alerted and the service partners are notified. For staff, the brownout notice photo is on the Power interruption card.</p>
+  </section>
+
+  <section class="card faq-q">
+    <!-- source: persona.ts haggleLine, haggleHold and directBetter; facts.ts lines 43-45 (D-311) -->
+    <h3>Can you do a lower price?</h3>
+    <div class="inset">
+      <div class="chat">
+        <div class="bub bot"><span class="from">Cassy</span>We completely understand, and we will do our best to accommodate your request. Our direct rates are lower than on Airbnb and the other booking apps, and the nightly rate goes down the longer you stay.</div>
+      </div>
+    </div>
+    <p class="hand"><b>Host takes over:</b> Cassy never counters or names a negotiated number. The host decides personally; Cassy then offers to hold the dates in the meantime.</p>
+  </section>
+  <a class="backlink" href="#/">&larr; All guides</a>
+  </div>
 
   <p class="foot">Cascade Hideaway · Hotel Comfort. Home Warmth.</p>
 </main>
 </div>
 <script src="../icons.js"></script>
 <script>
-document.getElementById('back').innerHTML = ICON('back', 's24');
-var bar = document.getElementById('appbar');
-window.addEventListener('scroll', function () { bar.classList.toggle('scrolled', window.scrollY > 8); }, { passive: true });
+(function () {
+  var back = document.getElementById('back'), ttl = document.getElementById('ttl'), landing = document.getElementById('landing');
+  var views = Array.prototype.slice.call(document.querySelectorAll('.qv'));
+  back.innerHTML = ICON('back', 's24');
+  var bar = document.getElementById('appbar');
+  window.addEventListener('scroll', function () { bar.classList.toggle('scrolled', window.scrollY > 8); }, { passive: true });
+
+  // Hash routes: #/ = the cards, #/<slug> = one guide. Deep links work; the browser back button returns to the cards.
+  function route() {
+    var slug = (location.hash.match(/^#\/([a-z]+)/) || [])[1];
+    var v = slug && document.getElementById('v-' + slug);
+    views.forEach(function (x) { x.hidden = x !== v; });
+    landing.hidden = !!v;
+    ttl.textContent = v ? v.getAttribute('data-title') : 'Quick guide';
+    back.setAttribute('href', v ? '#/' : '../#home');
+    back.setAttribute('aria-label', v ? 'Back to all guides' : 'Back to the app');
+    window.scrollTo(0, 0);
+  }
+  window.addEventListener('hashchange', route);
+  route();
+
+  // Telegram: try the app first, fall back to the web link if this page is still visible after about 1.2 s.
+  document.addEventListener('click', function (e) {
+    var a = e.target.closest && e.target.closest('a[data-tg]');
+    if (!a) return;
+    e.preventDefault();
+    var id = a.getAttribute('data-tg'), gone = false;
+    function mark() { if (document.visibilityState === 'hidden') gone = true; }
+    document.addEventListener('visibilitychange', mark);
+    window.addEventListener('blur', function () { gone = true; }, { once: true });
+    window.location.href = 'tg://privatepost?channel=' + id;
+    setTimeout(function () {
+      document.removeEventListener('visibilitychange', mark);
+      if (!gone && document.visibilityState === 'visible') window.location.href = 'https://t.me/c/' + id;
+    }, 1200);
+  });
+})();
 </script>
 </body>
 </html>
