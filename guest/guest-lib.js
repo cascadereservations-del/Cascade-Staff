@@ -64,7 +64,7 @@
     return !!(body.phone || body.email || body.companions.length || body.ids.length);
   }
 
-  var WHAT = { companion: 'companion', id_photo: 'ID photo', profile: 'phone and notes', email: 'email' };
+  var WHAT = { companion: 'companion', id_photo: 'ID photo', profile: 'phone and ID details', email: 'email' };
   var WHY = { denied: 'not allowed for this account', changed: 'someone changed this guest meanwhile, so reload and try again', upload_failed: 'the photo did not upload', email_kept: 'an email is already on file, so it was kept', save_failed: 'it did not save' };
   /** The save answer as plain lines: what landed first, then what did not and why. */
   function resultLines(saved) {
