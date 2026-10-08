@@ -12,7 +12,7 @@ test('uid comes from the hash, decoded; junk is empty', () => {
 
 test('the sheet starts from the proposal with every ID photo kept', () => {
   const s = G.sheetFrom({ phone: '09171234567', email: null, guests: 3, nationality: 'Filipino', companions: ['Carla Dizon'], ids: [{ image: 1, name: 'Ana Reyes', id_type: 'passport', own: true }] });
-  assert.deepEqual(s, { phone: '09171234567', email: '', guests: '3', nationality: 'Filipino', companions: [{ name: 'Carla Dizon', on: true }], ids: [{ image: 1, name: 'Ana Reyes', id_type: 'passport', own: true, on: true }] });
+  assert.deepEqual(s, { phone: '09171234567', email: '', guests: '3', nationality: 'Filipino', companions: [{ name: 'Carla Dizon', on: true }], ids: [{ image: 1, name: 'Ana Reyes', readName: 'Ana Reyes', srvOwn: true, id_type: 'passport', own: true, on: true }] });
   assert.deepEqual(G.sheetFrom(null).ids, []);
 });
 
@@ -50,13 +50,28 @@ test('mode comes from ?for=id or ?for=companion', () => {
   assert.equal(G.modeFromSearch(''), '');
 });
 
-test('from the empty ID box: one ID read is the guest own; an unread photo is offered unticked; chat screenshots never', () => {
-  const p = { ids: [{ image: 0, name: 'Angeleen Cruz', id_type: 'national_id', own: false }], images: ['id', 'other', 'chat'], companions: ['Angeleen Cruz', 'Carla'] };
+test('the server verdict on whose ID it is stands; an unread photo is offered unticked; chat screenshots never', () => {
+  const p = { ids: [{ image: 0, name: 'Carla D', id_type: 'national_id', own: false }], images: ['id', 'other', 'chat'], companions: ['Carla D'] };
   const s = G.sheetFrom(p, true);
-  assert.deepEqual(s.ids.map((d) => [d.image, d.own, d.on, !!d.unread]), [[0, true, true, false], [1, true, false, true]]);
-  assert.equal(G.sheetFrom(p).ids[0].own, false, 'the general page keeps the server answer');
-  assert.deepEqual(s.companions.map((c) => c.on), [false, true], 'the own ID holder is not also added as a companion');
-  assert.equal(G.sheetFrom(p).companions[0].on, true);
+  assert.deepEqual(s.ids.map((d) => [d.image, d.own, d.on, !!d.unread]), [[0, false, true, false], [1, true, false, true]], 'Fable repro: a different name is never forced to the guest');
+  assert.equal(G.sheetFrom({ ids: [{ image: 0, name: 'Alya Reyes', id_type: 'passport', own: true }] }, true).ids[0].own, true);
+  assert.deepEqual(s.companions.map((c) => c.on), [true]);
+});
+
+test('an ID switched to the guest while it reads another name needs an explicit yes, and is not also a companion', () => {
+  const images = [{ base64: 'A' }];
+  const sheet = G.sheetFrom({ ids: [{ image: 0, name: 'Carla D', id_type: 'national_id', own: false }], companions: ['Carla D'] }, true);
+  sheet.ids[0].own = true; // the person picked "The guest (Alya Reyes)"
+  assert.equal(G.ownNeedsYes(sheet.ids[0]), true);
+  assert.match(G.sheetProblem(sheet, 'Alya Reyes'), /Yes, this is Alya Reyes/);
+  assert.deepEqual(G.saveBody('u', sheet, images, 'Alya Reyes').ids, [], 'never sent as the guest without the yes');
+  sheet.ids[0].ownYes = true;
+  assert.equal(G.sheetProblem(sheet, 'Alya Reyes'), '');
+  const b = G.saveBody('u', sheet, images, 'Alya Reyes');
+  assert.deepEqual([b.ids.map((d) => d.name), b.companions], [['Alya Reyes'], []]);
+  sheet.ids[0].own = false; // back to "A companion": the read name goes with it and no yes is needed
+  assert.equal(G.sheetProblem(sheet, 'Alya Reyes'), '');
+  assert.deepEqual(G.saveBody('u', sheet, images, 'Alya Reyes').ids.map((d) => d.name), ['Carla D']);
 });
 
 test('save body: own ID goes under the name on file, a companion photo under its row; an unticked companion takes its photo', () => {

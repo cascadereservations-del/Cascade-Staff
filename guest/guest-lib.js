@@ -43,24 +43,24 @@
     return 'Something went wrong (' + (code || status) + '). Nothing new was saved.';
   }
 
-  /** The review sheet's starting values from the server's proposal. Every ID photo starts kept; screenshots are never kept. */
+  /** The review sheet's starting values from the server's proposal. Every ID photo starts kept; screenshots are never kept.
+      The server decides whether a read ID is the guest's own (the name on it matches the record): that verdict is kept as is.
+      readName is the name the reader found; srvOwn the server's verdict (see ownNeedsYes). */
   function sheetFrom(proposal, forOwnId) {
-    var p = proposal || {}, ids = (p.ids || []).map(function (d) { return { image: d.image, name: d.name, id_type: d.id_type, own: !!d.own, on: true }; });
+    var p = proposal || {}, ids = (p.ids || []).map(function (d) { return { image: d.image, name: d.name, readName: d.name || '', srvOwn: !!d.own, id_type: d.id_type, own: !!d.own || !d.name, on: true }; });
     // s78: a photo the reader could not place (kind "other") is offered unticked, so an ID it missed can still be kept by hand.
     // Opened from the empty ID box (forOwnId), such a photo starts as the guest's own ID; it still starts unticked.
     (p.images || []).forEach(function (k, i) {
-      if (k === 'other' && !ids.some(function (d) { return d.image === i; })) ids.push({ image: i, name: '', id_type: 'other', own: !!forOwnId, on: false, unread: true });
+      if (k === 'other' && !ids.some(function (d) { return d.image === i; })) ids.push({ image: i, name: '', readName: '', srvOwn: false, id_type: 'other', own: !!forOwnId, on: false, unread: true });
     });
-    // From the empty ID box with exactly one ID read: that photo is the guest's own (the person said so by where they tapped).
-    // The server also proposes that ID's holder as a new companion when the name differs from the record; that row starts unticked.
-    var ownRead = forOwnId && (p.ids || []).length === 1 ? ids[0] : null;
-    if (ownRead) ownRead.own = true;
     return {
       phone: p.phone || '', email: p.email || '', guests: p.guests ? String(p.guests) : '', nationality: p.nationality || '',
-      companions: (p.companions || []).map(function (n) { return { name: n, on: !(ownRead && n === ownRead.name) }; }),
+      companions: (p.companions || []).map(function (n) { return { name: n, on: true }; }),
       ids: ids
     };
   }
+  /** An ID set to "the guest" whose read name does not match the record needs the person's explicit "Yes, this is <guest>". */
+  function ownNeedsYes(d) { return !!(d.own && d.readName && !d.srvOwn); }
   /** The name an ID is saved under: the guest's own goes under the name on file (the server links it to the guest by that name),
       a companion's photo added on a companion row follows that row's name, else the name typed on the sheet. */
   function idName(d, sheet, ownName) {
@@ -72,6 +72,7 @@
   function sheetProblem(sheet, ownName) {
     var kept = sheet.ids.filter(function (d) { return d.on && !(d.comp != null && sheet.companions[d.comp] && !sheet.companions[d.comp].on); });
     if (kept.some(function (d) { return !idName(d, sheet, ownName); })) return 'Type the name on each ID you keep, or untick it.';
+    if (kept.some(function (d) { return ownNeedsYes(d) && !d.ownYes; })) return 'An ID reads a different name from the guest record. Tick “Yes, this is ' + (ownName || 'the guest') + '” under it, or set it to A companion.';
     return '';
   }
 
@@ -83,8 +84,9 @@
     return {
       action: 'save', uid: uid,
       phone: trim(sheet.phone) || null, email: trim(sheet.email) || null,
-      companions: sheet.companions.filter(function (c) { return c.on && trim(c.name); }).map(function (c) { return trim(c.name); }),
-      ids: sheet.ids.filter(function (d) { return d.on && images[d.image] && !compOff(d); }).map(function (d) { return { name: idName(d, sheet, ownName), id_type: d.id_type, image: images[d.image] }; })
+      // an ID confirmed as the guest's own is not also added as a companion under the name read from it
+      companions: sheet.companions.filter(function (c) { return c.on && trim(c.name) && !sheet.ids.some(function (d) { return d.on && d.own && d.ownYes && d.readName === trim(c.name); }); }).map(function (c) { return trim(c.name); }),
+      ids: sheet.ids.filter(function (d) { return d.on && images[d.image] && !compOff(d) && !(ownNeedsYes(d) && !d.ownYes); }).map(function (d) { return { name: idName(d, sheet, ownName), id_type: d.id_type, image: images[d.image] }; })
     };
   }
   function hasAnything(body) {
@@ -102,5 +104,5 @@
     return lines.length ? lines : ['Nothing needed saving. The record already had these details.'];
   }
 
-  return { MAX_IMAGES: MAX_IMAGES, MAX_TEXT: MAX_TEXT, ID_TYPES: ID_TYPES, uidFromHash: uidFromHash, errorText: errorText, sheetFrom: sheetFrom, saveBody: saveBody, idName: idName, sheetProblem: sheetProblem, modeFromSearch: modeFromSearch, hasAnything: hasAnything, resultLines: resultLines };
+  return { MAX_IMAGES: MAX_IMAGES, MAX_TEXT: MAX_TEXT, ID_TYPES: ID_TYPES, uidFromHash: uidFromHash, errorText: errorText, sheetFrom: sheetFrom, saveBody: saveBody, idName: idName, sheetProblem: sheetProblem, ownNeedsYes: ownNeedsYes, modeFromSearch: modeFromSearch, hasAnything: hasAnything, resultLines: resultLines };
 });

@@ -253,9 +253,9 @@
       .map(function () { return { date: iso, kind: 'brownout', label: 'Brownout', source: 'auto', id: null }; });
   }
   // ---- stays (s78, D-320): one stay per guest, shown through its checkout day.
-  // Two confirmed rows for the same guest that overlap or chain (one checks out the day the other checks in) are ONE stay: a direct
-  // booking and its Airbnb copy, or two channels for one person. The label row is the one with confirmed payment: direct first,
-  // then the Airbnb reservation. Same guest = the same name, or one name is the other plus more words ("Bia" / "Bia Cruz").
+  // Two confirmed rows for the same guest are ONE stay when they chain under the exact same name (an extension), or overlap from
+  // two channels (a direct booking and its Airbnb copy; there the name may be the other plus more words: "Bia" / "Bia Cruz").
+  // The label row is the one with confirmed payment: direct first, then the Airbnb reservation.
   // ponytail: names only (the calendar rows carry no guest id); two different people with the same name back to back would merge.
   function nameKey(n) { return String(n || '').trim().toLowerCase().replace(/\s+/g, ' '); }
   function sameGuest(a, b) {
@@ -269,7 +269,15 @@
       .sort(function (a, b) { return a.checkin_date < b.checkin_date ? -1 : a.checkin_date > b.checkin_date ? 1 : 0; });
     var groups = [];
     list.forEach(function (r) {
-      var g = groups.filter(function (x) { return r.checkin_date <= x.to && r.checkout_date >= x.from && x.rows.some(function (y) { return sameGuest(y, r); }); })[0];
+      // A merge must never hide a turnover or a clash: chained rows (one checks out the day the other checks in) join only on the
+      // exact same name; overlapping rows join only across two channels (a direct booking and its Airbnb copy). Two rows from one
+      // channel on the same nights stay apart and show as a clash.
+      var g = groups.filter(function (x) {
+        return x.rows.some(function (y) {
+          if (r.checkin_date < y.checkout_date && r.checkout_date > y.checkin_date) return r.source !== y.source && sameGuest(y, r);
+          return (r.checkin_date === y.checkout_date || r.checkout_date === y.checkin_date) && !!nameKey(r.guest_name) && nameKey(r.guest_name) === nameKey(y.guest_name);
+        });
+      })[0];
       if (g) { g.rows.push(r); if (r.checkout_date > g.to) g.to = r.checkout_date; } else groups.push({ from: r.checkin_date, to: r.checkout_date, rows: [r] });
     });
     return groups.map(function (g, i) {

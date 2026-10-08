@@ -183,15 +183,12 @@
     }
     // Owner/admin: the empty box opens Add guest details in ID mode (take or choose the guest's own ID photo; D-320.5).
     var addId = canReply() && g.uid ? './guest/?for=id#' + encodeURIComponent(g.uid) : '';
-    var comps = Array.isArray(g.companions) ? g.companions.filter(function (c) { return c && c.name; }) : [];
     var idcard = '<div class="card"><h3 class="hd">Guest ID</h3><div style="margin-top:10px">' +
       (g.id_photo_path ? '<div class="idphoto" data-idpath="' + esc(g.id_photo_path) + '"><span class="help">Loading the photo…</span></div><p class="help" style="margin:10px 0 0">Check the face and the name against the guest at the door.</p>'
         : addId ? '<a class="idphoto empty idadd" href="' + esc(addId) + '">' + ICON('camera', 's24') + '<span><b>No ID photo yet.</b><br>Tap to take or choose a photo of the guest’s ID.</span></a>'
         : '<div class="idphoto empty">No ID photo to show for this guest.</div>') +
-      (comps.length ? '<div class="cap up" style="margin:14px 0 6px">Companions</div><ul class="notes">' + comps.map(function (c) {
-        return '<li>' + ICON('user') + '<span>' + esc(c.name) + (c.photo || c.id_photo ? ' <span class="help">· ID on file</span>' : '') + '</span></li>';
-      }).join('') + '</ul>' : '') +
-      (addId ? '<a class="btn btn-ghost btn-sm" href="./guest/?for=companion#' + encodeURIComponent(g.uid) + '" style="margin:8px 0 0 -12px">' + ICON('plus', 's16') + 'Add a companion</a>' : '') + '</div></div>';
+      (addId ? '<a class="btn btn-ghost btn-sm" href="./guest/?for=companion#' + encodeURIComponent(g.uid) + '" style="margin:8px 0 0 -12px">' + ICON('plus', 's16') + 'Add a companion</a>' +
+        '<p class="help" style="margin:2px 0 0">Companions you add show in the admin guest page.</p>' : '') + '</div></div>';
     return info + notes + idcard;
   }
 
@@ -391,7 +388,8 @@
       html += stayLine(ds.stay, ds.arrive ? 'arrives' : 'is staying');
       if (ds.block) html += '<p class="help" style="margin-top:4px">Also held on the calendar: ' + esc(ds.blockWhy) + '</p>';
     }
-    if (ds.clash.length) html += '<div class="errbox" style="margin-top:10px">' + ICON('alert') + '<span>' + esc('Two different guests on this night: ' + ds.clash.map(function (s) { return (s.guest_name || 'Guest') + ' (' + CS.stayDates(s) + ')'; }).join(', ') + '. One booking needs to move.') + '</span></div>';
+    if (ds.clash.length) html += '<div class="errbox" style="margin-top:10px">' + ICON('alert') + '<span>' + esc('Two different guests on this night: ' + ds.clash.map(function (s) { return (s.guest_name || 'Guest') + ' (' + CS.stayDates(s) + ')'; }).join(', ') + '. One booking needs to move.') + '</span></div>' +
+      ds.clashIn.map(function (s) { return '<p class="sub num" style="margin:8px 0 0"><b>' + esc('Second arrival: ' + (s.guest_name || 'Guest')) + '</b> · ' + esc(CS.stayDates(s)) + '</p>'; }).join('');
     html += '<div class="cap up" style="margin:14px 0 6px">Also on this day</div>';
     html += ds.flags.length ? '<ul class="wlist">' + ds.flags.map(function (f) {
       var lbl = f.label && f.label !== CS.flagName(f.kind) ? ' · ' + esc(f.label) : '';

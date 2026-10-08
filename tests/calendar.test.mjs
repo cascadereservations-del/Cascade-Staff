@@ -163,3 +163,20 @@ test('turnover: one guest out and another in the same day; a true overlap of two
   assert.equal(CS.dayMoves(c), 'Dex checks out, Ale arrives, Rey arrives', 'the clashing arrival is said too');
   assert.equal(CS.dayStatus('2026-08-20', t, [], []).clash.length, 0);
 });
+
+test('a merge never hides a turnover or a clash', () => {
+  const chained = [
+    { uid: 'a', status: 'confirmed', guest_name: 'Jose', source: 'airbnb', checkin_date: '2026-09-25', checkout_date: '2026-09-27' },
+    { uid: 'b', status: 'confirmed', guest_name: 'Jose Cruz', source: 'airbnb', checkin_date: '2026-09-27', checkout_date: '2026-09-28' }
+  ];
+  assert.equal(CS.mergeStays(chained).length, 2, 'chained rows join only on the exact same name');
+  assert.equal(CS.dayStatus('2026-09-27', chained, [], []).turnover, true, 'so the turnover still shows');
+  const oneChannel = [
+    { uid: 'c', status: 'confirmed', guest_name: 'Mia', source: 'airbnb', checkin_date: '2026-10-01', checkout_date: '2026-10-03' },
+    { uid: 'd', status: 'confirmed', guest_name: 'Mia', source: 'airbnb', checkin_date: '2026-10-02', checkout_date: '2026-10-04' }
+  ];
+  assert.equal(CS.mergeStays(oneChannel).length, 2, 'two rows from one channel on the same night are not one stay');
+  assert.equal(CS.dayStatus('2026-10-02', oneChannel, [], []).clash.length, 1, 'they show as a clash');
+  const mirror = [oneChannel[0], { ...oneChannel[1], uid: 'e', source: 'direct', guest_name: 'Mia Santos' }];
+  assert.equal(CS.mergeStays(mirror).length, 1, 'a direct booking and its Airbnb copy are one stay');
+});

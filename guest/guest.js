@@ -114,13 +114,18 @@
       var im = S.images[d.image], comp = d.comp != null ? s.companions[d.comp] : null;
       var who = comp ? '<span class="help">' + esc('ID of ' + (comp.name || 'the companion above') + '.') + '</span>'
         : '<div class="input"><select data-idown="' + i + '" aria-label="Whose ID"><option value="own"' + (d.own ? ' selected' : '') + '>' + esc('The guest (' + (f.name || 'on file') + ')') + '</option><option value="comp"' + (d.own ? '' : ' selected') + '>A companion</option></select></div>' +
-          (d.own ? '' : '<div class="input"><input data-idname="' + i + '" value="' + esc(d.name) + '" aria-label="Name on the ID" placeholder="Name on the ID" maxlength="80"></div>');
+          (d.own ? '' : '<div class="input"><input data-idname="' + i + '" value="' + esc(d.name) + '" aria-label="Name on the ID" placeholder="Name on the ID" maxlength="80"></div>') +
+          // the read name differs from the record: say what the ID reads and ask for an explicit yes before it becomes the guest's own
+          (G.ownNeedsYes(d) ? '<p class="help" style="margin:0">' + esc('ID reads: ' + d.readName) + '</p><div class="payrow single" style="padding:0;border:0;display:flex;gap:8px;align-items:center">' +
+            '<button class="chk" type="button" role="checkbox" aria-checked="' + !!d.ownYes + '" data-ownyes="' + i + '" aria-label="' + esc('Yes, this is ' + (f.name || 'the guest')) + '">' + ICON('check', 's16') + '</button>' +
+            '<span class="help" style="color:var(--fg)">' + esc('Yes, this is ' + (f.name || 'the guest')) + '</span></div>' : '');
       return '<div class="payrow"><button class="chk" type="button" role="checkbox" aria-checked="' + !!d.on + '" aria-label="Keep this ID photo" data-idk="' + i + '">' + ICON('check', 's16') + '</button>' +
         '<div class="gd-id">' + (im ? '<img src="' + im.src + '" alt="ID photo">' : '<span></span>') + '<div class="stack" style="gap:8px">' + who +
         '<div class="input"><select data-idtype="' + i + '" aria-label="ID type">' + G.ID_TYPES.map(function (t) { return '<option value="' + t[0] + '"' + (t[0] === d.id_type ? ' selected' : '') + '>' + esc(t[1]) + '</option>'; }).join('') + '</select></div>' +
         '<span class="help">' + (d.unread ? 'Not read as an ID. Tick it to keep it as one. ' : '') + (d.own ? 'The guest’s own ID. It shows on the guest card.' : 'Saved as a companion’s ID.') + '</span></div></div></div>';
     }).join('') + '</div>' : '') +
-      (room ? '<div style="margin-top:8px"><span class="help">The guest’s own ID</span>' + photoButtons('gd-ownid', false) + '</div>' : '') +
+      // one own ID at a time: a second own photo would leave the first behind in storage
+      (room && !s.ids.some(function (d) { return d.on && d.own; }) ? '<div style="margin-top:8px"><span class="help">The guest’s own ID</span>' + photoButtons('gd-ownid', false) + '</div>' : '') +
       (S.preparing ? '<p class="help" role="status" style="margin:4px 0 0">Preparing the photo…</p>' : '') + '</div>';
     return stayCard() + errBox() + '<h2 class="hd" id="gd-h" tabindex="-1">Check before saving</h2><p class="help" style="margin:0">Fix anything that is wrong. Empty fields are left as they are.</p>' +
       input('gd-phone', 'Phone', s.phone, 'inputmode="tel" maxlength="20"', phoneHint) +
@@ -211,6 +216,7 @@
     var a = t.getAttribute('data-act');
     if (t.hasAttribute('data-rm')) { S.images.splice(+t.getAttribute('data-rm'), 1); S.err = ''; render(); }
     else if (t.hasAttribute('data-comp')) { syncSheet(); var c = S.sheet.companions[+t.getAttribute('data-comp')]; c.on = !c.on; render(); }
+    else if (t.hasAttribute('data-ownyes')) { syncSheet(); var y = S.sheet.ids[+t.getAttribute('data-ownyes')]; y.ownYes = !y.ownYes; render(); }
     else if (t.hasAttribute('data-idk')) { syncSheet(); var d = S.sheet.ids[+t.getAttribute('data-idk')]; d.on = !d.on; render(); }
     else if (a === 'read') read();
     else if (a === 'manual') { manual(); render('gd-h'); }
