@@ -6,7 +6,7 @@
 //   Same-origin shell files                                          -> network-first, cache fallback.
 // Nothing personal is ever stored here: the cache holds the shell (HTML, CSS, JS, fonts, icons) and nothing else.
 // A shell that loads offline says "Live information needs a connection"; guest names exist only in JS memory.
-const CACHE_NAME = 'cs-shell-v6';
+const CACHE_NAME = 'cs-shell-v7';
 const NAV_TIMEOUT_MS = 3000;
 // The self-hosted font files styles.css @font-face points at. Theme v2 changes fonts: edit this one list (and styles.css), nothing else here.
 const SELF_FONTS = ['cormorant-garamond-600.woff2', 'cormorant-garamond-700.woff2'];
@@ -15,6 +15,7 @@ const ICON_FILES = ['icon-192.png', 'icon-512.png', 'icon-512-maskable.png', 'ap
 const SHELL_URLS = [
   './', './index.html', './styles.css', './app.js', './lib.js', './icons.js', './theme.js', './manifest.webmanifest',
   './quick/', './quick/index.html', './pay/', './pay/index.html', './pay/pay.js', './pay/pay-lib.js', './pay/bank.html',
+  './guest/', './guest/index.html', './guest/guest.js', './guest/guest-lib.js',
   ...SELF_FONTS.map((f) => './fonts/' + f),
   ...ICON_FILES.map((f) => './icons/' + f)
 ];

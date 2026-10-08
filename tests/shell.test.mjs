@@ -29,11 +29,11 @@ test('sw shell list: every file exists, and the maskable icon, manifest and ever
 });
 
 test('supabase-js is pinned and loaded with the same SRI hash on every page that uses it', () => {
-  const tags = ['index.html', 'pay/index.html'].map((f) => read(f).match(/<script src="(https:\/\/cdn\.jsdelivr\.net\/npm\/@supabase\/supabase-js@\d+\.\d+\.\d+\/[^"]+)"([^>]*)>/));
+  const tags = ['index.html', 'pay/index.html', 'guest/index.html'].map((f) => read(f).match(/<script src="(https:\/\/cdn\.jsdelivr\.net\/npm\/@supabase\/supabase-js@\d+\.\d+\.\d+\/[^"]+)"([^>]*)>/));
   for (const t of tags) {
     assert.ok(t, 'supabase-js tag found');
     assert.match(t[2], /integrity="sha384-[A-Za-z0-9+/]{64}"/);
     assert.match(t[2], /crossorigin="anonymous"/);
   }
-  assert.equal(tags[0][1], tags[1][1]); assert.equal(tags[0][2], tags[1][2]);
+  for (const t of tags.slice(1)) { assert.equal(t[1], tags[0][1]); assert.equal(t[2], tags[0][2]); }
 });
