@@ -134,7 +134,7 @@ svg.i.s12 { width: 12px; height: 12px; } svg.i.s16 { width: 16px; height: 16px; 
 .dxl .script { font: 400 1.18em/1 var(--font-script); color: var(--accent-text); }
 @media (forced-colors: active) { .signin .word { background: none; -webkit-text-fill-color: currentColor; } }
 .dlg { font: 600 28px/34px var(--font-display); }
-.dlg::after { content: ""; display: block; width: 48px; height: 2px; margin-top: 6px; background: linear-gradient(90deg, #D7B377, #B58E5F, #7A5A2B); border-radius: 1px; }
+.dlg::after { content: ""; display: block; width: 48px; height: 2px; margin-top: 6px; background: var(--gilt); border-radius: 1px; }
 .ttl { font: 600 22px/28px var(--font-display); letter-spacing: .005em; }
 .hd { font: 600 17px/24px var(--font-ui); letter-spacing: .01em; }
 .strong { font-weight: 600; }
@@ -145,7 +145,7 @@ svg.i.s12 { width: 12px; height: 12px; } svg.i.s16 { width: 16px; height: 16px; 
 .num { font-variant-numeric: tabular-nums; }
 .brand { font: 600 22px/1 var(--font-display); letter-spacing: .02em; }
 .brand b { color: var(--accent); font-weight: 600; }
-.hair { width: 48px; height: 2px; background: linear-gradient(90deg, #D7B377, #B58E5F, #7A5A2B); border-radius: 1px; margin-top: 8px; }
+.hair { width: 48px; height: 2px; background: var(--gilt); border-radius: 1px; margin-top: 8px; }
 hr.hair { width: auto; height: 1px; border: 0; background: var(--rule); }
 
 /* ---- app bar ---- */
@@ -365,7 +365,7 @@ hr.hair { width: auto; height: 1px; border: 0; background: var(--rule); }
 .qg p.intro { margin: 20px 0 0; }
 .qg p.intro + p.intro { margin-top: 8px; color: var(--fg-2); }
 .qg h2 { font: 600 28px/34px var(--font-display); margin: 32px 0 12px; color: var(--accent-text); }
-.qg h2::after { content: ""; display: block; width: 48px; height: 2px; background: linear-gradient(90deg, #D7B377, #B58E5F, #7A5A2B); margin-top: 6px; border-radius: 1px; }
+.qg h2::after { content: ""; display: block; width: 48px; height: 2px; background: var(--gilt); margin-top: 6px; border-radius: 1px; }
 .qg .card { margin-top: 12px; }
 .qg code { font: 500 15px/22px var(--font-ui); font-variant-numeric: tabular-nums slashed-zero; background: var(--muted); padding: 1px 6px; border-radius: var(--r-sm); }
 .card-head { display: flex; align-items: center; gap: 12px; }
