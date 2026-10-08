@@ -430,6 +430,15 @@
   // The drafts carry prices and booking terms, so the button is owner and admin only; the function re-checks (403 staff_access_denied).
   var REPLY_MAX_TEXT = 4000, REPLY_MAX_IMAGE_BYTES = 4000000, REPLY_MAX_EDGE = 1600, REPLY_NAME_MAX = 80;
   function canDraftReply(role) { return role === 'owner' || role === 'admin'; }
+  // SPEC-44: pending direct bookings the host must confirm. Money roles only; cleaners, inspectors and maintenance never see the row or call the RPC.
+  var INQUIRIES_URL = 'https://cascadereservations-del.github.io/cascade-admin-dashboard/#/bookings/inquiries';
+  function canSeeBookingsToConfirm(role) { return role === 'owner' || role === 'admin' || role === 'finance'; }
+  // staff_inquiry_payments_v1 returns an array of pending bookings. Anything else (error, null, {ok:false}) is 0, so the row hides.
+  function bookingsToConfirmCount(data) { return Array.isArray(data) ? data.length : 0; }
+  function bookingsToConfirmRow(role, data) {
+    var n = canSeeBookingsToConfirm(role) ? bookingsToConfirmCount(data) : 0;
+    return n > 0 ? { count: n > 99 ? '99+' : String(n), n: n, href: INQUIRIES_URL } : null;
+  }
   // Longest edge capped at max, aspect kept, never enlarged, never 0.
   function shrinkSize(w, h, max) {
     max = max || REPLY_MAX_EDGE; w = Math.max(1, Math.round(Number(w) || 0)); h = Math.max(1, Math.round(Number(h) || 0));
@@ -482,6 +491,7 @@
     taskKindLabel: taskKindLabel, manilaDayOf: manilaDayOf, taskDue: taskDue, taskDueLabel: taskDueLabel, dueFromDate: dueFromDate, taskGroups: taskGroups,
     taskDueCount: taskDueCount, reminderProblem: reminderProblem, canEditRates: canEditRates, rateNum: rateNum, rateLine: rateLine,
     earliestRateStart: earliestRateStart, rateProblem: rateProblem, rateArgs: rateArgs,
+    canSeeBookingsToConfirm: canSeeBookingsToConfirm, bookingsToConfirmCount: bookingsToConfirmCount, bookingsToConfirmRow: bookingsToConfirmRow, INQUIRIES_URL: INQUIRIES_URL,
     canDraftReply: canDraftReply, shrinkSize: shrinkSize, replyProblem: replyProblem, replyBody: replyBody, replyErrorText: replyErrorText, replyResult: replyResult, clampText: clampText,
     REPLY_MAX_IMAGE_BYTES: REPLY_MAX_IMAGE_BYTES, REPLY_MAX_EDGE: REPLY_MAX_EDGE,
     staffAuthPassword: staffAuthPassword, staffLoginEmail: staffLoginEmail, deriveDisplayName: deriveDisplayName, greetingName: greetingName,

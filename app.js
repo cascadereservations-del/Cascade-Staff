@@ -44,7 +44,7 @@
     storage: CS.authStorage(store('localStorage'), store('sessionStorage'), function () { return trustOn; }) } });
 
   var state = { access: null, user: null, name: '', layout: null, payload: null, loadedAt: 0, loading: false, error: '', month: null, cassyOpen: true, payHint: null, photos: {},
-    tasks: null, tasksErr: '', tasksLoading: false, showDone: false, lastDone: null, add: null, assignees: null, rates: null, ratesErr: '', rateForm: null, rateSaving: false, reply: null };
+    tasks: null, tasksErr: '', tasksLoading: false, showDone: false, lastDone: null, add: null, assignees: null, rates: null, ratesErr: '', rateForm: null, rateSaving: false, reply: null, bookings: null };
   var $ = function (id) { return document.getElementById(id); };
   var VIEWS = ['signin', 'home', 'calendar', 'tasks', 'payrates', 'more', 'door', 'reply'];
   function pid() { return (state.access && state.access.property_ids && state.access.property_ids[0]) || CFG.propertyId; }
@@ -55,7 +55,7 @@
   function row(opts) { // title and sub-title always on separate lines (D-300.7)
     if (opts.door) { var dl = CS.doorLink(opts.door, doorDef(opts.door).url, location.origin, trustOn); opts.href = dl.href; opts.external = dl.external; }
     var inner = '<span class="lead">' + ICON(opts.icon) + '</span><span class="mid"><span class="t">' + esc(opts.title) + '</span><span class="s"' + (opts.subId ? ' id="' + opts.subId + '"' : '') + '>' + esc(opts.sub || '') + '</span></span>' +
-      (opts.count ? '<span class="count" aria-label="' + esc(opts.count + ' warnings') + '">' + esc(opts.count) + '</span>' : '') +
+      (opts.count ? '<span class="count" aria-label="' + esc(opts.count + (opts.countLabel || ' warnings')) + '">' + esc(opts.count) + '</span>' : '') +
       '<span class="chev">' + ICON(opts.external ? 'ext' : 'chev', opts.external ? 's16' : '') + '</span>';
     if (opts.href && opts.external) return ext(opts.href, inner, 'rowi');
     if (opts.href) return '<a class="rowi" href="' + esc(opts.href) + '">' + inner + '</a>';
@@ -125,7 +125,7 @@
     var el = $('v-home');
     if (!state.payload) { el.innerHTML = appbar({ brand: true }) + '<div class="screen">' + (state.error ? errBanner() : loadingBlock()) + '</div>'; return; }
     var staff = state.layout === 'staff', n = warnCount();
-    var doors;
+    var doors, bk = staff ? null : CS.bookingsToConfirmRow(state.access && state.access.role, state.bookings);
     if (staff) {
       doors = '<nav class="card list" aria-label="Staff">' +
         row({ icon: 'clip', title: 'Cleaning checklist', sub: 'Start or continue today’s turnover', door: 'checklist' }) +
@@ -137,6 +137,7 @@
         (LINKS.pay ? row({ icon: 'cash', title: 'Payment Request', sub: state.payHint || 'Ask for your cleaning pay', href: LINKS.pay, subId: 'pay-sub' }) : '') + '</nav>';
     } else {
       doors = '<nav class="card list" aria-label="Admin">' +
+        (bk ? row({ icon: 'clip', title: 'Bookings to confirm', sub: 'Open the pending bookings', href: bk.href, external: true, count: bk.count, countLabel: ' bookings to confirm' }) : '') +
         row({ icon: 'dash', title: 'Admin dashboard', sub: 'Today, bookings, money, operations', door: 'dashboard' }) +
         (trustOn ? '' : '<div class="help doornote">Sign-in is kept only on trusted devices</div>') +
         (CS.canEditRates(state.access && state.access.role) ? row({ icon: 'cash', title: 'Pay rates', sub: 'What a clean and its transport pay', href: '#payrates' }) : '') +
@@ -577,7 +578,7 @@
       }
       try { CS.assertNoMoney(r.data); } catch (e) { state.payload = null; state.error = 'This page was blocked because the data carried an amount or a contact detail. Tell Lloyd.'; return; }
       state.payload = r.data; state.loadedAt = Date.now(); state.error = '';
-      refreshWeather(); loadPayHint();
+      refreshWeather(); loadPayHint(); loadBookingsToConfirm();
     }).catch(function () {
       state.error = state.payload ? 'Live information needs a connection. Showing the last update.' : 'Live information needs a connection.';
     }).then(function () { state.loading = false; if (state.layout) render(); });
@@ -607,6 +608,17 @@
       state.payHint = n ? n + (n === 1 ? ' item ready to request' : ' items ready to request') : 'Nothing waiting to request';
       var s = $('pay-sub'); if (s) s.textContent = state.payHint;
     }).catch(function () {});
+  }
+
+  // Bookings to confirm (SPEC-44): owner/admin/finance only, refreshed when Home loads, no polling. Any error or a missing RPC hides the row (logged once).
+  var bkWarned = false;
+  function loadBookingsToConfirm() {
+    if (state.layout !== 'admin' || !CS.canSeeBookingsToConfirm(state.access && state.access.role)) return;
+    var fail = function (e) { state.bookings = null; if (!bkWarned) { bkWarned = true; console.warn('bookings to confirm unavailable', e && e.message ? e.message : e); } };
+    sb.rpc('staff_inquiry_payments_v1', { p_property_id: pid() }).then(function (r) {
+      if (r.error) return fail(r.error);
+      state.bookings = r.data;
+    }).catch(fail).then(function () { if (current === 'home' && state.layout) renderHome(); });
   }
 
   // ---------------------------------------------------------------- router
