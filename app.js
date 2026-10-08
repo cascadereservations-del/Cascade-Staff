@@ -271,14 +271,17 @@
   // Three primary looks that differ by pattern, not only colour: free = outlined card, blocked = hatched with the reason icon,
   // booked = filled with the brand bar. Arrival and checkout days are half-filled; a clash (two guests on one night) is red.
   // Secondary flags sit top-right as small icons. Every day opens the day sheet.
+  var monthHas = { turn: false, clash: false }; // the legend names Turnover and Clash only when this month shows one
   function calendarGrid() {
     var p = state.payload, m = monthState(), cells = CS.monthGrid(m.y, m.m);
     var dows = ['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su'].map(function (d) { return '<div class="dow" aria-hidden="true">' + d + '</div>'; }).join('');
+    monthHas = { turn: false, clash: false };
     var body = cells.map(function (c) {
       if (!c.iso) return '<div class="d off" aria-hidden="true"></div>';
       var ds = dayStatusOf(c.iso), booked = ds.primary === 'booked', blk = ds.primary === 'blocked';
+      if (ds.turnover) monthHas.turn = true; if (ds.clash.length) monthHas.clash = true;
       var cls = 'd s-' + ds.primary + (c.iso < p.today ? ' past' : '') + (c.iso === p.today ? ' today' : '') + (booked ? ' stay t' + ds.stay.tone : '') + (booked && ds.cont ? ' cont' : '') + (blk ? ' blk' : '') +
-        (ds.arrive ? ' arr' : '') + (ds.out ? ' dep' : '') + (ds.turnover ? ' turn' : '') + (ds.clash.length ? ' clash' : '');
+        (ds.arrive ? ' arr' : '') + (ds.out ? ' dep out-t' + ds.out.tone : '') + (ds.turnover ? ' turn' : '') + (ds.clash.length ? ' clash' : '');
       var fl = ds.flags.length ? '<span class="fl" aria-hidden="true">' + ds.flags.slice(0, 3).map(function (f) { return ICON(FLAG_ICON[f.kind] || 'note', 's12'); }).join('') + '</span>' : '';
       var inner = halves(ds) + '<span class="n">' + (+c.iso.slice(8)) + '</span>' + (booked && ds.startsHere ? '<span class="ini">' + esc(CS.initialOf(ds.stay.guest_name)) + '</span>' : '') +
         (blk && !ds.out ? '<span class="g">' + ICON(BLOCK_ICON[ds.block.block_reason] || 'lock', 's12') + '</span>' : '') +
@@ -295,7 +298,7 @@
     var it = function (cls, t) { return '<span><i class="lg ' + cls + '"></i>' + t + '</span>'; };
     var fi = function (k) { return '<span>' + ICON(FLAG_ICON[k], 's12') + CS.flagName(k) + '</span>'; };
     return '<div class="legend">' + it('lg-free', 'Free') + it('lg-blk', 'Blocked') + it('lg-booked', 'Booked') + it('lg-in', 'Arrives') + it('lg-out', 'Checks out') +
-      it('lg-turn', 'Turnover') + it('lg-clash', 'Clash') + it('lg-today', 'Today') + '</div>' +
+      (monthHas.turn ? it('lg-turn', 'Turnover') : '') + (monthHas.clash ? it('lg-clash', 'Clash') : '') + it('lg-today', 'Today') + '</div>' +
       '<div class="legend legend2">' + CS.FLAG_KINDS.map(fi).join('') + '<span class="help">Tap a day for details</span></div>';
   }
   function warnKey(w) { return w.kind + '|' + (w.title || '') + '|' + ((w.detail && w.detail.date) || ''); }
