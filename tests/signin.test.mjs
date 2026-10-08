@@ -168,8 +168,8 @@ test('app.js wiring: the three doors are same-origin (so they frame), the rows u
 
 test('Theme v2: deep bronze action, Raleway and Style Script loaded, no Inter, no teal action colour', () => {
   const css = read('styles.css');
-  assert.match(css, /--primary: #7A5A2B;/); assert.match(css, /--primary: #D7B377;/);
-  assert.match(css, /--bg: #F9F6F0;/); assert.match(css, /--bg: #130E09;/);
+  assert.match(css, /--primary: #7A5A2B;/); assert.match(css, /--primary: #D2B788;/); // s77 calm-luxury dark
+  assert.match(css, /--bg: #F9F6F0;/); assert.match(css, /--bg: #12100D;/);
   assert.match(css, /--font-ui: "Raleway"/); assert.match(css, /--font-script: "Style Script"/);
   assert.doesNotMatch(css, /--primary: #146C70|--primary: #63C5C7/);
   for (const f of ['index.html', 'pay/index.html', 'quick/index.html']) {

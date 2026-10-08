@@ -46,47 +46,59 @@
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    --bg: #130E09; --card: #1D1611; --muted: #28201A; --border: rgba(215, 179, 119, 0.18); --overlay: rgba(0, 0, 0, 0.64);
-    --fg: #F5EFE4; --fg-2: #C3B5A3; --fg-3: #9A8C7B;
-    --primary: #D7B377; --primary-fg: #2A1E0E; --primary-soft: #3A2C18; --ring: #E4C98F;
-    --accent: #EAD3A3; --accent-text: #E4C98F; --accent-soft: #33291A;
-    --gold: #E4C98F; --bronze: #EAD3A3; --bronze-deep: #C9963A; --espresso: #130E09;
-    --gilt: linear-gradient(135deg, #EAD3A3 0%, #D7B377 50%, #C9963A 100%);
-    --rule: linear-gradient(90deg, transparent 0%, #D7B377 50%, transparent 100%);
-    --hairline: rgba(215, 179, 119, 0.22);
-    --ok: #84C79A; --ok-soft: #1E3527; --warn: #F0A05A; --warn-soft: #3E2414;
-    --danger: #F28B82; --danger-soft: #44201D; --info: #8FB7F5; --info-soft: #1D2C44;
-    --sidebar: #0F0B07; --sidebar-fg: #EFE6D8; --sidebar-primary: #D7B377; --sidebar-accent: #231A12; --sidebar-border: rgba(215, 179, 119, 0.14);
-    --chart-1: #D7B377; --chart-2: #63C5C7; --chart-3: #8FB7F5; --chart-4: #84C79A; --chart-5: #F28B82;
+    /* s77 calm-luxury dark: warm near-black with low chroma, elevation by lightness (bg < card < muted), neutral hairlines
+       instead of gold outlines, champagne action colour, softened text white, quieter status washes. AA table: admin docs/s77-dark-palette-audit.md */
+    --bg: #12100D; --card: #1D1A16; --muted: #28241F; --border: rgba(236, 228, 215, 0.09); --overlay: rgba(0, 0, 0, 0.60);
+    --fg: #ECE4D7; --fg-2: #BBB0A1; --fg-3: #968B7D;
+    --primary: #D2B788; --primary-fg: #231A0E; --primary-soft: #362C1D; --ring: #E2CB9E;
+    --accent: #E2CC9F; --accent-text: #DCC69C; --accent-soft: #2A241A;
+    --gold: #E2CC9F; --bronze: #E2CC9F; --bronze-deep: #BF9447; --espresso: #12100D;
+    --gilt: linear-gradient(135deg, #E8D4AA 0%, #D2B788 50%, #BF9447 100%);
+    --rule: linear-gradient(90deg, transparent 0%, #D2B788 50%, transparent 100%);
+    --hairline: rgba(210, 183, 136, 0.16);
+    --ok: #93C2A0; --ok-soft: #1A2820; --warn: #E3AA7C; --warn-soft: #2A2018;
+    --danger: #E8A097; --danger-soft: #311D1A; --info: #A3BCE2; --info-soft: #1C2330;
+    --sidebar: #0F0D0A; --sidebar-fg: #ECE4D7; --sidebar-primary: #D2B788; --sidebar-accent: #211D18; --sidebar-border: rgba(210, 183, 136, 0.12);
+    --chart-1: #D2B788; --chart-2: #6FBDBE; --chart-3: #A3BCE2; --chart-4: #93C2A0; --chart-5: #E8A097;
     --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.40), 0 4px 14px rgba(0, 0, 0, 0.30);
     --shadow-md: 0 2px 6px rgba(0, 0, 0, 0.40), 0 12px 32px rgba(0, 0, 0, 0.40);
     --shadow-lg: 0 8px 16px rgba(0, 0, 0, 0.45), 0 28px 56px rgba(0, 0, 0, 0.50);
-    --danger-btn-fg: #44201D;
-    --border-strong: rgba(215, 179, 119, 0.48);
+    --danger-btn-fg: #2A1512;
+    --border-strong: rgba(210, 183, 136, 0.40);
     color-scheme: dark;
   }
 }
 
 :root[data-theme="dark"] {
-  --bg: #130E09; --card: #1D1611; --muted: #28201A; --border: rgba(215, 179, 119, 0.18); --overlay: rgba(0, 0, 0, 0.64);
-  --fg: #F5EFE4; --fg-2: #C3B5A3; --fg-3: #9A8C7B;
-  --primary: #D7B377; --primary-fg: #2A1E0E; --primary-soft: #3A2C18; --ring: #E4C98F;
-  --accent: #EAD3A3; --accent-text: #E4C98F; --accent-soft: #33291A;
-  --gold: #E4C98F; --bronze: #EAD3A3; --bronze-deep: #C9963A; --espresso: #130E09;
-  --gilt: linear-gradient(135deg, #EAD3A3 0%, #D7B377 50%, #C9963A 100%);
-  --rule: linear-gradient(90deg, transparent 0%, #D7B377 50%, transparent 100%);
-  --hairline: rgba(215, 179, 119, 0.22);
-  --ok: #84C79A; --ok-soft: #1E3527; --warn: #F0A05A; --warn-soft: #3E2414;
-  --danger: #F28B82; --danger-soft: #44201D; --info: #8FB7F5; --info-soft: #1D2C44;
-  --sidebar: #0F0B07; --sidebar-fg: #EFE6D8; --sidebar-primary: #D7B377; --sidebar-accent: #231A12; --sidebar-border: rgba(215, 179, 119, 0.14);
-  --chart-1: #D7B377; --chart-2: #63C5C7; --chart-3: #8FB7F5; --chart-4: #84C79A; --chart-5: #F28B82;
+  /* s77 calm-luxury dark: warm near-black with low chroma, elevation by lightness (bg < card < muted), neutral hairlines
+     instead of gold outlines, champagne action colour, softened text white, quieter status washes. AA table: admin docs/s77-dark-palette-audit.md */
+  --bg: #12100D; --card: #1D1A16; --muted: #28241F; --border: rgba(236, 228, 215, 0.09); --overlay: rgba(0, 0, 0, 0.60);
+  --fg: #ECE4D7; --fg-2: #BBB0A1; --fg-3: #968B7D;
+  --primary: #D2B788; --primary-fg: #231A0E; --primary-soft: #362C1D; --ring: #E2CB9E;
+  --accent: #E2CC9F; --accent-text: #DCC69C; --accent-soft: #2A241A;
+  --gold: #E2CC9F; --bronze: #E2CC9F; --bronze-deep: #BF9447; --espresso: #12100D;
+  --gilt: linear-gradient(135deg, #E8D4AA 0%, #D2B788 50%, #BF9447 100%);
+  --rule: linear-gradient(90deg, transparent 0%, #D2B788 50%, transparent 100%);
+  --hairline: rgba(210, 183, 136, 0.16);
+  --ok: #93C2A0; --ok-soft: #1A2820; --warn: #E3AA7C; --warn-soft: #2A2018;
+  --danger: #E8A097; --danger-soft: #311D1A; --info: #A3BCE2; --info-soft: #1C2330;
+  --sidebar: #0F0D0A; --sidebar-fg: #ECE4D7; --sidebar-primary: #D2B788; --sidebar-accent: #211D18; --sidebar-border: rgba(210, 183, 136, 0.12);
+  --chart-1: #D2B788; --chart-2: #6FBDBE; --chart-3: #A3BCE2; --chart-4: #93C2A0; --chart-5: #E8A097;
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.40), 0 4px 14px rgba(0, 0, 0, 0.30);
   --shadow-md: 0 2px 6px rgba(0, 0, 0, 0.40), 0 12px 32px rgba(0, 0, 0, 0.40);
   --shadow-lg: 0 8px 16px rgba(0, 0, 0, 0.45), 0 28px 56px rgba(0, 0, 0, 0.50);
-  --danger-btn-fg: #44201D;
-  --border-strong: rgba(215, 179, 119, 0.48);
+  --danger-btn-fg: #2A1512;
+  --border-strong: rgba(210, 183, 136, 0.40);
   color-scheme: dark;
 }
+
+/* s77 dark-only: status lines get a quiet 1px edge in their own hue so the wash can stay near the card tone (calm, not a loud orange slab) */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .warnline { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--warn) 24%, transparent); }
+  :root:not([data-theme="light"]) .warnline.calm { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ok) 24%, transparent); }
+}
+:root[data-theme="dark"] .warnline { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--warn) 24%, transparent); }
+:root[data-theme="dark"] .warnline.calm { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ok) 24%, transparent); }
 
 body { background: var(--bg); color: var(--fg); font: 400 15px/24px var(--font-ui); letter-spacing: .01em;
   font-variant-numeric: lining-nums; font-feature-settings: "lnum" 1; }
