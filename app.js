@@ -16,7 +16,7 @@
     url: 'https://qkgfhsdppslwunarczeq.supabase.co',
     key: 'sb_publishable_JFuRYZ9csmQULcMRmHXDSg_Abo9UeCj',
     propertyId: '6ae230f4-c189-4547-84b1-cb6e0b2cc9bd',
-    version: '2.3.0'
+    version: '2.3.1'
   };
   var LINKS = {
     checklist: 'https://cascadereservations-del.github.io/CH-Cleaners-Checklist/',
@@ -137,7 +137,7 @@
         (LINKS.pay ? row({ icon: 'cash', title: 'Payment Request', sub: state.payHint || 'Ask for your cleaning pay', href: LINKS.pay, subId: 'pay-sub' }) : '') + '</nav>';
     } else {
       doors = '<nav class="card list" aria-label="Admin">' +
-        (bk ? row({ icon: 'clip', title: 'Bookings to confirm', sub: 'Open the pending bookings', href: bk.href, external: true, count: bk.count, countLabel: ' bookings to confirm' }) : '') +
+        (bk ? row({ icon: 'clip', title: 'Bookings to confirm', sub: 'Open the pending bookings', href: bk.href, external: true, count: bk.count, countLabel: bk.n === 1 ? ' booking to confirm' : ' bookings to confirm' }) : '') +
         row({ icon: 'dash', title: 'Admin dashboard', sub: 'Today, bookings, money, operations', door: 'dashboard' }) +
         (trustOn ? '' : '<div class="help doornote">Sign-in is kept only on trusted devices</div>') +
         (CS.canEditRates(state.access && state.access.role) ? row({ icon: 'cash', title: 'Pay rates', sub: 'What a clean and its transport pay', href: '#payrates' }) : '') +
@@ -557,7 +557,7 @@
     });
   }
   function signOutTo(msg) {
-    dropPhotos(); state.reply = null; var rb = $('rp-body'); if (rb) rb.innerHTML = ''; rpLive(''); state.payload = null; state.access = null; state.layout = null; state.month = null; state.error = '';
+    dropPhotos(); state.reply = null; var rb = $('rp-body'); if (rb) rb.innerHTML = ''; rpLive(''); state.payload = null; state.bookings = null; state.access = null; state.layout = null; state.month = null; state.error = '';
     return sb.auth.signOut().catch(function () {}).then(function () { showSignin(msg); });
   }
   function showSignin(msg) {
@@ -617,7 +617,7 @@
     var fail = function (e) { state.bookings = null; if (!bkWarned) { bkWarned = true; console.warn('bookings to confirm unavailable', e && e.message ? e.message : e); } };
     sb.rpc('staff_inquiry_payments_v1', { p_property_id: pid() }).then(function (r) {
       if (r.error) return fail(r.error);
-      state.bookings = r.data;
+      state.bookings = CS.bookingsToConfirmCount(r.data); // the count only; the payment rows are never kept
     }).catch(fail).then(function () { if (current === 'home' && state.layout) renderHome(); });
   }
 

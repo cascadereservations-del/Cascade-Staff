@@ -434,7 +434,8 @@
   var INQUIRIES_URL = 'https://cascadereservations-del.github.io/cascade-admin-dashboard/#/bookings/inquiries';
   function canSeeBookingsToConfirm(role) { return role === 'owner' || role === 'admin' || role === 'finance'; }
   // staff_inquiry_payments_v1 returns an array of pending bookings. Anything else (error, null, {ok:false}) is 0, so the row hides.
-  function bookingsToConfirmCount(data) { return Array.isArray(data) ? data.length : 0; }
+  // A whole number passes through, so the stored count can go back through the same gate.
+  function bookingsToConfirmCount(data) { return Array.isArray(data) ? data.length : (Number.isInteger(data) && data > 0 ? data : 0); }
   function bookingsToConfirmRow(role, data) {
     var n = canSeeBookingsToConfirm(role) ? bookingsToConfirmCount(data) : 0;
     return n > 0 ? { count: n > 99 ? '99+' : String(n), n: n, href: INQUIRIES_URL } : null;
