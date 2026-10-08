@@ -115,3 +115,51 @@ test('guest contact: what to show, a safe Messenger link, and the contact guard 
   assert.throws(() => CS.assertNoMoney({ calendar: [{ phone: '1' }] }, { allowContact: true }), /phone/, 'contact only on the guest cards');
   assert.deepEqual(['owner', 'admin', 'finance', 'cleaner'].map(CS.canSeeGuestContact), [true, true, false, false]);
 });
+
+// s78 (D-320): a stay shows through its checkout day; same guest on two rows = one stay; turnover and clash days.
+test('stay span: arrival day, nights, and the checkout day are all marked', () => {
+  const s = (iso) => CS.dayStatus(iso, rows, [], []);
+  const d8 = s('2026-10-08'), d10 = s('2026-10-10'), d11 = s('2026-10-11'), d12 = s('2026-10-12');
+  assert.deepEqual([d8.primary, d8.arrive, d8.out, d8.turnover], ['booked', true, null, false]);
+  assert.equal(CS.dayMoves(d8), 'Angeleen arrives');
+  assert.deepEqual([d10.primary, d10.arrive, d10.cont], ['booked', false, false], 'the last night');
+  assert.equal(d11.out.guest_name, 'Angeleen', 'the checkout day is marked');
+  assert.equal(d11.primary, 'blocked', 'the night after checkout keeps its own status (the mirror block)');
+  assert.equal(CS.dayMoves(d11), 'Angeleen checks out');
+  assert.equal(d12.out, null);
+});
+
+test('same guest on overlapping or chained rows is one stay, labelled by the paid channel', () => {
+  const two = [
+    { uid: 'a', status: 'confirmed', guest_name: 'Bianca', source: 'airbnb', checkin_date: '2026-08-22', checkout_date: '2026-08-23' },
+    { uid: 'b', status: 'confirmed', guest_name: 'Bianca', source: 'airbnb', checkin_date: '2026-08-23', checkout_date: '2026-08-24' },
+    { uid: 'c', status: 'confirmed', guest_name: 'Ana Reyes', source: 'airbnb', checkin_date: '2026-10-08', checkout_date: '2026-10-11' },
+    { uid: 'd', status: 'confirmed', guest_name: 'ana', source: 'direct', checkin_date: '2026-10-08', checkout_date: '2026-10-10' },
+    { uid: 'e', status: 'cancelled', guest_name: 'Ana', source: 'direct', checkin_date: '2026-10-01', checkout_date: '2026-10-30' }
+  ];
+  const st = CS.mergeStays(two);
+  assert.equal(st.length, 2);
+  assert.deepEqual([st[0].checkin_date, st[0].checkout_date, st[0].nights, st[0].rows.length], ['2026-08-22', '2026-08-24', 2, 2], 'chained rows join');
+  assert.deepEqual([st[1].uid, st[1].source, st[1].checkout_date, st[1].rows.length], ['d', 'direct', '2026-10-11', 2], 'direct wins the label, the span covers both');
+  assert.equal(CS.dayStatus('2026-08-23', two, [], []).turnover, false, 'no turnover inside one guest');
+  assert.equal(CS.dayStatus('2026-10-09', two, [], []).clash.length, 0, 'no clash for one guest on two channels');
+  assert.equal(CS.sameGuest({ guest_name: 'Bia' }, { guest_name: 'Bianca' }), false, 'a prefix of a word is not the same name');
+  assert.equal(CS.sameGuest({ guest_name: 'Jose' }, { guest_name: 'Jose Cruz' }), true);
+  assert.equal(CS.sameGuest({ guest_name: '' }, { guest_name: '' }), false, 'no name never merges');
+});
+
+test('turnover: one guest out and another in the same day; a true overlap of two guests is a clash', () => {
+  const t = [
+    { uid: 'x', status: 'confirmed', guest_name: 'Dex', source: 'airbnb', checkin_date: '2026-08-18', checkout_date: '2026-08-21' },
+    { uid: 'y', status: 'confirmed', guest_name: 'Ale', source: 'airbnb', checkin_date: '2026-08-21', checkout_date: '2026-08-22' },
+    { uid: 'z', status: 'confirmed', guest_name: 'Rey', source: 'direct', checkin_date: '2026-08-21', checkout_date: '2026-08-23' }
+  ];
+  const d21 = CS.dayStatus('2026-08-21', t.slice(0, 2), [], []);
+  assert.deepEqual([d21.turnover, d21.out.guest_name, d21.stay.guest_name], [true, 'Dex', 'Ale']);
+  assert.notEqual(d21.out.tone, d21.stay.tone, 'the two halves differ');
+  assert.equal(CS.dayMoves(d21), 'Dex checks out, Ale arrives');
+  const c = CS.dayStatus('2026-08-21', t, [], []);
+  assert.equal(c.clash.length, 1, 'two different guests on one night');
+  assert.equal(CS.dayMoves(c), 'Dex checks out, Ale arrives, Rey arrives', 'the clashing arrival is said too');
+  assert.equal(CS.dayStatus('2026-08-20', t, [], []).clash.length, 0);
+});

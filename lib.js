@@ -252,11 +252,54 @@
     return (warnings || []).filter(function (w) { return w.kind === 'brownout' && w.detail && w.detail.date === iso; })
       .map(function () { return { date: iso, kind: 'brownout', label: 'Brownout', source: 'auto', id: null }; });
   }
-  function dayStatus(iso, rows, dayFlags, warnings) {
-    var s = dayState(iso, rows), blocks = (rows || []).filter(function (r) { return r.status === 'blocked' && iso >= r.checkin_date && iso < r.checkout_date; });
-    var block = blocks[0] || null, primary = s.stay ? 'booked' : block ? 'blocked' : 'free';
-    return { primary: primary, stay: s.stay, block: block, blocks: blocks, blockWhy: blocksWhy(blocks), startsHere: s.startsHere, cont: s.cont,
-      why: s.stay ? (s.stay.guest_name || 'Guest') : block ? blocksWhy(blocks) : 'Open for a booking', flags: flagsFor(iso, dayFlags, warnings) };
+  // ---- stays (s78, D-320): one stay per guest, shown through its checkout day.
+  // Two confirmed rows for the same guest that overlap or chain (one checks out the day the other checks in) are ONE stay: a direct
+  // booking and its Airbnb copy, or two channels for one person. The label row is the one with confirmed payment: direct first,
+  // then the Airbnb reservation. Same guest = the same name, or one name is the other plus more words ("Bia" / "Bia Cruz").
+  // ponytail: names only (the calendar rows carry no guest id); two different people with the same name back to back would merge.
+  function nameKey(n) { return String(n || '').trim().toLowerCase().replace(/\s+/g, ' '); }
+  function sameGuest(a, b) {
+    var x = nameKey(a && a.guest_name), y = nameKey(b && b.guest_name);
+    return !!x && !!y && (x === y || x.indexOf(y + ' ') === 0 || y.indexOf(x + ' ') === 0);
+  }
+  var PAID_RANK = { direct: 0, airbnb: 1 };
+  function paidRank(r) { return Object.prototype.hasOwnProperty.call(PAID_RANK, r.source) ? PAID_RANK[r.source] : 2; }
+  function mergeStays(rows) {
+    var list = (rows || []).filter(function (r) { return r && r.status === 'confirmed' && r.checkin_date && r.checkout_date; })
+      .sort(function (a, b) { return a.checkin_date < b.checkin_date ? -1 : a.checkin_date > b.checkin_date ? 1 : 0; });
+    var groups = [];
+    list.forEach(function (r) {
+      var g = groups.filter(function (x) { return r.checkin_date <= x.to && r.checkout_date >= x.from && x.rows.some(function (y) { return sameGuest(y, r); }); })[0];
+      if (g) { g.rows.push(r); if (r.checkout_date > g.to) g.to = r.checkout_date; } else groups.push({ from: r.checkin_date, to: r.checkout_date, rows: [r] });
+    });
+    return groups.map(function (g, i) {
+      var best = g.rows.slice().sort(function (a, b) { return paidRank(a) - paidRank(b); })[0], s = {};
+      Object.keys(best).forEach(function (k) { s[k] = best[k]; });
+      s.checkin_date = g.from; s.checkout_date = g.to; s.nights = daysBetween(g.from, g.to); s.rows = g.rows;
+      s.tone = i % 2; // neighbours alternate two looks so a turnover day shows two distinct halves
+      return s;
+    });
+  }
+  // What one calendar day holds. The night (checkin..checkout-1) gives the primary: booked > blocked > free. On top: the stay that
+  // checks out this morning (out), whether the night's stay arrives today (arrive), a turnover (one guest out, another in) and a
+  // clash (two different guests on the same night: a real overlap, shown red).
+  function dayStatus(iso, rows, dayFlags, warnings, stays) {
+    stays = stays || mergeStays(rows);
+    var nights = stays.filter(function (s) { return iso >= s.checkin_date && iso < s.checkout_date; }), stay = nights[0] || null;
+    var out = stays.filter(function (s) { return s.checkout_date === iso; })[0] || null;
+    var blocks = (rows || []).filter(function (r) { return r.status === 'blocked' && iso >= r.checkin_date && iso < r.checkout_date; });
+    var block = blocks[0] || null, primary = stay ? 'booked' : block ? 'blocked' : 'free', arrive = !!stay && stay.checkin_date === iso;
+    return { primary: primary, stay: stay, block: block, blocks: blocks, blockWhy: blocksWhy(blocks), startsHere: arrive, cont: !!stay && addDays(iso, 1) < stay.checkout_date,
+      arrive: arrive, out: out, turnover: !!(out && arrive), clash: nights.slice(1), clashIn: nights.slice(1).filter(function (s) { return s.checkin_date === iso; }),
+      why: stay ? (stay.guest_name || 'Guest') : block ? blocksWhy(blocks) : 'Open for a booking', flags: flagsFor(iso, dayFlags, warnings) };
+  }
+  // The day in words for the cell's label and the sheet: "Ana checks out, Ben arrives".
+  function dayMoves(ds) {
+    var w = [];
+    if (ds.out) w.push((ds.out.guest_name || 'Guest') + ' checks out');
+    if (ds.arrive) w.push((ds.stay.guest_name || 'Guest') + ' arrives');
+    (ds.clashIn || []).forEach(function (s) { w.push((s.guest_name || 'Guest') + ' arrives'); });
+    return w.join(', ');
   }
   function flagName(kind) { return FLAG_NAME[kind] || 'Note'; }
   // "Blocked nights" list: the nights a block holds with no confirmed stay on them, said with the reason.
@@ -631,7 +674,7 @@
     manilaToday: manilaToday, manilaParts: manilaParts, addDays: addDays, daysBetween: daysBetween, weekdayIndex: weekdayIndex,
     dayLabel: dayLabel, dayLong: dayLong, dayShort: dayShort, monthTitle: monthTitle, monthShortYear: monthShortYear, greeting: greeting,
     fmtTime: fmtTime, fmt24: fmt24, ordinal: ordinal, plural: plural, agoLabel: agoLabel, clockLabel: clockLabel,
-    monthGrid: monthGrid, dayState: dayState, dayStatus: dayStatus, blockWhy: blockWhy, flagName: flagName, FLAG_KINDS: FLAG_KINDS, blockedLines: blockedLines, blockedLineText: blockedLineText,
+    monthGrid: monthGrid, dayState: dayState, dayStatus: dayStatus, mergeStays: mergeStays, sameGuest: sameGuest, dayMoves: dayMoves, blockWhy: blockWhy, flagName: flagName, FLAG_KINDS: FLAG_KINDS, blockedLines: blockedLines, blockedLineText: blockedLineText,
     canFlagDays: canFlagDays, guestContact: guestContact, canSeeGuestContact: canSeeGuestContact, MESSENGER_INBOX: MESSENGER_INBOX, rpcMissing: rpcMissing, tgLink: tgLink, warningInfo: warningInfo, findingKey: findingKey, initialOf: initialOf, sourceLabel: sourceLabel, stayDates: stayDates, monthInRange: monthInRange,
     parseNotes: parseNotes, returningLabel: returningLabel, earlierLine: earlierLine, todayCardState: todayCardState,
     orderWarnings: orderWarnings, brownoutText: brownoutText, lowStockText: lowStockText, warningSummary: warningSummary,

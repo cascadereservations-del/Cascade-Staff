@@ -17,6 +17,9 @@
     return s.length > 0 && s.length <= 300 ? s : '';
   }
 
+  /** s78: how the page was opened: ?for=id (the empty ID box), ?for=companion (Add a companion), else the general page. */
+  function modeFromSearch(search) { var m = /[?&]for=(id|companion)(?:&|$)/.exec(String(search || '')); return m ? m[1] : ''; }
+
   /** What the person sees for a refusal or a failure: what happened, then what to do. */
   function errorText(status, code) {
     var t = {
@@ -41,24 +44,47 @@
   }
 
   /** The review sheet's starting values from the server's proposal. Every ID photo starts kept; screenshots are never kept. */
-  function sheetFrom(proposal) {
-    var p = proposal || {};
+  function sheetFrom(proposal, forOwnId) {
+    var p = proposal || {}, ids = (p.ids || []).map(function (d) { return { image: d.image, name: d.name, id_type: d.id_type, own: !!d.own, on: true }; });
+    // s78: a photo the reader could not place (kind "other") is offered unticked, so an ID it missed can still be kept by hand.
+    // Opened from the empty ID box (forOwnId), such a photo starts as the guest's own ID; it still starts unticked.
+    (p.images || []).forEach(function (k, i) {
+      if (k === 'other' && !ids.some(function (d) { return d.image === i; })) ids.push({ image: i, name: '', id_type: 'other', own: !!forOwnId, on: false, unread: true });
+    });
+    // From the empty ID box with exactly one ID read: that photo is the guest's own (the person said so by where they tapped).
+    // The server also proposes that ID's holder as a new companion when the name differs from the record; that row starts unticked.
+    var ownRead = forOwnId && (p.ids || []).length === 1 ? ids[0] : null;
+    if (ownRead) ownRead.own = true;
     return {
       phone: p.phone || '', email: p.email || '', guests: p.guests ? String(p.guests) : '', nationality: p.nationality || '',
-      companions: (p.companions || []).map(function (n) { return { name: n, on: true }; }),
-      ids: (p.ids || []).map(function (d) { return { image: d.image, name: d.name, id_type: d.id_type, own: !!d.own, on: true }; })
+      companions: (p.companions || []).map(function (n) { return { name: n, on: !(ownRead && n === ownRead.name) }; }),
+      ids: ids
     };
+  }
+  /** The name an ID is saved under: the guest's own goes under the name on file (the server links it to the guest by that name),
+      a companion's photo added on a companion row follows that row's name, else the name typed on the sheet. */
+  function idName(d, sheet, ownName) {
+    if (d.own) return String(ownName || '').trim();
+    if (d.comp != null && sheet.companions[d.comp]) return String(sheet.companions[d.comp].name || '').trim();
+    return String(d.name == null ? '' : d.name).trim();
+  }
+  /** What stops a save, in words, or ''. */
+  function sheetProblem(sheet, ownName) {
+    var kept = sheet.ids.filter(function (d) { return d.on && !(d.comp != null && sheet.companions[d.comp] && !sheet.companions[d.comp].on); });
+    if (kept.some(function (d) { return !idName(d, sheet, ownName); })) return 'Type the name on each ID you keep, or untick it.';
+    return '';
   }
 
   /** The save request. Guest count and nationality are shown in the sheet only: there is no safe place to save them yet, so they are never sent.
       images[i] is the {base64, mime} the page read for photo i; only kept ID photos are sent. */
-  function saveBody(uid, sheet, images) {
+  function saveBody(uid, sheet, images, ownName) {
     var trim = function (v) { return String(v == null ? '' : v).trim(); };
+    var compOff = function (d) { return d.comp != null && sheet.companions[d.comp] && !sheet.companions[d.comp].on; }; // an unticked companion takes its photo with it
     return {
       action: 'save', uid: uid,
       phone: trim(sheet.phone) || null, email: trim(sheet.email) || null,
       companions: sheet.companions.filter(function (c) { return c.on && trim(c.name); }).map(function (c) { return trim(c.name); }),
-      ids: sheet.ids.filter(function (d) { return d.on && images[d.image]; }).map(function (d) { return { name: trim(d.name), id_type: d.id_type, image: images[d.image] }; })
+      ids: sheet.ids.filter(function (d) { return d.on && images[d.image] && !compOff(d); }).map(function (d) { return { name: idName(d, sheet, ownName), id_type: d.id_type, image: images[d.image] }; })
     };
   }
   function hasAnything(body) {
@@ -76,5 +102,5 @@
     return lines.length ? lines : ['Nothing needed saving. The record already had these details.'];
   }
 
-  return { MAX_IMAGES: MAX_IMAGES, MAX_TEXT: MAX_TEXT, ID_TYPES: ID_TYPES, uidFromHash: uidFromHash, errorText: errorText, sheetFrom: sheetFrom, saveBody: saveBody, hasAnything: hasAnything, resultLines: resultLines };
+  return { MAX_IMAGES: MAX_IMAGES, MAX_TEXT: MAX_TEXT, ID_TYPES: ID_TYPES, uidFromHash: uidFromHash, errorText: errorText, sheetFrom: sheetFrom, saveBody: saveBody, idName: idName, sheetProblem: sheetProblem, modeFromSearch: modeFromSearch, hasAnything: hasAnything, resultLines: resultLines };
 });

@@ -16,7 +16,7 @@
     url: 'https://qkgfhsdppslwunarczeq.supabase.co',
     key: 'sb_publishable_JFuRYZ9csmQULcMRmHXDSg_Abo9UeCj',
     propertyId: '6ae230f4-c189-4547-84b1-cb6e0b2cc9bd',
-    version: '2.4.0'
+    version: '2.5.0'
   };
   var LINKS = {
     checklist: 'https://cascadereservations-del.github.io/CH-Cleaners-Checklist/',
@@ -181,9 +181,17 @@
     } else if (g.repeat === true) {
       notes = '<div class="card"><h3 class="hd">Notes from earlier stays</h3><p class="sub" style="margin-top:8px">Nothing was noted last time.</p></div>';
     }
+    // Owner/admin: the empty box opens Add guest details in ID mode (take or choose the guest's own ID photo; D-320.5).
+    var addId = canReply() && g.uid ? './guest/?for=id#' + encodeURIComponent(g.uid) : '';
+    var comps = Array.isArray(g.companions) ? g.companions.filter(function (c) { return c && c.name; }) : [];
     var idcard = '<div class="card"><h3 class="hd">Guest ID</h3><div style="margin-top:10px">' +
       (g.id_photo_path ? '<div class="idphoto" data-idpath="' + esc(g.id_photo_path) + '"><span class="help">Loading the photo…</span></div><p class="help" style="margin:10px 0 0">Check the face and the name against the guest at the door.</p>'
-        : '<div class="idphoto empty">No ID photo to show for this guest.</div>') + '</div></div>';
+        : addId ? '<a class="idphoto empty idadd" href="' + esc(addId) + '">' + ICON('camera', 's24') + '<span><b>No ID photo yet.</b><br>Tap to take or choose a photo of the guest’s ID.</span></a>'
+        : '<div class="idphoto empty">No ID photo to show for this guest.</div>') +
+      (comps.length ? '<div class="cap up" style="margin:14px 0 6px">Companions</div><ul class="notes">' + comps.map(function (c) {
+        return '<li>' + ICON('user') + '<span>' + esc(c.name) + (c.photo || c.id_photo ? ' <span class="help">· ID on file</span>' : '') + '</span></li>';
+      }).join('') + '</ul>' : '') +
+      (addId ? '<a class="btn btn-ghost btn-sm" href="./guest/?for=companion#' + encodeURIComponent(g.uid) + '" style="margin:8px 0 0 -12px">' + ICON('plus', 's16') + 'Add a companion</a>' : '') + '</div></div>';
     return info + notes + idcard;
   }
 
@@ -248,20 +256,36 @@
   }
   var FLAG_ICON = { brownout: 'zap', maintenance: 'wrench', deep_clean: 'sparkles', other: 'note' };
   var BLOCK_ICON = { brownout: 'zapoff', maintenance: 'wrench', deep_clean: 'sparkles', owner: 'house', direct: 'calendar' };
-  function dayStatusOf(iso) { var p = state.payload; return CS.dayStatus(iso, p.calendar || [], p.day_flags, p.warnings); }
+  // The merged stays (same guest on two rows = one stay, D-320), worked out once per payload.
+  var staysMemo = { p: null, list: [] };
+  function staysOf() { var p = state.payload; if (staysMemo.p !== p) staysMemo = { p: p, list: CS.mergeStays(p.calendar || []) }; return staysMemo.list; }
+  function dayStatusOf(iso) { var p = state.payload; return CS.dayStatus(iso, p.calendar || [], p.day_flags, p.warnings, staysOf()); }
+  // The arrival / checkout halves (hotel-calendar style): the arriving stay fills the lower-right triangle, the stay checking out the
+  // upper-left one. Neighbouring stays alternate two looks (plain / striped), so a turnover day is two distinct halves by pattern too.
+  function halves(ds) {
+    var h = '';
+    if (ds.out) h += '<span class="hx hx-out t' + ds.out.tone + '" aria-hidden="true"></span>';
+    if (ds.arrive) h += '<span class="hx hx-in t' + ds.stay.tone + '" aria-hidden="true"></span>';
+    return h;
+  }
   // Three primary looks that differ by pattern, not only colour: free = outlined card, blocked = hatched with the reason icon,
-  // booked = filled with the brand bar. Secondary flags sit top-right as small icons. Every day opens the day sheet.
+  // booked = filled with the brand bar. Arrival and checkout days are half-filled; a clash (two guests on one night) is red.
+  // Secondary flags sit top-right as small icons. Every day opens the day sheet.
   function calendarGrid() {
     var p = state.payload, m = monthState(), cells = CS.monthGrid(m.y, m.m);
     var dows = ['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su'].map(function (d) { return '<div class="dow" aria-hidden="true">' + d + '</div>'; }).join('');
     var body = cells.map(function (c) {
       if (!c.iso) return '<div class="d off" aria-hidden="true"></div>';
       var ds = dayStatusOf(c.iso), booked = ds.primary === 'booked', blk = ds.primary === 'blocked';
-      var cls = 'd s-' + ds.primary + (c.iso < p.today ? ' past' : '') + (c.iso === p.today ? ' today' : '') + (booked ? ' stay' : '') + (booked && ds.cont ? ' cont' : '') + (blk ? ' blk' : '');
+      var cls = 'd s-' + ds.primary + (c.iso < p.today ? ' past' : '') + (c.iso === p.today ? ' today' : '') + (booked ? ' stay t' + ds.stay.tone : '') + (booked && ds.cont ? ' cont' : '') + (blk ? ' blk' : '') +
+        (ds.arrive ? ' arr' : '') + (ds.out ? ' dep' : '') + (ds.turnover ? ' turn' : '') + (ds.clash.length ? ' clash' : '');
       var fl = ds.flags.length ? '<span class="fl" aria-hidden="true">' + ds.flags.slice(0, 3).map(function (f) { return ICON(FLAG_ICON[f.kind] || 'note', 's12'); }).join('') + '</span>' : '';
-      var inner = '<span class="n">' + (+c.iso.slice(8)) + '</span>' + (booked && ds.startsHere ? '<span class="ini">' + esc(CS.initialOf(ds.stay.guest_name)) + '</span>' : '') +
-        (blk ? '<span class="g">' + ICON(BLOCK_ICON[ds.block.block_reason] || 'lock', 's12') + '</span>' : '') + fl;
-      var label = CS.dayLong(c.iso) + (c.iso === p.today ? ', today' : '') + ', ' + (booked ? 'booked, ' + ds.why : blk ? 'blocked, ' + ds.why : 'free') +
+      var inner = halves(ds) + '<span class="n">' + (+c.iso.slice(8)) + '</span>' + (booked && ds.startsHere ? '<span class="ini">' + esc(CS.initialOf(ds.stay.guest_name)) + '</span>' : '') +
+        (blk && !ds.out ? '<span class="g">' + ICON(BLOCK_ICON[ds.block.block_reason] || 'lock', 's12') + '</span>' : '') +
+        (ds.clash.length ? '<span class="cx" aria-hidden="true">' + ICON('alert', 's12') + '</span>' : '') + fl;
+      var moves = CS.dayMoves(ds), night = booked ? (ds.arrive ? 'booked' : 'booked, ' + ds.why) : blk ? 'blocked, ' + ds.why : 'free';
+      var label = CS.dayLong(c.iso) + (c.iso === p.today ? ', today' : '') + (ds.turnover ? ', turnover' : '') + (moves ? ', ' + moves : '') + ', ' + night +
+        (ds.clash.length ? ', clash with ' + ds.clash.map(function (s) { return s.guest_name || 'another guest'; }).join(', ') : '') +
         (ds.flags.length ? '; ' + ds.flags.map(function (f) { return CS.flagName(f.kind); }).join(', ') : '');
       return '<button class="' + cls + '" type="button" data-day="' + c.iso + '" aria-label="' + esc(label) + '" aria-haspopup="dialog">' + inner + '</button>';
     }).join('');
@@ -270,7 +294,8 @@
   function legend() {
     var it = function (cls, t) { return '<span><i class="lg ' + cls + '"></i>' + t + '</span>'; };
     var fi = function (k) { return '<span>' + ICON(FLAG_ICON[k], 's12') + CS.flagName(k) + '</span>'; };
-    return '<div class="legend">' + it('lg-free', 'Free') + it('lg-blk', 'Blocked') + it('lg-booked', 'Booked') + it('lg-today', 'Today') + '</div>' +
+    return '<div class="legend">' + it('lg-free', 'Free') + it('lg-blk', 'Blocked') + it('lg-booked', 'Booked') + it('lg-in', 'Arrives') + it('lg-out', 'Checks out') +
+      it('lg-turn', 'Turnover') + it('lg-clash', 'Clash') + it('lg-today', 'Today') + '</div>' +
       '<div class="legend legend2">' + CS.FLAG_KINDS.map(fi).join('') + '<span class="help">Tap a day for details</span></div>';
   }
   function warnKey(w) { return w.kind + '|' + (w.title || '') + '|' + ((w.detail && w.detail.date) || ''); }
@@ -291,9 +316,8 @@
     if (!state.payload) { el.innerHTML = appbar({ title: 'Guest Calendar Info', back: '#home', refresh: true }) + '<div class="screen">' + (state.error ? errBanner() : loadingBlock()) + '</div>'; return; }
     var p = state.payload, m = monthState(), rows = p.calendar || [];
     var prevOk = CS.monthInRange(m.m === 1 ? m.y - 1 : m.y, m.m === 1 ? 12 : m.m - 1, p.today), nextOk = CS.monthInRange(m.m === 12 ? m.y + 1 : m.y, m.m === 12 ? 1 : m.m + 1, p.today);
-    var upcoming = rows.filter(function (r) { return r.status === 'confirmed' && r.checkout_date >= p.today; }).slice(0, 10);
+    var confirmedAll = staysOf(), upcoming = confirmedAll.filter(function (r) { return r.checkout_date >= p.today; }).slice(0, 10);
     var blocked = CS.blockedLines(rows, p.today);
-    var confirmedAll = rows.filter(function (r) { return r.status === 'confirmed'; });
     var html = appbar({ title: 'Guest Calendar Info', back: '#home', refresh: true }) + '<div class="screen">' + errBanner() +
       '<div class="calhdr"><button class="iconbtn" type="button" data-act="prev" aria-label="Previous month"' + (prevOk ? '' : ' disabled style="opacity:.35"') + '>' + ICON('back', 's24') + '</button><h2 class="dlg">' + esc(CS.monthTitle(m.y, m.m)) + '</h2><button class="iconbtn" type="button" data-act="next" aria-label="Next month"' + (nextOk ? '' : ' disabled style="opacity:.35"') + '>' + ICON('chev', 's24') + '</button></div>' +
       calendarGrid() +
@@ -302,8 +326,9 @@
     html += '<div class="sect"><span class="cap up">Next</span>' + (p.next_guest ? '<div class="stack">' + guestBlock(p.next_guest, 'next') + '</div>' : '<div class="card"><p class="sub">No arrival in the next 60 days.</p></div>') + '</div>';
     if (upcoming.length) {
       html += '<div class="sect"><span class="cap up">Coming up</span><div class="stack">' + upcoming.map(function (r) {
-        var i = confirmedAll.indexOf(r), src = CS.sourceLabel(r.source);
-        return '<div class="card staycard" id="stay-' + i + '"><div class="strong">' + esc(r.guest_name || 'Guest') + (src ? ' · ' + esc(src) : '') + '</div><div class="sub num" style="font-size:13px;line-height:18px">' + esc(CS.stayDates(r)) + '</div></div>';
+        var i = confirmedAll.indexOf(r), src = CS.sourceLabel(r.source), joined = r.rows.length > 1 ? r.rows.length + ' bookings shown as one stay' : '';
+        return '<div class="card staycard" id="stay-' + i + '"><div class="strong">' + esc(r.guest_name || 'Guest') + (src ? ' · ' + esc(src) : '') + '</div><div class="sub num" style="font-size:13px;line-height:18px">' + esc(CS.stayDates(r)) + '</div>' +
+          (joined ? '<div class="help">' + esc(joined) + '</div>' : '') + '</div>';
       }).join('') + '</div></div>';
     }
     if (blocked.length) {
@@ -349,13 +374,21 @@
   function daySheet(S) {
     var p = state.payload, ds = dayStatusOf(S.key), canFlag = CS.canFlagDays(role());
     var prim = ds.primary === 'booked' ? pill('brand', 'house', 'Booked') : ds.primary === 'blocked' ? pill('neutral', 'lock', 'Blocked') : pill('ok', 'check', 'Free');
-    var html = '<h2 class="ttl" id="cs-h" tabindex="-1">' + esc(CS.dayLong(S.key)) + '</h2><div class="row-wrap" style="margin-top:8px">' + prim + '<span class="sub">' + esc(ds.why) + '</span></div>';
+    var html = '<h2 class="ttl" id="cs-h" tabindex="-1">' + esc(CS.dayLong(S.key)) + '</h2><div class="row-wrap" style="margin-top:8px">' + prim +
+      (ds.turnover ? pill('info', 'repeat', 'Turnover') : '') + (ds.clash.length ? pill('danger', 'alert', 'Clash') : '') + '<span class="sub">' + esc(ds.why) + '</span></div>';
+    var all = staysOf();
+    var stayLine = function (st, what) {
+      var src = CS.sourceLabel(st.source);
+      return '<p class="sub num" style="margin:8px 0 0"><b>' + esc((st.guest_name || 'Guest') + ' ' + what) + '</b> · ' + esc(CS.stayDates(st) + (src ? ' · ' + src : '')) + '</p>' +
+        (st.rows.length > 1 ? '<p class="help" style="margin:2px 0 0">' + esc(st.rows.length + ' bookings for this guest, shown as one stay') + '</p>' : '') +
+        (st.checkout_date >= p.today ? '<button class="btn btn-ghost btn-sm" type="button" data-stay="' + all.indexOf(st) + '" style="margin:4px 0 0 -12px">Show the stay' + ICON('chev', 's16') + '</button>' : '');
+    };
+    if (ds.out) html += stayLine(ds.out, 'checks out');
     if (ds.stay) {
-      var all = (p.calendar || []).filter(function (r) { return r.status === 'confirmed'; }), src = CS.sourceLabel(ds.stay.source);
-      html += '<p class="sub num" style="margin:8px 0 0">' + esc(CS.stayDates(ds.stay) + (src ? ' · ' + src : '')) + '</p>' +
-        (ds.stay.checkout_date >= p.today ? '<button class="btn btn-ghost btn-sm" type="button" data-stay="' + all.indexOf(ds.stay) + '" style="margin:4px 0 0 -12px">Show the stay' + ICON('chev', 's16') + '</button>' : '');
+      html += stayLine(ds.stay, ds.arrive ? 'arrives' : 'is staying');
       if (ds.block) html += '<p class="help" style="margin-top:4px">Also held on the calendar: ' + esc(ds.blockWhy) + '</p>';
     }
+    if (ds.clash.length) html += '<div class="errbox" style="margin-top:10px">' + ICON('alert') + '<span>' + esc('Two different guests on this night: ' + ds.clash.map(function (s) { return (s.guest_name || 'Guest') + ' (' + CS.stayDates(s) + ')'; }).join(', ') + '. One booking needs to move.') + '</span></div>';
     html += '<div class="cap up" style="margin:14px 0 6px">Also on this day</div>';
     html += ds.flags.length ? '<ul class="wlist">' + ds.flags.map(function (f) {
       var lbl = f.label && f.label !== CS.flagName(f.kind) ? ' · ' + esc(f.label) : '';
