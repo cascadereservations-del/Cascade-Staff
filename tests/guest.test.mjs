@@ -38,5 +38,6 @@ test('error text: known codes, offline, and a fallback that names the code', () 
   assert.match(G.errorText(403, 'staff_access_denied'), /owner and admins/);
   assert.match(G.errorText(0, undefined), /No connection/);
   assert.match(G.errorText(500, 'weird'), /weird/);
-  for (const c of ['no_guest_record', 'read_failed', 'bad_field']) assert.doesNotMatch(G.errorText(400, c), /!/);
+  assert.match(G.errorText(429, 'too_many_reads'), /paused/);
+  for (const c of ['no_guest_record', 'read_failed', 'bad_field', 'too_many_reads']) assert.doesNotMatch(G.errorText(400, c), /!/);
 });

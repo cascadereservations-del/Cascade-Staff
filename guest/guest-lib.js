@@ -32,7 +32,8 @@
       bad_image: 'One photo could not be read. Use a JPEG, PNG or WebP.',
       bad_field: 'One field does not look right. Check the phone and the email.',
       bad_name: 'A name does not look right. Use letters only, no ID numbers.',
-      read_failed: 'The photos could not be read just now. Nothing was saved. Try again in a minute.'
+      read_failed: 'The photos could not be read just now. Nothing was saved. Try again in a minute.',
+      too_many_reads: 'Many reads ran in the last hour, so reading is paused for now. Nothing was saved. Try again later or type the details in the dashboard.'
     }[code];
     if (t) return t;
     if (status === 0) return 'No connection. Nothing was saved. Try again when you have signal.';
