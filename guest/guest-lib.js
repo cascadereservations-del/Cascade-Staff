@@ -30,7 +30,7 @@
       too_many_images: 'Add up to ' + MAX_IMAGES + ' photos at a time.',
       image_too_large: 'One photo is too large. Try a smaller screenshot.',
       bad_image: 'One photo could not be read. Use a JPEG, PNG or WebP.',
-      bad_field: 'One field does not look right. Check the phone, email and number of guests.',
+      bad_field: 'One field does not look right. Check the phone and the email.',
       bad_name: 'A name does not look right. Use letters only, no ID numbers.',
       read_failed: 'The photos could not be read just now. Nothing was saved. Try again in a minute.'
     }[code];
@@ -49,19 +49,19 @@
     };
   }
 
-  /** The save request. images[i] is the {base64, mime} the page read for photo i; only kept ID photos are sent. */
+  /** The save request. Guest count and nationality are shown in the sheet only: there is no safe place to save them yet, so they are never sent.
+      images[i] is the {base64, mime} the page read for photo i; only kept ID photos are sent. */
   function saveBody(uid, sheet, images) {
     var trim = function (v) { return String(v == null ? '' : v).trim(); };
     return {
       action: 'save', uid: uid,
       phone: trim(sheet.phone) || null, email: trim(sheet.email) || null,
-      guests: trim(sheet.guests) ? Number(trim(sheet.guests)) : null, nationality: trim(sheet.nationality) || null,
       companions: sheet.companions.filter(function (c) { return c.on && trim(c.name); }).map(function (c) { return trim(c.name); }),
       ids: sheet.ids.filter(function (d) { return d.on && images[d.image]; }).map(function (d) { return { name: trim(d.name), id_type: d.id_type, image: images[d.image] }; })
     };
   }
   function hasAnything(body) {
-    return !!(body.phone || body.email || body.guests || body.nationality || body.companions.length || body.ids.length);
+    return !!(body.phone || body.email || body.companions.length || body.ids.length);
   }
 
   var WHAT = { companion: 'companion', id_photo: 'ID photo', profile: 'phone and notes', email: 'email' };

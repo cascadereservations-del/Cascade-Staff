@@ -21,11 +21,11 @@ test('save body sends only kept ID photos and ticked companions; screenshots nev
   const sheet = { phone: ' 0917 ', email: '', guests: '2', nationality: '', companions: [{ name: 'Carla', on: true }, { name: 'Dan', on: false }, { name: ' ', on: true }],
     ids: [{ image: 1, name: 'Ana Reyes', id_type: 'passport', on: true }, { image: 2, name: 'Eve Lim', id_type: 'other', on: false }] };
   const b = G.saveBody('u1', sheet, images);
-  assert.deepEqual(b, { action: 'save', uid: 'u1', phone: '0917', email: null, guests: 2, nationality: null, companions: ['Carla'],
+  assert.deepEqual(b, { action: 'save', uid: 'u1', phone: '0917', email: null, companions: ['Carla'],
     ids: [{ name: 'Ana Reyes', id_type: 'passport', image: { base64: 'ID1', mime: 'image/jpeg', src: 'data:' } }] });
   assert.ok(!JSON.stringify(b).includes('SHOT'));
   assert.equal(G.hasAnything(b), true);
-  assert.equal(G.hasAnything(G.saveBody('u1', { phone: '', email: '', guests: '', nationality: '', companions: [], ids: [] }, [])), false);
+  assert.equal(G.hasAnything(G.saveBody('u1', { phone: '', email: '', guests: '3', nationality: 'Filipino', companions: [], ids: [] }, [])), false); // shown, never saved
 });
 
 test('result lines say what landed, then what did not and why', () => {

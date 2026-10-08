@@ -99,8 +99,8 @@
     return stayCard() + errBox() + '<h2 class="hd" id="gd-h" tabindex="-1">Check before saving</h2><p class="help" style="margin:0">Fix anything that is wrong. Empty fields are left as they are.</p>' +
       input('gd-phone', 'Phone', s.phone, 'inputmode="tel" maxlength="20"', phoneHint) +
       input('gd-email', 'Email', s.email, 'inputmode="email" maxlength="120"' + (f.email ? ' disabled' : ''), emailHint) +
-      input('gd-guests', 'Number of guests', s.guests, 'inputmode="numeric" maxlength="2"') +
-      input('gd-nat', 'Nationality', s.nationality, 'maxlength="40"') +
+      (s.guests || s.nationality ? '<div class="infobox">' + ICON('info') + '<span>' + esc([s.guests ? 'The message says ' + s.guests + ' guest' + (s.guests === '1' ? '' : 's') + '.' : '', s.nationality ? 'Nationality: ' + s.nationality + '.' : ''].filter(Boolean).join(' ')) +
+        ' This is for your information and is not saved.</span></div>' : '') +
       comps + ids +
       '<button class="btn btn-primary btn-block" type="button" data-act="save"' + (busy ? ' disabled' : '') + '>' + (busy ? 'Saving…' : 'Save to the guest record') + '</button>' +
       '<button class="btn btn-ghost btn-block" type="button" data-act="again"' + (busy ? ' disabled' : '') + '>Back</button>';
@@ -144,7 +144,7 @@
   function syncSheet() {
     var s = S.sheet; if (!s) return;
     var v = function (id) { var e = $(id); return e ? e.value : ''; };
-    s.phone = v('gd-phone'); s.email = S.ctx.on_file.email ? '' : v('gd-email'); s.guests = v('gd-guests'); s.nationality = v('gd-nat');
+    s.phone = v('gd-phone'); s.email = S.ctx.on_file.email ? '' : v('gd-email'); 
     root.querySelectorAll('[data-cname]').forEach(function (e) { s.companions[+e.getAttribute('data-cname')].name = e.value; });
     root.querySelectorAll('[data-idname]').forEach(function (e) { s.ids[+e.getAttribute('data-idname')].name = e.value; });
     root.querySelectorAll('[data-idtype]').forEach(function (e) { s.ids[+e.getAttribute('data-idtype')].id_type = e.value; });
