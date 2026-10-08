@@ -454,6 +454,15 @@
     if (!e.length) return null;
     return 'Earlier stays: ' + e.map(function (s) { return monthShortYear(s.month) + (s.nights != null ? ' · ' + plural(s.nights, 'night') : ''); }).join(', ');
   }
+  // s79: "With: Ana, Ben (ID on file for 1 of 2)". Owner/admin only: the key is absent for cleaners, and so is the line.
+  function companionsLine(g) {
+    var c = g && g.companions;
+    if (!Array.isArray(c) || !c.length) return null;
+    var names = c.map(function (x) { return String((x && x.name) || '').trim(); }).filter(Boolean);
+    if (!names.length) return null;
+    var withId = c.filter(function (x) { return x && x.has_photo === true; }).length;
+    return 'With: ' + names.join(', ') + ' (ID on file for ' + withId + ' of ' + c.length + ')';
+  }
   // What the Today card says about the stay: in the house, arriving today, or nobody.
   function todayCardState(payload, today) {
     var cur = payload && payload.current_guest, nxt = payload && payload.next_guest;
@@ -684,7 +693,7 @@
     fmtTime: fmtTime, fmt24: fmt24, ordinal: ordinal, plural: plural, agoLabel: agoLabel, clockLabel: clockLabel,
     monthGrid: monthGrid, dayState: dayState, dayStatus: dayStatus, mergeStays: mergeStays, sameGuest: sameGuest, dayMoves: dayMoves, blockWhy: blockWhy, flagName: flagName, FLAG_KINDS: FLAG_KINDS, blockedLines: blockedLines, blockedLineText: blockedLineText,
     canFlagDays: canFlagDays, guestContact: guestContact, canSeeGuestContact: canSeeGuestContact, MESSENGER_INBOX: MESSENGER_INBOX, rpcMissing: rpcMissing, tgLink: tgLink, warningInfo: warningInfo, findingKey: findingKey, initialOf: initialOf, sourceLabel: sourceLabel, stayDates: stayDates, monthInRange: monthInRange,
-    parseNotes: parseNotes, returningLabel: returningLabel, earlierLine: earlierLine, todayCardState: todayCardState,
+    parseNotes: parseNotes, returningLabel: returningLabel, earlierLine: earlierLine, companionsLine: companionsLine, todayCardState: todayCardState,
     orderWarnings: orderWarnings, brownoutText: brownoutText, lowStockText: lowStockText, warningSummary: warningSummary,
     weatherLine: weatherLine, rainLine: rainLine, weatherStale: weatherStale, esc: esc
   };

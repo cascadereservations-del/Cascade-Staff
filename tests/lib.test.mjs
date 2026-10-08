@@ -189,3 +189,10 @@ test('esc neutralises markup', () => {
   assert.equal(CS.esc('<img src=x onerror="a">&\''), '&lt;img src=x onerror=&quot;a&quot;&gt;&amp;&#39;');
   assert.equal(CS.esc(null), '');
 });
+
+test('companionsLine: names and ID count for owner/admin; nothing when the key is absent or empty', () => {
+  assert.equal(CS.companionsLine({ companions: [{ name: 'Ana', has_photo: true }, { name: 'Ben', has_photo: false }] }), 'With: Ana, Ben (ID on file for 1 of 2)');
+  assert.equal(CS.companionsLine({}), null);
+  assert.equal(CS.companionsLine({ companions: [] }), null);
+  assert.equal(CS.companionsLine(null), null);
+});
