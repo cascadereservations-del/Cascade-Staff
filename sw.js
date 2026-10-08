@@ -15,6 +15,7 @@ const ICON_FILES = ['icon-192.png', 'icon-512.png', 'icon-512-maskable.png', 'ap
 const SHELL_URLS = [
   './', './index.html', './styles.css', './app.js', './lib.js', './icons.js', './theme.js', './manifest.webmanifest',
   './quick/', './quick/index.html', './pay/', './pay/index.html', './pay/pay.js', './pay/pay-lib.js', './pay/bank.html',
+  './guest/', './guest/index.html', './guest/guest.js', './guest/guest-lib.js',
   ...SELF_FONTS.map((f) => './fonts/' + f),
   ...ICON_FILES.map((f) => './icons/' + f)
 ];
