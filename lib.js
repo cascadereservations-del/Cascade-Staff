@@ -240,17 +240,18 @@
   var FLAG_KINDS = ['brownout', 'maintenance', 'deep_clean', 'other'];
   var FLAG_NAME = { brownout: 'Brownout', maintenance: 'Maintenance', deep_clean: 'Deep cleaning', other: 'Note' };
   function blockWhy(r) { var l = r && String(r.block_label || '').trim(); return l || 'Blocked'; }
+  // Every reason on a night held by more than one block, each once: "Direct booking BD296460 · Maintenance".
+  function blocksWhy(list) { var out = []; (list || []).forEach(function (r) { var w = blockWhy(r); if (out.indexOf(w) < 0) out.push(w); }); return out.length > 1 ? out.filter(function (w) { return w !== 'Blocked'; }).join(' · ') : out[0] || ''; }
   function flagsFor(iso, dayFlags, warnings) {
     if (Array.isArray(dayFlags)) return dayFlags.filter(function (f) { return f && f.date === iso && FLAG_KINDS.indexOf(f.kind) >= 0; });
     return (warnings || []).filter(function (w) { return w.kind === 'brownout' && w.detail && w.detail.date === iso; })
       .map(function () { return { date: iso, kind: 'brownout', label: 'Brownout', source: 'auto', id: null }; });
   }
   function dayStatus(iso, rows, dayFlags, warnings) {
-    var s = dayState(iso, rows), block = null;
-    (rows || []).forEach(function (r) { if (!block && r.status === 'blocked' && iso >= r.checkin_date && iso < r.checkout_date) block = r; });
-    var primary = s.stay ? 'booked' : block ? 'blocked' : 'free';
-    return { primary: primary, stay: s.stay, block: block, startsHere: s.startsHere, cont: s.cont,
-      why: s.stay ? (s.stay.guest_name || 'Guest') : block ? blockWhy(block) : 'Open for a booking', flags: flagsFor(iso, dayFlags, warnings) };
+    var s = dayState(iso, rows), blocks = (rows || []).filter(function (r) { return r.status === 'blocked' && iso >= r.checkin_date && iso < r.checkout_date; });
+    var block = blocks[0] || null, primary = s.stay ? 'booked' : block ? 'blocked' : 'free';
+    return { primary: primary, stay: s.stay, block: block, blocks: blocks, blockWhy: blocksWhy(blocks), startsHere: s.startsHere, cont: s.cont,
+      why: s.stay ? (s.stay.guest_name || 'Guest') : block ? blocksWhy(blocks) : 'Open for a booking', flags: flagsFor(iso, dayFlags, warnings) };
   }
   function flagName(kind) { return FLAG_NAME[kind] || 'Note'; }
   // "Blocked nights" list: the nights a block holds with no confirmed stay on them, said with the reason.
@@ -286,13 +287,14 @@
 
   // Telegram: the app link first (tg://), the t.me web page as the fallback when the app does not open.
   function tgLink(channelId, post) {
-    var id = String(channelId).replace(/\D/g, ''), p = post != null && post !== '' ? String(post).replace(/\D/g, '') : '';
+    var id = String(channelId).replace(/\D/g, ''), p = post != null && post !== '' ? String(post).replace(/\D/g, '') : '1'; // Telegram documents post= as required for privatepost
     return { app: 'tg://privatepost?channel=' + id + (p ? '&post=' + p : ''), web: 'https://t.me/c/' + id + (p ? '/' + p : '') };
   }
 
   // What a warning means in plain words, where to go to fix it, and whether it can be marked handled here.
   var DASH = 'https://cascadereservations-del.github.io/cascade-admin-dashboard/#/';
   var CHECKS = [
+    [/airbnb block runs past/i, 'Our Airbnb block covers nights with no guest. Unblocking those nights on Airbnb opens them for sale again.', 'Bookings calendar', 'bookings/calendar'],
     [/overlap/i, 'Two confirmed stays share at least one night, so one guest may have no room. Moving or cancelling one booking clears it.', 'Bookings calendar', 'bookings/calendar'],
     [/no calendar block/i, 'A booking is confirmed but its nights are still open on a booking calendar. Blocking those nights keeps a second guest from taking them.', 'Bookings calendar', 'bookings/calendar'],
     [/calendar hold/i, 'Nights are held on the calendar with no live booking behind them. Releasing the hold opens them for sale again.', 'Bookings calendar', 'bookings/calendar'],
@@ -300,6 +302,17 @@
     [/clean/i, 'A guest has checked out and no cleaning is logged for that turnover yet.', 'Operations', 'operations'],
     [/\bID\b/, 'A guest arrives soon and no ID photo is on file yet. The guest card shows what is there.', 'the guest card', '#calendar/next']
   ];
+  // The safe facts L2 sends with a system check (ref, first name, dates, a count), as short lines.
+  function factLines(f) {
+    if (!f || typeof f !== 'object') return [];
+    var span = function (a, b) { return a && b ? dayLabel(a) + ' to ' + dayLabel(b) : a ? dayLabel(a) : ''; }, out = [];
+    if (f.guest_first) out.push('Guest: ' + f.guest_first);
+    if (f.ref) out.push('Booking ' + f.ref);
+    if (f.from) out.push('Stay: ' + span(f.from, f.to));
+    if (f.block_from) out.push('Calendar block: ' + span(f.block_from, f.block_to));
+    if (f.n != null && isFinite(+f.n)) out.push(plural(+f.n, 'case') + ' found');
+    return out;
+  }
   function warningInfo(w, role) {
     var admin = role === 'owner' || role === 'admin' || role === 'finance', d = (w && w.detail) || {}, out = { head: '', meaning: '', details: [], go: null, resolvable: false };
     if (w.kind === 'brownout') {
@@ -314,22 +327,23 @@
       if (admin) out.go = { label: 'Go to Inventory', href: DASH + 'inventory', external: true };
       return out;
     }
-    out.head = 'System check'; out.details = [w.title].concat(d.check_id ? ['Check ' + d.check_id] : [], d.status === 'acknowledged' ? ['Marked as seen, not fixed yet'] : []);
+    out.head = 'System check'; out.details = [w.title].concat(factLines(w.facts), d.check_id ? ['Check ' + d.check_id] : [], d.status === 'acknowledged' || w.acknowledged === true ? ['Marked as seen, not fixed yet'] : []);
     out.meaning = 'An automatic check found something that needs a person.';
-    for (var i = 0; i < CHECKS.length; i++) if (CHECKS[i][0].test(w.title || '')) {
+    for (var i = 0; i < CHECKS.length; i++) if (CHECKS[i][0].test(w.title || '') || (i === 0 && d.check_id === 'V1m')) {
       out.meaning = CHECKS[i][1];
       var internal = CHECKS[i][3].charAt(0) === '#';
       if (internal || admin) out.go = { label: 'Go to ' + CHECKS[i][2], href: internal ? CHECKS[i][3] : DASH + CHECKS[i][3], external: !internal };
       break;
     }
     if (!out.go && admin) out.go = { label: 'Go to System health', href: DASH + 'settings/health', external: true };
-    out.resolvable = (role === 'owner' || role === 'admin') && d.status !== 'acknowledged';
+    out.resolvable = (role === 'owner' || role === 'admin') && d.status !== 'acknowledged' && w.acknowledged !== true;
     return out;
   }
   // The finding key for ack_verifier_finding_v1: from the warning when the payload carries it, else the matching Tasks row.
   function findingKey(w, tasks) {
     if (w.key) return w.key; if (w.detail && w.detail.key) return w.detail.key;
-    var hit = (tasks || []).filter(function (t) { return t.source === 'verifier_findings' && t.title === w.title && t.status !== 'done'; });
+    var cid = w.detail && w.detail.check_id; // finding keys start with "<check_id>:"
+    var hit = (tasks || []).filter(function (t) { return t.source === 'verifier_findings' && t.title === w.title && t.status !== 'done' && (!cid || String(t.id).indexOf(cid + ':') === 0); });
     return hit.length === 1 ? hit[0].id : null;
   }
 

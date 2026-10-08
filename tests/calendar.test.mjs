@@ -35,6 +35,10 @@ test('day status: secondary flags ride on any primary; without day_flags, browno
   assert.equal(d15.primary, 'blocked'); assert.deepEqual(d15.flags.map((f) => [f.kind, f.source]), [['brownout', 'auto']]);
   assert.equal(CS.dayStatus('2026-10-15', rows, [], warnings).flags.length, 0, 'an empty day_flags list is the truth, no fallback');
   assert.equal(CS.flagName('deep_clean'), 'Deep cleaning');
+  const two = rows.concat([{ status: 'blocked', checkin_date: '2026-10-11', checkout_date: '2026-10-12', block_label: 'Maintenance' }, { status: 'blocked', checkin_date: '2026-10-11', checkout_date: '2026-10-12', block_label: null }]);
+  const d11 = CS.dayStatus('2026-10-11', two, [], []);
+  assert.equal(d11.why, 'Direct booking BD296460 · Maintenance', 'every reason on a night, each once, no bare Blocked beside a real one');
+  assert.equal(d11.blocks.length, 3);
 });
 
 test('blocked nights list: says why, and a mirror block shows only its extra night after checkout', () => {
@@ -49,9 +53,9 @@ test('blocked nights list: says why, and a mirror block shows only its extra nig
 });
 
 test('tgLink: the app link and the web fallback, with and without a post', () => {
-  assert.deepEqual(CS.tgLink('3798341977'), { app: 'tg://privatepost?channel=3798341977', web: 'https://t.me/c/3798341977' });
+  assert.deepEqual(CS.tgLink('3798341977'), { app: 'tg://privatepost?channel=3798341977&post=1', web: 'https://t.me/c/3798341977/1' }, 'post defaults to 1');
   assert.deepEqual(CS.tgLink('3819352746', 12), { app: 'tg://privatepost?channel=3819352746&post=12', web: 'https://t.me/c/3819352746/12' });
-  assert.equal(CS.tgLink('-100123"x').app, 'tg://privatepost?channel=100123', 'only digits survive');
+  assert.equal(CS.tgLink('-100123"x', '7x').app, 'tg://privatepost?channel=100123&post=7', 'only digits survive');
 });
 
 test('warning info: plain meaning, the right place to fix it, and who may mark it handled', () => {
@@ -65,6 +69,12 @@ test('warning info: plain meaning, the right place to fix it, and who may mark i
   assert.equal(CS.warningInfo(v('Two stays overlap'), 'cleaner').go, null, 'no dashboard jump for staff');
   assert.equal(CS.warningInfo(v('Two stays overlap', 'acknowledged'), 'admin').resolvable, false);
   assert.equal(CS.warningInfo(v('Two stays overlap'), 'finance').resolvable, false, 'ack is owner/admin only');
+  const v1m = CS.warningInfo({ kind: 'verifier', title: 'Airbnb block runs past the direct stay', key: 'V1m:x', acknowledged: false,
+    detail: { check_id: 'V1m', status: 'open' }, facts: { ref: 'BD296460', guest_first: 'Ana', from: '2026-10-08', to: '2026-10-11', block_from: '2026-10-08', block_to: '2026-10-12' } }, 'admin');
+  assert.match(v1m.meaning, /covers nights with no guest/); assert.match(v1m.go.href, /#\/bookings\/calendar$/);
+  assert.deepEqual(v1m.details.slice(1, 5), ['Guest: Ana', 'Booking BD296460', 'Stay: 8 Oct to 11 Oct', 'Calendar block: 8 Oct to 12 Oct']);
+  assert.ok(CS.warningInfo({ kind: 'verifier', title: 'Duplicate ledger rows', detail: { check_id: 'V10' }, facts: { check: 'ledger_duplicates', n: 2 } }, 'owner').details.includes('2 cases found'));
+  assert.equal(CS.warningInfo({ ...v('Two stays overlap'), acknowledged: true }, 'admin').resolvable, false);
   const inv = CS.warningInfo({ kind: 'inventory', title: 'Low stock: Soap', detail: { qty: 1, unit: 'pc', reorder_below: 10 } }, 'admin');
   assert.match(inv.go.href, /#\/inventory$/); assert.deepEqual(inv.details, ['Soap, 1 pc (reorder below 10)']);
   const bo = CS.warningInfo({ kind: 'brownout', title: 'SOCOTECO II', detail: { date: '2026-10-15', time: '06:00', hours: 11 } }, 'admin');
@@ -78,6 +88,10 @@ test('finding key: from the warning, else the single matching Tasks row', () => 
   assert.equal(CS.findingKey(w, tasks), 'k1');
   assert.equal(CS.findingKey(w, tasks.concat([{ source: 'verifier_findings', id: 'k2', title: 'Two stays overlap', status: 'open' }])), null, 'two matches: no guess');
   assert.equal(CS.findingKey(w, null), null);
+  const wc = { ...w, detail: { check_id: 'V1' } };
+  const keyed = [{ source: 'verifier_findings', id: 'V1:a:b', title: 'Two stays overlap', status: 'open' }, { source: 'verifier_findings', id: 'V3:c', title: 'Two stays overlap', status: 'open' }];
+  assert.equal(CS.findingKey(wc, keyed), 'V1:a:b', 'the check id must match the key prefix');
+  assert.equal(CS.findingKey({ ...wc, key: 'V1:z' }, keyed), 'V1:z', 'w.key wins');
 });
 
 test('rpc missing and day-flag roles', () => {

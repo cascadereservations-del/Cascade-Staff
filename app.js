@@ -53,7 +53,12 @@
   // ---------------------------------------------------------------- helpers
   function ext(href, inner, cls, extra) { return '<a class="' + (cls || '') + '" href="' + esc(href) + '" target="_blank" rel="noopener"' + (extra || '') + '>' + inner + '</a>'; }
   // Telegram links open the Telegram app (tg://); if this page is still showing ~1.2 s later the app did not open, so the web page opens.
-  function tgA(link, inner, cls) { return '<a class="' + (cls || '') + '" href="' + esc(link.app) + '" data-tgweb="' + esc(link.web) + '">' + inner + '</a>'; }
+  // Desktop keeps the plain https link in a new tab: its "Open Telegram Desktop?" prompt would race the fallback.
+  var TG_APP = /android|iphone|ipad|ipod/i.test(navigator.userAgent || '');
+  function tgA(link, inner, cls) {
+    if (!TG_APP) return ext(link.web, inner, cls);
+    return '<a class="' + (cls || '') + '" href="' + esc(link.app) + '" data-tgweb="' + esc(link.web) + '">' + inner + '</a>';
+  }
   function row(opts) { // title and sub-title always on separate lines (D-300.7)
     if (opts.door) { var dl = CS.doorLink(opts.door, doorDef(opts.door).url, location.origin, trustOn); opts.href = dl.href; opts.external = dl.external; }
     var inner = '<span class="lead">' + ICON(opts.icon) + '</span><span class="mid"><span class="t">' + esc(opts.title) + '</span><span class="s"' + (opts.subId ? ' id="' + opts.subId + '"' : '') + '>' + esc(opts.sub || '') + '</span></span>' +
@@ -325,7 +330,7 @@
       var all = (p.calendar || []).filter(function (r) { return r.status === 'confirmed'; }), src = CS.sourceLabel(ds.stay.source);
       html += '<p class="sub num" style="margin:8px 0 0">' + esc(CS.stayDates(ds.stay) + (src ? ' · ' + src : '')) + '</p>' +
         (ds.stay.checkout_date >= p.today ? '<button class="btn btn-ghost btn-sm" type="button" data-stay="' + all.indexOf(ds.stay) + '" style="margin:4px 0 0 -12px">Show the stay' + ICON('chev', 's16') + '</button>' : '');
-      if (ds.block) html += '<p class="help" style="margin-top:4px">Also held on the calendar: ' + esc(CS.blockWhy(ds.block)) + '</p>';
+      if (ds.block) html += '<p class="help" style="margin-top:4px">Also held on the calendar: ' + esc(ds.blockWhy) + '</p>';
     }
     html += '<div class="cap up" style="margin:14px 0 6px">Also on this day</div>';
     html += ds.flags.length ? '<ul class="wlist">' + ds.flags.map(function (f) {
@@ -339,7 +344,7 @@
       if (S.missing) html += '<p class="help">Available after the next update.</p>';
       else html += '<div class="stack"><div class="field"><label for="df-kind">Kind</label><select class="sel" id="df-kind" style="max-width:none;text-align:left;text-align-last:left">' +
         CS.FLAG_KINDS.map(function (k) { return '<option value="' + k + '"' + (S.form.kind === k ? ' selected' : '') + '>' + esc(CS.flagName(k)) + '</option>'; }).join('') + '</select></div>' +
-        '<div class="field"><label for="df-label">Short note (optional)</label><div class="input"><input id="df-label" maxlength="60" autocomplete="off" value="' + esc(S.form.label) + '" placeholder="e.g. Aircon service 2 pm"></div></div>' +
+        '<div class="field"><label for="df-label">Short note (optional)</label><div class="input"><input id="df-label" maxlength="60" autocomplete="off" value="' + esc(S.form.label) + '" placeholder="Short note, no phone numbers or amounts"></div></div>' +
         '<button class="btn btn-primary" type="button" data-act="flag-save"' + (S.busy ? ' disabled' : '') + '>' + (S.busy ? 'Saving…' : 'Add note') + '</button></div>';
     }
     return html;
@@ -760,7 +765,8 @@
     if (v === 'door') { renderDoor(); return; }
     renderTabs(v);
     if (v === 'home') renderHome(); else if (v === 'calendar') renderCalendar(); else if (v === 'tasks') renderTasks(); else if (v === 'payrates') { renderPayRates(); if (!state.rates) loadRates(); } else if (v === 'reply') renderReply(); else if (v === 'more') renderMore();
-    if (state.sheet) { if (v === 'calendar') drawSheet(); else closeSheet(); }
+    var typing = document.activeElement && /^df-(label|kind)$/.test(document.activeElement.id || '');
+    if (state.sheet) { if (v !== 'calendar') closeSheet(); else if (!typing) drawSheet(); }
   }
   // A door opens in the frame once per visit; coming back to the same door (a re-render) keeps the page where it is.
   function renderDoor() {
@@ -910,11 +916,16 @@
   // Telegram: the tg:// link opens the app. If the page is still in front ~1.2 s later the app did not open, so t.me opens instead.
   document.addEventListener('click', function (ev) {
     var a = ev.target.closest && ev.target.closest('a[data-tgweb]'), web = a && a.getAttribute('data-tgweb'); if (!web) return;
-    var left = false, gone = function () { if (document.visibilityState === 'hidden') left = true; };
-    document.addEventListener('visibilitychange', gone); window.addEventListener('pagehide', gone);
+    // An app chooser or "Open Telegram?" prompt blurs the page without hiding it: that counts as left too, so nothing opens twice.
+    var left = false, gone = function (e) { if (e.type === 'blur' || document.visibilityState === 'hidden') left = true; };
+    document.addEventListener('visibilitychange', gone); window.addEventListener('pagehide', gone); window.addEventListener('blur', gone);
     setTimeout(function () {
-      document.removeEventListener('visibilitychange', gone); window.removeEventListener('pagehide', gone);
-      if (!left && document.visibilityState === 'visible') { var w = window.open(web, '_blank'); if (w) w.opener = null; else location.href = web; }
+      document.removeEventListener('visibilitychange', gone); window.removeEventListener('pagehide', gone); window.removeEventListener('blur', gone);
+      if (left || document.visibilityState !== 'visible') return;
+      var w = window.open(web, '_blank'); if (w) { w.opener = null; return; }
+      // Pop-up blocked: never navigate the app away; the link itself becomes the web link with a line saying so.
+      a.setAttribute('href', web); a.setAttribute('target', '_blank'); a.setAttribute('rel', 'noopener'); a.removeAttribute('data-tgweb');
+      if (!a.nextElementSibling || !a.nextElementSibling.classList.contains('tgnote')) a.insertAdjacentHTML('afterend', '<span class="help tgnote" role="status">Telegram did not open. Tap again to open it in the browser.</span>');
     }, 1200);
   });
   window.addEventListener('hashchange', route);
