@@ -6,7 +6,7 @@
   var CS = window.CS, ICON = window.ICON, esc = CS.esc, root = document.getElementById('inst');
   var ua = navigator.userAgent || '';
   var standalone = (window.matchMedia && matchMedia('(display-mode: standalone)').matches) || navigator.standalone === true;
-  var link = location.origin + location.pathname; // this page, without a query or hash: what Copy link copies
+  var link = CS.INSTALL_URL; // the one canonical link: what Copy link copies and the Open in Chrome / Safari buttons carry
   var deferred = null, installed = false, phase = 'idle'; // phase: idle | installing | done (the one-tap install on Android and desktop)
   var copied = '', copyTimer = 0;
 
@@ -61,7 +61,7 @@
         '<p class="help" style="text-align:center;margin:0">Then open Cascade Staff from your Home Screen.</p>' + copyBtn();
     } else {
       body = '<div class="infobox">' + ICON('info') + '<span><b>This browser cannot install apps.</b> Copy the link and open it in Chrome on Android or Safari on iPhone.</span></div>' + copyBtn() +
-        '<p class="help" style="text-align:center;margin:0">You can also use the app in this browser without installing it. <a href="../">Open Cascade Staff</a></p>';
+        '<p class="help" style="text-align:center;margin:0">You can also use the app in this browser without installing it. <a href="../" style="display:inline-flex;align-items:center;min-height:44px">Open Cascade Staff</a></p>';
     }
     return head + body;
   }

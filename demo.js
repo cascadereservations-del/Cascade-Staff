@@ -14,7 +14,7 @@
 
   // ---- the one guard -----------------------------------------------------------------------------------------------------
   function isDemo(search) {
-    try { var p = new URLSearchParams(String(search || '')); return p.has('demo') && !/^(0|false|no|off)$/i.test(p.get('demo') || ''); } catch (e) { return false; }
+    var m = /[?&]demo(?:=([^&]*))?(?:&|$)/.exec(String(search || '')); return !!m && !/^(0|false|no|off)$/i.test(m[1] || ''); // identical to isDemo in theme.js
   }
   function roleFrom(search) {
     try { var r = new URLSearchParams(String(search || '')).get('role'); return VIEWS.indexOf(r) >= 0 ? r : 'owner'; } catch (e) { return 'owner'; }
@@ -168,7 +168,7 @@
     var fn = /\/functions\/v1\/([\w-]+)/.exec(url), name = fn && fn[1], body = null, X = build('owner');
     try { body = init && typeof init.body === 'string' ? JSON.parse(init.body) : null; } catch (e) { body = null; }
     if (name === 'guest-reply-draft') {
-      var said = (body && body.text) || 'Hi! Is an early check-in possible tomorrow? We land at 9 in the morning.';
+      var said = (body && body.text) || 'Hi po, is an early check-in possible tomorrow? We land at 9 in the morning.';
       return reply(200, { ok: true, guest_name: (body && body.guest_name) || 'Demo Guest One', platform: body && body.platform === 'airbnb' ? 'airbnb' : 'messenger', guest_text: said, header: 'Two drafts for you. Copy one and send it yourself.',
         replies: ['Good morning, and thank you for letting us know. Check-in starts at 2 in the afternoon. If the house is ready sooner, we will tell you, and your bags are welcome here from the morning.',
           'Thank you for the message. We cannot promise an early check-in yet, and we will confirm the morning after the cleaning is done. Your bags are welcome from 9 if you arrive first.'] });

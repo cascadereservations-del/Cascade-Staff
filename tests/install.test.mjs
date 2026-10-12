@@ -73,8 +73,10 @@ test('Open in Chrome / Safari: Android gets an intent with the page as the fallb
 test('the install page, the manifest and the service worker agree', () => {
   const html = read('install/index.html'), js = read('install/install.js');
   assert.match(html, /<link rel="manifest" href="\.\.\/manifest\.webmanifest">/);
-  assert.match(html, /<script src="\.\.\/lib\.js">/);
+  assert.match(html, /<script src="\.\.\/lib\.js">/); assert.match(html, /<script src="\.\.\/theme\.js">/);
+  assert.match(js, /var link = CS\.INSTALL_URL;/); assert.match(js, /min-height:44px/);
   assert.match(js, /serviceWorker\.register\('\.\.\/sw\.js'\)/);
+  assert.match(html, /<script src="\.\.\/theme\.js">/); assert.match(js, /var link = CS\.INSTALL_URL;/); assert.match(js, /min-height:44px/);
   assert.match(js, /beforeinstallprompt/); assert.match(js, /appinstalled/); assert.match(js, /getInstalledRelatedApps/);
   assert.doesNotMatch(js + html, /supabase|\/rest\/v1|functions\/v1|localStorage|sessionStorage/i, 'no data, no storage on the install page');
   const m = JSON.parse(read('manifest.webmanifest'));

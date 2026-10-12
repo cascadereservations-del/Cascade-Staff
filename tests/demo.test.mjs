@@ -123,7 +123,6 @@ test('one guard: every use of CSDemo in the pages sits behind DEMO, and the only
     assert.match(src, /!DEMO && !window\.supabase/, f + ' must not stop at the offline message in demo');
     assert.doesNotMatch(src.replace(/function net\(\)[^\n]*/, ''), /[^.\w]fetch\(/, f + ' calls fetch directly instead of through net()');
   }
-  assert.match(read('theme.js'), /cs-demo-theme/);
   for (const f of ['index.html', 'pay/index.html', 'guest/index.html', 'quick/index.html']) assert.match(read(f), /<script src="(\.\.\/)?demo\.js"><\/script>/, f);
 });
 
@@ -193,4 +192,17 @@ test('demo app: Tasks, Pay rates, Cassy reply and More draw; a write shows the n
 test('demo app: the sign-in screen lists the made-up names, and the doors do not open the live apps', async () => {
   const s = await bootDemo('signin', '#home'); assert.match(s.els['si-who'].innerHTML, /Demo Cleaner/); assert.match(s.els['si-who'].innerHTML, /Demo Admin/);
   const d = await bootDemo('owner', '#door/dashboard'); assert.equal(d.location.hash, '#home'); assert.equal(d.els['door-frame'].src, undefined);
+});
+
+test('theme.js and demo.js decide demo the same way, and demo never touches theme storage', () => {
+  const cases = ['', '?demo', '?demo=0', '?demo=false', '?demo=1', '?x=1&demo', '?%64emo', '?demox', '?xdemo', '?a=demo', '?demo&role=cleaner'];
+  for (const q of cases) {
+    const calls = [], stor = { getItem: (k) => { calls.push(k); return 'dark'; }, setItem: (k) => calls.push(k), removeItem: (k) => calls.push(k) };
+    const attrs = {}, win = { location: { search: q }, localStorage: stor, document: { documentElement: { setAttribute: (k, v) => { attrs[k] = v; }, removeAttribute() {} } } };
+    vm.runInNewContext(read('theme.js'), { window: win }); win.CSTheme.set('light');
+    assert.equal(win.CSTheme.isDemo(q), D.isDemo(q), q);
+    if (D.isDemo(q)) { assert.deepEqual(calls, [], q + ': demo reads and writes no storage'); assert.equal(win.CSTheme.get(), 'light'); }
+    else assert.ok(calls.length > 0, q);
+  }
+  assert.equal(D.isDemo('?%64emo'), false); assert.equal(D.isDemo('?demo=0'), false);
 });
