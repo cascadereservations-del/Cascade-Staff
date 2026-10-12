@@ -1,0 +1,1 @@
+function e(e=`admin`){return`${e}-${crypto.randomUUID().replace(/-/g,``)}`.slice(0,160)}export{e as t};

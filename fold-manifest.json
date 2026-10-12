@@ -1,0 +1,34 @@
+{
+  "schema": 1,
+  "surfaces": {
+    "admin": {
+      "source": "dist",
+      "head": "a151adf",
+      "files": 81,
+      "bytes": 1875314,
+      "time": "2026-10-12T16:43:34.625Z"
+    },
+    "checklist": {
+      "source": "s80-checklist",
+      "head": "8058e23",
+      "files": 8,
+      "bytes": 1006812,
+      "time": "2026-10-12T16:43:34.625Z"
+    },
+    "manual": {
+      "source": "s80-manual",
+      "head": "fc61adb",
+      "files": 16,
+      "bytes": 1404870,
+      "time": "2026-10-12T16:43:34.625Z"
+    },
+    "guide": {
+      "source": "system-guide",
+      "head": "11709aa",
+      "files": 48,
+      "bytes": 3820632,
+      "time": "2026-10-12T16:43:34.625Z",
+      "adminGuide": true
+    }
+  }
+}
