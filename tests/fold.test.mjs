@@ -17,19 +17,19 @@ function list(root, rel = '') { return fs.readdirSync(path.join(root, rel), { wi
 const CHECK = {
   'index.html': '<html><head><link rel="manifest" href="manifest.webmanifest"><link rel="icon" href="icons/i.png"><script src="install.js"></script></head><script>navigator.serviceWorker.register("sw.js")</script></html>',
   'sw.js': 'x', 'install.js': 'x', 'install.html': 'x', 'manifest.webmanifest': '{}', 'icons/i.png': 'p', 'fonts/f.woff2': 'f',
-  'docs/a.md': 'd', 'sql/a.sql': 's', 'supabase/c.toml': 's', 'tests/t.js': 't', 'Code.gs': 'g', 'appsscript.json': '{}', '.gitignore': 'x', 'README.md': 'r', 'icons/README.md': 'r', 'icons/x.gs': 'g'
+  'docs/a.md': 'd', 'sql/a.sql': 's', 'supabase/c.toml': 's', 'tests/t.js': 't', 'Code.gs': 'g', 'appsscript.json': '{}', '.gitignore': 'x', 'README.md': 'r', 'icons/README.md': 'r', 'icons/x.gs': 'g', 'sw 2.js': 'o', 'sw deprectaed.js': 'o'
 };
 
 test('checklist: allow-list honoured, forbidden files never copied, manifest link stripped', () => {
   const root = tmp(), src = tree(tmp(), CHECK);
   const rows = foldIn({ checklist: src }, { root });
-  // install.html is not named in index.html, so it stays out
-  assert.deepEqual(list(path.join(root, 'checklist')), ['fonts/f.woff2', 'icons/i.png', 'index.html', 'install.js', 'sw.js']);
+  // install files, the manifest and names with spaces never go in
+  assert.deepEqual(list(path.join(root, 'checklist')), ['fonts/f.woff2', 'icons/i.png', 'index.html', 'sw.js']);
   const html = fs.readFileSync(path.join(root, 'checklist', 'index.html'), 'utf8');
   assert.doesNotMatch(html, /rel="manifest"/); assert.match(html, /rel="icon"/);
-  assert.equal(rows[0].files, 5);
+  assert.equal(rows[0].files, 4);
   const mf = JSON.parse(fs.readFileSync(path.join(root, 'fold-manifest.json'), 'utf8'));
-  assert.equal(mf.surfaces.checklist.files, 5); assert.ok(mf.surfaces.checklist.bytes > 0); assert.ok(mf.surfaces.checklist.time); assert.ok('head' in mf.surfaces.checklist);
+  assert.equal(mf.surfaces.checklist.files, 4); assert.ok(mf.surfaces.checklist.bytes > 0); assert.ok(mf.surfaces.checklist.time); assert.ok('head' in mf.surfaces.checklist);
 });
 
 test('checklist: sw.js and install files are copied only when index.html names them', () => {
@@ -42,7 +42,7 @@ test('admin copies everything; manual and guide take only their allow-list; the 
   const root = tmp();
   const admin = tree(tmp(), { 'index.html': 'a', 'assets/x.js': 'x', 'assets/y.css': 'y' });
   const manual = tree(tmp(), { 'index.html': 'm', 'img/a.png': 'p', 'notes.txt': 'n', 'docs/d.md': 'd', 'README.md': 'r' });
-  const guide = tree(tmp(), { 'index.html': 'g', 'staff/index.html': 's', 'admin/index.html': 'a', 'assets/a.js': 'j', 'img/i.png': 'i', 'research/r.md': 'r', 'tools/t.mjs': 't' });
+  const guide = tree(tmp(), { 'index.html': 'g', 'staff/index.html': 's', 'admin/index.html': 'a', 'assets/a.js': 'j', 'img/i.png': 'i', 'research/r.md': 'r', 'tools/t.mjs': 't', 'private/p.md': 'p', 'build.mjs': 'b', 'staff/notes.md': 'n', 'content/c.md': 'c' });
   foldIn({ admin }, { root }); foldIn({ manual, guide }, { root });
   assert.deepEqual(list(path.join(root, 'admin')), ['assets/x.js', 'assets/y.css', 'index.html']);
   assert.deepEqual(list(path.join(root, 'manual')), ['img/a.png', 'index.html']);
@@ -77,6 +77,21 @@ test('--dry reports but writes and deletes nothing', () => {
 test('CLI exits 1 with a message on a bad source', () => {
   const r = spawnSync(process.execPath, [SCRIPT, '--guide', tmp(), '--root', tmp()], { encoding: 'utf8' });
   assert.equal(r.status, 1); assert.match(r.stderr, /no index\.html/);
+});
+
+test('guide staff links to siblings are rewritten (exact strings, counted); other links stay', () => {
+  const root = tmp(), A = 'https://cascadereservations-del.github.io/';
+  const guide = tree(tmp(), { 'index.html': 'g', 'staff/index.html': `<a href="${A}CH-Cleaners-Checklist/">c</a><a href="${A}Cascade-Manual/">m</a><a href="${A}Cascade-Staff/">s</a><a href="${A}Cascade-Manual/">m2</a><a href="https://t.me/x">t</a>` });
+  foldIn({ guide }, { root });
+  assert.equal(fs.readFileSync(path.join(root, 'guide/staff/index.html'), 'utf8'), '<a href="../../checklist/">c</a><a href="../../manual/">m</a><a href="../../">s</a><a href="../../manual/">m2</a><a href="https://t.me/x">t</a>');
+});
+
+test('sw: activate deletes only old cs-shell caches, never a foreign cache', () => {
+  const sandbox = { self: { addEventListener() {}, location: { href: 'https://x.github.io/Cascade-Staff/sw.js' } }, module: { exports: {} }, URL, caches: {}, fetch() {}, setTimeout };
+  vm.runInNewContext(fs.readFileSync(path.join(HERE, '..', 'sw.js'), 'utf8'), sandbox);
+  const { staleShellCache } = sandbox.module.exports;
+  assert.equal(staleShellCache('cs-shell-v10'), true); assert.equal(staleShellCache('cs-shell-v11'), false);
+  for (const k of ['ch-shell-v3', 'ch-data', 'workbox-x']) assert.equal(staleShellCache(k), false, k);
 });
 
 test('stripManifestLink removes only the manifest link', () => {

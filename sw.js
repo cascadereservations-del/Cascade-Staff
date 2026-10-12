@@ -42,10 +42,12 @@ self.addEventListener('install', (event) => {
 
 self.addEventListener('activate', (event) => {
   event.waitUntil(
-    caches.keys().then((keys) => Promise.all(keys.filter((k) => k !== CACHE_NAME).map((k) => caches.delete(k)))).then(() => self.clients.claim())
+    caches.keys().then((keys) => Promise.all(keys.filter((k) => staleShellCache(k)).map((k) => caches.delete(k)))).then(() => self.clients.claim())
   );
 });
 
+// Cache Storage is shared by every app on this origin (the folded checklist keeps ch-shell-*): only old cs-shell-* caches are ours to delete.
+function staleShellCache(key) { return key.indexOf('cs-shell') === 0 && key !== CACHE_NAME; }
 function timeout(ms) { return new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), ms)); }
 
 self.addEventListener('fetch', (event) => {
@@ -83,4 +85,4 @@ self.addEventListener('fetch', (event) => {
   }
   event.respondWith(fromNetwork(request).catch(() => caches.match(request, { ignoreSearch: true })));
 });
-if (typeof module !== 'undefined') module.exports = { swRoute, CACHE_NAME, SHELL_URLS };
+if (typeof module !== 'undefined') module.exports = { staleShellCache, swRoute, CACHE_NAME, SHELL_URLS };

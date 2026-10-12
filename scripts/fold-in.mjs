@@ -10,10 +10,10 @@ import { execFileSync } from 'node:child_process';
 
 const DEFAULT_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 // Never copied from a repo-style source (admin dist is a build output, so it is copied whole).
-const FORBIDDEN = /^(docs|sql|supabase|tests?|node_modules|\.git.*|readme.*|appsscript\.json|.*\.gs)$/i;
+const FORBIDDEN = /^(docs|sql|supabase|tests?|node_modules|\.git.*|readme.*|appsscript\.json|.*\.gs|.*\.md|private|research|content|tools|shots|diagrams|build\.mjs|.*\s.*)$/i; // .*\s.* = names with spaces (sw 2.js, sw deprecated.js)
 const SURFACES = {
   admin: { all: true },
-  checklist: { files: ['index.html', 'sw.js', 'install.js', 'install.html'], dirs: ['icons', 'fonts'], onlyIfReferenced: ['sw.js', 'install.js', 'install.html'] },
+  checklist: { files: ['index.html', 'sw.js'], dirs: ['icons', 'fonts'], onlyIfReferenced: ['sw.js'] },
   manual: { files: ['index.html'], dirs: ['img'] },
   guide: { files: ['index.html'], dirs: ['staff', 'admin', 'assets', 'img'] }
 };
@@ -49,6 +49,13 @@ function head(src) {
   try { return execFileSync('git', ['-c', 'safe.directory=*', '-C', src, 'rev-parse', '--short', 'HEAD'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim() || 'unknown'; } catch { return 'unknown'; }
 }
 
+// The public System Guide links its siblings by absolute URL; folded, they are one folder up. Exact strings only, counted.
+const GUIDE_LINKS = [['https://cascadereservations-del.github.io/CH-Cleaners-Checklist/', '../../checklist/'], ['https://cascadereservations-del.github.io/Cascade-Manual/', '../../manual/'], ['https://cascadereservations-del.github.io/Cascade-Staff/', '../../']];
+export function rewriteGuideLinks(html) {
+  let n = 0;
+  for (const [a, b] of GUIDE_LINKS) { const parts = html.split(a); n += parts.length - 1; html = parts.join(b); }
+  return { html, n };
+}
 export function stripManifestLink(html) { return html.replace(/<link\b[^>]*\brel\s*=\s*["']?manifest["']?[^>]*>[ \t]*\r?\n?/gi, ''); }
 
 export function foldIn(sources, { root = DEFAULT_ROOT, dry = false, now = new Date() } = {}) {
@@ -70,12 +77,16 @@ export function foldIn(sources, { root = DEFAULT_ROOT, dry = false, now = new Da
       if (p.name === 'checklist' && f === 'index.html') { // one install only: the checklist must not offer its own manifest
         const html = stripManifestLink(fs.readFileSync(from, 'utf8')); bytes += Buffer.byteLength(html);
         if (!dry) { fs.mkdirSync(path.dirname(path.join(tmp, f)), { recursive: true }); fs.writeFileSync(path.join(tmp, f), html); }
+      } else if (p.name === 'guide' && f === 'staff/index.html') {
+        const r = rewriteGuideLinks(fs.readFileSync(from, 'utf8')); bytes += Buffer.byteLength(r.html); p.rewrites = r.n;
+        if (!dry) { fs.mkdirSync(path.dirname(path.join(tmp, f)), { recursive: true }); fs.writeFileSync(path.join(tmp, f), r.html); }
       } else {
         bytes += fs.statSync(from).size;
         if (!dry) { fs.mkdirSync(path.dirname(path.join(tmp, f)), { recursive: true }); fs.copyFileSync(from, path.join(tmp, f)); }
       }
     }
     if (!dry) { fs.rmSync(p.target, { recursive: true, force: true }); fs.renameSync(tmp, p.target); }
+    if (p.rewrites != null) console.log(`guide/staff/index.html: ${p.rewrites} sibling link(s) rewritten`);
     rows.push({ surface: p.name, source: p.src, head: head(p.src), files: p.files.length, bytes, time: now.toISOString() });
   }
   if (!dry) {

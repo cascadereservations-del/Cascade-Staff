@@ -94,7 +94,7 @@ The shell service worker (`cs-shell-v11`) passes `admin/`, `checklist/`, `manual
 node scripts/fold-in.mjs --admin <admin>/dist --checklist <checklist repo> --manual <manual repo> --guide <system-guide repo> [--dry]
 ```
 
-It replaces only the folders you name with an allow-listed copy (checklist: `index.html`, `sw.js` / `install.js` / `install.html` only if `index.html` names them, `icons/`, `fonts/`; manual: `index.html`, `img/`; guide: `index.html`, `staff/`, `admin/`, `assets/`, `img/`; admin: all of dist), never copies `docs/ sql/ supabase/ tests/ *.gs appsscript.json .git* README*`, strips the `<link rel="manifest">` from the checklist (one install only), refuses a source without `index.html`, and writes `fold-manifest.json` (git HEAD, file count, bytes, time per surface; folds merge into it).
+It replaces only the folders you name with an allow-listed copy (checklist: `index.html`, `sw.js` (only if `index.html` names it), `icons/`, `fonts/`, never files with spaces in the name; manual: `index.html`, `img/`; guide: `index.html`, `staff/`, `admin/`, `assets/`, `img/`; admin: all of dist), never copies `docs/ sql/ supabase/ tests/ private/ research/ content/ tools/ shots/ diagrams/ build.mjs *.md *.gs appsscript.json .git*`, rewrites the three absolute sibling links in `guide/staff/index.html` to `../../checklist/`, `../../manual/`, `../../` (counted and printed), strips the `<link rel="manifest">` from the checklist (one install only), refuses a source without `index.html`, and writes `fold-manifest.json` (git HEAD, file count, bytes, time per surface; folds merge into it).
 
 **Publish flow:** fold in, `npm test`, review `git status`, commit, then Lloyd pushes `main` (Pages serves the repo root).
 
