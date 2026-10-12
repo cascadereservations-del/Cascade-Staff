@@ -138,8 +138,17 @@
   // fold-manifest.json -> {doorKey: relativeUrl} for the surfaces that were folded (null, 404 or junk = nothing folded).
   function foldedDoorUrls(manifest) {
     var out = {}, s = manifest && typeof manifest === 'object' && manifest.surfaces && typeof manifest.surfaces === 'object' ? manifest.surfaces : {};
-    Object.keys(FOLD_DOORS).forEach(function (k) { var e = s[FOLD_DOORS[k][0]]; if (e && e.files > 0) out[k] = FOLD_DOORS[k][1]; });
+    Object.keys(FOLD_DOORS).forEach(function (k) { var e = s[FOLD_DOORS[k][0]]; if (e && e.files > 0 && (k !== 'adminguide' || e.adminGuide === true)) out[k] = FOLD_DOORS[k][1]; });
     return out;
+  }
+  // A folded sibling that sends its TOP window "up" (../) would load the shell inside its own frame. If this window is framed by a
+  // same-origin parent, return where that parent should go (its own path and query, so ?demo survives, at #home); else null.
+  function framedParentTarget(win) {
+    try {
+      var par = win.parent;
+      if (par && par !== win && par.location.origin === win.location.origin) return par.location.pathname + par.location.search + '#home';
+    } catch (e) { /* cross-origin parent: leave it alone */ }
+    return null;
   }
   function doorRule(key) { return Object.prototype.hasOwnProperty.call(DOOR_RULES, key) ? DOOR_RULES[key] : null; }
   function doorFramed(key, layout, trusted) {
@@ -737,7 +746,7 @@
     REPLY_MAX_IMAGE_BYTES: REPLY_MAX_IMAGE_BYTES, REPLY_MAX_EDGE: REPLY_MAX_EDGE,
     staffAuthPassword: staffAuthPassword, staffLoginEmail: staffLoginEmail, deriveDisplayName: deriveDisplayName, greetingName: greetingName,
     signinKind: signinKind, signinList: signinList, typedEntry: typedEntry, keypadPress: keypadPress, signinCredentials: signinCredentials,
-    authStorage: authStorage, trustedFromStorage: trustedFromStorage, rememberName: rememberName, recalledName: recalledName, doorTarget: doorTarget, doorLink: doorLink, doorRule: doorRule, doorFramed: doorFramed, doorAllowed: doorAllowed, doorsForRole: doorsForRole, foldedDoorUrls: foldedDoorUrls, FOLD_DOORS: FOLD_DOORS,
+    authStorage: authStorage, trustedFromStorage: trustedFromStorage, rememberName: rememberName, recalledName: recalledName, doorTarget: doorTarget, doorLink: doorLink, doorRule: doorRule, doorFramed: doorFramed, doorAllowed: doorAllowed, doorsForRole: doorsForRole, foldedDoorUrls: foldedDoorUrls, framedParentTarget: framedParentTarget, FOLD_DOORS: FOLD_DOORS,
     layoutForRole: layoutForRole, accessVerdict: accessVerdict, assertNoMoney: assertNoMoney, moneyKeys: moneyKeys,
     manilaToday: manilaToday, manilaParts: manilaParts, addDays: addDays, daysBetween: daysBetween, weekdayIndex: weekdayIndex,
     dayLabel: dayLabel, dayLong: dayLong, dayShort: dayShort, monthTitle: monthTitle, monthShortYear: monthShortYear, greeting: greeting,

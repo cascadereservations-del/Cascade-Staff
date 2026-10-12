@@ -28,7 +28,8 @@ const NEVER_PATHS = ['/rest/v1/', '/functions/v1/', '/auth/v1/', '/storage/v1/']
 const FOLDED_DIRS = ['admin', 'checklist', 'manual', 'guide'];
 function swRoute(pathname, base) {
   if (pathname.indexOf(base) !== 0) return 'shell';
-  const first = pathname.slice(base.length).split('/')[0];
+  let first = pathname.slice(base.length).split('/')[0];
+  try { first = decodeURIComponent(first); } catch (e) { return 'network'; } // bad encoding: never ours to cache
   return FOLDED_DIRS.indexOf(first) >= 0 ? 'network' : 'shell';
 }
 

@@ -5,6 +5,8 @@
 (function () {
   'use strict';
   var CS = window.CS, P = window.CSPay, ICON = window.ICON, esc = CS.esc;
+  var up = CS.framedParentTarget(window); // a folded sibling sent its top window "up": this page is the shell inside a frame, so send the parent home and stop
+  if (up) { try { window.parent.location.replace(up); } catch (e) {} return; }
   var DEMO = !!(window.CSDemo && window.CSDemo.active); // ?demo: synthetic data, no Supabase client, no network, no storage (demo.js)
   function net() { return (DEMO ? window.CSDemo.fetch : window.fetch).apply(window, arguments); } // every call to an edge function or a signed photo goes through this
   if (!DEMO && !window.supabase) { // offline on a first visit: the shell is here, the client library is not
@@ -852,9 +854,11 @@
     var d = doorDef(doorKey), f = $('door-frame'); if (!d) return;
     $('door-title').textContent = d.title; f.title = d.title;
     $('door-back').innerHTML = ICON('back', 's24') + 'Back';
-    if (f.getAttribute('data-door') !== doorKey) { f.setAttribute('data-door', doorKey); f.src = d.url; }
+    if (f.getAttribute('data-door') !== doorKey) { f.setAttribute('data-door', doorKey); setFrame(f, d.url); }
   }
-  function leaveDoor() { var f = $('door-frame'); if (f && f.getAttribute('data-door')) { f.removeAttribute('data-door'); f.src = 'about:blank'; } }
+  function leaveDoor() { var f = $('door-frame'); if (f && f.getAttribute('data-door')) { f.removeAttribute('data-door'); setFrame(f, 'about:blank'); } }
+  // location.replace on the frame's window: opening or closing a door adds no history entry (so Back is one press, not two).
+  function setFrame(f, url) { try { f.contentWindow.location.replace(url); } catch (e) { f.src = url; } }
   function enter() {
     state.layout = CS.layoutForRole(state.access.role);
     state.name = CS.deriveDisplayName(state.user);

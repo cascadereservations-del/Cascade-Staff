@@ -208,8 +208,9 @@ test('doors by role (D-324): the six roles, in home-screen order', () => {
 });
 
 test('folded door urls come from fold-manifest.json; nothing folded means no overrides', () => {
-  const m = { schema: 1, surfaces: { admin: { files: 5 }, guide: { files: 2 }, manual: { files: 0 } } };
+  const m = { schema: 1, surfaces: { admin: { files: 5 }, guide: { files: 2, adminGuide: true }, manual: { files: 0 } } };
   assert.deepEqual(CS.foldedDoorUrls(m), { dashboard: './admin/#/today', inventory: './admin/#/inventory', guide: './guide/staff/', adminguide: './guide/admin/' });
+  assert.equal(CS.foldedDoorUrls({ surfaces: { guide: { files: 2 } } }).adminguide, undefined, 'no admin guide unless it was folded');
   for (const bad of [null, undefined, {}, [], 'x', { surfaces: null }]) assert.deepEqual(CS.foldedDoorUrls(bad), {});
   for (const u of Object.values(CS.foldedDoorUrls(m))) assert.equal(CS.doorTarget(u, 'https://x.github.io'), 'frame');
 });
@@ -218,4 +219,16 @@ test('doors: the new keys frame for the right layout and a folded inventory need
   assert.equal(CS.doorFramed('inventory', 'staff', true), false); assert.equal(CS.doorFramed('adminguide', 'staff', true), false);
   assert.equal(CS.doorFramed('guide', 'staff', false), true); assert.equal(CS.doorFramed('adminguide', 'admin', false), true);
   assert.deepEqual(CS.doorLink('inventory', './admin/#/inventory', 'https://x.github.io', true), { href: '#door/inventory', external: false });
+});
+
+test('framed shell: a same-origin parent is sent home keeping its query; cross-origin or no parent is left alone', () => {
+  const loc = (o, p, q) => ({ origin: o, pathname: p, search: q });
+  const top = { location: loc('https://x.io', '/Cascade-Staff/', '?demo') };
+  assert.equal(CS.framedParentTarget({ parent: top, location: loc('https://x.io', '/Cascade-Staff/admin/', '') }), '/Cascade-Staff/?demo#home');
+  const self = { location: loc('https://x.io', '/Cascade-Staff/', '') }; self.parent = self;
+  assert.equal(CS.framedParentTarget(self), null);
+  assert.equal(CS.framedParentTarget({ parent: top, location: loc('https://other.io', '/', '') }), null);
+  const locked = { get location() { throw new Error('cross-origin'); } };
+  assert.equal(CS.framedParentTarget({ parent: locked, location: loc('https://x.io', '/', '') }), null);
+  assert.equal(CS.framedParentTarget({}), null);
 });
