@@ -677,7 +677,33 @@
   }
   function clampText(s, n) { s = String(s == null ? '' : s).replace(/\s+/g, ' ').trim(); return s.length > n ? s.slice(0, n - 1).trimEnd() + '…' : s; }
 
+  // ---- install page (s80): which of five states the one-link install page shows ----------------------------------------------
+  // A chat app's built-in browser (Messenger, Facebook, Instagram, Telegram on some phones, an Android WebView) cannot install anything. An iPhone
+  // web view carries no "Safari/" token in its user agent, which is how it gives itself away.
+  var INAPP_RE = /FBAN|FBAV|FB_IAB|FBIOS|FB4A|FBSS|Messenger|Orca-Android|Instagram|Snapchat|MicroMessenger|Line\/|Telegram|GSA\/|; wv\)/i;
+  var IOS_RE = /iPhone|iPad|iPod/i;
+  function isInAppBrowser(ua) { ua = String(ua || ''); return INAPP_RE.test(ua) || (IOS_RE.test(ua) && !/Safari\//.test(ua)); }
+  // e = { ua, standalone, installed, prompt (a beforeinstallprompt was caught), touchPoints }. -> installed | inapp | ios | prompt | unsupported
+  function installState(e) {
+    e = e || {}; var ua = String(e.ua || '');
+    if (e.standalone || e.installed) return 'installed';
+    if (isInAppBrowser(ua)) return 'inapp';
+    if (IOS_RE.test(ua) || (/Macintosh/.test(ua) && e.touchPoints > 1)) return 'ios'; // iPadOS asks for the desktop site by default
+    if (e.prompt) return 'prompt';
+    return 'unsupported';
+  }
+  // The button that leaves a chat app's browser for the phone's own: Android opens Chrome (and falls back to the page itself), iPhone opens Safari.
+  // null on a desktop or for a non-https address: the Copy link button is all there is then.
+  function openInBrowserLink(ua, url) {
+    var m = /^https:\/\/([^\s#]+)$/.exec(String(url || '')); if (!m) return null;
+    if (/android/i.test(ua)) return { label: 'Open in Chrome', href: 'intent://' + m[1] + '#Intent;scheme=https;package=com.android.chrome;S.browser_fallback_url=' + encodeURIComponent(url) + ';end' };
+    if (IOS_RE.test(ua)) return { label: 'Open in Safari', href: 'x-safari-https://' + m[1] };
+    return null;
+  }
+  var INSTALL_URL = 'https://cascadereservations-del.github.io/Cascade-Staff/install/';
+
   return {
+    isInAppBrowser: isInAppBrowser, installState: installState, openInBrowserLink: openInBrowserLink, INSTALL_URL: INSTALL_URL,
     taskKindLabel: taskKindLabel, manilaDayOf: manilaDayOf, taskDue: taskDue, taskDueLabel: taskDueLabel, dueFromDate: dueFromDate, taskGroups: taskGroups,
     taskDueCount: taskDueCount, reminderProblem: reminderProblem, canEditRates: canEditRates, rateNum: rateNum, rateLine: rateLine,
     earliestRateStart: earliestRateStart, rateProblem: rateProblem, rateArgs: rateArgs,

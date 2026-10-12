@@ -6,12 +6,14 @@
   var CS = window.CS, P = window.CSPay, ICON = window.ICON, esc = CS.esc;
   var CFG = { url: 'https://qkgfhsdppslwunarczeq.supabase.co', key: 'sb_publishable_JFuRYZ9csmQULcMRmHXDSg_Abo9UeCj', propertyId: '6ae230f4-c189-4547-84b1-cb6e0b2cc9bd' };
   var $ = function (id) { return document.getElementById(id); };
+  var DEMO = !!(window.CSDemo && window.CSDemo.active); // ?demo: synthetic data, no Supabase client, no network, no storage (demo.js)
+  function net() { return (DEMO ? window.CSDemo.fetch : window.fetch).apply(window, arguments); }
   var root = $('pay');
-  if (!window.supabase) { root.innerHTML = shell('Payment Request', '<div class="errbox">' + ICON('alert') + '<span>Live information needs a connection. Open the app again when you have signal.</span></div>'); return; }
-  var sb = window.supabase.createClient(CFG.url, CFG.key, { auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: false } });
+  if (!DEMO && !window.supabase) { root.innerHTML = shell('Payment Request', '<div class="errbox">' + ICON('alert') + '<span>Live information needs a connection. Open the app again when you have signal.</span></div>'); return; }
+  var sb = DEMO ? window.CSDemo.client('cleaner') : window.supabase.createClient(CFG.url, CFG.key, { auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: false } });
 
   // One key per submission: kept across retries of a failed send, renewed after an ok (see CSPay.keyKeeper).
-  var K = P.keyKeeper();
+  var K = DEMO ? P.keyKeeper(undefined, null) : P.keyKeeper(); // demo: the in-flight key is kept in memory only
   var S = { step: 'pick', cands: null, sel: null, err: '', note: '', sending: false, draftOpen: false, askedOnce: false, askOpen: false, draft: { description: '', amount: '', file: null }, result: null, loadErr: '' };
 
   function shell(title, inner, back) {
@@ -144,21 +146,22 @@
   function upload(extra, token, key) {
     if (!extra.file || extra.receipt_path) return Promise.resolve(true);
     return toJpeg(extra.file).then(function (blob) {
-      return fetch(CFG.url + '/functions/v1/upload-photo', { method: 'POST', headers: { Authorization: 'Bearer ' + token, apikey: CFG.key, 'Content-Type': 'image/jpeg', 'x-cascade-file-name': 'receipt.jpg', 'x-cascade-property-id': CFG.propertyId, 'x-cascade-submission-id': key }, body: blob });
+      return net(CFG.url + '/functions/v1/upload-photo', { method: 'POST', headers: { Authorization: 'Bearer ' + token, apikey: CFG.key, 'Content-Type': 'image/jpeg', 'x-cascade-file-name': 'receipt.jpg', 'x-cascade-property-id': CFG.propertyId, 'x-cascade-submission-id': key }, body: blob });
     }).then(function (r) { return r.json(); }).then(function (j) { if (!j || !j.ok || !j.path) throw new Error('upload'); extra.receipt_path = j.path; return true; }).catch(function () { return false; });
   }
   function send() {
     if (S.sending) return;
     if (noPhotoCount() && !S.askedOnce) { S.askedOnce = true; S.askOpen = true; renderReview(); return; }
     S.sending = true; S.err = ''; S.askOpen = false; renderReview();
+    var demoTotal = DEMO ? P.computeTotal(S.cands, S.sel) : 0;
     sb.auth.getSession().then(function (s) {
       var token = s.data && s.data.session && s.data.session.access_token; if (!token) throw new Error('signin');
       var failed = [], key = K.forSelection(S.cands, S.sel);
       return Promise.all(S.sel.extras.map(function (e) { return upload(e, token, key).then(function (ok) { if (!ok) failed.push(e.description); }); })).then(function () {
         var body = P.buildPayload(S.cands, S.sel, key);
-        return fetch(CFG.url + '/functions/v1/notify-cleaner-payment', { method: 'POST', headers: { Authorization: 'Bearer ' + token, apikey: CFG.key, 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+        return net(CFG.url + '/functions/v1/notify-cleaner-payment', { method: 'POST', headers: { Authorization: 'Bearer ' + token, apikey: CFG.key, 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
           .then(function (r) { return r.json().catch(function () { return { ok: false, reason: 'http_' + r.status }; }); })
-          .then(function (j) { return { j: j, failed: failed }; });
+          .then(function (j) { if (DEMO && j && j.ok) j.total = demoTotal; return { j: j, failed: failed }; });
       });
     }).catch(function () { return { j: { ok: false, reason: 'offline' }, failed: [] }; }).then(function (o) {
       S.sending = false; var m = P.resultMessage(o.j); K.settle(o.j);

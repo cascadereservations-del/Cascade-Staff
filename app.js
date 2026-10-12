@@ -5,7 +5,9 @@
 (function () {
   'use strict';
   var CS = window.CS, P = window.CSPay, ICON = window.ICON, esc = CS.esc;
-  if (!window.supabase) { // offline on a first visit: the shell is here, the client library is not
+  var DEMO = !!(window.CSDemo && window.CSDemo.active); // ?demo: synthetic data, no Supabase client, no network, no storage (demo.js)
+  function net() { return (DEMO ? window.CSDemo.fetch : window.fetch).apply(window, arguments); } // every call to an edge function or a signed photo goes through this
+  if (!DEMO && !window.supabase) { // offline on a first visit: the shell is here, the client library is not
     document.getElementById('v-signin').classList.add('on');
     var e0 = document.getElementById('si-err'); e0.hidden = false; e0.textContent = 'Live information needs a connection. Open the app again when you have signal.';
     return;
@@ -16,7 +18,7 @@
     url: 'https://qkgfhsdppslwunarczeq.supabase.co',
     key: 'sb_publishable_JFuRYZ9csmQULcMRmHXDSg_Abo9UeCj',
     propertyId: '6ae230f4-c189-4547-84b1-cb6e0b2cc9bd',
-    version: '2.5.1'
+    version: '2.6.0'
   };
   var LINKS = {
     checklist: 'https://cascadereservations-del.github.io/CH-Cleaners-Checklist/',
@@ -38,9 +40,9 @@
 
   // supabase-js default storage key on purpose: the dashboard on this origin is then signed in too (SPEC-36 section 5).
   // "Trust this device" (D-303.3): ON keeps the session in localStorage, OFF in sessionStorage only (CS.authStorage picks, key unchanged).
-  function store(name) { try { return window[name]; } catch (e) { return null; } }
+  function store(name) { if (DEMO) return null; try { return window[name]; } catch (e) { return null; } } // demo touches no storage
   var trustOn = CS.trustedFromStorage(store('localStorage'), store('sessionStorage'));
-  var sb = window.supabase.createClient(CFG.url, CFG.key, { auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: false,
+  var sb = DEMO ? window.CSDemo.client(window.CSDemo.role()) : window.supabase.createClient(CFG.url, CFG.key, { auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: false,
     storage: CS.authStorage(store('localStorage'), store('sessionStorage'), function () { return trustOn; }) } });
 
   var state = { access: null, user: null, name: '', layout: null, payload: null, loadedAt: 0, loading: false, error: '', month: null, cassyOpen: true, payHint: null, photos: {},
@@ -224,7 +226,7 @@
       if (hit && Date.now() - hit.at < 4 * 60000) { putPhoto(box, hit.url); return; }
       sb.storage.from('guest-id-photos').createSignedUrl(path, 300).then(function (r) {
         if (r.error || !r.data) throw new Error('sign');
-        return fetch(r.data.signedUrl, { cache: 'no-store', referrerPolicy: 'no-referrer' });
+        return net(r.data.signedUrl, { cache: 'no-store', referrerPolicy: 'no-referrer' });
       }).then(function (res) { if (!res.ok) throw new Error('fetch'); return res.blob(); }).then(function (blob) {
         if (hit) URL.revokeObjectURL(hit.url);
         var url = URL.createObjectURL(blob); state.photos[path] = { url: url, at: Date.now() }; putPhoto(box, url);
@@ -684,7 +686,7 @@
     var body = JSON.stringify(CS.replyBody({ mode: R.mode, text: R.text, image: R.image, guestName: R.name, platform: R.platform }));
     sb.auth.getSession().then(function (s) {
       var token = s.data && s.data.session && s.data.session.access_token; if (!token) return { status: 401, j: null };
-      return fetch(CFG.url + '/functions/v1/guest-reply-draft', { method: 'POST', headers: { Authorization: 'Bearer ' + token, apikey: CFG.key, 'Content-Type': 'application/json' }, body: body })
+      return net(CFG.url + '/functions/v1/guest-reply-draft', { method: 'POST', headers: { Authorization: 'Bearer ' + token, apikey: CFG.key, 'Content-Type': 'application/json' }, body: body })
         .then(function (r) { return r.json().catch(function () { return null; }).then(function (j) { return { status: r.status, j: j }; }); });
     }).catch(function () { return { status: 0, j: null }; }).then(function (o) {
       if (state.reply !== R) return; // signed out meanwhile
@@ -725,7 +727,8 @@
       '<div class="card list">' + (canReply() ? row({ icon: 'sparkles', title: 'Cassy reply', sub: 'Draft a warm reply to a guest message', href: '#reply' }) : '') + row({ icon: 'book', title: 'Quick guide', sub: 'How to use Cassy in Telegram', href: LINKS.quick }) +
       (staff ? '' : row({ icon: 'wallet', title: 'Cassy · Telegram Finance', sub: 'Open in Telegram', tg: LINKS.tgFinance, external: true })) + row({ icon: 'book', title: 'Cascade Manual', sub: 'How we do things', door: 'manual' }) + '</div>' +
       '<div class="card"><h2 class="hd">Appearance</h2><div class="row-wrap" style="margin-top:10px">' + chip('auto', 'Automatic') + chip('light', 'Light') + chip('dark', 'Dark') + '</div></div>' +
-      '<div class="card" id="install-card" hidden><h2 class="hd">Install the app</h2><p class="sub" style="margin-top:6px">Put Cascade Staff on your Home Screen.</p><button class="btn btn-secondary" id="install-btn" type="button" style="margin-top:10px">' + ICON('plus', 's16') + 'Install</button></div>' +
+      '<div class="card" id="install-card" hidden><h2 class="hd">Install the app</h2><p class="sub" style="margin-top:6px">Put Cascade Staff on your Home Screen.</p><button class="btn btn-secondary" id="install-btn" type="button" style="margin-top:10px">' + ICON('plus', 's16') + 'Install</button>' +
+        '<a class="btn btn-secondary" id="install-link" href="./install/" style="margin-top:10px" hidden>' + ICON('plus', 's16') + 'How to install</a></div>' +
       '<div class="card"><h2 class="hd">Signed in as ' + esc(state.name) + '</h2><p class="sub" style="margin-top:4px">' + esc(state.access ? state.access.role : '') + '</p><button class="btn btn-secondary" type="button" data-act="signout" style="margin-top:10px">' + ICON('logout', 's16') + 'Sign out</button>' +
       '<p class="help" style="margin-top:8px">Signs you out of the admin dashboard as well, on this phone.</p></div></div>' +
       '<div class="help" style="text-align:center;margin-top:16px">Cascade Staff v' + CFG.version + '</div></div>';
@@ -772,7 +775,7 @@
     if (!CS.weatherStale(w)) return;
     sb.auth.getSession().then(function (s) {
       var tok = s.data && s.data.session && s.data.session.access_token; if (!tok) return;
-      return fetch(CFG.url + '/functions/v1/weather-proxy', { headers: { Authorization: 'Bearer ' + tok, apikey: CFG.key }, cache: 'no-store' })
+      return net(CFG.url + '/functions/v1/weather-proxy', { headers: { Authorization: 'Bearer ' + tok, apikey: CFG.key }, cache: 'no-store' })
         .then(function (res) { return res.ok ? res.json() : null; }).then(function (j) {
           if (j && j.current && j.current.temp != null && state.payload) {
             var c = j.current;
@@ -812,6 +815,7 @@
     if (v === 'door' && !(doorDef(parts[1]) && CS.doorFramed(parts[1], state.layout, trustOn))) v = 'home';
     if (v === 'payrates' && !CS.canEditRates(state.access && state.access.role)) v = 'home';
     if (v === 'reply' && !canReply()) v = 'home';
+    if (v === 'door' && DEMO) { toast('Demo: ' + doorDef(parts[1]).title + ' opens in the live app'); history.replaceState(null, '', '#home'); v = 'home'; } // a door would load a real app in the frame
     if (v === 'door') { doorKey = parts[1]; render('door'); window.scrollTo(0, 0); return; }
     leaveDoor(); render(v);
     var t = parts[1] && $(parts[1]); if (t) t.scrollIntoView({ block: 'start' }); else window.scrollTo(0, 0);
@@ -1000,15 +1004,16 @@
   window.addEventListener('appinstalled', function () { deferredPrompt = null; syncInstall(); });
   function syncInstall() {
     var card = $('install-card'), btn = $('install-btn'); if (!card) return;
-    card.hidden = standalone || !(deferredPrompt || isIOS);
+    card.hidden = standalone; // no prompt and not an iPhone: the card still shows, and links to the install page (it says what this browser can do)
+    var lnk = $('install-link'); if (lnk) lnk.hidden = !!(deferredPrompt || isIOS); if (btn) btn.hidden = !(deferredPrompt || isIOS);
     if (btn) btn.onclick = function () {
       if (deferredPrompt) { deferredPrompt.prompt(); deferredPrompt.userChoice.then(function () { deferredPrompt = null; syncInstall(); }); }
       else showA2hs();
     };
   }
-  function seen() { try { return !!localStorage.getItem('cs_a2hs_seen'); } catch (e) { return false; } }
+  function seen() { if (DEMO) return true; try { return !!localStorage.getItem('cs_a2hs_seen'); } catch (e) { return false; } }
   function showA2hs() { $('a2hs-share').innerHTML = ICON('share'); $('a2hs').classList.add('on'); $('a2hs').setAttribute('aria-hidden', 'false'); $('a2hs-scrim').classList.add('on'); }
-  function hideA2hs() { $('a2hs').classList.remove('on'); $('a2hs').setAttribute('aria-hidden', 'true'); $('a2hs-scrim').classList.remove('on'); try { localStorage.setItem('cs_a2hs_seen', '1'); } catch (e) {} }
+  function hideA2hs() { $('a2hs').classList.remove('on'); $('a2hs').setAttribute('aria-hidden', 'true'); $('a2hs-scrim').classList.remove('on'); if (!DEMO) try { localStorage.setItem('cs_a2hs_seen', '1'); } catch (e) {} }
   function maybeIosHint() { if (isIOS && !standalone && !seen()) setTimeout(showA2hs, 800); }
   $('a2hs-ok').addEventListener('click', hideA2hs); $('a2hs-scrim').addEventListener('click', hideA2hs);
 

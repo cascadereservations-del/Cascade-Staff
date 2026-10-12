@@ -1,6 +1,7 @@
 /* Cascade Staff - theme switch. Loaded in <head> before first paint so a saved choice never flashes. Same key as the mockups. */
 (function (root) {
-  var KEY = 'cascade-theme', el = root.document.documentElement;
+  var KEY = /(^|[?&])demo(=|&|$)/.test(root.location.search) ? 'cs-demo-theme' : 'cascade-theme', // ?demo keeps its own key: it never reads or changes the real choice
+       el = root.document.documentElement;
   function get() { try { var t = root.localStorage.getItem(KEY); return t === 'dark' || t === 'light' ? t : 'auto'; } catch (e) { return 'auto'; } }
   function set(t) {
     try { if (t === 'dark' || t === 'light') root.localStorage.setItem(KEY, t); else root.localStorage.removeItem(KEY); } catch (e) {}

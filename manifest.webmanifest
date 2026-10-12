@@ -6,6 +6,8 @@
   "start_url": "/Cascade-Staff/?source=pwa",
   "scope": "/Cascade-Staff/",
   "display": "standalone",
+  "prefer_related_applications": false,
+  "related_applications": [{ "platform": "webapp", "url": "https://cascadereservations-del.github.io/Cascade-Staff/manifest.webmanifest" }],
   "background_color": "#F9F6F0",
   "theme_color": "#F9F6F0",
   "icons": [

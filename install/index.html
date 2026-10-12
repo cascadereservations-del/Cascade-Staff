@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Install Cascade Staff</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="description" content="Put Cascade Staff on your phone in one step. Open this link in Chrome (Android) or Safari (iPhone).">
+<meta name="theme-color" content="#F9F6F0" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#12100D" media="(prefers-color-scheme: dark)">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cascade Staff">
+<meta name="referrer" content="no-referrer">
+<link rel="manifest" href="../manifest.webmanifest">
+<link rel="apple-touch-icon" href="../icons/apple-touch-icon-180.png">
+<link rel="icon" type="image/png" sizes="192x192" href="../icons/icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Raleway:wght@400;500;600;700&family=Cormorant+Garamond:ital,wght@0,500;0,600;0,700;1,500;1,600&family=Style+Script&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../styles.css">
+<style>
+  .inst { max-width: 480px; margin: 0 auto; padding: calc(env(safe-area-inset-top) + 24px) var(--gutter) calc(env(safe-area-inset-bottom) + 32px); display: flex; flex-direction: column; gap: 16px; }
+  .inst .head { text-align: center; }
+  .inst .big { height: 64px; font-size: 16px; }
+  .inst .isteps { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 16px; }
+  .inst .istep { display: grid; grid-template-columns: 32px 1fr; gap: 12px; align-items: start; }
+  .inst .inum { width: 32px; height: 32px; border-radius: var(--r-full); background: var(--primary); color: var(--primary-fg); font: 700 15px/32px var(--font-ui); text-align: center; }
+  .inst .istep h2 { font: 600 15px/22px var(--font-ui); margin: 4px 0 8px; }
+  .inst .pic { display: block; width: 100%; height: auto; }
+  .inst .pic text { font: 500 11px var(--font-ui); fill: var(--fg-2); }
+  .inst .pic .hi { fill: var(--primary-soft); stroke: var(--primary); stroke-width: 2; }
+  .inst .pic .box { fill: var(--muted); stroke: var(--border-strong); stroke-width: 1; }
+  .inst .pic .ink { stroke: var(--fg-2); fill: none; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+  .inst .pic .ink.hi2 { stroke: var(--primary); stroke-width: 2.2; }
+  .inst .pic text.tx-hi { fill: var(--primary); font-weight: 700; }
+  .inst .row-actions { display: grid; gap: 8px; }
+  .inst .istep, .inst .okbox, .inst .infobox, .inst .card { text-align: left; }
+  .inst { min-height: 0; justify-content: flex-start; }
+  .inst .okbox, .inst .infobox { align-items: center; }
+</style>
+</head>
+<body>
+<main class="inst signin" id="inst" aria-live="polite"></main>
+<script src="../icons.js"></script>
+<script src="../lib.js"></script>
+<script src="install.js"></script>
+</body>
+</html>

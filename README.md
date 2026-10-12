@@ -15,6 +15,8 @@ Specs: SPEC-36 (gateway, calendar info), SPEC-37 sections 4-7 (Payment Request p
 | `pay/index.html`, `pay/pay.js`, `pay/pay-lib.js` | Payment Request: pick cleans (per-clean transport toggle), expenses with an optional receipt photo, review in Honey's format, status. |
 | `pay/bank.html` | Opens a bank app. Lists only apps whose ids are verified (none yet, so none is offered). |
 | `sw.js`, `manifest.webmanifest`, `icons/`, `fonts/` | Installable shell. Supabase is network-only; nothing personal is ever cached. |
+| `install/index.html`, `install/install.js` | The one-link install page, `https://cascadereservations-del.github.io/Cascade-Staff/install/`: in-app browser (Open in Chrome / Safari + Copy link), one Install button, the iPhone three-step picture guide, already installed, other browsers. No data, no sign-in. The decision is `CS.installState`. |
+| `demo.js` | Demo mode for design review: open any page with `?demo` (`&role=owner`, `admin`, `cleaner` or `signin`). Synthetic data, no Supabase client, no network, no storage; every write says "Demo: nothing was saved". |
 | `tests/` | `npm test` (Node 20+, no dependencies). |
 
 ## Tasks and Pay rates (D-301)

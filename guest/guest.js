@@ -7,13 +7,15 @@
   var CS = window.CS, G = window.CSGuest, ICON = window.ICON, esc = CS.esc;
   var CFG = { url: 'https://qkgfhsdppslwunarczeq.supabase.co', key: 'sb_publishable_JFuRYZ9csmQULcMRmHXDSg_Abo9UeCj' };
   var $ = function (id) { return document.getElementById(id); };
+  var DEMO = !!(window.CSDemo && window.CSDemo.active); // ?demo: synthetic data, no Supabase client, no network, no storage (demo.js)
+  function net() { return (DEMO ? window.CSDemo.fetch : window.fetch).apply(window, arguments); }
   var root = $('gd');
   var uid = G.uidFromHash(location.hash), mode = G.modeFromSearch(location.search); // s78: 'id' from the empty ID box, 'companion' from Add a companion
-  if (!window.supabase) { root.innerHTML = shell('<div class="errbox">' + ICON('alert') + '<span>Live information needs a connection. Open the app again when you have signal.</span></div>'); return; }
+  if (!DEMO && !window.supabase) { root.innerHTML = shell('<div class="errbox">' + ICON('alert') + '<span>Live information needs a connection. Open the app again when you have signal.</span></div>'); return; }
   // Same session as the Staff app: the default key and the "Trust this device" storage choice (D-303.3).
-  function store(name) { try { return window[name]; } catch (e) { return null; } }
+  function store(name) { if (DEMO) return null; try { return window[name]; } catch (e) { return null; } }
   var trustOn = CS.trustedFromStorage(store('localStorage'), store('sessionStorage'));
-  var sb = window.supabase.createClient(CFG.url, CFG.key, { auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: false,
+  var sb = DEMO ? window.CSDemo.client('owner') : window.supabase.createClient(CFG.url, CFG.key, { auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: false,
     storage: CS.authStorage(store('localStorage'), store('sessionStorage'), function () { return trustOn; }) } });
 
   // step: load | input | reading | review | saving | done
@@ -27,7 +29,7 @@
   function call(body) {
     return sb.auth.getSession().then(function (s) {
       var token = s.data && s.data.session && s.data.session.access_token; if (!token) return { status: 401, j: { error: 'authentication_required' } };
-      return fetch(CFG.url + '/functions/v1/staff-guest-details', { method: 'POST', headers: { Authorization: 'Bearer ' + token, apikey: CFG.key, 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+      return net(CFG.url + '/functions/v1/staff-guest-details', { method: 'POST', headers: { Authorization: 'Bearer ' + token, apikey: CFG.key, 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
         .then(function (r) { return r.json().catch(function () { return null; }).then(function (j) { return { status: r.status, j: j || {} }; }); });
     }).catch(function () { return { status: 0, j: {} }; });
   }
