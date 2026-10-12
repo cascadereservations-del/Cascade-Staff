@@ -6,7 +6,7 @@
 //   Same-origin shell files                                          -> network-first, cache fallback.
 // Nothing personal is ever stored here: the cache holds the shell (HTML, CSS, JS, fonts, icons) and nothing else.
 // A shell that loads offline says "Live information needs a connection"; guest names exist only in JS memory.
-const CACHE_NAME = 'cs-shell-v10';
+const CACHE_NAME = 'cs-shell-v11';
 const NAV_TIMEOUT_MS = 3000;
 // The self-hosted font files styles.css @font-face points at. Theme v2 changes fonts: edit this one list (and styles.css), nothing else here.
 const SELF_FONTS = ['cormorant-garamond-600.woff2', 'cormorant-garamond-700.woff2'];
@@ -23,6 +23,14 @@ const SHELL_URLS = [
 const NETWORK_ONLY_HOSTS = ['supabase.co', 'supabase.in', 'api.telegram.org', 't.me'];
 const FONT_HOSTS = ['fonts.googleapis.com', 'fonts.gstatic.com', 'cdn.jsdelivr.net']; // public files only: fonts and the pinned supabase-js build
 const NEVER_PATHS = ['/rest/v1/', '/functions/v1/', '/auth/v1/', '/storage/v1/'];
+// Folded sibling apps (D-324): never answered or stored by the shell worker. The admin dashboard must never be served stale, and the
+// checklist registers its own nested worker for its own scope. Pure, so tests can run it: swRoute('/Cascade-Staff/admin/x.js', '/Cascade-Staff/') -> 'network'.
+const FOLDED_DIRS = ['admin', 'checklist', 'manual', 'guide'];
+function swRoute(pathname, base) {
+  if (pathname.indexOf(base) !== 0) return 'shell';
+  const first = pathname.slice(base.length).split('/')[0];
+  return FOLDED_DIRS.indexOf(first) >= 0 ? 'network' : 'shell';
+}
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
@@ -59,6 +67,7 @@ self.addEventListener('fetch', (event) => {
   }
 
   if (url.origin !== self.location.origin) return; // anything else cross-origin: the browser's own handling
+  if (swRoute(url.pathname, new URL('./', self.location).pathname) === 'network') return; // folded apps: straight to the network, never stored here
 
   const fromNetwork = (req) => fetch(req).then((resp) => {
     if (resp && resp.status === 200 && resp.type === 'basic') { const copy = resp.clone(); caches.open(CACHE_NAME).then((c) => c.put(req, copy)); }
@@ -74,3 +83,4 @@ self.addEventListener('fetch', (event) => {
   }
   event.respondWith(fromNetwork(request).catch(() => caches.match(request, { ignoreSearch: true })));
 });
+if (typeof module !== 'undefined') module.exports = { swRoute, CACHE_NAME, SHELL_URLS };

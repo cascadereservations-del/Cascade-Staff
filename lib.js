@@ -114,8 +114,33 @@
   var DOOR_RULES = {
     checklist: { layouts: ['staff', 'admin'], localKey: false },
     dashboard: { layouts: ['admin'], localKey: true },
-    manual: { layouts: ['staff', 'admin'], localKey: false }
+    manual: { layouts: ['staff', 'admin'], localKey: false },
+    inventory: { layouts: ['admin'], localKey: true }, // the folded admin build reads the same localStorage session as the dashboard
+    guide: { layouts: ['staff', 'admin'], localKey: false },
+    adminguide: { layouts: ['admin'], localKey: false } // encrypted on its own; no session needed
   };
+  // Who sees which door (D-324): role decides, the server stays the real gate. Order = order on the home screen.
+  var ALL_ROLES = ['owner', 'admin', 'finance', 'cleaner', 'inspector', 'maintenance'];
+  var DOOR_ROLES = {
+    checklist: ALL_ROLES, manual: ALL_ROLES, guide: ALL_ROLES,
+    dashboard: ['owner', 'admin', 'finance'],
+    inventory: ['owner', 'admin'],
+    adminguide: ['owner', 'admin']
+  };
+  var DOOR_ORDER = ['checklist', 'dashboard', 'manual', 'inventory', 'guide', 'adminguide'];
+  function doorAllowed(key, role) { return Object.prototype.hasOwnProperty.call(DOOR_ROLES, key) && DOOR_ROLES[key].indexOf(role) >= 0; }
+  function doorsForRole(role) { return DOOR_ORDER.filter(function (k) { return doorAllowed(k, role); }); }
+  // Where each door lives once its surface is folded into this app: key -> [surface in fold-manifest.json, relative url].
+  var FOLD_DOORS = {
+    checklist: ['checklist', './checklist/'], dashboard: ['admin', './admin/#/today'], inventory: ['admin', './admin/#/inventory'],
+    manual: ['manual', './manual/'], guide: ['guide', './guide/staff/'], adminguide: ['guide', './guide/admin/']
+  };
+  // fold-manifest.json -> {doorKey: relativeUrl} for the surfaces that were folded (null, 404 or junk = nothing folded).
+  function foldedDoorUrls(manifest) {
+    var out = {}, s = manifest && typeof manifest === 'object' && manifest.surfaces && typeof manifest.surfaces === 'object' ? manifest.surfaces : {};
+    Object.keys(FOLD_DOORS).forEach(function (k) { var e = s[FOLD_DOORS[k][0]]; if (e && e.files > 0) out[k] = FOLD_DOORS[k][1]; });
+    return out;
+  }
   function doorRule(key) { return Object.prototype.hasOwnProperty.call(DOOR_RULES, key) ? DOOR_RULES[key] : null; }
   function doorFramed(key, layout, trusted) {
     var r = doorRule(key);
@@ -712,7 +737,7 @@
     REPLY_MAX_IMAGE_BYTES: REPLY_MAX_IMAGE_BYTES, REPLY_MAX_EDGE: REPLY_MAX_EDGE,
     staffAuthPassword: staffAuthPassword, staffLoginEmail: staffLoginEmail, deriveDisplayName: deriveDisplayName, greetingName: greetingName,
     signinKind: signinKind, signinList: signinList, typedEntry: typedEntry, keypadPress: keypadPress, signinCredentials: signinCredentials,
-    authStorage: authStorage, trustedFromStorage: trustedFromStorage, rememberName: rememberName, recalledName: recalledName, doorTarget: doorTarget, doorLink: doorLink, doorRule: doorRule, doorFramed: doorFramed,
+    authStorage: authStorage, trustedFromStorage: trustedFromStorage, rememberName: rememberName, recalledName: recalledName, doorTarget: doorTarget, doorLink: doorLink, doorRule: doorRule, doorFramed: doorFramed, doorAllowed: doorAllowed, doorsForRole: doorsForRole, foldedDoorUrls: foldedDoorUrls, FOLD_DOORS: FOLD_DOORS,
     layoutForRole: layoutForRole, accessVerdict: accessVerdict, assertNoMoney: assertNoMoney, moneyKeys: moneyKeys,
     manilaToday: manilaToday, manilaParts: manilaParts, addDays: addDays, daysBetween: daysBetween, weekdayIndex: weekdayIndex,
     dayLabel: dayLabel, dayLong: dayLong, dayShort: dayShort, monthTitle: monthTitle, monthShortYear: monthShortYear, greeting: greeting,

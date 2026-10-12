@@ -196,3 +196,26 @@ test('companionsLine: names and ID count for owner/admin; nothing when the key i
   assert.equal(CS.companionsLine({ companions: [] }), null);
   assert.equal(CS.companionsLine(null), null);
 });
+
+test('doors by role (D-324): the six roles, in home-screen order', () => {
+  const all = ['checklist', 'manual', 'guide'];
+  assert.deepEqual(CS.doorsForRole('owner'), ['checklist', 'dashboard', 'manual', 'inventory', 'guide', 'adminguide']);
+  assert.deepEqual(CS.doorsForRole('admin'), CS.doorsForRole('owner'));
+  assert.deepEqual(CS.doorsForRole('finance'), ['checklist', 'dashboard', 'manual', 'guide']);
+  for (const r of ['cleaner', 'inspector', 'maintenance']) assert.deepEqual(CS.doorsForRole(r), all);
+  for (const r of ['guest', '', null, undefined]) assert.deepEqual(CS.doorsForRole(r), []);
+  assert.equal(CS.doorAllowed('dashboard', 'cleaner'), false); assert.equal(CS.doorAllowed('constructor', 'owner'), false);
+});
+
+test('folded door urls come from fold-manifest.json; nothing folded means no overrides', () => {
+  const m = { schema: 1, surfaces: { admin: { files: 5 }, guide: { files: 2 }, manual: { files: 0 } } };
+  assert.deepEqual(CS.foldedDoorUrls(m), { dashboard: './admin/#/today', inventory: './admin/#/inventory', guide: './guide/staff/', adminguide: './guide/admin/' });
+  for (const bad of [null, undefined, {}, [], 'x', { surfaces: null }]) assert.deepEqual(CS.foldedDoorUrls(bad), {});
+  for (const u of Object.values(CS.foldedDoorUrls(m))) assert.equal(CS.doorTarget(u, 'https://x.github.io'), 'frame');
+});
+
+test('doors: the new keys frame for the right layout and a folded inventory needs Trust ON', () => {
+  assert.equal(CS.doorFramed('inventory', 'staff', true), false); assert.equal(CS.doorFramed('adminguide', 'staff', true), false);
+  assert.equal(CS.doorFramed('guide', 'staff', false), true); assert.equal(CS.doorFramed('adminguide', 'admin', false), true);
+  assert.deepEqual(CS.doorLink('inventory', './admin/#/inventory', 'https://x.github.io', true), { href: '#door/inventory', external: false });
+});

@@ -18,12 +18,14 @@
     url: 'https://qkgfhsdppslwunarczeq.supabase.co',
     key: 'sb_publishable_JFuRYZ9csmQULcMRmHXDSg_Abo9UeCj',
     propertyId: '6ae230f4-c189-4547-84b1-cb6e0b2cc9bd',
-    version: '2.6.0'
+    version: '2.7.0'
   };
   var LINKS = {
     checklist: 'https://cascadereservations-del.github.io/CH-Cleaners-Checklist/',
     dashboard: 'https://cascadereservations-del.github.io/cascade-admin-dashboard/#/today',
     manual: 'https://cascadereservations-del.github.io/Cascade-Manual/',
+    inventory: 'https://cascadereservations-del.github.io/CH_Inventory/', // retired signpost to the dashboard's Inventory tab (D-137); only a fallback
+    guide: 'https://cascadereservations-del.github.io/Cascade-System-Guide/',
     quick: './quick/',
     tgOps: CS.tgLink('3798341977'), // {app: tg://..., web: https://t.me/c/...}; tgA() opens the app, the web page is the fallback
     tgFinance: CS.tgLink('3819352746'),
@@ -31,12 +33,24 @@
   };
   // Doors (D-304.3): a door on this origin opens inside the app in a full-screen frame (one storage partition on iPhone Home Screen and
   // Android alike); a door on another origin would open externally. The frame is addressed by key, never by a URL in the hash.
-  function doorDef(key) { return Object.prototype.hasOwnProperty.call(DOORS, key) ? DOORS[key] : null; }
+  // D-324: a surface folded into this app (fold-manifest.json, read once at start) opens from its relative path; otherwise today's absolute
+  // github.io URL. The admin guide has no absolute fallback: it exists only folded, so without it the door is simply not there.
+  function doorDef(key) { var d = Object.prototype.hasOwnProperty.call(DOORS, key) ? DOORS[key] : null; return d && d.url ? d : null; }
   var DOORS = {
     checklist: { title: 'Cleaning checklist', url: LINKS.checklist },
     dashboard: { title: 'Admin dashboard', url: LINKS.dashboard },
-    manual: { title: 'Cascade Manual', url: LINKS.manual }
+    manual: { title: 'Cascade Manual', url: LINKS.manual },
+    inventory: { title: 'Inventory', url: LINKS.inventory },
+    guide: { title: 'System Guide', url: LINKS.guide },
+    adminguide: { title: 'Admin guide', url: '' }
   };
+  var FALLBACK = {}; Object.keys(DOORS).forEach(function (k) { FALLBACK[k] = DOORS[k].url; });
+  function applyFold(manifest) { // pure over DOORS: folded relative url where the surface exists, else the fallback again
+    var f = CS.foldedDoorUrls(manifest);
+    Object.keys(DOORS).forEach(function (k) { DOORS[k].url = DEMO ? (CS.FOLD_DOORS[k][1]) : (f[k] || FALLBACK[k]); }); // demo: every door exists, none opens (route toasts)
+  }
+  // A door row only for a role that may have it and only if it has somewhere to go.
+  function doorRow(key, icon, sub) { return doorDef(key) && CS.doorAllowed(key, state.access && state.access.role) ? row({ icon: icon, title: DOORS[key].title, sub: sub, door: key }) : ''; }
 
   // supabase-js default storage key on purpose: the dashboard on this origin is then signed in too (SPEC-36 section 5).
   // "Trust this device" (D-303.3): ON keeps the session in localStorage, OFF in sessionStorage only (CS.authStorage picks, key unchanged).
@@ -144,11 +158,13 @@
         '<div class="subrow"><a class="btn btn-secondary btn-sm" href="' + LINKS.quick + '">' + ICON('book', 's16') + 'Quick guide</a>' +
         '<span class="help">Two minutes on telling Cassy what happened, asking her anything, and logging what you spent.</span></div>' +
         row({ icon: 'book', title: 'Cascade Manual', sub: 'How we do things', door: 'manual' }) +
+        doorRow('guide', 'book', 'How the staff app and the house work') +
         (LINKS.pay ? row({ icon: 'cash', title: 'Payment Request', sub: state.payHint || 'Ask for your cleaning pay', href: LINKS.pay, subId: 'pay-sub' }) : '') + '</nav>';
     } else {
       doors = '<nav class="card list" aria-label="Admin">' +
         (bk ? row({ icon: 'clip', title: 'Bookings to confirm', sub: 'Open the pending bookings', href: bk.href, external: true, count: bk.count, countLabel: bk.n === 1 ? ' booking to confirm' : ' bookings to confirm' }) : '') +
         row({ icon: 'dash', title: 'Admin dashboard', sub: 'Today, bookings, money, operations', door: 'dashboard' }) +
+        doorRow('inventory', 'box', 'Stock levels and usage') +
         (trustOn ? '' : '<div class="help doornote">Sign-in is kept only on trusted devices</div>') +
         (CS.canEditRates(state.access && state.access.role) ? row({ icon: 'cash', title: 'Pay rates', sub: 'What a clean and its transport pay', href: '#payrates' }) : '') +
         (canReply() ? row({ icon: 'sparkles', title: 'Cassy reply', sub: 'Draft a warm reply to a guest message', href: '#reply' }) : '') +
@@ -157,7 +173,8 @@
         '<div class="submenu" id="cassy-sub"' + (state.cassyOpen ? '' : ' hidden') + '>' +
         tgA(LINKS.tgFinance, ICON('wallet', 's16') + 'Finance', 'chip') + tgA(LINKS.tgOps, ICON('wrench', 's16') + 'OPS', 'chip') +
         '<a class="chip" href="' + LINKS.quick + '">' + ICON('book', 's16') + 'Quick guide</a></div>' +
-        row({ icon: 'book', title: 'Cascade Manual', sub: 'Operations manual', door: 'manual' }) + '</nav>';
+        row({ icon: 'book', title: 'Cascade Manual', sub: 'Operations manual', door: 'manual' }) +
+        doorRow('guide', 'book', 'How the staff app and the house work') + doorRow('adminguide', 'lock', 'Owner and admin chapters') + '</nav>';
     }
     el.innerHTML = appbar({ brand: true, refresh: true }) + '<div class="screen">' + errBanner() + greetBlock() +
       '<div class="stack">' + todayCard(staff) + warnLine() + doors + '</div>' + footerLine() + '</div>';
@@ -812,7 +829,7 @@
     var h = (location.hash || '').replace(/^#/, ''), parts = h.split('/'), v = parts[0] || 'home';
     if (!state.layout) return;
     if (VIEWS.indexOf(v) < 0 || v === 'signin') v = 'home';
-    if (v === 'door' && !(doorDef(parts[1]) && CS.doorFramed(parts[1], state.layout, trustOn))) v = 'home';
+    if (v === 'door' && !(doorDef(parts[1]) && CS.doorFramed(parts[1], state.layout, trustOn) && CS.doorAllowed(parts[1], state.access && state.access.role))) v = 'home'; // role decides; the server stays the real gate
     if (v === 'payrates' && !CS.canEditRates(state.access && state.access.role)) v = 'home';
     if (v === 'reply' && !canReply()) v = 'home';
     if (v === 'door' && DEMO) { toast('Demo: ' + doorDef(parts[1]).title + ' opens in the live app'); history.replaceState(null, '', '#home'); v = 'home'; } // a door would load a real app in the frame
@@ -1018,5 +1035,9 @@
   $('a2hs-ok').addEventListener('click', hideA2hs); $('a2hs-scrim').addEventListener('click', hideA2hs);
 
   if ('serviceWorker' in navigator) window.addEventListener('load', function () { navigator.serviceWorker.register('sw.js').catch(function () {}); });
+  // Which sibling surfaces are folded into this deployment? Read once, network-first (no-store); 404 or offline-without-cache = none folded.
+  if (DEMO) applyFold(null);
+  else if (typeof window.fetch === 'function') window.fetch('./fold-manifest.json', { cache: 'no-store' }).then(function (r) { return r.ok ? r.json() : null; }).catch(function () { return null; })
+    .then(function (m) { applyFold(m); if (state.layout && current !== 'door') render(current); });
   boot();
 })();

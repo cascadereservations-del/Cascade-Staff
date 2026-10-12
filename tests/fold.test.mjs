@@ -1,0 +1,95 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import vm from 'node:vm';
+import { fileURLToPath } from 'node:url';
+import { spawnSync } from 'node:child_process';
+import { foldIn, stripManifestLink } from '../scripts/fold-in.mjs';
+
+const HERE = path.dirname(fileURLToPath(import.meta.url));
+const SCRIPT = path.join(HERE, '..', 'scripts', 'fold-in.mjs');
+const tmp = () => fs.mkdtempSync(path.join(os.tmpdir(), 'fold-'));
+function tree(root, files) { for (const [f, c] of Object.entries(files)) { const p = path.join(root, f); fs.mkdirSync(path.dirname(p), { recursive: true }); fs.writeFileSync(p, c); } return root; }
+function list(root, rel = '') { return fs.readdirSync(path.join(root, rel), { withFileTypes: true }).flatMap((e) => e.isDirectory() ? list(root, path.join(rel, e.name)) : [path.join(rel, e.name).replace(/\\/g, '/')]).sort(); }
+
+const CHECK = {
+  'index.html': '<html><head><link rel="manifest" href="manifest.webmanifest"><link rel="icon" href="icons/i.png"><script src="install.js"></script></head><script>navigator.serviceWorker.register("sw.js")</script></html>',
+  'sw.js': 'x', 'install.js': 'x', 'install.html': 'x', 'manifest.webmanifest': '{}', 'icons/i.png': 'p', 'fonts/f.woff2': 'f',
+  'docs/a.md': 'd', 'sql/a.sql': 's', 'supabase/c.toml': 's', 'tests/t.js': 't', 'Code.gs': 'g', 'appsscript.json': '{}', '.gitignore': 'x', 'README.md': 'r', 'icons/README.md': 'r', 'icons/x.gs': 'g'
+};
+
+test('checklist: allow-list honoured, forbidden files never copied, manifest link stripped', () => {
+  const root = tmp(), src = tree(tmp(), CHECK);
+  const rows = foldIn({ checklist: src }, { root });
+  // install.html is not named in index.html, so it stays out
+  assert.deepEqual(list(path.join(root, 'checklist')), ['fonts/f.woff2', 'icons/i.png', 'index.html', 'install.js', 'sw.js']);
+  const html = fs.readFileSync(path.join(root, 'checklist', 'index.html'), 'utf8');
+  assert.doesNotMatch(html, /rel="manifest"/); assert.match(html, /rel="icon"/);
+  assert.equal(rows[0].files, 5);
+  const mf = JSON.parse(fs.readFileSync(path.join(root, 'fold-manifest.json'), 'utf8'));
+  assert.equal(mf.surfaces.checklist.files, 5); assert.ok(mf.surfaces.checklist.bytes > 0); assert.ok(mf.surfaces.checklist.time); assert.ok('head' in mf.surfaces.checklist);
+});
+
+test('checklist: sw.js and install files are copied only when index.html names them', () => {
+  const root = tmp(), src = tree(tmp(), { ...CHECK, 'index.html': '<html>nothing here</html>' });
+  foldIn({ checklist: src }, { root });
+  assert.deepEqual(list(path.join(root, 'checklist')), ['fonts/f.woff2', 'icons/i.png', 'index.html']);
+});
+
+test('admin copies everything; manual and guide take only their allow-list; the manifest merges across runs', () => {
+  const root = tmp();
+  const admin = tree(tmp(), { 'index.html': 'a', 'assets/x.js': 'x', 'assets/y.css': 'y' });
+  const manual = tree(tmp(), { 'index.html': 'm', 'img/a.png': 'p', 'notes.txt': 'n', 'docs/d.md': 'd', 'README.md': 'r' });
+  const guide = tree(tmp(), { 'index.html': 'g', 'staff/index.html': 's', 'admin/index.html': 'a', 'assets/a.js': 'j', 'img/i.png': 'i', 'research/r.md': 'r', 'tools/t.mjs': 't' });
+  foldIn({ admin }, { root }); foldIn({ manual, guide }, { root });
+  assert.deepEqual(list(path.join(root, 'admin')), ['assets/x.js', 'assets/y.css', 'index.html']);
+  assert.deepEqual(list(path.join(root, 'manual')), ['img/a.png', 'index.html']);
+  assert.deepEqual(list(path.join(root, 'guide')), ['admin/index.html', 'assets/a.js', 'img/i.png', 'index.html', 'staff/index.html']);
+  assert.deepEqual(Object.keys(JSON.parse(fs.readFileSync(path.join(root, 'fold-manifest.json'), 'utf8')).surfaces).sort(), ['admin', 'guide', 'manual']);
+});
+
+test('a refold replaces the old folder and touches nothing else in the app root', () => {
+  const root = tree(tmp(), { 'index.html': 'app', 'app.js': 'js', 'admin/old.js': 'old', 'pay/p.js': 'p' });
+  foldIn({ admin: tree(tmp(), { 'index.html': 'new' }) }, { root });
+  assert.deepEqual(list(root), ['admin/index.html', 'app.js', 'fold-manifest.json', 'index.html', 'pay/p.js']);
+});
+
+test('refuses a bad source: no index.html, not a folder, nothing given, a source inside its target', () => {
+  const root = tmp();
+  assert.throws(() => foldIn({ manual: tree(tmp(), { 'x.html': '1' }) }, { root }), /no index\.html/);
+  assert.throws(() => foldIn({ manual: path.join(tmp(), 'missing') }, { root }), /not a folder/);
+  assert.throws(() => foldIn({}, { root }), /nothing to fold/);
+  assert.throws(() => foldIn({ guide: tree(tmp(), { 'index.html': 'g' }), manual: tree(tmp(), {}) }, { root }), /manual/);
+  assert.deepEqual(fs.readdirSync(root), [], 'one bad source stops the whole run before anything is written');
+  tree(root, { 'admin/index.html': 'a' });
+  assert.throws(() => foldIn({ admin: path.join(root, 'admin') }, { root }), /refusing/);
+});
+
+test('--dry reports but writes and deletes nothing', () => {
+  const root = tree(tmp(), { 'manual/old.html': 'keep me' }), src = tree(tmp(), { 'index.html': 'm' });
+  const r = spawnSync(process.execPath, [SCRIPT, '--manual', src, '--dry', '--root', root], { encoding: 'utf8' });
+  assert.equal(r.status, 0, r.stderr); assert.match(r.stdout, /DRY RUN/); assert.match(r.stdout, /manual/);
+  assert.deepEqual(list(root), ['manual/old.html']);
+});
+
+test('CLI exits 1 with a message on a bad source', () => {
+  const r = spawnSync(process.execPath, [SCRIPT, '--guide', tmp(), '--root', tmp()], { encoding: 'utf8' });
+  assert.equal(r.status, 1); assert.match(r.stderr, /no index\.html/);
+});
+
+test('stripManifestLink removes only the manifest link', () => {
+  assert.equal(stripManifestLink('<link rel="icon" href="a"><link href="m.json" rel=manifest>\n<b>'), '<link rel="icon" href="a"><b>');
+});
+
+// ---- service worker routing ----------------------------------------------------------------------------------------
+test('sw: folded apps go straight to the network, the shell stays cached, the cache name moved on', () => {
+  const sandbox = { self: { addEventListener() {}, location: { href: 'https://x.github.io/Cascade-Staff/sw.js' } }, module: { exports: {} }, URL, caches: {}, fetch() {}, setTimeout };
+  vm.runInNewContext(fs.readFileSync(path.join(HERE, '..', 'sw.js'), 'utf8'), sandbox);
+  const { swRoute, CACHE_NAME } = sandbox.module.exports, B = '/Cascade-Staff/';
+  assert.equal(CACHE_NAME, 'cs-shell-v11');
+  for (const p of ['admin/', 'admin/assets/a.js', 'checklist/', 'checklist/sw.js', 'manual/img/x.png', 'guide/staff/', 'guide/admin/index.html', 'admin']) assert.equal(swRoute(B + p, B), 'network', p);
+  for (const p of ['', 'index.html', 'app.js', 'pay/', 'quick/', 'install/', 'adminx/', 'icons/icon-192.png', 'fold-manifest.json']) assert.equal(swRoute(B + p, B), 'shell', p);
+  assert.equal(swRoute('/other/admin/', B), 'shell');
+});

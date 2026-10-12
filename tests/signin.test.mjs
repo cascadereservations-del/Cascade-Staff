@@ -154,8 +154,8 @@ test('door URL: same origin opens in the frame, another origin or scheme opens e
 
 test('app.js wiring: the three doors are same-origin (so they frame), the rows use the door key, the frame view exists', () => {
   const app = read('app.js'), html = read('index.html');
-  const doors = [...app.matchAll(/(checklist|dashboard|manual): \{ title: '[^']+', url: LINKS\.(\w+) \}/g)];
-  assert.deepEqual(doors.map((m) => m[1]), ['checklist', 'dashboard', 'manual']);
+  const doors = [...app.matchAll(/(checklist|dashboard|manual|inventory|guide): \{ title: '[^']+', url: LINKS\.(\w+) \}/g)];
+  assert.deepEqual(doors.map((m) => m[1]), ['checklist', 'dashboard', 'manual', 'inventory', 'guide']);
   for (const m of doors) {
     const url = app.match(new RegExp(m[2] + ": '([^']+)'"))[1];
     assert.equal(CS.doorTarget(url, ORIGIN), 'frame', m[1]);
@@ -200,7 +200,7 @@ test('door lookup is by own property: constructor, __proto__, toString and frien
   }
   assert.ok(CS.doorRule('manual'));
   const app = read('app.js');
-  assert.match(app, /function doorDef\(key\) \{ return Object\.prototype\.hasOwnProperty\.call\(DOORS, key\)/);
+  assert.match(app, /function doorDef\(key\) \{ var d = Object\.prototype\.hasOwnProperty\.call\(DOORS, key\)/);
   assert.ok(!/DOORS\[(parts|doorKey|opts)/.test(app), 'no raw DOORS[...] lookup with a user-controlled key');
 });
 

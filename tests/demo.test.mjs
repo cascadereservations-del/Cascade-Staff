@@ -206,3 +206,10 @@ test('theme.js and demo.js decide demo the same way, and demo never touches them
   }
   assert.equal(D.isDemo('?%64emo'), false); assert.equal(D.isDemo('?demo=0'), false);
 });
+
+test('demo app: the role switcher shows the new doors by the same role mapping, and a hand-typed admin door goes home', async () => {
+  for (const r of ['owner', 'admin']) { const h = (await bootDemo(r)).els['v-home'].innerHTML; assert.match(h, /Inventory/); assert.match(h, /System Guide/); assert.match(h, /Admin guide/); }
+  const c = (await bootDemo('cleaner')).els['v-home'].innerHTML;
+  assert.match(c, /System Guide/); assert.doesNotMatch(c, /Inventory|Admin guide/);
+  const t = await bootDemo('cleaner', '#door/adminguide'); assert.equal(t.location.hash, '#home');
+});

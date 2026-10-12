@@ -58,7 +58,7 @@ The photo of the guest in the house and the guest arriving next shows right on t
 
 ## How far single sign-on goes (D-304)
 
-Every door that lives on this origin (the admin dashboard, the cleaning checklist, the Operations Manual) now opens **inside the app**: a full-screen same-origin frame with a thin bar (title and Back) at `#door/<key>`, not a new tab. iPhone Home Screen apps and Android therefore share one storage partition, which is what makes one sign-in possible. A door on another origin, if one is ever added, still opens externally (`CS.doorTarget`). The inventory app (`CH_Inventory`) has no entry in this app yet; when it gets one it is a one-line `DOORS` entry.
+Every door that lives on this origin (the admin dashboard, the cleaning checklist, the Operations Manual) now opens **inside the app**: a full-screen same-origin frame with a thin bar (title and Back) at `#door/<key>`, not a new tab. iPhone Home Screen apps and Android therefore share one storage partition, which is what makes one sign-in possible. A door on another origin, if one is ever added, still opens externally (`CS.doorTarget`). Inventory, the System Guide and the Admin guide are doors too (D-324, below).
 
 **Doors that still ask for their own sign-in today** (converting them is a follow-up, D-304.2): the cleaning checklist (own token store `ch_staff_session_v1` and a device PIN, so cleaners sign in once more inside the frame; converting it is a separate lane in the CH-Cleaners-Checklist repo), and the Operations Manual (its own PIN map, remembered 30 days). The admin dashboard reads supabase-js's default `localStorage` key, so it is already signed in when **Trust this device** is ON. With the box OFF the session is in `sessionStorage`, which the dashboard cannot see, so the dashboard door then opens in a new tab (it asks for its own sign-in, which persists there) and a note under the row says "Sign-in is kept only on trusted devices". The frame is also refused for a door the role may not use (`#door/dashboard` by hand as staff goes home) and for any key that is not a door (`#door/constructor`). Whether the checklist and the dashboard render correctly inside a frame is not yet checked on a phone.
 
@@ -72,6 +72,31 @@ The table below was written before the frame: its "Door" links now open in the f
 | Telegram | `tg://privatepost?channel=3798341977&post=1` (OPS), `tg://privatepost?channel=3819352746&post=1` (Finance), built by `CS.tgLink` | Telegram's own | n/a. On phones the `tg://` link opens the Telegram app; if the page is still in front (not hidden or blurred) after ~1.2 s, `https://t.me/c/<id>/1` opens in a new tab, or the link turns into it when pop-ups are blocked; the app never navigates away. Desktop gets the plain t.me link in a new tab (s77). Neither carries a secret; both open only for members. |
 
 The Staff app uses supabase-js's default storage key on the same origin as the dashboard, so signing out here signs the dashboard out too (and the reverse). Deep links carry nothing secret.
+
+## One app: folded surfaces (D-324)
+
+This app is the only one people install. The sibling surfaces are published **inside it** as subfolders and open in the frame at `#door/<key>`:
+
+| Folder | What | Door (who) |
+|---|---|---|
+| `admin/` | React dashboard build, hash router | Admin dashboard `./admin/#/today` (owner, admin, finance); Inventory `./admin/#/inventory` (owner, admin) |
+| `checklist/` | Cleaning checklist (keeps its own nested service worker) | everyone signed in |
+| `manual/` | Operations Manual | everyone signed in |
+| `guide/` | System Guide: `guide/staff/` open, `guide/admin/` encrypted | System Guide (everyone); Admin guide `./guide/admin/` (owner, admin) |
+
+`CS.doorsForRole(role)` in `lib.js` is the one role-to-doors mapping; the router sends home for a door the role may not have, even if typed in the hash. The server stays the real gate, the client only hides. At start the app reads `fold-manifest.json` once (network-first, 404 = nothing folded): a folded surface opens from its relative path, an unfolded one falls back to its old github.io URL (the Admin guide has no fallback, so it simply is not offered). `?demo` shows the doors by role but opens none of them.
+
+The shell service worker (`cs-shell-v11`) passes `admin/`, `checklist/`, `manual/` and `guide/` straight to the network and never stores them (`swRoute` in `sw.js`).
+
+**Fold in** (Node 20+, no dependencies; each flag optional, `--dry` writes nothing):
+
+```
+node scripts/fold-in.mjs --admin <admin>/dist --checklist <checklist repo> --manual <manual repo> --guide <system-guide repo> [--dry]
+```
+
+It replaces only the folders you name with an allow-listed copy (checklist: `index.html`, `sw.js` / `install.js` / `install.html` only if `index.html` names them, `icons/`, `fonts/`; manual: `index.html`, `img/`; guide: `index.html`, `staff/`, `admin/`, `assets/`, `img/`; admin: all of dist), never copies `docs/ sql/ supabase/ tests/ *.gs appsscript.json .git* README*`, strips the `<link rel="manifest">` from the checklist (one install only), refuses a source without `index.html`, and writes `fold-manifest.json` (git HEAD, file count, bytes, time per surface; folds merge into it).
+
+**Publish flow:** fold in, `npm test`, review `git status`, commit, then Lloyd pushes `main` (Pages serves the repo root).
 
 ## Run and test
 
