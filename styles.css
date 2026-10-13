@@ -439,7 +439,7 @@ ol.steps li::before { content: counter(s); position: absolute; left: 0; top: 0; 
 .legend2 .help { margin-left: auto; }
 /* warning rows open a detail sheet */
 .wlist li:has(> .wbtn) { padding: 0; }
-.wbtn { display: flex; gap: 10px; align-items: flex-start; width: 100%; padding: 10px 12px; background: none; border: 0; border-radius: inherit; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.wbtn { min-height: var(--touch); display: flex; gap: 10px; align-items: flex-start; width: 100%; padding: 10px 12px; background: none; border: 0; border-radius: inherit; color: inherit; font: inherit; text-align: left; cursor: pointer; }
 .wbtn > span:not(.chev) { flex: 1; min-width: 0; }
 .wbtn .chev { margin-left: auto; color: var(--fg-3); align-self: center; }
 .wbtn:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
@@ -735,10 +735,11 @@ button.A_chipglass.E_pill { width: auto; min-width: 124px; max-width: 184px; hei
 .appbar { padding-left: max(8px, env(safe-area-inset-left, 0px)); padding-right: max(8px, env(safe-area-inset-right, 0px)); }
 .tabbar { left: max(12px, env(safe-area-inset-left, 0px)); right: max(12px, env(safe-area-inset-right, 0px)); }
 .A_herobar { padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+.A_card { align-content: start; }
 .F_group { display: grid; gap: var(--v5-gap); align-content: start; }
 .F_group:has(> #install-card[hidden]) { display: none; }
 /* the photo header: a reserved minimum height, content in the flow so a larger text size grows it instead of overlapping the bar */
-.A_hero { height: auto; min-height: 252px; display: flex; flex-direction: column; }
+.A_hero { width: 100%; height: auto; min-height: 252px; display: flex; flex-direction: column; }
 .A_greet { position: static; margin-top: auto; padding: 0 max(20px, env(safe-area-inset-right, 0px)) 28px max(20px, env(safe-area-inset-left, 0px)); }
 .A_hero > .A_greet { position: relative; left: auto; right: auto; bottom: auto; }
 /* the door frame uses the whole window in every class */

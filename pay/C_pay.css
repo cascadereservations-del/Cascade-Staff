@@ -73,3 +73,6 @@ body { background: var(--v5-ambient), var(--v5-bg); color: var(--v5-ink); font: 
 
 @media (prefers-reduced-motion: reduce) { .btn, .sw i, .sw i::after { transition: none; } .btn:active { transform: none; } }
 @media (max-width: 340px) { .C_amount { font-size: var(--v5-t-display); line-height: clamp(2.5rem, 2.3373rem + 0.7228vw, 2.8rem); } }
+
+/* F_ adaptive: the pay pages are one column on every screen, capped to a readable line and centred (the shell's own 480 px cap becomes this) */
+@media (min-width: 37.5rem) { .shell { max-width: 40rem; } }

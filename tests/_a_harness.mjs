@@ -30,7 +30,7 @@ export async function boot({ role, hash, handlers, now, demo, els: pre, docQuery
     rpc: (name, args) => { calls.push([name, JSON.parse(JSON.stringify(args || {}))]); const h = handlers[name]; if (!h) return Promise.resolve({ error: null, data: null }); const r = h(args); return r && typeof r.then === 'function' ? r : Promise.resolve(JSON.parse(JSON.stringify(r))); },
     storage: { from: () => ({ createSignedUrl: () => Promise.resolve({ error: { message: 'x' } }) }) } };
   const win = { supabase: { createClient: () => sb }, CS, P, CSPay: P, ICON: (n, c) => '<svg class="i ' + (c || '') + '" data-i="' + n + '"></svg>', CSTheme: { get: () => 'auto', set() {}, plainOn: () => false, setPlain() {} },
-    addEventListener: (t, fn) => { (winListeners[t] ||= []).push(fn); }, matchMedia: (q) => ({ matches: !!(reduced && /reduced-motion/.test(String(q))) }), scrollTo() {}, scrollY: 0, innerWidth: width || 360, localStorage: ls || { getItem: () => null, setItem() {}, removeItem() {} }, sessionStorage: { getItem: () => null, setItem() {}, removeItem() {} } };
+    addEventListener: (t, fn) => { (winListeners[t] ||= []).push(fn); }, matchMedia: (q) => ({ matches: !!(reduced && /reduced-motion/.test(String(q))) || (/min-width: 37\.5rem/.test(String(q)) && (width || 360) >= 600) }), scrollTo() {}, scrollY: 0, innerWidth: width || 360, localStorage: ls || { getItem: () => null, setItem() {}, removeItem() {} }, sessionStorage: { getItem: () => null, setItem() {}, removeItem() {} } };
   if (fold) win.fetch = () => Promise.resolve({ ok: true, json: () => Promise.resolve(fold) });
   if (demo) win.CSDemo = { active: true, role: () => role, client: () => sb, fetch: () => Promise.resolve({ ok: false }) };
   const registered = [];
