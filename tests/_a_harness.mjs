@@ -19,21 +19,23 @@ export function el() {
     querySelectorAll: () => [], querySelector: () => null, contains: () => false, focus() {}, scrollIntoView() {}, closest: () => null, appendChild() {}, onclick: null };
   return e;
 }
-export async function boot({ role, hash, handlers, now, demo, els: pre, docQuery, serviceWorker }) {
+// E_ options (all optional): fold = a fold-manifest.json object; reduced = prefers-reduced-motion; nav = extra navigator members (vibrate); width = innerWidth; ls = a localStorage stand-in; visible = false hides the page.
+export async function boot({ role, hash, handlers, now, demo, els: pre, docQuery, serviceWorker, fold, reduced, nav: navExtra, width, ls, visible }) {
   const when = now || NOW;
   class FixedDate extends Date { constructor(...a) { if (a.length) super(...a); else super(when.getTime()); } static now() { return when.getTime(); } }
   const els = pre || {}, listeners = {}, winListeners = {}, calls = [], location = { hash, pathname: '/', search: demo ? '?demo' : '', origin: 'https://staff.example', replace() {} };
-  const docObj = { getElementById: (id) => (els[id] ||= el()), querySelector: (q) => (docQuery ? docQuery(q) : null), querySelectorAll: () => [], visibilityState: 'visible', addEventListener: (t, fn) => { (listeners[t] ||= []).push(fn); } };
+  const docObj = { getElementById: (id) => (els[id] ||= el()), querySelector: (q) => (docQuery ? docQuery(q) : null), querySelectorAll: () => [], visibilityState: visible === false ? 'hidden' : 'visible', addEventListener: (t, fn) => { (listeners[t] ||= []).push(fn); } };
   const sb = {
     auth: { getSession: () => Promise.resolve({ data: { session: { user: { email: 'ana@staff.cascade.invalid', user_metadata: { display_name: 'Ana' } }, access_token: 't' } } }), signOut: () => Promise.resolve({}) },
     rpc: (name, args) => { calls.push([name, JSON.parse(JSON.stringify(args || {}))]); const h = handlers[name]; if (!h) return Promise.resolve({ error: null, data: null }); const r = h(args); return r && typeof r.then === 'function' ? r : Promise.resolve(JSON.parse(JSON.stringify(r))); },
     storage: { from: () => ({ createSignedUrl: () => Promise.resolve({ error: { message: 'x' } }) }) } };
   const win = { supabase: { createClient: () => sb }, CS, P, CSPay: P, ICON: (n, c) => '<svg class="i ' + (c || '') + '" data-i="' + n + '"></svg>', CSTheme: { get: () => 'auto', set() {}, plainOn: () => false, setPlain() {} },
-    addEventListener: (t, fn) => { (winListeners[t] ||= []).push(fn); }, matchMedia: () => ({ matches: false }), scrollTo() {}, scrollY: 0, innerWidth: 360, localStorage: { getItem: () => null, setItem() {}, removeItem() {} }, sessionStorage: { getItem: () => null, setItem() {}, removeItem() {} } };
+    addEventListener: (t, fn) => { (winListeners[t] ||= []).push(fn); }, matchMedia: (q) => ({ matches: !!(reduced && /reduced-motion/.test(String(q))) }), scrollTo() {}, scrollY: 0, innerWidth: width || 360, localStorage: ls || { getItem: () => null, setItem() {}, removeItem() {} }, sessionStorage: { getItem: () => null, setItem() {}, removeItem() {} } };
+  if (fold) win.fetch = () => Promise.resolve({ ok: true, json: () => Promise.resolve(fold) });
   if (demo) win.CSDemo = { active: true, role: () => role, client: () => sb, fetch: () => Promise.resolve({ ok: false }) };
   const registered = [];
-  const nav = { userAgent: 'test' }; if (serviceWorker !== false) nav.serviceWorker = { register: (u) => { registered.push(u); return Promise.resolve(); } };
-  const ctx = { window: win, document: docObj, location, history: { replaceState(a, b, h) { location.hash = h; } }, navigator: nav, localStorage: win.localStorage, matchMedia: () => ({ matches: false }),
+  const nav = Object.assign({ userAgent: 'test' }, navExtra || {}); if (serviceWorker !== false) nav.serviceWorker = { register: (u) => { registered.push(u); return Promise.resolve(); } };
+  const ctx = { window: win, document: docObj, location, history: { replaceState(a, b, h) { location.hash = h; } }, navigator: nav, localStorage: win.localStorage, matchMedia: win.matchMedia,
     fetch: () => Promise.resolve({ ok: false }), setTimeout, clearTimeout, console, URL, Image: function () {}, Date: FixedDate, Math, JSON, Promise, crypto: { randomUUID: () => 'uuid' } };
   win.crypto = ctx.crypto; vm.createContext(ctx); vm.runInContext(read('app.js'), ctx);
   const flush = async () => { for (let i = 0; i < 14; i++) await new Promise((r) => setImmediate(r)); }; await flush();

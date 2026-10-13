@@ -7,6 +7,7 @@
 .C_notice-head { font: 600 var(--v5-t-body)/24px var(--v5-font-ui); }
 .C_notice-line { font: 400 var(--v5-t-2)/20px var(--v5-font-ui); font-variant-numeric: tabular-nums; }
 .C_notice-acts { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 8px; }
+.C_notice-acts .btn { flex: 1 1 auto; min-width: 0; padding: 0 6px; font-size: 14px; white-space: nowrap; } /* both fit one row at 320 px, so the card stays under 128 px */
 .C_notice-text { grid-column: 1 / -1; margin: 0; font-size: var(--v5-t-2); line-height: 22px; color: var(--v5-ink); }
 .C_notice-text[hidden] { display: none; }
 

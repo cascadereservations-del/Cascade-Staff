@@ -572,14 +572,14 @@
     }).join('') + '</ul>';
     html += '<div class="cap up" style="margin:14px 0 6px">Cleaning</div><p class="sub" style="margin:0">' + (ds.out || ds.arrive ? (ds.out ? esc((ds.out.guest_name || 'Guest') + ' out ' + T.outLabel) : '') + (ds.out && ds.arrive ? ', ' : '') + (ds.arrive ? esc((ds.stay.guest_name || 'Guest') + ' in ' + T.inLabel) : '') + '.' : 'No turnover this day.') + '</p>';
     if (canFlag && state.notices && !state.noticesAbsent) html += '<button class="btn btn-secondary btn-sm" type="button" data-act="notice-add-open" data-date="' + esc(S.key) + '" style="margin-top:8px">' + ICON('plus', 's16') + 'Add a notice</button>';
-    html += '<div class="cap up" style="margin:14px 0 6px">Also on this day</div>';
     var fl = ds.flags.filter(function (f) { return f.source === 'manual' || !CS.A_flagDup(f, nd); });
+    if (fl.length) html += '<div class="cap up" style="margin:14px 0 6px">Also on this day</div>'; // an empty "Nothing else noted" took a line and told nobody anything
     html += fl.length ? '<ul class="wlist">' + fl.map(function (f) {
       var lbl = f.label && f.label !== CS.flagName(f.kind) ? ' · ' + esc(f.label) : '';
       return '<li>' + ICON(FLAG_ICON[f.kind] || 'note').replace('class="i"', 'class="i ' + (f.kind === 'brownout' ? 'c-warn' : 'c-fg2') + '"') + '<span style="flex:1"><b>' + esc(CS.flagName(f.kind)) + '</b>' + lbl +
         (f.source === 'auto' ? ' <span class="help">(added automatically)</span>' : '') + '</span>' +
         (canFlag && f.source === 'manual' && f.id ? '<button class="btn btn-ghost btn-sm" type="button" data-act="flag-clear" data-id="' + esc(f.id) + '"' + (S.busy ? ' disabled' : '') + ' aria-label="' + esc('Remove ' + CS.flagName(f.kind) + (f.label ? ': ' + f.label : '')) + '">Remove</button>' : '') + '</li>';
-    }).join('') + '</ul>' : '<p class="help">Nothing else noted.</p>';
+    }).join('') + '</ul>' : '';
     if (canFlag && S.missing) html += '<div class="cap up" style="margin:14px 0 6px">Add a note for this day</div><p class="help">Available after the next update.</p>';
     else if (canFlag && !S.formOpen) html += '<button class="btn btn-secondary btn-sm" type="button" data-act="dayform-open" style="margin-top:14px">' + ICON('plus', 's16') + 'Add a note for this day</button>'; // the form opens in place, so Close stays in reach
     else if (canFlag) {
@@ -608,7 +608,7 @@
     return html;
   }
   function drawSheet() {
-    var S = state.sheet; if (!S || !state.payload) return;
+    var S = state.sheet; if (!S || (!state.payload && S.kind !== 'attn')) return; // the pill's list can say "Loading" and "No connection" before there is a payload
     var e = sheetEls(), had = e.sheet.contains(document.activeElement);
     e.sheet.setAttribute('data-E-swipe', E_sheetTwin(S.kind)); // the pull-down's tap twin: the button with this data-act is on the sheet
     $('cs-body').innerHTML = (S.kind === 'attn' ? E_attnSheet() : S.kind === 'day' ? daySheet(S) : S.kind === 'add' ? addReminderCard() : S.kind === 'news' ? A_newsSheet() : S.kind === 'nadd' ? A_noticeAddForm() : S.kind === 'rate' ? A_rateConfirm() : warnSheet(S)) +
