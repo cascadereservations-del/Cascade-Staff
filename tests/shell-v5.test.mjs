@@ -250,7 +250,7 @@ test('A_ live mock: Tasks has filter chips with counts and Add a reminder opens 
   assert.match(th, /data-tfilter="all" aria-pressed="true">All 2/); assert.match(th, /data-tfilter="mine"[^>]*>Mine 1/); assert.match(th, /data-tfilter="due"[^>]*>Due 1/); assert.match(th, /data-tfilter="blocks"[^>]*>Blocks arrival 1/);
   await t.click({ 'data-tfilter': 'mine' }); assert.doesNotMatch(t.els['v-tasks'].innerHTML, /Two/); assert.match(t.els['v-tasks'].innerHTML, /One/);
   const m = await boot({ role: 'owner', hash: '#more', handlers: base('owner') }), mh = m.els['v-more'].innerHTML;
-  assert.ok(mh.indexOf('How we do things') < mh.indexOf('Appearance') && mh.indexOf('Appearance') < mh.indexOf('Cassy reply') && mh.indexOf('Cassy reply') < mh.indexOf('This phone') && mh.indexOf('This phone') < mh.lastIndexOf('data-act="signout"'), 'F6: the manual, Appearance, Cassy, This phone, then Sign out last');
+  assert.ok(mh.indexOf('How we do things') < mh.indexOf('Appearance') && mh.indexOf('Cassy reply') < mh.indexOf('Appearance') && mh.indexOf('Appearance') < mh.indexOf('This phone') && mh.indexOf('This phone') < mh.lastIndexOf('data-act="signout"'), 'F6: the manual, Cassy, Appearance, This phone, then Sign out last');
   assert.match(mh, /role="switch" data-act="plain" aria-checked="false"/); assert.match(mh, /Admin hub/);
   await m.click({ 'data-act': 'whatsnew' }); assert.match(m.els['cs-body'].innerHTML, /Tell the guest/);
   const c = await boot({ role: 'cleaner', hash: '#more', handlers: base('cleaner') }); await c.click({ 'data-act': 'whatsnew' });
@@ -291,7 +291,7 @@ test('A_ motion and accessibility floor: press 0.97 at 160 ms, sheets 300 ms wit
   assert.match(css, /\.A_tabs a \{ min-height: 44px/); assert.match(css, /\.chip \{ min-height: var\(--touch\)/); // F_: controls grow with the text size instead of clipping it
 });
 test('A_ service worker and manifest: new cache name, tokens + house photos precached and each photo is 60 KB or less, theme colours are the v5 backgrounds', () => {
-  const sw = read('sw.js'); assert.match(sw, /CACHE_NAME = 'cs-shell-v18'/);
+  const sw = read('sw.js'); assert.match(sw, /CACHE_NAME = 'cs-shell-v19'/);
   for (const u of ['./tokens.css', './img/house-hero.webp', './img/house-blur.webp', './fonts/dm-serif-display-400.woff2']) assert.ok(sw.includes("'" + u + "'") || sw.includes(u.replace('./', '').replace('fonts/', '')) , u);
   for (const f of ['img/house-hero.webp', 'img/house-blur.webp']) assert.ok(fs.statSync(path.join(root, f)).size <= 60 * 1024, f + ' is 60 KB or less');
   const man = JSON.parse(read('manifest.webmanifest')); assert.equal(man.theme_color, '#EEF1F4'); assert.equal(man.background_color, '#EEF1F4');

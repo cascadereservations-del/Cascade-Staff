@@ -135,21 +135,22 @@
   }
 
   // ---- the stand-in for the Supabase client: same four calls the pages make, answered from the fixtures ---------------------------
-  var WRITES = ['calendar_day_flag_set_v1', 'calendar_day_flag_clear_v1', 'ack_verifier_finding_v1', 'task_set_done_v1', 'task_add_reminder_v1', 'admin_add_pay_rate_v1'];
+  var WRITES = ['calendar_day_flag_set_v1', 'calendar_day_flag_clear_v1', 'ack_verifier_finding_v1', 'task_set_done_v1', 'task_add_reminder_v1', 'admin_add_pay_rate_v1', 'ops_notice_add_v1'];
   var clone = function (x) { return JSON.parse(JSON.stringify(x)); };
   function admin_(v) { return v === 'owner' || v === 'admin'; }
   function client(role, now) {
-    var view = VIEWS.indexOf(role) >= 0 ? role : 'owner', D = function () { return build(view, now); };
+    var view = VIEWS.indexOf(role) >= 0 ? role : 'owner', D = function () { return build(view, now); }, doneSet = {}; // doneSet: this page load only, so a task marked done leaves the list and Undo brings it back, like the live app
     var done = function (data) { return Promise.resolve({ data: clone(data), error: null }); };
     function rpc(name, args) {
       var X = D();
-      if (WRITES.indexOf(name) >= 0) { toast(NOTE); return done({ ok: true }); } // nothing changes; the next read returns the same fixtures
+      if (name === 'task_set_done_v1' && args && args.p_id) doneSet[args.p_id] = !!args.p_done; // memory only: nothing is ever saved
+      if (WRITES.indexOf(name) >= 0) { toast(NOTE); return done({ ok: true }); }
       switch (name) {
         case 'current_staff_access': return done(X.access);
         case 'staff_home_v1': return done(X.home);
         case 'notices_v1': return done(X.notices);
         case 'cleaning_progress_v1': return done(admin_(view) ? { ok: true, active: { step: 4, of: 9, label: 'Bathroom', started_at: new Date().toISOString(), updated_at: new Date().toISOString(), cleaner_name: 'Demo Cleaner' } } : { ok: false });
-        case 'tasks_list_v1': return done(X.tasks(!!(args && args.p_include_done)));
+        case 'tasks_list_v1': { var tl = X.tasks(true), inc = !!(args && args.p_include_done); tl.tasks = tl.tasks.map(function (t) { return doneSet[t.id] === undefined ? t : Object.assign({}, t, { status: doneSet[t.id] ? 'done' : 'open' }); }).filter(function (t) { return inc || t.status !== 'done'; }); return done(tl); }
         case 'task_assignees_v1': return done(X.assignees);
         case 'admin_pay_rates_v1': return done(X.rates);
         case 'staff_pay_candidates_v1': return done(X.pay);
@@ -184,7 +185,7 @@
     try { body = init && typeof init.body === 'string' ? JSON.parse(init.body) : null; } catch (e) { body = null; }
     if (name === 'guest-reply-draft') {
       var said = (body && body.text) || 'Hi po, is an early check-in possible tomorrow? We land at 9 in the morning.';
-      return reply(200, { ok: true, guest_name: (body && body.guest_name) || 'Demo Guest One', platform: body && body.platform === 'airbnb' ? 'airbnb' : 'messenger', guest_text: said, header: 'Two drafts for you. Copy one and send it yourself.',
+      return reply(200, { ok: true, guest_name: (body && body.guest_name) || 'Demo Guest One', platform: body && body.platform === 'airbnb' ? 'airbnb' : 'messenger', guest_text: said, header: 'Three drafts for you. Copy one and send it yourself.',
         options: [{ label: 'Short', text: 'Hello, check-in starts at 2 in the afternoon. We will tell you if the house is ready sooner.' }, { label: 'Warm', text: 'Good morning, and thank you for letting us know. Check-in starts at 2 in the afternoon. If the house is ready sooner, we will tell you, and your bags are welcome here from the morning.' }, { label: 'With details', text: 'Thank you for the message. We cannot promise an early check-in yet, and we will confirm the morning after the cleaning is done. Your bags are welcome from 9 if you arrive first, and there is shade and water on the porch.' }],
         replies: ['Good morning, and thank you for letting us know. Check-in starts at 2 in the afternoon. If the house is ready sooner, we will tell you, and your bags are welcome here from the morning.',
           'Thank you for the message. We cannot promise an early check-in yet, and we will confirm the morning after the cleaning is done. Your bags are welcome from 9 if you arrive first.'] });

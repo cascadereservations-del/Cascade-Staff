@@ -921,6 +921,10 @@
   function A_whatsNew(role, flags) {
     flags = flags || {};
     var admin = layoutForRole(role) === 'admin', mgr = canSeeGuestContact(role), items = [
+      ['Undo works every time', 'After you mark a task done, Undo brings it back, even on a slow connection.'],
+      ['Earlier months', 'The calendar goes back a year. ' + (mgr ? 'Days before last week are dashed: older stays are in the admin dashboard.' : 'Days before last week are dashed: older stays are not shown here.')],
+      ['Cassy reply shows its progress', 'While a reply is written you see the step, the usual time and a Cancel button.'],
+      ['Better on a tablet', 'More now lays out in two even columns with a label on every group.'],
       ['Swipes that work', 'Swipe the month grid for the next month, a task left to mark it done, and pull a sheet down by its title bar to close it. Every swipe has a button too.'],
       ['One calendar', 'Month and Stays are one screen: the month, then the next 14 days. Notices is the other tab.'],
       ['Search', 'In More, find a task or a page of the manual.'], ['A short tour', 'In More, “Show the tour” plays three short cards.'],
@@ -928,6 +932,7 @@
     if (flags.notices) items.push(['Notices', 'Rain watch, brownouts and water interruptions show on Today and on the calendar. Tap the weather for the forecast.']);
     items.push(['Cassy reply', 'Draft a warm reply to a guest message. You get two or three drafts to pick from.']);
     items.push(['Cleaning fee', 'Ask for payment for your cleans and expenses. When you finish a clean, a card on Today takes you there.']);
+    if (mgr) items.push(['Add a notice from Today', 'The Notices card has an Add a notice button. Water and Power are the first two choices.']);
     if (admin) items.push(['Admin hub', 'More lists every dashboard page in one place.']);
     if (mgr) items.push(['Arrival checks', 'Each arriving guest shows whether the ID, the balance and the door code are in place.']);
     if (flags.notices && mgr) items.push(['Tell the guest', 'On a notice, copy a ready message to send to the guest yourself.']);
@@ -1118,10 +1123,26 @@
     if (canSeeGuestContact(role)) out.guests = (src.stays || []).filter(function (st) { return st && has(st.guest_name); }).slice(0, 5);
     return out;
   }
+  // 3.1.1: how far the calendar goes. Ahead: the 60 days the server sends. Back: a year, so earlier months can be looked at (the server sends only the last 7 days of stays; older ones are in the dashboard).
+  var H_DATA_BACK = 7;
+  function H_monthOk(y, m, today) {
+    var first = y + '-' + pad(m) + '-01', last = addDays(m === 12 ? (y + 1) + '-01-01' : y + '-' + pad(m + 1) + '-01', -1);
+    return last >= addDays(today, -366) && first <= addDays(today, 60);
+  }
+  function H_dataFrom(today) { return addDays(today, -H_DATA_BACK); }
   // The day before / after in the day sheet; null at the edge of the months the calendar offers.
   function H_dayStep(iso, dir, today) {
     var d = addDays(iso, dir), a = d.split('-');
-    return monthInRange(+a[0], +a[1], today) ? d : null;
+    return H_monthOk(+a[0], +a[1], today) ? d : null;
+  }
+  // The wait for a Cassy reply: honest steps on a timer (seconds since the tap).
+  function H_waitStep(sec) { return sec < 4 ? 'Reading the message' : sec < 12 ? 'Writing three replies' : 'Almost there'; }
+  // A power notice is saved as a brownout on its day (the notice call refuses power): a short title and a date.
+  function H_powerProblem(f) {
+    if (!String(f.title || '').trim()) return 'Add a short title, for example the hours.';
+    if (String(f.title).trim().length > 60) return 'Keep the title to 60 characters.';
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(String(f.date || ''))) return 'Pick the date.';
+    return null;
   }
 
   // ---- haptics: three words, one guard. A silent no-op where navigator.vibrate is missing (iOS Safari), when switched off, or when the page is hidden. ----
@@ -1233,7 +1254,7 @@
     weatherLine: weatherLine, rainLine: rainLine, weatherStale: weatherStale, esc: esc,
     A_HOUSE_FALLBACK: A_HOUSE_FALLBACK, A_houseTimes: A_houseTimes, A_turnoverClock: A_turnoverClock, A_turnoverLine: A_turnoverLine, A_hm: A_hm, A_NOTICE_TYPES: A_NOTICE_TYPES, A_noticesView: A_noticesView, A_noticeFilters: A_noticeFilters, A_dayMarks: A_dayMarks, A_noticeDay: A_noticeDay, A_guestMessage: A_guestMessage, A_CAL_TABS: A_CAL_TABS, A_calTab: A_calTab, A_stayShade: A_stayShade, A_hubGroups: A_hubGroups, A_hubRoutes: A_hubRoutes, A_hubRouteOk: A_hubRouteOk, A_hubDoorUrl: A_hubDoorUrl, A_whatsNew: A_whatsNew, A_shortTime: A_shortTime, A_PINNED: A_PINNED, A_noticeAddError: A_noticeAddError, A_NOTICE_HINT: A_NOTICE_HINT, A_flagDup: A_flagDup, A_facebookUrl: A_facebookUrl, A_fbPluginUrl: A_fbPluginUrl, A_noticeAddProblem: A_noticeAddProblem, A_noticeAddArgs: A_noticeAddArgs, A_plainRefusal: A_plainRefusal, A_hour12: A_hour12, A_timeRange: A_timeRange,
     taskPriorityLabel: taskPriorityLabel, E_attention: E_attention, E_warnKey: E_warnKey, E_buzz: E_buzz, E_hapticsOn: E_hapticsOn, E_hapticsSet: E_hapticsSet, E_PATTERNS: E_PATTERNS,
-    H_noticeUrl: H_noticeUrl, H_noticeHead: H_noticeHead, H_weatherShort: H_weatherShort, H_agenda: H_agenda, H_ready: H_ready, H_readyChips: H_readyChips, H_readyOk: H_readyOk, H_clock12: H_clock12, H_readyLine: H_readyLine, H_progress: H_progress, H_cleanLine: H_cleanLine, H_houseLine: H_houseLine, H_untilLine: H_untilLine, H_manualIndex: H_manualIndex, H_search: H_search, H_dayStep: H_dayStep,
+    H_monthOk: H_monthOk, H_dataFrom: H_dataFrom, H_waitStep: H_waitStep, H_powerProblem: H_powerProblem, H_noticeUrl: H_noticeUrl, H_noticeHead: H_noticeHead, H_weatherShort: H_weatherShort, H_agenda: H_agenda, H_ready: H_ready, H_readyChips: H_readyChips, H_readyOk: H_readyOk, H_clock12: H_clock12, H_readyLine: H_readyLine, H_progress: H_progress, H_cleanLine: H_cleanLine, H_houseLine: H_houseLine, H_untilLine: H_untilLine, H_manualIndex: H_manualIndex, H_search: H_search, H_dayStep: H_dayStep,
     E_drag: E_drag, E_lockOf: E_lockOf, E_inEdge: E_inEdge, E_velocity: E_velocity, E_tabFollow: E_tabFollow, E_tabCommit: E_tabCommit, E_sheetFollow: E_sheetFollow, E_sheetCommit: E_sheetCommit,
     E_taskFollow: E_taskFollow, E_taskCommit: E_taskCommit, E_taskDist: E_taskDist, E_EDGE_R_TASK: E_EDGE_R_TASK, E_taskOpens: E_taskOpens, E_slideCommit: E_slideCommit, E_tabNeighbour: E_tabNeighbour, F_widthClass: F_widthClass, E_setClock: E_setClock
   };

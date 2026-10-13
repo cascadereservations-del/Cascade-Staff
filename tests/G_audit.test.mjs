@@ -61,9 +61,9 @@ test('G_ large text: nothing is wider than its box (pills wrap, long values brea
 test('G_ the pay pages keep clear of the rail (landscape phones too); the two-column grid starts at 42 rem; Turnover is not stretched; the hero is a third of the height at most; no lone card', () => {
   const b = strip(css), railQ = '@media (min-width: 52.5rem), (min-width: 37.5rem) and (max-height: 30rem) {', i = b.indexOf(railQ); assert.ok(i >= 0);
   const rail = b.slice(i, b.indexOf('\n}\n', i)); assert.match(rail, /body > \.shell:not\(#app\) \{ max-width: min\(40rem, calc\(100% - 2 \* var\(--v5-nav-w\)\)\); \}/, 'pay shell offset in the rail query, not only at 840');
-  assert.match(b, /@media \(min-width: 42rem\) \{\s*\.A_body \{ grid-template-columns: repeat\(2/); assert.doesNotMatch(b.slice(b.indexOf('@media (min-width: 37.5rem) {'), b.indexOf('@media (min-width: 42rem)')), /\.A_body \{ grid-template-columns/);
+  assert.match(b, /@media \(min-width: 42rem\) \{\s*\.A_body \{ display: block; column-count: 2;/); assert.doesNotMatch(b.slice(b.indexOf('@media (min-width: 37.5rem) {'), b.indexOf('@media (min-width: 42rem)')), /\.A_body \{ grid-template-columns/);
   assert.match(b, /\[aria-label="Turnover today"\] \{ align-self: start; \}/); assert.match(b, /\.A_hero \{ aspect-ratio: 16 \/ 7; max-height: max\(15\.75rem, 34vh\); \}/);
-  assert.match(b, /\[aria-label="Today in the house"\] \{ grid-template-columns: minmax\(0, 1fr\) auto;/, 'Today is two columns on a wide screen'); assert.match(b, /#v-more \.stack > \.F_group:last-child:nth-child\(even\) \{ grid-column: 1 \/ -1; \}/);
+  assert.match(b, /\[aria-label="Today in the house"\] \{ grid-template-columns: minmax\(0, 1fr\) auto;/, 'Today is two columns on a wide screen'); assert.match(b, /\.H_cols \{ grid-template-columns: repeat\(2, minmax\(0, 1fr\)\); align-items: start; \}/, '3.1.1: no lone card on More: two stacks that end together');
   assert.match(b, /\.scrim\[data-F-kind="day"\], \.scrim\[data-F-kind="attn"\] \{ left: var\(--v5-nav-w\); \}/, 'the side sheet scrim leaves the rail alone');
 });
 
