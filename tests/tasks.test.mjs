@@ -278,7 +278,7 @@ test('shell: the Tasks tab is a hash route in both layouts, the Payment Request 
   assert.match(app, /\['tasks', '#tasks', 'Tasks', 'tasks', due\]/);
   assert.doesNotMatch(app, /\['pay', LINKS\.pay, 'Tasks'/);
   assert.match(html, /id="v-tasks"/); assert.match(html, /id="v-payrates"/); assert.match(html, /<script src="pay\/pay-lib\.js"><\/script>/);
-  assert.match(pay, /href="\.\.\/#tasks"/);
+  assert.ok(read('pay/pay-lib.js').includes("['tasks', '../#tasks', 'Tasks'")); // s82: the pay pages draw the shell's tab bar from pay-lib (P_tabs)
   assert.doesNotMatch(pay, /href="\.\/" aria-current="page"><span class="ico">' \+ ICON\('tasks'/);
   assert.match(app, /'tasks', 'payrates', 'more', 'door'/);
 });
