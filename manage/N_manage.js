@@ -490,8 +490,8 @@
     return '<div class="N_charts" aria-hidden="true">' + [1, 2, 3, 4].map(function () { return '<div class="N_card N_hcard N_skel"></div>'; }).join('') + '<div class="N_card N_wide N_skel"></div></div>';
   }
   function sparkPoints(vals, W, H) { // x evenly spaced, y scaled to the series max; null = gap
-    var mx = 0; vals.forEach(function (v) { if (v !== null && v > mx) mx = v; }); if (mx <= 0) mx = 1;
-    return vals.map(function (v, i) { return v === null ? null : { x: vals.length > 1 ? 2 + (W - 4) * i / (vals.length - 1) : W / 2, y: H - 2 - (H - 4) * (v / mx), v: v, i: i }; });
+    var mx = -Infinity, mn = Infinity; vals.forEach(function (v) { if (v !== null) { if (v > mx) mx = v; if (v < mn) mn = v; } }); var span = mx - mn;
+    return vals.map(function (v, i) { return v === null ? null : { x: vals.length > 1 ? 2 + (W - 4) * i / (vals.length - 1) : W / 2, y: span > 0 ? H - 4 - (H - 8) * ((v - mn) / span) : H / 2, v: v, i: i }; }); // a line trend uses the series' own range
   }
   function sparkLine(vals) {
     var W = 120, H = 32, pts = sparkPoints(vals, W, H), segs = [], cur = [];

@@ -107,3 +107,4 @@
 .N_table th:first-child, .N_table tbody th { text-align: left; font-weight: 600; }
 @keyframes N_grow { from { transform: scaleY(0); } to { transform: scaleY(1); } }
 @media (prefers-reduced-motion: reduce) { .N_bar { animation: none; } }
+@media (min-width: 37.5rem) { .N_plot { height: 14rem; } .N_wide { min-height: 23.5rem; } }
