@@ -76,3 +76,16 @@ body { background: var(--v5-ambient), var(--v5-bg); color: var(--v5-ink); font: 
 
 /* F_ adaptive: the pay pages are one column on every screen, capped to a readable line and centred (the shell's own 480 px cap becomes this) */
 @media (min-width: 37.5rem) { .shell { max-width: 40rem; } }
+
+/* ---- P_ (s82 lane P): Cleaning fee sub-line, expectation line, 44 px transport row, tappable rows, Pay staff groups ---- */
+.P_sub { margin: 0; }
+.P_expect { display: block; margin-top: 6px; }
+.payrow .opt .P_tr { display: flex; width: 100%; justify-content: space-between; align-items: center; gap: 12px; min-height: var(--v5-touch); }
+.payrow .opt .P_tr span { font-size: var(--v5-t-2); color: var(--v5-ink); }
+button.rowi.C_row, .rowi.P_tap { cursor: pointer; font: inherit; }
+.P_go { margin-left: auto; flex: none; font: 600 var(--v5-t-2)/1 var(--v5-font-ui); color: var(--v5-gold-text); white-space: nowrap; }
+.P_group { display: grid; gap: 6px; }
+.P_rec { display: grid; gap: 4px; padding: 14px 16px; }
+.P_rec .row { display: flex; justify-content: space-between; gap: 12px; min-height: 28px; align-items: baseline; }
+.P_rec .row b { font-variant-numeric: tabular-nums; text-align: right; overflow-wrap: anywhere; }
+.P_full { width: 100%; }

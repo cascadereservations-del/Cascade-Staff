@@ -9,22 +9,20 @@
   var DEMO = !!(window.CSDemo && window.CSDemo.active); // ?demo: synthetic data, no Supabase client, no network, no storage (demo.js)
   function net() { return (DEMO ? window.CSDemo.fetch : window.fetch).apply(window, arguments); }
   var root = $('pay');
-  if (!DEMO && !window.supabase) { root.innerHTML = shell('Your pay', '<div class="errbox">' + ICON('alert') + '<span>Live information needs a connection. Open the app again when you have signal.</span></div>'); return; }
+  if (!DEMO && !window.supabase) { root.innerHTML = shell('Cleaning fee', '<div class="errbox">' + ICON('alert') + '<span>Live information needs a connection. Open the app again when you have signal.</span></div>'); return; }
   var sb = DEMO ? window.CSDemo.client('cleaner') : window.supabase.createClient(CFG.url, CFG.key, { auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: false } });
 
   // One key per submission: kept across retries of a failed send, renewed after an ok (see CSPay.keyKeeper).
   var K = DEMO ? P.keyKeeper(undefined, null) : P.keyKeeper(); // demo: the in-flight key is kept in memory only
-  var S = { step: 'pick', cands: null, sel: null, err: '', note: '', sending: false, draftOpen: false, askedOnce: false, askOpen: false, draft: { description: '', amount: '', file: null }, result: null, loadErr: '', mine: null, pushState: null, pushMsg: '' };
+  var S = { step: 'pick', cands: null, sel: null, err: '', note: '', sending: false, draftOpen: false, askedOnce: false, askOpen: false, draft: { description: '', amount: '', file: null }, result: null, loadErr: '', mine: null, clean: P.P_param(typeof location !== 'undefined' ? location.search : '', 'clean'), pushState: null, pushMsg: '' };
 
-  function shell(title, inner, back) {
-    return '<header class="appbar"><a class="iconbtn" href="' + (back || '../#home') + '" aria-label="Back">' + ICON('back', 's24') + '</a><h1 class="ttl">' + esc(title) + '</h1></header><div class="screen">' + inner + '</div>' +
-      '<nav class="tabbar" aria-label="Primary"><a class="tab" href="../#home"><span class="ico">' + ICON('house', 's24') + '</span>Today</a><a class="tab" href="../#calendar"><span class="ico">' + ICON('calendar', 's24') + '</span>Calendar</a>' +
-      '<a class="tab" href="../#tasks"><span class="ico">' + ICON('tasks', 's24') + '</span>Tasks</a><a class="tab" href="../#more"><span class="ico">' + ICON('more', 's24') + '</span>More</a></nav>';
-  }
+  function shell(title, inner, back) { return P.P_shell(title, inner, { back: back, icon: ICON, esc: esc, hash: P.P_hash(window) }); } // F7: the app's own bar and tab bar, badges from the hash
+  P.P_wireBack(window);
 
   function freshSel(c) {
     var sel = { sessions: {}, claims: {}, extras: S.sel ? S.sel.extras : [] };
-    (c.sessions || []).forEach(function (s) { sel.sessions[s.id] = { on: true, transport: false }; });
+    var only = S.clean && (c.sessions || []).some(function (s) { return s.id === S.clean; }) ? S.clean : null; // MF1: ?clean=<session_id> ticks that clean (and no other clean); an unknown id ticks all, as before
+    (c.sessions || []).forEach(function (s) { sel.sessions[s.id] = { on: !only || s.id === only, transport: false }; });
     (c.claims || []).forEach(function (x) { sel.claims[x.id] = true; });
     return sel;
   }
@@ -50,7 +48,7 @@
   }
   function cleanRow(s) {
     var st = S.sel.sessions[s.id] || { on: false, transport: false }, amt = P.sessionAmount(s, st.on && st.transport);
-    var opt = s.transport != null ? '<div class="opt"><button class="sw" type="button" role="switch" aria-checked="' + !!st.transport + '" data-sw="' + esc(s.id) + '"><i aria-hidden="true"></i>+' + esc(P.peso(s.transport)) + ' transport</button><span class="help">' + (st.transport ? 'added for this clean' : 'off') + '</span></div>' : '';
+    var opt = s.transport != null ? '<div class="opt"><button class="sw P_tr" type="button" role="switch" aria-checked="' + !!st.transport + '" aria-label="' + esc('Add ' + P.peso(s.transport) + ' transport for ' + P.dateLabel(s.date)) + '" data-sw="' + esc(s.id) + '"><span>Transport +' + esc(P.peso(s.transport)) + '</span><i aria-hidden="true"></i></button></div>' : '';
     return '<div class="payrow"><button class="chk" type="button" role="checkbox" aria-checked="' + !!st.on + '" aria-label="' + esc(P.dateLabel(s.date) + ' clean') + '" data-ses="' + esc(s.id) + '">' + ICON('check', 's16') + '</button>' +
       '<div><div class="t"><span>' + esc(P.dateLabel(s.date) + ' · ' + P.typeLabel(s.type)) + '</span><span class="val">' + esc(P.peso(amt)) + '</span></div><span class="s">Base ' + esc(P.peso(s.base)) + (s.guest ? ' · ' + esc(s.guest) + ' checked out' : '') + '</span>' + opt + '</div></div>';
   }
@@ -88,13 +86,13 @@
     if (!rs.length) return slot;
     return '<div><div class="cap up" style="margin-bottom:6px">Your requests</div><div class="card list">' + rs.map(function (r) {
       var bank = r.status === 'paid' && r.bank_reference ? ' · Bank ref ' + esc(window.C_PaidText.reference({ bank_reference: r.bank_reference })) : '';
-      return '<div class="rowi" style="cursor:default"><span class="lead">' + ICON('cash') + '</span><span class="mid"><span class="t num">' + esc(P.peso(r.total)) + '</span><span class="s num C_ref">Ref ' + esc(String(r.ref || '').replace(/^CASCADE-/, '')) + (r.created_at ? ' · sent ' + esc(P.shortDate(r.created_at)) : '') + (r.status === 'paid' && r.paid_at ? ' · paid ' + esc(P.shortDate(r.paid_at)) : '') + bank + '</span>' + C_stepper(r.status) + '</span></div>';
+      return '<div class="rowi" style="cursor:default"><span class="lead">' + ICON('cash') + '</span><span class="mid"><span class="t num">' + esc(P.peso(r.total)) + '</span><span class="s num C_ref">Ref ' + esc(String(r.ref || '').replace(/^CASCADE-/, '')) + (r.created_at ? ' · sent ' + esc(P.shortDate(r.created_at)) : '') + (r.status === 'paid' && r.paid_at ? ' · paid ' + esc(P.shortDate(r.paid_at)) : '') + bank + '</span>' + C_stepper(r.status) + (r.status === 'requested' || r.status === 'paying' ? '<span class="help P_expect">Usually paid the same day. You will see "You were paid" here.</span>' : '') + '</span></div>';
     }).join('') + '</div></div>' + slot;
   }
   function renderPick() {
     var c = S.cands, hasRows = (c.sessions || []).length || (c.claims || []).length;
     var total = P.computeTotal(c, S.sel), lines = P.lineCount(c, S.sel), over = lines > P.MAX_LINES;
-    var inner = '<div class="stack">' +
+    var inner = '<div class="stack"><p class="help P_sub">Ask for payment for your cleans and expenses</p>' +
       (hasRows ? '<div><div class="cap up" style="margin-bottom:6px">Not yet paid</div><div class="card list">' + (c.sessions || []).map(cleanRow).join('') + (c.claims || []).map(claimRow).join('') + '</div></div>'
         : '<div class="card empty"><div class="disc">' + ICON('checks') + '</div><h2 class="hd">Nothing waiting</h2><p>Cleans you have reported and not been paid for will show here.</p></div>') +
       missingBlock() +
@@ -104,7 +102,7 @@
       '<div class="sticky"><div class="total"><span class="cap up">Total to request</span><span class="amt num">' + esc(P.peso(total)) + '</span></div>' +
       (over ? '<div class="errbox">' + ICON('alert') + '<span>A request holds up to ' + P.MAX_LINES + ' lines. Untick some and send the rest in a second request.</span></div>' : '') +
       '<button class="btn btn-primary btn-block" type="button" data-act="review"' + (total > 0 && !over ? '' : ' disabled') + '>Review request' + ICON('chev') + '</button></div>';
-    root.innerHTML = shell('Your pay', inner) + '<input type="file" id="x-file" accept="image/*" capture="environment" hidden>';
+    root.innerHTML = shell('Cleaning fee', inner) + '<input type="file" id="x-file" accept="image/*" capture="environment" hidden>';
   }
 
   // ---------------------------------------------------------------- review
@@ -136,11 +134,11 @@
   function go(step) { S.step = step; S.err = ''; render(); window.scrollTo(0, 0); }
   function render() {
     if (S.loadErr) {
-      var msg = { signin: 'Sign in to the Staff app first, then open Ask for your pay.', denied: 'Your pay is for the cleaning team.', notready: 'Your pay is not switched on yet. Ask Lloyd.', offline: 'Live information needs a connection.' }[S.loadErr];
-      root.innerHTML = shell('Your pay', '<div class="errbox">' + ICON('alert') + '<span>' + esc(msg) + '</span></div>' + (S.loadErr === 'signin' ? '<a class="btn btn-primary btn-block" href="../#signin" style="margin-top:12px">Sign in</a>' : '<button class="btn btn-secondary" type="button" data-act="retry" style="margin-top:12px">Try again</button>'));
+      var msg = { signin: 'Sign in to the Staff app first, then open Cleaning fee.', denied: 'Your pay is for the cleaning team.', notready: 'Your pay is not switched on yet. Ask Lloyd.', offline: 'Live information needs a connection.' }[S.loadErr];
+      root.innerHTML = shell('Cleaning fee', '<div class="errbox">' + ICON('alert') + '<span>' + esc(msg) + '</span></div>' + (S.loadErr === 'signin' ? '<a class="btn btn-primary btn-block" href="../#signin" style="margin-top:12px">Sign in</a>' : '<button class="btn btn-secondary" type="button" data-act="retry" style="margin-top:12px">Try again</button>'));
       return;
     }
-    if (!S.cands) { root.innerHTML = shell('Your pay', '<div class="stack" style="margin-top:16px"><div class="skel" style="height:180px"></div><div class="skel" style="height:120px"></div></div>'); return; }
+    if (!S.cands) { root.innerHTML = shell('Cleaning fee', '<div class="stack" style="margin-top:16px"><div class="skel" style="height:180px"></div><div class="skel" style="height:120px"></div></div>'); return; }
     if (S.step === 'review') renderReview(); else if (S.step === 'status') renderStatus(); else renderPick();
     if (S.step !== 'review') C_pushRefresh();
   }
@@ -180,7 +178,7 @@
       });
     }).catch(function () { return { j: { ok: false, reason: 'offline' }, failed: [] }; }).then(function (o) {
       S.sending = false; var m = P.resultMessage(o.j); K.settle(o.j);
-      if (m.ok) { F_tap(); S.result = m; S.note = o.failed.length ? 'The receipt photo for ' + o.failed.join(', ') + ' did not upload; tell Finance.' : ''; S.sel.extras = []; S.askedOnce = false; return load().then(function () { go('status'); }); }
+      if (m.ok) { F_tap(); S.result = m; S.note = o.failed.length ? 'The receipt photo for ' + o.failed.join(', ') + ' did not upload; tell Finance.' : ''; S.sel.extras = []; S.askedOnce = false; S.clean = ''; return load().then(function () { go('status'); }); }
       if (m.refresh) return load().then(function () { S.step = 'pick'; S.err = ''; render(); renderPickNotice(m.text); });
       S.err = m.text;
       renderReview();

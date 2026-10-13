@@ -169,7 +169,49 @@
     return 'intent:#Intent;action=android.intent.action.MAIN;category=android.intent.category.LAUNCHER;package=' + a.pkg + ';S.browser_fallback_url=' + encodeURIComponent(playUrl(a.pkg)) + ';end';
   }
 
+  // ---- P_ (s82 lane P): the shared chrome of both pay pages, so they look like the rest of the app (F7). Strings only; the caller passes ICON and esc.
+  // Badge counts and "I came from the app" travel in the URL hash the shell links with: pay/#tasks=2&cal=2 (a hash with either key means the link was the shell's).
+  function P_hashCounts(hash) {
+    var o = { tasks: 0, cal: 0 };
+    String(hash || '').replace(/^#/, '').split('&').forEach(function (p) { var kv = p.split('='); if ((kv[0] === 'tasks' || kv[0] === 'cal') && /^\d{1,3}$/.test(kv[1] || '')) o[kv[0]] = +kv[1]; });
+    return o;
+  }
+  function P_fromShell(hash) { return /(^#|&)(tasks|cal)=/.test(String(hash || '')); }
+  // The pages send "no-referrer", so document.referrer is empty even from the app: the hash is the second witness.
+  function P_backIsHistory(referrer, origin, hash, histLen) {
+    if (!(histLen > 1)) return false;
+    var r = String(referrer || ''), o = String(origin || '');
+    return (!!o && !!r && (r === o || r.indexOf(o + '/') === 0)) || P_fromShell(hash);
+  }
+  function P_tabs(hash, ICON, esc) {
+    var n = P_hashCounts(hash);
+    var tabs = [['home', '../#home', 'Today', 'house', 0, ''], ['calendar', '../#calendar', 'Calendar', 'calendar', n.cal, ' warnings'], ['tasks', '../#tasks', 'Tasks', 'tasks', n.tasks, ' due'], ['more', '../#more', 'More', 'more', 0, '']];
+    return tabs.map(function (t) {
+      return '<a class="tab" href="' + t[1] + '"' + (t[0] === 'home' ? ' aria-current="page"' : '') + '><span class="ico">' + ICON(t[3], 's24') + '</span>' + esc(t[2]) +
+        (t[4] ? '<span class="badge" aria-label="' + t[4] + t[5] + '">' + t[4] + '</span>' : '') + '</a>';
+    }).join('');
+  }
+  // back: an in-page href (e.g. "#back") that the page handles itself; left out, Back is the app's home or the browser's Back (P_wireBack).
+  function P_shell(title, inner, o) {
+    o = o || {}; var ICON = o.icon, esc = o.esc;
+    return '<header class="appbar"><a class="iconbtn" href="' + esc(o.back || '../#home') + '" aria-label="Back"' + (o.back ? '' : ' data-p-back="1"') + '>' + ICON('back', 's24') + '</a><h1 class="ttl">' + esc(title) + '</h1></header>' +
+      '<div class="screen">' + inner + '</div><nav class="tabbar" aria-label="Primary">' + P_tabs(o.hash, ICON, esc) + '</nav>';
+  }
+  function P_wireBack(win) {
+    var d = win && win.document; if (!d || !d.addEventListener) return;
+    d.addEventListener('click', function (ev) {
+      var a = ev.target && ev.target.closest && ev.target.closest('a[data-p-back]');
+      if (!a || ev.defaultPrevented) return; // a page that handled Back itself (inside a pay view) has already prevented it
+      var l = win.location || {}, h = win.history || {};
+      if (P_backIsHistory(d.referrer, l.origin, l.hash, h.length)) { ev.preventDefault(); h.back(); }
+    });
+  }
+  function P_param(search, name) { var m = new RegExp('[?&]' + name + '=([^&#]*)').exec(String(search || '')); try { return m ? decodeURIComponent(m[1]) : ''; } catch (e) { return ''; } }
+  function P_hash(win) { try { return (win && win.location && win.location.hash) || ''; } catch (e) { return ''; } }
+  function P_plural(n, one, many) { return n + ' ' + (n === 1 ? one : many || one + 's'); }
+
   return {
+    P_hashCounts: P_hashCounts, P_fromShell: P_fromShell, P_backIsHistory: P_backIsHistory, P_tabs: P_tabs, P_shell: P_shell, P_wireBack: P_wireBack, P_param: P_param, P_hash: P_hash, P_plural: P_plural,
     peso: peso, plain: plain, dateLabel: dateLabel, shortDate: shortDate, typeLabel: typeLabel, parseExtra: parseExtra, sessionAmount: sessionAmount,
     chosen: chosen, computeTotal: computeTotal, lineCount: lineCount, buildPayload: buildPayload, reviewBlock: reviewBlock, newKey: newKey, keyKeeper: keyKeeper,
     resultMessage: resultMessage, requestStatus: requestStatus, fitSize: fitSize, BANK_APPS: BANK_APPS, listedBankApps: listedBankApps,

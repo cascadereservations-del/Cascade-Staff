@@ -53,7 +53,7 @@ const happy = (over = {}) => ({
 test('list: one list call, the open request with a Pay button, and the signed-in states', async () => {
   const b = boot(happy()); await tick();
   assert.equal(b.rpcs[0][0], 'staff_pay_admin_list_v1'); assert.equal(b.rpcs[0][1], undefined, 'no arguments');
-  assert.match(b.root.innerHTML, /Waiting to be paid/); assert.match(b.root.innerHTML, /Honey/); assert.match(b.root.innerHTML, /data-act="pay" data-id="req1"/);
+  assert.match(b.root.innerHTML, /To pay/); assert.match(b.root.innerHTML, /Honey/); assert.match(b.root.innerHTML, /data-act="pay" data-id="req1"/);
   assert.match(b.root.innerHTML, /Waiting for payment/);
   const denied = boot({ rpc: () => ({ data: { ok: false, reason: 'not_authorized' }, error: null }) }); await tick();
   assert.match(denied.root.innerHTML, /for the owner, admin and finance/);
@@ -146,7 +146,7 @@ test('I am not paying this now: returns the request to requested and goes back t
   await fire(c.root, 'click', { target: target({ 'data-act': 'pay', 'data-id': 'req1' }) }); await tick();
   await fire(c.root, 'click', { target: target({ 'data-act': 'unpay' }) }); await tick();
   assert.deepEqual(plain(c.rpcs.filter((r) => r[0] === 'staff_pay_admin_step_v1').map((r) => r[1].p_step)), ['pay', 'not_sent']);
-  assert.match(c.root.innerHTML, /Waiting to be paid/);
+  assert.match(c.root.innerHTML, /To pay/);
 });
 
 test('lib: ready needs all three, proof keys, copy amount, sha256, the status words', async () => {
