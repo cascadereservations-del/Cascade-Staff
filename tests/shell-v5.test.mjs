@@ -187,21 +187,23 @@ test('A_ live mock: notices_v1 is called with exactly p_property_id; the cleaner
   assert.deepEqual(Object.keys(call[1]), ['p_property_id']); assert.equal(call[1].p_property_id, 'prop-1');
   const h = app.els['v-home'].innerHTML;
   const iToday = h.indexOf('aria-label="Today in the house"'), iSlot = h.indexOf('id="slot-paid-notice"'), iTurn = h.indexOf('aria-label="Turnover today"');
-  assert.ok(iToday > 0 && iSlot > iToday && iTurn > iSlot, 'the paid-notice slot sits directly under the Today card');
+  assert.ok(iToday > 0 && iTurn > iToday && iSlot > iTurn && h.indexOf('aria-label="Notices"') > iSlot, 'E_: the paid-notice slot sits directly under the Turnover card, above Notices');
   assert.match(h, /id="slot-paid-notice" class="A_slot" hidden>/);
   assert.match(h, /out 12:00 noon/, 'a guest with no check-out time shows the house time, not a made-up one');
   assert.match(h, /Next guest in 1 h 30 m/); assert.match(h, /Slide to start cleaning/); assert.match(h, /data-slide/);
   assert.match(h, /aria-label="Notices"/); assert.match(h, /Rain watch, 2 to 5 pm/);
-  for (const w of ['Work', 'Help', 'Cleaning checklist', 'Payment Request', 'Guest Calendar Info', 'Cassy · OPS', 'Quick guide', 'House manual']) assert.ok(h.includes(w), w);
+  for (const w of ['Work', 'Ask Cassy', 'Cleaning checklist', 'Ask for your pay', 'Calendar', 'Cassy · OPS', 'Quick guide']) assert.ok(h.includes(w), w);
   assert.doesNotMatch(h, /Admin hub|slot-inbox|to confirm|Tell the guest/);
+  assert.doesNotMatch(h, /Payment Request|Guest Calendar Info|House manual|Sign out|aria-label="Status"|warnline/, 'E_: renamed rows, help trimmed, Sign out off the footer, no strip or warnings line');
 });
-test('A_ live mock: the admin home has the status strip, the notices, the three groups, the Inbox slot with its count, and the hub', async () => {
+test('A_ live mock: the admin home has the one pill (no status strip), the notices, two groups, the Inbox slot with its count; the hub row is on More', async () => {
   const app = await boot({ role: 'admin', hash: '#home', handlers: base('admin') });
   const h = app.els['v-home'].innerHTML;
-  assert.match(h, /aria-label="Status"/); assert.match(h, /Turnover on track/); assert.match(h, /Nothing overdue/); assert.match(h, /No clash days/);
-  for (const g of ['Guests and bookings', 'Money and stock', 'Team and help']) assert.ok(h.includes(g), g);
+  assert.match(h, /class="A_chipglass E_pill"/); assert.doesNotMatch(h, /aria-label="Status"|A_strip|Turnover on track|Nothing overdue|No clash days/);
+  for (const g of ['Guests and bookings', 'Admin']) assert.ok(h.includes(g), g);
+  assert.doesNotMatch(h, /Money and stock|Team and help|Admin hub/, 'E_: one Admin group; help and the hub live on More');
   assert.match(h, /id="slot-inbox"[^>]*>/); assert.doesNotMatch(h, /id="slot-inbox" hidden/); assert.match(h, /Inbox/); assert.match(h, /3 open/);
-  assert.match(h, /href="#hub"/);
+  assert.match((await boot({ role: 'admin', hash: '#more', handlers: base('admin') })).els['v-more'].innerHTML, /href="#hub"/);
   assert.match(h, /href="\.\/admin\/#\/guests\/conversations"|href="https:\/\/[^"]*#\/guests\/conversations"|#door\/dashboard\/guests\/conversations/, 'the Inbox opens guests/conversations through the dashboard door');
   const noInbox = await boot({ role: 'admin', hash: '#home', handlers: base('admin', { notices_v1: () => NOTICES('admin', { inbox_open: null }) }) });
   assert.match(noInbox.els['v-home'].innerHTML, /id="slot-inbox" hidden>/, 'hidden when inbox_open is null');
@@ -235,7 +237,7 @@ test('A_ live mock: Resolve sends the existing ack_verifier_finding_v1; the cale
   await a.click({ 'data-act': 'notice-resolve', 'data-id': 'V1m:x' });
   assert.deepEqual(a.calls.find((c) => c[0] === 'ack_verifier_finding_v1')[1], { p_key: 'V1m:x' });
   const m = await boot({ role: 'cleaner', hash: '#calendar', handlers: base('cleaner') }), h = m.els['v-calendar'].innerHTML;
-  assert.match(h, /aria-current="page">Month<\/a><a href="#calendar\/stays">Stays<\/a><a href="#calendar\/notices">Notices/);
+  assert.match(h, /aria-current="page">Month<\/a><a href="#calendar\/stays" data-act="cal-tab" data-tab="stays">Stays<\/a><a href="#calendar\/notices" data-act="cal-tab" data-tab="notices">Notices/);
   assert.ok(h.indexOf('class="A_legend"') > 0 && h.indexOf('class="A_legend"') < h.indexOf('class="cal"'), 'legend chips above the grid');
   assert.equal((h.match(/<button class="d /g) || []).length, 31, 'one 44 px button per day of October');
   assert.match(h, /A_mk power/); assert.match(h, /data-day="2026-10-16"/);
@@ -286,7 +288,7 @@ test('A_ motion and accessibility floor: press 0.97 at 160 ms, sheets 300 ms wit
   assert.match(css, /\.A_tabs a \{ min-height: 44px/); assert.match(css, /\.chip \{ height: var\(--touch\)/);
 });
 test('A_ service worker and manifest: new cache name, tokens + house photos precached and each photo is 60 KB or less, theme colours are the v5 backgrounds', () => {
-  const sw = read('sw.js'); assert.match(sw, /CACHE_NAME = 'cs-shell-v13'/);
+  const sw = read('sw.js'); assert.match(sw, /CACHE_NAME = 'cs-shell-v14'/);
   for (const u of ['./tokens.css', './img/house-hero.webp', './img/house-blur.webp', './fonts/dm-serif-display-400.woff2']) assert.ok(sw.includes("'" + u + "'") || sw.includes(u.replace('./', '').replace('fonts/', '')) , u);
   for (const f of ['img/house-hero.webp', 'img/house-blur.webp']) assert.ok(fs.statSync(path.join(root, f)).size <= 60 * 1024, f + ' is 60 KB or less');
   const man = JSON.parse(read('manifest.webmanifest')); assert.equal(man.theme_color, '#EEF1F4'); assert.equal(man.background_color, '#EEF1F4');

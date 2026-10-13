@@ -6,7 +6,7 @@
 //   Same-origin shell files                                          -> network-first, cache fallback.
 // Nothing personal is ever stored here: the cache holds the shell (HTML, CSS, JS, fonts, icons) and nothing else.
 // A shell that loads offline says "Live information needs a connection"; guest names exist only in JS memory.
-const CACHE_NAME = 'cs-shell-v13';
+const CACHE_NAME = 'cs-shell-v14';
 const NAV_TIMEOUT_MS = 3000;
 // Web Push handlers for the "You were paid" notice live with the pay screens (pay/C_push-sw.js). Absent in the unit-test sandbox.
 if (typeof importScripts === 'function') importScripts('pay/C_push-sw.js');

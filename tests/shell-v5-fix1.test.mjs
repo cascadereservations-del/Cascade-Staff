@@ -93,15 +93,17 @@ test('A_fix M2: a redraw of Home carries the paid-notice slot node over instead 
   await app.click({ 'data-act': 'refresh' });
   assert.ok(swaps.length >= 1, 'the mounted node is put back after a redraw'); assert.equal(swaps[0][0], mounted); assert.equal(swaps[0][1], fresh); assert.equal(removed[0], mounted);
 });
-test('A_fix M3: slide-to-start never swallows a later tap: the flag clears on the next pointerdown and after 400 ms', async () => {
-  const attrs = {}, a = { getAttribute: (k) => attrs[k] ?? null, setAttribute: (k, v) => { attrs[k] = String(v); }, removeAttribute: (k) => { delete attrs[k]; }, querySelector: () => ({ style: {} }), offsetWidth: 300, href: '#door/checklist' };
-  const app = await boot({ role: 'cleaner', hash: '#home', handlers: baseHandlers('cleaner'), docQuery: (q) => (q === '[data-slid]' && attrs['data-slid'] ? a : null) });
+test('A_fix M3 (E_: now through E_drag): slide-to-start swallows only the click that follows a short drag, on the slide itself, for 400 ms at most', async () => {
+  const a = { getAttribute: () => null, querySelector: () => ({ style: {} }), offsetWidth: 300, href: '#door/checklist', contains: (t) => t === a, closest: () => null, setPointerCapture() {} };
+  const app = await boot({ role: 'cleaner', hash: '#home', handlers: baseHandlers('cleaner') });
   const fire = (t, ev) => { for (const fn of app.listeners[t] || []) fn(ev); };
-  const slide = (x) => { fire('pointerdown', { target: { closest: () => a }, button: 0, clientX: 0 }); fire('pointermove', { clientX: x }); fire('pointerup', {}); };
-  slide(100); assert.equal(attrs['data-slid'], '1', 'a short drag arms the swallow');
-  fire('pointerdown', { target: { closest: () => null }, button: 0, clientX: 5 });
-  assert.equal(attrs['data-slid'], undefined, 'the next pointerdown clears it');
-  slide(100); assert.equal(attrs['data-slid'], '1'); await wait(450); assert.equal(attrs['data-slid'], undefined, 'and 400 ms is the longest it lives');
+  const slide = (x, t0) => { const at0 = { target: { closest: (s) => (s === '[data-slide]' ? a : null) }, button: 0, clientX: 40, clientY: 10, pointerId: 1, timeStamp: t0 };
+    fire('pointerdown', at0); fire('pointermove', { clientX: 40 + x, clientY: 10, pointerId: 1, timeStamp: t0 + 90 }); fire('pointerup', { clientX: 40 + x, clientY: 10, pointerId: 1, timeStamp: t0 + 100 }); };
+  const click = (target) => { let p = 0; fire('click', { target, preventDefault() { p++; }, stopPropagation() {} }); return p; };
+  slide(60, 0); assert.equal(click(a), 1, 'a short drag swallows the click that follows it');
+  assert.equal(click(a), 0, 'once');
+  slide(60, 200); assert.equal(click({ closest: () => null }), 0, 'a click anywhere else is never swallowed');
+  await wait(450); assert.equal(click(a), 0, 'and 400 ms is the longest it lives');
 });
 
 // ---------------------------------------------------------------- M4 M5
