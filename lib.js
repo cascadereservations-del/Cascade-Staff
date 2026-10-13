@@ -770,7 +770,7 @@
   // The server filters by role; this filters again. A cleaner (any staff layout) never gets `house` or `inbox_open`, even if the payload carries them.
   function A_noticesView(raw, role, today) {
     if (!raw || typeof raw !== 'object' || raw.ok === false || Array.isArray(raw)) return null;
-    var mgr = layoutForRole(role) === 'admin', times = A_houseTimes(raw.house_times);
+    var mgr = canSeeGuestContact(role), times = A_houseTimes(raw.house_times);
     var w = raw.weather && typeof raw.weather === 'object' ? raw.weather : null, weather = null;
     if (w && typeof w.temp_c === 'number') {
       weather = { source: A_WEATHER_SOURCE[w.source] || '', temp: Math.round(w.temp_c), condition: String(w.condition || ''), rain: typeof w.rain_chance_pct === 'number' ? Math.round(w.rain_chance_pct) : null,
@@ -817,6 +817,23 @@
     var when = n && n.date ? ' on ' + dayShort(n.date) + (n.start ? ' ' + A_timeRange(n.start, n.end) : '') : '';
     return 'Hello, a quick note about your stay: ' + String(n && n.title || 'a change') + (when && !/ on /.test(String(n && n.title || '')) ? when : '') + '. We will keep the house comfortable and tell you if anything changes.';
   }
+  // ops_notice_add_v1: argument names are exactly p_type, p_title, p_date, p_start_time, p_duration_hours, p_detail, p_property_id.
+  // The server is the real gate (it refuses phones, e-mails, amounts and a brownout); this only catches the empty and the oversize.
+  function A_noticeAddProblem(f) {
+    if (['water', 'maintenance', 'deep_clean', 'note'].indexOf(f.type) < 0) return 'Choose what kind of notice this is.';
+    if (!String(f.title || '').trim()) return 'Add a short title.';
+    if (String(f.title).trim().length > 80) return 'Keep the title to 80 characters.';
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(String(f.date || ''))) return 'Pick the date.';
+    if (String(f.detail || '').length > 200) return 'Keep the detail to 200 characters.';
+    var h = String(f.hours || '').trim(); if (h && !(+h > 0 && +h <= 72)) return 'Hours must be between 1 and 72.';
+    return null;
+  }
+  function A_noticeAddArgs(propertyId, f) {
+    var h = String(f.hours || '').trim();
+    return { p_property_id: propertyId, p_type: f.type, p_title: String(f.title).trim(), p_date: f.date, p_start_time: f.start || null, p_duration_hours: h ? +h : null, p_detail: String(f.detail || '').trim() || null };
+  }
+  // the server's refusal, said plainly (its own words when short and clean, else a calm default)
+  function A_plainRefusal(msg) { var m = String(msg || '').trim(); return m && m.length <= 160 && !/[{}<>]|pgrst|sqlstate/i.test(m) ? m : 'The notice was not accepted. Check the text and try again.'; }
   var A_CAL_TABS = ['month', 'stays', 'notices'];
   function A_calTab(part) { return part === 'stays' || part === 'house' || part === 'warnings' ? 'stays' : part === 'notices' ? 'notices' : 'month'; }
   var A_SHADES = [1, 2, 3, 4, 6]; // tokens.css has --v5-g1..g4 and g6; g5 does not exist
@@ -878,6 +895,6 @@
     parseNotes: parseNotes, returningLabel: returningLabel, earlierLine: earlierLine, companionsLine: companionsLine, todayCardState: todayCardState,
     orderWarnings: orderWarnings, brownoutText: brownoutText, lowStockText: lowStockText, warningSummary: warningSummary,
     weatherLine: weatherLine, rainLine: rainLine, weatherStale: weatherStale, esc: esc,
-    A_HOUSE_FALLBACK: A_HOUSE_FALLBACK, A_houseTimes: A_houseTimes, A_turnoverClock: A_turnoverClock, A_turnoverLine: A_turnoverLine, A_hm: A_hm, A_NOTICE_TYPES: A_NOTICE_TYPES, A_noticesView: A_noticesView, A_noticeFilters: A_noticeFilters, A_dayMarks: A_dayMarks, A_noticeDay: A_noticeDay, A_guestMessage: A_guestMessage, A_CAL_TABS: A_CAL_TABS, A_calTab: A_calTab, A_stayShade: A_stayShade, A_hubGroups: A_hubGroups, A_hubRoutes: A_hubRoutes, A_hubRouteOk: A_hubRouteOk, A_hubDoorUrl: A_hubDoorUrl, A_whatsNew: A_whatsNew, A_hour12: A_hour12, A_timeRange: A_timeRange
+    A_HOUSE_FALLBACK: A_HOUSE_FALLBACK, A_houseTimes: A_houseTimes, A_turnoverClock: A_turnoverClock, A_turnoverLine: A_turnoverLine, A_hm: A_hm, A_NOTICE_TYPES: A_NOTICE_TYPES, A_noticesView: A_noticesView, A_noticeFilters: A_noticeFilters, A_dayMarks: A_dayMarks, A_noticeDay: A_noticeDay, A_guestMessage: A_guestMessage, A_CAL_TABS: A_CAL_TABS, A_calTab: A_calTab, A_stayShade: A_stayShade, A_hubGroups: A_hubGroups, A_hubRoutes: A_hubRoutes, A_hubRouteOk: A_hubRouteOk, A_hubDoorUrl: A_hubDoorUrl, A_whatsNew: A_whatsNew, A_noticeAddProblem: A_noticeAddProblem, A_noticeAddArgs: A_noticeAddArgs, A_plainRefusal: A_plainRefusal, A_hour12: A_hour12, A_timeRange: A_timeRange
   };
 });

@@ -70,7 +70,7 @@ test('A_ notices view: a cleaner never gets house or inbox_open, even if the pay
     assert.ok(!CS.A_noticeFilters(v).some((f) => f[0] === 'house'), 'no House filter');
   }
   const fin = CS.A_noticesView(RAW(), 'finance', TODAY);
-  assert.equal(fin.house.length, 2); assert.ok(fin.list.every((n) => n.tell === false), 'finance may see the house but not tell the guest');
+  assert.deepEqual(fin.house, [], 'finance gets no house list, whatever the payload says'); assert.equal(fin.inbox, null); assert.ok(fin.list.every((n) => n.tell === false), 'finance cannot tell the guest');
   const own = CS.A_noticesView(RAW(), 'owner', TODAY);
   assert.ok(own.list.some((n) => n.tell), 'owner/admin may');
   assert.ok(!own.list.find((n) => n.key === 'rain-watch').tell === false || true);
@@ -172,7 +172,7 @@ async function boot({ role, hash, handlers }) {
   win.crypto = ctx.crypto; vm.createContext(ctx); vm.runInContext(read('app.js'), ctx);
   const flush = async () => { for (let i = 0; i < 14; i++) await new Promise((r) => setImmediate(r)); }; await flush();
   const click = async (attrs) => { const btn = { getAttribute: (n) => (n in attrs ? attrs[n] : null), hasAttribute: (n) => n in attrs }; for (const fn of listeners.click || []) fn({ target: { closest: () => btn } }); await flush(); };
-  return { els, calls, click, flush };
+  return { els, calls, click, flush, listeners };
 }
 const ACCESS = (role) => ({ error: null, data: { role, disabled: false, session_current: true, property_ids: ['prop-1'] } });
 const guest = (o) => Object.assign({ uid: 'g', guest_name: 'Ana Reyes', source: 'direct', checkin_date: '2026-10-12', checkout_date: TODAY, checkin_time: '14:00:00', checkout_time: null, nights: 3 }, o);
@@ -302,4 +302,35 @@ test('A_ demo fixtures: house times 12:00 noon / 2:00 pm everywhere, notices for
   assert.doesNotThrow(() => CS.assertNoMoney(X.notices)); assert.doesNotThrow(() => CS.A_noticesView(X.notices, 'owner', TODAY));
   assert.ok(!/(11:00 ?am|3:00 ?pm)/i.test(JSON.stringify(X.notices) + JSON.stringify(X.home)), 'no stale 11:00 am / 3:00 pm in a fixture');
   const sb = D.client('owner', NOW); return sb.rpc('notices_v1', {}).then((r) => assert.equal(r.error, null));
+});
+
+test('A_ ops_notice_add_v1 live mock: exact name and argument keys; owner/admin only; the server refusal shows inline and keeps what was typed; a missing RPC hides the form', async () => {
+  const KEYS = ['p_date', 'p_detail', 'p_duration_hours', 'p_property_id', 'p_start_time', 'p_title', 'p_type'];
+  assert.deepEqual(Object.keys(CS.A_noticeAddArgs('prop-1', { type: 'water', title: ' No water ', date: '2026-10-20', start: '09:00', hours: '6', detail: '' })).sort(), KEYS);
+  assert.deepEqual(CS.A_noticeAddArgs('prop-1', { type: 'note', title: 'x', date: '2026-10-20', start: '', hours: '', detail: '' }), { p_property_id: 'prop-1', p_type: 'note', p_title: 'x', p_date: '2026-10-20', p_start_time: null, p_duration_hours: null, p_detail: null });
+  assert.ok(CS.A_noticeAddProblem({ type: 'brownout', title: 'x', date: '2026-10-20' }), 'a brownout is not a choice');
+  assert.ok(CS.A_noticeAddProblem({ type: 'water', title: 'x'.repeat(81), date: '2026-10-20' })); assert.ok(CS.A_noticeAddProblem({ type: 'water', title: 'x', date: '2026-10-20', hours: '73' }));
+  const sent = []; let mode = 'ok';
+  const app = await boot({ role: 'admin', hash: '#calendar/notices', handlers: base('admin', { ops_notice_add_v1: (args) => { sent.push(args); return mode === 'refuse' ? { error: { code: '22023', message: 'Please leave phone numbers out of the notice.' }, data: null } : mode === 'missing' ? { error: { code: 'PGRST202', message: 'Could not find the function' }, data: null } : { error: null, data: { ok: true } }; } }) });
+  assert.match(app.els['v-calendar'].innerHTML, /data-act="notice-add-open"/);
+  await app.click({ 'data-act': 'notice-add-open', 'data-date': TODAY });
+  assert.match(app.els['cs-body'].innerHTML, /id="n-title"/); assert.match(app.els['cs-body'].innerHTML, /maxlength="80"/); assert.doesNotMatch(app.els['cs-body'].innerHTML, /value="brownout"/);
+  mode = 'refuse'; await app.click({ 'data-act': 'notice-add-save' });
+  assert.match(app.els['cs-body'].innerHTML, /Add a short title/, 'empty title is stopped before the server');
+  for (const fn of app.listeners.input || []) { fn({ target: { id: 'n-title', value: 'Call 0917' } }); fn({ target: { id: 'n-type', value: 'note' } }); }
+  await app.click({ 'data-act': 'notice-add-save' });
+  assert.equal(sent.length, 1); assert.deepEqual(Object.keys(sent[0]).sort(), KEYS); assert.equal(sent[0].p_property_id, 'prop-1'); assert.equal(sent[0].p_type, 'note'); assert.equal(sent[0].p_date, TODAY);
+  assert.match(app.els['cs-body'].innerHTML, /Please leave phone numbers out/); assert.match(app.els['cs-body'].innerHTML, /value="Call 0917"/, 'what was typed is kept');
+  mode = 'missing'; await app.click({ 'data-act': 'notice-add-save' });
+  await app.click({ 'data-act': 'notice-add-open', 'data-date': TODAY });
+  assert.equal(sent.length, 2, 'once the RPC is known to be missing the form does not open again');
+  const c = await boot({ role: 'cleaner', hash: '#calendar/notices', handlers: base('cleaner') });
+  assert.doesNotMatch(c.els['v-calendar'].innerHTML, /notice-add-open/); await c.click({ 'data-act': 'notice-add-open', 'data-date': TODAY }); assert.ok(!(c.els['cs-body'] && c.els['cs-body'].innerHTML), 'no form for a cleaner even by hand');
+  const f = await boot({ role: 'finance', hash: '#calendar/notices', handlers: base('finance') });
+  assert.doesNotMatch(f.els['v-calendar'].innerHTML, /notice-add-open/); assert.doesNotMatch(f.els['v-calendar'].innerHTML, /aria-label="House"/);
+});
+test('A_ notice text: the [hidden] marker and odd weather (null code, null aqi, no rain watch, empty hourly) draw as is', () => {
+  const v = CS.A_noticesView(RAW({ notices: [{ id: 'h', type: 'note', title: 'Call [hidden] about the gate', date: '2026-10-16', source: 'manual', detail: 'Mail [hidden]' }], weather: { source: 'google', fetched_at: '2026-10-15T02:00:00Z', temp_c: 28, condition: 'Clear', code: null, rain_chance_pct: 10, aqi: null, hourly: [], rain_watch: null, hourly_source: 'google' } }), 'owner', TODAY);
+  assert.equal(v.list[0].title, 'Call [hidden] about the gate'); assert.equal(v.weather.watch, null); assert.deepEqual(v.weather.hours, []); assert.equal(v.weather.aqi, null);
+  assert.equal(CS.A_noticesView(RAW({ role: 'inspector' }), 'inspector', TODAY).house.length, 0);
 });

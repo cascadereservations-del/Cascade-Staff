@@ -62,7 +62,7 @@
     storage: CS.authStorage(store('localStorage'), store('sessionStorage'), function () { return trustOn; }) } });
 
   var state = { access: null, user: null, name: '', layout: null, payload: null, loadedAt: 0, loading: false, error: '', month: null, payHint: null, photos: {},
-    notices: null, noticesAbsent: false, noticesLoading: false, noticeFilter: 'all', calTab: 'month', taskFilter: 'all', hubRoute: '', tasks: null, tasksErr: '', tasksLoading: false, showDone: false, lastDone: null, add: null, assignees: null, rates: null, ratesErr: '', rateForm: null, rateSaving: false, reply: null, bookings: null };
+    notices: null, noticesAbsent: false, noticesLoading: false, noticeFilter: 'all', nadd: null, noticeAddMissing: false, calTab: 'month', taskFilter: 'all', hubRoute: '', tasks: null, tasksErr: '', tasksLoading: false, showDone: false, lastDone: null, add: null, assignees: null, rates: null, ratesErr: '', rateForm: null, rateSaving: false, reply: null, bookings: null };
   var $ = function (id) { return document.getElementById(id); };
   var VIEWS = ['signin', 'home', 'calendar', 'tasks', 'payrates', 'more', 'door', 'reply', 'hub'];
   function pid() { return (state.access && state.access.property_ids && state.access.property_ids[0]) || CFG.propertyId; }
@@ -470,6 +470,7 @@
     if (v.mgr && (f === 'all' || f === 'house')) html += '<div class="A_label">House</div>' + (v.house.length ? '<section class="card glass list" aria-label="House">' + v.house.map(A_houseRow).join('') + '</section>' : '<div class="card glass"><p class="sub">Nothing needs a person in the house.</p></div>');
     if (f !== 'weather' && f !== 'house' && !v.list.length && f === 'all' && !W) html += '<div class="card glass"><p class="sub">No notices right now.</p></div>';
     if (CS.canSeeGuestContact(role())) html += '<section class="card glass A_card" aria-label="Add a notice"><h2 class="hd">Add a notice</h2><p class="sub" style="margin:0">Saw an advisory from SOCOTECO II or GSCWD? Forward the post to Cassy in Telegram and tap Save. It shows here and on the calendar.</p>' +
+      (state.noticeAddMissing ? '' : '<button class="btn btn-primary btn-sm" type="button" data-act="notice-add-open" data-date="' + esc(state.payload.today) + '">' + ICON('plus', 's16') + 'Add a notice</button>') +
       tgA(LINKS.tgOps, ICON('chat', 's16') + 'Open Cassy · OPS', 'btn btn-secondary btn-sm') + '</section>';
     return html;
   }
@@ -498,13 +499,13 @@
     state.sheet = { kind: kind, key: key, form: { kind: 'brownout', label: '' }, busy: false, err: '', msg: '', missing: false };
     var e = sheetEls(); $('cs-live').textContent = ''; drawSheet();
     e.sheet.classList.add('on'); e.sheet.setAttribute('aria-hidden', 'false'); e.scrim.classList.add('on');
-    var h = kind === 'add' ? $('t-title') : $('cs-h'); if (h) h.focus();
+    var h = kind === 'add' ? $('t-title') : kind === 'nadd' ? $('n-title') : $('cs-h'); if (h) h.focus();
   }
   function closeSheet() {
     var S = state.sheet; if (!S) return; state.sheet = null;
     var e = sheetEls(), attr = S.kind === 'day' ? 'data-day' : S.kind === 'warn' ? 'data-warn' : 'data-act';
     e.sheet.classList.remove('on'); e.sheet.setAttribute('aria-hidden', 'true'); e.scrim.classList.remove('on');
-    var want = S.kind === 'add' ? 'task-add-open' : S.kind === 'news' ? 'whatsnew' : S.key;
+    var want = S.kind === 'add' ? 'task-add-open' : S.kind === 'nadd' ? 'notice-add-open' : S.kind === 'news' ? 'whatsnew' : S.key;
     var back = Array.prototype.filter.call(document.querySelectorAll('[' + attr + ']'), function (b) { return b.getAttribute(attr) === want; })[0];
     if (back) back.focus();
   }
@@ -536,6 +537,7 @@
         (n.tell && CS.canSeeGuestContact(role()) ? '<button class="btn btn-secondary btn-sm" type="button" data-act="notice-tell" data-nkey="' + esc(n.key) + '">Tell the guest</button>' : '') + '</li>';
     }).join('') + '</ul>';
     html += '<div class="cap up" style="margin:14px 0 6px">Cleaning</div><p class="sub" style="margin:0">' + (ds.out || ds.arrive ? (ds.out ? esc((ds.out.guest_name || 'Guest') + ' out ' + T.outLabel) : '') + (ds.out && ds.arrive ? ', ' : '') + (ds.arrive ? esc((ds.stay.guest_name || 'Guest') + ' in ' + T.inLabel) : '') + '.' : 'No turnover this day.') + '</p>';
+    if (canFlag && !state.noticeAddMissing) html += '<button class="btn btn-secondary btn-sm" type="button" data-act="notice-add-open" data-date="' + esc(S.key) + '" style="margin-top:8px">' + ICON('plus', 's16') + 'Add a notice</button>';
     html += '<div class="cap up" style="margin:14px 0 6px">Also on this day</div>';
     html += ds.flags.length ? '<ul class="wlist">' + ds.flags.map(function (f) {
       var lbl = f.label && f.label !== CS.flagName(f.kind) ? ' · ' + esc(f.label) : '';
@@ -572,10 +574,10 @@
   function drawSheet() {
     var S = state.sheet; if (!S || !state.payload) return;
     var e = sheetEls(), had = e.sheet.contains(document.activeElement);
-    $('cs-body').innerHTML = (S.kind === 'day' ? daySheet(S) : S.kind === 'add' ? addReminderCard() : S.kind === 'news' ? A_newsSheet() : warnSheet(S)) +
+    $('cs-body').innerHTML = (S.kind === 'day' ? daySheet(S) : S.kind === 'add' ? addReminderCard() : S.kind === 'news' ? A_newsSheet() : S.kind === 'nadd' ? A_noticeAddForm() : warnSheet(S)) +
       (S.err ? '<div class="errbox" style="margin-top:12px">' + ICON('alert') + '<span>' + esc(S.err) + '</span></div>' : '') +
       (S.msg ? '<div class="okbox" style="margin-top:12px">' + ICON('check') + '<span>' + esc(S.msg) + '</span></div>' : '') +
-      (S.kind === 'add' ? '' : '<button class="btn btn-ghost btn-block" type="button" data-act="sheet-close" style="margin-top:12px">Close</button>');
+      (S.kind === 'add' || S.kind === 'nadd' ? '' : '<button class="btn btn-ghost btn-block" type="button" data-act="sheet-close" style="margin-top:12px">Close</button>');
     if (had && !e.sheet.contains(document.activeElement)) { var h = $('cs-h'); if (h) h.focus(); }
   }
   function A_newsSheet() {
@@ -924,6 +926,35 @@
       if (CS.rpcMissing(e)) { state.noticesAbsent = true; state.notices = null; }
     }).then(function () { state.noticesLoading = false; if (state.layout && (current === 'home' || current === 'calendar')) render(current); });
   }
+  var NADD_TYPES = [['water', 'Water interruption'], ['maintenance', 'Maintenance'], ['deep_clean', 'Deep cleaning'], ['note', 'Note']]; // a brownout is refused by the server
+  function A_noticeAddForm() {
+    var a = state.nadd;
+    return '<h2 class="ttl" id="cs-h" tabindex="-1">Add a notice</h2><p class="help" style="margin:4px 0 0">No phone numbers, e-mails or amounts.</p><div class="stack" style="margin-top:10px">' +
+      '<div class="field"><label for="n-type">Kind</label><select class="sel" id="n-type" style="max-width:none;text-align:left;text-align-last:left">' + NADD_TYPES.map(function (t) { return '<option value="' + t[0] + '"' + (a.type === t[0] ? ' selected' : '') + '>' + t[1] + '</option>'; }).join('') + '</select></div>' +
+      '<div class="field"><label for="n-title">What is happening</label><div class="input"><input id="n-title" maxlength="80" value="' + esc(a.title) + '" autocomplete="off"></div></div>' +
+      '<div class="field"><label for="n-date">Date</label><div class="input"><input id="n-date" type="date" value="' + esc(a.date) + '"></div></div>' +
+      '<div class="field"><label for="n-start">Starts (optional)</label><div class="input"><input id="n-start" type="time" value="' + esc(a.start) + '"></div></div>' +
+      '<div class="field"><label for="n-hours">Lasts, in hours (optional)</label><div class="input"><input id="n-hours" inputmode="decimal" maxlength="4" value="' + esc(a.hours) + '"></div></div>' +
+      '<div class="field"><label for="n-detail">Detail (optional)</label><div class="input"><input id="n-detail" maxlength="200" value="' + esc(a.detail) + '" autocomplete="off"></div></div>' +
+      (a.err ? '<div class="errbox" role="alert">' + ICON('alert') + '<span>' + esc(a.err) + '</span></div>' : '') +
+      '<div class="row-wrap"><button class="btn btn-primary" type="button" data-act="notice-add-save"' + (a.busy ? ' disabled' : '') + '>' + (a.busy ? 'Saving…' : 'Add notice') + '</button><button class="btn btn-ghost" type="button" data-act="notice-add-cancel">Cancel</button></div></div>';
+  }
+  function A_noticeAddDraw() { if (state.sheet && state.sheet.kind === 'nadd') drawSheet(); }
+  function A_noticeAddSave() {
+    var a = state.nadd; if (!a || a.busy || !CS.canSeeGuestContact(role())) return;
+    var bad = CS.A_noticeAddProblem(a); if (bad) { a.err = bad; A_noticeAddDraw(); return; }
+    a.busy = true; a.err = ''; A_noticeAddDraw();
+    sb.rpc('ops_notice_add_v1', CS.A_noticeAddArgs(pid(), a)).then(function (r) {
+      if (r.error) throw r.error;
+      if (r.data && r.data.ok === false) throw { message: r.data.error || 'not ok', code: '22023' };
+      state.nadd = null; closeSheet(); toast('Notice added.'); return A_loadNotices();
+    }).catch(function (e) {
+      a.busy = false;
+      if (CS.rpcMissing(e)) { state.noticeAddMissing = true; closeSheet(); render(current); return; }
+      a.err = e && e.code === '42501' ? 'Only an owner or admin can add a notice.' : e && e.message && e.code !== '' && !/fetch|network/i.test(e.message) ? CS.A_plainRefusal(e.message) : 'That did not save. Check your signal and try again.';
+      A_noticeAddDraw();
+    });
+  }
   function A_noticeByKey(key) { var v = A_notices(); return v ? v.all.filter(function (n) { return n.key === key; })[0] || null : null; }
 
   // ---------------------------------------------------------------- data
@@ -934,7 +965,7 @@
     });
   }
   function signOutTo(msg) {
-    closeSheet(); dropPhotos(); state.reply = null; var rb = $('rp-body'); if (rb) rb.innerHTML = ''; rpLive(''); state.payload = null; state.bookings = null; state.notices = null; state.noticesAbsent = false; state.tasks = null; state.access = null; state.layout = null; state.month = null; state.error = '';
+    closeSheet(); dropPhotos(); state.reply = null; var rb = $('rp-body'); if (rb) rb.innerHTML = ''; rpLive(''); state.payload = null; state.bookings = null; state.notices = null; state.noticesAbsent = false; state.nadd = null; state.noticeAddMissing = false; state.tasks = null; state.access = null; state.layout = null; state.month = null; state.error = '';
     return sb.auth.signOut().catch(function () {}).then(function () { showSignin(msg); });
   }
   function showSignin(msg) {
@@ -1020,7 +1051,7 @@
     if (v === 'door') { renderDoor(); return; }
     renderTabs(v === 'hub' ? 'more' : v);
     if (v === 'hub') renderHub(); else if (v === 'home') renderHome(); else if (v === 'calendar') renderCalendar(); else if (v === 'tasks') renderTasks(); else if (v === 'payrates') { renderPayRates(); if (!state.rates) loadRates(); } else if (v === 'reply') renderReply(); else if (v === 'more') renderMore();
-    var typing = document.activeElement && /^(df-(label|kind)|t-(title|due|who|note))$/.test(document.activeElement.id || '');
+    var typing = document.activeElement && /^(df-(label|kind)|t-(title|due|who|note)|n-(type|title|date|start|hours|detail))$/.test(document.activeElement.id || '');
     if (state.sheet) { if (v !== (state.sheet.kind === 'add' ? 'tasks' : state.sheet.kind === 'news' ? 'more' : 'calendar')) closeSheet(); else if (!typing) drawSheet(); }
   }
   // A door opens in the frame once per visit; coming back to the same door (a re-render) keeps the page where it is.
@@ -1136,6 +1167,9 @@
     else if (a === 'task-add-cancel') { state.add = null; closeSheet(); }
     else if (a === 'plain') { window.CSTheme.setPlain(!window.CSTheme.plainOn()); renderMore(); }
     else if (a === 'whatsnew') openSheet('news', 'news');
+    else if (a === 'notice-add-open') { if (CS.canSeeGuestContact(role()) && !state.noticeAddMissing) { state.nadd = { type: 'water', title: '', date: t.getAttribute('data-date') || '', start: '', hours: '', detail: '', err: '', busy: false }; openSheet('nadd', 'notice-add-open'); } }
+    else if (a === 'notice-add-cancel') { state.nadd = null; closeSheet(); }
+    else if (a === 'notice-add-save') A_noticeAddSave();
     else if (a === 'notice-tell') { var nt = CS.canSeeGuestContact(role()) ? A_noticeByKey(t.getAttribute('data-nkey')) : null; if (nt) copyText(CS.A_guestMessage(nt)).then(function () { toast('Message copied. Paste it to the guest.'); }, function () { toast('Copy did not work on this phone.'); }); }
     else if (a === 'notice-cal') { var nd0 = t.getAttribute('data-date'), np = nd0.split('-'); if (CS.monthInRange(+np[0], +np[1], state.payload.today)) state.month = { y: +np[0], m: +np[1] }; state.calTab = 'month'; if (location.hash !== '#calendar') location.hash = '#calendar'; else render('calendar'); openSheet('day', nd0); }
     else if (a === 'notice-resolve') { if (CS.canSeeGuestContact(role())) sb.rpc('ack_verifier_finding_v1', { p_key: t.getAttribute('data-id') }).then(function (r) { if (r.error) throw r.error; return A_loadNotices(); }).catch(function () { toast('That did not save. Check your signal and try again.'); }); }
@@ -1168,11 +1202,13 @@
     var id = ev.target && ev.target.id, a = state.add, f = state.rateForm;
     if (state.sheet && id === 'df-label') state.sheet.form.label = ev.target.value; else if (state.sheet && id === 'df-kind') state.sheet.form.kind = ev.target.value;
     if (state.reply && id === 'rp-text') { state.reply.text = ev.target.value; state.reply.err = ''; } else if (state.reply && id === 'rp-name') state.reply.name = ev.target.value;
+    var na = state.nadd; if (na && /^n-(type|title|date|start|hours|detail)$/.test(id || '')) { na[{ 'n-type': 'type', 'n-title': 'title', 'n-date': 'date', 'n-start': 'start', 'n-hours': 'hours', 'n-detail': 'detail' }[id]] = ev.target.value; na.err = ''; }
     if (a && id === 't-title') a.title = ev.target.value; else if (a && id === 't-due') a.due = ev.target.value; else if (a && id === 't-note') a.note = ev.target.value; else if (a && id === 't-who') a.who = ev.target.value;
     else if (f && /^r-(from|regular|general|transport|note)$/.test(id || '')) { f[id.slice(2)] = ev.target.value; f.err = ''; syncRate(); }
   });
   document.addEventListener('change', function (ev) {
     if (ev.target && ev.target.id === 'rp-file') { var f0 = ev.target.files && ev.target.files[0]; if (f0) pickShot(f0); return; }
+    if (ev.target && ev.target.id === 'n-type' && state.nadd) { state.nadd.type = ev.target.value; return; }
     if (ev.target && ev.target.id === 'df-kind' && state.sheet) { state.sheet.form.kind = ev.target.value; return; }
     if (ev.target && ev.target.id === 't-who' && state.add) state.add.who = ev.target.value;
     else if (ev.target && ev.target.getAttribute && ev.target.getAttribute('data-act') === 'tasks-showdone') { state.showDone = ev.target.checked; loadTasks(); renderTasks(); }
