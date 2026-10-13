@@ -286,7 +286,7 @@
     var m = S.model, o = {}, n; for (n = 0; n < W_PARTS.length; n++) o[W_PARTS[n]] = '';
     if (!m) {
       o.hero = S.busy && !S.failed ? '<div class="card glass W_empty" role="status"><p class="sub">Loading the forecast.</p></div>'
-        : '<div class="card glass W_empty" role="status"><p class="W_big2">No connection</p><p class="sub">The forecast could not be loaded.</p><button type="button" class="btn btn-primary" data-w-retry="1">Try again</button></div>';
+        : '<div class="card glass W_empty" role="status"><p class="W_big2">No connection</p><p class="sub">The weather did not load. Check your connection and try again.</p><button type="button" class="btn btn-primary" data-w-retry="1">Try again</button></div>';
       return o;
     }
     o.hero = W_hero(m, S); o.alerts = W_alertBlock(m, S.houseTimes); o.hours = W_hoursBlock(m); o.days = W_daysBlock(m, S.open); o.sun = W_sunBlock(m); o.map = W_mapBlock(S); o.src = W_sourceBlock(m, S);

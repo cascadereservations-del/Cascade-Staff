@@ -412,3 +412,17 @@ test('fix 2: after a layer chip or Refresh rewrites its part, keyboard focus goe
   assert.equal(focused[focused.length - 1], '[data-w-refresh="1"]');
   assert.equal(focused.length, 2, 'once per tap');
 });
+
+test('3.1.1: a first load that fails (error answer, thrown error, or no answer in 15 s) replaces the loading text with the plain failure line and Try again', async () => {
+  const cases = [['error answer', () => Promise.resolve({ data: null, error: { message: 'FunctionsFetchError' } })], ['thrown', () => Promise.reject(new TypeError('Failed to fetch'))], ['never answers', () => new Promise(() => {})]];
+  for (const [name, invoke] of cases) {
+    const w = world({ invoke }); const e = el();
+    w.W.mount(e, { client: w.client, timeoutMs: 30 });
+    assert.ok(e.innerHTML.includes('Loading the forecast.'), name + ': loading text first');
+    await new Promise((r) => setTimeout(r, 80)); await settle();
+    const h = e.innerHTML;
+    assert.ok(!h.includes('Loading the forecast.'), name + ': the loading text is gone');
+    assert.ok(h.includes('The weather did not load. Check your connection and try again.') && h.includes('data-w-retry="1"') && h.includes('Try again'), name);
+    assert.ok(!h.includes('W_dli') && !h.includes('Partly cloudy'), name + ': no sample rows');
+  }
+});
