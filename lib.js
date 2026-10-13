@@ -226,7 +226,7 @@
   function monthTitle(y, m) { return MONTHS[m - 1] + ' ' + y; }
   function monthShortYear(ym) { var a = String(ym).split('-'); return MONTHS[+a[1] - 1].slice(0, 3) + ' ' + a[0]; } // 2026-06 -> Jun 2026
   function greeting(now) { var h = manilaParts(now).h; return h < 12 ? 'Good morning' : h < 18 ? 'Good afternoon' : 'Good evening'; }
-  // '14:00:00' -> '2:00 PM'; '12:00:00' -> '12:00 noon'; null stays null.
+  // '14:00:00' -> '2:00 pm'; '12:00:00' -> '12:00 noon'; null stays null.
   function fmtTime(t) {
     if (!t) return null;
     var m = /^(\d{1,2}):(\d{2})/.exec(String(t)); if (!m) return null;
@@ -751,6 +751,8 @@
     var phase = m < t.outMin ? 'before' : m < t.inMin ? 'window' : 'after';
     return { phase: phase, minsToOut: Math.max(0, t.outMin - m), minsToIn: Math.max(0, t.inMin - m), times: t };
   }
+  // 'noon', '2 pm', '2:30 pm': short enough for one line in a third of a phone
+  function A_shortTime(hhmm) { var m = /^(\d{2}):(\d{2})$/.exec(String(hhmm || '')); if (!m) return ''; var h = +m[1]; if (h === 12 && m[2] === '00') return 'noon'; return (h % 12 === 0 ? 12 : h % 12) + (m[2] === '00' ? '' : ':' + m[2]) + ' ' + (h >= 12 ? 'pm' : 'am'); }
   function A_hm(mins) { var h = Math.floor(mins / 60), m = mins % 60; return h ? h + ' h ' + m + ' m' : m + ' m'; }
   function A_turnoverLine(clock, arrivesToday) {
     if (!arrivesToday) return 'No arrival today';
@@ -795,18 +797,27 @@
     var house = mgr ? (Array.isArray(raw.house) ? raw.house : []).filter(function (h) { return h && (h.kind === 'low_stock' || h.kind === 'finding') && h.title; })
       .map(function (h) { return { key: 'h:' + h.kind + ':' + h.id, id: String(h.id || ''), kind: h.kind, type: 'house', group: 'house', title: String(h.title), sub: h.detail ? String(h.detail) : '', detail: h.detail ? String(h.detail) : '' }; }) : [];
     var srcs = raw.sources && typeof raw.sources === 'object' ? raw.sources : {};
-    return { sources: { water: A_facebookUrl(srcs.water_page), power: A_facebookUrl(srcs.power_page) }, times: times, weather: weather, list: list, house: house, all: list.concat(house), inbox: mgr && typeof raw.inbox_open === 'number' ? raw.inbox_open : null, mgr: mgr,
+    return { sources: { water: A_sourceUrl('water', srcs, 'water_page'), power: A_sourceUrl('power', srcs, 'power_page') }, times: times, weather: weather, list: list, house: house, all: list.concat(house), inbox: mgr && typeof raw.inbox_open === 'number' ? raw.inbox_open : null, mgr: mgr,
       counts: { all: list.length + house.length, weather: list.filter(function (x) { return x.group === 'weather'; }).length + (weather ? 1 : 0), power: list.filter(function (x) { return x.group === 'power'; }).length,
         water: list.filter(function (x) { return x.group === 'water'; }).length, house: house.length } };
   }
-  // Only an https address on facebook.com (no credentials, no odd port) is a source link; anything else is not drawn.
-  function A_facebookUrl(u) {
-    if (typeof u !== 'string' || u.length > 300) return null;
-    try { var x = new URL(u); return x.protocol === 'https:' && (x.hostname === 'facebook.com' || /\.facebook\.com$/.test(x.hostname)) && !x.username && !x.password && !x.port ? x.href : null; } catch (e) { return null; }
+  // The two source pages are PINNED here. The setting behind notices_v1.sources is staff-writable, so it is never trusted: a payload value counts only when it
+  // parses to https on www.facebook.com, m.facebook.com or facebook.com, with no query, no hash, no credentials, no port and exactly the pinned page's path
+  // (case-insensitive, optional trailing slash). What is returned is always the pinned address itself, never the payload's spelling.
+  var A_PINNED = { water: 'https://www.facebook.com/gscwaterdistrict/', power: 'https://www.facebook.com/socoteco2.EC/' };
+  function A_facebookUrl(u, key) {
+    if (!Object.prototype.hasOwnProperty.call(A_PINNED, key) || typeof u !== 'string' || u.length > 300 || u.indexOf('?') >= 0 || u.indexOf('#') >= 0) return null;
+    try {
+      var x = new URL(u), want = new URL(A_PINNED[key]).pathname.replace(/\/$/, '').toLowerCase();
+      var ok = x.protocol === 'https:' && (x.hostname === 'www.facebook.com' || x.hostname === 'm.facebook.com' || x.hostname === 'facebook.com') && !x.username && !x.password && !x.port && !x.search && !x.hash && x.pathname.replace(/\/$/, '').toLowerCase() === want;
+      return ok ? A_PINNED[key] : null;
+    } catch (e) { return null; }
   }
+  // A page whose entry is in the payload falls back to the pinned address when the value is not good; no sources at all (an older server) draws nothing.
+  function A_sourceUrl(key, srcs, field) { var present = !!srcs && Object.prototype.hasOwnProperty.call(srcs, field); return A_facebookUrl(present ? srcs[field] : null, key) || (present ? A_PINNED[key] : null); }
   // Facebook's own Page Plugin for the water page: built only from a validated page URL, width capped at 500.
   function A_fbPluginUrl(page, width) {
-    var p = A_facebookUrl(page); if (!p) return null;
+    var p = A_facebookUrl(page, 'water'); if (!p) return null;
     var w = Math.max(180, Math.min(500, Math.round(+width) || 340));
     return 'https://www.facebook.com/plugins/page.php?href=' + encodeURIComponent(p) + '&tabs=timeline&width=' + w + '&height=600&small_header=true&adapt_container_width=true&hide_cover=true&show_facepile=false';
   }
@@ -922,6 +933,6 @@
     parseNotes: parseNotes, returningLabel: returningLabel, earlierLine: earlierLine, companionsLine: companionsLine, todayCardState: todayCardState,
     orderWarnings: orderWarnings, brownoutText: brownoutText, lowStockText: lowStockText, warningSummary: warningSummary,
     weatherLine: weatherLine, rainLine: rainLine, weatherStale: weatherStale, esc: esc,
-    A_HOUSE_FALLBACK: A_HOUSE_FALLBACK, A_houseTimes: A_houseTimes, A_turnoverClock: A_turnoverClock, A_turnoverLine: A_turnoverLine, A_hm: A_hm, A_NOTICE_TYPES: A_NOTICE_TYPES, A_noticesView: A_noticesView, A_noticeFilters: A_noticeFilters, A_dayMarks: A_dayMarks, A_noticeDay: A_noticeDay, A_guestMessage: A_guestMessage, A_CAL_TABS: A_CAL_TABS, A_calTab: A_calTab, A_stayShade: A_stayShade, A_hubGroups: A_hubGroups, A_hubRoutes: A_hubRoutes, A_hubRouteOk: A_hubRouteOk, A_hubDoorUrl: A_hubDoorUrl, A_whatsNew: A_whatsNew, A_noticeAddError: A_noticeAddError, A_NOTICE_HINT: A_NOTICE_HINT, A_flagDup: A_flagDup, A_facebookUrl: A_facebookUrl, A_fbPluginUrl: A_fbPluginUrl, A_noticeAddProblem: A_noticeAddProblem, A_noticeAddArgs: A_noticeAddArgs, A_plainRefusal: A_plainRefusal, A_hour12: A_hour12, A_timeRange: A_timeRange
+    A_HOUSE_FALLBACK: A_HOUSE_FALLBACK, A_houseTimes: A_houseTimes, A_turnoverClock: A_turnoverClock, A_turnoverLine: A_turnoverLine, A_hm: A_hm, A_NOTICE_TYPES: A_NOTICE_TYPES, A_noticesView: A_noticesView, A_noticeFilters: A_noticeFilters, A_dayMarks: A_dayMarks, A_noticeDay: A_noticeDay, A_guestMessage: A_guestMessage, A_CAL_TABS: A_CAL_TABS, A_calTab: A_calTab, A_stayShade: A_stayShade, A_hubGroups: A_hubGroups, A_hubRoutes: A_hubRoutes, A_hubRouteOk: A_hubRouteOk, A_hubDoorUrl: A_hubDoorUrl, A_whatsNew: A_whatsNew, A_shortTime: A_shortTime, A_PINNED: A_PINNED, A_noticeAddError: A_noticeAddError, A_NOTICE_HINT: A_NOTICE_HINT, A_flagDup: A_flagDup, A_facebookUrl: A_facebookUrl, A_fbPluginUrl: A_fbPluginUrl, A_noticeAddProblem: A_noticeAddProblem, A_noticeAddArgs: A_noticeAddArgs, A_plainRefusal: A_plainRefusal, A_hour12: A_hour12, A_timeRange: A_timeRange
   };
 });

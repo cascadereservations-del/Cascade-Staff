@@ -18,7 +18,10 @@ test('A_fix H1: the guest tag is readable on past and clash cells, and a one-nig
   const cal = [stayRow('Ana Reyes', '2026-10-20', '2026-10-21'), stayRow('Ben Cruz', '2026-10-22', '2026-10-25')];
   const app = await boot({ role: 'cleaner', hash: '#calendar', handlers: baseHandlers('cleaner', { staff_home_v1: () => HOMEWITH(cal) }) });
   const h = html(app);
-  assert.match(dayCell(h, '2026-10-20'), /A_tag in">Ana/, 'a one-night stay: the name sits on the arrival cell');
+  assert.match(dayCell(h, '2026-10-20'), /A_tag in" style="--A_g:var\(--v5-g\d\);--A_gfg:var\(--v5-g\d-fg\)">Ana/, 'a one-night stay: the name sits on the arrival cell and carries its own shade');
+  const tagRule = css.match(/\.cal \.d \.A_tag\.in \{[^}]*\}/)[0]; assert.match(tagRule, /max-width: calc\(100% - 8px\)/); assert.match(tagRule, /background: var\(--A_g/); assert.match(tagRule, /left: 4px/);
+  assert.match(css.match(/\.cal \.d \.A_tag \{[^}]*\}/)[0], /overflow: hidden; text-overflow: ellipsis/);
+  assert.match(css, /\.cal \.d\.past \.A_tag\.in \{ color: var\(--v5-cal-past-fg\); \}/);
   assert.doesNotMatch(dayCell(h, '2026-10-22'), /A_tag/, 'a longer stay keeps its name on the first night cell, not on the arrival');
   assert.match(dayCell(h, '2026-10-23'), /A_tag"[^>]*>Ben/);
 });
@@ -29,11 +32,11 @@ test('A_fix H2: at 2:01 pm with no cleaning record the card never says Guest out
   const app = await boot({ role: 'cleaner', hash: '#home', now: at('2026-10-15T06:01:00Z'), handlers: baseHandlers('cleaner', { staff_home_v1: () => HOMEWITH(cal, { current_guest: null, next_guest: null }) }) });
   const h = app.els['v-home'].innerHTML;
   assert.match(h, /aria-label="Turnover today"/, 'the card shows although current_guest is gone after noon');
-  assert.match(h, /Clean<\/span><b>Window closed/); assert.doesNotMatch(h, />Done</); assert.doesNotMatch(h, /class="done"/);
+  assert.match(h, /Clean<\/span><b>Closed/); assert.doesNotMatch(h, />Done</); assert.doesNotMatch(h, /class="done"/);
   const steps = h.slice(h.indexOf('class="A_steps"'), h.indexOf('A_slide'));
   assert.doesNotMatch(steps, /data-i="check"/, 'no tick on any step: the app does not know what happened');
   const before = await boot({ role: 'cleaner', hash: '#home', now: at('2026-10-15T01:00:00Z'), handlers: baseHandlers('cleaner', { staff_home_v1: () => HOMEWITH(cal) }) });
-  assert.match(before.els['v-home'].innerHTML, /Clean<\/span><b>From 12:00 noon/);
+  assert.match(before.els['v-home'].innerHTML, /Clean<\/span><b>From noon/);
 });
 
 // ---------------------------------------------------------------- H3 Add a notice
@@ -59,14 +62,22 @@ test('A_fix H3: Add a notice exists only once notices_v1 answered; a missing RPC
 
 // ---------------------------------------------------------------- M1 / M2 / M3
 test('A_fix M1: the Notices card has one fixed height for loaded, empty and failed, shows two rows and collapses only when the RPC is absent; the inbox slot is reserved', async () => {
-  assert.match(css, /\.A_noticecard \{ min-height: 232px/);
+  const card = css.match(/\.A_noticecard \{[^}]*\}/)[0]; assert.match(card, /(^|[ ;{])height: 216px/); assert.doesNotMatch(card, /min-height/); assert.match(card, /overflow: hidden/);
+  assert.match(css, /\.A_noticecard \.rowi \{ height: 64px; min-height: 64px; overflow: hidden; \}/);
+  assert.match(css, /\.A_noticecard \.rowi \.t, \.A_noticecard \.rowi \.s \{ white-space: nowrap; overflow: hidden; text-overflow: ellipsis; \}/);
   const three = NOTICES_RAW({ notices: [...NOTICES_RAW().notices, { id: 'n3', type: 'deep_clean', title: 'Deep clean', date: '2026-10-21', source: 'manual' }] });
   const ok = await boot({ role: 'admin', hash: '#home', handlers: baseHandlers('admin', { notices_v1: () => ({ error: null, data: three }) }) });
   const h = ok.els['v-home'].innerHTML; assert.match(h, /A_noticecard/); assert.equal((h.match(/<a class="rowi" href="#calendar\/notices"/g) || []).length, 2, 'two rows and See all 3'); assert.match(h, /See all 3/);
   const empty = await boot({ role: 'admin', hash: '#home', handlers: baseHandlers('admin', { notices_v1: () => ({ error: null, data: NOTICES_RAW({ notices: [], weather: null }) }) }) });
   assert.match(empty.els['v-home'].innerHTML, /A_noticecard[^>]*>.*No notices/s);
   const failed = await boot({ role: 'admin', hash: '#home', handlers: baseHandlers('admin', { notices_v1: () => ({ error: { code: '500', message: 'boom' }, data: null }) }) });
-  const fh = failed.els['v-home'].innerHTML; assert.match(fh, /A_noticecard/); assert.match(fh, /No connection\. <button/); assert.match(fh, /id="slot-inbox" style="min-height:64px"/, 'the inbox slot keeps its height');
+  const fh = failed.els['v-home'].innerHTML; assert.match(fh, /A_noticecard/); assert.match(fh, /No connection\. <button/); assert.match(fh, /id="slot-inbox" hidden>/, 'a failed read drops the inbox reserve');
+  assert.match(ok.els['v-home'].innerHTML, /title="Brownout 1:00 to 4:00 pm · /, 'the row is one line; the full text is in its title');
+  const never = new Promise(() => {});
+  const pend = await boot({ role: 'admin', hash: '#home', handlers: baseHandlers('admin', { notices_v1: () => never }) });
+  assert.match(pend.els['v-home'].innerHTML, /aria-busy="true"/); assert.match(pend.els['v-home'].innerHTML, /id="slot-inbox" style="min-height:64px"/, 'owner/admin: the reserve is kept while loading');
+  const fin = await boot({ role: 'finance', hash: '#home', handlers: baseHandlers('finance', { notices_v1: () => never }) });
+  assert.match(fin.els['v-home'].innerHTML, /id="slot-inbox" hidden>/, 'finance never has an inbox');
   const gone = await boot({ role: 'admin', hash: '#home', handlers: baseHandlers('admin', { notices_v1: () => ({ error: { code: 'PGRST202', message: 'x' }, data: null }) }) });
   assert.doesNotMatch(gone.els['v-home'].innerHTML, /A_noticecard/);
 });
@@ -98,18 +109,28 @@ test('A_fix M4: the deep-clean tile has a colour (the class the app writes is th
   assert.match(css, /\.lead\.A_t-deep_clean \{ background: var\(--v5-deep\)/); assert.doesNotMatch(css, /\.A_t-deep\b(?!_)/);
   assert.ok(CS.A_noticesView({ notices: [{ id: 'd', type: 'deep_clean', title: 'Deep clean', date: '2026-10-20' }] }, 'cleaner', TODAY).list[0].type === 'deep_clean');
 });
-test('A_fix M5: every interactive class is at least 44 px tall in the stylesheet, and the house row keeps its buttons on their own line', async () => {
+test('A_fix M5: EVERY rule ending in an interactive class sets a height of at least 44 px (px >= 44 or the touch token), and the house row keeps its buttons on their own line', async () => {
   const interactive = ['.btn', '.btn-sm', '.chip', '.iconbtn', '.sw', '.ctval', '.tab', '.trust', '.rowi', '.A_chipglass', '.doorbar .back', '.pad button'];
-  const last = {};
+  const seen = new Set(), bad = [];
   for (const m of css.replace(/\/\*[\s\S]*?\*\//g, '').matchAll(/([^{}@]+)\{([^{}]*)\}/g)) {
-    const sels = m[1].split(',').map((x) => x.trim()), v = /(?:^|[;\s])(?:min-)?height:\s*([^;]+)/.exec(m[2]);
-    if (!v) continue; for (const s of sels) if (interactive.includes(s)) last[s] = v[1].trim();
+    for (const s of m[1].split(',').map((x) => x.trim())) {
+      const hit = interactive.find((c) => s === c || s.endsWith(' ' + c)); if (!hit) continue;
+      for (const d of m[2].matchAll(/(?:^|[;\s])((?:min-)?height):\s*([^;]+)/g)) {
+        seen.add(hit); const val = d[2].trim(), px = /^(\d+(?:\.\d+)?)px$/.exec(val);
+        if (!(val === 'var(--touch)' || val === 'var(--v5-touch)' || (px && +px[1] >= 44))) bad.push(s + ' { ' + d[1] + ': ' + val + ' }');
+      }
+    }
   }
-  for (const k of Object.keys(last)) { const px = /^(\d+(?:\.\d+)?)px$/.exec(last[k]); assert.ok(!px || +px[1] >= 44, k + ' is ' + last[k] + ' tall'); }
-  assert.ok(Object.keys(last).length >= 8, 'the check actually found the rules');
+  assert.deepEqual(bad, [], 'a rule under 44 px, or a value that is not a plain size');
+  assert.ok(seen.size >= 9, 'the check found the rules: ' + [...seen].join(' '));
   const app = await boot({ role: 'admin', hash: '#calendar/notices', handlers: baseHandlers('admin', { notices_v1: () => ({ error: null, data: NOTICES_RAW({ house: [{ kind: 'finding', id: 'V1m:x', title: 'System check', detail: 'Airbnb block runs past the last guest night' }] }) }) }) });
   assert.match(html(app), /<\/span><div class="A_acts"><button[^>]*notice-resolve/, 'Resolve sits in its own A_acts line, after the text');
   assert.match(css, /\.A_acts \{ display: flex; gap: 8px; flex-wrap: wrap; width: 100%/);
+});
+test('A_fix F5: the three turnover labels are short enough for one line and align from the top', () => {
+  assert.deepEqual(['12:00', '14:00', '14:30', '09:05', '00:00'].map(CS.A_shortTime), ['noon', '2 pm', '2:30 pm', '9:05 am', '12 am']); assert.equal(CS.A_shortTime('bad'), '');
+  assert.match(css, /\.A_steps > div \{ align-content: start; \} \.A_steps b \{ white-space: nowrap; \}/);
+  assert.ok(CS.A_shortTime('12:00').length + 5 <= 10 && ('Until ' + CS.A_shortTime('14:00')).length <= 10, 'none of the three labels is longer than 10 characters');
 });
 
 // ---------------------------------------------------------------- M6 M7
@@ -158,7 +179,7 @@ test('A_fix LOW: a flag and a notice of one kind read once on the cell and on th
 test('A_fix LOW: no raw colour in styles.css, tokens added for both themes, no Google Fonts host and no font preload for the missing file', () => {
   const raw = css.split('\n').filter((l) => /#[0-9a-fA-F]{3,8}\b|rgba?\(/.test(l)); assert.deepEqual(raw, []);
   const tk = read('tokens.css'); for (const t of ['--v5-photo-ink', '--v5-photo-fade', '--v5-live-ok', '--v5-bar-on', '--v5-scrim']) assert.ok(tk.includes(t + ':'), t);
-  const sw = read('sw.js'); assert.doesNotMatch(sw, /fonts\.googleapis|fonts\.gstatic/); assert.match(sw, /'facebook\.com'/);
+  const sw = read('sw.js'); assert.doesNotMatch(sw, /fonts\.googleapis|fonts\.gstatic/); assert.doesNotMatch(sw, /facebook/, 'a cross-origin frame never reaches our worker');
   assert.doesNotMatch(read('index.html'), /rel="preload"/);
 });
 test('A_fix LOW: one time format ("2:00 pm", "12:00 noon"); the demo registers no service worker, a live page does', async () => {
@@ -171,19 +192,26 @@ test('A_fix LOW: one time format ("2:00 pm", "12:00 noon"); the demo registers n
 });
 
 // ---------------------------------------------------------------- notice sources and the opt-in GSCWD posts
-test('A_fix sources: a source link is an https facebook.com address or nothing', () => {
-  const ok = ['https://www.facebook.com/gscwaterdistrict/', 'https://facebook.com/x', 'https://m.facebook.com/x'];
-  for (const u of ok) assert.ok(CS.A_facebookUrl(u), u);
-  for (const u of ['http://www.facebook.com/x', 'https://evilfacebook.com/x', 'https://facebook.com.evil.example/x', 'https://user:pw@www.facebook.com/x', 'https://www.facebook.com:8443/x', 'javascript:alert(1)', '//www.facebook.com/x', '', null, undefined, 42, 'https://www.facebook.com/' + 'a'.repeat(400)]) assert.equal(CS.A_facebookUrl(u), null, String(u));
-  const v = CS.A_noticesView(NOTICES_RAW({ sources: { water_page: 'https://evil.example/x', power_page: 'https://www.facebook.com/socoteco2.EC/' } }), 'cleaner', TODAY);
-  assert.deepEqual(v.sources, { water: null, power: 'https://www.facebook.com/socoteco2.EC/' });
-  assert.deepEqual(CS.A_noticesView(NOTICES_RAW({ sources: undefined }), 'cleaner', TODAY).sources, { water: null, power: null }, 'an older server: nothing');
-  assert.equal(CS.A_fbPluginUrl('https://evil.example/x', 300), null);
-  const u = CS.A_fbPluginUrl('https://www.facebook.com/gscwaterdistrict/', 900);
-  assert.ok(u.startsWith('https://www.facebook.com/plugins/page.php?href=https%3A%2F%2Fwww.facebook.com%2Fgscwaterdistrict%2F&tabs=timeline&width=500&height=600&small_header=true&adapt_container_width=true&hide_cover=true&show_facepile=false'));
-  assert.match(CS.A_fbPluginUrl('https://www.facebook.com/x', 10), /width=180&/);
+const HOSTILE = ['https://l.facebook.com/l.php?u=https%3A%2F%2Fevil.example', 'https://www.facebook.com/dialog/oauth?client_id=1&redirect_uri=https%3A%2F%2Fevil.example', 'https://apps.facebook.com/x', 'https://evil.example.facebook.com/',
+  'https://www.facebook.com/someotherpage/', 'https://www.facebook.com/gscwaterdistrict/?ref=x', 'https://www.facebook.com/gscwaterdistrict/#x', 'https://www.facebook.com/gscwaterdistrict/?', 'https://www.facebook.com/gscwaterdistrict/extra',
+  'http://www.facebook.com/gscwaterdistrict/', 'https://evilfacebook.com/gscwaterdistrict/', 'https://facebook.com.evil.example/gscwaterdistrict/', 'https://user:pw@www.facebook.com/gscwaterdistrict/', 'https://www.facebook.com:8443/gscwaterdistrict/',
+  'https://www.facebook.com/%67scwaterdistrict/', 'https://web.facebook.com/gscwaterdistrict/', 'https://fb.com/gscwaterdistrict/', 'javascript:alert(1)', '//www.facebook.com/gscwaterdistrict/', '', null, undefined, 42, {}, 'https://www.facebook.com/' + 'a'.repeat(400)];
+test('A_fix F1: the source pages are pinned in code; a payload value counts only when it is exactly that page, and anything else is the pinned page or nothing', () => {
+  assert.deepEqual(CS.A_PINNED, { water: 'https://www.facebook.com/gscwaterdistrict/', power: 'https://www.facebook.com/socoteco2.EC/' });
+  for (const u of ['https://www.facebook.com/gscwaterdistrict/', 'https://www.facebook.com/gscwaterdistrict', 'https://facebook.com/GSCWaterDistrict/', 'https://m.facebook.com/gscwaterdistrict/']) assert.equal(CS.A_facebookUrl(u, 'water'), CS.A_PINNED.water, u);
+  for (const u of ['https://www.facebook.com/socoteco2.EC/', 'https://www.facebook.com/SOCOTECO2.ec']) assert.equal(CS.A_facebookUrl(u, 'power'), CS.A_PINNED.power, u);
+  assert.equal(CS.A_facebookUrl('https://www.facebook.com/socoteco2.EC/', 'water'), null, 'the power page is not the water page');
+  for (const k of ['constructor', '__proto__', 'x', undefined]) assert.equal(CS.A_facebookUrl('https://www.facebook.com/gscwaterdistrict/', k), null, String(k));
+  for (const u of HOSTILE) { for (const k of ['water', 'power']) assert.equal(CS.A_facebookUrl(u, k), null, k + ' ' + String(u).slice(0, 60));
+    const v = CS.A_noticesView(NOTICES_RAW({ sources: { water_page: u, power_page: u } }), 'cleaner', TODAY); assert.deepEqual(v.sources, { water: CS.A_PINNED.water, power: CS.A_PINNED.power }, 'a bad value with the entry present falls back to the pinned page: ' + String(u).slice(0, 50)); }
+  assert.deepEqual(CS.A_noticesView(NOTICES_RAW({ sources: { water_page: 'https://l.facebook.com/l.php?u=x' } }), 'cleaner', TODAY).sources, { water: CS.A_PINNED.water, power: null }, 'an entry that is not there draws nothing');
+  for (const none of [undefined, null, 'x', [], {}]) assert.deepEqual(CS.A_noticesView(NOTICES_RAW({ sources: none }), 'cleaner', TODAY).sources, { water: null, power: null }, 'an older server: nothing');
+  for (const u of HOSTILE) assert.equal(CS.A_fbPluginUrl(u, 300), null, 'the plugin is never built from ' + String(u).slice(0, 50));
+  const u = CS.A_fbPluginUrl('https://m.facebook.com/GSCwaterdistrict', 900);
+  assert.ok(u.startsWith('https://www.facebook.com/plugins/page.php?href=https%3A%2F%2Fwww.facebook.com%2Fgscwaterdistrict%2F&tabs=timeline&width=500&height=600&small_header=true&adapt_container_width=true&hide_cover=true&show_facepile=false'), 'built from the pinned page, not the payload spelling');
+  assert.match(CS.A_fbPluginUrl(CS.A_PINNED.water, 10), /width=180&/);
 });
-test('A_fix sources: the Notices page shows both page links to every role, the posts only after a tap, never in demo, and Hide removes them', async () => {
+test('A_fix F1/F4: hostile payload links are never drawn; the posts load only on a tap, are carried across redraws, and a new visit to the tab needs a new tap', async () => {
   for (const role of ['cleaner', 'admin']) {
     const app = await boot({ role, hash: '#calendar/notices', handlers: baseHandlers(role) }), h = html(app);
     assert.match(h, /Check the GSCWD page/); assert.match(h, /Check the SOCOTECO II page/);
@@ -199,9 +227,53 @@ test('A_fix sources: the Notices page shows both page links to every role, the p
   }
   const demo = await boot({ role: 'admin', hash: '#calendar/notices', demo: true, handlers: baseHandlers('admin') });
   await demo.click({ 'data-act': 'fb-show' }); assert.doesNotMatch(html(demo), /<iframe/, 'demo loads nothing'); assert.match(html(demo), /Demo: the live posts are not loaded here\./);
-  const bad = await boot({ role: 'cleaner', hash: '#calendar/notices', handlers: baseHandlers('cleaner', { notices_v1: () => ({ error: null, data: NOTICES_RAW({ sources: { water_page: 'https://evil.example/x', power_page: 'http://facebook.com/a' } }) }) }) });
-  assert.doesNotMatch(html(bad), /Check the (GSCWD|SOCOTECO II) page|fb-show|evil\.example/);
+  const bad = await boot({ role: 'cleaner', hash: '#calendar/notices', handlers: baseHandlers('cleaner', { notices_v1: () => ({ error: null, data: NOTICES_RAW({ sources: { water_page: 'https://l.facebook.com/l.php?u=https%3A%2F%2Fevil.example', power_page: 'https://apps.facebook.com/x' } }) }) }) });
+  assert.doesNotMatch(html(bad), /evil\.example|apps\.facebook|l\.facebook/); assert.match(html(bad), /href="https:\/\/www\.facebook\.com\/gscwaterdistrict\/"/, 'the pinned page stands in');
   const old = await boot({ role: 'cleaner', hash: '#calendar/notices', handlers: baseHandlers('cleaner', { notices_v1: () => ({ error: null, data: NOTICES_RAW({ sources: undefined }) }) }) });
-  assert.doesNotMatch(html(old), /Check the (GSCWD|SOCOTECO II) page/);
+  assert.doesNotMatch(html(old), /Check the (GSCWD|SOCOTECO II) page|fb-show/);
   assert.equal(D.build('owner', NOW).notices.sources.water_page, 'https://www.facebook.com/gscwaterdistrict/'); assert.equal(D.build('cleaner', NOW).notices.sources.power_page, 'https://www.facebook.com/socoteco2.EC/');
+  // F4: carried across redraws (no second request), reset when the tab changes or the calendar is left
+  let out = '', rendered = false, phase = 'idle'; const swaps = [], removed = [];
+  const live = { tag: 'live', parentNode: { removeChild(n) { removed.push(n); } } }, fresh = { tag: 'fresh', parentNode: { replaceChild(n, o) { swaps.push([n, o]); phase = 'idle'; } } };
+  const cal = { style: {}, classList: { add() {}, remove() {}, toggle() {} }, setAttribute() {}, getAttribute: () => null, querySelectorAll: () => [], focus() {}, querySelector: (q) => (q !== '#A_fbbox' || !/<iframe|A_fbbox/.test(out) ? null : phase === 'fresh' ? fresh : live) };
+  Object.defineProperty(cal, 'innerHTML', { get: () => out, set: (x) => { if (/A_fbbox/.test(out) && /id="A_fbbox"/.test(x)) phase = 'fresh'; out = x; rendered = true; } });
+  const app = await boot({ role: 'cleaner', hash: '#calendar/notices', els: { 'v-calendar': cal }, handlers: baseHandlers('cleaner') });
+  await app.click({ 'data-act': 'fb-show' }); assert.equal((out.match(/<iframe/g) || []).length, 1);
+  await app.click({ 'data-nfilter': 'all' });
+  assert.equal((out.match(/<iframe/g) || []).length, 0, 'the redraw writes no second iframe (no second request to Facebook)'); assert.ok(/id="A_fbbox"/.test(out));
+  assert.equal(swaps.length, 1, 'the live node is put back'); assert.equal(swaps[0][0], live); assert.equal(removed[0], live);
+  const go = (hash) => { app.location.hash = hash; for (const fn of app.winListeners.hashchange || []) fn(); };
+  go('#calendar/stays'); go('#calendar/notices'); await app.flush();
+  assert.doesNotMatch(out, /<iframe/); assert.match(out, /data-act="fb-show"/, 'coming back to the tab needs a new tap');
+  await app.click({ 'data-act': 'fb-show' }); assert.equal((out.match(/<iframe/g) || []).length, 1);
+  go('#home'); go('#calendar/notices'); await app.flush(); assert.doesNotMatch(out, /<iframe/, 'leaving the calendar resets it too');
+});
+
+test('A_fix pay rates: Add rate opens a confirm sheet; nothing is sent before Save rate; Go back keeps the typed values; exact RPC name and argument keys; owner/admin only', async () => {
+  const RATES = { ok: true, today: TODAY, next: null, in_force: { id: 'r3', effective_from: '2026-09-30', regular_rate: 500, general_rate: 1000, transport_rate: 150, note: 'x' },
+    history: [{ id: 'r3', effective_from: '2026-09-30', regular_rate: 500, general_rate: 1000, transport_rate: 150, note: 'x' }, { id: 'r2', effective_from: '2026-05-07', regular_rate: 650, general_rate: 1000, transport_rate: null, note: 'y' }, { id: 'r1', effective_from: '2025-09-08', regular_rate: 600, general_rate: 900, transport_rate: null, note: 'z' }] };
+  const mk = (role) => boot({ role, hash: '#payrates', handlers: baseHandlers(role, { admin_pay_rates_v1: () => ({ error: null, data: RATES }), admin_add_pay_rate_v1: () => ({ error: null, data: { ok: true, id: 'r4' } }) }) });
+  const app = await mk('owner'), page = () => app.els['v-payrates'].innerHTML, sent = () => app.calls.filter((c) => c[0] === 'admin_add_pay_rate_v1');
+  assert.match(page(), />Add rate</); assert.match(page(), /You will confirm before it saves\./); assert.doesNotMatch(page(), /Save new rate/);
+  assert.match(page(), /Show 2 earlier rates/); assert.equal((page().match(/class="rowi"/g) || []).length, 1, 'the latest entry first, the others behind the button');
+  app.input('r-regular', '520'); app.input('r-general', '1050'); app.input('r-transport', '160'); app.input('r-note', 'Agreed');
+  await app.click({ 'data-act': 'rate-save' });
+  assert.equal(sent().length, 0, 'the RPC is not called by Add rate');
+  const sheet = app.els['cs-body'].innerHTML;
+  assert.match(sheet, /Save this rate\?/); assert.match(sheet, /520/); assert.match(sheet, /1,050/); assert.match(sheet, /160/); assert.match(sheet, /every cleaner/); assert.match(sheet, /6 Oct 2026|Oct 2026/); assert.match(sheet, /data-act="rate-confirm">Save rate</); assert.match(sheet, /data-act="rate-back">Go back</);
+  assert.equal(app.els['cal-sheet'].getAttribute('aria-hidden'), 'false');
+  await app.click({ 'data-act': 'rate-back' });
+  assert.equal(sent().length, 0); assert.equal(app.els['cal-sheet'].getAttribute('aria-hidden'), 'true', 'Go back closes the sheet');
+  await app.click({ 'data-act': 'rates-more' }); // a redraw: the form is rebuilt from state, so state must hold the typed values
+  assert.match(page(), /id="r-regular" value="520"/); assert.match(page(), /id="r-note" value="Agreed"/, 'the typed values are still there');
+  await app.click({ 'data-act': 'rate-save' }); assert.equal(sent().length, 0);
+  await app.click({ 'data-act': 'rate-confirm' });
+  assert.equal(sent().length, 1); assert.deepEqual(Object.keys(sent()[0][1]).sort(), ['p_effective_from', 'p_general', 'p_note', 'p_property_id', 'p_regular', 'p_transport']);
+  assert.deepEqual(sent()[0][1], { p_property_id: 'prop-1', p_effective_from: '2026-10-15', p_regular: 520, p_general: 1050, p_transport: 160, p_note: 'Agreed' });
+  assert.equal(app.els['cal-sheet'].getAttribute('aria-hidden'), 'true');
+  // an empty form never opens the sheet, and nobody but owner/admin has the screen or the confirm
+  const empty = await mk('admin'); await empty.click({ 'data-act': 'rate-save' }); assert.ok(!empty.els['cal-sheet'] || empty.els['cal-sheet'].getAttribute('aria-hidden') !== 'false', 'nothing to confirm yet');
+  for (const role of ['finance', 'cleaner']) { const o = await mk(role); await o.click({ 'data-act': 'rate-confirm' }); assert.equal(o.calls.filter((c) => c[0] === 'admin_add_pay_rate_v1').length, 0, role); assert.equal(o.calls.filter((c) => c[0] === 'admin_pay_rates_v1').length, 0, role + ' never reads rates'); }
+  const gone = await boot({ role: 'owner', hash: '#payrates', handlers: baseHandlers('owner', { admin_pay_rates_v1: () => ({ error: { code: 'PGRST202', message: 'x' }, data: null }) }) });
+  assert.match(gone.els['v-payrates'].innerHTML, /available after the next update/); assert.doesNotMatch(gone.els['v-payrates'].innerHTML, /data-act="rate-save"/);
 });

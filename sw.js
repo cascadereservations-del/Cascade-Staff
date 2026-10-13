@@ -23,7 +23,7 @@ const SHELL_URLS = [
   ...SELF_FONTS.map((f) => './fonts/' + f),
   ...ICON_FILES.map((f) => './icons/' + f)
 ];
-const NETWORK_ONLY_HOSTS = ['supabase.co', 'supabase.in', 'api.telegram.org', 't.me', 'facebook.com']; // facebook.com: the opt-in GSCWD page plugin is never stored
+const NETWORK_ONLY_HOSTS = ['supabase.co', 'supabase.in', 'api.telegram.org', 't.me'];
 const FONT_HOSTS = ['cdn.jsdelivr.net']; // public files only: the pinned supabase-js build
 const NEVER_PATHS = ['/rest/v1/', '/functions/v1/', '/auth/v1/', '/storage/v1/'];
 // Folded sibling apps (D-324): never answered or stored by the shell worker. The admin dashboard must never be served stale, and the

@@ -62,7 +62,7 @@
     storage: CS.authStorage(store('localStorage'), store('sessionStorage'), function () { return trustOn; }) } });
 
   var state = { access: null, user: null, name: '', layout: null, payload: null, loadedAt: 0, loading: false, error: '', month: null, payHint: null, photos: {},
-    notices: null, noticesAbsent: false, noticesLoading: false, noticeFilter: 'all', nadd: null, fbOpen: false, calTab: 'month', taskFilter: 'all', hubRoute: '', tasks: null, tasksErr: '', tasksLoading: false, showDone: false, lastDone: null, add: null, assignees: null, rates: null, ratesErr: '', rateForm: null, rateSaving: false, reply: null, bookings: null };
+    notices: null, noticesAbsent: false, noticesLoading: false, noticeFilter: 'all', nadd: null, fbOpen: false, ratesMore: false, calTab: 'month', taskFilter: 'all', hubRoute: '', tasks: null, tasksErr: '', tasksLoading: false, showDone: false, lastDone: null, add: null, assignees: null, rates: null, ratesErr: '', rateForm: null, rateSaving: false, reply: null, bookings: null };
   var $ = function (id) { return document.getElementById(id); };
   var VIEWS = ['signin', 'home', 'calendar', 'tasks', 'payrates', 'more', 'door', 'reply', 'hub'];
   function pid() { return (state.access && state.access.property_ids && state.access.property_ids[0]) || CFG.propertyId; }
@@ -84,7 +84,7 @@
       '<span class="chev">' + ICON(opts.external ? 'ext' : 'chev', opts.external ? 's16' : '') + '</span>';
     if (opts.tg) return tgA(opts.tg, inner, 'rowi');
     if (opts.href && opts.external) return ext(opts.href, inner, 'rowi');
-    if (opts.href) return '<a class="rowi" href="' + esc(opts.href) + '">' + inner + '</a>';
+    if (opts.href) return '<a class="rowi" href="' + esc(opts.href) + '"' + (opts.hint ? ' title="' + esc(opts.hint) + '"' : '') + '>' + inner + '</a>';
     return '<button class="rowi" type="button" id="' + esc(opts.id || '') + '">' + inner + '</button>';
   }
   // A_hubLink: a dashboard page by its route (admin/#/<route>), through the existing door frame when the role and the trust setting allow it.
@@ -174,7 +174,7 @@
     var win = clock.phase === 'window', closed = clock.phase === 'after';
     var steps = '<div class="A_steps">' +
       '<div><span class="dot">' + ICON('logout', 's16') + '</span><span>Guest out</span><b>' + esc(outToday ? T.outLabel : 'None today') + '</b></div>' +
-      '<div class="' + (win ? 'now' : '') + '"><span class="dot">' + ICON('sparkles', 's16') + '</span><span>Clean</span><b>' + esc(closed ? 'Window closed' : win ? 'Until ' + T.inLabel : 'From ' + T.outLabel) + '</b></div>' +
+      '<div class="' + (win ? 'now' : '') + '"><span class="dot">' + ICON('sparkles', 's16') + '</span><span>Clean</span><b>' + esc(closed ? 'Closed' : win ? 'Until ' + CS.A_shortTime(T.check_in) : 'From ' + CS.A_shortTime(T.check_out)) + '</b></div>' +
       '<div><span class="dot">' + ICON('user', 's16') + '</span><span>Guest in</span><b>' + esc(inToday ? T.inLabel : 'None today') + '</b></div></div>';
     return '<section class="card glass A_card" aria-label="Turnover today"><div class="row-between"><span class="cap up">Turnover today</span><span class="sub num" style="font-size:15px">' + esc(CS.A_turnoverLine(clock, inToday)) + '</span></div>' +
       steps + (staff ? A_slideStart() : '') + '</section>';
@@ -185,7 +185,7 @@
     if (state.noticesAbsent) return '';
     var loading = !v && state.noticesLoading, items = v ? v.all.slice(0, 2) : [], body;
     if (!v) body = loading ? '<div class="skel" style="height:72px"></div>' : '<p class="sub" style="margin:0">No connection. <button class="btn btn-ghost btn-sm" type="button" data-act="refresh">Try again</button></p>';
-    else body = items.length ? '<div class="A_nlist">' + items.map(function (n) { return row({ icon: A_noticeIcon(n.type), tile: n.type, title: n.title, sub: n.sub, href: '#calendar/notices' }); }).join('') + '</div>' : '<p class="sub" style="margin:0">No notices. Nothing to plan around.</p>';
+    else body = items.length ? '<div class="A_nlist">' + items.map(function (n) { return row({ icon: A_noticeIcon(n.type), tile: n.type, title: n.title, sub: n.sub, href: '#calendar/notices', hint: n.title + (n.sub ? ' · ' + n.sub : '') }); }).join('') + '</div>' : '<p class="sub" style="margin:0">No notices. Nothing to plan around.</p>';
     return '<section class="card glass A_card A_noticecard" aria-label="Notices"' + (loading ? ' aria-busy="true"' : '') + '><div class="A_head"><h2>Notices</h2>' + (v ? '<a href="#calendar/notices">' + (v.counts.all ? 'See all ' + v.counts.all : 'Open') + ICON('chev', 's16') + '</a>' : '') + '</div>' + body + '</section>';
   }
   function A_noticeIcon(type) { return type === 'house' ? 'house' : (CS.A_NOTICE_TYPES[type] || CS.A_NOTICE_TYPES.note).icon; }
@@ -220,11 +220,13 @@
           row({ icon: 'book', title: 'House manual', sub: 'How we do things', door: 'manual' }) + doorRow('guide', 'book', 'How the staff app and the house work')) + footerLine() + '</div>';
     } else {
       var bk = CS.bookingsToConfirmRow(role(), state.bookings), dash = A_hubLink('today'), conv = A_hubLink('guests/conversations'), inbox = v ? v.inbox : null;
+      // only owner and admin have an inbox; the reserve is kept while notices load, and dropped on failure, when absent, and for finance
+      var inboxShown = !!conv && CS.canSeeGuestContact(role()) && !state.noticesAbsent && (v ? inbox != null : state.noticesLoading);
       var hubRow = row({ icon: 'dash', title: 'Admin hub', sub: 'Every dashboard page, in one list', href: '#hub' });
       body = '<div class="A_body">' + errBanner() + A_statusStrip(bk) + todayCard() + A_turnoverCard(false) + A_noticesCard() + warnLine() +
         A_navCard('Guests and bookings', (bk ? row({ icon: 'clip', title: 'Bookings to confirm', sub: 'Open the pending bookings', href: bk.href, external: true, count: bk.count, countLabel: bk.n === 1 ? ' booking to confirm' : ' bookings to confirm' }) : '') +
           row({ icon: 'calendar', title: 'Guest Calendar Info', sub: 'Stays, blocked nights, notices', href: '#calendar', count: n || '' }) +
-          '<div id="slot-inbox"' + (state.noticesAbsent || (v && inbox == null) || !conv ? ' hidden' : '') + (!v && !state.noticesAbsent ? ' style="min-height:64px"' : '') + '>' + (conv && v && inbox != null ? row({ icon: 'chat', title: 'Inbox', sub: inbox ? inbox + ' open' : 'No open messages', href: conv.href, external: conv.external, count: inbox || '', countLabel: ' open messages' }) : '') + '</div>' +
+          '<div id="slot-inbox"' + (inboxShown ? '' : ' hidden') + (inboxShown && !v ? ' style="min-height:64px"' : '') + '>' + (inboxShown && v ? row({ icon: 'chat', title: 'Inbox', sub: inbox ? inbox + ' open' : 'No open messages', href: conv.href, external: conv.external, count: inbox || '', countLabel: ' open messages' }) : '') + '</div>' +
           (canReply() ? row({ icon: 'sparkles', title: 'Cassy reply', sub: 'Draft a warm reply to a guest message', href: '#reply' }) : '')) +
         A_navCard('Money and stock', row({ icon: 'dash', title: 'Admin dashboard', sub: 'Today, bookings, money, operations', door: 'dashboard' }) + hubRow +
           (trustOn ? '' : '<div class="help doornote">Sign-in is kept only on trusted devices</div>') +
@@ -366,7 +368,7 @@
         var prev = i > 0 ? info[i - 1] : null, starts = col === 0 || !prev || prev.stay !== ds.stay || prev.arrive;
         if (starts) { var run = 1; while (col + run < 7 && info[i + run] && info[i + run].stay === ds.stay && !info[i + run].arrive) run++; tag = '<span class="A_tag" style="width:calc(' + run + '00% + ' + (run - 1) * 3 + 'px - 8px)">' + esc(A_firstName(ds.stay)) + '</span>'; }
       }
-      if (booked && ds.arrive && !ds.cont) tag = '<span class="A_tag in">' + esc(A_firstName(ds.stay)) + '</span>';
+      if (booked && ds.arrive && !ds.cont) tag = '<span class="A_tag in" style="' + A_shadeOf(ds.stay) + '">' + esc(A_firstName(ds.stay)) + '</span>';
       var marks = CS.A_dayMarks(c.iso, view, ds.flags); marks.forEach(function (k) { monthHas.marks[k] = true; });
       var mk = marks.length ? '<span class="A_marks" aria-hidden="true">' + marks.map(function (k) { return '<span class="A_mk ' + k + '">' + ICON(MARK_ICON[k] || 'note', 's12') + '</span>'; }).join('') + '</span>' : '';
       var inner = halves(ds) + '<span class="n">' + (+c.iso.slice(8)) + '</span>' + tag +
@@ -382,8 +384,8 @@
   }
   // Legend chips ABOVE the grid; they scroll sideways on a narrow phone.
   function legend() {
-    var sw = function (css, t) { return '<span><i class="sw" style="' + css + '"></i>' + t + '</span>'; };
-    var mk = function (k) { return '<span><i class="A_mk ' + k + ' sw" style="display:inline-flex;align-items:center;justify-content:center">' + ICON(MARK_ICON[k], 's12') + '</i>' + MARK_WORD[k] + '</span>'; };
+    var sw = function (css, t) { return '<span><i class="A_sw" style="' + css + '"></i>' + t + '</span>'; };
+    var mk = function (k) { return '<span><i class="A_mk ' + k + ' A_sw" style="display:inline-flex;align-items:center;justify-content:center">' + ICON(MARK_ICON[k], 's12') + '</i>' + MARK_WORD[k] + '</span>'; };
     return '<div class="A_legend" role="group" aria-label="Legend, scroll sideways" tabindex="0">' +
       sw('background:var(--v5-surf);border:1px solid var(--v5-cal-free-edge)', 'Free') + sw('background:var(--v5-g1)', 'Booked') +
       sw('background:repeating-linear-gradient(135deg,transparent 0 3px,var(--v5-cal-hatch) 3px 5px),var(--v5-cal-blocked)', 'Blocked') +
@@ -453,6 +455,7 @@
       (acts ? '<div class="A_acts">' + acts + '</div>' : '') + '</div>';
   }
   // Where the notices come from: a plain link for every role (https facebook.com only, validated in lib), and an opt-in panel of the page's latest posts.
+  var fbCarry = false; // true while renderCalendar is carrying the live frame node over: the new markup then holds an empty box, so no second request starts
   var SRC_WORD = { water: 'GSCWD', power: 'SOCOTECO II' };
   function A_sourceRow(kind, url) {
     return '<nav class="card glass list" aria-label="' + SRC_WORD[kind] + ' page"><a class="rowi" href="' + esc(url) + '" target="_blank" rel="noopener noreferrer"><span class="lead">' + ICON('ext') + '</span><span class="mid"><span class="t">Check the ' + SRC_WORD[kind] + ' page</span><span class="s">Opens Facebook in a new tab</span></span><span class="chev">' + ICON('ext', 's16') + '</span></a></nav>';
@@ -460,10 +463,11 @@
   // Never loaded by itself (data cost, and a third-party frame); never in demo; never cached by the service worker.
   function A_fbPanel(page) {
     if (!state.fbOpen) return '<button class="btn btn-secondary btn-block" type="button" data-act="fb-show">Show the latest GSCWD posts</button>';
+    var carried = fbCarry;
     var cap = 'From GSCWD’s Facebook page.' + (CS.canSeeGuestContact(role()) ? ' To add one to the calendar, send the post link to Cassy.' : '');
     var body = '';
     if (DEMO) body = '<p class="sub" style="margin:0">Demo: the live posts are not loaded here.</p>';
-    else { var url = CS.A_fbPluginUrl(page, Math.min(500, (window.innerWidth || 360) - 32)); if (url) body = '<div class="A_fbbox"><iframe title="Latest GSCWD posts" loading="lazy" referrerpolicy="no-referrer" sandbox="allow-scripts allow-same-origin allow-popups" src="' + esc(url) + '"></iframe></div>'; }
+    else { var url = CS.A_fbPluginUrl(page, Math.min(500, (window.innerWidth || 360) - 32)); if (url) body = '<div class="A_fbbox" id="A_fbbox">' + (carried ? '' : '<iframe title="Latest GSCWD posts" loading="lazy" referrerpolicy="no-referrer" sandbox="allow-scripts allow-same-origin allow-popups" src="' + esc(url) + '"></iframe>') + '</div>'; }
     return '<div class="card glass A_card" aria-label="Latest GSCWD posts">' + body + '<p class="help" style="margin:0">' + esc(cap) + '</p><button class="btn btn-secondary" type="button" data-act="fb-hide">Hide</button></div>';
   }
   function calNotices() {
@@ -495,8 +499,13 @@
   function renderCalendar() {
     var el = $('v-calendar'), head = appbar({ title: 'Guest Calendar Info', back: '#home', refresh: true });
     if (!state.payload) { el.innerHTML = head + '<div class="screen">' + (state.error ? errBanner() : loadingBlock()) + '</div>'; return; }
-    var tab = state.calTab, body = tab === 'stays' ? calStays() : tab === 'notices' ? calNotices() : calMonth();
-    el.innerHTML = head + '<div class="screen">' + errBanner() + calTabs(tab) + body + '<div class="help" style="text-align:center;margin-top:14px">Updated ' + esc(CS.agoLabel(state.payload.generated_at)) + '</div></div>';
+    var tab = state.calTab;
+    var keepFb = state.fbOpen && tab === 'notices' && el.querySelector ? el.querySelector('#A_fbbox') : null; if (keepFb && keepFb.parentNode) keepFb.parentNode.removeChild(keepFb); else keepFb = null;
+    fbCarry = !!keepFb;
+    var inner = head + '<div class="screen">' + errBanner() + calTabs(tab) + (tab === 'stays' ? calStays() : tab === 'notices' ? calNotices() : calMonth()) + '<div class="help" style="text-align:center;margin-top:14px">Updated ' + esc(CS.agoLabel(state.payload.generated_at)) + '</div></div>';
+    fbCarry = false;
+    el.innerHTML = inner;
+    if (keepFb) { var fresh = el.querySelector('#A_fbbox'); if (fresh && fresh.parentNode) fresh.parentNode.replaceChild(keepFb, fresh); }
     loadIdPhotos(el);
   }
 
@@ -593,10 +602,10 @@
   function drawSheet() {
     var S = state.sheet; if (!S || !state.payload) return;
     var e = sheetEls(), had = e.sheet.contains(document.activeElement);
-    $('cs-body').innerHTML = (S.kind === 'day' ? daySheet(S) : S.kind === 'add' ? addReminderCard() : S.kind === 'news' ? A_newsSheet() : S.kind === 'nadd' ? A_noticeAddForm() : warnSheet(S)) +
+    $('cs-body').innerHTML = (S.kind === 'day' ? daySheet(S) : S.kind === 'add' ? addReminderCard() : S.kind === 'news' ? A_newsSheet() : S.kind === 'nadd' ? A_noticeAddForm() : S.kind === 'rate' ? A_rateConfirm() : warnSheet(S)) +
       (S.err ? '<div class="errbox" style="margin-top:12px">' + ICON('alert') + '<span>' + esc(S.err) + '</span></div>' : '') +
       (S.msg ? '<div class="okbox" style="margin-top:12px">' + ICON('check') + '<span>' + esc(S.msg) + '</span></div>' : '') +
-      (S.kind === 'add' || S.kind === 'nadd' ? '' : '<button class="btn btn-ghost btn-block" type="button" data-act="sheet-close" style="margin-top:12px">Close</button>');
+      (S.kind === 'add' || S.kind === 'nadd' || S.kind === 'rate' ? '' : '<button class="btn btn-ghost btn-block" type="button" data-act="sheet-close" style="margin-top:12px">Close</button>');
     if (had && !e.sheet.contains(document.activeElement)) { var h = $('cs-h'); if (h) h.focus(); }
   }
   function A_newsSheet() {
@@ -743,10 +752,10 @@
       fld('r-transport', 'Transport (PHP, empty if included)', f.transport, 'inputmode="decimal" placeholder="included"') +
       fld('r-note', 'Why (kept in the audit history)', f.note, 'maxlength="500" autocomplete="off"') +
       '<div class="errbox" id="r-problem" role="alert" hidden></div>' +
-      '<button class="btn btn-primary" type="button" data-act="rate-save" disabled>' + (state.rateSaving ? 'Saving…' : 'Save new rate') + '</button></div></div>' +
-      '<div><div class="cap up" style="margin-bottom:6px">History</div><div class="card list">' + (R.history || []).map(function (h) {
+      '<button class="btn btn-primary" type="button" data-act="rate-save" disabled>' + (state.rateSaving ? 'Saving…' : 'Add rate') + '</button><p class="help" style="margin:0;text-align:center">You will confirm before it saves.</p></div></div>' +
+      '<div><div class="cap up" style="margin-bottom:6px">History</div><div class="card list">' + (R.history || []).slice(0, state.ratesMore ? undefined : 1).map(function (h) {
         return '<div class="rowi" style="cursor:default"><span class="lead">' + ICON('cash') + '</span><span class="mid"><span class="t num">' + esc(CS.dayLabel(h.effective_from) + ' ' + h.effective_from.slice(0, 4)) + '</span><span class="s num">' + esc(CS.rateLine(h, P.peso)) + (h.note ? ' · ' + esc(h.note) : '') + '</span></span></div>';
-      }).join('') + '</div></div></div></div>';
+      }).join('') + '</div>' + ((R.history || []).length > 1 ? '<button class="btn btn-ghost" type="button" data-act="rates-more" aria-expanded="' + !!state.ratesMore + '" style="margin-top:6px">' + (state.ratesMore ? 'Hide earlier rates' : 'Show ' + CS.plural((R.history || []).length - 1, 'earlier rate')) + ICON(state.ratesMore ? 'back' : 'chevdown', 's16') + '</button>' : '') + '</div></div></div>';
     syncRate();
   }
   // The save button and the one-line reason follow the typed values without redrawing the form (a redraw would drop the keyboard).
@@ -765,18 +774,31 @@
       if (!state.rateForm) state.rateForm = { from: CS.earliestRateStart(d.history, d.today), regular: '', general: '', transport: '', note: '', err: '', };
       else if (state.rateForm.from < CS.earliestRateStart(d.history, d.today)) state.rateForm.from = CS.earliestRateStart(d.history, d.today);
     }).catch(function (e) {
-      state.ratesErr = e && (e.code === '42501' || e.message === 'denied') ? 'Only the owner and admins can see pay rates.' : 'Live information needs a connection.';
+      state.ratesErr = e && (e.code === '42501' || e.message === 'denied') ? 'Only the owner and admins can see pay rates.' : CS.rpcMissing(e) ? 'Pay rates are available after the next update.' : 'Live information needs a connection.';
     }).then(function () { if (current === 'payrates') renderPayRates(); });
   }
+  // Add rate: the button validates and opens a sheet that restates the rate, who it applies to and the start date. Only "Save rate" there sends anything.
+  function A_rateOpen() {
+    var f = state.rateForm, R = state.rates; if (!f || !R || state.rateSaving || !CS.canEditRates(role())) return;
+    if (CS.rateProblem(f, CS.earliestRateStart(R.history, R.today), R.today)) { syncRate(); return; }
+    openSheet('rate', 'rate-save');
+  }
+  function A_rateConfirm() {
+    var a = CS.rateArgs(pid(), state.rateForm), row = { regular_rate: a.p_regular, general_rate: a.p_general, transport_rate: a.p_transport };
+    return '<h2 class="ttl" id="cs-h" tabindex="-1">Save this rate?</h2><p class="strong num" style="margin:10px 0 0">' + esc(CS.rateLine(row, P.peso)) + '</p>' +
+      '<p class="sub" style="margin:6px 0 0">Applies to every cleaner, for cleans on or after ' + esc(CS.dayLabel(a.p_effective_from) + ' ' + a.p_effective_from.slice(0, 4)) + '. Earlier dates keep their rate; nothing is overwritten.</p>' + (a.p_note ? '<p class="help" style="margin:6px 0 0">' + esc(a.p_note) + '</p>' : '') +
+      '<div class="stack" style="margin-top:14px"><button class="btn btn-primary btn-block" type="button" data-act="rate-confirm">Save rate</button><button class="btn btn-ghost btn-block" type="button" data-act="rate-back">Go back</button></div>';
+  }
   function saveRate() {
-    var f = state.rateForm, R = state.rates; if (!f || !R || state.rateSaving) return;
+    var f = state.rateForm, R = state.rates; if (!f || !R || state.rateSaving || !CS.canEditRates(role())) return;
+    closeSheet();
     if (CS.rateProblem(f, CS.earliestRateStart(R.history, R.today), R.today)) { syncRate(); return; }
     state.rateSaving = true; f.err = ''; syncRate();
     sb.rpc('admin_add_pay_rate_v1', CS.rateArgs(pid(), f)).then(function (r) {
       if (r.error) throw r.error;
       state.rateForm = null; state.rateSaving = false; return loadRates();
     }).catch(function (e) {
-      state.rateSaving = false; f.err = e && e.code === '42501' ? 'Only the owner and admins can change pay rates.' : e && e.code === '22023' && e.message ? e.message : 'That did not save. Check your signal and try again.'; syncRate();
+      state.rateSaving = false; f.err = CS.rpcMissing(e) ? 'Available after the next update.' : e && e.code === '42501' ? 'Only the owner and admins can change pay rates.' : e && e.code === '22023' && e.message ? e.message : 'That did not save. Check your signal and try again.'; syncRate();
     });
   }
 
@@ -1058,6 +1080,7 @@
     if (v === 'payrates' && !CS.canEditRates(state.access && state.access.role)) v = 'home';
     if (v === 'reply' && !canReply()) v = 'home';
     if (v === 'hub' && state.layout !== 'admin') v = 'home';
+    if (v !== 'calendar' || CS.A_calTab(parts[1]) !== state.calTab) state.fbOpen = false; // the posts load only on a tap in the current visit to the Notices tab
     if (v === 'calendar') { var tab0 = CS.A_calTab(parts[1]); if (tab0 !== state.calTab) closeSheet(); state.calTab = tab0; }
     if (v === 'door' && DEMO) { toast('Demo: ' + doorDef(parts[1]).title + ' opens in the live app'); history.replaceState(null, '', '#home'); v = 'home'; } // a door would load a real app in the frame
     if (v === 'door') { doorKey = parts[1]; doorRoute = doorKey === 'dashboard' && CS.A_hubRouteOk(parts.slice(2).join('/')) ? parts.slice(2).join('/') : ''; render('door'); window.scrollTo(0, 0); return; }
@@ -1072,7 +1095,7 @@
     renderTabs(v === 'hub' ? 'more' : v);
     if (v === 'hub') renderHub(); else if (v === 'home') renderHome(); else if (v === 'calendar') renderCalendar(); else if (v === 'tasks') renderTasks(); else if (v === 'payrates') { renderPayRates(); if (!state.rates) loadRates(); } else if (v === 'reply') renderReply(); else if (v === 'more') renderMore();
     var typing = document.activeElement && /^(df-(label|kind)|t-(title|due|who|note)|n-(type|title|date|start|hours|detail))$/.test(document.activeElement.id || '');
-    if (state.sheet) { if (v !== (state.sheet.kind === 'add' ? 'tasks' : state.sheet.kind === 'news' ? 'more' : 'calendar')) closeSheet(); else if (!typing) drawSheet(); }
+    if (state.sheet) { if (v !== (state.sheet.kind === 'add' ? 'tasks' : state.sheet.kind === 'rate' ? 'payrates' : state.sheet.kind === 'news' ? 'more' : 'calendar')) closeSheet(); else if (!typing) drawSheet(); }
   }
   // A door opens in the frame once per visit; coming back to the same door (a re-render) keeps the page where it is.
   function renderDoor() {
@@ -1198,7 +1221,10 @@
     else if (t.hasAttribute('data-nfilter')) { state.noticeFilter = t.getAttribute('data-nfilter'); renderCalendar(); }
     else if (t.hasAttribute('data-tfilter')) { state.taskFilter = t.getAttribute('data-tfilter'); renderTasks(); }
     else if (a === 'task-add-save') saveAdd();
-    else if (a === 'rate-save') saveRate();
+    else if (a === 'rate-save') A_rateOpen();
+    else if (a === 'rate-confirm') saveRate();
+    else if (a === 'rate-back') closeSheet();
+    else if (a === 'rates-more') { state.ratesMore = !state.ratesMore; renderPayRates(); }
     else if (a === 'reply-mode') { var R1 = state.reply || (state.reply = newReply()); R1.mode = t.getAttribute('data-mode') === 'image' ? 'image' : 'text'; R1.step = 'form'; R1.err = ''; R1.signout = false; renderReply(); window.scrollTo(0, 0); if (R1.mode === 'text') rpFocus('rp-text'); }
     else if (a === 'reply-platform') { if (state.reply) { state.reply.platform = t.getAttribute('data-platform') === 'airbnb' ? 'airbnb' : 'messenger'; Array.prototype.forEach.call(document.querySelectorAll('#v-reply [data-act="reply-platform"]'), function (b) { b.setAttribute('aria-pressed', String(b === t)); }); } }
     else if (a === 'reply-send') sendReply();

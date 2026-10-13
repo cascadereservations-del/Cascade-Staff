@@ -209,7 +209,7 @@ test('A_ live mock: the admin home has the status strip, the notices, the three 
 test('A_ live mock: the turnover card walks out, clean, in against the frozen clock', async () => {
   const app = await boot({ role: 'cleaner', hash: '#home', handlers: base('cleaner') });
   const h = app.els['v-home'].innerHTML;
-  assert.match(h, /Guest out<\/span><b>12:00 noon/); assert.match(h, /Clean<\/span><b>Until 2:00 pm/); assert.match(h, /Guest in<\/span><b>2:00 pm/);
+  assert.match(h, /Guest out<\/span><b>12:00 noon/); assert.match(h, /Clean<\/span><b>Until 2 pm/); assert.match(h, /Guest in<\/span><b>2:00 pm/);
   const quiet = await boot({ role: 'cleaner', hash: '#home', handlers: base('cleaner', { staff_home_v1: () => HOME(guest({ checkout_date: '2026-10-17' }), guest({ uid: 'h', checkin_date: '2026-10-17', checkout_date: '2026-10-19' })) }) });
   assert.match(quiet.els['v-home'].innerHTML, /No turnover today/); assert.doesNotMatch(quiet.els['v-home'].innerHTML, /Slide to start/);
 });

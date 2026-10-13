@@ -103,7 +103,7 @@ hr.hair { width: auto; height: 1px; border: 0; background: var(--rule); }
 .card.list { padding: 0; overflow: hidden; }
 .stack { display: grid; gap: 12px; }
 .inset { background: var(--muted); border: 1px solid var(--hairline); border-radius: var(--r-md); padding: 12px; }
-.rowi { display: flex; align-items: center; gap: 12px; min-height: 60px; padding: 12px 16px; border: 0; border-bottom: 1px solid var(--border); background: transparent; width: 100%; text-align: left; color: inherit; text-decoration: none; cursor: pointer; transition: background var(--motion-fast) var(--ease); }
+.rowi { display: flex; align-items: center; gap: 12px; min-height: var(--touch); padding: 12px 16px; border: 0; border-bottom: 1px solid var(--border); background: transparent; width: 100%; text-align: left; color: inherit; text-decoration: none; cursor: pointer; transition: background var(--motion-fast) var(--ease); }
 .rowi:last-child { border-bottom: 0; }
 .rowi:active { background: var(--muted); }
 .lead { width: 40px; height: 40px; border-radius: var(--r-full); background: var(--muted); color: var(--fg-2); box-shadow: inset 0 0 0 1px var(--hairline); display: flex; align-items: center; justify-content: center; font: 600 15px/1 var(--font-ui); flex: none; }
@@ -118,7 +118,7 @@ hr.hair { width: auto; height: 1px; border: 0; background: var(--rule); }
 .subrow .help { display: block; max-width: 280px; }
 .submenu { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 4px 16px 14px 68px; border-bottom: 1px solid var(--border); }
 .submenu .cap { width: 100%; }
-.chip { display: inline-flex; align-items: center; gap: 6px; height: 36px; padding: 0 12px; border-radius: var(--r-md); border: 1px solid var(--border); background: var(--muted); color: var(--fg); font: 600 13px/18px var(--font-ui); letter-spacing: .02em; text-decoration: none; cursor: pointer; }
+.chip { display: inline-flex; align-items: center; gap: 6px; height: var(--touch); padding: 0 12px; border-radius: var(--r-md); border: 1px solid var(--border); background: var(--muted); color: var(--fg); font: 600 13px/18px var(--font-ui); letter-spacing: .02em; text-decoration: none; cursor: pointer; }
 .chip:active { transform: scale(.98); }
 .rowi .chev.turn { transition: transform var(--motion-base) var(--ease); }
 .rowi[aria-expanded="true"] .chev.turn { transform: rotate(90deg); }
@@ -160,7 +160,7 @@ hr.hair { width: auto; height: 1px; border: 0; background: var(--rule); }
 .chk { width: 24px; height: 24px; border-radius: var(--r-sm); border: 1.5px solid var(--fg-3); background: var(--card); display: inline-flex; align-items: center; justify-content: center; color: var(--primary-fg); flex: none; cursor: pointer; padding: 0; }
 .chk[aria-checked="true"] { background: var(--primary); border-color: var(--primary); }
 .chk svg { display: none; } .chk[aria-checked="true"] svg { display: block; }
-.sw { display: inline-flex; align-items: center; gap: 8px; font: 500 13px/18px var(--font-ui); color: var(--fg-2); cursor: pointer; min-height: 32px; border: 0; background: transparent; padding: 0; }
+.sw { display: inline-flex; align-items: center; gap: 8px; font: 500 13px/18px var(--font-ui); color: var(--fg-2); cursor: pointer; min-height: var(--touch); border: 0; background: transparent; padding: 0; }
 .sw i { width: 40px; height: 24px; border-radius: var(--r-full); background: var(--border); position: relative; flex: none; transition: background var(--motion-fast) var(--ease); }
 .sw i::after { content: ""; position: absolute; top: 3px; left: 3px; width: 18px; height: 18px; border-radius: var(--r-full); background: var(--card); box-shadow: var(--shadow-sm); transition: transform var(--motion-fast) var(--ease); }
 .sw[aria-checked="true"] { color: var(--primary); } .sw[aria-checked="true"] i { background: var(--primary); } .sw[aria-checked="true"] i::after { transform: translateX(16px); }
@@ -583,7 +583,7 @@ button.A_chipglass { width: var(--touch); padding: 0; justify-content: center; c
 .A_tabs a[aria-current="page"] { background: var(--v5-act); color: var(--v5-act-fg); }
 .A_legend { display: flex; gap: 8px; overflow-x: auto; padding: 2px 0 8px; scrollbar-width: none; }
 .A_legend span { flex: none; display: inline-flex; align-items: center; gap: 6px; min-height: 32px; padding: 0 10px; border-radius: var(--r-full); background: var(--v5-fill); font: 600 13px/18px var(--font-ui); color: var(--v5-ink-2); white-space: nowrap; }
-.A_legend .sw { width: 14px; height: 14px; border-radius: 4px; display: inline-block; flex: none; }
+.A_sw { width: 14px; height: 14px; border-radius: 4px; display: inline-block; flex: none; }
 .cal { gap: 3px; }
 .cal .d { min-height: 44px; border-radius: 10px; font-size: 15px; line-height: 18px; font-weight: 600; padding: 3px 4px; overflow: hidden; }
 .cal .d.s-free { background: var(--v5-surf); border: 1px solid var(--v5-cal-free-edge); }
@@ -655,10 +655,19 @@ html[data-plain="1"] .doorbar { background: var(--v5-bg); -webkit-backdrop-filte
 .sw i { margin: 0 2px; }
 .A_herorow, button.A_chipglass { flex: none; }
 .A_herobar .A_chipglass:not(button) { min-width: 0; max-width: 168px; overflow: hidden; text-overflow: ellipsis; }
-.A_noticecard { min-height: 232px; align-content: start; }
+/* one fixed height for loading, loaded, empty and failed: padding 32 + header 44 + gap 8 + two rows of 64 = 212, with room for the 1 px row rule */
+.A_noticecard { height: 216px; overflow: hidden; align-content: start; }
+.A_noticecard .A_nlist { overflow: hidden; }
+.A_noticecard .rowi { height: 64px; min-height: 64px; overflow: hidden; }
+.A_noticecard .rowi .mid { min-width: 0; overflow: hidden; }
+.A_noticecard .rowi .t, .A_noticecard .rowi .s { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.A_steps > div { align-content: start; } .A_steps b { white-space: nowrap; }
 .A_acts { display: flex; gap: 8px; flex-wrap: wrap; width: 100%; padding-left: 56px; }
 .cal .d.past .A_tag { color: var(--v5-cal-past-fg); }
 .cal .d.clash .A_tag { color: var(--v5-danger-t); }
-.cal .d .A_tag.in { left: auto; right: 4px; text-align: right; }
+/* the arrival tag of a one-night stay: its own shade as a background (so its text never sits on white), one line, ellipsis inside the cell */
+.cal .d .A_tag.in { left: 4px; right: auto; max-width: calc(100% - 8px); padding: 0 3px; border-radius: 4px; text-align: left; background: var(--A_g, var(--v5-g1)); color: var(--A_gfg, var(--v5-g1-fg)); }
+.cal .d.past .A_tag.in, .cal .d.clash .A_tag.in { background: transparent; padding: 0; }
+.cal .d.past .A_tag.in { color: var(--v5-cal-past-fg); } .cal .d.clash .A_tag.in { color: var(--v5-danger-t); }
 .A_fbbox { height: 600px; }
 .A_fbbox iframe { display: block; width: 100%; height: 600px; border: 0; border-radius: var(--v5-r-field); }

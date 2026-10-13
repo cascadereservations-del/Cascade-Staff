@@ -239,12 +239,17 @@ test('Pay rates: owner sees the screen with the visible note and history; save s
   const html = app.els['v-payrates'].innerHTML;
   assert.match(html, /The staff app and payment requests use these rates/);
   assert.match(html, /₱500 per clean · ₱1,000 per deep clean · ₱150 transport when ticked/);
-  assert.match(html, /transport included/, 'the 650 era row says transport is included');
+  assert.doesNotMatch(html, /transport included/, 'the latest entry only, until Show earlier rates');
+  assert.match(html, /Show 1 earlier rate/);
+  await app.click({ 'data-act': 'rates-more' });
+  assert.match(app.els['v-payrates'].innerHTML, /transport included/, 'the 650 era row says transport is included'); assert.match(app.els['v-payrates'].innerHTML, /Hide earlier rates/);
   assert.match(html, /id="r-from"[^>]*min="2026-10-06"/);
   await app.click({ 'data-act': 'rate-save' });
   assert.ok(!app.calls.some((c) => c[0] === 'admin_add_pay_rate_v1'), 'nothing is sent while the form is empty');
   app.input('r-regular', '520'); app.input('r-general', '1050'); app.input('r-transport', '160'); app.input('r-note', 'Honey agreed a raise');
   await app.click({ 'data-act': 'rate-save' });
+  assert.ok(!app.calls.some((c) => c[0] === 'admin_add_pay_rate_v1'), 'Add rate only opens the confirm sheet');
+  await app.click({ 'data-act': 'rate-confirm' });
   assert.deepEqual(app.calls.find((c) => c[0] === 'admin_add_pay_rate_v1')[1], { p_property_id: 'prop-1', p_effective_from: '2026-10-06', p_regular: 520, p_general: 1050, p_transport: 160, p_note: 'Honey agreed a raise' });
 });
 

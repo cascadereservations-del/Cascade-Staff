@@ -26,7 +26,7 @@ export async function boot({ role, hash, handlers, now, demo, els: pre, docQuery
   const docObj = { getElementById: (id) => (els[id] ||= el()), querySelector: (q) => (docQuery ? docQuery(q) : null), querySelectorAll: () => [], visibilityState: 'visible', addEventListener: (t, fn) => { (listeners[t] ||= []).push(fn); } };
   const sb = {
     auth: { getSession: () => Promise.resolve({ data: { session: { user: { email: 'ana@staff.cascade.invalid', user_metadata: { display_name: 'Ana' } }, access_token: 't' } } }), signOut: () => Promise.resolve({}) },
-    rpc: (name, args) => { calls.push([name, JSON.parse(JSON.stringify(args || {}))]); const h = handlers[name]; return Promise.resolve(h ? JSON.parse(JSON.stringify(h(args))) : { error: null, data: null }); },
+    rpc: (name, args) => { calls.push([name, JSON.parse(JSON.stringify(args || {}))]); const h = handlers[name]; if (!h) return Promise.resolve({ error: null, data: null }); const r = h(args); return r && typeof r.then === 'function' ? r : Promise.resolve(JSON.parse(JSON.stringify(r))); },
     storage: { from: () => ({ createSignedUrl: () => Promise.resolve({ error: { message: 'x' } }) }) } };
   const win = { supabase: { createClient: () => sb }, CS, P, CSPay: P, ICON: (n, c) => '<svg class="i ' + (c || '') + '" data-i="' + n + '"></svg>', CSTheme: { get: () => 'auto', set() {}, plainOn: () => false, setPlain() {} },
     addEventListener: (t, fn) => { (winListeners[t] ||= []).push(fn); }, matchMedia: () => ({ matches: false }), scrollTo() {}, scrollY: 0, innerWidth: 360, localStorage: { getItem: () => null, setItem() {}, removeItem() {} }, sessionStorage: { getItem: () => null, setItem() {}, removeItem() {} } };
@@ -39,7 +39,7 @@ export async function boot({ role, hash, handlers, now, demo, els: pre, docQuery
   const flush = async () => { for (let i = 0; i < 14; i++) await new Promise((r) => setImmediate(r)); }; await flush();
   const click = async (attrs) => { const btn = { getAttribute: (n) => (n in attrs ? attrs[n] : null), hasAttribute: (n) => n in attrs }; for (const fn of listeners.click || []) fn({ target: { closest: () => btn } }); await flush(); };
   const input = (id, value) => { for (const fn of listeners.input || []) fn({ target: { id, value } }); };
-  return { els, calls, click, input, flush, listeners, winListeners, registered };
+  return { els, calls, click, input, flush, listeners, winListeners, registered, location };
 }
 export const ACCESS = (role) => ({ error: null, data: { role, disabled: false, session_current: true, property_ids: ['prop-1'] } });
 export const stayRow = (name, a, b, extra) => Object.assign({ guest_name: name, checkin_date: a, checkout_date: b, status: 'confirmed', source: 'direct' }, extra || {});
