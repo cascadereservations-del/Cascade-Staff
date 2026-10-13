@@ -64,7 +64,7 @@ export const CATALOGUE = { items: [item('i1', 'Toilet paper', 4, 12), item('i2',
 export async function setup(o = {}) {
   const role = o.role || 'owner', nav = { onLine: true }, toasts = [], navs = [], hapts = [];
   const client = o.demo ? (o.client || null) : (o.client || mockClient({ catalogue: CATALOGUE }));
-  const when = new Date(o.now || NOW);
+  let when = new Date(o.now || NOW);
   class FixedDate extends Date { constructor(...a) { if (a.length) super(...a); else super(when.getTime()); } static now() { return when.getTime(); } }
   let n = 0;
   const win = { crypto: { randomUUID: () => 'uuid-' + String(++n).padStart(8, '0') + '-aaaa-bbbb-cccc-dddddddddddd' } };
@@ -73,11 +73,11 @@ export async function setup(o = {}) {
   vm.createContext(ctx);
   vm.runInContext(fs.readFileSync(srcPath, 'utf8'), ctx, { filename: 'I_stock.js' });
   const root = new Root();
-  const opts = { client, demo: !!o.demo, role, sub: o.sub || '', navigate: (h) => navs.push(h), toast: (m) => toasts.push(m), haptic: (k) => hapts.push(k) };
+  const opts = { client, demo: !!o.demo, role, sub: o.sub || '', navigate: (h) => { navs.push(h); if (o.remount !== false) { const m = /^#stock\/?(.*)$/.exec(h); if (m) { opts.sub = m[1]; win.I_Stock.mount(root, opts); } } }, /* the shell re-mounts on a sub-route change */ toast: (m) => toasts.push(m), haptic: (k) => hapts.push(k) };
   if (o.propertyId) opts.propertyId = o.propertyId;
   const fire = async (type, ev) => { for (const f of root.l[type] || []) await f(ev); await flush(); };
   const env = {
-    role, client, nav, toasts, navs, hapts, root, win, ctx, lib: win.I_Stock.lib,
+    advance: (ms) => { when = new Date(when.getTime() + ms); }, role, client, nav, toasts, navs, hapts, root, win, ctx, lib: win.I_Stock.lib,
     mount: async (sub) => { if (sub !== undefined) opts.sub = sub; win.I_Stock.mount(root, opts); await flush(); },
     unmount: () => win.I_Stock.unmount(),
     act: async (act, extra) => { const attrs = Object.assign({ 'data-act': act }, extra || {}); const t = { getAttribute: (k) => (k in attrs ? attrs[k] : null), closest: (s) => (s === '[data-act]' ? t : null) }; await fire('click', { target: t, preventDefault() {} }); },

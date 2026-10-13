@@ -433,7 +433,9 @@
   /* ---- the write */
   function build(a) {
     var it = itemById(a.itemId), today = manilaToday(nowMs()), sig = JSON.stringify([a.kind, a.itemId || a.shopId, a.vals, a.status]);
-    a.sig = sig; a.key = K.keys[sig] || (K.keys[sig] = newKey(a.kind)); // one key per set of values, kept even if the sheet is reopened; dropped on success
+    var ke = K.keys[sig]; // one key per set of values, kept even if the sheet is reopened; dropped on success; forgotten after 10 minutes (a write that landed unseen must not replay a later identical one)
+    if (!ke || nowMs() - ke.at > 600000) ke = K.keys[sig] = { key: newKey(a.kind), at: nowMs() };
+    a.sig = sig; a.key = ke.key;
     if (a.kind === 'count') return countCall(it, a.vals, a.key);
     if (a.kind === 'used') return usageCall(M.pid, it, a.vals, a.key, today);
     if (a.kind === 'recv') return receiptCall(it, a.vals, a.key, today);
@@ -447,6 +449,7 @@
     if (me.demo) { toast(DEMO_NOTE); finish(); return; }
     if (!online()) { a.err = 'offline'; drawLayer(); return; }
     if (!me.client) { a.err = 'missing'; drawLayer(); return; }
+    K.at = 0; // any write makes the list stale, whichever mount sees the answer
     a.sending = true; a.err = null; drawLayer();
     Promise.resolve().then(function () { return me.client.rpc(call.fn, call.args); }).then(function (r) {
       if (me.dead) return;

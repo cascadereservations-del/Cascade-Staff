@@ -123,3 +123,25 @@ test('I_fix count confirm: a first count says it is one-way; a controlled item g
   assert.match(e.sheet(), /Set Controlled soap to 3\?/);
   assert.doesNotMatch(e.sheet(), /Telegram/);
 });
+
+test('I_fix3 after a successful write from an item sheet the shell re-mounts and the row shows the new quantity (the list is stale at once)', async () => {
+  let qty = 4;
+  const cat = () => ({ items: [item('i1', 'Toilet paper', qty, 12)] });
+  const client = cl({ rpc: { get_inventory_catalogue_v1: () => ({ data: cat(), error: null }), reconcile_inventory_baseline_v1: () => { qty = 12; return { data: { ok: true }, error: null }; } } });
+  const e = await setup({ role: 'owner', client });
+  await e.mount(''); await e.open('i1'); await e.begin('count'); await e.input('I_f_qty', '12'); await e.submit(); await e.submit();
+  assert.ok(client.rpcCalls('get_inventory_catalogue_v1').length >= 2);
+  assert.match(e.html(), /12 rolls/); assert.doesNotMatch(e.html(), /4 rolls/);
+  assert.equal(e.navs[e.navs.length - 1], '#stock');
+});
+
+test('I_fix3 an idempotency key is forgotten after 10 minutes and kept before that', async () => {
+  const bad = { data: null, error: { code: 'XX000', message: 'boom' } };
+  const e = await setup({ role: 'owner', client: cl({ rpc: { reconcile_inventory_baseline_v1: () => bad } }) });
+  const go = async () => { await e.open('i1'); await e.begin('count'); await e.input('I_f_qty', '9'); await e.submit(); await e.submit(); await e.act('back'); await e.act('back'); await e.act('close'); };
+  await e.mount(''); await go();
+  e.advance(9 * 60000); await go();
+  e.advance(11 * 60000); await go();
+  const k = e.client.rpcCalls('reconcile_inventory_baseline_v1').map((c) => c[2].p_idempotency_key);
+  assert.equal(k.length, 3); assert.equal(k[0], k[1]); assert.notEqual(k[1], k[2]);
+});
