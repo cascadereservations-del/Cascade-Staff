@@ -6,7 +6,7 @@
 //   Same-origin shell files                                          -> network-first, cache fallback.
 // Nothing personal is ever stored here: the cache holds the shell (HTML, CSS, JS, fonts, icons) and nothing else.
 // A shell that loads offline says "Live information needs a connection"; guest names exist only in JS memory.
-const CACHE_NAME = 'cs-shell-v15';
+const CACHE_NAME = 'cs-shell-v16';
 const NAV_TIMEOUT_MS = 3000;
 // Web Push handlers for the "You were paid" notice live with the pay screens (pay/C_push-sw.js). Absent in the unit-test sandbox.
 if (typeof importScripts === 'function') importScripts('pay/C_push-sw.js');
@@ -78,7 +78,8 @@ self.addEventListener('fetch', (event) => {
   if (url.origin !== self.location.origin) return; // anything else cross-origin: the browser's own handling
   if (swRoute(url.pathname, new URL('./', self.location).pathname) === 'network') return; // folded apps: straight to the network, never stored here
 
-  const fromNetwork = (req) => fetch(req).then((resp) => {
+  // revalidate with the server on every shell request: the browser's HTTP cache (GitHub Pages max-age 600) must never hand back a stale app.js beside a fresh index.html
+  const fromNetwork = (req) => fetch(new Request(req, { cache: 'no-cache' })).then((resp) => {
     if (resp && resp.status === 200 && resp.type === 'basic') { const copy = resp.clone(); caches.open(CACHE_NAME).then((c) => c.put(req, copy)); }
     return resp;
   });
