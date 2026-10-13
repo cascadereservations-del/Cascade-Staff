@@ -162,6 +162,8 @@
       return net(CFG.url + '/functions/v1/upload-photo', { method: 'POST', headers: { Authorization: 'Bearer ' + token, apikey: CFG.key, 'Content-Type': 'image/jpeg', 'x-cascade-file-name': 'receipt.jpg', 'x-cascade-property-id': CFG.propertyId, 'x-cascade-submission-id': key }, body: blob });
     }).then(function (r) { return r.json(); }).then(function (j) { if (!j || !j.ok || !j.path) throw new Error('upload'); extra.receipt_path = j.path; return true; }).catch(function () { return false; });
   }
+  // F_: one short buzz when the request has been sent (CS.E_buzz is a silent no-op where vibration is missing, off, or in demo storage-less mode)
+  function F_tap() { try { CS.E_buzz('tap', { navigator: navigator, storage: DEMO ? null : window.localStorage, doc: document }); } catch (e) {} }
   function send() {
     if (S.sending) return;
     if (noPhotoCount() && !S.askedOnce) { S.askedOnce = true; S.askOpen = true; renderReview(); return; }
@@ -178,7 +180,7 @@
       });
     }).catch(function () { return { j: { ok: false, reason: 'offline' }, failed: [] }; }).then(function (o) {
       S.sending = false; var m = P.resultMessage(o.j); K.settle(o.j);
-      if (m.ok) { S.result = m; S.note = o.failed.length ? 'The receipt photo for ' + o.failed.join(', ') + ' did not upload; tell Finance.' : ''; S.sel.extras = []; S.askedOnce = false; return load().then(function () { go('status'); }); }
+      if (m.ok) { F_tap(); S.result = m; S.note = o.failed.length ? 'The receipt photo for ' + o.failed.join(', ') + ' did not upload; tell Finance.' : ''; S.sel.extras = []; S.askedOnce = false; return load().then(function () { go('status'); }); }
       if (m.refresh) return load().then(function () { S.step = 'pick'; S.err = ''; render(); renderPickNotice(m.text); });
       S.err = m.text;
       renderReview();

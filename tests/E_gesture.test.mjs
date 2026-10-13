@@ -199,7 +199,7 @@ test('E_ G1: a drag that starts in the edge zone, and a vertical scroll over the
 test('E_ G1: the arrow keys move between the views from a focused tab link (the keyboard path), and the three links are the tap twin', async () => {
   const a = await calApp('#calendar'); const html = a.els['v-calendar'].innerHTML;
   for (const t of ['month', 'stays', 'notices']) assert.match(html, new RegExp('<a href="#calendar[^"]*" data-act="cal-tab" data-tab="' + t + '"'));
-  assert.match(html, /<div class="E_tabbody" data-E-swipe="cal-tab">/);
+  assert.match(html, /<div class="E_tabbody" data-E-swipe="cal-tab" data-F-tab="month">/);
   const key = (tab, k) => { let stopped = 0; const link = { getAttribute: (n) => (n === 'data-tab' ? tab : null) }; (a.listeners.keydown || []).forEach((f) => f({ key: k, target: { closest: (s) => (/A_tabs a/.test(s) ? link : null) }, preventDefault() { stopped++; } })); return stopped; };
   assert.equal(key('month', 'ArrowLeft'), 0); assert.equal(a.location.hash, '#calendar', 'nothing left of Month');
   assert.equal(key('month', 'ArrowRight'), 1); assert.equal(a.location.hash, '#calendar/stays');

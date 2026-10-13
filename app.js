@@ -104,6 +104,7 @@
   function setView(name) {
     VIEWS.forEach(function (v) { $('v-' + v).classList.toggle('on', v === name); });
     $('tabbar').hidden = name === 'signin' || name === 'door' || !state.layout;
+    var shellEl = $('app'); if (shellEl && shellEl.classList) shellEl.classList.toggle('F_nav', !$('tabbar').hidden); // the rail's room is kept only while the rail is there
   }
   function warnCount() { return state.payload ? (state.payload.warnings || []).length : 0; }
   function errBanner() {
@@ -134,9 +135,9 @@
   // The Today card (glass). Check-out time falls back to the house time, never a hard-coded one.
   function todayCard() {
     var p = state.payload, st = CS.todayCardState(p, p.today);
-    if (!st.guest) return '<section class="card glass A_card" aria-label="Today in the house"><span class="cap up">' + esc(st.label) + '</span><p class="sub">The house is free tonight. The next stay will show here.</p></section>';
+    if (!st.guest) return '<section class="card glass A_card F_span" aria-label="Today in the house"><span class="cap up">' + esc(st.label) + '</span><p class="sub">The house is free tonight. The next stay will show here.</p></section>';
     var g = st.guest, ret = CS.returningLabel(g, true), co = CS.fmtTime(g.checkout_time) || A_houseT().outLabel;
-    return '<section class="card glass A_card" aria-label="Today in the house"><div class="row-between"><span class="cap up">' + esc(st.label) + '</span>' + (st.pill ? pill(st.pill.tone, toneIcon(st.pill.tone), st.pill.text) : '') + '</div>' +
+    return '<section class="card glass A_card F_span" aria-label="Today in the house"><div class="row-between"><span class="cap up">' + esc(st.label) + '</span>' + (st.pill ? pill(st.pill.tone, toneIcon(st.pill.tone), st.pill.text) : '') + '</div>' +
       '<h2 class="A_name">' + esc(g.guest_name || 'Guest') + '</h2>' + (ret ? '<div>' + pill('brand', 'repeat', ret) + '</div>' : '') +
       '<p class="sub num" style="margin:0">' + esc(CS.dayLabel(g.checkin_date) + ' → ' + CS.dayLabel(g.checkout_date) + ' · ' + CS.plural(g.nights != null ? g.nights : CS.daysBetween(g.checkin_date, g.checkout_date), 'night') + ' · out ' + co) + '</p>' +
       '<a class="A_more" href="#calendar/house">Open guest card' + ICON('chev', 's16') + '</a></section>';
@@ -171,7 +172,7 @@
       '<div class="A_greet"><h1>' + esc(CS.greeting() + (nm ? ', ' + nm : '')) + '</h1><div class="cap">' + esc(CS.dayLong(p ? p.today : CS.manilaToday())) + (wx ? '<span aria-hidden="true">·</span>' + wx : '') + '</div></div></div>';
   }
   // Sign out lives on More only (a wet-hand mis-tap away from the tab bar); the footer says how fresh the screen is.
-  function footerLine() { return '<div class="help" style="text-align:center;margin-top:16px">Updated ' + esc(state.loadedAt ? CS.agoLabel(new Date(state.loadedAt).toISOString()) : 'just now') + ' · v' + CFG.version + '</div>'; }
+  function footerLine() { return '<div class="help F_span" style="text-align:center;margin-top:16px">Updated ' + esc(state.loadedAt ? CS.agoLabel(new Date(state.loadedAt).toISOString()) : 'just now') + ' · v' + CFG.version + '</div>'; }
 
   // The turnover: guest out, clean, guest in, against the 12:00 noon to 2:00 pm window. Slide (or tap) to start opens the checklist door; no second PIN from here.
   function A_slideStart() {
@@ -204,7 +205,8 @@
     return '<section class="card glass A_card A_noticecard" aria-label="Notices"' + (loading ? ' aria-busy="true"' : '') + '><div class="A_head"><h2>Notices</h2>' + (v ? '<a href="#calendar/notices">' + (v.counts.all ? 'See all ' + v.counts.all : 'Open') + ICON('chev', 's16') + '</a>' : '') + '</div>' + body + '</section>';
   }
   function A_noticeIcon(type) { return type === 'house' ? 'house' : (CS.A_NOTICE_TYPES[type] || CS.A_NOTICE_TYPES.note).icon; }
-  function A_navCard(label, rows) { return rows ? '<div class="A_label">' + esc(label) + '</div><nav class="card glass list" aria-label="' + esc(label) + '">' + rows + '</nav>' : ''; }
+  // F_: a label and its card travel as one grid item (F_group), so a two-column grid never splits them
+  function A_navCard(label, rows) { return rows ? '<div class="F_group"><div class="A_label">' + esc(label) + '</div><nav class="card glass list" aria-label="' + esc(label) + '">' + rows + '</nav></div>' : ''; }
   function renderHome() {
     var el = $('v-home');
     if (!state.payload) { el.innerHTML = A_hero() + '<div class="screen" style="min-height:0;padding-top:0"><div class="A_body">' + (state.error ? errBanner() : loadingBlock()) + '</div></div>'; return; }
@@ -507,7 +509,7 @@
     var tab = state.calTab;
     var keepFb = state.fbOpen && tab === 'notices' && el.querySelector ? el.querySelector('#A_fbbox') : null; if (keepFb && keepFb.parentNode) keepFb.parentNode.removeChild(keepFb); else keepFb = null;
     fbCarry = !!keepFb;
-    var inner = head + '<div class="screen">' + errBanner() + calTabs(tab) + '<div class="E_tabbody" data-E-swipe="cal-tab">' + (tab === 'stays' ? calStays() : tab === 'notices' ? calNotices() : calMonth()) + '<div class="help" style="text-align:center;margin-top:14px">Updated ' + esc(CS.agoLabel(state.payload.generated_at)) + '</div></div></div>';
+    var inner = head + '<div class="screen">' + errBanner() + calTabs(tab) + '<div class="E_tabbody" data-E-swipe="cal-tab" data-F-tab="' + tab + '">' + (tab === 'stays' ? calStays() : tab === 'notices' ? calNotices() : calMonth()) + '<div class="help" style="text-align:center;margin-top:14px">Updated ' + esc(CS.agoLabel(state.payload.generated_at)) + '</div></div></div>';
     fbCarry = false;
     el.innerHTML = inner;
     if (E_tabFocus) { E_tabFocus = false; var ct = el.querySelector && el.querySelector('.A_tabs a[aria-current="page"]'); if (ct && ct.focus) ct.focus(); } // an arrow key moved the view: focus follows it
@@ -610,7 +612,7 @@
   function drawSheet() {
     var S = state.sheet; if (!S || (!state.payload && S.kind !== 'attn')) return; // the pill's list can say "Loading" and "No connection" before there is a payload
     var e = sheetEls(), had = e.sheet.contains(document.activeElement);
-    e.sheet.setAttribute('data-E-swipe', E_sheetTwin(S.kind)); // the pull-down's tap twin: the button with this data-act is on the sheet
+    e.sheet.setAttribute('data-F-kind', S.kind); e.sheet.setAttribute('data-E-swipe', E_sheetTwin(S.kind)); // the pull-down's tap twin: the button with this data-act is on the sheet
     $('cs-body').innerHTML = (S.kind === 'attn' ? E_attnSheet() : S.kind === 'day' ? daySheet(S) : S.kind === 'add' ? addReminderCard() : S.kind === 'news' ? A_newsSheet() : S.kind === 'nadd' ? A_noticeAddForm() : S.kind === 'rate' ? A_rateConfirm() : warnSheet(S)) +
       (S.err ? '<div class="errbox" style="margin-top:12px">' + ICON('alert') + '<span>' + esc(S.err) + '</span></div>' : '') +
       (S.msg ? '<div class="okbox" style="margin-top:12px">' + ICON('check') + '<span>' + esc(S.msg) + '</span></div>' : '') +
@@ -699,6 +701,8 @@
   function E_canVibrate() { return 'vibrate' in navigator; }
   function E_reduced() { try { return !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches); } catch (e) { return false; } }
   function E_vw() { return window.innerWidth || 360; }
+  // F_: a sheet is a bottom sheet only below 600 px (37.5 rem, so a large text size gets the dialog sooner too); wider, it is a centred dialog or a side sheet and closes by its button, Escape or the scrim
+  function F_bottomSheet() { try { return !(window.matchMedia && window.matchMedia('(min-width: 37.5rem)').matches); } catch (e) { return true; } }
 
   // ---------------------------------------------------------------- Tasks (D-301)
   // ONE list from tasks_list_v1: reminders, follow-ups, work orders, cleaning issues and open checks. The server limits it to the role
@@ -1012,8 +1016,8 @@
         row({ icon: 'chat', title: 'Cassy · Telegram OPS', sub: 'Open in Telegram', tg: LINKS.tgOps, external: true }) + (admin ? row({ icon: 'wallet', title: 'Cassy · Telegram Finance', sub: 'Open in Telegram', tg: LINKS.tgFinance, external: true }) : '')) +
       A_navCard('Reference', row({ icon: 'book', title: 'House manual', sub: 'How we do things', door: 'manual' }) + doorRow('guide', 'book', 'How the staff app and the house work') + doorRow('adminguide', 'lock', 'Owner and admin chapters')) +
       (admin ? A_navCard('Admin', row({ icon: 'dash', title: 'Admin hub', sub: 'Every dashboard page, in one list', href: '#hub' }) + (CS.canEditRates(role()) ? row({ icon: 'cash', title: 'Pay rates', sub: 'What a clean and its transport pay', href: '#payrates' }) : '') + doorRow('inventory', 'box', 'Stock levels and usage')) : '') +
-      '<div class="A_label">This phone</div><section class="card" id="install-card" hidden aria-label="Install the app"><h2 class="hd">Install the app</h2><p class="sub" style="margin-top:6px">Put Cascade Staff on your Home Screen.</p><button class="btn btn-secondary" id="install-btn" type="button" style="margin-top:10px">' + ICON('plus', 's16') + 'Install</button>' +
-        '<a class="btn btn-secondary" id="install-link" href="./install/" style="margin-top:10px" hidden>' + ICON('plus', 's16') + 'How to install</a></section>' +
+      '<div class="F_group"><div class="A_label">This phone</div><section class="card" id="install-card" hidden aria-label="Install the app"><h2 class="hd">Install the app</h2><p class="sub" style="margin-top:6px">Put Cascade Staff on your Home Screen.</p><button class="btn btn-secondary" id="install-btn" type="button" style="margin-top:10px">' + ICON('plus', 's16') + 'Install</button>' +
+        '<a class="btn btn-secondary" id="install-link" href="./install/" style="margin-top:10px" hidden>' + ICON('plus', 's16') + 'How to install</a></section></div>' +
       '</div>' +
       '<div class="help" style="text-align:center;margin-top:16px">Cascade Staff v' + CFG.version + '</div></div>';
     syncInstall();
@@ -1377,7 +1381,7 @@
   (function E_sheetPull() {
     var scrim = function () { return $('cal-scrim'); };
     E_drag(document, { sel: '#cal-sheet', axis: 'y', vw: E_vw, reduced: E_reduced,
-      canStart: function (el, ev) { return !!state.sheet && (!!(ev.target.closest && ev.target.closest('.E_grab')) || !el.scrollTop); },
+      canStart: function (el, ev) { return !!state.sheet && F_bottomSheet() && (!!(ev.target.closest && ev.target.closest('.E_grab')) || !el.scrollTop); },
       move: function (el, d) {
         E_tr(el, 0); el.style.transform = 'translateY(' + CS.E_sheetFollow(d.dy) + 'px)';
         var sc = scrim(); if (sc && sc.style) sc.style.opacity = String(Math.max(0, 1 - Math.max(0, d.dy) / Math.max(1, el.offsetHeight || 400)));

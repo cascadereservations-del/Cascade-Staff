@@ -719,3 +719,91 @@ button.A_chipglass.E_pill { width: auto; min-width: 124px; max-width: 184px; hei
 .E_signout { flex: none; }
 .E_signhelp { flex: 1 0 100%; margin: 0; }
 @media (prefers-reduced-motion: reduce) { .E_swipewrap .payrow { transition: none; } }
+
+/* ================= F_ adaptive pass (s81, lane F) =================
+   Width classes, chosen by the room there is (never by device or orientation), written in rem so a large text size gets the roomier layout sooner:
+     F_compact  under 360 px      base rules + the max-width 22.4375rem block: one column, nothing clipped, the month grid still fits
+     phone      360 to 599 px     today's layout (the base rules)
+     F_medium   600 to 839 px     (min-width: 37.5rem): two-column card grid, centred bottom bar, centred dialogs, roomier month
+     F_wide     840 px and up     (min-width: 52.5rem): left rail, capped centred container, side sheets for the day and "To look at"
+   Fixed on purpose: hairlines, the 44 px targets, the notification pill's slot, the sheet grabber, the focus ring, blur and shadows. */
+:root { --gutter: var(--v5-gutter); --F-side-l: max(var(--gutter), env(safe-area-inset-left, 0px)); --F-side-r: max(var(--gutter), env(safe-area-inset-right, 0px)); }
+.card { padding: var(--v5-pad); } .card.list { padding: 0; } .A_card { padding: var(--v5-pad); }
+.A_body, .stack { gap: var(--v5-gap); }
+.screen { padding-left: var(--F-side-l); padding-right: var(--F-side-r); }
+.A_body { margin-left: calc(var(--F-side-l) * -1); margin-right: calc(var(--F-side-r) * -1); padding-left: var(--F-side-l); padding-right: var(--F-side-r); border-radius: var(--v5-r-sheet) var(--v5-r-sheet) 0 0; }
+.appbar { padding-left: max(8px, env(safe-area-inset-left, 0px)); padding-right: max(8px, env(safe-area-inset-right, 0px)); }
+.tabbar { left: max(12px, env(safe-area-inset-left, 0px)); right: max(12px, env(safe-area-inset-right, 0px)); }
+.A_herobar { padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+.F_group { display: grid; gap: var(--v5-gap); align-content: start; }
+.F_group:has(> #install-card[hidden]) { display: none; }
+/* the photo header: a reserved minimum height, content in the flow so a larger text size grows it instead of overlapping the bar */
+.A_hero { height: auto; min-height: 252px; display: flex; flex-direction: column; }
+.A_greet { position: static; margin-top: auto; padding: 0 max(20px, env(safe-area-inset-right, 0px)) 28px max(20px, env(safe-area-inset-left, 0px)); }
+.A_hero > .A_greet { position: relative; left: auto; right: auto; bottom: auto; }
+/* the door frame uses the whole window in every class */
+.doorbar, .doorframe { max-width: none; }
+.doorbar { padding-left: max(6px, env(safe-area-inset-left, 0px)); padding-right: max(6px, env(safe-area-inset-right, 0px)); }
+.doorframe { left: env(safe-area-inset-left, 0px); right: env(safe-area-inset-right, 0px); width: auto; }
+/* the sheet's grabber strip and its Close button stay inside the safe area */
+.sheet { padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+.toast { max-width: calc(100% - 2 * var(--gutter)); }
+.tab { font-size: var(--v5-t-chrome); }
+
+/* ---- F_compact: under 360 px ---- */
+@media (max-width: 22.4375rem) {
+  .cal { gap: 2px; }
+  .cal .d { padding: 2px 3px; } /* a cell may be under 44 px wide here only; it stays one target, 44 px tall */
+  .A_chk-row, .A_filters { gap: 6px; }
+  .A_card { gap: 6px; }
+}
+
+/* ---- F_medium and up: 600 px ---- */
+@media (min-width: 37.5rem) {
+  #app { max-width: calc(70rem + var(--v5-nav-w)); }
+  .A_body { grid-template-columns: repeat(2, minmax(0, 1fr)); grid-auto-flow: row dense; }
+  .A_body > .F_span, .A_body > .errbox, .A_body > #slot-paid-notice { grid-column: 1 / -1; }
+  #v-more .stack { grid-template-columns: repeat(2, minmax(0, 1fr)); grid-auto-flow: row dense; align-items: start; }
+  #v-more .stack > .A_prof { grid-column: 1 / -1; }
+  /* long-form screens keep a readable line */
+  #v-calendar .screen, #v-tasks .screen, #v-payrates .screen, #v-reply .screen, #v-hub .screen { width: 100%; max-width: 46rem; margin-left: auto; margin-right: auto; }
+  #v-more .screen { max-width: 56rem; margin-left: auto; margin-right: auto; }
+  .A_hero { aspect-ratio: 16 / 7; max-height: 22rem; }
+  .cal .d { aspect-ratio: 5 / 4; }
+  .tabbar { max-width: 30rem; }
+  /* sheets: a centred dialog; no grabber, no pull (the button, Escape or the scrim close it) */
+  .sheet, .sheet.calsheet { left: 50%; right: auto; top: 50%; bottom: auto; width: min(36rem, calc(100% - 2 * var(--gutter))); max-width: none; margin: 0; max-height: 85vh; max-height: 85dvh;
+    overflow-y: auto; border-radius: var(--v5-r-sheet); border-bottom: 1px solid var(--v5-glass-edge); padding-bottom: 16px; transform: translate(-50%, -48%) scale(.98); opacity: 0; visibility: hidden;
+    transition: transform var(--v5-sheet-ms) var(--v5-sheet-ease), opacity var(--v5-sheet-ms) var(--v5-sheet-ease), visibility 0s linear var(--v5-sheet-ms); }
+  .sheet.on, .sheet.calsheet.on { transform: translate(-50%, -50%); opacity: 1; visibility: visible; transition-delay: 0s; }
+  .sheet::before, .E_grab { display: none; }
+}
+
+/* ---- F_wide: 840 px and up, and a short landscape phone: the tab bar becomes a left rail (same four tabs, same order, same badges) ---- */
+@media (min-width: 52.5rem), (min-width: 37.5rem) and (max-height: 30rem) {
+  :root { --v5-nav-w: calc(5rem + env(safe-area-inset-left, 0px)); --tabbar-h: 0px; --F-side-l: var(--gutter); }
+  #app.F_nav { padding-left: var(--v5-nav-w); }
+  .appbar { padding-left: 8px; }
+  .tabbar { left: 0; right: auto; top: 0; bottom: 0; width: var(--v5-nav-w); max-width: none; height: auto; margin: 0; padding: calc(env(safe-area-inset-top, 0px) + .75rem) 0 calc(env(safe-area-inset-bottom, 0px) + .75rem) env(safe-area-inset-left, 0px);
+    flex-direction: column; justify-content: flex-start; gap: .5rem; border-radius: 0; border-width: 0 1px 0 0; box-shadow: 8px 0 24px var(--v5-card-shadow); }
+  .tab { flex: 0 0 auto; width: 100%; min-height: var(--touch); padding: .75rem 0; }
+}
+@media (min-width: 52.5rem) {
+  #v-calendar .screen { max-width: 64rem; }
+  .cal { max-width: 46rem; margin-left: auto; margin-right: auto; }
+  #v-calendar [data-F-tab="stays"] { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--v5-gap); align-items: start; }
+  #v-calendar [data-F-tab="stays"] > .sect { margin-top: 0; }
+  #v-calendar [data-F-tab="stays"] > #warnings, #v-calendar [data-F-tab="stays"] > .help { grid-column: 1 / -1; }
+  .A_hero { aspect-ratio: 21 / 8; }
+  /* the day sheet and "To look at" are a right-hand side sheet; small forms and confirms stay centred dialogs */
+  .sheet[data-F-kind="day"], .sheet[data-F-kind="attn"] { left: auto; right: 0; top: 0; bottom: 0; width: min(26rem, 40vw); height: 100%; max-height: none; border-radius: var(--v5-r-sheet) 0 0 var(--v5-r-sheet);
+    padding-right: max(16px, env(safe-area-inset-right, 0px)); transform: translateX(100%); opacity: 1; }
+  .sheet[data-F-kind="day"].on, .sheet[data-F-kind="attn"].on { transform: none; }
+}
+/* a landscape phone: the photo header shrinks so the content is on screen without scrolling; less vertical padding; a sheet may use the whole height */
+@media (max-height: 30rem) and (orientation: landscape) {
+  .A_hero { aspect-ratio: auto; min-height: 9.5rem; max-height: none; }
+  .A_greet { padding-bottom: 12px; }
+  .screen { padding-bottom: calc(var(--tabbar-h) + env(safe-area-inset-bottom, 0px) + 16px); }
+  .sheet, .sheet.calsheet { max-height: calc(100vh - 1rem); max-height: calc(100dvh - 1rem); }
+}

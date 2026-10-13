@@ -1061,6 +1061,9 @@
     root.addEventListener('click', click, true);
     return { down: down, move: move, up: up, cancel: cancel, busy: function () { return !!g; } };
   }
+  // F_ the width class: chosen by the room there is (the layout width over the root text size, so a big text size lands in a narrower class), never by device or orientation.
+  // The same thresholds are the rem media queries in styles.css: 22.5 rem (360 px), 37.5 rem (600 px), 52.5 rem (840 px).
+  function F_widthClass(widthPx, rootPx) { var w = (+widthPx || 0) / (+rootPx > 0 ? +rootPx : 16); return w < 22.5 ? 'F_compact' : w < 37.5 ? 'F_phone' : w < 52.5 ? 'F_medium' : 'F_wide'; }
   // the order of the three calendar views, for the swipe and for the arrow keys; no wrap
   function E_tabNeighbour(cur, dir) { var i = A_CAL_TABS.indexOf(cur) + dir; return i < 0 || i >= A_CAL_TABS.length ? null : A_CAL_TABS[i]; }
 
@@ -1087,6 +1090,6 @@
     A_HOUSE_FALLBACK: A_HOUSE_FALLBACK, A_houseTimes: A_houseTimes, A_turnoverClock: A_turnoverClock, A_turnoverLine: A_turnoverLine, A_hm: A_hm, A_NOTICE_TYPES: A_NOTICE_TYPES, A_noticesView: A_noticesView, A_noticeFilters: A_noticeFilters, A_dayMarks: A_dayMarks, A_noticeDay: A_noticeDay, A_guestMessage: A_guestMessage, A_CAL_TABS: A_CAL_TABS, A_calTab: A_calTab, A_stayShade: A_stayShade, A_hubGroups: A_hubGroups, A_hubRoutes: A_hubRoutes, A_hubRouteOk: A_hubRouteOk, A_hubDoorUrl: A_hubDoorUrl, A_whatsNew: A_whatsNew, A_shortTime: A_shortTime, A_PINNED: A_PINNED, A_noticeAddError: A_noticeAddError, A_NOTICE_HINT: A_NOTICE_HINT, A_flagDup: A_flagDup, A_facebookUrl: A_facebookUrl, A_fbPluginUrl: A_fbPluginUrl, A_noticeAddProblem: A_noticeAddProblem, A_noticeAddArgs: A_noticeAddArgs, A_plainRefusal: A_plainRefusal, A_hour12: A_hour12, A_timeRange: A_timeRange,
     taskPriorityLabel: taskPriorityLabel, E_attention: E_attention, E_warnKey: E_warnKey, E_buzz: E_buzz, E_hapticsOn: E_hapticsOn, E_hapticsSet: E_hapticsSet, E_PATTERNS: E_PATTERNS,
     E_drag: E_drag, E_lockOf: E_lockOf, E_inEdge: E_inEdge, E_velocity: E_velocity, E_tabFollow: E_tabFollow, E_tabCommit: E_tabCommit, E_sheetFollow: E_sheetFollow, E_sheetCommit: E_sheetCommit,
-    E_taskFollow: E_taskFollow, E_taskCommit: E_taskCommit, E_taskOpens: E_taskOpens, E_slideCommit: E_slideCommit, E_tabNeighbour: E_tabNeighbour
+    E_taskFollow: E_taskFollow, E_taskCommit: E_taskCommit, E_taskOpens: E_taskOpens, E_slideCommit: E_slideCommit, E_tabNeighbour: E_tabNeighbour, F_widthClass: F_widthClass
   };
 });

@@ -189,6 +189,8 @@
       }); });
     });
   }
+  // F_: one short buzz after a successful settle (silent no-op where vibration is missing or switched off; nothing stored in demo)
+  function F_tap() { try { CS.E_buzz('tap', { navigator: navigator, storage: window.CSDemo && window.CSDemo.active ? null : window.localStorage, doc: document }); } catch (e) {} }
   function settle() {
     if (S.busy || !A.ready(S.form)) return;
     S.busy = true; S.msg = ''; renderPay();
@@ -198,7 +200,7 @@
           S.busy = false;
           var d = res.data;
           if (res.error || !d) { S.msg = A.refusal({ reason: 'offline' }); S.msgOk = false; return renderPay(); }
-          if (d.ok) { S.view = 'done'; notifyPaid(tok, S.req.id); return renderDone(); }
+          if (d.ok) { S.view = 'done'; F_tap(); notifyPaid(tok, S.req.id); return renderDone(); }
           if (d.reason === 'amount_mismatch') S.form.override = S.form.override || 'ask';
           if (d.reason === 'no_stored_proof') S.form.uploaded = null;
           S.msg = A.refusal(d); S.msgOk = false; renderPay();

@@ -25,6 +25,9 @@
 <div class="A_bg" aria-hidden="true"><img src="img/house-blur.webp" alt="" width="240" height="160"></div>
 <div class="shell" id="app">
 
+  <!-- F_: the tab bar is first in the page, so on a wide screen the left rail is also first in the Tab order (it is fixed: its place in the markup never moves it) -->
+  <nav class="tabbar" id="tabbar" aria-label="Primary" hidden></nav>
+
   <!-- Sign in -->
   <section class="view" id="v-signin" aria-labelledby="si-h">
     <div class="screen notab">
@@ -71,7 +74,6 @@
     <iframe class="doorframe" id="door-frame" title="" src="about:blank"></iframe>
   </section>
 
-  <nav class="tabbar" id="tabbar" aria-label="Primary" hidden></nav>
 </div>
 
 <!-- iOS one-time hint -->
