@@ -38,9 +38,9 @@ test('E_buzz: off when the setting says 0, when the person switched it off this 
 test('E_buzz: reduced motion and Save-Data do not turn haptics off (a buzz is not motion), and edge is the only word a drag may use', () => {
   reset(); const v = vib();
   assert.equal(CS.E_buzz('tap', { navigator: Object.assign(v, { connection: { saveData: true } }), storage: store(), doc: { visibilityState: 'visible' } }), true);
-  const src = read('app.js'); assert.doesNotMatch(src, /saveData/); assert.match(src, /function buzz\(kind\) \{ return CS\.E_buzz\(kind, \{ navigator: navigator, storage: store\('localStorage'\), doc: document \}\); \}/);
+  const src = read('app.js'); assert.doesNotMatch(src, /saveData/); assert.match(src, /function E_vibe\(kind\) \{ return CS\.E_buzz\(kind, \{ navigator: navigator, storage: store\('localStorage'\), doc: document \}\); \}/);
   const body = (re) => [...src.matchAll(re)].length;
-  assert.equal(body(/buzz\('edge'\)/g), 3, 'slide, sheet and task row: one edge buzz each (fired once per drag by E_drag)');
+  assert.equal(body(/E_vibe\('edge'\)/g), 3, 'slide, sheet and task row: one edge buzz each (fired once per drag by E_drag)');
 });
 
 test('E_ haptics in the app: marking a task done buzzes once ([10]); a refused save buzzes the error pattern; with the switch off nothing buzzes', async () => {
