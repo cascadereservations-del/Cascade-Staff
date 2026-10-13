@@ -59,15 +59,6 @@ body { background: var(--v5-ambient), var(--v5-bg); color: var(--v5-ink); font: 
 .C_check input { width: 24px; height: 24px; }
 .C_rowstatus { padding: 0 16px 12px 68px; border-bottom: 1px solid var(--v5-sep); }
 
-/* ---- "You were paid" notice on the cleaner home ---- */
-.C_notice { display: flex; gap: 12px; align-items: flex-start; padding: 14px 16px; background: var(--v5-ok-w); color: var(--v5-ok-t); border: 1px solid var(--v5-card-edge); border-radius: var(--v5-r-card); }
-.C_notice-ico { flex: none; margin-top: 2px; }
-.C_notice-body { flex: 1; min-width: 0; display: grid; gap: 4px; }
-.C_notice-head { font: 700 var(--v5-t-body)/24px var(--v5-font-ui); }
-.C_notice-line { font: 700 var(--v5-t-2)/20px var(--v5-font-ui); font-variant-numeric: tabular-nums; }
-.C_notice-text { margin: 0; font-size: var(--v5-t-2); line-height: 22px; color: var(--v5-ink); }
-.C_notice-ok { justify-self: start; margin-top: 6px; }
-
 /* ---- Your requests: Requested -> Paying -> Paid ---- */
 .C_steps { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-top: 6px; }
 .C_step { display: inline-flex; align-items: center; gap: 4px; min-height: 28px; padding: 0 10px 0 8px; border-radius: var(--v5-r-full); font: 600 12px/16px var(--v5-font-ui); border: 1px solid var(--v5-line); color: var(--v5-ink-2); }

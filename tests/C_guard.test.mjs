@@ -52,7 +52,10 @@ test('css: every colour is a v5 token; the one literal is the white QR quiet zon
   assert.deepEqual(hexes, ['#fff'], 'only the QR frame is a literal colour');
   assert.match(c, /\.C_qrframe\s*\{[^}]*background:\s*#fff/);
   assert.doesNotMatch(c, /\brgba?\(|\bhsla?\(/, 'no literal colour functions either');
-  assert.ok((c.match(/var\(--v5-/g) || []).length > 80);
+  assert.ok((c.match(/var\(--v5-/g) || []).length > 70);
+  const n = read('pay/C_notice.css').replace(/\/\*[\s\S]*?\*\//g, '');
+  assert.doesNotMatch(n, /#[0-9a-fA-F]{3,8}|rgba?\(|:root|body/, 'the notice sheet is tokens only and touches nothing global');
+  assert.ok(/^\s*\.C_/m.test(n) && n.split('}').filter((r) => r.trim() && !/^\s*@media/.test(r) && !/^\s*\.C_/.test(r.trim())).length === 0, 'every rule in the notice sheet is a .C_ rule');
   for (const m of c.matchAll(/font(?:-size)?:\s*[^;]*?\b(\d+)px/g)) assert.ok(+m[1] >= 12 || /line|\//.test(m[0]), 'text under 12px: ' + m[0]);
 });
 
