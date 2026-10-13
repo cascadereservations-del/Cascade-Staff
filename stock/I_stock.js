@@ -8,6 +8,9 @@
 
   var PROPERTY_ID = '6ae230f4-c189-4547-84b1-cb6e0b2cc9bd'; // same constant as the shell's CFG.propertyId; opts.propertyId wins
   var DEMO_NOTE = 'Demo only, nothing was saved.';
+  // Owner decision pending (counting makes an item ledger-controlled; Used some doubles the checklist supply log). Read once; the test hook is window.I_STOCK_FLAGS.
+  var I_FLAGS = { count: false, usage: false };
+  if (root.I_STOCK_FLAGS) { I_FLAGS.count = !!root.I_STOCK_FLAGS.count; I_FLAGS.usage = !!root.I_STOCK_FLAGS.usage; }
 
   /* ------------------------------------------------------------------ pure helpers (exported as I_Stock.lib) */
   var MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -26,7 +29,7 @@
       id: String(raw.id), name: String(raw.name || ''), category: String(raw.category || 'Other'), unit: String(raw.unit || ''),
       qty: num(raw.qty), reorder: num(raw.reorderBelow), consumable: !!raw.consumable, active: raw.active !== false,
       purchaseUnit: raw.purchaseUnit ? String(raw.purchaseUnit) : null, perPack: num(raw.unitsPerPurchase) || 1,
-      cover: num(raw.coverageDays), coverEst: num(raw.estCoverageDays)
+      cover: num(raw.coverageDays), coverEst: num(raw.estCoverageDays), controlled: !!raw.movementControlled
     };
     if (canManage(role)) it.cost = num(raw.unitCost);
     return it;
@@ -96,8 +99,9 @@
 
   // Argument builders: the exact RPC names and keys the dashboard uses (api.ts). `vals` are the strings from the form, already validated.
   function countCall(it, v, key) {
-    return { fn: 'reconcile_inventory_baseline_v1', args: { p_item_id: it.id, p_counted_qty: parseQty(v.qty, true), p_note: String(v.note || '').trim().slice(0, 200) || 'Counted in the staff app', p_idempotency_key: key } };
+    return { fn: 'reconcile_inventory_baseline_v1', args: { p_item_id: it.id, p_counted_qty: parseQty(v.qty, true), p_note: noteOf(v.note), p_idempotency_key: key } };
   }
+  function noteOf(n) { var t = String(n || '').trim().slice(0, 200); return t.length >= 3 ? t : 'Counted in the staff app'; } // the server needs 3 characters
   function usageCall(pid, it, v, key, today) {
     return { fn: 'record_inventory_usage', args: { p_property_id: pid, p_session_date: today, p_logged_by: null, p_notes: 'Logged in the staff app', p_rows: [{ item_id: it.id, used_qty: parseQty(v.qty), usage_key: key }] } };
   }
@@ -132,13 +136,13 @@
   function demoShop() { return [{ id: 's1', item_id: 'd3', item_name: 'Hand soap', quantity: 6, purchase_unit: 'bottles', reason: 'Last one used today', status: 'proposed', proposed_at: '2026-10-12T02:00:00Z', proposed_by: 'someone' }, { id: 's2', item_id: 'd1', item_name: 'Toilet paper', quantity: 2, purchase_unit: 'pack', reason: '', status: 'approved', proposed_at: '2026-10-11T02:00:00Z', proposed_by: 'someone' }]; }
 
   /* ------------------------------------------------------------------ screen */
-  var K = { items: null, shop: null, q: '', chip: 'low', role: null }; // survives unmount: the list shows at once while it refreshes
+  var K = { items: null, shop: null, q: '', chip: 'low', role: null, at: 0, keys: {} }; // survives unmount: the list shows at once while it refreshes
   var M = null; // the live mount
 
   function mount(el, opts) {
     unmount();
     opts = opts || {};
-    if (K.role !== opts.role) { K.role = opts.role; K.items = null; K.shop = null; K.q = ''; K.chip = 'low'; } // a cached list is never shown to another role
+    if (K.role !== opts.role) { K.role = opts.role; K.items = null; K.shop = null; K.q = ''; K.chip = 'low'; K.at = 0; K.keys = {}; } // a cached list is never shown to another role
     M = {
       el: el, opts: opts, role: opts.role, demo: !!opts.demo, client: opts.client || null, pid: opts.propertyId || PROPERTY_ID,
       sub: String(opts.sub || ''), act: null, denied: {}, uid: null, loadErr: null, shopErr: null, loading: false, offlineStale: false, itemInfo: {}, listeners: []
@@ -149,7 +153,8 @@
     if (M.demo) { K.items = demoItems().map(function (r) { return normalize(r, M.role); }); K.shop = normalizeShop(demoShop(), null); }
     else if (M.client && M.client.auth && M.client.auth.getSession) { try { M.client.auth.getSession().then(function (r) { var s = r && r.data && r.data.session; M.uid = s && s.user ? s.user.id : null; }, function () {}); } catch (e) { /* no uid: rows read "Asked by staff" */ } }
     draw();
-    if (!M.demo) load();
+    if (!M.demo && !(K.items && K.at && nowMs() - K.at < 60000)) load(); // a fresh list for this role is kept when only the sub-route changed
+    else if (!M.demo) loadShopSoon();
     return M;
   }
   function unmount() {
@@ -173,7 +178,7 @@
     Promise.resolve().then(function () { return me.client.rpc('get_inventory_catalogue_v1', { p_property_id: me.pid }); }).then(function (r) {
       if (me.dead) return;
       var items = r && !r.error ? normalizeCatalogue(r.data, me.role) : null;
-      if (items) { K.items = items; me.loadErr = null; me.offlineStale = false; }
+      if (items) { K.items = items; K.at = nowMs(); me.loadErr = null; me.offlineStale = false; }
       else if (K.items) me.offlineStale = true;
       else me.loadErr = errKind(r && r.error, online()) === 'offline' ? 'offline' : 'unavailable';
     }, function (e) {
@@ -181,6 +186,7 @@
       if (K.items) me.offlineStale = true; else me.loadErr = errKind(e, online()) === 'offline' ? 'offline' : 'unavailable';
     }).then(function () { if (me.dead) return; me.loading = false; draw(); loadShop(); });
   }
+  function loadShopSoon() { var me = M; if (me && !K.shop) loadShop(); }
   function loadShop() {
     var me = M; if (!me || me.demo || !me.client || me.loadErr) return;
     var run = function () { return me.client.from('inventory_shopping_list').select('id,item_id,item_name,quantity,purchase_unit,reason,status,proposed_by,proposed_at').eq('property_id', me.pid).in('status', ['proposed', 'approved']).order('proposed_at', { ascending: false }).limit(100); };
@@ -214,7 +220,7 @@
     top.innerHTML = renderTop(rt);
     drawList();
     // an item route opens its sheet once the catalogue is here
-    if (rt.itemId && K.items && (!M.act || M.act.itemId !== rt.itemId)) { var it = itemById(rt.itemId); if (it) M.act = { kind: 'menu', itemId: rt.itemId }; }
+    if (rt.itemId && K.items && (!M.act || M.act.itemId !== rt.itemId)) { var it = itemById(rt.itemId); if (it) { M.act = { kind: 'menu', itemId: rt.itemId }; loadLastCount(rt.itemId); } }
     if (!rt.itemId && M.act && M.act.itemId) M.act = null;
     drawLayer();
   }
@@ -310,10 +316,10 @@
         (cover ? row('Lasts', esc(cover)) : '') + (canManage(m) && it.cost != null ? row('Unit cost', esc(peso(it.cost))) : '') + '</dl>' +
         (M.denied.shop ? '' : shopN ? '<p class="help">Already on the shopping list.</p>' : '') + (a.note ? '<div class="okbox" role="status"><span>' + esc(a.note) + '</span></div>' : '') + errBox(a) +
         '<div class="I_btns">' +
-        (canManage(m) && !M.denied.count ? '<button class="btn btn-primary btn-block" type="button" data-act="begin" data-kind="count">Count it</button>' : '') +
-        (canUse(m) && !M.denied.used ? '<button class="btn btn-primary btn-block" type="button" data-act="begin" data-kind="used">Used some</button>' : '') +
-        (canManage(m) && !M.denied.recv ? '<button class="btn btn-secondary btn-block" type="button" data-act="begin" data-kind="recv">Stock received</button>' : '') +
-        (!M.denied.shop ? '<button class="btn btn-secondary btn-block" type="button" data-act="begin" data-kind="shop">Add to shopping list</button>' : '') +
+        (allowed('count') ? '<button class="btn btn-primary btn-block" type="button" data-act="begin" data-kind="count">Count it</button>' : '') +
+        (allowed('used') ? '<button class="btn btn-primary btn-block" type="button" data-act="begin" data-kind="used">Used some</button>' : '') +
+        (allowed('recv', it) ? '<button class="btn btn-secondary btn-block" type="button" data-act="begin" data-kind="recv">Stock received</button>' : canManage(m) && it.controlled ? '<p class="help I_more"><a href="#door/inventory" data-act="admin">Receive this one in the admin dashboard</a></p>' : '') +
+        (allowed('shop') ? '<button class="btn btn-secondary btn-block" type="button" data-act="begin" data-kind="shop">Add to shopping list</button>' : '') +
         '<button class="btn btn-ghost btn-block" type="button" data-act="close">Close</button></div>' +
         (canManage(m) ? '<p class="help I_more"><a href="#door/inventory" data-act="admin">Full inventory in the admin dashboard</a></p>' : '');
       return h;
@@ -350,9 +356,9 @@
   function renderShopSheet(a) {
     var r = (K.shop || []).filter(function (x) { return x.id === a.shopId; })[0]; if (!r) return null;
     return head(r.name, (r.qty != null ? fmt(r.qty) + ' ' + (r.unit || '') : '') + ' · ' + (r.status === 'approved' ? 'Approved' : 'Asked')) + (r.note ? '<p>' + esc(r.note) + '</p>' : '') + (a.note ? '<div class="okbox" role="status"><span>' + esc(a.note) + '</span></div>' : '') + errBox(a) +
-      '<div class="I_btns">' + (r.status === 'proposed' ? '<button class="btn btn-primary btn-block" type="button" data-act="shop-do" data-do="approved">Approve</button>' : '') +
-      (r.status === 'approved' && r.itemId && !M.denied.recv ? '<button class="btn btn-primary btn-block" type="button" data-act="shop-bought">Mark bought</button>' : '') +
-      '<button class="btn btn-secondary btn-block" type="button" data-act="shop-do" data-do="rejected">Remove from the list</button><button class="btn btn-ghost btn-block" type="button" data-act="close">Close</button></div>';
+      '<div class="I_btns">' + (r.status === 'proposed' && !M.denied.shopset ? '<button class="btn btn-primary btn-block" type="button" data-act="shop-do" data-do="approved">Approve</button>' : '') +
+      (r.status === 'approved' && r.itemId && allowed('recv', itemById(r.itemId)) ? '<button class="btn btn-primary btn-block" type="button" data-act="shop-bought">Mark bought</button>' : r.status === 'approved' && r.itemId && itemById(r.itemId) && itemById(r.itemId).controlled ? '<p class="help I_more"><a href="#door/inventory" data-act="admin">Receive this one in the admin dashboard</a></p>' : '') +
+      (M.denied.shopset ? '' : '<button class="btn btn-secondary btn-block" type="button" data-act="shop-do" data-do="rejected">Remove from the list</button>') + '<button class="btn btn-ghost btn-block" type="button" data-act="close">Close</button></div>';
   }
 
   /* ---- events */
@@ -371,11 +377,11 @@
     var a = M.act;
     if (act === 'close') return closeSheet();
     if (!a) return;
-    if (a.sending && act !== 'close') return;
+    if (a.sending) return; // nothing, not even Close, while a write is in flight
     if (act === 'begin') return begin(attr(t, 'data-kind'));
     if (act === 'back') { if (a.kind === 'shopset') { a.kind = 'menu'; a.step = null; a.err = null; drawLayer(); } else if (a.fromShop && a.step !== 'confirm') { M.act = null; drawLayer(); } else if (a.step === 'confirm') { a.step = 'form'; a.err = null; drawLayer(); } else if (a.shopId) { a.kind = 'menu'; a.err = null; drawLayer(); } else { a.kind = 'menu'; a.vals = null; a.step = null; a.err = null; a.bad = false; drawLayer(); } return; }
     if (act === 'step') { a.vals = a.vals || {}; var f = attr(t, 'data-f'); a.vals[f] = stepQty(a.vals[f], +attr(t, 'data-d'), attr(t, 'data-z') === '1'); a.err = null; drawLayer(); var nb = q('[data-act="step"][data-f="' + f + '"][data-d="' + attr(t, 'data-d') + '"]'); if (nb && nb.focus) nb.focus(); return; }
-    if (act === 'shop-bought') { var r = (K.shop || []).filter(function (x) { return x.id === a.shopId; })[0]; if (!r || !r.itemId) return; M.act = { kind: 'recv', itemId: r.itemId, step: 'form', vals: { packs: fmt(r.qty || 1), supplier: '', cost: '', shopId: r.id }, fromShop: true }; drawLayer(); return; }
+    if (act === 'shop-bought') { var r = (K.shop || []).filter(function (x) { return x.id === a.shopId; })[0]; if (!r || !r.itemId || !allowed('recv', itemById(r.itemId))) return; M.act = { kind: 'recv', itemId: r.itemId, step: 'form', vals: { packs: fmt(r.qty || 1), supplier: '', cost: '', shopId: r.id }, fromShop: true }; drawLayer(); return; }
     if (act === 'shop-do') { var rr = (K.shop || []).filter(function (x) { return x.id === a.shopId; })[0]; if (!rr) return; a.kind = 'shopset'; a.status = attr(t, 'data-do'); a.step = 'confirm'; a.rowName = rr.name; drawLayer(); return; }
   }
   function go(hash, sub, itemId) {
@@ -384,13 +390,22 @@
     if (M) { draw(); if (itemId) loadLastCount(itemId); }
   }
   function closeSheet() {
-    if (!M) return;
+    if (!M || (M.act && M.act.sending)) return;
     var id = M.act && M.act.itemId;
     M.act = null;
     if (route().itemId) { M.sub = ''; if (M.opts.navigate) M.opts.navigate('#stock'); }
     if (M) { drawLayer(); if (id) { var b = q('[data-id="' + id + '"]'); if (b && b.focus) b.focus(); } }
   }
+  function allowed(kind, it) {
+    var m = M.role;
+    if (kind === 'count') return I_FLAGS.count && canManage(m) && !M.denied.count;
+    if (kind === 'used') return I_FLAGS.usage && canUse(m) && !M.denied.used;
+    if (kind === 'recv') return canManage(m) && !M.denied.recv && !(it && it.controlled);
+    if (kind === 'shop') return !M.denied.shop;
+    return false;
+  }
   function begin(kind) {
+    if (!allowed(kind, itemById(M.act.itemId))) return;
     var a = M.act, it = itemById(a.itemId), defaults = { count: { qty: it && it.qty != null ? fmt(it.qty) : '0', note: '' }, used: { qty: '1' }, recv: { packs: '1', supplier: '', cost: '' }, shop: { qty: '1', note: '' } };
     a.kind = kind; a.step = 'form'; a.vals = defaults[kind]; a.err = null; a.bad = false; a.key = null; a.sig = null; a.focused = false; drawLayer();
   }
@@ -410,7 +425,7 @@
   }
   function onSubmit(ev) {
     if (ev && ev.preventDefault) ev.preventDefault();
-    var a = M && M.act; if (!a || a.sending) return;
+    var a = M && M.act; if (!a || a.sending || a.kind === 'menu') return;
     if (a.step !== 'confirm') { if (!valid(a)) { a.bad = true; drawLayer(); return; } a.bad = false; a.step = 'confirm'; a.err = null; a.focused = false; drawLayer(); return; }
     commit(a);
   }
@@ -418,7 +433,7 @@
   /* ---- the write */
   function build(a) {
     var it = itemById(a.itemId), today = manilaToday(nowMs()), sig = JSON.stringify([a.kind, a.itemId || a.shopId, a.vals, a.status]);
-    if (a.sig !== sig || !a.key) { a.sig = sig; a.key = newKey(a.kind); } // one key per confirmed set of values; a retry of the same values reuses it
+    a.sig = sig; a.key = K.keys[sig] || (K.keys[sig] = newKey(a.kind)); // one key per set of values, kept even if the sheet is reopened; dropped on success
     if (a.kind === 'count') return countCall(it, a.vals, a.key);
     if (a.kind === 'used') return usageCall(M.pid, it, a.vals, a.key, today);
     if (a.kind === 'recv') return receiptCall(it, a.vals, a.key, today);
@@ -437,15 +452,16 @@
       if (me.dead) return;
       if (r && r.error) throw r.error;
       if (r && r.data && r.data.ok === false) throw { message: 'failed' };
-      a.sending = false;
+      a.sending = false; delete K.keys[a.sig];
       var msg = DONE[a.kind](it, a);
       toast(msg); if (me.opts.haptic) { try { me.opts.haptic('success'); } catch (e) { /* no haptics */ } }
       finish(); load();
     }).catch(function (e) {
       if (me.dead) return;
       a.sending = false; a.err = errKind(e, online());
+      if (a.err === 'offline' || a.err === 'other') { me.loading = false; load(); } // the write may have landed: look again
       if (a.err === 'refused') { // the server decides: calm line, and the action goes away
-        var gone = { count: 'count', used: 'used', recv: 'recv', shop: 'shop', shopset: 'recv' }[a.kind]; me.denied[gone] = true;
+        var gone = { count: 'count', used: 'used', recv: 'recv', shop: 'shop', shopset: 'shopset' }[a.kind]; me.denied[gone] = true;
         if (a.kind === 'shopset') { a.kind = 'menu'; } else { a.kind = 'menu'; a.vals = null; a.step = null; }
       }
       drawLayer();

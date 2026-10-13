@@ -25,12 +25,22 @@ class Root {
 export function mockClient(o = {}) {
   const calls = [], handlers = o.rpc || {};
   const ok = { data: { ok: true }, error: null };
+  // The server rules we know (SQL read): a count needs a 3+ character note; keys 16-160 characters; a controlled item refuses usage above stock.
+  const err = (code, message) => ({ data: null, error: { code, message } });
+  const byId = (id) => ((o.catalogue && o.catalogue.items) || []).filter((i) => i.id === id)[0];
+  function serverRules(name, a) {
+    const key = a.p_idempotency_key || (a.p_rows && a.p_rows[0] && a.p_rows[0].usage_key);
+    if (key !== undefined && (String(key).length < 16 || String(key).length > 160)) return err('22023', 'idempotency key required');
+    if (name === 'reconcile_inventory_baseline_v1' && String(a.p_note || '').trim().length < 3) return err('22023', 'a count note is required');
+    if (name === 'record_inventory_usage') { const i = byId(a.p_rows[0].item_id); if (i && i.movementControlled && i.qty < a.p_rows[0].used_qty) return err('22023', 'insufficient stock for ' + i.name); }
+    return null;
+  }
   const client = {
     calls,
     rpc(name, args) {
       calls.push(['rpc', name, clone(args)]);
       const h = handlers[name];
-      if (!h) return Promise.resolve(name === 'get_inventory_catalogue_v1' ? { data: o.catalogue, error: null } : ok);
+      if (!h) return Promise.resolve(name === 'get_inventory_catalogue_v1' ? { data: o.catalogue, error: null } : serverRules(name, args) || ok);
       try { return Promise.resolve(h(args)); } catch (e) { return Promise.reject(e); }
     },
     from(table) {
@@ -58,6 +68,7 @@ export async function setup(o = {}) {
   class FixedDate extends Date { constructor(...a) { if (a.length) super(...a); else super(when.getTime()); } static now() { return when.getTime(); } }
   let n = 0;
   const win = { crypto: { randomUUID: () => 'uuid-' + String(++n).padStart(8, '0') + '-aaaa-bbbb-cccc-dddddddddddd' } };
+  if (!('flags' in o)) win.I_STOCK_FLAGS = { count: true, usage: true }; else if (o.flags) win.I_STOCK_FLAGS = o.flags;
   const ctx = { window: win, navigator: nav, Date: FixedDate, console };
   vm.createContext(ctx);
   vm.runInContext(fs.readFileSync(srcPath, 'utf8'), ctx, { filename: 'I_stock.js' });
