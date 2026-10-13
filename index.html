@@ -24,6 +24,7 @@
 <body>
 <div class="A_bg" aria-hidden="true"><img src="img/house-blur.webp" alt="" width="240" height="160"></div>
 <div class="shell" id="app">
+  <div class="H_offline" id="H_offline" role="status" hidden></div>
 
   <!-- F_: the tab bar is first in the page, so on a wide screen the left rail is also first in the Tab order (it is fixed: its place in the markup never moves it) -->
   <nav class="tabbar" id="tabbar" aria-label="Primary" hidden></nav>
@@ -81,7 +82,6 @@
 </div>
 
 <!-- iOS one-time hint -->
-<div class="H_offline" id="H_offline" role="status" hidden></div>
 <div class="scrim" id="a2hs-scrim"></div>
 <div class="sheet" id="a2hs" role="dialog" aria-modal="true" aria-labelledby="a2hs-h" aria-hidden="true">
   <h2 class="ttl" id="a2hs-h">Add Cascade Staff to your Home Screen</h2>

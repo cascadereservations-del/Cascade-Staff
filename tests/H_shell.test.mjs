@@ -163,16 +163,27 @@ test('H_ More: the manual, Appearance, Cassy, This phone, then Sign out last as 
 });
 
 // ------------------------------------------------------------------------------------------------ MF1, MF4, MF5
-test('H_ clean done: the checklist message closes the door and Home shows the card with the pay link; another origin is ignored', async () => {
-  const app = await boot({ role: 'cleaner', hash: '#home', handlers: baseHandlers('cleaner', { staff_home_v1: turnover(null) }) });
-  const send = async (origin, data) => { for (const f of app.winListeners.message || []) f({ origin, data }); await app.flush(); };
-  await send('https://evil.example', { type: 'cs-clean-done', session_id: 's-1' }); assert.doesNotMatch(app.els['v-home'].innerHTML, /Clean done/);
-  await send('https://staff.example', { type: 'other' }); assert.doesNotMatch(app.els['v-home'].innerHTML, /Clean done/);
-  await send('https://staff.example', { type: 'cs-clean-done', session_id: 's-1', started_at: '2026-10-15T03:00:00Z', finished_at: '2026-10-15T04:25:00Z', issues: 2, photos: 6 });
+const FOLD = { schema: 1, surfaces: { admin: { files: 84 }, checklist: { files: 8 }, manual: { files: 16 }, guide: { files: 48, adminGuide: true } } };
+const frameEl = () => { const w = { location: { replace() {} } }, a = {}; return { w, el: { contentWindow: w, style: {}, title: '', setAttribute(k, v) { a[k] = v; }, getAttribute: (k) => (k in a ? a[k] : null), removeAttribute(k) { delete a[k]; } } }; };
+async function openDoor(role, hash) {
+  const f = frameEl(); const app = await boot({ role, hash: '#home', fold: FOLD, els: { 'door-frame': f.el }, handlers: baseHandlers(role, { staff_home_v1: turnover(null) }) });
+  app.location.hash = hash || '#door/checklist'; for (const fn of app.winListeners.hashchange || []) fn(); await app.flush(); return { app, f };
+}
+const say = async (x, data, origin, source) => { for (const fn of x.app.winListeners.message || []) fn({ origin: origin || 'https://staff.example', data, source: source === undefined ? x.f.w : source }); await x.app.flush(); };
+test('H_ clean done: only the open checklist frame of a staff session can say it; Home then shows the card with the shared pay link', async () => {
+  const x = await openDoor('cleaner'), app = x.app;
+  const good = { type: 'cs-clean-done', session_id: 's-1', started_at: '2026-10-15T03:00:00Z', finished_at: '2026-10-15T04:25:00Z', issues: 2, photos: 6 };
+  await say(x, good, 'https://evil.example'); assert.notEqual(app.location.hash, '#home', 'another origin is ignored');
+  await say(x, good, undefined, {}); assert.notEqual(app.location.hash, '#home', 'a window that is not the door frame is ignored');
+  await say(x, { type: 'other' }); assert.notEqual(app.location.hash, '#home');
+  await say(x, good);
   const h = app.els['v-home'].innerHTML; assert.equal(app.location.hash, '#home'); assert.match(h, /Clean done · 1 h 25 min/); assert.match(h, /Ben Cruz in at 2:00 pm/); assert.match(h, /2 issues logged · 6 photos/);
   assert.match(h, /href="\.\/pay\/\?clean=s-1#tasks=0&amp;cal=0"[^>]*>Ask for the cleaning fee/); await app.click({ 'data-act': 'clean-done-hide' }); assert.doesNotMatch(app.els['v-home'].innerHTML, /Clean done/);
-  await send('https://staff.example', { type: 'cs-clean-done', session_id: '../x y', issues: -3, photos: 'many' }); assert.match(app.els['v-home'].innerHTML, /No issues logged · 0 photos/); assert.doesNotMatch(app.els['v-home'].innerHTML, /\?clean=/, 'a bad id is dropped');
-  assert.match(read('index.html'), /id="door-done"/); assert.match(read('app.js'), /'Cleaning · '/);
+  const y = await openDoor('cleaner'); await say(y, { type: 'cs-clean-done', session_id: '../x y', issues: -3, photos: 'many' });
+  assert.match(y.app.els['v-home'].innerHTML, /No issues logged · 0 photos/); assert.doesNotMatch(y.app.els['v-home'].innerHTML, /\?clean=/, 'a bad id is dropped');
+  const adm = await openDoor('admin', '#door/dashboard'); await say(adm, good); assert.doesNotMatch(adm.app.els['v-home'].innerHTML, /Clean done/, 'not from another door');
+  const ad2 = await openDoor('admin'); await say(ad2, good); assert.doesNotMatch(ad2.app.els['v-home'].innerHTML, /Clean done/, 'the card is for the role that asks for the fee');
+  assert.match(read('index.html'), /id="door-done"/); assert.match(read('app.js'), /'Cleaning · '/); assert.match(read('app.js'), /return LINKS\.pay \+ \(page/);
 });
 
 test('H_ tour: three cards once, Skip at any time, never again on this phone; More plays it on demand; the demo does not start it', async () => {
@@ -263,10 +274,22 @@ test('H_ guard: no duplicate top-level H_ names in app.js or lib.js, the files p
   assert.equal(JSON.parse(read('package.json')).version, '3.1.0'); assert.match(read('sw.js'), /CACHE_NAME = 'cs-shell-v18'/);
 });
 
+// the bodies of the three theme rules: :root, :root:not([data-theme="light"]) inside the dark media query, :root[data-theme="dark"]
+function ruleBodies(css) {
+  const c = css.replace(/\/\*[\s\S]*?\*\//g, ''), out = []; let i = 0;
+  while (i < c.length) {
+    const open = c.indexOf('{', i); if (open < 0) break; const head = c.slice(i, open).trim(); let depth = 1, j = open + 1; while (j < c.length && depth) { depth += c[j] === '{' ? 1 : c[j] === '}' ? -1 : 0; j++; }
+    const inner = c.slice(open + 1, j - 1);
+    if (/^@media/.test(head)) { for (const r of ruleBodies(inner)) out.push(r); } else if (/^:root(:not\(\[data-theme="light"\]\)|\[data-theme="dark"\])?$/.test(head)) out.push(inner);
+    i = j;
+  }
+  return out;
+}
 test('H_ look: the 13 px floor is in the tokens, the sheet header is the pull surface, the legend is one row, the hero is a third at most, light gold is darker', () => {
   const tk = read('tokens.css'), css = read('styles.css');
   assert.match(tk, /--v5-t-label: clamp\(0\.8125rem,/); assert.match(tk, /--v5-t-min: clamp\(0\.8125rem, 0\.716rem \+ 0\.151vw, 0\.8125rem\);/); assert.match(tk, /--v5-t-chrome: clamp\(13px,/); assert.match(tk, /--v5-gold-text: #7A4E0E;/);
-  for (const n of ['field-line', 'gold-wash', 'sidebar-hover', 'turn-stripe', 'ok-wash']) assert.equal((tk.match(new RegExp('--v5-' + n + ':', 'g')) || []).length, 3, n + ' in light and both dark blocks');
+  const bodies = ruleBodies(tk); assert.equal(bodies.length, 3, 'light, OS dark, forced dark');
+  for (const n of ['field-line', 'gold-wash', 'sidebar-hover', 'turn-stripe', 'ok-wash']) for (const [i, b] of bodies.entries()) assert.ok(b.includes('--v5-' + n + ':'), n + ' is declared inside rule body ' + i);
   assert.match(css, /\.A_hero \{ min-height: clamp\(12\.5rem, 32vh, 15\.75rem\); \}/); assert.match(css, /\.A_tabs\.card \{ padding: 4px;/); assert.match(css, /\.F_sheethead \*, \.E_grab \* \{ touch-action: none; \}/);
   assert.match(css, /\.A_card > \.row-between \{ flex-wrap: nowrap;/); assert.match(css, /mask-image: linear-gradient\(90deg, black 88%, transparent\)/);
   assert.match(css, /\.chk, \.H_chk \{ box-sizing: border-box; width: var\(--touch\); height: var\(--touch\);/);
@@ -276,4 +299,42 @@ test('H_ look: the 13 px floor is in the tokens, the sheet header is the pull su
 test('H_ demo: the fixtures feed the new features and stay out of a cleaner payload', () => {
   const o = D.build('owner'), c = D.build('cleaner');
   assert.deepEqual(o.home.next_guest.arrival_ready, { id: false, paid: false, door_code: true }); assert.equal(c.home.next_guest.arrival_ready, undefined); assert.equal(CS.assertNoMoney(o.home, { allowContact: true }), true); assert.equal(CS.assertNoMoney(c.home, {}), true);
+});
+
+// ------------------------------------------------------------------------------------------------ fix round
+const hashTo = async (app, h) => { app.location.hash = h; for (const f of app.winListeners.hashchange || []) f(); await app.flush(); };
+test('H_ fix: a module that failed to load is retried on the next open; a throw in mount or unmount never leaves a blank screen or blocks navigation', async () => {
+  let n = 0; const mounts = [];
+  const app = await boot({ role: 'cleaner', hash: '#home', winInit: (win) => { win.H_loadAsset = (m) => { n++; if (n === 1) return Promise.reject(new Error('offline')); win[m.global] = { mount(el, o) { mounts.push(o); } }; return Promise.resolve(); }; }, handlers: baseHandlers('cleaner') });
+  await hashTo(app, '#weather'); assert.equal(app.location.hash, '#calendar/notices', 'the first open falls back');
+  await hashTo(app, '#weather'); assert.equal(n, 2, 'the second open loads again'); assert.equal(mounts.length, 1); assert.equal(app.location.hash, '#weather');
+  const src = read('app.js'); assert.match(src, /sc\.onerror = function \(\) \{ \[sc, l\]\.forEach/); assert.match(src, /pr\.catch\(function \(\) \{ if \(H_mod\.p\[key\] === pr\) delete H_mod\.p\[key\]/);
+  const mk = (mod) => (win) => { win.H_loadAsset = (m) => { win[m.global] = mod; return Promise.resolve(); }; };
+  const t = await boot({ role: 'owner', hash: '#home', winInit: mk({ mount() { throw new Error('boom'); } }), handlers: baseHandlers('owner') }); await hashTo(t, '#manage'); assert.equal(t.location.hash, '#hub', 'mount threw: the route falls back');
+  const r = await boot({ role: 'owner', hash: '#home', winInit: mk({ mount() { return Promise.reject(new Error('late')); } }), handlers: baseHandlers('owner') }); await hashTo(r, '#manage'); assert.equal(r.location.hash, '#hub', 'an async failure falls back too');
+  let un = 0; const u = await boot({ role: 'admin', hash: '#home', winInit: mk({ mount() {}, unmount() { un++; throw new Error('x'); } }), handlers: baseHandlers('admin') });
+  await hashTo(u, '#manage'); await u.click({ 'data-act': 'signout' }); assert.equal(un, 1, 'sign-out still goes ahead when unmount throws');
+});
+
+test('H_ fix: the offline strip is in the flow at the top of the page and never shows before a layout; an offline tick in the attention sheet says so too', async () => {
+  const rule = /\.H_offline \{([^}]*)\}/.exec(read('styles.css'))[1]; assert.doesNotMatch(rule, /position: fixed/);
+  assert.match(read('index.html'), /<div class="shell" id="app">\s*<div class="H_offline" id="H_offline" role="status" hidden><\/div>/);
+  assert.match(read('app.js'), /var off = !!state\.layout && current !== 'door' && \(navigator\.onLine === false/, 'not before a layout exists, not inside a door');
+  const app = await boot({ role: 'admin', hash: '#home', nav: { onLine: false }, handlers: baseHandlers('admin', { tasks_list_v1: tasksOf([T({ blocks_arrival: true })], true) }) });
+  await app.click({ 'data-act': 'attn-open' }); await app.click({ 'data-act': 'task-done', 'data-task': 'follow_up_tasks:a' });
+  assert.match(app.els['cs-body'].innerHTML, /H_noconn H_attoff" role="status">No connection</); assert.equal(app.calls.filter((c) => c[0] === 'task_set_done_v1').length, 0);
+});
+
+test('H_ fix: the tour waits while the Add to Home Screen hint is showing; sign-out forgets the search; only bottom sheets get the pull header', async () => {
+  const ls = mem(); const hint = { classList: { contains: (c) => c === 'on', add() {}, remove() {} }, setAttribute() {}, getAttribute: () => null };
+  const app = await boot({ role: 'cleaner', hash: '#home', tour: true, tourDelay: 0, ls, els: { a2hs: hint }, handlers: baseHandlers('cleaner') }); await new Promise((r) => setTimeout(r, 20));
+  assert.ok(!app.els['cal-sheet'] || app.els['cal-sheet'].getAttribute('aria-hidden') !== 'false', 'no tour over the install hint'); assert.equal(ls.getItem('cs_seen_v3'), null, 'and it is not marked seen: it starts on the next open');
+  assert.match(read('app.js'), /signOutTo\(msg\) \{\s*state\.H_q = ''/); assert.match(read('styles.css'), /@media \(max-width: 37\.4375rem\) \{ \.F_sheethead \{ touch-action: none; \} \}/);
+});
+
+test('H_ fix: the three module folders are precached best effort, apart from the required shell list', () => {
+  const sw = read('sw.js'), ctx = vm.createContext({ self: { addEventListener() {}, location: { href: 'https://x/' } }, URL, Request: class {}, Promise });
+  vm.runInContext(sw.replace(/^const /gm, 'var ').replace(/^if \(typeof module[^\n]*$/m, ''), ctx); const opt = vm.runInContext('OPTIONAL_URLS', ctx), req = vm.runInContext('SHELL_URLS', ctx);
+  assert.deepEqual([...opt], ['./weather/W_weather.js', './weather/W_weather.css', './stock/I_stock.js', './stock/I_stock.css', './manage/N_manage.js', './manage/N_manage.css']); for (const u of opt) assert.ok(!req.includes(u), u + ' is not in the required list');
+  assert.match(sw, /SHELL_URLS\.concat\(OPTIONAL_URLS\)\.map\(\(u\) => cache\.add\(new Request\(u, \{ cache: 'reload' \}\)\)\.catch\(\(\) => \{\}\)\)/, 'a missing file is swallowed one by one');
 });

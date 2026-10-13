@@ -698,7 +698,8 @@ button.A_chipglass.E_pill { width: auto; min-width: 124px; max-width: 184px; hei
 /* Sheets: the pull-down strip. Sticky so it stays at the top of a scrolled sheet; it takes no room (its margins cancel its height). */
 .E_grab { position: sticky; top: 0; z-index: 3; height: 28px; margin: -16px -16px -12px; touch-action: none; } /* the strip over the visible handle (.sheet::before): 28 px, so it hides little of the content under it */
 /* the sheet's header is a real sticky row: the title (wraps) on the left, Close on the right, its own height and an opaque background; the content starts below it */
-.F_sheethead { position: sticky; top: 0; z-index: 4; display: flex; align-items: flex-start; gap: 8px; min-height: 56px; margin: 0 -16px 8px; padding: 12px 16px 8px; background: var(--v5-surf); touch-action: none; }
+.F_sheethead { position: sticky; top: 0; z-index: 4; display: flex; align-items: flex-start; gap: 8px; min-height: 56px; margin: 0 -16px 8px; padding: 12px 16px 8px; background: var(--v5-surf); }
+@media (max-width: 37.4375rem) { .F_sheethead { touch-action: none; } } /* a bottom sheet pulls down by its header; the dialogs and side sheets from 600 px do not pull, so their header keeps the browser's own scroll */
 .sheet.calsheet { padding-top: 0; } /* no padding strip above the header for scrolled content to show in */
 .sheet.calsheet::before { margin: 8px auto 4px; width: 36px; height: 4px; background: var(--v5-line-2); }
 .F_sheethead h2 { flex: 1; min-width: 0; margin: 0; padding-top: 8px; }
@@ -899,7 +900,7 @@ button.A_chipglass.E_pill { width: auto; min-width: 124px; max-width: 184px; hei
 .H_until { font-variant-numeric: tabular-nums; color: var(--v5-ink); font-weight: 600; text-align: center; }
 .H_cleandone { gap: 8px; }
 /* the attention sheet: a box to tick and a Mark as handled button on the same row */
-.H_attrow { display: flex; align-items: center; border-bottom: 1px solid var(--v5-sep); }
+.H_attrow { display: flex; flex-wrap: wrap; align-items: center; border-bottom: 1px solid var(--v5-sep); }
 .H_attrow:last-child { border-bottom: 0; }
 .H_attrow > .rowi { flex: 1 1 auto; min-width: 0; border-bottom: 0; }
 .H_chk { flex: none; width: var(--touch); height: var(--touch); margin-left: 6px; border-radius: 12px; display: inline-flex; align-items: center; justify-content: center; }
@@ -907,6 +908,7 @@ button.A_chipglass.E_pill { width: auto; min-width: 124px; max-width: 184px; hei
 .H_attrow.H_stack > .rowi { flex: 1 1 100%; }
 .H_attrow.H_stack > .btn { margin-left: 56px; }
 .H_noconn { display: block; margin-top: 2px; }
+.H_attoff { flex: 1 0 100%; padding: 0 12px 8px 56px; }
 /* guest ID: a tap shows it full screen (owner and admin) */
 .H_idbtn { display: block; width: 100%; padding: 0; border: 0; background: none; cursor: zoom-in; }
 .H_idbtn img { display: block; width: 100%; }
@@ -914,7 +916,7 @@ button.A_chipglass.E_pill { width: auto; min-width: 124px; max-width: 184px; hei
 .H_idfull.on { display: flex; }
 .H_idfull img { max-width: 100%; max-height: calc(100% - 72px); object-fit: contain; border-radius: var(--v5-r-field); background: var(--v5-surf); }
 /* the offline strip: fixed under the app bar, 36 px, never takes a tap */
-.H_offline { position: fixed; z-index: 5; left: 0; right: 0; top: calc(var(--appbar-h, 56px) + env(safe-area-inset-top, 0px)); height: 36px; display: flex; align-items: center; justify-content: center; background: var(--v5-sunk); color: var(--v5-ink-2); font: 600 var(--v5-t-label)/1 var(--font-ui); pointer-events: none; }
+.H_offline { display: flex; align-items: center; justify-content: center; min-height: 36px; padding: 0 var(--gutter); background: var(--v5-sunk); color: var(--v5-ink-2); font: 600 var(--v5-t-label)/1.2 var(--font-ui); text-align: center; }
 .H_offline[hidden] { display: none; }
 .H_railhead { display: none; }
 .H_how .H_steps { margin: 6px 0 0; padding-left: 1.25rem; display: grid; gap: 4px; }
@@ -937,7 +939,7 @@ button.A_chipglass.E_pill { width: auto; min-width: 124px; max-width: 184px; hei
 /* the tick box: a 44 px target around the same 28 px box (the border is the room, the inset ring is the edge) */
 .chk, .H_chk { box-sizing: border-box; width: var(--touch); height: var(--touch); border: 8px solid transparent; background-clip: padding-box; box-shadow: inset 0 0 0 1px var(--v5-line-2); border-radius: 17px; }
 .chk[aria-checked="true"] { box-shadow: none; border-color: transparent; }
-.F_sheethead *, .E_grab * { touch-action: none; } /* the header and everything in it: the pull surface the browser must never pan from */
+@media (max-width: 37.4375rem) { .F_sheethead *, .E_grab * { touch-action: none; } } /* the header and everything in it: the pull surface the browser must never pan from */
 /* F3: a task's title is body size (17 at 360); its detail lines are 15 and never under 13 */
 .payrow .t { font-size: var(--v5-t-body); line-height: clamp(1.5rem, 1.4023rem + 0.4337vw, 1.68rem); }
 .payrow .s { font-size: var(--v5-t-2); line-height: clamp(1.25rem, 1.1686rem + 0.3614vw, 1.4rem); }

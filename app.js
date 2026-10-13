@@ -114,7 +114,7 @@
     var shellEl = $('app'); if (shellEl && shellEl.classList) shellEl.classList.toggle('F_nav', !$('tabbar').hidden); // the rail's room is kept only while the rail is there
   }
   // lane P: every link into pay/ carries the badge counts in its hash, even when they are zero (query first, then hash)
-  function H_payUrl(page, query) { var n = state.tasks ? CS.taskDueCount(state.tasks.tasks, state.tasks.today) : 0; return './pay/' + (page || '') + (query || '') + '#tasks=' + n + '&cal=' + warnCount(); }
+  function H_payUrl(page, query) { var n = state.tasks ? CS.taskDueCount(state.tasks.tasks, state.tasks.today) : 0; return LINKS.pay + (page || '') + (query || '') + '#tasks=' + n + '&cal=' + warnCount(); }
   function warnCount() { return state.payload ? (state.payload.warnings || []).length : 0; }
   function errBanner() {
     return state.error ? '<div class="errbox" role="alert">' + ICON('alert') + '<span>' + esc(state.error) + ' <button class="btn btn-ghost btn-sm" type="button" data-act="refresh">Try again</button></span></div>' : '';
@@ -734,7 +734,7 @@
   function H_tourMaybe() {
     var delay = typeof window.H_TOUR_DELAY === 'number' ? window.H_TOUR_DELAY : 1500;
     setTimeout(function () {
-      if (DEMO || !state.layout || state.sheet) return;
+      if (DEMO || !state.layout || state.sheet || ($('a2hs') && $('a2hs').classList.contains('on'))) return; // not over the Add to Home Screen hint: it starts on the next open
       var ls = store('localStorage'); try { if (!ls || ls.getItem('cs_seen_v3') === '1') return; ls.setItem('cs_seen_v3', '1'); } catch (e) { return; }
       openSheet('tour', 'tour-open'); state.sheet.step = 0; drawSheet();
     }, delay);
@@ -789,8 +789,9 @@
     var inner = '<' + g.tag + ' class="rowi"' + g.attrs + '><span class="lead' + (r.tile ? ' A_t-' + r.tile : '') + '">' + ICON(r.glyph) + '</span><span class="mid"><span class="t">' + esc(r.title) + '</span>' + (r.sub ? '<span class="s">' + esc(r.sub) + '</span>' : '') +
       '</span><span class="chev">' + ICON(g.ext ? 'ext' : 'chev', g.ext ? 's16' : '') + '</span></' + g.tag + '>';
     var isTask = r.go.kind === 'tasks' && typeof r.id === 'string' && r.id.indexOf(':') > 0, ver = isTask && r.id.indexOf('verifier_findings:') === 0;
-    if (isTask && !ver) return '<div class="H_attrow"><button class="chk H_chk" type="button" role="checkbox" aria-checked="false" aria-label="' + esc('Mark done: ' + r.title) + '" data-act="task-done" data-task="' + esc(r.id) + '">' + ICON('check', 's16') + '</button>' + inner + '</div>';
-    if (ver) return '<div class="H_attrow H_stack">' + inner + '<button class="btn btn-ghost btn-sm" type="button" data-act="task-done" data-task="' + esc(r.id) + '" aria-label="' + esc('Mark as handled: ' + r.title) + '">' + ICON('check', 's16') + 'Mark as handled</button></div>';
+    var off = isTask && state.H_offKey === r.id ? '<span class="help c-danger H_noconn H_attoff" role="status">No connection</span>' : '';
+    if (isTask && !ver) return '<div class="H_attrow"><button class="chk H_chk" type="button" role="checkbox" aria-checked="false" aria-label="' + esc('Mark done: ' + r.title) + '" data-act="task-done" data-task="' + esc(r.id) + '">' + ICON('check', 's16') + '</button>' + inner + off + '</div>';
+    if (ver) return '<div class="H_attrow H_stack">' + inner + '<button class="btn btn-ghost btn-sm" type="button" data-act="task-done" data-task="' + esc(r.id) + '" aria-label="' + esc('Mark as handled: ' + r.title) + '">' + ICON('check', 's16') + 'Mark as handled</button>' + off + '</div>';
     var w = r.go.kind === 'warn' ? findWarn(r.go.key) : null;
     if (w && w.kind === 'verifier' && CS.findingKey(w, state.tasks && state.tasks.tasks)) return '<div class="H_attrow H_stack">' + inner + '<button class="btn btn-ghost btn-sm" type="button" data-act="attn-ack" data-warn="' + esc(r.go.key) + '">' + ICON('check', 's16') + 'Mark as handled</button></div>';
     return inner;
@@ -935,7 +936,7 @@
     // The server hides a finished task once the list reloads, so Undo works from the remembered one.
     if (!t && L && L.source + ':' + L.id === key) t = { source: L.source, id: L.id, title: L.title, status: done ? 'open' : 'done' };
     if (!t || t.status === (done ? 'done' : 'open')) return;
-    if (navigator.onLine === false) { state.H_offKey = key; E_vibe('error'); if (current === 'tasks') renderTasks(); return; } // MF8: no queue; the row says so under itself
+    if (navigator.onLine === false) { state.H_offKey = key; E_vibe('error'); if (current === 'tasks') renderTasks(); if (state.sheet && state.sheet.kind === 'attn') drawSheet(); return; } // MF8: no queue; the row says so under itself
     state.H_offKey = '';
     t.status = done ? 'done' : 'open'; state.lastDone = { source: t.source, id: t.id, title: t.title, done: done }; state.tasksErr = ''; if (current === 'tasks') renderTasks(); renderTabs(current); if (state.sheet && state.sheet.kind === 'attn') drawSheet();
     E_vibe('tap'); // one buzz for the confirm; the same path whether the box, the underlay button or the swipe asked
@@ -1221,19 +1222,22 @@
   var H_mod = { mounted: '', sub: '', n: 0, p: {} }, H_sub = '';
   function H_domLoad(m) { // a stylesheet (never waited for) and a script; a 404 on the script rejects
     return new Promise(function (res, rej) {
-      if (m.css) { var l = document.createElement('link'); l.rel = 'stylesheet'; l.href = m.css; document.head.appendChild(l); }
-      var sc = document.createElement('script'); sc.src = m.src; sc.onload = function () { res(); }; sc.onerror = function () { rej(new Error('load')); }; document.head.appendChild(sc);
+      var l = null; if (m.css) { l = document.createElement('link'); l.rel = 'stylesheet'; l.href = m.css; document.head.appendChild(l); }
+      var sc = document.createElement('script'); sc.src = m.src; sc.onload = function () { res(); };
+      sc.onerror = function () { [sc, l].forEach(function (t) { try { if (t && t.parentNode) t.parentNode.removeChild(t); } catch (e) {} }); rej(new Error('load')); }; // the next open starts clean
+      document.head.appendChild(sc);
     });
   }
   function H_loadModule(key) {
     var m = H_MODULES[key]; if (H_mod.p[key]) return H_mod.p[key];
     var load = typeof window.H_loadAsset === 'function' ? window.H_loadAsset : H_domLoad; // tests replace the loader
-    H_mod.p[key] = (window[m.global] ? Promise.resolve() : load(m)).then(function () { if (!window[m.global] || typeof window[m.global].mount !== 'function') throw new Error('no module'); });
-    return H_mod.p[key];
+    var pr = H_mod.p[key] = (window[m.global] ? Promise.resolve() : load(m)).then(function () { if (!window[m.global] || typeof window[m.global].mount !== 'function') throw new Error('no module'); });
+    pr.catch(function () { if (H_mod.p[key] === pr) delete H_mod.p[key]; }); // a failed load (offline, a 404) is never remembered: the next open retries
+    return pr;
   }
   function H_unmount() {
     var k = H_mod.mounted; H_mod.mounted = ''; H_mod.sub = ''; H_mod.n++;
-    var g = k && window[H_MODULES[k].global]; try { if (g && typeof g.unmount === 'function') g.unmount(); } catch (e) {}
+    var g = k && window[H_MODULES[k].global]; try { if (g && typeof g.unmount === 'function') g.unmount(); } catch (e) { /* never block navigation or sign-out */ }
   }
   // The folder is not shipped yet: weather goes to the Notices tab (which has the weather card), stock to the inventory door, manage to the admin hub.
   function H_fallback(key) {
@@ -1250,7 +1254,8 @@
       if (current !== key || token !== H_mod.n) return;
       var box = $('H_mod-' + key); if (!box) return; box.innerHTML = '';
       H_mod.mounted = key; H_mod.sub = sub;
-      window[m.global].mount(box, { client: DEMO ? null : sb, demo: DEMO, role: role(), sub: sub, propertyId: pid(), houseTimes: A_houseT(), navigate: function (h) { location.hash = String(h).charAt(0) === '#' ? h : '#' + h; }, toast: toast, haptic: E_vibe });
+      var bad = function () { if (H_mod.mounted === key) { H_mod.mounted = ''; H_mod.sub = ''; H_mod.n++; } if (current === key) H_fallback(key); };
+      try { var mr = window[m.global].mount(box, { client: DEMO ? null : sb, demo: DEMO, role: role(), sub: sub, propertyId: pid(), houseTimes: A_houseT(), navigate: function (h) { location.hash = String(h).charAt(0) === '#' ? h : '#' + h; }, toast: toast, haptic: E_vibe }); if (mr && typeof mr.then === 'function') mr.then(null, bad); } catch (e) { bad(); } // a module that throws leaves a screen that works, not a blank one
     }, function () { if (current === key && token === H_mod.n) H_fallback(key); });
   }
 
@@ -1317,7 +1322,7 @@
     });
   }
   function signOutTo(msg) {
-    H_unmount(); closeSheet(); dropPhotos(); state.replyRecent = []; state.cleanDone = null; state.progress = null; state.progressAbsent = false; H_idClose(); state.reply = null; var rb = $('rp-body'); if (rb) rb.innerHTML = ''; rpLive(''); state.payload = null; state.bookings = null; state.bookingsDone = false; state.noticesDone = false; state.notices = null; state.noticesAbsent = false; state.nadd = null; state.fbOpen = false; state.tasks = null; state.access = null; state.layout = null; state.month = null; state.error = '';
+    state.H_q = ''; state.H_offKey = ''; H_unmount(); closeSheet(); dropPhotos(); state.replyRecent = []; state.cleanDone = null; state.progress = null; state.progressAbsent = false; H_idClose(); state.reply = null; var rb = $('rp-body'); if (rb) rb.innerHTML = ''; rpLive(''); state.payload = null; state.bookings = null; state.bookingsDone = false; state.noticesDone = false; state.notices = null; state.noticesAbsent = false; state.nadd = null; state.fbOpen = false; state.tasks = null; state.access = null; state.layout = null; state.month = null; state.error = '';
     return sb.auth.signOut().catch(function () {}).then(function () { showSignin(msg); });
   }
   function showSignin(msg) {
@@ -1536,7 +1541,8 @@
   $('door-done').addEventListener('click', function () { location.replace(location.pathname + location.search + '#home'); });
   // MF1: the checklist (same origin) posts cs-clean-done after a successful submit. The door closes and Home shows the clean-done card.
   window.addEventListener('message', function (ev) {
-    var d = ev && ev.data; if (!d || typeof d !== 'object' || d.type !== 'cs-clean-done' || ev.origin !== location.origin || !state.layout) return;
+    var d = ev && ev.data; if (!d || typeof d !== 'object' || d.type !== 'cs-clean-done' || ev.origin !== location.origin || state.layout !== 'staff' || current !== 'door' || doorKey !== 'checklist') return;
+    var fr = $('door-frame'); if (!fr || !fr.contentWindow || ev.source !== fr.contentWindow) return; // only the open checklist frame may say it
     var n = function (x) { x = Math.floor(+x); return x >= 0 && x < 1000 ? x : 0; };
     state.cleanDone = { id: /^[\w-]{1,64}$/.test(String(d.session_id)) ? String(d.session_id) : '', startedAt: String(d.started_at || ''), finishedAt: String(d.finished_at || ''), issues: n(d.issues), photos: n(d.photos), at: Date.now() };
     location.hash = '#home'; route();
@@ -1636,7 +1642,7 @@
   // Gestures (E_): four swipes, each through the one helper CS.E_drag, each with a visible tap twin on the same screen. The thresholds live in lib.js.
   var E_drag = CS.E_drag;
   function E_tr(el, ms) { if (el && el.style) el.style.transition = ms && !E_reduced() ? 'transform ' + ms + 'ms ease-out, opacity ' + ms + 'ms ease-out' : 'none'; }
-  // G4. Slide to start cleaning: 70% of the travel, or a fast flick after 40%. The knob follows the finger 1:1 and returns over 200 ms.
+  // G4. Slide to start cleaning: 70% of the travel, or a fast flick after 40% of it. The knob follows the finger 1:1 and returns over 200 ms.
   (function A_slideInit() {
     var t0 = 1, travel = function () { return t0; }; // measured once when the drag starts: a redrawn (detached) pill must never read 0 and commit
     E_drag(document, { sel: '[data-slide]', axis: 'x', vw: E_vw, reduced: E_reduced, start: function (a) { t0 = Math.max(1, a.offsetWidth - 56); },
@@ -1671,7 +1677,7 @@
       },
       cancel: function (el) { E_sheetReset(el, scrim()); } });
   })();
-  // G3. Task row: swipe left to mark done (Undo on a finished row). 40% of the row, or a fast flick, takes the same path as the box; a shorter swipe past
+  // G3. Task row: swipe left to mark done (Undo on a finished row). a third of the row (110 px at most), or a fast flick, takes the same path as the box; a shorter swipe past
   // 48 px leaves the row open on its real button. A system check row only ever opens its "Mark as handled" button.
   (function E_taskSwipe() {
     var openW = function (el) { return parseInt(el.getAttribute('data-E-w'), 10) || 96; };
@@ -1733,7 +1739,7 @@
   // MF8: no queue. A strip says the screen is the last one that loaded; a write tapped offline says so under its own row.
   function H_offlineSync() {
     var el = $('H_offline'); if (!el) return;
-    var off = navigator.onLine === false || (!!state.error && state.errorKind === 'network' && !!state.payload);
+    var off = !!state.layout && current !== 'door' && (navigator.onLine === false || (!!state.error && state.errorKind === 'network' && !!state.payload));
     el.hidden = !off; if (off) el.textContent = 'No connection' + (state.loadedAt ? ' · showing ' + CS.clockLabel(new Date(state.loadedAt).toISOString()) : '');
     if (!off && state.H_offKey) { state.H_offKey = ''; if (current === 'tasks') renderTasks(); }
   }

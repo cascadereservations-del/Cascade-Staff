@@ -152,7 +152,7 @@ test('E_ G2 (s82): the whole header is the pull surface; a finger on the body is
   const r = await openDay('admin', { reduced: true }); const rs = pullSheet(r, [[0, 180, 300], [30, 180, 340], [60, 180, 400], [90, 180, 410]]);
   assert.ok(shut(r), 'still commits'); assert.equal(rs.style.transform, '', 'the pull was handed back to the stylesheet on release (instant under reduced motion)');
   const src = read('styles.css');
-  assert.match(src, /\.F_sheethead \{ position: sticky; top: 0; z-index: 4; [^}]*min-height: 56px;[^}]*touch-action: none; \}/, 'the header the browser must not pan from');
+  assert.match(src, /\.F_sheethead \{ position: sticky; top: 0; z-index: 4; [^}]*min-height: 56px;[^}]*\}/); assert.match(src, /@media \(max-width: 37\.4375rem\) \{ \.F_sheethead \{ touch-action: none; \} \}/, 'the header the browser must not pan from, on a bottom sheet');
   assert.match(src, /\.E_grab \{ position: sticky; top: 0; z-index: 3; height: 28px;[^}]*touch-action: none; \}/);
   assert.match(src, /\.sheet\.calsheet::before \{ margin: 8px auto 4px; width: 36px; height: 4px; background: var\(--v5-line-2\); \}/, 'the handle is 36 x 4');
   assert.match(read('app.js'), /closest\('\.E_grab, \.F_sheethead'\)/); assert.doesNotMatch(read('app.js'), /!el\.scrollTop/);

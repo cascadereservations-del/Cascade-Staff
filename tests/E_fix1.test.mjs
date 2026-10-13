@@ -164,7 +164,7 @@ test('E_fix F8: every sheet has a 44 px Close in a sticky header (glyph and word
     const b = app.els['cs-body'].innerHTML; assert.match(b, /^<div class="F_sheethead( H_dayhead)?">(<button class="iconbtn H_daynav"[^>]*>(?:<svg[^>]*><\/svg>)<\/button>)?<h2 class="ttl"[^>]*>[^]*?<\/h2>(<button class="iconbtn H_daynav"[^>]*>(?:<svg[^>]*><\/svg>)<\/button>)?<button class="btn btn-secondary btn-sm F_close" type="button" data-F-close="1" data-act="/, name + ': the header row is (day arrows) + title + Close'); assert.ok(b.includes('data-act="' + act + '"><svg'), name);
     assert.match(b.slice(0, 700), /Close<\/button><\/div>/, name); assert.doesNotMatch(b, /btn-block" type="button" data-act="sheet-close" style="margin-top:12px">Close/, name + ': no Close at the very end');
   }
-  assert.match(css, /\.F_sheethead \{ position: sticky; top: 0; z-index: 4; display: flex;[^}]*background: var\(--v5-surf\); touch-action: none; \}/); assert.match(css, /\.F_close \{ flex: none; margin-left: auto; \}/); assert.match(css, /\.btn-sm \{ min-height: var\(--touch\);/);
+  assert.match(css, /\.F_sheethead \{ position: sticky; top: 0; z-index: 4; display: flex;[^}]*background: var\(--v5-surf\); \}/); assert.match(css, /@media \(max-width: 37\.4375rem\) \{ \.F_sheethead \{ touch-action: none; \} \}/, 'only a bottom sheet pulls'); assert.match(css, /\.F_close \{ flex: none; margin-left: auto; \}/); assert.match(css, /\.btn-sm \{ min-height: var\(--touch\);/);
   assert.match(css, /\.F_sheethead h2 \{ flex: 1; min-width: 0;/, 'a long title wraps beside Close, never under it');
 });
 
