@@ -10,10 +10,10 @@
     },
     "checklist": {
       "source": "s82-checklist-C",
-      "head": "e4fdda4",
+      "head": "450145f",
       "files": 8,
-      "bytes": 1035201,
-      "time": "2026-10-13T13:10:37.578Z"
+      "bytes": 1035089,
+      "time": "2026-10-13T13:22:31.673Z"
     },
     "manual": {
       "source": "s80-manual",
