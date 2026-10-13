@@ -626,3 +626,28 @@ test('N charts: demo draws the cards with no network; the stylesheet has the car
   assert.match(CSS, /prefers-reduced-motion: reduce\) \{ \.N_bar \{ animation: none/); assert.ok(!/<canvas|chart\.js|d3/i.test(SRC));
   assert.ok(/var\(--v5-gold\)/.test(CSS) && /var\(--v5-line\)/.test(CSS));
 });
+
+// ------------------------------------------------------------------------------------------------ 3.1.1b chart honesty
+test('N charts: a month with zero or negative revenue draws no bar (no sliver); the caption and table still give the figure', async () => {
+  const mk = (rev) => ({ data: METRICS(1, { accommodation_revenue: METRIC('accommodation_revenue', 'PHP', rev), occupancy: METRIC('occupancy', 'percent', '60') }), error: null });
+  const t = await boot({ sub: 'kpis', handlers: monthHandlers({ '2026-05-01': mk('0.00'), '2026-06-01': mk('-150.00') }) }); await tick(20);
+  assert.equal(count(t.html(), /class="N_bar/g), 4, 'no bar for 0 and for a negative');
+  await t.click('mon', 1); assert.match(t.text(), /May 2026: Revenue .*0\.00 · Occupancy 60\.0%/);
+  await t.click('mon', 2); assert.match(t.text(), /Jun 2026: Revenue .*150\.00/);
+  await t.click('tbl'); assert.match(t.html(), /scope="row">May 2026<\/th><td class="N_num">[^<]*0\.00</);
+});
+test('N charts: sparklines use a 0-100 scale for percent and a zero floor for money, so a flat 60-61-60 reads flat', () => {
+  const html = (vals) => { const { M } = load(); return M; };
+  // drive through the real cards: occupancy 60,61,60 across months must stay in the top band of the 32px sparkline with a tiny wobble
+  const wobble = async () => {
+    const h = { get_hospitality_metrics_v1: (a) => { const i = MONTH_STARTS.indexOf(a.p_start); if (i >= 0 && /-01$/.test(a.p_end_exclusive)) return { data: METRICS(1, { occupancy: METRIC('occupancy', 'percent', ['60', '61', '60', '61', '60', '61'][i]), adr: METRIC('adr', 'PHP', ['2000.00', '2010.00', '2000.00', '2010.00', '2000.00', '2010.00'][i]) }), error: null }; return { data: METRICS(1), error: null }; } };
+    const t = await boot({ sub: 'kpis', handlers: h }); await tick(20);
+    const ys = (label) => { const sec = t.html().split('aria-label="' + label + '"')[1].split('</section>')[0]; return [...sec.match(/class="N_sline" d="([^"]+)"/)[1].matchAll(/[ML][\d.]+ ([\d.]+)/g)].map((m) => +m[1]); };
+    return { occ: ys('Occupancy'), adr: ys('Accommodation ADR') };
+  };
+  return wobble().then(({ occ, adr }) => {
+    assert.ok(Math.max(...occ) - Math.min(...occ) < 1, 'percent 60-61 spans under 1 of 32 units: ' + (Math.max(...occ) - Math.min(...occ)));
+    assert.ok(Math.max(...adr) - Math.min(...adr) < 1, 'money 2000-2010 spans under 1 of 32 units');
+    assert.ok(Math.min(...occ) > 32 * 0.3 && Math.max(...occ) < 32 * 0.6, 'a 60% value sits at 60% of the scale, not pinned to an edge');
+  });
+});

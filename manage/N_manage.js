@@ -489,12 +489,14 @@
   function chartsSkeleton() {
     return '<div class="N_charts" aria-hidden="true">' + [1, 2, 3, 4].map(function () { return '<div class="N_card N_hcard N_skel"></div>'; }).join('') + '<div class="N_card N_wide N_skel"></div></div>';
   }
-  function sparkPoints(vals, W, H) { // x evenly spaced, y scaled to the series max; null = gap
-    var mx = -Infinity, mn = Infinity; vals.forEach(function (v) { if (v !== null) { if (v > mx) mx = v; if (v < mn) mn = v; } }); var span = mx - mn;
+  function sparkPoints(vals, W, H, mode) { // x evenly spaced, y scaled to the series max; null = gap
+    var mx = -Infinity, mn = Infinity; vals.forEach(function (v) { if (v !== null) { if (v > mx) mx = v; if (v < mn) mn = v; } });
+    if (mode === 'pct') { mn = 0; mx = 100; } else if (mode === 'zero') { mn = Math.min(0, mn); } // a percent runs 0-100, money has a zero floor: 60-61-60 must not look volatile
+    var span = mx - mn;
     return vals.map(function (v, i) { return v === null ? null : { x: vals.length > 1 ? 2 + (W - 4) * i / (vals.length - 1) : W / 2, y: span > 0 ? H - 4 - (H - 8) * ((v - mn) / span) : H / 2, v: v, i: i }; }); // a line trend uses the series' own range
   }
-  function sparkLine(vals) {
-    var W = 120, H = 32, pts = sparkPoints(vals, W, H), segs = [], cur = [];
+  function sparkLine(vals, mode) {
+    var W = 120, H = 32, pts = sparkPoints(vals, W, H, mode), segs = [], cur = [];
     pts.forEach(function (p) { if (p) cur.push(p); else { if (cur.length) segs.push(cur); cur = []; } }); if (cur.length) segs.push(cur);
     return '<svg class="N_spark" viewBox="0 0 ' + W + ' ' + H + '" preserveAspectRatio="none" aria-hidden="true" focusable="false">' + segs.map(function (sg) {
       var d = sg.map(function (p, i) { return (i ? 'L' : 'M') + p.x.toFixed(1) + ' ' + p.y.toFixed(1); }).join(' ');
@@ -505,7 +507,7 @@
     var W = 120, H = 32, n = vals.length, mx = 0; vals.forEach(function (v) { if (v !== null && v > mx) mx = v; }); if (mx <= 0) mx = 1;
     var bw = W / n * 0.62;
     return '<svg class="N_spark" viewBox="0 0 ' + W + ' ' + H + '" preserveAspectRatio="none" aria-hidden="true" focusable="false">' + vals.map(function (v, i) {
-      if (v === null) return ''; var h = Math.max(1.5, (H - 2) * (v / mx)), x = W / n * i + (W / n - bw) / 2;
+      if (v === null || v <= 0) return ''; var h = Math.max(1.5, (H - 2) * (v / mx)), x = W / n * i + (W / n - bw) / 2;
       return '<rect class="N_sbar" x="' + x.toFixed(1) + '" y="' + (H - h).toFixed(1) + '" width="' + bw.toFixed(1) + '" height="' + h.toFixed(1) + '" rx="2"/>';
     }).join('') + '</svg>';
   }
@@ -521,13 +523,14 @@
       var m = mNow[h[0]]; if (!m) return;
       var vals = series.map(function (x) { return x[h[2]]; });
       out += '<section class="N_card N_hcard" aria-label="' + esc(h[1]) + '"><span class="N_hl">' + esc(h[1]) + '</span><span class="N_hv N_num">' + esc(formatMetricValue(m)) + '</span>' + chipHtml(hasPrev ? chipFor(m, mPrev[h[0]]) : null) +
-        (vals.some(function (v) { return v !== null; }) ? (h[3] === 'line' ? sparkLine(vals) : sparkBars(vals)) + '<span class="N_hs">Last 6 months</span>' : '<span class="N_hs">No data for the last 6 months</span>') + '</section>';
+        (vals.some(function (v) { return v !== null; }) ? (h[3] === 'line' ? sparkLine(vals, h[0] === 'occupancy' ? 'pct' : 'zero') : sparkBars(vals)) + '<span class="N_hs">Last 6 months</span>' : '<span class="N_hs">No data for the last 6 months</span>') + '</section>';
     });
     // the wide card
     var W = 600, H = 160, col = W / 6, mxR = 0; series.forEach(function (x) { if (x.rev !== null && x.rev > mxR) mxR = x.rev; }); if (mxR <= 0) mxR = 1;
     var sel = S.monSel; if (sel == null || sel < 0 || sel > 5) { sel = -1; for (var i = series.length - 1; i >= 0; i--) if (!series[i].failed && (series[i].rev !== null || series[i].occ !== null)) { sel = i; break; } if (sel < 0) sel = 5; }
     var grid = [0.25, 0.5, 0.75, 1].map(function (f) { return '<line class="N_grid" x1="0" x2="' + W + '" y1="' + (H - H * f).toFixed(1) + '" y2="' + (H - H * f).toFixed(1) + '"/>'; }).join('');
-    var bars = series.map(function (x, i) { if (x.rev === null) return ''; var h = Math.max(2, (H - 6) * (x.rev / mxR)); return '<rect class="N_bar' + (i === sel ? ' N_on' : '') + '" x="' + (col * i + col * 0.2).toFixed(1) + '" y="' + (H - h).toFixed(1) + '" width="' + (col * 0.6).toFixed(1) + '" height="' + h.toFixed(1) + '" rx="5"/>'; }).join('');
+    var bars = series.map(function (x, i) { if (x.rev === null || x.rev <= 0) return ''; // no bar for a gap, zero or negative: the caption and table give the figure
+       var h = Math.max(2, (H - 6) * (x.rev / mxR)); return '<rect class="N_bar' + (i === sel ? ' N_on' : '') + '" x="' + (col * i + col * 0.2).toFixed(1) + '" y="' + (H - h).toFixed(1) + '" width="' + (col * 0.6).toFixed(1) + '" height="' + h.toFixed(1) + '" rx="5"/>'; }).join('');
     var pts = series.map(function (x, i) { return x.occ === null ? null : { x: col * i + col / 2, y: H - 8 - (H - 16) * Math.min(100, Math.max(0, x.occ)) / 100, i: i }; });
     var segs = [], cur = []; pts.forEach(function (p) { if (p) cur.push(p); else { if (cur.length) segs.push(cur); cur = []; } }); if (cur.length) segs.push(cur);
     var line = segs.filter(function (sg) { return sg.length > 1; }).map(function (sg) { return '<path class="N_oline" d="' + sg.map(function (p, j) { return (j ? 'L' : 'M') + p.x.toFixed(1) + ' ' + p.y.toFixed(1); }).join(' ') + '"/>'; }).join('');
