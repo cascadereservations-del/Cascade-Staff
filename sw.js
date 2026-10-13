@@ -1,4 +1,4 @@
-// sw.js - Cascade Staff service worker v1.3 (2026-10-13, design v5)
+// sw.js - Cascade Staff service worker v1.4 (2026-10-13, design v5)
 // Copied from the cleaning checklist's v1.2 strategy and tightened for a staff app:
 //   Supabase (REST, RPC, Storage, Auth, Edge Functions), Telegram -> network-only, NEVER cached or replayed.
 //   The pinned supabase-js build (jsDelivr)                           -> cache-first (public, no personal data).
@@ -6,7 +6,7 @@
 //   Same-origin shell files                                          -> network-first, cache fallback.
 // Nothing personal is ever stored here: the cache holds the shell (HTML, CSS, JS, fonts, icons) and nothing else.
 // A shell that loads offline says "Live information needs a connection"; guest names exist only in JS memory.
-const CACHE_NAME = 'cs-shell-v17';
+const CACHE_NAME = 'cs-shell-v18';
 const NAV_TIMEOUT_MS = 3000;
 // Web Push handlers for the "You were paid" notice live with the pay screens (pay/C_push-sw.js). Absent in the unit-test sandbox.
 if (typeof importScripts === 'function') { try { importScripts('pay/C_push-sw.js'); } catch (e) { /* a missing push file must never stop the new worker installing */ } }
@@ -26,6 +26,8 @@ const SHELL_URLS = [
   ...SELF_FONTS.map((f) => './fonts/' + f),
   ...ICON_FILES.map((f) => './icons/' + f)
 ];
+// The module folders (weather, stock, manage) are built by their own lanes: precached best effort, so a missing file never touches the install or the required list above.
+const OPTIONAL_URLS = ['./weather/W_weather.js', './weather/W_weather.css', './stock/I_stock.js', './stock/I_stock.css', './manage/N_manage.js', './manage/N_manage.css'];
 const NETWORK_ONLY_HOSTS = ['supabase.co', 'supabase.in', 'api.telegram.org', 't.me'];
 const FONT_HOSTS = ['cdn.jsdelivr.net']; // public files only: the pinned supabase-js build
 const NEVER_PATHS = ['/rest/v1/', '/functions/v1/', '/auth/v1/', '/storage/v1/'];
@@ -42,7 +44,7 @@ function swRoute(pathname, base) {
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME)
-      .then((cache) => Promise.all(SHELL_URLS.map((u) => cache.add(new Request(u, { cache: 'reload' })).catch(() => {}))))
+      .then((cache) => Promise.all(SHELL_URLS.concat(OPTIONAL_URLS).map((u) => cache.add(new Request(u, { cache: 'reload' })).catch(() => {}))))
       .then(() => self.skipWaiting())
   );
 });
@@ -93,4 +95,4 @@ self.addEventListener('fetch', (event) => {
   }
   event.respondWith(fromNetwork(request).catch(() => caches.match(request, { ignoreSearch: true })));
 });
-if (typeof module !== 'undefined') module.exports = { staleShellCache, swRoute, CACHE_NAME, SHELL_URLS };
+if (typeof module !== 'undefined') module.exports = { staleShellCache, swRoute, CACHE_NAME, SHELL_URLS, OPTIONAL_URLS };

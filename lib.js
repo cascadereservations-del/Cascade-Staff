@@ -189,7 +189,7 @@
     if (Array.isArray(value)) { value.forEach(function (v, i) { moneyKeys(v, path + '[' + i + ']', out); }); return out; }
     if (value && typeof value === 'object') {
       Object.keys(value).forEach(function (k) {
-        if (keyTokens(k).some(function (t) { return MONEY_TOKEN.test(t); })) out.push(path + '.' + k);
+        if (keyTokens(k).some(function (t) { return MONEY_TOKEN.test(t); })) out.push(path + '.' + k + (k === 'paid' && /\.arrival_ready$/.test(path) && (typeof value[k] === 'boolean' || value[k] === null) ? '#bool' : ''));
         moneyKeys(value[k], path + '.' + k, out);
       });
     }
@@ -198,10 +198,11 @@
   // s77: owner and admin may receive the guest's phone and e-mail on the two guest cards, nowhere else. Money keys stay refused for
   // every role, and a contact key anywhere else (or for any other role) still blocks the page.
   var CONTACT_OK = /^\$\.(current_guest|next_guest)\.(phone|email)$/;
+  var ARRIVAL_OK = /\.arrival_ready\.paid#bool$/; // s82: whether the balance is received, as true or false, for owner and admin; never an amount
   function canSeeGuestContact(role) { return role === 'owner' || role === 'admin'; }
   function assertNoMoney(payload, opts) {
     var allow = !!(opts && opts.allowContact);
-    var bad = moneyKeys(payload).filter(function (p) { return !(allow && CONTACT_OK.test(p)); });
+    var bad = moneyKeys(payload).filter(function (p) { return !(allow && (CONTACT_OK.test(p) || ARRIVAL_OK.test(p))); });
     if (bad.length) throw new Error('payload carries money or contact keys: ' + bad.join(', '));
     return true;
   }
@@ -654,7 +655,9 @@
   // ---- Cassy reply (s76): owner and admin draft warm guest replies from pasted text or a screenshot ---------------------------
   // The drafts carry prices and booking terms, so the button is owner and admin only; the function re-checks (403 staff_access_denied).
   var REPLY_MAX_TEXT = 4000, REPLY_MAX_IMAGE_BYTES = 4000000, REPLY_MAX_EDGE = 1600, REPLY_NAME_MAX = 80;
-  function canDraftReply(role) { return role === 'owner' || role === 'admin'; }
+  // s82 decision 5: Cassy reply is open to every signed-in staff role. The guest-details uploader (ID photos, companions) stays owner and admin.
+  function canDraftReply(role) { return ALL_ROLES.indexOf(role) >= 0; }
+  function canAddGuestDetails(role) { return role === 'owner' || role === 'admin'; }
   // SPEC-44: pending direct bookings the host must confirm. Money roles only; cleaners, inspectors and maintenance never see the row or call the RPC.
   var INQUIRIES_URL = 'https://cascadereservations-del.github.io/cascade-admin-dashboard/#/bookings/inquiries';
   function canSeeBookingsToConfirm(role) { return role === 'owner' || role === 'admin' || role === 'finance'; }
@@ -706,11 +709,20 @@
     return REPLY_ERRORS[k] || 'That did not work. Try again in a moment.';
   }
   // A 200 body -> what the screen draws, or null when the shape is wrong (the screen then says draft_failed).
+  // s82 H: the server returns options [{label, text}] (2 or 3); an older server returns replies [string]; the oldest a single draft. All three draw the same cards.
   function replyResult(j) {
-    if (!j || j.ok !== true || !Array.isArray(j.replies)) return null;
-    var replies = j.replies.filter(function (r) { return typeof r === 'string' && r.trim(); });
-    if (!replies.length) return null;
-    return { guestName: typeof j.guest_name === 'string' && j.guest_name ? j.guest_name : '', platform: j.platform === 'airbnb' ? 'airbnb' : 'messenger', guestText: String(j.guest_text == null ? '' : j.guest_text), header: typeof j.header === 'string' ? j.header : '', replies: replies.slice(0, 2) };
+    if (!j || j.ok !== true) return null;
+    var opts = (Array.isArray(j.options) ? j.options : []).filter(function (o) { return o && typeof o.text === 'string' && o.text.trim(); })
+      .map(function (o) { return { label: typeof o.label === 'string' ? o.label.trim().slice(0, 24) : '', text: o.text }; });
+    if (!opts.length) {
+      var many = (Array.isArray(j.replies) ? j.replies : []).filter(function (r) { return typeof r === 'string' && r.trim(); });
+      if (!many.length && typeof j.draft === 'string' && j.draft.trim()) many = [j.draft];
+      opts = many.map(function (t) { return { label: '', text: t }; });
+    }
+    if (!opts.length) return null;
+    opts = opts.slice(0, 3);
+    return { guestName: typeof j.guest_name === 'string' && j.guest_name ? j.guest_name : '', platform: j.platform === 'airbnb' ? 'airbnb' : 'messenger', guestText: String(j.guest_text == null ? '' : j.guest_text), header: typeof j.header === 'string' ? j.header : '',
+      options: opts, replies: opts.map(function (o) { return o.text; }) };
   }
   function clampText(s, n) { s = String(s == null ? '' : s).replace(/\s+/g, ' ').trim(); return s.length > n ? s.slice(0, n - 1).trimEnd() + '…' : s; }
 
@@ -795,7 +807,7 @@
       if (today && date && date < today) return;
       var src = A_NOTICE_SOURCE[n.source] || '';
       list.push({ key: 'n:' + n.id, id: String(n.id), type: type, group: type === 'power' || type === 'water' ? type : 'other', title: String(n.title), date: date, start: n.start_time || null, end: n.end_time || null,
-        sub: [date ? dayShort(date) : '', A_titleHasTime(n.title) ? '' : A_timeRange(n.start_time, n.end_time), src].filter(Boolean).join(' · '), detail: n.detail ? String(n.detail) : '', source: src, tell: canSeeGuestContact(role) && (type === 'power' || type === 'water' || type === 'rain') });
+        sub: [date ? dayShort(date) : '', A_titleHasTime(n.title) ? '' : A_timeRange(n.start_time, n.end_time), src].filter(Boolean).join(' · '), detail: n.detail ? String(n.detail) : '', source: src, url: H_noticeUrl(n.url), tell: canSeeGuestContact(role) && (type === 'power' || type === 'water' || type === 'rain') });
     });
     list.sort(function (a, b) { return (a.type === 'rain' && a.key === 'rain-watch' ? 0 : 1) - (b.type === 'rain' && b.key === 'rain-watch' ? 0 : 1) || String(a.date || '9999').localeCompare(String(b.date || '9999')) || String(a.start || '').localeCompare(String(b.start || '')); });
     var house = mgr ? (Array.isArray(raw.house) ? raw.house : []).filter(function (h) { return h && (h.kind === 'low_stock' || h.kind === 'finding') && h.title; })
@@ -876,8 +888,8 @@
     return msg && msg.length <= 160 && !/[{}<>]|pgrst|sqlstate/i.test(msg) ? msg : 'The notice was not accepted. ' + A_NOTICE_HINT;
   }
   function A_plainRefusal(msg) { return A_noticeAddError({ code: '22023', message: msg }); }
-  var A_CAL_TABS = ['month', 'stays', 'notices'];
-  function A_calTab(part) { return part === 'stays' || part === 'house' || part === 'warnings' ? 'stays' : part === 'notices' ? 'notices' : 'month'; }
+  var A_CAL_TABS = ['calendar', 'notices']; // s82 H: Month and Stays are one screen; the segmented control is tap only (no swipe), these two are its tap twin and the arrow keys
+  function A_calTab(part) { return part === 'notices' ? 'notices' : 'calendar'; }
   var A_SHADES = [1, 2, 3, 4, 6]; // tokens.css has --v5-g1..g4 and g6; g5 does not exist
   function A_stayShade(i) { var n = A_SHADES[((i % A_SHADES.length) + A_SHADES.length) % A_SHADES.length]; return '--A_g:var(--v5-g' + n + ');--A_gfg:var(--v5-g' + n + '-fg)'; }
 
@@ -908,12 +920,17 @@
   // ---- what's new: only what this person can use ----
   function A_whatsNew(role, flags) {
     flags = flags || {};
-    var admin = layoutForRole(role) === 'admin', items = [
-      ['Month, Stays and Notices', 'The calendar now has three views. Tap a day to see who is staying and what is planned.'],
+    var admin = layoutForRole(role) === 'admin', mgr = canSeeGuestContact(role), items = [
+      ['Swipes that work', 'Swipe the month grid for the next month, a task left to mark it done, and pull a sheet down by its title bar to close it. Every swipe has a button too.'],
+      ['One calendar', 'Month and Stays are one screen: the month, then the next 14 days. Notices is the other tab.'],
+      ['Search', 'In More, find a task or a page of the manual.'], ['A short tour', 'In More, “Show the tour” plays three short cards.'],
       ['Plain bars', 'In More, switch glass off for a calmer, easier-to-read screen. It turns on by itself on slower phones.']];
-    if (flags.notices) items.push(['Notices', 'Rain watch, brownouts and water interruptions show on Today and on the calendar.']);
+    if (flags.notices) items.push(['Notices', 'Rain watch, brownouts and water interruptions show on Today and on the calendar. Tap the weather for the forecast.']);
+    items.push(['Cassy reply', 'Draft a warm reply to a guest message. You get two or three drafts to pick from.']);
+    items.push(['Cleaning fee', 'Ask for payment for your cleans and expenses. When you finish a clean, a card on Today takes you there.']);
     if (admin) items.push(['Admin hub', 'More lists every dashboard page in one place.']);
-    if (flags.notices && canSeeGuestContact(role)) items.push(['Tell the guest', 'On a notice, copy a ready message to send to the guest yourself.']);
+    if (mgr) items.push(['Arrival checks', 'Each arriving guest shows whether the ID, the balance and the door code are in place.']);
+    if (flags.notices && mgr) items.push(['Tell the guest', 'On a notice, copy a ready message to send to the guest yourself.']);
     return items.map(function (i) { return { title: i[0], text: i[1] }; });
   }
 
@@ -984,7 +1001,7 @@
     if (first) {
       var rs = by[first], c = rs.length;
       top = first === 'risk' ? 'Turnover at risk' : first === 'overdue' ? c + ' overdue' : first === 'due' ? c + ' due today' : first === 'clash' ? (c === 1 ? 'Clash day' : c + ' clash days') : first === 'confirm' ? rs[0].n + ' to confirm' : first === 'inbox' ? rs[0].n + ' in inbox' : rs[0].word;
-      word = first === 'risk' ? 'Turnover at risk' : first === 'overdue' ? 'Overdue' : first === 'due' ? 'Due today' : first === 'due' ? 'Due today' : first === 'clash' ? (c === 1 ? 'Clash day' : 'Clash days') : first === 'confirm' ? 'To confirm' : first === 'inbox' ? 'In inbox' : rs[0].word;
+      word = first === 'risk' ? (c === 1 ? '1 blocks arrival' : c + ' block arrival') : first === 'overdue' ? 'Overdue' : first === 'due' ? 'Due today' : first === 'due' ? 'Due today' : first === 'clash' ? (c === 1 ? 'Clash day' : 'Clash days') : first === 'confirm' ? 'To confirm' : first === 'inbox' ? 'In inbox' : rs[0].word;
       tone = first === 'risk' || first === 'overdue' || first === 'clash' ? 'danger' : 'warn';
     }
     var sections = E_SECTIONS.filter(function (s) { return by[s[0]].length; }).map(function (s) {
@@ -999,10 +1016,112 @@
     else if (phase === 'offline') pill = { text: 'No connection', short: 'No connection', dot: 'idle', glyph: 'info', aria: 'No connection.' + (i.lastAt ? ' Showing the last update from ' + clockLabel(i.lastAt) + '.' : '') + ' Opens the list' };
     else if (phase === 'stale') pill = { text: 'Could not update', short: 'Could not update', dot: 'idle', glyph: 'info', aria: 'Could not update.' + (i.lastAt ? ' Showing the last update from ' + clockLabel(i.lastAt) + '.' : '') + ' Opens the list' };
     else if (phase === 'clear') pill = { text: 'All clear', short: 'All clear', dot: 'ok', glyph: 'check', aria: 'All clear. Nothing needs attention. Opens the list' };
-    else pill = { text: shown + ' · ' + word, short: shown + ' to look at', dot: tone === 'danger' ? 'bad' : 'warn', glyph: tone === 'danger' ? 'alert' : 'clock',
+    else pill = { text: (first === 'risk' && n === by.risk.length + by.overdue.length + by.due.length ? shown + (n === 1 ? ' task' : ' tasks') : shown) + ' · ' + word, short: shown + ' to look at', dot: tone === 'danger' ? 'bad' : 'warn', glyph: tone === 'danger' ? 'alert' : 'clock',
       aria: n === 1 ? '1 thing to look at: ' + top.toLowerCase() + '. Opens the list' : shown + ' things to look at. Most urgent: ' + top.toLowerCase() + '. Opens the list' };
     var empty = !sections.length;
     return { partial: failed && n > 0, phase: phase, n: n, top: top, topWord: word, tone: tone, sections: sections, pill: pill, empty: empty, say: phase === 'items' ? shown + (n === 1 ? ' thing' : ' things') + ' to look at' : phase === 'clear' ? 'All clear' : phase === 'offline' ? 'No connection' : phase === 'stale' ? 'Could not update' : '' };
+  }
+
+  // ================================================================ H_ shell pass (s82, lane H) ================================================
+  // A notice link is only ever an https address with no credentials; anything else is dropped (the notice then links to its source page as before).
+  function H_noticeUrl(u) {
+    if (typeof u !== 'string' || u.length > 500) return null;
+    try { var x = new URL(u); return x.protocol === 'https:' && !x.username && !x.password && x.hostname.indexOf('.') > 0 ? x.href : null; } catch (e) { return null; }
+  }
+  // F11: the row title is the kind and the day, the sub-line the time and the place, so a title stays on one line at 320 px.
+  var H_HEADS = { power: 'Brownout', water: 'Water off' };
+  function H_noticeHead(n) {
+    var time = n && n.date && H_HEADS[n.type] ? A_timeRange(n.start, n.end) : '';
+    if (!time) return { title: n ? String(n.title || '') : '', sub: n ? String(n.sub || '') : '' };
+    return { title: H_HEADS[n.type] + ' · ' + dayShort(n.date), sub: [time, n.source].filter(Boolean).join(' · ') };
+  }
+  // F13: on a very small phone the weather line is "29° cloudy".
+  function H_weatherShort(temp, desc, narrow) {
+    var d = String(desc || '').toLowerCase().trim();
+    if (narrow && d.indexOf(' ') > 0) d = d.split(/\s+/).pop();
+    return Math.round(+temp) + '° ' + d;
+  }
+  // The "Next 14 days" list: stays that arrive or leave in the window, by the day that matters. skip(st) drops the stays already drawn as full cards.
+  function H_agenda(stays, today, span, skip) {
+    var end = addDays(today, span || 14), out = [];
+    (stays || []).forEach(function (st) {
+      if (!st || st.checkout_date < today || (skip && skip(st))) return;
+      var arrives = st.checkin_date > today && st.checkin_date <= end, leaves = st.checkout_date >= today && st.checkout_date <= end;
+      if (!arrives && !leaves && st.checkin_date !== today) return;
+      var kind = st.checkin_date >= today ? 'arrive' : 'house', day = kind === 'arrive' ? st.checkin_date : st.checkout_date;
+      out.push({ st: st, kind: kind, day: day });
+    });
+    return out.sort(function (a, b) { return a.day < b.day ? -1 : a.day > b.day ? 1 : String(a.st.guest_name || '') < String(b.st.guest_name || '') ? -1 : 1; });
+  }
+  // MF2: three booleans per stay, owner and admin only, and only when the server sent the field. Anything else is "no row".
+  function H_ready(raw, role) {
+    if (!canSeeGuestContact(role) || !raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
+    // each of the three is true, false or null; null is "not known yet" and draws nothing at all (never as missing)
+    var r = {}; ['id', 'paid', 'door_code'].forEach(function (k) { r[k] = typeof raw[k] === 'boolean' ? raw[k] : null; });
+    return r.id === null && r.paid === null && r.door_code === null ? null : r;
+  }
+  function H_readyChips(r) {
+    if (!r) return [];
+    var out = []; if (r.id !== null) out.push({ key: 'id', ok: r.id, word: r.id ? 'ID on file' : 'No ID yet' });
+    if (r.paid !== null) out.push({ key: 'paid', ok: r.paid, word: r.paid ? 'Balance received' : 'Balance due' });
+    if (r.door_code !== null) out.push({ key: 'door_code', ok: r.door_code, word: r.door_code ? 'Door code set' : 'No door code' });
+    return out;
+  }
+  function H_readyOk(r) { return !!r && H_readyChips(r).every(function (c) { return c.ok; }); }
+  function H_readyLine(r) { return H_readyChips(r).map(function (c, i) { return i ? c.word.charAt(0).toLowerCase() + c.word.slice(1) : c.word; }).join(' · '); }
+  // 1:42 pm (Manila)
+  function H_clock12(iso) { var d = new Date(iso); if (isNaN(d.getTime())) return ''; var p = manilaParts(d); return (p.h % 12 === 0 ? 12 : p.h % 12) + ':' + pad(p.min) + ' ' + (p.h >= 12 ? 'pm' : 'am'); }
+  // cleaning_progress_v1 (owner and admin): null = the feature or the answer is absent, so the row is hidden.
+  function H_progress(raw, role) {
+    if (!canSeeGuestContact(role) || !raw || typeof raw !== 'object' || raw.ok === false) return null;
+    var a = raw.active;
+    if (!a || typeof a !== 'object') return { active: null };
+    var step = Math.floor(+a.step), of = Math.floor(+a.of);
+    if (!(step >= 0) || !(of > 0)) return { active: null };
+    return { active: { step: Math.min(step, of), of: of, label: typeof a.label === 'string' ? a.label.slice(0, 40) : '', name: typeof a.cleaner_name === 'string' ? a.cleaner_name.split(/\s+/)[0] : '', at: a.updated_at || a.started_at || null } };
+  }
+  // The "Clean" check row of the admin Turnover card. Fifteen minutes into the window with no progress it turns amber.
+  function H_cleanLine(prog, clock) {
+    if (!prog) return null;
+    if (prog.active && prog.active.step >= prog.active.of) return { tone: 'ok', text: 'Clean finished' + (prog.active.at ? ' ' + H_clock12(prog.active.at) : '') }; // the last step was ticked
+    if (prog.active) { var a = prog.active; return { tone: 'ok', text: (a.name ? a.name + ' · ' : '') + 'step ' + a.step + ' of ' + a.of + (a.at ? ' · ' + clockLabel(a.at) : '') }; }
+    var late = !!clock && clock.phase !== 'before' && (clock.phase === 'after' || clock.times.inMin - clock.minsToIn - clock.times.outMin >= 15);
+    return { tone: late ? 'warn' : 'idle', text: 'Not started' };
+  }
+  function H_houseLine(view, today) {
+    if (!view) return null;
+    var n = (view.list || []).filter(function (x) { return x.date === today && (x.type === 'power' || x.type === 'water') && x.key !== 'rain-watch'; })[0];
+    if (!n) return { tone: 'ok', text: 'Clear' };
+    var t = A_timeRange(n.start, n.end);
+    return { tone: 'warn', text: (n.type === 'power' ? 'Brownout' : 'Water off') + (t ? ' ' + t : '') };
+  }
+  // F16: what the staff Turnover card says under the three steps.
+  function H_untilLine(clock, arrivesToday) {
+    if (clock.phase === 'after') return 'Checked in';
+    if (clock.phase === 'window') return arrivesToday ? Math.floor(clock.minsToIn / 60) + ' h ' + (clock.minsToIn % 60) + ' min until check-in' : 'Clean until ' + A_shortTime(clock.times.check_in);
+    return 'Clean from ' + A_shortTime(clock.times.check_out);
+  }
+  // MF5 search. Staff: tasks and the manual. Owner and admin: guests too. A cleaner is never handed a guest, whatever the caller passes.
+  function H_manualIndex(raw) {
+    var list = Array.isArray(raw) ? raw : raw && typeof raw === 'object' ? (raw.entries || raw.headings || raw.items || []) : [];
+    return (Array.isArray(list) ? list : []).map(function (e) {
+      var t = e && (e.title || e.heading || e.h), id = e && (e.id || e.anchor);
+      return typeof t === 'string' && t.trim() && typeof id === 'string' && /^[\w.-]{1,80}$/.test(id) ? { title: t.trim().slice(0, 100), id: id } : null;
+    }).filter(Boolean).slice(0, 400);
+  }
+  function H_search(query, src, role) {
+    var q = String(query == null ? '' : query).trim().toLowerCase(), out = { tasks: [], guests: [], manual: [] };
+    if (q.length < 2) return out;
+    var has = function (t) { return String(t || '').toLowerCase().indexOf(q) >= 0; };
+    out.tasks = (src.tasks || []).filter(function (t) { return t && t.status !== 'done' && (has(t.title) || has(t.detail)); }).slice(0, 5);
+    out.manual = (src.manual || []).filter(function (h) { return has(h.title); }).slice(0, 5);
+    if (canSeeGuestContact(role)) out.guests = (src.stays || []).filter(function (st) { return st && has(st.guest_name); }).slice(0, 5);
+    return out;
+  }
+  // The day before / after in the day sheet; null at the edge of the months the calendar offers.
+  function H_dayStep(iso, dir, today) {
+    var d = addDays(iso, dir), a = d.split('-');
+    return monthInRange(+a[0], +a[1], today) ? d : null;
   }
 
   // ---- haptics: three words, one guard. A silent no-op where navigator.vibrate is missing (iOS Safari), when switched off, or when the page is hidden. ----
@@ -1023,24 +1142,25 @@
   }
 
   // ---- gestures: the numbers, then the one helper (E_drag) that every swipe goes through ----
-  var E_EDGE = 24, E_LOCK = 12, E_RATIO = 1.5, E_WINDOW = 80;
+  var E_EDGE = 24, E_EDGE_R_TASK = 12, E_LOCK = 10, E_RATIO = 1.0, E_WINDOW = 100; // s82 H: the browser has already arbitrated at 45 degrees (pan-y), so the lock is the same line; 12 px on the right edge for task rows
   var E_nowFn = function () { return Date.now(); };
   function E_setClock(fn) { E_nowFn = typeof fn === 'function' ? fn : function () { return Date.now(); }; } // tests freeze it
   function E_lockOf(dx, dy) { var ax = Math.abs(dx), ay = Math.abs(dy); return ax > E_LOCK && ax > E_RATIO * ay ? 'x' : ay > E_LOCK && ay > E_RATIO * ax ? 'y' : ''; }
-  function E_inEdge(x, w) { return x < E_EDGE || x > w - E_EDGE; }
-  // px/ms over the last 80 ms of {t,x,y} samples
+  function E_inEdge(x, w, l, r) { return x < (l == null ? E_EDGE : l) || x > w - (r == null ? E_EDGE : r); }
+  // px/ms over the last 100 ms of {t,x,y} samples (the pointerup sample is never in the list: a pause before lifting must not zero a deliberate swipe)
   function E_velocity(s) {
     var n = s.length; if (n < 2) return { vx: 0, vy: 0 };
     var last = s[n - 1], a = s[n - 2], k; for (k = n - 2; k >= 0; k--) { if (last.t - s[k].t <= E_WINDOW) a = s[k]; else break; }
     var dt = last.t - a.t; return dt > 0 ? { vx: (last.x - a.x) / dt, vy: (last.y - a.y) / dt } : { vx: 0, vy: 0 };
   }
-  function E_tabFollow(dx) { return Math.max(-48, Math.min(48, dx * 0.35)); } // damped: "there is a page beside this"
+  function E_tabFollow(dx) { return Math.max(-96, Math.min(96, dx * 0.6)); } // the content follows the finger at 0.6x, capped at 96 px
   // a fast flick commits only past a 48 px floor and only the way the finger went: a 13 px twitch or a drag flicked back is not a swipe
-  function E_tabCommit(dx, w, vx) { return Math.abs(dx) >= 0.25 * w || (Math.abs(dx) >= 48 && Math.abs(vx) >= 0.4 && (vx < 0) === (dx < 0)); }
+  function E_tabCommit(dx, w, vx) { return Math.abs(dx) >= Math.min(0.2 * w, 64) || (Math.abs(dx) >= 32 && Math.abs(vx) >= 0.3 && (vx < 0) === (dx < 0)); }
   function E_sheetFollow(dy) { return dy >= 0 ? dy : Math.max(-16, dy * 0.2); }
-  function E_sheetCommit(dy, vy) { return dy >= 96 || (dy >= 48 && vy >= 0.5); }
+  function E_sheetCommit(dy, vy) { return dy >= 80 || (dy >= 40 && vy >= 0.4); }
   function E_taskFollow(dx, open) { var a = -dx; return a <= 0 ? 0 : a <= open ? a : open + (a - open) * 0.25; } // px the row has moved left
-  function E_taskCommit(dx, w, vx) { return -dx >= 0.4 * w || (-dx >= 48 && -vx >= 0.5); }
+  function E_taskDist(w) { return Math.min(0.33 * w, 110); }
+  function E_taskCommit(dx, w, vx) { return -dx >= E_taskDist(w) || (-dx >= 40 && -vx >= 0.35); }
   function E_taskOpens(dx) { return -dx > 48; }
   function E_slideCommit(dx, travel, vx) { return dx >= 0.7 * travel || (dx >= 0.4 * travel && vx >= 0.6); }
   // E_drag(root, o): pointer events only, first pointer only, no main-button-less starts. o = { sel, axis:'x'|'y', vw(), reduced(), canStart(el, ev),
@@ -1055,7 +1175,7 @@
       if (ev.button > 0) return;
       if (g) { if (ev.isPrimary === false) return; var old = g; g = null; if (old.lock && o.cancel) o.cancel(old.el); } // the dropped gesture hands its row or sheet back // a second finger is ignored; a new primary touch means the last pointerup was lost: start over
       var el = ev.target && ev.target.closest ? ev.target.closest(o.sel) : null; if (!el || (o.canStart && !o.canStart(el, ev))) return;
-      if (o.axis === 'x' && E_inEdge(ev.clientX, o.vw ? o.vw() : 360)) return;
+      if (o.axis === 'x' && E_inEdge(ev.clientX, o.vw ? o.vw() : 360, E_EDGE, o.edgeR == null ? E_EDGE : o.edgeR)) return;
       g = { el: el, id: ev.pointerId, x0: ev.clientX, y0: ev.clientY, lock: '', s: [{ t: stamp(ev), x: ev.clientX, y: ev.clientY }], edged: false, reduced: !!(o.reduced && o.reduced()) };
     }
     function move(ev) {
@@ -1074,8 +1194,7 @@
     function up(ev) {
       if (!g || ev.pointerId !== g.id) return;
       var G = g; g = null; if (!G.lock) return;
-      G.s.push({ t: stamp(ev), x: ev.clientX, y: ev.clientY });
-      var d = { dx: ev.clientX - G.x0, dy: ev.clientY - G.y0 }, v = E_velocity(G.s); d.vx = v.vx; d.vy = v.vy; d.reduced = G.reduced;
+      var d = { dx: ev.clientX - G.x0, dy: ev.clientY - G.y0 }, v = E_velocity(G.s); d.vx = v.vx; d.vy = v.vy; d.reduced = G.reduced; // the lift itself is not a velocity sample
       swallow = { el: G.el, until: E_nowFn() + 400 }; // the click that follows a drag is ours to swallow, for 400 ms at most
       if (G.el.isConnected === false) { if (o.cancel) o.cancel(G.el); return; } // the screen was redrawn under the finger: a stale node never commits
       if (o.end) o.end(G.el, d);
@@ -1098,7 +1217,7 @@
     taskDueCount: taskDueCount, reminderProblem: reminderProblem, canEditRates: canEditRates, rateNum: rateNum, rateLine: rateLine,
     earliestRateStart: earliestRateStart, rateProblem: rateProblem, rateArgs: rateArgs,
     canSeeBookingsToConfirm: canSeeBookingsToConfirm, bookingsToConfirmCount: bookingsToConfirmCount, bookingsToConfirmRow: bookingsToConfirmRow, INQUIRIES_URL: INQUIRIES_URL,
-    canDraftReply: canDraftReply, shrinkSize: shrinkSize, replyProblem: replyProblem, replyBody: replyBody, replyErrorText: replyErrorText, replyResult: replyResult, clampText: clampText,
+    canDraftReply: canDraftReply, canAddGuestDetails: canAddGuestDetails, shrinkSize: shrinkSize, replyProblem: replyProblem, replyBody: replyBody, replyErrorText: replyErrorText, replyResult: replyResult, clampText: clampText,
     REPLY_MAX_IMAGE_BYTES: REPLY_MAX_IMAGE_BYTES, REPLY_MAX_EDGE: REPLY_MAX_EDGE,
     staffAuthPassword: staffAuthPassword, staffLoginEmail: staffLoginEmail, deriveDisplayName: deriveDisplayName, greetingName: greetingName,
     signinKind: signinKind, signinList: signinList, typedEntry: typedEntry, keypadPress: keypadPress, signinCredentials: signinCredentials,
@@ -1114,7 +1233,8 @@
     weatherLine: weatherLine, rainLine: rainLine, weatherStale: weatherStale, esc: esc,
     A_HOUSE_FALLBACK: A_HOUSE_FALLBACK, A_houseTimes: A_houseTimes, A_turnoverClock: A_turnoverClock, A_turnoverLine: A_turnoverLine, A_hm: A_hm, A_NOTICE_TYPES: A_NOTICE_TYPES, A_noticesView: A_noticesView, A_noticeFilters: A_noticeFilters, A_dayMarks: A_dayMarks, A_noticeDay: A_noticeDay, A_guestMessage: A_guestMessage, A_CAL_TABS: A_CAL_TABS, A_calTab: A_calTab, A_stayShade: A_stayShade, A_hubGroups: A_hubGroups, A_hubRoutes: A_hubRoutes, A_hubRouteOk: A_hubRouteOk, A_hubDoorUrl: A_hubDoorUrl, A_whatsNew: A_whatsNew, A_shortTime: A_shortTime, A_PINNED: A_PINNED, A_noticeAddError: A_noticeAddError, A_NOTICE_HINT: A_NOTICE_HINT, A_flagDup: A_flagDup, A_facebookUrl: A_facebookUrl, A_fbPluginUrl: A_fbPluginUrl, A_noticeAddProblem: A_noticeAddProblem, A_noticeAddArgs: A_noticeAddArgs, A_plainRefusal: A_plainRefusal, A_hour12: A_hour12, A_timeRange: A_timeRange,
     taskPriorityLabel: taskPriorityLabel, E_attention: E_attention, E_warnKey: E_warnKey, E_buzz: E_buzz, E_hapticsOn: E_hapticsOn, E_hapticsSet: E_hapticsSet, E_PATTERNS: E_PATTERNS,
+    H_noticeUrl: H_noticeUrl, H_noticeHead: H_noticeHead, H_weatherShort: H_weatherShort, H_agenda: H_agenda, H_ready: H_ready, H_readyChips: H_readyChips, H_readyOk: H_readyOk, H_clock12: H_clock12, H_readyLine: H_readyLine, H_progress: H_progress, H_cleanLine: H_cleanLine, H_houseLine: H_houseLine, H_untilLine: H_untilLine, H_manualIndex: H_manualIndex, H_search: H_search, H_dayStep: H_dayStep,
     E_drag: E_drag, E_lockOf: E_lockOf, E_inEdge: E_inEdge, E_velocity: E_velocity, E_tabFollow: E_tabFollow, E_tabCommit: E_tabCommit, E_sheetFollow: E_sheetFollow, E_sheetCommit: E_sheetCommit,
-    E_taskFollow: E_taskFollow, E_taskCommit: E_taskCommit, E_taskOpens: E_taskOpens, E_slideCommit: E_slideCommit, E_tabNeighbour: E_tabNeighbour, F_widthClass: F_widthClass, E_setClock: E_setClock
+    E_taskFollow: E_taskFollow, E_taskCommit: E_taskCommit, E_taskDist: E_taskDist, E_EDGE_R_TASK: E_EDGE_R_TASK, E_taskOpens: E_taskOpens, E_slideCommit: E_slideCommit, E_tabNeighbour: E_tabNeighbour, F_widthClass: F_widthClass, E_setClock: E_setClock
   };
 });

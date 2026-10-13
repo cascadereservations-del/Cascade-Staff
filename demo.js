@@ -74,6 +74,7 @@
       phone: '0900-000-0000', email: 'demo.guest.one@example.invalid', messenger: {} });
     var g2 = guest({ uid: 'demo-stay-2', guest_name: 'Demo Guest Two', checkin_date: d(2), checkout_date: d(5), checkin_time: '14:00:00', checkout_time: '12:00:00', nights: 3, source: 'direct',
       repeat: false, stay_count: 1, earlier_stays: [], notes: null, id_photo_path: null, companions: [], phone: '0900-000-0001', email: 'demo.guest.two@example.invalid' });
+    if (admin) { g1.arrival_ready = { id: true, paid: true, door_code: true }; g2.arrival_ready = { id: false, paid: false, door_code: true }; }
     var row = function (name, a, b, src) { return { guest_name: name, checkin_date: d(a), checkout_date: d(b), status: 'confirmed', source: src }; };
     var block = function (a, b, why, label) { return { guest_name: null, checkin_date: d(a), checkout_date: d(b), status: 'blocked', source: 'manual', block_reason: why, block_label: label }; };
     var home = {
@@ -96,7 +97,7 @@
       weather: { source: 'open-meteo', fetched_at: stamp, temp_c: 29, condition: 'Partly cloudy', code: 2, rain_chance_pct: 70, aqi: 42,
         hourly: [hr(10, 10, 0), hr(11, 20, 0), hr(12, 30, 0), hr(13, 40, 0), hr(14, 70, 1.2), hr(15, 80, 2.4), hr(16, 70, 1.6), hr(17, 40, 0.2), hr(18, 20, 0)], rain_watch: { from: at(0, '14:00'), to: at(0, '17:00'), peak_pct: 80 } },
       notices: [{ id: 'demo-n1', type: 'power', title: 'Brownout 1:00 to 4:00 pm', date: d(3), start_time: '13:00', end_time: '16:00', duration_hours: 3, source: 'socoteco', detail: 'San Isidro feeder · line maintenance' },
-        { id: 'demo-n2', type: 'water', title: 'No water 9:00 am to 3:00 pm', date: d(5), start_time: '09:00', end_time: '15:00', duration_hours: 6, source: 'gscwd', detail: 'Pipe repair. Fill the water drums the day before.' },
+        { id: 'demo-n2', type: 'water', title: 'No water 9:00 am to 3:00 pm', date: d(5), start_time: '09:00', end_time: '15:00', duration_hours: 6, source: 'gscwd', detail: 'Pipe repair. Fill the water drums the day before.', url: 'https://www.facebook.com/gscwaterdistrict/posts/demo' },
         { id: 'demo-n3', type: 'deep_clean', title: 'Deep clean', date: d(6), start_time: null, end_time: null, duration_hours: null, source: 'manual', detail: null }],
       house: admin ? [{ kind: 'low_stock', id: 'demo-towels', title: 'Low stock: Demo towels, 4 left', detail: 'Reorder below 6' }, { kind: 'finding', id: 'V1m:demo', title: 'System check', detail: 'Airbnb block runs past the last guest night' }] : [],
       inbox_open: admin ? 2 : null, sources: { water_page: 'https://www.facebook.com/gscwaterdistrict/', power_page: 'https://www.facebook.com/socoteco2.EC/' } };
@@ -136,6 +137,7 @@
   // ---- the stand-in for the Supabase client: same four calls the pages make, answered from the fixtures ---------------------------
   var WRITES = ['calendar_day_flag_set_v1', 'calendar_day_flag_clear_v1', 'ack_verifier_finding_v1', 'task_set_done_v1', 'task_add_reminder_v1', 'admin_add_pay_rate_v1'];
   var clone = function (x) { return JSON.parse(JSON.stringify(x)); };
+  function admin_(v) { return v === 'owner' || v === 'admin'; }
   function client(role, now) {
     var view = VIEWS.indexOf(role) >= 0 ? role : 'owner', D = function () { return build(view, now); };
     var done = function (data) { return Promise.resolve({ data: clone(data), error: null }); };
@@ -146,6 +148,7 @@
         case 'current_staff_access': return done(X.access);
         case 'staff_home_v1': return done(X.home);
         case 'notices_v1': return done(X.notices);
+        case 'cleaning_progress_v1': return done(admin_(view) ? { ok: true, active: { step: 4, of: 9, label: 'Bathroom', started_at: new Date().toISOString(), updated_at: new Date().toISOString(), cleaner_name: 'Demo Cleaner' } } : { ok: false });
         case 'tasks_list_v1': return done(X.tasks(!!(args && args.p_include_done)));
         case 'task_assignees_v1': return done(X.assignees);
         case 'admin_pay_rates_v1': return done(X.rates);
@@ -182,6 +185,7 @@
     if (name === 'guest-reply-draft') {
       var said = (body && body.text) || 'Hi po, is an early check-in possible tomorrow? We land at 9 in the morning.';
       return reply(200, { ok: true, guest_name: (body && body.guest_name) || 'Demo Guest One', platform: body && body.platform === 'airbnb' ? 'airbnb' : 'messenger', guest_text: said, header: 'Two drafts for you. Copy one and send it yourself.',
+        options: [{ label: 'Short', text: 'Hello, check-in starts at 2 in the afternoon. We will tell you if the house is ready sooner.' }, { label: 'Warm', text: 'Good morning, and thank you for letting us know. Check-in starts at 2 in the afternoon. If the house is ready sooner, we will tell you, and your bags are welcome here from the morning.' }, { label: 'With details', text: 'Thank you for the message. We cannot promise an early check-in yet, and we will confirm the morning after the cleaning is done. Your bags are welcome from 9 if you arrive first, and there is shade and water on the porch.' }],
         replies: ['Good morning, and thank you for letting us know. Check-in starts at 2 in the afternoon. If the house is ready sooner, we will tell you, and your bags are welcome here from the morning.',
           'Thank you for the message. We cannot promise an early check-in yet, and we will confirm the morning after the cleaning is done. Your bags are welcome from 9 if you arrive first.'] });
     }
@@ -193,13 +197,14 @@
     }
     if (name === 'notify-cleaner-payment') { toast(NOTE); return reply(200, { ok: true, total: 0, ref: 'CASCADE-DEMO0001' }); }
     if (name === 'upload-photo') return reply(200, { ok: true, path: 'demo/receipt.jpg' });
+    if (/manual\/index\.json/.test(url)) return reply(200, [{ title: 'Aircon does not cool', id: 'aircon' }, { title: 'Hot water heater', id: 'heater' }, { title: 'Brownout: what to do', id: 'brownout' }]);
     if (name === 'weather-proxy') return reply(200, { source: 'demo', fetched_at: new Date().toISOString(), current: X.home.weather.current });
     return reply(404, { error: 'not part of the demo' });
   }
 
   // ---- the page furniture: a "Demo data" pill and a role switcher on every screen -------------------------------------------------
   var STYLE = '.demo-bar{position:sticky;top:0;z-index:40;display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:4px;padding:2px 8px;background:var(--card);border-bottom:1px solid var(--border-strong)}' +
-    '.demo-roles{display:flex;flex-wrap:wrap;gap:4px}.demo-roles button{min-height:44px;min-width:44px;padding:0 8px;border-radius:var(--r-md);border:1px solid var(--border);background:var(--muted);color:var(--fg);font:600 13px/18px var(--font-ui);cursor:pointer}' +
+    '.demo-roles{display:flex;flex-wrap:wrap;gap:4px}.demo-bar{flex-wrap:nowrap}.demo-bar .pill{min-height:26px;padding:0 6px;flex:none}.demo-roles{flex-wrap:nowrap;gap:2px}.demo-roles button{min-height:44px;min-width:44px;padding:0 5px;border-radius:var(--r-md);border:1px solid var(--border);background:var(--muted);color:var(--fg);font:600 13px/18px var(--font-ui);cursor:pointer}' +
     '.demo-roles button[aria-pressed="true"]{background:var(--primary);border-color:var(--primary);color:var(--primary-fg)}.demo-on .appbar{top:var(--demo-h,52px)}';
   var scriptDir = ''; try { if (root.document && root.document.currentScript) scriptDir = new URL('./', root.document.currentScript.src).pathname; } catch (e) {}
   function rootPath() { return scriptDir || '/'; }

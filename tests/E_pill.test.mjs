@@ -40,9 +40,9 @@ test('E_ pill: text and aria-label per state (clear, one, many, no connection), 
   const clear = await boot({ role: 'cleaner', hash: '#home', handlers: baseHandlers('cleaner', { staff_home_v1: home(), tasks_list_v1: tasksOf([]) }) });
   let p = pillOf(clear.els['v-home'].innerHTML); assert.equal(textOf(p), 'All clear'); assert.equal(aria(p), 'All clear. Nothing needs attention. Opens the list'); assert.match(p, /E_dot E_ok/);
   const one = await boot({ role: 'cleaner', hash: '#home', handlers: baseHandlers('cleaner', { staff_home_v1: home(), tasks_list_v1: tasksOf([T({})]) }) });
-  p = pillOf(one.els['v-home'].innerHTML); assert.equal(textOf(p), '1 · Turnover at risk'); assert.match(p, /<span class="E_cnt">1 to look at<\/span>/); assert.match(p, /E_dot E_bad/); assert.match(p, /data-i="alert"/);
+  p = pillOf(one.els['v-home'].innerHTML); assert.equal(textOf(p), '1 task · 1 blocks arrival'); assert.match(p, /<span class="E_cnt">1 to look at<\/span>/); assert.match(p, /E_dot E_bad/); assert.match(p, /data-i="alert"/);
   const many = await boot({ role: 'cleaner', hash: '#home', handlers: baseHandlers('cleaner', { staff_home_v1: home(), tasks_list_v1: tasksOf([T({}), T({ id: 'b', blocks_arrival: false }), T({ id: 'c', blocks_arrival: false })]) }) });
-  p = pillOf(many.els['v-home'].innerHTML); assert.equal(textOf(p), '3 · Turnover at risk'); assert.equal(aria(p), '3 things to look at. Most urgent: turnover at risk. Opens the list');
+  p = pillOf(many.els['v-home'].innerHTML); assert.equal(textOf(p), '3 tasks · 1 blocks arrival'); assert.equal(aria(p), '3 things to look at. Most urgent: turnover at risk. Opens the list');
   const warn = await boot({ role: 'cleaner', hash: '#home', handlers: baseHandlers('cleaner', { staff_home_v1: home({ warnings: [{ kind: 'inventory', title: 'Low stock: soap', detail: {} }] }), tasks_list_v1: tasksOf([]) }) });
   p = pillOf(warn.els['v-home'].innerHTML); assert.equal(textOf(p), '1 · Low stock'); assert.match(p, /E_dot E_warn/); assert.match(p, /data-i="clock"/);
   const off = await boot({ role: 'cleaner', hash: '#home', handlers: baseHandlers('cleaner', { staff_home_v1: () => ({ error: { message: 'TypeError: Failed to fetch' }, data: null }) }) });
@@ -54,7 +54,7 @@ test('E_ pill: the strip, the warnings line and the Sign out button are gone fro
     const app = await boot({ role, hash: '#home', handlers: baseHandlers(role, { staff_home_v1: home({ warnings: [{ kind: 'inventory', title: 'Low stock: soap', detail: {} }] }), tasks_list_v1: tasksOf([T({})]) }) });
     const h = app.els['v-home'].innerHTML;
     assert.doesNotMatch(h, /A_strip|class="warnline|aria-label="Status"|Turnover on track|Nothing overdue|No clash days|No warnings today|data-act="signout"|Sign out/, role);
-    assert.match(h, /<div class="help F_span" style="text-align:center;margin-top:16px">Updated [^<]*· v3\.0\.0<\/div>/, role);
+    assert.match(h, /<div class="help F_span" style="text-align:center;margin-top:16px">Updated [^<]*· v3\.1\.0<\/div>/, role);
   }
   const src = read('app.js'); assert.doesNotMatch(src, /function warnLine|function A_statusStrip/); assert.doesNotMatch(css, /\.A_strip/);
 });
@@ -102,11 +102,13 @@ test('E_ pill: a cleaner\'s sheet has no admin groups even when the payload smug
   assert.match(b, /Turnover at risk/); assert.match(b, /Low stock/);
   assert.doesNotMatch(b, /To confirm|Inbox|Clash|bookings|open messages|System check|Resolve|Tell the guest|#door\/dashboard|Admin|conversations/i);
   assert.equal(app.calls.filter((c) => c[0] === 'staff_inquiry_payments_v1').length, 0, 'a cleaner never even asks for the bookings');
-  for (const hash of ['#hub', '#payrates', '#reply', '#door/dashboard/bookings/inquiries', '#door/dashboard']) {
+  for (const hash of ['#hub', '#payrates', '#manage', '#door/dashboard/bookings/inquiries', '#door/dashboard']) {
     const x = await boot({ role: 'cleaner', hash, fold: FOLD, handlers: baseHandlers('cleaner', { staff_home_v1: home(), tasks_list_v1: tasksOf([]) }) });
     assert.equal(x.els['door-frame'].getAttribute('data-door'), null, hash + ': no door opened'); assert.equal(x.els['v-hub'].innerHTML, '', hash); assert.equal(x.els['v-payrates'].innerHTML, '', hash);
     assert.match(x.els['v-home'].innerHTML, /E_pill/, hash + ': the cleaner is on her own home');
   }
+  const rp = await boot({ role: 'cleaner', hash: '#reply', fold: FOLD, handlers: baseHandlers('cleaner', { staff_home_v1: home(), tasks_list_v1: tasksOf([]) }) });
+  assert.match(rp.els['rp-body'].innerHTML, /What did the guest send/, 's82 decision 5: Cassy reply is open to a cleaner too');
 });
 
 test('E_ pill: empty, offline and loading sheets say the right thing; the cleaner empty line is her own', async () => {

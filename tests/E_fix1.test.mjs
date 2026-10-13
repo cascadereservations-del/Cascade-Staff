@@ -127,13 +127,13 @@ test('E_fix F5: the next pointerdown clears the click swallow, and a lost pointe
 test('E_fix F6: a note being typed on a day is never lost to a pull; the dirty kinds are the reminder, notice, rate and day-note sheets', async () => {
   const cal = [stayRow('Ana Reyes', '2026-10-14', '2026-10-17')];
   const open = async () => { const app = await boot({ role: 'admin', hash: '#calendar', handlers: baseHandlers('admin', { staff_home_v1: () => HOMEWITH(cal) }) }); await app.click({ 'data-day': '2026-10-16' }); return app; };
-  const pull = (app) => { const sh = app.els['cal-sheet']; drive(app, sh, [[0, 180, 300], [30, 180, 340], [60, 180, 380], [90, 180, 410], [400, 180, 410]], (s) => (s === '#cal-sheet' ? sh : s === '.E_grab' ? {} : null)); };
+  const pull = (app) => { const sh = app.els['cal-sheet']; drive(app, sh, [[0, 180, 300], [30, 180, 340], [60, 180, 380], [90, 180, 410], [400, 180, 410]], (s) => (s === '#cal-sheet' ? sh : s === '.E_grab, .F_sheethead' ? {} : null)); };
   const shut = (app) => app.els['cal-sheet'].getAttribute('aria-hidden') === 'true';
   const typed = await open(); await typed.click({ 'data-act': 'dayform-open' }); typed.input('df-label', 'Plumber coming at 9'); pull(typed); assert.ok(!shut(typed), 'text typed: the sheet springs back');
   const closed = await open(); await closed.click({ 'data-act': 'dayform-open' }); pull(closed); assert.ok(shut(closed), 'form open but empty: closes');
   const plain = await open(); pull(plain); assert.ok(shut(plain), 'no form: closes');
   const live = await open(); await live.click({ 'data-act': 'dayform-open' }); live.els['df-label'] = { value: 'typed, not yet synced' }; pull(live); assert.ok(!shut(live), 'the live field is read too, not only the synced state');
-  const src = read('app.js'); assert.match(src, /if \(S\.kind === 'day'\) \{ var fld = \$\('df-label'\)/); for (const k of ["'add'", "'nadd'", "'rate'"]) assert.ok(src.includes("S.kind === " + k + ") return !!("), k + ' is dirty-aware');
+  const src = read('app.js'); assert.match(src, /if \(S\.kind === 'day'\) \{ var fld = \$\('df-label'\)/); for (const k of ["'add'", "'nadd'"]) assert.ok(src.includes("S.kind === " + k + ") return !!("), k + ' is dirty-aware'); assert.match(src, /S\.kind === 'rate'\) return false;/, 'the pay-rates confirm sheet is not a form: it is out of the discard guard');
 });
 
 // ------------------------------------------------------------------------------------------------ F7
@@ -161,10 +161,10 @@ test('E_fix F8: every sheet has a 44 px Close in a sticky header (glyph and word
   const add = await boot({ role: 'admin', hash: '#tasks', handlers: baseHandlers('admin', { tasks_list_v1: tasksOf([], true) }) }); await add.click({ 'data-act': 'task-add-open' }); sheets.push(['add', add, 'task-add-cancel']);
   const nadd = await boot({ role: 'admin', hash: '#calendar', handlers: baseHandlers('admin') }); await nadd.click({ 'data-act': 'notice-add-open', 'data-date': TODAY }); sheets.push(['nadd', nadd, 'notice-add-cancel']);
   for (const [name, app, act] of sheets) {
-    const b = app.els['cs-body'].innerHTML; assert.match(b, /^<div class="F_sheethead"><h2 class="ttl"[^>]*>[^]*?<\/h2><button class="btn btn-secondary btn-sm F_close" type="button" data-F-close="1" data-act="/, name + ': the header row is title + Close'); assert.ok(b.includes('data-act="' + act + '"><svg'), name);
-    assert.match(b.slice(0, 260), /Close<\/button><\/div>/, name); assert.doesNotMatch(b, /btn-block" type="button" data-act="sheet-close" style="margin-top:12px">Close/, name + ': no Close at the very end');
+    const b = app.els['cs-body'].innerHTML; assert.match(b, /^<div class="F_sheethead( H_dayhead)?">(<button class="iconbtn H_daynav"[^>]*>(?:<svg[^>]*><\/svg>)<\/button>)?<h2 class="ttl"[^>]*>[^]*?<\/h2>(<button class="iconbtn H_daynav"[^>]*>(?:<svg[^>]*><\/svg>)<\/button>)?<button class="btn btn-secondary btn-sm F_close" type="button" data-F-close="1" data-act="/, name + ': the header row is (day arrows) + title + Close'); assert.ok(b.includes('data-act="' + act + '"><svg'), name);
+    assert.match(b.slice(0, 700), /Close<\/button><\/div>/, name); assert.doesNotMatch(b, /btn-block" type="button" data-act="sheet-close" style="margin-top:12px">Close/, name + ': no Close at the very end');
   }
-  assert.match(css, /\.F_sheethead \{ position: sticky; top: 0; z-index: 4; display: flex;[^}]*background: var\(--v5-surf\); \}/); assert.match(css, /\.F_close \{ flex: none; margin-left: auto; \}/); assert.match(css, /\.btn-sm \{ min-height: var\(--touch\);/);
+  assert.match(css, /\.F_sheethead \{ position: sticky; top: 0; z-index: 4; display: flex;[^}]*background: var\(--v5-surf\); \}/); assert.match(css, /@media \(max-width: 37\.4375rem\) \{ \.F_sheethead \{ touch-action: none; \} \}/, 'only a bottom sheet pulls'); assert.match(css, /\.F_close \{ flex: none; margin-left: auto; \}/); assert.match(css, /\.btn-sm \{ min-height: var\(--touch\);/);
   assert.match(css, /\.F_sheethead h2 \{ flex: 1; min-width: 0;/, 'a long title wraps beside Close, never under it');
 });
 
@@ -181,7 +181,7 @@ test('E_fix F9: leaving a door reloads Home and Tasks, so the pill is not stale 
 
 // ------------------------------------------------------------------------------------------------ F11
 test('E_fix F11: touch-action keeps pinch-zoom, the grab strip is 28 px, the hidden Undo is out of the Tab order, reduced motion keeps the follow and drops the spring-back', async () => {
-  assert.match(css, /\.E_tabbody \{ touch-action: pan-y pinch-zoom; \}/); assert.match(css, /\.E_swipewrap \.payrow \{[^}]*touch-action: pan-y pinch-zoom;/); assert.match(css, /\.A_slide \{[^}]*touch-action: pan-y pinch-zoom;/); assert.doesNotMatch(css, /touch-action: pan-y;/);
+  assert.match(css, /\.cal \{ touch-action: pan-y pinch-zoom; \}/); assert.match(css, /\.E_swipewrap \.payrow \{[^}]*touch-action: pan-y pinch-zoom;/); assert.match(css, /\.A_slide \{[^}]*touch-action: pan-y pinch-zoom;/); assert.doesNotMatch(css, /touch-action: pan-y;/);
   assert.match(css, /\.E_grab \{ position: sticky; top: 0; z-index: 3; height: 28px; margin: -16px -16px -12px; touch-action: none; \}/);
   const gone = new Set(), app = await boot({ role: 'admin', hash: '#tasks', handlers: baseHandlers('admin', { tasks_list_v1: () => tasksOf([T({})].filter((t) => !gone.has(t.id)), true)(), task_set_done_v1: (a) => { gone.add(a.p_id); return { error: null, data: { ok: true } }; } }) });
   await app.click({ 'data-act': 'task-done', 'data-task': 'follow_up_tasks:a' }); assert.match(app.els['v-tasks'].innerHTML, /<div class="okbox sr" role="status">[^]*<button class="btn btn-ghost btn-sm" type="button" data-act="task-undo"[^>]*tabindex="-1">Undo<\/button>/);
@@ -223,10 +223,12 @@ test('E_fix: until the fold manifest answers the bookings row and the pill row l
 // ------------------------------------------------------------------------------------------------ the tap twins, behaviourally
 test('E_fix: the tap twin of G1, G2 and G4 does the same thing as the gesture (same resulting state), not just "a control exists"', async () => {
   const cal = await boot({ role: 'admin', hash: '#calendar', handlers: baseHandlers('admin', { staff_home_v1: () => HOMEWITH([stayRow('Ana Reyes', '2026-10-14', '2026-10-17')]) }) });
-  const link = /<a href="(#calendar\/stays)" data-act="cal-tab" data-tab="stays"/.exec(cal.els['v-calendar'].innerHTML)[1];
-  const body = surf(); drive(cal, body, [[0, 300, 300], [100, 250, 302], [200, 150, 302], [260, 150, 302]], (s, el) => (s === '.E_tabbody' ? el : null)); assert.equal(cal.location.hash, link, 'swiping to Stays lands where the Stays tab link goes');
+  const title = (a) => (/<h2 class="dlg"[^>]*>([^<]+)</.exec(a.els['v-calendar'].innerHTML) || [])[1];
+  const body = surf({ offsetWidth: 328 }); drive(cal, body, [[0, 300, 300], [100, 250, 302], [200, 150, 302], [260, 150, 302]], (s, el) => (s === '.cal' ? el : null));
+  const tap = await boot({ role: 'admin', hash: '#calendar', handlers: baseHandlers('admin', { staff_home_v1: () => HOMEWITH([stayRow('Ana Reyes', '2026-10-14', '2026-10-17')]) }) }); await tap.click({ 'data-act': 'next' });
+  assert.equal(title(cal), title(tap), 'swiping the grid lands on the month the next arrow goes to');
   const state = async (how) => { const app = await boot({ role: 'admin', hash: '#tasks', handlers: baseHandlers('admin', { tasks_list_v1: tasksOf([], true) }) }); await app.click({ 'data-act': 'task-add-open' });
-    if (how === 'pull') { const sh = app.els['cal-sheet']; drive(app, sh, [[0, 180, 100], [20, 180, 200], [40, 180, 320], [60, 180, 400]], (s) => (s === '#cal-sheet' ? sh : s === '.E_grab' ? {} : null)); } else await app.click({ 'data-act': app.els['cal-sheet'].getAttribute('data-E-swipe') });
+    if (how === 'pull') { const sh = app.els['cal-sheet']; drive(app, sh, [[0, 180, 100], [20, 180, 200], [40, 180, 320], [60, 180, 400]], (s) => (s === '#cal-sheet' ? sh : s === '.E_grab, .F_sheethead' ? {} : null)); } else await app.click({ 'data-act': app.els['cal-sheet'].getAttribute('data-E-swipe') });
     await app.click({ 'data-act': 'task-add-open' }); return [app.els['cal-sheet'].getAttribute('aria-hidden'), /id="t-title" maxlength="200" value=""/.test(app.els['cs-body'].innerHTML)]; };
   assert.deepEqual(await state('pull'), await state('button'), 'a pulled-down reminder sheet and a cancelled one end in the same state (closed, nothing kept)');
   const FOLDED = { schema: 1, surfaces: { checklist: { files: 8 }, admin: { files: 1 } } }, tw = { knob: { style: {} } };

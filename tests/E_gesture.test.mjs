@@ -22,25 +22,28 @@ const surf = (extra) => Object.assign({ style: {}, offsetWidth: 360, offsetHeigh
   getAttribute: () => null, setAttribute() {}, querySelector: () => null, contains(t) { return t === this; }, setPointerCapture() {} }, extra || {});
 
 // ---------------------------------------------------------------------------------------------------- the helper
-test('E_drag numbers: lock at 12 px and a 1.5 ratio, a 24 px edge zone, velocity over the last 80 ms', () => {
-  assert.equal(CS.E_lockOf(13, 0), 'x'); assert.equal(CS.E_lockOf(12, 0), '', '12 is not past 12'); assert.equal(CS.E_lockOf(0, 13), 'y'); assert.equal(CS.E_lockOf(-20, 0), 'x');
-  assert.equal(CS.E_lockOf(20, 14), '', 'a diagonal drag is neither'); assert.equal(CS.E_lockOf(30, 20), '', '1.5 times is the line'); assert.equal(CS.E_lockOf(31, 20), 'x'); assert.equal(CS.E_lockOf(14, 30), 'y');
+test('E_drag numbers (s82): lock at 10 px on the browser\'s own 45 degrees, a 24 px edge zone (12 px on the right for task rows), velocity over the last 100 ms', () => {
+  assert.equal(CS.E_lockOf(11, 0), 'x'); assert.equal(CS.E_lockOf(10, 0), '', '10 is not past 10'); assert.equal(CS.E_lockOf(0, 11), 'y'); assert.equal(CS.E_lockOf(-20, 0), 'x');
+  assert.equal(CS.E_lockOf(20, 14), 'x', 'a 35 degree thumb arc is a swipe now (it was a dead band)'); assert.equal(CS.E_lockOf(20, 20), '', '45 degrees exactly is neither'); assert.equal(CS.E_lockOf(21, 20), 'x'); assert.equal(CS.E_lockOf(14, 30), 'y');
   assert.equal(CS.E_inEdge(23, 360), true); assert.equal(CS.E_inEdge(24, 360), false); assert.equal(CS.E_inEdge(336, 360), false); assert.equal(CS.E_inEdge(337, 360), true);
-  assert.deepEqual(CS.E_velocity([{ t: 0, x: 0, y: 0 }, { t: 50, x: 25, y: 0 }, { t: 100, x: 100, y: 0 }]), { vx: 75 / 50, vy: 0 }, 'only the last 80 ms count: from t = 50');
+  assert.equal(CS.E_inEdge(348, 360, 24, CS.E_EDGE_R_TASK), false, 'a task row may start 12 px from the right edge'); assert.equal(CS.E_inEdge(349, 360, 24, CS.E_EDGE_R_TASK), true); assert.equal(CS.E_inEdge(23, 360, 24, CS.E_EDGE_R_TASK), true, 'the left edge stays 24');
+  assert.deepEqual(CS.E_velocity([{ t: 0, x: 0, y: 0 }, { t: 50, x: 25, y: 0 }, { t: 100, x: 100, y: 0 }]), { vx: 1, vy: 0 }, 'the last 100 ms count: from t = 0');
+  assert.deepEqual(CS.E_velocity([{ t: 0, x: 0, y: 0 }, { t: 150, x: 50, y: 0 }, { t: 200, x: 100, y: 0 }]), { vx: 1, vy: 0 }, 'only from t = 150 back to 100 ms: from t = 150 is 50 px in 50 ms');
   assert.deepEqual(CS.E_velocity([{ t: 0, x: 0, y: 0 }]), { vx: 0, vy: 0 });
   assert.deepEqual(CS.E_velocity([{ t: 5, x: 0, y: 0 }, { t: 5, x: 9, y: 0 }]), { vx: 0, vy: 0 }, 'no time, no velocity');
 });
 
-test('E_drag numbers: every commit rule from the spec', () => {
-  assert.equal(CS.E_tabCommit(-90, 360, 0), true); assert.equal(CS.E_tabCommit(-89, 360, 0), false); assert.equal(CS.E_tabCommit(-48, 360, -0.4), true); assert.equal(CS.E_tabCommit(-48, 360, -0.39), false); assert.equal(CS.E_tabCommit(-47, 360, -2), false, 'a flick needs a 48 px floor');
-  assert.equal(CS.E_tabFollow(-100), -35); assert.equal(CS.E_tabFollow(-300), -48, 'damped to 0.35 and clamped to 48');
-  assert.equal(CS.E_sheetCommit(96, 0), true); assert.equal(CS.E_sheetCommit(95, 0.49), false); assert.equal(CS.E_sheetCommit(48, 0.5), true); assert.equal(CS.E_sheetCommit(47, 5), false, 'a flick needs a 48 px floor');
+test('E_drag numbers (s82): every commit rule from the audit 5.3', () => {
+  assert.equal(CS.E_tabCommit(-64, 360, 0), true); assert.equal(CS.E_tabCommit(-63, 360, 0), false, 'min(20% of the width, 64 px)'); assert.equal(CS.E_tabCommit(-39, 200, 0), false, '20% of 200 is 40');
+  assert.equal(CS.E_tabCommit(-40, 200, 0), true); assert.equal(CS.E_tabCommit(-32, 360, -0.3), true); assert.equal(CS.E_tabCommit(-32, 360, -0.29), false); assert.equal(CS.E_tabCommit(-31, 360, -2), false, 'a flick needs a 32 px floor'); assert.equal(CS.E_tabCommit(-32, 360, 0.5), false, 'and only the way the finger went');
+  assert.equal(CS.E_tabFollow(-100), -60); assert.equal(CS.E_tabFollow(-300), -96, 'followed at 0.6 and clamped to 96');
+  assert.equal(CS.E_sheetCommit(80, 0), true); assert.equal(CS.E_sheetCommit(79, 0.39), false); assert.equal(CS.E_sheetCommit(40, 0.4), true); assert.equal(CS.E_sheetCommit(39, 5), false, 'a flick needs a 40 px floor');
   assert.equal(CS.E_sheetFollow(50), 50, '1:1 downward'); assert.equal(CS.E_sheetFollow(-40), -8, 'upward damped by 0.2'); assert.equal(CS.E_sheetFollow(-200), -16, 'and capped at 16 px');
-  assert.equal(CS.E_taskCommit(-144, 360, 0), true); assert.equal(CS.E_taskCommit(-143, 360, 0), false); assert.equal(CS.E_taskCommit(-48, 360, -0.5), true); assert.equal(CS.E_taskCommit(-47, 360, -9), false, 'a flick needs a 48 px floor'); assert.equal(CS.E_taskCommit(60, 360, 0.9), false, 'a swipe the other way is nothing');
+  assert.equal(CS.E_taskCommit(-110, 360, 0), true); assert.equal(CS.E_taskCommit(-109, 360, 0), false, 'min(33% of the row, 110 px)'); assert.equal(CS.E_taskDist(200), 66); assert.equal(CS.E_taskCommit(-40, 360, -0.35), true); assert.equal(CS.E_taskCommit(-39, 360, -9), false, 'a flick needs a 40 px floor'); assert.equal(CS.E_taskCommit(60, 360, 0.9), false, 'a swipe the other way is nothing');
   assert.equal(CS.E_taskFollow(-60, 96), 60); assert.equal(CS.E_taskFollow(-196, 96), 96 + 100 * 0.25, 'past the underlay it is damped'); assert.equal(CS.E_taskFollow(40, 96), 0);
   assert.equal(CS.E_taskOpens(-49), true); assert.equal(CS.E_taskOpens(-48), false);
   assert.equal(CS.E_slideCommit(70, 100, 0), true); assert.equal(CS.E_slideCommit(69, 100, 0.59), false); assert.equal(CS.E_slideCommit(40, 100, 0.6), true); assert.equal(CS.E_slideCommit(39, 100, 2), false, 'a fast flick needs 40% of the travel first');
-  assert.equal(CS.E_tabNeighbour('month', -1), null); assert.equal(CS.E_tabNeighbour('month', 1), 'stays'); assert.equal(CS.E_tabNeighbour('notices', 1), null, 'no wrap'); assert.equal(CS.E_tabNeighbour('notices', -1), 'stays');
+  assert.deepEqual(CS.A_CAL_TABS, ['calendar', 'notices']); assert.equal(CS.E_tabNeighbour('calendar', -1), null); assert.equal(CS.E_tabNeighbour('calendar', 1), 'notices'); assert.equal(CS.E_tabNeighbour('notices', 1), null, 'no wrap'); assert.equal(CS.E_tabNeighbour('notices', -1), 'calendar');
 });
 
 function fakeRoot() { const l = {}; return { l, addEventListener: (t, fn) => { (l[t] ||= []).push(fn); }, fire: (t, ev) => (l[t] || []).forEach((f) => f(ev)) }; }
@@ -54,7 +57,7 @@ function helper(over) {
 }
 
 test('E_drag: nothing moves before the lock; the other direction is left to the page; a horizontal drag follows once locked', () => {
-  const a = helper(); a.down(100, 100); a.mv(108, 100, 10); a.mv(111, 101, 20); assert.deepEqual(a.log, [], 'under 12 px: nothing moves, nothing starts');
+  const a = helper(); a.down(100, 100); a.mv(105, 100, 10); a.mv(109, 101, 20); assert.deepEqual(a.log, [], 'under 10 px: nothing moves, nothing starts');
   a.mv(120, 101, 30); assert.deepEqual(a.log, ['start', ['move', 20]]); a.up(120, 101, 40); assert.equal(a.seen.length, 1);
   const v = helper(); v.down(100, 100); v.mv(104, 130, 10); v.mv(110, 160, 20); v.up(110, 160, 30);
   assert.deepEqual(v.log, [], 'a vertical drag on a horizontal surface is the page scrolling: never started'); assert.equal(v.seen.length, 0, 'and never ends'); assert.equal(v.h.busy(), false);
@@ -66,6 +69,7 @@ test('E_drag: a drag that starts inside 24 px of either screen edge is ignored (
   const two = helper(); two.down(100, 100, 1); two.root.fire('pointerdown', { target: { closest: () => two.el }, clientX: 200, clientY: 200, pointerId: 2, isPrimary: false, timeStamp: 0, button: 0 }); two.mv(150, 100, 10, 2); assert.deepEqual(two.log, [], 'the second finger moves nothing'); two.mv(130, 100, 10, 1); assert.equal(two.log[0], 'start');
   two.up(130, 100, 20, 2); assert.equal(two.seen.length, 0, 'and cannot end the first finger\'s drag'); two.up(130, 100, 30, 1); assert.equal(two.seen.length, 1);
   const btn = helper(); btn.down(100, 100, 1, 2); btn.mv(160, 100, 10); assert.deepEqual(btn.log, []);
+  const tr = helper({ edgeR: CS.E_EDGE_R_TASK }); tr.down(340, 100); tr.mv(300, 100, 10); assert.equal(tr.log[0], 'start', 'a task row may start 20 px from the right edge'); const tr2 = helper({ edgeR: CS.E_EDGE_R_TASK }); tr2.down(350, 100); tr2.mv(300, 100, 10); assert.deepEqual(tr2.log, [], 'but not 10 px from it');
   // the sheet is vertical: the edge zone is about left and right, so it does not apply
   const sheet = helper({ axis: 'y' }); sheet.down(5, 100); sheet.mv(5, 140, 10); assert.equal(sheet.log[0], 'start');
 });
@@ -79,6 +83,11 @@ test('E_drag: the edge buzz fires once per drag and again after the finger went 
 test('E_drag: reduced motion keeps the 1:1 follow (a control that does not move under the finger feels broken); the drag ends with the same numbers', () => {
   const a = helper({ reduced: () => true }); a.down(100, 100); a.mv(160, 100, 10); a.mv(260, 100, 20); a.up(260, 100, 30);
   assert.deepEqual(a.log.filter((x) => Array.isArray(x)).map((x) => x[1]), [60, 160], 'the finger is followed'); assert.equal(a.seen.length, 1); assert.equal(a.seen[0].dx, 160); assert.ok(a.seen[0].vx > 0);
+});
+
+test('E_drag (s82): a pause before lifting does not zero a deliberate swipe (the lift is not a velocity sample), and a 35 degree arc locks', () => {
+  const a = helper(); a.down(100, 100); a.mv(120, 110, 10); a.mv(150, 120, 20); a.up(151, 121, 140);
+  assert.ok(a.seen[0].vx >= 1.5, 'the swipe was fast until the pause: ' + a.seen[0].vx); assert.equal(a.log[0], 'start', '20 px across, 10 px down is a swipe');
 });
 
 test('E_drag: the click that follows a drag is swallowed on that surface for 400 ms, once', async () => {
@@ -96,18 +105,18 @@ async function openDay(role, o) {
   const app = await boot(Object.assign({ role, hash: '#calendar', handlers: baseHandlers(role, { staff_home_v1: () => HOMEWITH(cal), tasks_list_v1: tasksOf([T({})], role !== 'cleaner') }) }, o || {}));
   await app.click({ 'data-day': '2026-10-16' }); return app;
 }
-const pullSheet = (app, pts, o) => { const sh = app.els['cal-sheet']; drive(app, sh, pts, Object.assign({ pick: (s) => (s === '#cal-sheet' ? sh : s === '.E_grab' ? ((o && o.grab) === false ? null : {}) : null) }, o || {})); return sh; };
+const pullSheet = (app, pts, o) => { const sh = app.els['cal-sheet']; drive(app, sh, pts, Object.assign({ pick: (s) => (s === '#cal-sheet' ? sh : s === '.E_grab, .F_sheethead' ? ((o && o.grab) === false ? null : {}) : null) }, o || {})); return sh; };
 const shut = (app) => app.els['cal-sheet'].getAttribute('aria-hidden') === 'true';
 
-test('E_ G2: pulling the sheet down 96 px closes it; the buzz at 96, one tap twin on the sheet itself', async () => {
+test('E_ G2: pulling the sheet down 80 px closes it; the buzz at 80, one tap twin on the sheet itself', async () => {
   const v = vib(), app = await openDay('admin', { nav: v });
   assert.equal(app.els['cal-sheet'].getAttribute('data-E-swipe'), 'sheet-close'); assert.match(app.els['cs-body'].innerHTML, /data-act="sheet-close"/);
   const sh = pullSheet(app, [[0, 180, 300], [30, 180, 340], [60, 180, 380], [90, 180, 400], [400, 180, 400]]);
-  assert.ok(shut(app), 'closed'); assert.equal(sh.style.transform, '', 'the inline pull is handed back to the stylesheet'); assert.deepEqual(v.calls, [[6]], 'one edge buzz at 96 px');
+  assert.ok(shut(app), 'closed'); assert.equal(sh.style.transform, '', 'the inline pull is handed back to the stylesheet'); assert.deepEqual(v.calls, [[6]], 'one edge buzz at 80 px');
 });
 
 test('E_ G2: a short slow pull springs back and leaves the sheet open; a fast flick closes it', async () => {
-  const slow = await openDay('admin'); const sh = pullSheet(slow, [[0, 180, 300], [200, 180, 330], [400, 180, 370], [800, 180, 380]]);
+  const slow = await openDay('admin'); const sh = pullSheet(slow, [[0, 180, 300], [200, 180, 330], [400, 180, 365], [800, 180, 372]]);
   assert.ok(!shut(slow), 'open'); assert.equal(sh.style.transform, ''); assert.equal(sh.style.transition, '');
   const fast = await openDay('admin'); pullSheet(fast, [[0, 180, 300], [20, 180, 322], [40, 180, 346], [60, 180, 360]]); assert.ok(shut(fast), '60 px at 1 px/ms');
 });
@@ -115,7 +124,7 @@ test('E_ G2: a short slow pull springs back and leaves the sheet open; a fast fl
 test('E_ G2: the sheet follows the finger 1:1 down and damped up, and the scrim fades with the pull', async () => {
   const app = await openDay('admin'); const sh = app.els['cal-sheet'], scrim = app.els['cal-scrim'] || (app.els['cal-scrim'] = { style: {} });
   const fire = (t, ev) => (app.listeners[t] || []).forEach((f) => f(ev));
-  fire('pointerdown', { target: { closest: (s) => (s === '#cal-sheet' ? sh : s === '.E_grab' ? {} : null) }, clientX: 180, clientY: 300, pointerId: 1, timeStamp: 0, button: 0 });
+  fire('pointerdown', { target: { closest: (s) => (s === '#cal-sheet' ? sh : s === '.E_grab, .F_sheethead' ? {} : null) }, clientX: 180, clientY: 300, pointerId: 1, timeStamp: 0, button: 0 });
   fire('pointermove', { clientX: 180, clientY: 340, pointerId: 1, timeStamp: 100 }); assert.equal(sh.style.transform, 'translateY(40px)'); assert.equal(sh.style.transition, 'none');
   assert.ok(+scrim.style.opacity < 1 && +scrim.style.opacity > 0.8, 'the scrim fades: ' + scrim.style.opacity);
   fire('pointermove', { clientX: 180, clientY: 250, pointerId: 1, timeStamp: 200 }); assert.equal(sh.style.transform, 'translateY(-10px)');
@@ -136,13 +145,17 @@ test('E_ G2: a form with something typed in it never closes on a pull; its Cance
   n.input('n-title', 'Pipe repair'); pullSheet(n, [[0, 180, 100], [20, 180, 200], [40, 180, 320], [60, 180, 400]]); assert.ok(!shut(n), 'a notice being typed is kept');
 });
 
-test('E_ G2: a pull that starts in the body only counts when the sheet is scrolled to the top; in reduced motion the sheet still follows the finger and closes', async () => {
-  const app = await openDay('admin'); const sh = app.els['cal-sheet']; sh.scrollTop = 120;
-  pullSheet(app, [[0, 180, 300], [20, 180, 340], [40, 180, 380], [60, 180, 420]], { grab: false }); assert.ok(!shut(app), 'scrolled down: the body is the sheet\'s to scroll');
-  pullSheet(app, [[0, 180, 300], [20, 180, 340], [40, 180, 380], [60, 180, 420]], { grab: true }); assert.ok(shut(app), 'the grab strip always works');
+test('E_ G2 (s82): the whole header is the pull surface; a finger on the body is the body\'s to scroll (the browser would cancel a pull there); reduced motion still follows and closes', async () => {
+  const app = await openDay('admin'); const sh = app.els['cal-sheet'];
+  pullSheet(app, [[0, 180, 300], [20, 180, 340], [40, 180, 380], [60, 180, 420]], { grab: false }); assert.ok(!shut(app), 'a pull that starts on the body does nothing, whatever its scroll position');
+  sh.scrollTop = 120; pullSheet(app, [[0, 180, 300], [20, 180, 340], [40, 180, 380], [60, 180, 420]], { grab: true }); assert.ok(shut(app), 'the header always works, scrolled or not');
   const r = await openDay('admin', { reduced: true }); const rs = pullSheet(r, [[0, 180, 300], [30, 180, 340], [60, 180, 400], [90, 180, 410]]);
   assert.ok(shut(r), 'still commits'); assert.equal(rs.style.transform, '', 'the pull was handed back to the stylesheet on release (instant under reduced motion)');
-  const src = read('styles.css'); assert.match(src, /\.E_grab \{ position: sticky; top: 0; z-index: 3; height: 28px;[^}]*touch-action: none; \}/);
+  const src = read('styles.css');
+  assert.match(src, /\.F_sheethead \{ position: sticky; top: 0; z-index: 4; [^}]*min-height: 56px;[^}]*\}/); assert.match(src, /@media \(max-width: 37\.4375rem\) \{ \.F_sheethead \{ touch-action: none; \} \}/, 'the header the browser must not pan from, on a bottom sheet');
+  assert.match(src, /\.E_grab \{ position: sticky; top: 0; z-index: 3; height: 28px;[^}]*touch-action: none; \}/);
+  assert.match(src, /\.sheet\.calsheet::before \{ margin: 8px auto 4px; width: 36px; height: 4px; background: var\(--v5-line-2\); \}/, 'the handle is 36 x 4');
+  assert.match(read('app.js'), /closest\('\.E_grab, \.F_sheethead'\)/); assert.doesNotMatch(read('app.js'), /!el\.scrollTop/);
 });
 
 // ---------------------------------------------------------------------------------------------------- G4 slide
@@ -161,7 +174,7 @@ test('E_ G4: the slide commits at 70% of the travel, or a flick after 40%; the k
 
 const FOLD = { schema: 1, surfaces: { admin: { files: 84 }, checklist: { files: 8 }, manual: { files: 16 }, guide: { files: 48, adminGuide: true } } };
 const turnover = () => HOMEWITH([stayRow('Ana Reyes', '2026-10-12', TODAY), stayRow('Ben Cruz', TODAY, '2026-10-18')]);
-const showDone = async (app) => { for (const f of app.listeners.change || []) f({ target: { id: '', checked: true, getAttribute: (k) => (k === 'data-act' ? 'tasks-showdone' : null) } }); await app.flush(); };
+const showDone = async (app) => { await app.click({ 'data-act': 'tasks-toggle-done' }); };
 test('E_ G4: in reduced motion the knob still follows the finger, the release is instant, and the slide still commits; the whole pill stays a link (the tap twin)', async () => {
   const writes = [], knob = { style: new Proxy({}, { set(t, k, v) { if (k === 'transform' && v) writes.push(v); t[k] = v; return true; } }) }, a = surf({ offsetWidth: 300, querySelector: () => knob, getAttribute: (k) => (k === 'href' ? '#door/checklist' : null) });
   const app = await boot({ role: 'cleaner', hash: '#home', reduced: true, fold: FOLD, handlers: baseHandlers('cleaner', { staff_home_v1: turnover }) });
@@ -170,42 +183,55 @@ test('E_ G4: in reduced motion the knob still follows the finger, the release is
   assert.match(app.els['v-home'].innerHTML, /<a class="A_slide" data-slide href="#door\/checklist"[^>]*aria-label="Start cleaning">/);
 });
 
-// ---------------------------------------------------------------------------------------------------- G1 calendar views
+// ---------------------------------------------------------------------------------------------------- G1 the month grid (s82)
 async function calApp(hash, o) { return boot(Object.assign({ role: 'admin', hash, handlers: baseHandlers('admin', { staff_home_v1: () => HOMEWITH([stayRow('Ana Reyes', '2026-10-14', '2026-10-17')]) }) }, o || {})); }
-const swipeTab = (app, pts, o) => { const body = surf({ offsetWidth: 360 }); drive(app, body, pts, Object.assign({ pick: (s) => (s === '.E_tabbody' ? body : null) }, o || {})); return body; };
+const swipeCal = (app, pts, o) => { const cal = surf({ offsetWidth: 328 }); drive(app, cal, pts, Object.assign({ pick: (s) => (s === '.cal' ? cal : null) }, o || {})); return cal; };
+const monthOf = (app) => (/<h2 class="dlg"[^>]*>([^<]+)<\/h2>/.exec(app.els['v-calendar'].innerHTML) || [])[1];
 
-test('E_ G1: a swipe of 25% of the width or 0.4 px/ms changes the view (hash first), with no wrap and no slide-in; Stays swipes both ways', async () => {
-  const a = await calApp('#calendar'); swipeTab(a, [[0, 300, 300], [100, 250, 302], [200, 200, 302], [600, 200, 302]]);
-  assert.equal(a.location.hash, '#calendar/stays', 'left from Month goes to Stays (110 px of 360)');
-  const slow = await calApp('#calendar'); swipeTab(slow, [[0, 300, 300], [300, 280, 302], [900, 230, 302], [1200, 230, 302]]); assert.equal(slow.location.hash, '#calendar', '70 px, slow: no');
-  const flick = await calApp('#calendar'); swipeTab(flick, [[0, 300, 300], [30, 280, 302], [60, 244, 302], [70, 244, 302]]); assert.equal(flick.location.hash, '#calendar/stays', '56 px at over 0.4 px/ms');
-  const month = await calApp('#calendar'); swipeTab(month, [[0, 100, 300], [100, 160, 302], [200, 260, 302], [260, 260, 302]]); assert.equal(month.location.hash, '#calendar', 'Month cannot swipe right: no wrap');
-  const stays = await calApp('#calendar/stays'); swipeTab(stays, [[0, 100, 300], [100, 160, 302], [200, 260, 302], [260, 260, 302]]); assert.equal(stays.location.hash, '#calendar', 'right from Stays is Month');
-  const stays2 = await calApp('#calendar/stays'); swipeTab(stays2, [[0, 300, 300], [100, 250, 302], [200, 150, 302], [260, 150, 302]]); assert.equal(stays2.location.hash, '#calendar/notices');
-  const notices = await calApp('#calendar/notices'); swipeTab(notices, [[0, 300, 300], [100, 250, 302], [200, 100, 302], [260, 100, 302]]); assert.equal(notices.location.hash, '#calendar/notices', 'Notices is the last view');
+test('E_ G1 (s82): swiping the month grid left shows the next month, right the previous one; min(20% of the width, 64 px) or a 32 px flick at 0.3 px/ms', async () => {
+  const a = await calApp('#calendar'); assert.equal(monthOf(a), 'October 2026');
+  swipeCal(a, [[0, 300, 300], [100, 250, 304], [200, 220, 306], [600, 220, 306]]); assert.equal(monthOf(a), 'November 2026', 'left: 80 px');
+  swipeCal(a, [[0, 100, 300], [100, 150, 304], [200, 190, 306], [600, 190, 306]]); assert.equal(monthOf(a), 'October 2026', 'right: back to October (90 px)');
+  const slow = await calApp('#calendar'); swipeCal(slow, [[0, 300, 300], [300, 280, 302], [900, 250, 302], [1200, 250, 302]]); assert.equal(monthOf(slow), 'October 2026', '50 px, slow: no');
+  const flick = await calApp('#calendar'); swipeCal(flick, [[0, 300, 300], [30, 285, 302], [60, 255, 302], [70, 255, 302]]); assert.equal(monthOf(flick), 'November 2026', '45 px at over 0.3 px/ms');
+  const pause = await calApp('#calendar'); swipeCal(pause, [[0, 300, 300], [40, 270, 303], [80, 250, 305], [400, 250, 305]]); assert.equal(monthOf(pause), 'November 2026', '50 px swiped fast and held 320 ms before lifting still counts');
+  const arc = await calApp('#calendar'); swipeCal(arc, [[0, 300, 300], [60, 270, 322], [120, 230, 346], [180, 230, 346]]); assert.equal(monthOf(arc), 'November 2026', 'a natural diagonal thumb arc (70 px across, 46 down) is a swipe');
+  const edge = await calApp('#calendar'); swipeCal(edge, [[0, 345, 300], [100, 290, 302], [200, 220, 302], [260, 220, 302]]); assert.equal(monthOf(edge), 'October 2026', 'starts at x = 345 of 360: the system Back gesture\'s');
+  const vert = await calApp('#calendar'); swipeCal(vert, [[0, 300, 300], [100, 292, 360], [200, 285, 440], [260, 285, 500]]); assert.equal(monthOf(vert), 'October 2026', 'a vertical scroll');
+  const stop = await calApp('#calendar'); for (let i = 0; i < 3; i++) swipeCal(stop, [[0, 300, 300], [100, 250, 304], [200, 200, 306], [600, 200, 306]]); assert.equal(monthOf(stop), 'December 2026', 'the calendar offers 60 days ahead and no more');
+  const back = await calApp('#calendar'); swipeCal(back, [[0, 100, 300], [100, 160, 304], [200, 260, 306], [600, 260, 306]]); assert.equal(monthOf(back), 'October 2026', 'September is past the week the calendar keeps');
 });
 
-test('E_ G1: a drag that starts in the edge zone, and a vertical scroll over the grid, never change the view; the follow is damped to 48 px', async () => {
-  const edge = await calApp('#calendar'); swipeTab(edge, [[0, 340, 300], [100, 250, 302], [200, 100, 302], [260, 100, 302]]); assert.equal(edge.location.hash, '#calendar', 'starts at x = 340 of 360');
-  const vert = await calApp('#calendar'); swipeTab(vert, [[0, 300, 300], [100, 292, 360], [200, 285, 440], [260, 285, 500]]); assert.equal(vert.location.hash, '#calendar', 'a vertical scroll');
-  const a = await calApp('#calendar'); const body = surf({ offsetWidth: 360 }), fire = (t, ev) => (a.listeners[t] || []).forEach((f) => f(ev));
-  fire('pointerdown', { target: { closest: (s) => (s === '.E_tabbody' ? body : null) }, clientX: 300, clientY: 300, pointerId: 1, timeStamp: 0, button: 0 });
-  fire('pointermove', { clientX: 200, clientY: 301, pointerId: 1, timeStamp: 100 }); assert.equal(body.style.transform, 'translateX(-35px)'); assert.equal(body.style.opacity, String(1 - 0.15 * 35 / 48));
-  fire('pointermove', { clientX: 0 + 30, clientY: 301, pointerId: 1, timeStamp: 200 }); assert.equal(body.style.transform, 'translateX(-48px)');
-  fire('pointerup', { clientX: 30, clientY: 301, pointerId: 1, timeStamp: 210 }); assert.equal(body.style.transition, 'transform 160ms ease-out, opacity 160ms ease-out', 'snap back over 160 ms');
-  const filters = await calApp('#calendar/notices'); const fb = surf(); drive(filters, fb, [[0, 300, 300], [100, 200, 302], [200, 100, 302], [260, 100, 302]], { pick: (s) => (s === '.E_tabbody' ? fb : s === '.A_filters,.A_hours,iframe,input,select,textarea' ? {} : null) });
-  assert.equal(filters.location.hash, '#calendar/notices', 'a drag on the sideways filter chips is theirs');
+test('E_ G1 (s82): the month follows the finger at 0.6x (cap 96 px), a month that is not there does not follow, and the release snaps back over 160 ms', async () => {
+  const a = await calApp('#calendar'); const cal = surf({ offsetWidth: 328 }), fire = (t, ev) => (a.listeners[t] || []).forEach((f) => f(ev));
+  fire('pointerdown', { target: { closest: (s) => (s === '.cal' ? cal : null) }, clientX: 300, clientY: 300, pointerId: 1, timeStamp: 0, button: 0 });
+  fire('pointermove', { clientX: 200, clientY: 301, pointerId: 1, timeStamp: 100 }); assert.equal(cal.style.transform, 'translateX(-60px)'); assert.equal(cal.style.transition, 'none');
+  fire('pointermove', { clientX: 30, clientY: 301, pointerId: 1, timeStamp: 200 }); assert.equal(cal.style.transform, 'translateX(-96px)');
+  fire('pointerup', { clientX: 30, clientY: 301, pointerId: 1, timeStamp: 210 }); assert.equal(cal.style.transition, 'transform 160ms ease-out, opacity 160ms ease-out'); assert.equal(monthOf(a), 'November 2026');
+  const none = await calApp('#calendar'); const c2 = surf({ offsetWidth: 328 }), f2 = (t, ev) => (none.listeners[t] || []).forEach((f) => f(ev));
+  f2('pointerdown', { target: { closest: (s) => (s === '.cal' ? c2 : null) }, clientX: 100, clientY: 300, pointerId: 1, timeStamp: 0, button: 0 });
+  f2('pointermove', { clientX: 200, clientY: 301, pointerId: 1, timeStamp: 100 }); assert.equal(c2.style.transform, 'translateX(0px)', 'right of October is September: not offered, so the grid does not move');
+  f2('pointerup', { clientX: 200, clientY: 301, pointerId: 1, timeStamp: 110 });
 });
 
-test('E_ G1: the arrow keys move between the views from a focused tab link (the keyboard path), and the three links are the tap twin', async () => {
-  const a = await calApp('#calendar'); const html = a.els['v-calendar'].innerHTML;
-  for (const t of ['month', 'stays', 'notices']) assert.match(html, new RegExp('<a href="#calendar[^"]*" data-act="cal-tab" data-tab="' + t + '"'));
-  assert.match(html, /<div class="E_tabbody" data-E-swipe="cal-tab" data-F-tab="month">/);
+test('E_ G1 (s82): a cancel (the browser took the pan) resets the grid and changes nothing; the sub-tabs are tap only and the arrow keys move between the two', async () => {
+  const a = await calApp('#calendar'); const cal = surf({ offsetWidth: 328 }), fire = (t, ev) => (a.listeners[t] || []).forEach((f) => f(ev));
+  fire('pointerdown', { target: { closest: (s) => (s === '.cal' ? cal : null) }, clientX: 300, clientY: 300, pointerId: 1, timeStamp: 0, button: 0 });
+  fire('pointermove', { clientX: 200, clientY: 301, pointerId: 1, timeStamp: 100 }); fire('pointercancel', { pointerId: 1 });
+  assert.equal(cal.style.transform, ''); assert.equal(monthOf(a), 'October 2026');
+  const html = a.els['v-calendar'].innerHTML;
+  for (const t of ['calendar', 'notices']) assert.match(html, new RegExp('<a href="#calendar[^"]*" data-act="cal-tab" data-tab="' + t + '"'));
+  assert.equal((html.match(/data-act="cal-tab"/g) || []).length, 2); assert.doesNotMatch(html, /data-E-swipe="cal-tab"/, 'no swipe on the segmented control');
   const key = (tab, k) => { let stopped = 0; const link = { getAttribute: (n) => (n === 'data-tab' ? tab : null) }; (a.listeners.keydown || []).forEach((f) => f({ key: k, target: { closest: (s) => (/A_tabs a/.test(s) ? link : null) }, preventDefault() { stopped++; } })); return stopped; };
-  assert.equal(key('month', 'ArrowLeft'), 0); assert.equal(a.location.hash, '#calendar', 'nothing left of Month');
-  assert.equal(key('month', 'ArrowRight'), 1); assert.equal(a.location.hash, '#calendar/stays');
-  key('stays', 'ArrowRight'); assert.equal(a.location.hash, '#calendar/notices'); key('notices', 'ArrowRight'); assert.equal(a.location.hash, '#calendar/notices');
-  key('notices', 'ArrowLeft'); assert.equal(a.location.hash, '#calendar/stays'); key('stays', 'Enter'); assert.equal(a.location.hash, '#calendar/stays');
+  assert.equal(key('calendar', 'ArrowLeft'), 0); assert.equal(a.location.hash, '#calendar', 'nothing left of Calendar');
+  assert.equal(key('calendar', 'ArrowRight'), 1); assert.equal(a.location.hash, '#calendar/notices');
+  key('notices', 'ArrowRight'); assert.equal(a.location.hash, '#calendar/notices'); key('notices', 'ArrowLeft'); assert.equal(a.location.hash, '#calendar'); key('calendar', 'Enter'); assert.equal(a.location.hash, '#calendar');
+});
+
+test('E_ G1 (s82): the month arrows are the tap twin of the swipe (same result), and the grid names its swipe', async () => {
+  const sw = await calApp('#calendar'); swipeCal(sw, [[0, 300, 300], [100, 250, 304], [200, 200, 306], [600, 200, 306]]);
+  const tap = await calApp('#calendar'); await tap.click({ 'data-act': 'next' }); assert.equal(monthOf(tap), monthOf(sw)); await tap.click({ 'data-act': 'prev' }); assert.equal(monthOf(tap), 'October 2026');
+  assert.match(tap.els['v-calendar'].innerHTML, /Swipe for the next month/); assert.match(tap.els['v-calendar'].innerHTML, /class="cal"[^>]*data-E-swipe="month"|data-E-swipe="month"[^>]*class="cal"|class="cal" role="group"/);
 });
 
 // ---------------------------------------------------------------------------------------------------- G3 task row
@@ -219,24 +245,24 @@ async function taskApp(list, o) {
 const rowEl = (key, act, ver, w) => { const cls = new Set(), wrap = { classList: { add: (c) => cls.add(c), remove: (c) => cls.delete(c), contains: (c) => cls.has(c) }, style: {}, cls }; return surf({ style: {}, parentNode: wrap, wrap, getAttribute: (k) => ({ 'data-task': key, 'data-E-swipe': act, 'data-E-verifier': ver ? '1' : '', 'data-E-w': String(w || 96) })[k] ?? null }); };
 const swipeTask = (app, row, pts) => drive(app, row, pts, { sel: '.taskrow[data-E-swipe]' });
 
-test('E_ G3: swiping a row left 40% of its width marks it done through the same call as the box, with an edge buzz at the line and a tap buzz on commit', async () => {
+test('E_ G3: swiping a row left min(33% of the row, 110 px) marks it done through the same call as the box, with an edge buzz at the line and a tap buzz on commit', async () => {
   const v = vib(), app = await taskApp([T({})], { nav: v });
-  swipeTask(app, rowEl('follow_up_tasks:a', 'task-done'), [[0, 330, 200], [60, 280, 201], [120, 150, 201], [500, 150, 201]]);
+  swipeTask(app, rowEl('follow_up_tasks:a', 'task-done'), [[0, 330, 200], [60, 280, 201], [120, 210, 201], [500, 210, 201]]);
   await app.flush();
   assert.deepEqual(app.calls.filter((c) => c[0] === 'task_set_done_v1').map((c) => c[1]), [{ p_property_id: 'prop-1', p_source: 'follow_up_tasks', p_id: 'a', p_done: true }]);
   const viaBox = await taskApp([T({})]); await viaBox.click({ 'data-act': 'task-done', 'data-task': 'follow_up_tasks:a' });
   assert.deepEqual(viaBox.calls.filter((c) => c[0] === 'task_set_done_v1').map((c) => c[1]), app.calls.filter((c) => c[0] === 'task_set_done_v1').map((c) => c[1]), 'the swipe and the tap send the identical call');
-  assert.deepEqual(v.calls, [[6], [10]], 'edge at 40%, then one tap buzz for the confirm (not two)'); assert.match(app.els['cs-toast'].innerHTML, /Marked done/);
+  assert.deepEqual(v.calls, [[6], [10]], 'edge at 110 px, then one tap buzz for the confirm (not two)'); assert.match(app.els['cs-toast'].innerHTML, /Marked done/);
 });
 
-test('E_ G3: a short swipe past 48 px leaves the row open on a real Done button; a swipe under 48 px or to the right closes it; a flick at 0.5 px/ms commits', async () => {
+test('E_ G3: a short swipe past 48 px leaves the row open on a real Done button; a swipe under 48 px or to the right closes it; a 40 px flick at 0.35 px/ms commits', async () => {
   const app = await taskApp([T({})]), row = rowEl('follow_up_tasks:a', 'task-done');
   swipeTask(app, row, [[0, 330, 200], [200, 300, 201], [400, 270, 201], [800, 270, 201]]);
   assert.ok(row.wrap.cls.has('E_open'), 'open at 60 px'); assert.equal(app.calls.filter((c) => c[0] === 'task_set_done_v1').length, 0, 'nothing sent: the person taps Done');
   const small = rowEl('follow_up_tasks:a', 'task-done'); swipeTask(app, small, [[0, 330, 200], [200, 310, 201], [400, 290, 201], [800, 290, 201]]); assert.ok(!small.wrap.cls.has('E_open'), '40 px: closes');
   const right = rowEl('follow_up_tasks:a', 'task-done'); swipeTask(app, right, [[0, 100, 200], [200, 160, 201], [400, 250, 201], [800, 250, 201]]); assert.ok(!right.wrap.cls.has('E_open'), 'to the right: nothing');
-  const flick = rowEl('follow_up_tasks:a', 'task-done'); swipeTask(app, flick, [[0, 330, 200], [30, 310, 201], [60, 270, 201], [70, 270, 201]]); await app.flush();
-  assert.equal(app.calls.filter((c) => c[0] === 'task_set_done_v1').length, 1, 'a 60 px flick at 0.86 px/ms commits');
+  const flick = rowEl('follow_up_tasks:a', 'task-done'); swipeTask(app, flick, [[0, 330, 200], [30, 310, 201], [60, 285, 201], [70, 285, 201]]); await app.flush();
+  assert.equal(app.calls.filter((c) => c[0] === 'task_set_done_v1').length, 1, 'a 45 px flick at 0.75 px/ms commits (it needed 60 at 0.5 before)');
 });
 
 test('E_ G3: a finished row swipes to Undo; the markup carries an Undo underlay; a system check row only opens "Mark as handled" and never auto-commits', async () => {
@@ -273,7 +299,7 @@ test('E_ tap-twin guard: every element that carries data-E-swipe has a visible w
   }
   assert.ok(seen >= 2, 'the guard looked at rows: ' + seen);
   // calendar: the body names cal-tab and the three tab links carry that act
-  const cal = (await calApp('#calendar')).els['v-calendar'].innerHTML; assert.match(cal, /data-E-swipe="cal-tab"/); assert.equal((cal.match(/data-act="cal-tab"/g) || []).length, 3);
+  const cal = (await calApp('#calendar')).els['v-calendar'].innerHTML; assert.match(cal, /class="cal" role="group" data-E-swipe="month"/); assert.equal((cal.match(/data-act="prev"/g) || []).length, 1); assert.equal((cal.match(/data-act="next"/g) || []).length, 1, 'the arrows are the twin'); assert.equal((cal.match(/data-act="cal-tab"/g) || []).length, 2);
   // sheets: the sheet names the act of its own Close / Cancel / Go back button, and the body draws that button
   const checks = [];
   const day = await openDay('admin'); checks.push(day);
@@ -288,9 +314,10 @@ test('E_ tap-twin guard: every element that carries data-E-swipe has a visible w
   const home = await boot({ role: 'cleaner', hash: '#home', fold: FOLD, handlers: baseHandlers('cleaner', { staff_home_v1: turnover }) }); assert.match(home.els['v-home'].innerHTML, /<a class="A_slide" data-slide href="#door\/checklist"/);
 });
 
-test('E_ the rejected gestures are not built: no month swipe, snooze, pull to refresh, notice dismiss, long press, or touch-event listener', () => {
+test('E_ the rejected gestures are not built: no main-tab swipe, snooze, pull to refresh, notice dismiss, long press, sub-tab swipe, or touch-event listener', () => {
   const src = read('app.js');
-  assert.equal((src.match(/E_drag\(document, \{ sel:/g) || []).length, 4, 'exactly the four kept gestures go through the one helper');
+  assert.equal((src.match(/E_drag\(document, \{ sel:/g) || []).length, 5, 'the slide, the sheet pull, the task row, the month grid and the day sheet: all through the one helper');
+  assert.match(src, /sel: '\.cal', axis: 'x'/); assert.doesNotMatch(src, /sel: '\.E_tabbody'/, 'the sub-tab swipe (old G1) is removed: the segmented control is tap only');
   assert.doesNotMatch(src, /touchstart|touchmove|touchend|contextmenu', function \(ev\) \{ var .*press|longpress|long-press|snooze|pull.to.refresh|ptr/i);
-  assert.doesNotMatch(src, /sel: '\.cal'|sel: '\.cal \.d'|sel: '\.A_nlist|sel: '\.C_notice/);
+  assert.doesNotMatch(src, /sel: '\.cal \.d'|sel: '\.A_nlist|sel: '\.C_notice|sel: '\.tabbar|sel: '#app'|sel: '\.view/, 'no swipe between the main tabs');
 });

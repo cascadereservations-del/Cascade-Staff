@@ -53,7 +53,7 @@ test('G_ large text: nothing is wider than its box (pills wrap, long values brea
   const b = strip(css), has = (re, msg) => assert.match(b, re, msg);
   has(/\.pill \{ max-width: 100%; min-width: 0; white-space: normal;/, 'a pill wraps instead of widening the page'); has(/\.ctval, \.ctrow \{ min-width: 0; overflow-wrap: anywhere; \}/, 'an e-mail breaks');
   has(/\.A_hours \{ overflow-x: auto; grid-auto-columns: minmax\(2\.75rem, 1fr\); \}/, 'the strip scrolls in its own box'); has(/\.input input \{ width: 100%; min-width: 0; \}/, 'rate inputs shrink'); has(/\.field, \.input, \.input input, \.sel, \.stack > \*, \.card, \.A_card, \.mid \{ min-width: 0; \}/);
-  has(/\.A_tabs \{ overflow-x: auto; grid-template-columns: repeat\(3, minmax\(max-content, 1fr\)\);/, 'sub-tabs scroll inside their bar'); has(/\.A_herobar \.brand \{ font-size: var\(--v5-t-wordmark\); \}/); has(/\.A_chipglass, \.E_pill \{ font-size: var\(--v5-t-pill\); \}/);
+  has(/\.A_tabs \{ overflow-x: auto; grid-template-columns: repeat\(2, minmax\(max-content, 1fr\)\);/, 'sub-tabs scroll inside their bar'); has(/\.A_herobar \.brand \{ font-size: var\(--v5-t-wordmark\); \}/); has(/\.A_chipglass, \.E_pill \{ font-size: var\(--v5-t-pill\); \}/);
   const tk = read('tokens.css'); assert.match(tk, /--v5-t-pill: clamp\(13px, 0\.8125rem, 15px\);/); assert.match(tk, /--v5-t-wordmark: clamp\(18px, 1\.375rem, 24px\);/);
 });
 
@@ -110,7 +110,7 @@ test('G_ errors say what happened: a 5xx or a server statement timeout is "Could
   }
   const t = await boot({ role: 'cleaner', hash: '#tasks', handlers: baseHandlers('cleaner', { tasks_list_v1: () => ({ error: { code: '500', message: 'boom' }, data: null }) }) }); assert.match(t.els['v-tasks'].innerHTML, /Could not update\./); assert.doesNotMatch(t.els['v-tasks'].innerHTML, /needs a connection/);
   const a = CS.E_attention({ role: 'admin', today: TODAY, ready: { payload: true, tasks: true, bookings: true, notices: true }, failed: { notices: true }, tasks: [T({ blocks_arrival: true })] });
-  assert.equal(a.phase, 'items'); assert.equal(a.pill.text, '1 · Turnover at risk'); assert.equal(a.partial, true);
+  assert.equal(a.phase, 'items'); assert.equal(a.pill.text, '1 task · 1 blocks arrival'); assert.equal(a.partial, true);
   const app = await boot({ role: 'admin', hash: '#home', handlers: baseHandlers('admin', { staff_home_v1: () => HOMEWITH([]), tasks_list_v1: tasksOf([T({ blocks_arrival: true })], true), notices_v1: () => ({ error: { code: '500', message: 'x' }, data: null }) }) });
   await app.click({ 'data-act': 'attn-open' }); assert.match(app.els['cs-body'].innerHTML, /Some items could not be loaded<\/span><button class="btn btn-ghost btn-sm" type="button" data-act="refresh">Try again/);
 });

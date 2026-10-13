@@ -9,9 +9,10 @@ const CS = createRequire(import.meta.url)('../lib.js');
 const root = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 const read = (f) => fs.readFileSync(path.join(root, f), 'utf8');
 
-test('role gate: owner and admin only; cleaner, inspector, maintenance, finance and nothing are shut out', () => {
-  for (const r of ['owner', 'admin']) assert.equal(CS.canDraftReply(r), true);
-  for (const r of ['cleaner', 'inspector', 'maintenance', 'finance', 'guest', '', null, undefined]) assert.equal(CS.canDraftReply(r), false, String(r));
+test('role gate (s82 decision 5): every signed-in staff role drafts replies; nothing and a stranger do not; the guest-details uploader stays owner and admin', () => {
+  for (const r of ['owner', 'admin', 'cleaner', 'inspector', 'maintenance', 'finance']) assert.equal(CS.canDraftReply(r), true, r);
+  for (const r of ['guest', '', null, undefined]) assert.equal(CS.canDraftReply(r), false, String(r));
+  for (const r of ['owner', 'admin']) assert.equal(CS.canAddGuestDetails(r), true); for (const r of ['cleaner', 'finance', null]) assert.equal(CS.canAddGuestDetails(r), false);
 });
 
 test('shrink: longest edge capped at 1600, aspect kept, small pictures untouched, never zero', () => {
@@ -70,7 +71,10 @@ test('every error code gets its own warm sentence: no raw code, no exclamation m
 
 test('a 200 body becomes what the screen draws; a wrong shape is null', () => {
   const ok = { ok: true, guest_name: 'Ana', platform: 'airbnb', guest_text: 'Is breakfast included?', header: 'Two options', replies: ['One', 'Two', 'Three'] };
-  assert.deepEqual(CS.replyResult(ok), { guestName: 'Ana', platform: 'airbnb', guestText: 'Is breakfast included?', header: 'Two options', replies: ['One', 'Two'] });
+  assert.deepEqual(CS.replyResult(ok), { guestName: 'Ana', platform: 'airbnb', guestText: 'Is breakfast included?', header: 'Two options', replies: ['One', 'Two', 'Three'], options: [{ label: '', text: 'One' }, { label: '', text: 'Two' }, { label: '', text: 'Three' }] }, 'an older server: replies become unlabelled options, up to three');
+  const opt = CS.replyResult({ ok: true, replies: ['Old'], options: [{ label: 'Short', text: 'A' }, { label: 'Warm', text: 'B' }, { label: 'With details', text: 'C' }, { label: 'x', text: 'D' }, { label: 'bad' }] });
+  assert.deepEqual(opt.options.map((o) => o.label), ['Short', 'Warm', 'With details']); assert.deepEqual(opt.replies, ['A', 'B', 'C'], 'options win over replies; at most three');
+  assert.deepEqual(CS.replyResult({ ok: true, draft: 'Only one' }).options, [{ label: '', text: 'Only one' }], 'the single draft still draws');
   assert.equal(CS.replyResult({ ...ok, guest_name: null }).guestName, '');
   assert.equal(CS.replyResult({ ...ok, platform: 'x' }).platform, 'messenger');
   for (const bad of [null, {}, { ok: false }, { ok: true }, { ok: true, replies: [] }, { ok: true, replies: ['  ', 3] }]) assert.equal(CS.replyResult(bad), null);
@@ -85,7 +89,7 @@ test('clamp keeps the guest text short and on one line', () => {
 test('wiring: the reply view is gated by role in the route, the home and More rows, and posts to the function with a bearer token', () => {
   const app = read('app.js'), html = read('index.html'), sw = read('sw.js');
   assert.match(app, /if \(v === 'reply' && !canReply\(\)\) v = 'home'/);
-  assert.equal((app.match(/canReply\(\) \? row\(/g) || []).length, 2, 'home and More');
+  assert.equal((app.match(/canReply\(\) \? row\(/g) || []).length, 3, 'the staff home, the admin home and More');
   assert.match(app, /\/functions\/v1\/guest-reply-draft'.*Authorization: 'Bearer ' \+ token/);
   assert.match(html, /id="v-reply"/);
   assert.match(app, /VIEWS = \[[^\]]*'reply'/);
@@ -132,7 +136,7 @@ test('render: Write the reply is disabled while the screenshot shrinks; a 401 of
 
 test('wiring: sign-out clears the drawn view, #reply survives a reload, transparent PNGs are filled white, the live region is persistent', () => {
   const app = read('app.js'), html = read('index.html');
-  assert.match(app, /\/\^#\(home\|calendar\|tasks\|payrates\|reply\|more\|hub\)\//);
+  assert.match(app, /\/\^#\(home\|calendar\|tasks\|payrates\|reply\|more\|hub\|weather\|stock\|manage\|search\)\//);
   assert.match(app, /state\.reply = null; var rb = \$\('rp-body'\); if \(rb\) rb\.innerHTML = ''/);
   assert.match(app, /fillStyle = '#FFFFFF'; cx\.fillRect\([^)]*\); cx\.drawImage/);
   assert.match(html, /id="v-reply"><div class="sr" id="rp-live" role="status" aria-live="polite"><\/div><div id="rp-body">/);

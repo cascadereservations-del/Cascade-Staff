@@ -24,6 +24,7 @@
 <body>
 <div class="A_bg" aria-hidden="true"><img src="img/house-blur.webp" alt="" width="240" height="160"></div>
 <div class="shell" id="app">
+  <div class="H_offline" id="H_offline" role="status" hidden></div>
 
   <!-- F_: the tab bar is first in the page, so on a wide screen the left rail is also first in the Tab order (it is fixed: its place in the markup never moves it) -->
   <nav class="tabbar" id="tabbar" aria-label="Primary" hidden></nav>
@@ -41,8 +42,8 @@
         </div>
         <div class="field" id="si-pick"><label for="si-who">Who is signing in?</label>
           <select class="sel" id="si-who" disabled><option value="">Loading names...</option></select></div>
-        <div class="field" id="si-typedbox" hidden><label for="si-typed">Name or e-mail</label>
-          <div class="input"><input id="si-typed" autocomplete="username" autocapitalize="none" autocorrect="off" spellcheck="false"></div></div>
+        <div class="field" id="si-typedbox" hidden><label for="si-typed">Your name, as Lloyd wrote it</label>
+          <div class="input"><input id="si-typed" placeholder="Honey" autocomplete="username" autocapitalize="none" autocorrect="off" spellcheck="false"></div></div>
         <div class="field" id="si-pinbox" hidden>
           <label id="si-pinlbl">Your PIN</label>
           <div class="dots" id="si-dots" role="img" aria-live="polite" aria-label="PIN, 0 of 4 digits"><i></i><i></i><i></i><i></i></div>
@@ -67,10 +68,14 @@
   <section class="view" id="v-reply"><div class="sr" id="rp-live" role="status" aria-live="polite"></div><div id="rp-body"></div></section>
   <section class="view" id="v-more"></section>
   <section class="view" id="v-hub"></section>
+  <section class="view" id="v-search"></section>
+  <section class="view" id="v-weather"></section>
+  <section class="view" id="v-stock"></section>
+  <section class="view" id="v-manage"></section>
 
   <!-- A door (checklist, dashboard, manual) opens here, inside the app (D-304.3) -->
   <section class="view" id="v-door" aria-label="Door">
-    <header class="doorbar"><button class="back" type="button" id="door-back" aria-label="Back to the app"></button><h1 class="ttl" id="door-title"></h1></header>
+    <header class="doorbar"><button class="back" type="button" id="door-back" aria-label="Back to the app"></button><h1 class="ttl" id="door-title"></h1><button class="btn btn-secondary btn-sm" type="button" id="door-done" hidden>Done</button></header>
     <iframe class="doorframe" id="door-frame" title="" src="about:blank"></iframe>
   </section>
 

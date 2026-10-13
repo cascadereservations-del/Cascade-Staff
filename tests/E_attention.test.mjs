@@ -41,9 +41,9 @@ test('E_attention: no connection wins over everything, with or without old data,
 test('E_attention: one row says it by name, many say the count and the most urgent; the narrow text is "N to look at"', () => {
   const one = CS.E_attention(base('cleaner', { tasks: [task({ blocks_arrival: true, due_at: '2026-10-12T09:00:00Z' })] }));
   assert.equal(one.n, 1); assert.equal(one.top, 'Turnover at risk'); assert.equal(one.tone, 'danger');
-  assert.deepEqual(one.pill, { text: '1 · Turnover at risk', short: '1 to look at', dot: 'bad', glyph: 'alert', aria: '1 thing to look at: turnover at risk. Opens the list' });
+  assert.deepEqual(one.pill, { text: '1 task · 1 blocks arrival', short: '1 to look at', dot: 'bad', glyph: 'alert', aria: '1 thing to look at: turnover at risk. Opens the list' });
   const many = CS.E_attention(base('cleaner', { tasks: [task({ blocks_arrival: true }), task({ due_at: '2026-10-10T09:00:00Z' }), task({ due_at: '2026-10-11T09:00:00Z' })] }));
-  assert.equal(many.n, 3); assert.equal(many.pill.text, '3 · Turnover at risk'); assert.equal(many.pill.short, '3 to look at');
+  assert.equal(many.n, 3); assert.equal(many.pill.text, '3 tasks · 1 blocks arrival'); assert.equal(many.pill.short, '3 to look at');
   assert.equal(many.pill.aria, '3 things to look at. Most urgent: turnover at risk. Opens the list');
   const warn = CS.E_attention(base('cleaner', { warnings: [low] }));
   assert.deepEqual([warn.tone, warn.pill.dot, warn.pill.glyph, warn.pill.text], ['warn', 'warn', 'clock', '1 · Low stock']);
@@ -97,7 +97,7 @@ test('E_attention: a group shows three rows and "more" holds the whole count for
 test('E_attention: the number is capped at 99+', () => {
   const tasks = Array.from({ length: 120 }, (_, i) => task({ id: 'x' + i, blocks_arrival: true }));
   const a = CS.E_attention(base('admin', { tasks }));
-  assert.equal(a.n, 120); assert.equal(a.pill.text, '99+ · Turnover at risk'); assert.equal(a.pill.short, '99+ to look at'); assert.match(a.pill.aria, /^99\+ things to look at/);
+  assert.equal(a.n, 120); assert.equal(a.pill.text, '99+ tasks · 120 block arrival'); assert.equal(a.pill.short, '99+ to look at'); assert.match(a.pill.aria, /^99\+ things to look at/);
 });
 
 test('E_attention: a cleaner never gets clash days, bookings, the inbox or a system check, even if the input smuggles them in', () => {

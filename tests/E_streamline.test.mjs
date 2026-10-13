@@ -14,9 +14,9 @@ test('E_ cleaner home order: Today, Turnover, the paid-notice slot, Notices, Wor
   const order = ['aria-label="Today in the house"', 'aria-label="Turnover today"', 'id="slot-paid-notice"', 'aria-label="Notices"', 'aria-label="Work"', 'aria-label="Ask Cassy"', 'Updated '].map((s) => idx(h, s));
   assert.deepEqual(order, [...order].sort((a, b) => a - b), 'the order is fixed');
   const cassy = h.slice(idx(h, 'aria-label="Ask Cassy"'), idx(h, 'Updated '));
-  assert.equal((cassy.match(/class="rowi"|class="rowi" /g) || []).length, 2, 'two rows: Cassy OPS and Quick guide'); assert.match(cassy, /Cassy · OPS/); assert.match(cassy, /Quick guide/);
-  assert.doesNotMatch(h, /House manual|System Guide|Sign out|data-act="signout"/);
-  assert.match(h, /Ask for your pay/); assert.match(h, /<span class="t">Calendar<\/span><span class="s">Who is staying, who is next/); assert.doesNotMatch(h, /Payment Request|Guest Calendar Info/);
+  assert.equal((cassy.match(/class="rowi"|class="rowi" /g) || []).length, 3, 'three rows: Cassy OPS, Cassy reply (every role) and Quick guide'); assert.match(cassy, /Cassy · OPS/); assert.match(cassy, /Quick guide/);
+  assert.match(h, /House manual/, 'F6: the manual is on the staff home'); assert.doesNotMatch(h, /System Guide|Sign out|data-act="signout"/);
+  assert.match(h, /Cleaning fee/); assert.match(h, /Ask for payment for your cleans and expenses/); assert.match(h, /<span class="t">Calendar<\/span><span class="s">Who is staying, who is next/); assert.doesNotMatch(h, /Payment Request|Guest Calendar Info/);
   // the slot is empty and reserved, so Turnover and Slide to start never move when the notice lands
   assert.match(h, /id="slot-paid-notice" class="A_slot" hidden><\/div>/);
 });
@@ -30,7 +30,7 @@ test('E_ admin home: one Admin group (dashboard, Pay staff, Pay rates, Inventory
   for (const w of ['Admin dashboard', 'Pay staff', 'Pay rates', 'Inventory']) assert.ok(admin.includes(w), w);
   assert.match(h, /<span class="t">Calendar<\/span><span class="s">Stays, blocked nights, notices/);
   const more = (await boot({ role: 'owner', hash: '#more', handlers: baseHandlers('owner') })).els['v-more'].innerHTML;
-  for (const w of ['Cassy · Telegram OPS', 'Cassy · Telegram Finance', 'Quick guide', 'House manual', 'Admin hub', 'Pay rates', 'Inventory']) assert.ok(more.includes(w), 'reachable on More: ' + w);
+  for (const w of ['Cassy · Telegram OPS', 'Cassy · Telegram Finance', 'Quick guide', 'Cascade Manual', 'Admin hub', 'Pay rates', 'Inventory']) assert.ok(more.includes(w), 'reachable on More: ' + w);
   const fin = (await boot({ role: 'finance', hash: '#home', handlers: baseHandlers('finance') })).els['v-home'].innerHTML;
   assert.doesNotMatch(fin, /Pay rates/); assert.match(fin, /Pay staff/);
 });
@@ -52,8 +52,7 @@ test('E_ Notices card rows: the title keeps the time, the sub is date and source
   const app = await boot({ role: 'cleaner', hash: '#home', handlers: baseHandlers('cleaner', { notices_v1: () => ({ error: null, data: raw }) }) });
   const h = app.els['v-home'].innerHTML;
   assert.match(h, /<span class="t">Rain watch, 2 to 5 pm<\/span><span class="s">80% chance today<\/span>/);
-  assert.match(h, /<span class="t">Brownout 1:00 to 4:00 pm<\/span><span class="s">Fri 16 Oct · SOCOTECO II<\/span>/);
-  assert.doesNotMatch(h.slice(h.indexOf('aria-label="Notices"')), /<span class="s">[^<]*\d:\d\d [ap]m[^<]*<\/span>/, 'no time in any sub');
+  assert.match(h, /<span class="t">Brownout · Fri 16 Oct<\/span><span class="s">1:00 pm to 4:00 pm · SOCOTECO II<\/span>/, 'F11: the title is the kind and the day, the sub the time and the place');
   assert.match(css, /\.A_noticecard \{ background: var\(--v5-card-glass\); \}/);
 });
 
@@ -69,16 +68,16 @@ test('E_ Calendar: no Back arrow, the title is "Calendar", the legend wraps, Sta
   const cal = [stayRow('Ana Reyes', '2026-10-12', '2026-10-17'), stayRow('Ben Cruz', '2026-10-20', '2026-10-22')];
   const guest = { uid: 'g1', guest_name: 'Ana Reyes', source: 'direct', checkin_date: '2026-10-12', checkout_date: '2026-10-17', nights: 5 };
   const next = { uid: 'g2', guest_name: 'Ben Cruz', source: 'direct', checkin_date: '2026-10-20', checkout_date: '2026-10-22', nights: 2 };
-  const app = await boot({ role: 'cleaner', hash: '#calendar/stays', handlers: baseHandlers('cleaner', { staff_home_v1: () => HOMEWITH(cal, { current_guest: guest, next_guest: next }) }) });
+  const app = await boot({ role: 'cleaner', hash: '#calendar', handlers: baseHandlers('cleaner', { staff_home_v1: () => HOMEWITH(cal, { current_guest: guest, next_guest: next }) }) });
   const h = app.els['v-calendar'].innerHTML;
   assert.match(h, /<h1 class="ttl">Calendar<\/h1>/); assert.doesNotMatch(h.slice(0, h.indexOf('</header>')), /aria-label="Back"|class="iconbtn" href/);
   assert.equal((h.match(/In the house/gi) || []).length, 1, 'the cap is said once (case-insensitive: the CSS uppercases it)'); assert.equal((h.match(/Next arrival/gi) || []).length, 1);
-  assert.match(h, /Coming up/);
-  const empty = await boot({ role: 'cleaner', hash: '#calendar/stays', handlers: baseHandlers('cleaner') });
-  assert.match(empty.els['v-calendar'].innerHTML, /<span class="cap up">In the house<\/span><div class="card glass"><p class="sub">No guest in the house tonight/, 'an empty card still has its label');
+  assert.match(h, /Next 14 days/);
+  const empty = await boot({ role: 'cleaner', hash: '#calendar', handlers: baseHandlers('cleaner') });
+  assert.match(empty.els['v-calendar'].innerHTML, /Nothing is booked to arrive or leave in the next 14 days/, 'an empty agenda says so');
   const month = await boot({ role: 'cleaner', hash: '#calendar', handlers: baseHandlers('cleaner') });
-  assert.match(month.els['v-calendar'].innerHTML, /<div class="A_legend" role="group" aria-label="Legend">/); assert.doesNotMatch(month.els['v-calendar'].innerHTML, /scroll sideways|tabindex="0"/);
-  assert.match(css, /\.A_legend \{ display: flex; flex-wrap: wrap; gap: 8px; row-gap: 6px; overflow: visible;/);
+  assert.match(month.els['v-calendar'].innerHTML, /<div class="A_legend H_legend" role="group" aria-label="Legend" data-open="0"><div class="H_row">/); assert.doesNotMatch(month.els['v-calendar'].innerHTML, /scroll sideways|tabindex="0"/);
+  assert.match(css, /\.A_legend \{ display: flex; flex-wrap: wrap; gap: 8px; row-gap: 6px; overflow: visible;/); assert.match(css, /\.H_legend \.H_row \{ display: grid; grid-template-columns: repeat\(5, minmax\(0, 1fr\)\);/, 'F2: four chips and More in ONE row');
   assert.match(month.els['v-calendar'].innerHTML, /Updated /);
 });
 
@@ -89,7 +88,7 @@ test('E_ Calendar day sheet: the admin note form is collapsed behind one button 
   let b = app.els['cs-body'].innerHTML;
   assert.match(b, /<button class="btn btn-secondary btn-sm" type="button" data-act="dayform-open"[^>]*>[^]*Add a note for this day<\/button>/); assert.doesNotMatch(b, /id="df-kind"|id="df-label"|data-act="flag-save"/);
   assert.doesNotMatch(b, /Nothing else noted/);
-  assert.match(b, /^<div class="F_sheethead"><h2 class="ttl"[^>]*>[^<]*<\/h2><button class="btn btn-secondary btn-sm F_close" type="button" data-F-close="1" data-act="sheet-close"><svg[^>]*><\/svg>Close<\/button><\/div>/, 'Close is in the sticky header row, beside the title');
+  assert.match(b, /^<div class="F_sheethead H_dayhead"><button class="iconbtn H_daynav"[^>]*data-act="day-prev"[^>]*><svg[^>]*><\/svg><\/button><h2 class="ttl"[^>]*>[^<]*<\/h2><button class="iconbtn H_daynav"[^>]*data-act="day-next"[^>]*><svg[^>]*><\/svg><\/button><button class="btn btn-secondary btn-sm F_close" type="button" data-F-close="1" data-act="sheet-close"><svg[^>]*><\/svg>Close<\/button><\/div>/, 'Close is in the sticky header row, beside the title and the two day arrows');
   await app.click({ 'data-act': 'dayform-open' });
   b = app.els['cs-body'].innerHTML; assert.match(b, /id="df-kind"/); assert.match(b, /id="df-label"/); assert.match(b, /data-act="flag-save"/); assert.doesNotMatch(b, /data-act="dayform-open"/);
   const cl = await boot({ role: 'cleaner', hash: '#calendar', handlers: baseHandlers('cleaner', { staff_home_v1: () => HOMEWITH(cal) }) });
@@ -122,7 +121,7 @@ test('E_ More: one Sign out button, on the profile card, with the dashboard note
     const app = await boot({ role, hash: '#more', handlers: baseHandlers(role) });
     const h = app.els['v-more'].innerHTML;
     assert.equal((h.match(/data-act="signout"/g) || []).length, 1, role);
-    const prof = h.slice(idx(h, 'class="card glass A_prof"'), idx(h, 'aria-label="What’s new"'));
+    const prof = h.slice(idx(h, 'class="card glass A_prof"')); assert.ok(h.lastIndexOf('data-act="signout"') > idx(h, 'aria-label="About this app"'), 'F6: Sign out is the last control');
     assert.match(prof, /data-act="signout"/); assert.match(prof, /Signs you out of the admin dashboard as well, on this phone\./);
     assert.doesNotMatch(h, /Signed in as|aria-label="Account"/);
   }
@@ -139,7 +138,7 @@ test('E_ press and hover: the many-times-a-day controls change colour only; hove
 });
 
 test('E_ renames and wording: the pay page is "Your pay", the quick guide names the new row, the old names are gone from every screen', () => {
-  assert.match(read('pay/index.html'), /<title>Your pay<\/title>/); assert.doesNotMatch(read('pay/pay.js'), /shell\('Payment Request'/); assert.match(read('pay/pay.js'), /shell\('Your pay'/);
-  assert.match(read('quick/index.html'), /Open <strong>Ask for your pay<\/strong>/);
+  assert.match(read('pay/index.html'), /<title>(Your pay|Cleaning fee)<\/title>/); assert.doesNotMatch(read('pay/pay.js'), /shell\('Payment Request'/); assert.match(read('pay/pay.js'), /shell\('(Your pay|Cleaning fee)'/);
+  assert.match(read('quick/index.html'), /Open <strong>Cleaning fee<\/strong>/);
   assert.doesNotMatch(read('app.js'), /title: 'Payment Request'|title: 'Guest Calendar Info'|'Guest Calendar Info'/);
 });
