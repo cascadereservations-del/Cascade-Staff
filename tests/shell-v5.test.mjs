@@ -269,6 +269,9 @@ test('A_ no duplicate top-level names in app.js, lib.js, theme.js, demo.js, icon
   const libExports = Object.keys(CS), dups = libExports.filter((k, i) => libExports.indexOf(k) !== i); assert.deepEqual(dups, []);
   for (const f of ['app.js', 'lib.js']) { const n = topNames(f).filter((x) => /^A_/.test(x)); assert.equal(new Set(n).size, n.length, f); }
   assert.ok(Object.keys(CS).filter((k) => /^A_/.test(k)).length >= 18, 'the shell helpers are exported');
+  // E_ (streamline pass): no top-level E_ name twice, in app.js, lib.js or the lib export list; the gesture helper is named once and aliased once
+  for (const f of ['app.js', 'lib.js']) { const n = topNames(f).filter((x) => /^E_/.test(x)); assert.equal(new Set(n).size, n.length, f + ' declares an E_ name twice'); assert.ok(n.length >= (f === 'lib.js' ? 20 : 8), f + ' carries its E_ names: ' + n.length); }
+  assert.ok(Object.keys(CS).filter((k) => /^E_/.test(k)).length >= 19, 'the streamline helpers are exported');
 });
 test('A_ parse: every shell script and page parses, the new view and slots exist, the old Google font links are gone', () => {
   for (const f of ['app.js', 'lib.js', 'theme.js', 'demo.js', 'icons.js', 'sw.js']) assert.doesNotThrow(() => new vm.Script(read(f), { filename: f }), f);

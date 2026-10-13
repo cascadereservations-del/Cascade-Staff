@@ -627,11 +627,11 @@
     sb.rpc(name, args).then(function (r) {
       if (r.error) throw r.error;
       if (r.data && r.data.ok === false) throw { message: r.data.error || 'not ok' };
-      S.msg = okMsg; S.form.label = ''; sheetLive(okMsg); buzz('tap');
+      S.msg = okMsg; S.form.label = ''; sheetLive(okMsg); E_vibe('tap');
       return Promise.all([loadHome(), loadTasks()]);
     }).catch(function (e) {
       if (CS.rpcMissing(e)) { S.missing = true; sheetLive('Available after the next update.'); return; }
-      S.err = e && e.code === '42501' ? 'Only an owner or admin can change this.' : 'That did not save. Check your signal and try again.'; sheetLive(S.err); buzz('error');
+      S.err = e && e.code === '42501' ? 'Only an owner or admin can change this.' : 'That did not save. Check your signal and try again.'; sheetLive(S.err); E_vibe('error');
     }).then(function () { S.busy = false; if (state.sheet === S) drawSheet(); });
   }
   function flagSave() {
@@ -695,7 +695,7 @@
   function E_announce() { if (!E_say) return; E_say = false; var l = $('E_attn-live'), a = E_att(); if (l) l.textContent = a.say || ''; }
 
   // ---------------------------------------------------------------- haptics (E_): CS.E_buzz holds the guards; the choice is a switch on More
-  function buzz(kind) { return CS.E_buzz(kind, { navigator: navigator, storage: store('localStorage'), doc: document }); }
+  function E_vibe(kind) { return CS.E_buzz(kind, { navigator: navigator, storage: store('localStorage'), doc: document }); }
   function E_canVibrate() { return 'vibrate' in navigator; }
   function E_reduced() { try { return !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches); } catch (e) { return false; } }
   function E_vw() { return window.innerWidth || 360; }
@@ -779,14 +779,14 @@
     if (!t && L && L.source + ':' + L.id === key) t = { source: L.source, id: L.id, title: L.title, status: done ? 'open' : 'done' };
     if (!t || t.status === (done ? 'done' : 'open')) return;
     t.status = done ? 'done' : 'open'; state.lastDone = { source: t.source, id: t.id, title: t.title, done: done }; state.tasksErr = ''; renderTasks(); renderTabs('tasks');
-    buzz('tap'); // one buzz for the confirm; the same path whether the box, the underlay button or the swipe asked
+    E_vibe('tap'); // one buzz for the confirm; the same path whether the box, the underlay button or the swipe asked
     toast(done ? 'Marked done' : 'Back on the list', t.source === 'verifier_findings' ? null : { act: done ? 'task-undo' : 'task-done', task: key, text: done ? 'Undo' : 'Done again', label: (done ? 'Undo: ' : 'Done again: ') + t.title });
     var call = t.source === 'verifier_findings' ? sb.rpc('ack_verifier_finding_v1', { p_key: t.id })
       : sb.rpc('task_set_done_v1', { p_property_id: pid(), p_source: t.source, p_id: t.id, p_done: done });
     var msg = '';
     call.then(function (r) { if (r.error) throw r.error; }).catch(function (e) {
       t.status = done ? 'open' : 'done'; state.lastDone = null;
-      msg = e && (e.code === '42501' || e.code === 'P0002') ? 'That task is not yours to change.' : 'That did not save. Check your signal and try again.'; buzz('error');
+      msg = e && (e.code === '42501' || e.code === 'P0002') ? 'That task is not yours to change.' : 'That did not save. Check your signal and try again.'; E_vibe('error');
     }).then(function () { return loadTasks(); }).then(function () { if (msg) { state.tasksErr = msg; renderTasks(); } });
   }
   function openAdd() {
@@ -800,9 +800,9 @@
     a.busy = true; a.err = ''; A_addDraw();
     sb.rpc('task_add_reminder_v1', { p_property_id: pid(), p_title: a.title.trim(), p_due_at: CS.dueFromDate(a.due), p_assignee_user_id: a.who || null, p_note: a.note.trim() || null, p_idempotency_key: a.key }).then(function (r) {
       if (r.error) throw r.error;
-      state.add = null; state.lastDone = null; closeSheet(); buzz('tap'); return loadTasks();
+      state.add = null; state.lastDone = null; closeSheet(); E_vibe('tap'); return loadTasks();
     }).catch(function (e) {
-      a.busy = false; buzz('error'); a.err = e && e.code === '42501' ? 'Only the owner and admins can add reminders.' : e && e.code === '22023' && e.message ? e.message : 'That did not save. Check your signal and try again.'; A_addDraw();
+      a.busy = false; E_vibe('error'); a.err = e && e.code === '42501' ? 'Only the owner and admins can add reminders.' : e && e.code === '22023' && e.message ? e.message : 'That did not save. Check your signal and try again.'; A_addDraw();
     });
   }
 
@@ -868,9 +868,9 @@
     state.rateSaving = true; f.err = ''; syncRate();
     sb.rpc('admin_add_pay_rate_v1', CS.rateArgs(pid(), f)).then(function (r) {
       if (r.error) throw r.error;
-      state.rateForm = null; state.rateSaving = false; buzz('tap'); return loadRates();
+      state.rateForm = null; state.rateSaving = false; E_vibe('tap'); return loadRates();
     }).catch(function (e) {
-      state.rateSaving = false; buzz('error'); f.err = CS.rpcMissing(e) ? 'Available after the next update.' : e && e.code === '42501' ? 'Only the owner and admins can change pay rates.' : e && e.code === '22023' && e.message ? e.message : 'That did not save. Check your signal and try again.'; syncRate();
+      state.rateSaving = false; E_vibe('error'); f.err = CS.rpcMissing(e) ? 'Available after the next update.' : e && e.code === '42501' ? 'Only the owner and admins can change pay rates.' : e && e.code === '22023' && e.message ? e.message : 'That did not save. Check your signal and try again.'; syncRate();
     });
   }
 
@@ -967,7 +967,7 @@
       R.busy = false;
       var X = o.status === 200 ? CS.replyResult(o.j) : null;
       if (X) { R.result = X; R.step = 'done'; R.copied = -1; R.err = ''; R.signout = false; }
-      else { R.err = CS.replyErrorText(o.status === 200 ? 502 : o.status, o.j && o.j.error); R.signout = o.status === 401; if (o.status === 401 || o.status === 403) buzz('error'); }
+      else { R.err = CS.replyErrorText(o.status === 200 ? 502 : o.status, o.j && o.j.error); R.signout = o.status === 401; if (o.status === 401 || o.status === 403) E_vibe('error'); }
       if (current === 'reply') { renderReply(X ? 'heading' : 'error'); rpLive(X ? 'The replies are ready' : ''); window.scrollTo(0, 0); }
     });
   }
@@ -1064,9 +1064,9 @@
     sb.rpc('ops_notice_add_v1', CS.A_noticeAddArgs(pid(), a)).then(function (r) {
       if (r.error) throw r.error;
       if (r.data && r.data.ok === false) throw { message: r.data.error || 'not ok', code: '22023' };
-      state.nadd = null; closeSheet(); toast('Notice added.'); buzz('tap'); return A_loadNotices();
+      state.nadd = null; closeSheet(); toast('Notice added.'); E_vibe('tap'); return A_loadNotices();
     }).catch(function (e) {
-      a.busy = false; buzz('error');
+      a.busy = false; E_vibe('error');
       a.err = CS.rpcMissing(e) ? 'Available after the next update.' : CS.A_noticeAddError(e);
       A_noticeAddDraw();
     });
@@ -1248,7 +1248,7 @@
     si.busy = true; $('si-go').disabled = true; trustOn = $('si-trust').checked;
     var bad = entry.kind === 'pin' ? 'That name or PIN is not right.' : 'That name or password is not right.';
     sb.auth.signInWithPassword(cred).then(function (r) {
-      if (r.error) { var offline = /fetch|network/i.test(r.error.message || '') || r.error.status === 0; if (!offline) buzz('error'); showSignin(offline ? 'No connection.' : bad); return; }
+      if (r.error) { var offline = /fetch|network/i.test(r.error.message || '') || r.error.status === 0; if (!offline) E_vibe('error'); showSignin(offline ? 'No connection.' : bad); return; }
       CS.rememberName(store('localStorage'), entry.handle);
       state.user = r.data.user;
       return loadAccess().then(function (access) {
@@ -1294,7 +1294,7 @@
     else if (a === 'notice-add-open') { if (CS.canSeeGuestContact(role()) && state.notices && !state.noticesAbsent) { state.nadd = { type: 'water', title: '', date: t.getAttribute('data-date') || '', start: '', hours: '', detail: '', err: '', busy: false }; openSheet('nadd', 'notice-add-open'); } }
     else if (a === 'notice-add-cancel') { state.nadd = null; closeSheet(); }
     else if (a === 'notice-add-save') A_noticeAddSave();
-    else if (a === 'notice-tell') { var nt = CS.canSeeGuestContact(role()) ? A_noticeByKey(t.getAttribute('data-nkey')) : null; var gm = nt ? CS.A_guestMessage(nt) : null; if (nt && !gm) toast('Check the notice text first.'); else if (gm) copyText(gm).then(function () { toast('Message copied. Paste it to the guest.'); buzz('tap'); }, function () { toast('Copy did not work on this phone.'); }); }
+    else if (a === 'notice-tell') { var nt = CS.canSeeGuestContact(role()) ? A_noticeByKey(t.getAttribute('data-nkey')) : null; var gm = nt ? CS.A_guestMessage(nt) : null; if (nt && !gm) toast('Check the notice text first.'); else if (gm) copyText(gm).then(function () { toast('Message copied. Paste it to the guest.'); E_vibe('tap'); }, function () { toast('Copy did not work on this phone.'); }); }
     else if (a === 'notice-cal') { var nd0 = t.getAttribute('data-date'), np = nd0.split('-'); if (CS.monthInRange(+np[0], +np[1], state.payload.today)) state.month = { y: +np[0], m: +np[1] }; state.calTab = 'month'; if (location.hash !== '#calendar') location.hash = '#calendar'; else render('calendar'); openSheet('day', nd0); }
     else if (a === 'notice-resolve') { if (CS.canSeeGuestContact(role())) sb.rpc('ack_verifier_finding_v1', { p_key: t.getAttribute('data-id') }).then(function (r) { if (r.error) throw r.error; return A_loadNotices(); }).catch(function () { toast('That did not save. Check your signal and try again.'); }); }
     else if (t.hasAttribute('data-nfilter')) { state.noticeFilter = t.getAttribute('data-nfilter'); renderCalendar(); }
@@ -1365,11 +1365,11 @@
     E_drag(document, { sel: '[data-slide]', axis: 'x', vw: E_vw, reduced: E_reduced,
       move: function (a, d) { var k = a.querySelector('.knob'); if (k) { E_tr(k, 0); k.style.transform = 'translateX(' + Math.max(0, Math.min(travel(a), d.dx)) + 'px)'; } },
       reached: function (a, d) { return d.dx >= travel(a) * 0.7; },
-      onEdge: function () { buzz('edge'); },
+      onEdge: function () { E_vibe('edge'); },
       end: function (a, d) {
         var k = a.querySelector('.knob'), go = CS.E_slideCommit(Math.max(0, d.dx), travel(a), d.vx);
         if (k) { E_tr(k, 200); k.style.transform = ''; }
-        if (go) { buzz('tap'); if (a.getAttribute('target') === '_blank') window.open(a.href, '_blank', 'noopener'); else location.hash = a.getAttribute('href'); }
+        if (go) { E_vibe('tap'); if (a.getAttribute('target') === '_blank') window.open(a.href, '_blank', 'noopener'); else location.hash = a.getAttribute('href'); }
       },
       cancel: function (a) { var k = a.querySelector('.knob'); if (k) { E_tr(k, 200); k.style.transform = ''; } } });
   })();
@@ -1383,7 +1383,7 @@
         var sc = scrim(); if (sc && sc.style) sc.style.opacity = String(Math.max(0, 1 - Math.max(0, d.dy) / Math.max(1, el.offsetHeight || 400)));
       },
       reached: function (el, d) { return d.dy >= 96; },
-      onEdge: function () { buzz('edge'); },
+      onEdge: function () { E_vibe('edge'); },
       end: function (el, d) {
         var S = state.sheet, close = !!S && CS.E_sheetCommit(d.dy, d.vy) && !E_dirty();
         E_sheetReset(el, scrim()); // back to the stylesheet: it springs home over --v5-sheet-ms, or carries on out if the sheet closes
@@ -1403,7 +1403,7 @@
       start: function (el) { shutAll(el); if (el.parentNode && el.parentNode.classList) el.parentNode.classList.add('E_live'); },
       move: function (el, d) { E_tr(el, 0); el.style.transform = 'translateX(' + (-CS.E_taskFollow(d.dx, openW(el))) + 'px)'; },
       reached: function (el, d) { return el.getAttribute('data-E-verifier') !== '1' && -d.dx >= 0.4 * (el.offsetWidth || 360); },
-      onEdge: function () { buzz('edge'); },
+      onEdge: function () { E_vibe('edge'); },
       end: function (el, d) {
         var ver = el.getAttribute('data-E-verifier') === '1', commit = CS.E_taskCommit(d.dx, el.offsetWidth || 360, d.vx);
         if (!ver && commit) { shut(el); setTaskDone(el.getAttribute('data-task'), el.getAttribute('data-E-swipe') === 'task-done'); }
