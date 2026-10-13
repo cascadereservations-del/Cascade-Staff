@@ -47,6 +47,7 @@
     if (hook) hook(msg || NOTE);
     var doc = root.document; if (!doc) return;
     var t = doc.getElementById('cs-toast');
+    if (t && t.classList && t.classList.contains('E_hasact')) return; // an Undo toast keeps its words and its full time; the app adds the demo note itself
     if (!t) { t = doc.createElement('div'); t.id = 'cs-toast'; t.className = 'toast'; t.setAttribute('role', 'status'); t.setAttribute('aria-live', 'polite'); doc.body.appendChild(t); }
     t.textContent = msg || NOTE; t.classList.add('on');
     clearTimeout(timer); timer = setTimeout(function () { t.classList.remove('on'); t.textContent = ''; }, 2500);
