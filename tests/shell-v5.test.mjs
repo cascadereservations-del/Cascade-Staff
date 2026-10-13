@@ -88,8 +88,8 @@ test('A_ day marks and guest message: one glyph per kind, the flag brownout and 
   const msg = CS.A_guestMessage(v.list.find((n) => n.id === 'n1'));
   assert.match(msg, /Brownout 1:00 to 4:00 pm/); assert.doesNotMatch(msg, /!/); assert.match(msg, /tell you if anything changes/);
 });
-test('A_ calendar tabs and stay shades: Month | Stays | Notices, old deep links land on Stays, g5 does not exist so five shades cycle', () => {
-  assert.deepEqual([CS.A_calTab(undefined), CS.A_calTab('stays'), CS.A_calTab('house'), CS.A_calTab('warnings'), CS.A_calTab('notices'), CS.A_calTab('x')], ['month', 'stays', 'stays', 'stays', 'notices', 'month']);
+test('A_ calendar tabs and stay shades: Calendar | Notices, old Stays deep links land on the one calendar screen, g5 does not exist so five shades cycle', () => {
+  assert.deepEqual([CS.A_calTab(undefined), CS.A_calTab('stays'), CS.A_calTab('house'), CS.A_calTab('warnings'), CS.A_calTab('notices'), CS.A_calTab('x')], ['calendar', 'calendar', 'calendar', 'calendar', 'notices', 'calendar']);
   const shades = [0, 1, 2, 3, 4, 5].map(CS.A_stayShade);
   assert.equal(shades[0], shades[5]); assert.notEqual(shades[0], shades[1]);
   assert.ok(shades.every((s) => !/g5/.test(s)));
@@ -237,8 +237,8 @@ test('A_ live mock: Resolve sends the existing ack_verifier_finding_v1; the cale
   await a.click({ 'data-act': 'notice-resolve', 'data-id': 'V1m:x' });
   assert.deepEqual(a.calls.find((c) => c[0] === 'ack_verifier_finding_v1')[1], { p_key: 'V1m:x' });
   const m = await boot({ role: 'cleaner', hash: '#calendar', handlers: base('cleaner') }), h = m.els['v-calendar'].innerHTML;
-  assert.match(h, /aria-current="page">Month<\/a><a href="#calendar\/stays" data-act="cal-tab" data-tab="stays">Stays<\/a><a href="#calendar\/notices" data-act="cal-tab" data-tab="notices">Notices/);
-  assert.ok(h.indexOf('class="A_legend"') > 0 && h.indexOf('class="A_legend"') < h.indexOf('class="cal"'), 'legend chips above the grid');
+  assert.match(h, /aria-current="page">Calendar<\/a><a href="#calendar\/notices" data-act="cal-tab" data-tab="notices">Notices/); assert.doesNotMatch(h, />Stays<\/a>/);
+  assert.ok(h.indexOf('class="A_legend H_legend"') > 0 && h.indexOf('class="A_legend H_legend"') < h.indexOf('class="cal"'), 'legend chips above the grid');
   assert.equal((h.match(/<button class="d /g) || []).length, 31, 'one 44 px button per day of October');
   assert.match(h, /A_mk power/); assert.match(h, /data-day="2026-10-16"/);
 });

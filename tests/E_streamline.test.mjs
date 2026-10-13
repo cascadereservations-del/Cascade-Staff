@@ -52,8 +52,7 @@ test('E_ Notices card rows: the title keeps the time, the sub is date and source
   const app = await boot({ role: 'cleaner', hash: '#home', handlers: baseHandlers('cleaner', { notices_v1: () => ({ error: null, data: raw }) }) });
   const h = app.els['v-home'].innerHTML;
   assert.match(h, /<span class="t">Rain watch, 2 to 5 pm<\/span><span class="s">80% chance today<\/span>/);
-  assert.match(h, /<span class="t">Brownout 1:00 to 4:00 pm<\/span><span class="s">Fri 16 Oct · SOCOTECO II<\/span>/);
-  assert.doesNotMatch(h.slice(h.indexOf('aria-label="Notices"')), /<span class="s">[^<]*\d:\d\d [ap]m[^<]*<\/span>/, 'no time in any sub');
+  assert.match(h, /<span class="t">Brownout · Fri 16 Oct<\/span><span class="s">1:00 pm to 4:00 pm · SOCOTECO II<\/span>/, 'F11: the title is the kind and the day, the sub the time and the place');
   assert.match(css, /\.A_noticecard \{ background: var\(--v5-card-glass\); \}/);
 });
 
@@ -69,16 +68,16 @@ test('E_ Calendar: no Back arrow, the title is "Calendar", the legend wraps, Sta
   const cal = [stayRow('Ana Reyes', '2026-10-12', '2026-10-17'), stayRow('Ben Cruz', '2026-10-20', '2026-10-22')];
   const guest = { uid: 'g1', guest_name: 'Ana Reyes', source: 'direct', checkin_date: '2026-10-12', checkout_date: '2026-10-17', nights: 5 };
   const next = { uid: 'g2', guest_name: 'Ben Cruz', source: 'direct', checkin_date: '2026-10-20', checkout_date: '2026-10-22', nights: 2 };
-  const app = await boot({ role: 'cleaner', hash: '#calendar/stays', handlers: baseHandlers('cleaner', { staff_home_v1: () => HOMEWITH(cal, { current_guest: guest, next_guest: next }) }) });
+  const app = await boot({ role: 'cleaner', hash: '#calendar', handlers: baseHandlers('cleaner', { staff_home_v1: () => HOMEWITH(cal, { current_guest: guest, next_guest: next }) }) });
   const h = app.els['v-calendar'].innerHTML;
   assert.match(h, /<h1 class="ttl">Calendar<\/h1>/); assert.doesNotMatch(h.slice(0, h.indexOf('</header>')), /aria-label="Back"|class="iconbtn" href/);
   assert.equal((h.match(/In the house/gi) || []).length, 1, 'the cap is said once (case-insensitive: the CSS uppercases it)'); assert.equal((h.match(/Next arrival/gi) || []).length, 1);
-  assert.match(h, /Coming up/);
-  const empty = await boot({ role: 'cleaner', hash: '#calendar/stays', handlers: baseHandlers('cleaner') });
-  assert.match(empty.els['v-calendar'].innerHTML, /<span class="cap up">In the house<\/span><div class="card glass"><p class="sub">No guest in the house tonight/, 'an empty card still has its label');
+  assert.match(h, /Next 14 days/);
+  const empty = await boot({ role: 'cleaner', hash: '#calendar', handlers: baseHandlers('cleaner') });
+  assert.match(empty.els['v-calendar'].innerHTML, /Nothing is booked to arrive or leave in the next 14 days/, 'an empty agenda says so');
   const month = await boot({ role: 'cleaner', hash: '#calendar', handlers: baseHandlers('cleaner') });
-  assert.match(month.els['v-calendar'].innerHTML, /<div class="A_legend" role="group" aria-label="Legend">/); assert.doesNotMatch(month.els['v-calendar'].innerHTML, /scroll sideways|tabindex="0"/);
-  assert.match(css, /\.A_legend \{ display: flex; flex-wrap: wrap; gap: 8px; row-gap: 6px; overflow: visible;/);
+  assert.match(month.els['v-calendar'].innerHTML, /<div class="A_legend H_legend" role="group" aria-label="Legend" data-open="0"><div class="H_row">/); assert.doesNotMatch(month.els['v-calendar'].innerHTML, /scroll sideways|tabindex="0"/);
+  assert.match(css, /\.A_legend \{ display: flex; flex-wrap: wrap; gap: 8px; row-gap: 6px; overflow: visible;/); assert.match(css, /\.H_legend \.H_row \{ display: grid; grid-template-columns: repeat\(5, minmax\(0, 1fr\)\);/, 'F2: four chips and More in ONE row');
   assert.match(month.els['v-calendar'].innerHTML, /Updated /);
 });
 
@@ -89,7 +88,7 @@ test('E_ Calendar day sheet: the admin note form is collapsed behind one button 
   let b = app.els['cs-body'].innerHTML;
   assert.match(b, /<button class="btn btn-secondary btn-sm" type="button" data-act="dayform-open"[^>]*>[^]*Add a note for this day<\/button>/); assert.doesNotMatch(b, /id="df-kind"|id="df-label"|data-act="flag-save"/);
   assert.doesNotMatch(b, /Nothing else noted/);
-  assert.match(b, /^<div class="F_sheethead"><h2 class="ttl"[^>]*>[^<]*<\/h2><button class="btn btn-secondary btn-sm F_close" type="button" data-F-close="1" data-act="sheet-close"><svg[^>]*><\/svg>Close<\/button><\/div>/, 'Close is in the sticky header row, beside the title');
+  assert.match(b, /^<div class="F_sheethead H_dayhead"><button class="iconbtn H_daynav"[^>]*data-act="day-prev"[^>]*><svg[^>]*><\/svg><\/button><h2 class="ttl"[^>]*>[^<]*<\/h2><button class="iconbtn H_daynav"[^>]*data-act="day-next"[^>]*><svg[^>]*><\/svg><\/button><button class="btn btn-secondary btn-sm F_close" type="button" data-F-close="1" data-act="sheet-close"><svg[^>]*><\/svg>Close<\/button><\/div>/, 'Close is in the sticky header row, beside the title and the two day arrows');
   await app.click({ 'data-act': 'dayform-open' });
   b = app.els['cs-body'].innerHTML; assert.match(b, /id="df-kind"/); assert.match(b, /id="df-label"/); assert.match(b, /data-act="flag-save"/); assert.doesNotMatch(b, /data-act="dayform-open"/);
   const cl = await boot({ role: 'cleaner', hash: '#calendar', handlers: baseHandlers('cleaner', { staff_home_v1: () => HOMEWITH(cal) }) });

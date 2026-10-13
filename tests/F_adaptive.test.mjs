@@ -15,7 +15,7 @@ function evalClamp(c, w) {
   return Math.min(len(parts[3], w), Math.max(len(parts[1], w), mid));
 }
 const WIDTHS = [320, 360, 412, 600, 768, 1024, 1280];
-const TYPE = { display: [36, 44], section: [24, 30], num: [22, 28], body: [17, 19], 2: [15, 17], label: [13, 14], min: [12, 13] };
+const TYPE = { display: [36, 44], section: [24, 30], num: [22, 28], body: [17, 19], 2: [15, 17], label: [13, 14], min: [13, 13] };
 
 test('F_ type tokens: rem + vw clamp(), exactly today\'s px at 360, growing to their maximum by 1024, never under 12 px, monotonic', () => {
   for (const [name, [base, max]] of Object.entries(TYPE)) {
@@ -24,10 +24,10 @@ test('F_ type tokens: rem + vw clamp(), exactly today\'s px at 360, growing to t
     assert.ok(Math.abs(v[1] - base) < 0.1, name + ' at 360 is ' + v[1] + ', today is ' + base);
     assert.ok(Math.abs(evalClamp(c, 1024) - max) < 0.1 && evalClamp(c, 1600) === max * 1, name + ' reaches ' + max + ' by 1024 and holds');
     for (let i = 1; i < v.length; i++) assert.ok(v[i] >= v[i - 1] - 1e-9, name + ' never shrinks as the screen grows: ' + v.join(', '));
-    assert.ok(Math.min(...v) >= 12, name + ' is never under 12 px: ' + v.join(', '));
+    assert.ok(Math.min(...v) >= 13, name + ' is never under 13 px (s82 F3): ' + v.join(', '));
   }
-  assert.equal(evalClamp(tok('t-min'), 320), 12, 'the caption formula would give 11.94 at 320: the floor holds it at 12');
-  const chrome = tok('t-chrome'); assert.equal(evalClamp(chrome, 360), 12); assert.equal(evalClamp(chrome, 1280), 12, 'tab labels are capped chrome and follow the text size only up to 14 px'); assert.equal(chrome, 'clamp(12px, 0.75rem, 14px)');
+  assert.equal(evalClamp(tok('t-min'), 320), 13, 'the floor is 13 px');
+  const chrome = tok('t-chrome'); assert.equal(evalClamp(chrome, 360), 13); assert.equal(evalClamp(chrome, 1280), 13, 'tab labels are capped chrome and follow the text size only up to 14 px'); assert.equal(chrome, 'clamp(13px, 0.8125rem, 14px)');
 });
 
 test('F_ spacing and radius tokens follow the same method: 16 / 14 / 16 / 24 at 360, gentle growth, fixed minimums, the sheet radius and targets do not scale', () => {
@@ -92,7 +92,7 @@ test('F_ scoping: the card grid, the dialogs, the rail and the side sheets exist
   assert.match(medium, /translate\(-50%, -50%\)/); assert.match(medium, /width: min\(36rem, calc\(100% - 2 \* var\(--gutter\)\)\)/); assert.match(medium, /max-height: 85dvh/); assert.match(medium, /\.E_grab \{ display: none; \}/);
   assert.match(medium, /\.tabbar \{ max-width: 30rem; \}/);
   assert.match(rail, /\.tabbar \{ left: 0; right: auto; top: 0; bottom: 0; width: var\(--v5-nav-w\)/); assert.match(rail, /flex-direction: column/); assert.match(rail, /#app\.F_nav \{ padding-left: var\(--v5-nav-w\); \}/);
-  assert.match(wide, /data-F-kind="day"\], \.sheet\[data-F-kind="attn"\] \{[^}]*right: 0; top: 0; bottom: 0; width: min\(26rem, 40vw\)/); assert.match(wide, /\[data-F-tab="stays"\] \{ display: grid; grid-template-columns: repeat\(2/);
+  assert.match(wide, /data-F-kind="day"\], \.sheet\[data-F-kind="attn"\] \{[^}]*right: 0; top: 0; bottom: 0; width: min\(26rem, 40vw\)/); assert.doesNotMatch(wide, /data-F-tab="stays"/, 'the Stays screen is gone (s82)');
   for (const x of [/grid-template-columns: repeat\(2/, /translate\(-50%/, /width: var\(--v5-nav-w\)/, /data-F-kind/, /flex-direction: column; justify-content: flex-start/]) assert.doesNotMatch(base, x, 'not in the base rules: ' + x);
   assert.doesNotMatch(block('(max-width: 22.4375rem)'), /grid-template-columns: repeat\(2|translate\(-50%|flex-direction: column/, 'the compact class is the phone column, tighter');
   assert.match(block('(max-width: 22.4375rem)'), /\.cal \.d \{ padding: 2px 3px; \}/); assert.doesNotMatch(block('(max-width: 22.4375rem)'), /min-height: (?:[0-3]\d)px/, 'a cell may be narrow, never short');
@@ -140,7 +140,7 @@ const surf = (x) => Object.assign({ style: {}, offsetWidth: 360, offsetHeight: 4
 
 test('F_ sheets: a bottom sheet below 600 px pulls down to close; from 600 px it is a dialog that does not pull and closes by its button, Escape or the scrim', async () => {
   const open = async (w) => { const app = await boot({ role: 'admin', hash: '#calendar', width: w, handlers: baseHandlers('admin', { staff_home_v1: () => HOMEWITH([stayRow('Ana Reyes', '2026-10-14', '2026-10-17')]) }) }); await app.click({ 'data-day': '2026-10-16' }); return app; };
-  const pull = (app) => { const sh = app.els['cal-sheet']; drive(app, sh, [[0, 180 + 0, 300], [30, 180, 340], [60, 180, 380], [90, 180, 410], [400, 180, 410]], (s) => (s === '#cal-sheet' ? sh : s === '.E_grab' ? {} : null)); };
+  const pull = (app) => { const sh = app.els['cal-sheet']; drive(app, sh, [[0, 180 + 0, 300], [30, 180, 340], [60, 180, 380], [90, 180, 410], [400, 180, 410]], (s) => (s === '#cal-sheet' ? sh : s === '.E_grab, .F_sheethead' ? {} : null)); };
   const shut = (app) => app.els['cal-sheet'].getAttribute('aria-hidden') === 'true';
   for (const w of [320, 360, 599]) { const a = await open(w); pull(a); assert.ok(shut(a), 'pulled shut at ' + w); }
   for (const w of [600, 768, 1024, 1280]) {
@@ -155,8 +155,8 @@ test('F_ gestures and haptics keep working in every class: the calendar swipe, t
   const FOLD = { schema: 1, surfaces: { admin: { files: 84 }, checklist: { files: 8 }, manual: { files: 16 }, guide: { files: 48, adminGuide: true } } };
   for (const width of [360, 768, 1280]) {
     const tab = await boot({ role: 'admin', hash: '#calendar', width, handlers: baseHandlers('admin', { staff_home_v1: () => HOMEWITH([stayRow('Ana Reyes', '2026-10-14', '2026-10-17')]) }) });
-    const body = surf({ offsetWidth: width }); drive(tab, body, [[0, width - 80, 300], [100, width - 80 - Math.round(width * 0.15), 302], [200, width - 80 - Math.round(width * 0.4), 302], [260, width - 80 - Math.round(width * 0.4), 302]], (s, el) => (s === '.E_tabbody' ? el : null));
-    assert.equal(tab.location.hash, '#calendar/stays', 'swipe at ' + width);
+    const body = surf({ offsetWidth: width }); drive(tab, body, [[0, width - 80, 300], [100, width - 80 - Math.round(width * 0.15), 302], [200, width - 80 - Math.round(width * 0.4), 302], [260, width - 80 - Math.round(width * 0.4), 302]], (s, el) => (s === '.cal' ? el : null));
+    assert.match(tab.els['v-calendar'].innerHTML, /<h2 class="dlg"[^>]*>November 2026</, 'month swipe at ' + width);
     const done = new Set(), calls = [];
     const task = await boot({ role: 'admin', hash: '#tasks', width, nav: { vibrate: (p) => { calls.push(p); return true; } }, handlers: baseHandlers('admin', { tasks_list_v1: () => ({ error: null, data: { ok: true, manager: true, today: TODAY, tasks: [T({})].filter((t) => !done.has(t.id)) } }), task_set_done_v1: (a) => { done.add(a.p_id); return { error: null, data: { ok: true } }; } }) });
     const row = surf({ offsetWidth: Math.min(width, 736), getAttribute: (k) => ({ 'data-task': 'follow_up_tasks:a', 'data-E-swipe': 'task-done', 'data-E-w': '96' })[k] ?? null });

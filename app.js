@@ -63,11 +63,12 @@
     storage: CS.authStorage(store('localStorage'), store('sessionStorage'), function () { return trustOn; }) } });
 
   var state = { access: null, user: null, name: '', layout: null, payload: null, loadedAt: 0, loading: false, error: '', month: null, payHint: null, photos: {},
-    notices: null, noticesAbsent: false, noticesLoading: false, noticeFilter: 'all', nadd: null, fbOpen: false, ratesMore: false, calTab: 'month', taskFilter: 'all', hubRoute: '', tasks: null, tasksErr: '', tasksLoading: false, showDone: false, lastDone: null, add: null, assignees: null, rates: null, ratesErr: '', rateForm: null, rateSaving: false, reply: null, bookings: null, bookingsDone: false, noticesDone: false, tasksDenied: false, noticesFailed: false, bookingsFailed: false, errorKind: '' };
+    notices: null, noticesAbsent: false, noticesLoading: false, noticeFilter: 'all', nadd: null, fbOpen: false, ratesMore: false, calTab: 'calendar', legendOpen: false, H_peekedCal: false, H_peekedTask: false, progress: null, progressAbsent: false, taskFilter: 'all', hubRoute: '', tasks: null, tasksErr: '', tasksLoading: false, showDone: false, lastDone: null, add: null, assignees: null, rates: null, ratesErr: '', rateForm: null, rateSaving: false, reply: null, bookings: null, bookingsDone: false, noticesDone: false, tasksDenied: false, noticesFailed: false, bookingsFailed: false, errorKind: '' };
   var $ = function (id) { return document.getElementById(id); };
-  var VIEWS = ['signin', 'home', 'calendar', 'tasks', 'payrates', 'more', 'door', 'reply', 'hub'];
+  var VIEWS = ['signin', 'home', 'calendar', 'tasks', 'payrates', 'more', 'door', 'reply', 'hub', 'weather', 'stock', 'manage', 'search'];
   function pid() { return (state.access && state.access.property_ids && state.access.property_ids[0]) || CFG.propertyId; }
-  function canReply() { return CS.canDraftReply(state.access && state.access.role); }
+  function canReply() { return CS.canDraftReply(state.access && state.access.role); } // s82 decision 5: every signed-in staff role
+  function canAddDetails() { return CS.canAddGuestDetails(state.access && state.access.role); } // the guest-details uploader stays owner and admin
 
   // ---------------------------------------------------------------- helpers
   function ext(href, inner, cls, extra) { return '<a class="' + (cls || '') + '" href="' + esc(href) + '" target="_blank" rel="noopener"' + (extra || '') + '>' + inner + '</a>'; }
@@ -120,7 +121,7 @@
   function renderTabs(current) {
     var staff = state.layout === 'staff', due = state.tasks ? CS.taskDueCount(state.tasks.tasks, state.tasks.today) : 0;
     var late = state.tasks ? state.tasks.tasks.some(function (t) { return t.status !== 'done' && CS.taskDue(t.due_at, state.tasks.today) === 'overdue'; }) : false; // red only when something is overdue
-    var tabs = [['home', '#home', staff ? 'Today' : 'Home', 'house'], ['calendar', '#calendar', 'Calendar', 'calendar', warnCount()],
+    var tabs = [['home', '#home', 'Today', 'house'], ['calendar', '#calendar', 'Calendar', 'calendar', warnCount()],
       ['tasks', '#tasks', 'Tasks', 'tasks', due], ['more', '#more', 'More', 'more']];
     $('tabbar').innerHTML = tabs.map(function (t) {
       return '<a class="tab" href="' + esc(t[1]) + '"' + (t[0] === current ? ' aria-current="page"' : '') + '><span class="ico">' + ICON(t[3], 's24') + '</span>' + esc(t[2]) +
@@ -207,8 +208,9 @@
     if (state.noticesAbsent) return '';
     var loading = !v && state.noticesLoading, items = v ? v.all.slice(0, 2) : [], body;
     if (!v) body = loading ? '<div class="skel" style="height:72px"></div>' : '<p class="sub" style="margin:0">No connection. <button class="btn btn-ghost btn-sm" type="button" data-act="refresh">Try again</button></p>';
-    else body = items.length ? '<div class="A_nlist">' + items.map(function (n) { return row({ icon: A_noticeIcon(n.type), tile: n.type, title: n.title, sub: n.sub, href: '#calendar/notices', hint: n.title + (n.sub ? ' · ' + n.sub : '') }); }).join('') + '</div>' : '<p class="sub" style="margin:0">No notices. Nothing to plan around.</p>';
-    return '<section class="card glass A_card A_noticecard" aria-label="Notices"' + (loading ? ' aria-busy="true"' : '') + '><div class="A_head"><h2>Notices</h2>' + (v ? '<a href="#calendar/notices">' + (v.counts.all ? 'See all ' + v.counts.all : 'Open') + ICON('chev', 's16') + '</a>' : '') + '</div>' + body + '</section>';
+    else body = items.length ? '<div class="A_nlist">' + items.map(function (n) { var h = CS.H_noticeHead(n); return row({ icon: A_noticeIcon(n.type), tile: n.type, title: h.title, sub: h.sub, href: '#calendar/notices', hint: n.title + (n.sub ? ' · ' + n.sub : '') }); }).join('') + '</div>' : '<p class="sub" style="margin:0">No notices. Nothing to plan around.</p>';
+    var mgr = CS.canSeeGuestContact(role()), add = mgr && v ? '<button class="btn btn-ghost H_addrow" type="button" data-act="notice-add-open" data-date="' + esc(state.payload.today) + '">' + ICON('plus', 's16') + 'Add a notice</button>' : '';
+    return '<section class="card glass A_card A_noticecard' + (mgr ? ' H_mgr' : '') + '" aria-label="Notices"' + (loading ? ' aria-busy="true"' : '') + '><div class="A_head"><h2>Notices</h2>' + (v ? '<a href="#calendar/notices">' + (v.counts.all ? 'See all ' + v.counts.all : 'Open') + ICON('chev', 's16') + '</a>' : '') + '</div>' + body + add + '</section>';
   }
   function A_noticeIcon(type) { return type === 'house' ? 'house' : (CS.A_NOTICE_TYPES[type] || CS.A_NOTICE_TYPES.note).icon; }
   // F_: a label and its card travel as one grid item (F_group), so a two-column grid never splits them
@@ -258,7 +260,7 @@
       '<h3 class="ttl" style="margin-top:8px">' + esc(g.guest_name || 'Guest') + '</h3>' + (withLine ? '<p class="sub" style="margin:2px 0 0">' + esc(withLine) + '</p>' : '') +
       '<div class="row-wrap" style="margin-top:6px">' + (ret ? pill('brand', 'repeat', ret) : '') + (src ? '<span class="pill p-neutral">' + esc(src) + '</span>' : '') + '</div>' +
       '<p class="sub num" style="margin:8px 0 0">' + esc(datesLine(g)) + '</p>' + (earlier ? '<p class="help num" style="margin:2px 0 0">' + esc(earlier) + '</p>' : '') + contactBlock(g) +
-      (canReply() && g.uid ? '<a class="btn btn-secondary btn-sm" href="./guest/#' + encodeURIComponent(g.uid) + '" style="margin-top:12px">' + ICON('idcard', 's16') + 'Add guest details</a>' : '') + '</div>';
+      H_readyBlock(g.arrival_ready, g, true) + (canAddDetails() && g.uid ? '<a class="btn btn-secondary btn-sm" href="./guest/#' + encodeURIComponent(g.uid) + '" style="margin-top:12px">' + ICON('idcard', 's16') + 'Add guest details</a>' : '') + '</div>';
     var groups = CS.parseNotes(g.notes), notes = '';
     if (groups.length) {
       notes = '<div class="card glass"><h3 class="hd">Notes from earlier stays</h3><div style="margin-top:10px">' + groups.map(function (gr) {
@@ -269,7 +271,7 @@
       notes = '<div class="card"><h3 class="hd">Notes from earlier stays</h3><p class="sub" style="margin-top:8px">Nothing was noted last time.</p></div>';
     }
     // Owner/admin: the empty box opens Add guest details in ID mode (take or choose the guest's own ID photo; D-320.5).
-    var addId = canReply() && g.uid ? './guest/?for=id#' + encodeURIComponent(g.uid) : '';
+    var addId = canAddDetails() && g.uid ? './guest/?for=id#' + encodeURIComponent(g.uid) : '';
     var idcard = '<div class="card glass"><h3 class="hd">Guest ID</h3><div style="margin-top:10px">' +
       (g.id_photo_path ? '<div class="idphoto" data-idpath="' + esc(g.id_photo_path) + '"><span class="help">Loading the photo…</span></div><p class="help" style="margin:10px 0 0">Check the face and the name against the guest at the door.</p>'
         : addId ? '<a class="idphoto empty idadd" href="' + esc(addId) + '">' + ICON('camera', 's24') + '<span><b>No ID photo yet.</b><br>Tap to take or choose a photo of the guest’s ID.</span></a>'
@@ -335,11 +337,14 @@
     if (!state.month) state.month = { y: +p[0], m: +p[1] };
     return state.month;
   }
-  function shiftMonth(d) {
+  function monthStep(d) { // the month d steps away, or null past the months the calendar offers
     var m = monthState(), y = m.y, mm = m.m + d;
     if (mm < 1) { mm = 12; y--; } if (mm > 12) { mm = 1; y++; }
-    if (!CS.monthInRange(y, mm, state.payload.today)) return;
-    state.month = { y: y, m: mm }; renderCalendar();
+    return CS.monthInRange(y, mm, state.payload.today) ? { y: y, m: mm } : null;
+  }
+  function shiftMonth(d, fade) {
+    var n = monthStep(d); if (!n) return false;
+    state.month = n; state.H_fade = !!fade; renderCalendar(); return true;
   }
   var FLAG_ICON = { brownout: 'zap', maintenance: 'wrench', deep_clean: 'sparkles', other: 'note' };
   var BLOCK_ICON = { brownout: 'zapoff', maintenance: 'wrench', deep_clean: 'sparkles', owner: 'house', direct: 'calendar' };
@@ -391,20 +396,22 @@
         (ds.flags.filter(function (f) { return !CS.A_flagDup(f, nd); }).length ? '; ' + ds.flags.filter(function (f) { return !CS.A_flagDup(f, nd); }).map(function (f) { return CS.flagName(f.kind); }).join(', ') : '') + (nd.length ? '; ' + nd.map(function (x) { return x.title; }).join(', ') : '');
       return '<button class="' + cls + '" type="button" style="' + A_shadeOf(ds.out || ds.stay) + '" data-day="' + c.iso + '" aria-label="' + esc(label) + '" aria-haspopup="dialog">' + inner + '</button>';
     }).join('');
-    return '<div class="cal" role="group" aria-label="' + esc(CS.monthTitle(m.y, m.m)) + '">' + dows + body + '</div>';
+    return '<div class="cal" role="group" data-E-swipe="month" aria-label="' + esc(CS.monthTitle(m.y, m.m)) + '">' + dows + body + '</div>';
   }
-  // Legend chips ABOVE the grid; they wrap onto a second row on a narrow phone (nothing scrolls sideways).
+  // F2: the legend is ONE row: Booked, Turnover, Blocked, Clash and a More chip that opens the rest inline (and is remembered). From 600 px all of it shows in one row.
   function legend() {
     var sw = function (css, t) { return '<span><i class="A_sw" style="' + css + '"></i>' + t + '</span>'; };
     var mk = function (k) { return '<span><i class="A_mk ' + k + ' A_sw" style="display:inline-flex;align-items:center;justify-content:center">' + ICON(MARK_ICON[k], 's12') + '</i>' + MARK_WORD[k] + '</span>'; };
-    return '<div class="A_legend" role="group" aria-label="Legend">' +
-      sw('background:var(--v5-surf);border:1px solid var(--v5-cal-free-edge)', 'Free') + sw('background:var(--v5-g1)', 'Booked') +
+    var open = !!state.legendOpen;
+    return '<div class="A_legend H_legend" role="group" aria-label="Legend" data-open="' + (open ? '1' : '0') + '"><div class="H_row">' +
+      sw('background:var(--v5-g1)', 'Booked') + sw('background:linear-gradient(135deg,var(--v5-g1) 50%,var(--v5-g3) 50%)', 'Turnover') +
       sw('background:repeating-linear-gradient(135deg,transparent 0 3px,var(--v5-cal-hatch) 3px 5px),var(--v5-cal-blocked)', 'Blocked') +
-      (monthHas.turn ? sw('background:linear-gradient(135deg,var(--v5-g1) 50%,var(--v5-g3) 50%)', 'Turnover') : '') +
-      (monthHas.clash ? sw('background:var(--v5-danger-w);box-shadow:inset 0 0 0 2px var(--v5-cal-clash-ring)', 'Clash') : '') +
-      sw('background:var(--v5-surf);box-shadow:inset 0 0 0 2px var(--v5-gold)', 'Today') +
-      Object.keys(MARK_ICON).filter(function (k) { return monthHas.marks[k]; }).map(mk).join('') + '</div>';
+      sw('background:var(--v5-danger-w);box-shadow:inset 0 0 0 2px var(--v5-cal-clash-ring)', 'Clash') +
+      '<button class="H_more" type="button" data-act="legend-more" aria-expanded="' + open + '" aria-controls="H_extra">More' + ICON('chevdown', 's16') + '</button></div>' +
+      '<div class="H_extra" id="H_extra">' + sw('background:var(--v5-surf);border:1px solid var(--v5-cal-free-edge)', 'Free') + sw('background:var(--v5-surf);box-shadow:inset 0 0 0 2px var(--v5-gold)', 'Today') +
+      Object.keys(MARK_ICON).filter(function (k) { return monthHas.marks[k]; }).map(mk).join('') + '</div></div>';
   }
+  function H_legendSave() { var ls = store('localStorage'); try { if (ls) ls.setItem('cs_legend_open', state.legendOpen ? '1' : '0'); } catch (e) {} }
   function warnKey(w) { return w.kind + '|' + (w.title || '') + '|' + ((w.detail && w.detail.date) || ''); }
   function warningItems() {
     var p = state.payload, items = CS.orderWarnings(p.warnings).map(function (w) {
@@ -419,29 +426,49 @@
     return items;
   }
   function calTabs(cur) {
-    var t = [['month', '#calendar', 'Month'], ['stays', '#calendar/stays', 'Stays'], ['notices', '#calendar/notices', 'Notices']];
+    var t = [['calendar', '#calendar', 'Calendar'], ['notices', '#calendar/notices', 'Notices']]; // tap only: the old sub-tab swipe is gone
     return '<nav class="A_tabs card glass" aria-label="View">' + t.map(function (x) { return '<a href="' + x[1] + '" data-act="cal-tab" data-tab="' + x[0] + '"' + (x[0] === cur ? ' aria-current="page"' : '') + '>' + x[2] + '</a>'; }).join('') + '</nav>';
   }
-  function calMonth() {
-    var p = state.payload, m = monthState();
-    var prevOk = CS.monthInRange(m.m === 1 ? m.y - 1 : m.y, m.m === 1 ? 12 : m.m - 1, p.today), nextOk = CS.monthInRange(m.m === 12 ? m.y + 1 : m.y, m.m === 12 ? 1 : m.m + 1, p.today);
-    var grid = calendarGrid();
-    return '<div class="calhdr"><button class="iconbtn" type="button" data-act="prev" aria-label="Previous month"' + (prevOk ? '' : ' disabled style="opacity:.35"') + '>' + ICON('back', 's24') + '</button><h2 class="dlg">' + esc(CS.monthTitle(m.y, m.m)) + '</h2><button class="iconbtn" type="button" data-act="next" aria-label="Next month"' + (nextOk ? '' : ' disabled style="opacity:.35"') + '>' + ICON('chev', 's24') + '</button></div>' +
-      legend() + grid + '<p class="help" style="text-align:center;margin-top:10px">Tap a day to see who is staying and what is planned.</p>';
-  }
-  function calStays() {
-    var p = state.payload, rows = p.calendar || [];
-    var confirmedAll = staysOf(), upcoming = confirmedAll.filter(function (r) { return r.checkout_date >= p.today; }).slice(0, 10), blocked = CS.blockedLines(rows, p.today), html = '';
-    // the guest card carries its own IN THE HOUSE / NEXT ARRIVAL cap; the section cap only labels the empty cards, which have none
-    html += '<div class="sect">' + (p.current_guest ? '<div class="stack">' + guestBlock(p.current_guest, 'house') + '</div>' : '<span class="cap up">In the house</span><div class="card glass"><p class="sub">No guest in the house tonight.</p></div>') + '</div>';
-    html += '<div class="sect">' + (p.next_guest ? '<div class="stack">' + guestBlock(p.next_guest, 'next') + '</div>' : '<span class="cap up">Next arrival</span><div class="card glass"><p class="sub">No arrival in the next 60 days.</p></div>') + '</div>';
-    if (upcoming.length) {
-      html += '<div class="sect"><span class="cap up">Coming up</span><div class="stack">' + upcoming.map(function (r) {
-        var i = confirmedAll.indexOf(r), src = CS.sourceLabel(r.source), joined = r.rows.length > 1 ? r.rows.length + ' bookings shown as one stay' : '';
-        return '<div class="card glass staycard" id="stay-' + i + '" style="' + CS.A_stayShade(i).replace(/--A_g:var\(([^)]+)\);.*/, 'border-left:6px solid var($1)') + '"><div class="strong">' + esc(r.guest_name || 'Guest') + (src ? ' · ' + esc(src) : '') + '</div><div class="sub num" style="font-size:var(--v5-t-2);line-height:1.35">' + esc(CS.stayDates(r)) + '</div>' +
-          (joined ? '<div class="help">' + esc(joined) + '</div>' : '') + '</div>';
-      }).join('') + '</div></div>';
+  // MF2: three chips (glyph and word, never colour alone) and, where something is missing, one 44 px action beside it. Owner and admin only, and only when the server sent the field.
+  function H_readyBlock(raw, g, actions) {
+    var r = CS.H_ready(raw, role()); if (!r) return '';
+    var chips = CS.H_readyChips(r).map(function (c) { return pill(c.ok ? 'ok' : 'warn', c.ok ? 'check' : 'clock', c.word); }).join(''), acts = '';
+    if (actions) {
+      var bk = !r.paid ? A_hubLink('bookings') : null;
+      if (bk) acts += bk.external ? ext(bk.href, 'Open booking' + ICON('ext', 's16'), 'btn btn-ghost btn-sm') : '<a class="btn btn-ghost btn-sm" href="' + esc(bk.href) + '">Open booking</a>';
+      if (!r.id && g && g.uid && canAddDetails()) acts += '<a class="btn btn-ghost btn-sm" href="./guest/?for=id#' + encodeURIComponent(g.uid) + '">Add ID photo</a>';
+      if (!r.door_code) acts += tgA(LINKS.tgOps, ICON('chat', 's16') + 'Set the door code in Cassy', 'btn btn-ghost btn-sm');
     }
+    return '<div class="H_ready" role="group" aria-label="Arrival checklist"><div class="row-wrap">' + chips + '</div>' + (acts ? '<div class="row-wrap">' + acts + '</div>' : '') + '</div>';
+  }
+  function H_readyRaw(st) { // the merged stay, or one of the rows behind it, may carry arrival_ready
+    if (!st) return null; if (st.arrival_ready) return st.arrival_ready;
+    var r = (st.rows || []).filter(function (x) { return x && x.arrival_ready; })[0]; if (r) return r.arrival_ready;
+    var p = state.payload, g = [p && p.next_guest, p && p.current_guest].filter(function (x) { return x && x.arrival_ready && x.guest_name === st.guest_name && x.checkin_date === st.checkin_date; })[0];
+    return g ? g.arrival_ready : null;
+  }
+  function H_agendaRow(a) {
+    var st = a.st, nights = st.nights != null ? st.nights : CS.daysBetween(st.checkin_date, st.checkout_date), src = CS.sourceLabel(st.source);
+    var lead = a.kind === 'arrive' ? 'Arrives ' + CS.dayShort(st.checkin_date) : 'Leaves ' + CS.dayShort(st.checkout_date);
+    var ready = a.kind === 'arrive' ? CS.H_ready(H_readyRaw(st), role()) : null;
+    var chips = ready ? '<span class="H_chips">' + CS.H_readyChips(ready).map(function (c) { return pill(c.ok ? 'ok' : 'warn', c.ok ? 'check' : 'clock', c.word); }).join('') + '</span>' : '';
+    return '<button class="rowi H_arow" type="button" data-day="' + esc(a.day) + '" aria-haspopup="dialog"><span class="lead">' + ICON(a.kind === 'arrive' ? 'user' : 'logout') + '</span><span class="mid"><span class="t">' + esc(st.guest_name || 'Guest') + '</span>' +
+      '<span class="s num">' + esc(lead + ' · ' + CS.plural(nights, 'night') + (src ? ' · ' + src : '')) + '</span>' + chips + '</span><span class="chev">' + ICON('chev') + '</span></button>';
+  }
+  // One screen: the month, then the next 14 days (arrivals and departures; the full Arriving next and In the house cards come first), blocked nights and warnings.
+  function calCalendar() {
+    var p = state.payload, m = monthState(), ng = p.next_guest, cg = p.current_guest;
+    var prevOk = !!monthStep(-1), nextOk = !!monthStep(1), grid = calendarGrid();
+    var same = function (st, g) { return !!g && st.guest_name === g.guest_name && st.checkin_date === g.checkin_date; };
+    var rows = CS.H_agenda(staysOf(), p.today, 14, function (st) { return same(st, ng) || same(st, cg); });
+    var html = '<div class="calhdr"><button class="iconbtn" type="button" data-act="prev" aria-label="Previous month"' + (prevOk ? '' : ' disabled style="opacity:.35"') + '>' + ICON('back', 's24') + '</button><h2 class="dlg" aria-live="polite">' + esc(CS.monthTitle(m.y, m.m)) + '</h2><button class="iconbtn" type="button" data-act="next" aria-label="Next month"' + (nextOk ? '' : ' disabled style="opacity:.35"') + '>' + ICON('chev', 's24') + '</button></div>' +
+      legend() + grid + '<p class="help H_help" style="text-align:center;margin:8px 0 0">Tap a day for who is staying. Swipe for the next month.</p>';
+    html += '<div class="sect" id="agenda"><h2 class="hd H_agendahd">Next 14 days</h2>';
+    if (ng) html += '<div class="stack">' + guestBlock(ng, 'next') + '</div>'; else if (!cg && !rows.length) html += '<p class="sub" style="margin:0">Nothing is booked to arrive or leave in the next 14 days.</p>';
+    if (cg) html += '<div class="stack">' + guestBlock(cg, 'house') + '</div>';
+    if (rows.length) html += '<div class="card glass list" role="list">' + rows.map(H_agendaRow).join('') + '</div>';
+    html += '</div>';
+    var blocked = CS.blockedLines(p.calendar || [], p.today);
     if (blocked.length) {
       html += '<div class="sect"><span class="cap up">Blocked nights</span><ul class="wlist">' + blocked.map(function (l) {
         return '<li>' + ICON(l.extra ? 'alert' : 'lock').replace('class="i"', 'class="i ' + (l.extra ? 'c-warn' : 'c-fg2') + '"') + '<span class="num">' + esc(CS.blockedLineText(l)) + '</span></li>';
@@ -456,7 +483,8 @@
     var tell = n.tell && CS.canSeeGuestContact(role());
     return '<section class="card glass A_nrow" aria-label="' + esc(n.title) + '"><div class="top"><span class="lead A_t-' + esc(n.type) + '">' + ICON(A_noticeIcon(n.type)) + '</span><div class="mid"><span class="t">' + esc(n.title) + '</span>' +
       (n.sub ? '<span class="s">' + esc(n.sub) + '</span>' : '') + (n.detail ? '<span class="A_det">' + esc(n.detail) + '</span>' : '') + '</div></div>' +
-      (tell || n.date ? '<div class="acts">' + (tell ? '<button class="btn btn-secondary btn-sm" type="button" data-act="notice-tell" data-nkey="' + esc(n.key) + '">Tell the guest</button>' : '') +
+      (tell || n.date || n.url ? '<div class="acts">' + (tell ? '<button class="btn btn-secondary btn-sm" type="button" data-act="notice-tell" data-nkey="' + esc(n.key) + '">Tell the guest</button>' : '') +
+        (n.url ? ext(n.url, 'Open the original notice' + ICON('ext', 's16'), 'btn btn-ghost btn-sm') : '') +
         (n.date ? '<button class="btn btn-ghost btn-sm" type="button" data-act="notice-cal" data-date="' + esc(n.date) + '">Open on calendar</button>' : '') + '</div>' : '') + '</section>';
   }
   function A_houseRow(h) {
@@ -489,9 +517,10 @@
     var f = state.noticeFilter, filters = CS.A_noticeFilters(v), W = v.weather, html = '';
     if (!filters.some(function (x) { return x[0] === f; })) f = 'all';
     html += '<div class="A_filters" role="group" aria-label="Filter notices">' + filters.map(function (x) { return '<button class="chip" type="button" data-nfilter="' + x[0] + '" aria-pressed="' + (x[0] === f) + '">' + esc(x[1]) + '</button>'; }).join('') + '</div>';
+    if (CS.canSeeGuestContact(role())) html += '<button class="btn btn-secondary btn-block H_addnotice" type="button" data-act="notice-add-open" data-date="' + esc(state.payload.today) + '">' + ICON('plus', 's16') + 'Add a notice</button>';
     if ((f === 'all' || f === 'weather') && W) {
-      html += '<div class="A_label">Weather</div><section class="card glass A_card" aria-label="Weather"><div class="row-wrap" style="gap:14px"><span class="A_temp">' + W.temp + '°</span><span class="mid"><span class="t">' + esc(W.condition || 'Weather') + '</span>' +
-        (W.watch ? '<span class="s">' + ICON('rain', 's16') + ' ' + esc(W.watch.text) + '</span>' : '<span class="s">' + (W.rain != null ? W.rain + '% chance of rain' : '') + (W.aqi != null ? ' · air quality ' + W.aqi : '') + '</span>') + '</span></div>' +
+      html += '<div class="A_label">Weather</div><section class="card glass A_card" aria-label="Weather"><a class="row-wrap H_wxlink" href="#weather" style="gap:14px" aria-label="Open the forecast"><span class="A_temp">' + W.temp + '°</span><span class="mid"><span class="t">' + esc(W.condition || 'Weather') + '</span>' +
+        (W.watch ? '<span class="s">' + ICON('rain', 's16') + ' ' + esc(W.watch.text) + '</span>' : '<span class="s">' + (W.rain != null ? W.rain + '% chance of rain' : '') + (W.aqi != null ? ' · air quality ' + W.aqi : '') + '</span>') + '</span><span class="chev">' + ICON('chev') + '</span></a>' +
         (W.hours.length ? '<div class="A_hours" aria-label="Chance of rain by hour">' + W.hours.map(function (h) { return '<div><span>' + h.pct + '%</span><i style="height:' + Math.max(4, Math.round(h.pct * 0.6)) + 'px"></i><span>' + esc(h.label) + '</span></div>'; }).join('') + '</div>' : '') +
         (W.watch ? '<p class="sub" style="margin:0">Close the windows and bring in the laundry before the rain.</p>' : '') +
         '<p class="help" style="margin:0">' + esc(W.source ? W.source + ' forecast' : 'Forecast') + (W.fetched_at ? ' · as of ' + esc(CS.clockLabel(W.fetched_at)) : '') + '</p></section>';
@@ -504,23 +533,28 @@
     if (v.mgr && (f === 'all' || f === 'house')) html += '<div class="A_label">House</div>' + (v.house.length ? '<section class="card glass list" aria-label="House">' + v.house.map(A_houseRow).join('') + '</section>' : '<div class="card glass"><p class="sub">Nothing needs a person in the house.</p></div>');
     if (f !== 'weather' && f !== 'house' && !v.list.length && f === 'all' && !W) html += '<div class="card glass"><p class="sub">No notices right now.</p></div>';
     if (CS.canSeeGuestContact(role())) html += '<section class="card glass A_card" aria-label="Add a notice"><h2 class="hd">Add a notice</h2><p class="sub" style="margin:0">Saw an advisory from SOCOTECO II or GSCWD? Forward the post to Cassy in Telegram and tap Save. It shows here and on the calendar.</p>' +
-      ('<button class="btn btn-primary btn-sm" type="button" data-act="notice-add-open" data-date="' + esc(state.payload.today) + '">' + ICON('plus', 's16') + 'Add a notice</button>') +
       tgA(LINKS.tgOps, ICON('chat', 's16') + 'Open Cassy · OPS', 'btn btn-secondary btn-sm') + '</section>';
     return html;
   }
   var E_tabFocus = false;
+  // The one-time peek of the month grid (24 px right and back over 360 ms, once per visit) tells a person the grid moves; a title fade shows a month swipe landed.
+  function H_calHints(el) {
+    var cal = el.querySelector && el.querySelector('.cal'); if (!cal || !cal.classList) return;
+    if (state.H_fade) { state.H_fade = false; cal.classList.add('H_fade'); }
+    else if (!state.H_peekedCal && state.calTab === 'calendar' && !E_reduced()) { state.H_peekedCal = true; cal.classList.add('H_peek'); }
+  }
   function renderCalendar() {
     var el = $('v-calendar'), head = appbar({ title: 'Calendar', refresh: true }); // a tab screen: no Back arrow, like Tasks and More
     if (!state.payload) { el.innerHTML = head + '<div class="screen">' + (state.error ? errBanner() : loadingBlock()) + '</div>'; return; }
     var tab = state.calTab;
     var keepFb = state.fbOpen && tab === 'notices' && el.querySelector ? el.querySelector('#A_fbbox') : null; if (keepFb && keepFb.parentNode) keepFb.parentNode.removeChild(keepFb); else keepFb = null;
     fbCarry = !!keepFb;
-    var inner = head + '<div class="screen">' + errBanner() + calTabs(tab) + '<div class="E_tabbody" data-E-swipe="cal-tab" data-F-tab="' + tab + '">' + (tab === 'stays' ? calStays() : tab === 'notices' ? calNotices() : calMonth()) + '<div class="help" style="text-align:center;margin-top:14px">Updated ' + esc(CS.agoLabel(state.payload.generated_at)) + '</div></div></div>';
+    var inner = head + '<div class="screen">' + errBanner() + calTabs(tab) + '<div class="E_tabbody" data-F-tab="' + tab + '">' + (tab === 'notices' ? calNotices() : calCalendar()) + '<div class="help" style="text-align:center;margin-top:14px">Updated ' + esc(CS.agoLabel(state.payload.generated_at)) + '</div></div></div>';
     fbCarry = false;
     el.innerHTML = inner;
     if (E_tabFocus) { E_tabFocus = false; var ct = el.querySelector && el.querySelector('.A_tabs a[aria-current="page"]'); if (ct && ct.focus) ct.focus(); } // an arrow key moved the view: focus follows it
     if (keepFb) { var fresh = el.querySelector('#A_fbbox'); if (fresh && fresh.parentNode) fresh.parentNode.replaceChild(keepFb, fresh); }
-    loadIdPhotos(el);
+    loadIdPhotos(el); H_calHints(el);
   }
 
   // ---------------------------------------------------------------- day and warning sheets (s77): the .sheet/.scrim pattern of the iOS hint.
@@ -573,18 +607,19 @@
       var src = CS.sourceLabel(st.source);
       return '<p class="sub num" style="margin:8px 0 0"><b>' + esc((st.guest_name || 'Guest') + ' ' + what) + '</b> · ' + esc(CS.stayDates(st) + (src ? ' · ' + src : '')) + '</p>' +
         (st.rows.length > 1 ? '<p class="help" style="margin:2px 0 0">' + esc(st.rows.length + ' bookings for this guest, shown as one stay') + '</p>' : '') +
-        (st.checkout_date >= p.today ? '<button class="btn btn-ghost btn-sm" type="button" data-stay="' + all.indexOf(st) + '" style="margin:4px 0 0 -12px">Show the stay' + ICON('chev', 's16') + '</button>' : '');
+        '';
     };
     if (ds.out) html += stayLine(ds.out, 'checks out');
     if (ds.stay) {
       html += stayLine(ds.stay, ds.arrive ? 'arrives' : 'is staying');
+      if (ds.arrive) html += H_readyBlock(H_readyRaw(ds.stay), ds.stay, true);
       if (ds.block) html += '<p class="help" style="margin-top:4px">Also held on the calendar: ' + esc(ds.blockWhy) + '</p>';
     }
     if (ds.clash.length) html += '<div class="errbox" style="margin-top:10px">' + ICON('alert') + '<span>' + esc('Two different guests on this night: ' + ds.clash.map(function (s) { return (s.guest_name || 'Guest') + ' (' + CS.stayDates(s) + ')'; }).join(', ') + '. One booking needs to move.') + '</span></div>' +
       ds.clashIn.map(function (s) { return '<p class="sub num" style="margin:8px 0 0"><b>' + esc('Second arrival: ' + (s.guest_name || 'Guest')) + '</b> · ' + esc(CS.stayDates(s)) + '</p>'; }).join('');
     var nd = CS.A_noticeDay(A_notices(), S.key), T = A_houseT();
     if (nd.length) html += '<div class="cap up" style="margin:14px 0 6px">Notices</div><ul class="wlist">' + nd.map(function (n) {
-      return '<li>' + ICON(A_noticeIcon(n.type)) + '<span style="flex:1"><b>' + esc(n.title) + '</b>' + (n.sub ? '<br><span class="help">' + esc(n.sub) + '</span>' : '') + '</span>' +
+      return '<li>' + ICON(A_noticeIcon(n.type)) + '<span style="flex:1"><b>' + esc(n.title) + '</b>' + (n.sub ? '<br><span class="help">' + esc(n.sub) + '</span>' : '') + (n.url ? '<br>' + ext(n.url, 'Open the original notice' + ICON('ext', 's16'), 'btn btn-ghost btn-sm') : '') + '</span>' +
         (n.tell && CS.canSeeGuestContact(role()) ? '<button class="btn btn-secondary btn-sm" type="button" data-act="notice-tell" data-nkey="' + esc(n.key) + '">Tell the guest</button>' : '') + '</li>';
     }).join('') + '</ul>';
     html += '<div class="cap up" style="margin:14px 0 6px">Cleaning</div><p class="sub" style="margin:0">' + (ds.out || ds.arrive ? (ds.out ? esc((ds.out.guest_name || 'Guest') + ' out ' + T.outLabel) : '') + (ds.out && ds.arrive ? ', ' : '') + (ds.arrive ? esc((ds.stay.guest_name || 'Guest') + ' in ' + T.inLabel) : '') + '.' : 'No turnover this day.') + '</p>';
@@ -633,6 +668,18 @@
       (S.msg ? '<div class="okbox" style="margin-top:12px">' + ICON('check') + '<span>' + esc(S.msg) + '</span></div>' : '') + (S.hint ? '<p class="help" role="status" style="margin:8px 0 0">' + esc(S.hint) + '</p>' : '') +
       '');
     if (had && !e.sheet.contains(document.activeElement)) { var h = $('cs-h'); if (h) h.focus(); }
+  }
+  // The day sheet's neighbour day: the same sheet, a new date. A note being typed is kept (the person closes or saves first).
+  function H_dayGo(dir) {
+    var S = state.sheet; if (!S || S.kind !== 'day' || !state.payload) return false;
+    var d = CS.H_dayStep(S.key, dir, state.payload.today); if (!d) return false;
+    if (E_dirty()) { S.hint = 'Add the note, or close this day, before moving to another one.'; sheetLive(S.hint); drawSheet(); return false; }
+    S.key = d; S.formOpen = false; S.form.label = ''; S.err = ''; S.msg = ''; S.hint = ''; S.confirm = false;
+    var a = d.split('-'); state.month = { y: +a[0], m: +a[1] };
+    if (current === 'calendar') renderCalendar();
+    drawSheet(); sheetLive(CS.dayLong(d)); E_vibe('tap');
+    var b = $('cs-body'); if (b && b.classList && !E_reduced()) { b.classList.add('H_fade'); setTimeout(function () { b.classList.remove('H_fade'); }, 160); }
+    return true;
   }
   function A_newsSheet() {
     var items = CS.A_whatsNew(role(), { notices: !state.noticesAbsent && !!state.notices });
@@ -703,7 +750,8 @@
   function E_sheetPage(S, html) {
     var m = /^<h2 class="ttl"[^>]*>[\s\S]*?<\/h2>/.exec(html), title = m ? m[0] : '';
     var ask = S.confirm ? '<div class="errbox" role="alert" style="margin-bottom:10px"><span>Discard what you typed?</span><span class="row-wrap" style="margin-top:6px"><button class="btn btn-secondary btn-sm" type="button" id="F_keep" data-act="discard-keep">Keep editing</button><button class="btn btn-primary btn-sm" type="button" data-act="' + E_sheetTwin(S.kind) + '">Discard</button></span></div>' : '';
-    return '<div class="F_sheethead">' + title + '<button class="btn btn-secondary btn-sm F_close" type="button" data-F-close="1" data-act="' + E_sheetTwin(S.kind) + '">' + ICON('close', 's16') + 'Close</button></div>' + ask + html.slice(title.length);
+    var day = S.kind === 'day' && state.payload, nav = function (dir, act, label, icon) { return '<button class="iconbtn H_daynav" type="button" data-act="' + act + '" aria-label="' + label + '"' + (CS.H_dayStep(S.key, dir, state.payload.today) ? '' : ' disabled') + '>' + ICON(icon, 's24') + '</button>'; };
+    return '<div class="F_sheethead' + (day ? ' H_dayhead' : '') + '">' + (day ? nav(-1, 'day-prev', 'Previous day', 'back') : '') + title + (day ? nav(1, 'day-next', 'Next day', 'chev') : '') + '<button class="btn btn-secondary btn-sm F_close" type="button" data-F-close="1" data-act="' + E_sheetTwin(S.kind) + '">' + ICON('close', 's16') + 'Close</button></div>' + ask + html.slice(title.length);
   }
   function E_sheetTwin(kind) { return kind === 'add' ? 'task-add-cancel' : kind === 'nadd' ? 'notice-add-cancel' : kind === 'rate' ? 'rate-back' : 'sheet-close'; }
   function E_dirty() {
@@ -781,8 +829,18 @@
     if (manager()) body += '<button class="btn btn-secondary" type="button" data-act="task-add-open">' + ICON('plus', 's16') + 'Add a reminder</button>';
     if (!groups.length) body += '<div class="card glass empty"><div class="disc">' + ICON('checks') + '</div><h2 class="hd">Nothing to do</h2><p>' + (manager() ? 'Add a reminder, or wait for a cleaning issue or a check to land here.' : 'Nothing is waiting for you.') + '</p></div>';
     groups.forEach(function (g) { body += '<div><div class="cap up" style="margin-bottom:6px">' + esc(g.label) + ' (' + g.tasks.length + ')</div><div class="card list">' + g.tasks.map(taskRow).join('') + '</div></div>'; });
-    body += '<label class="trust"><input type="checkbox" data-act="tasks-showdone"' + (state.showDone ? ' checked' : '') + '> Show what was done in the last 14 days</label>';
-    el.innerHTML = head + '<div class="screen"><p class="sub" style="margin:0 0 12px">' + (manager() ? 'Everything that needs a person. Tap the box when it is done.' : 'What is yours to do. Tap the box when it is done.') + '</p><div class="stack">' + body + '</div></div>';
+    body += '<button class="btn btn-ghost" type="button" data-act="tasks-toggle-done" aria-pressed="' + !!state.showDone + '">' + (state.showDone ? 'Hide done' : 'Show done (14 days)') + '</button>';
+    el.innerHTML = head + '<div class="screen"><p class="sub" style="margin:0 0 4px">' + (manager() ? 'Everything that needs a person.' : 'What is yours to do.') + '</p><p class="help H_help" style="margin:0 0 12px">Swipe a task left to mark it done. Or tap its box.</p><div class="stack">' + body + '</div></div>';
+    H_taskPeek();
+  }
+  // The first time Tasks opens, the first row peeks 32 px left over 240 ms and shows the Done underlay; never again once a swipe has worked on this phone (cs_swiped).
+  function H_taskPeek() {
+    if (state.H_peekedTask || current !== 'tasks' || E_reduced()) return;
+    var ls = store('localStorage'); try { if (ls && ls.getItem('cs_swiped') === '1') { state.H_peekedTask = true; return; } } catch (e) {}
+    var row = document.querySelector('#v-tasks .taskrow[data-E-swipe]'); if (!row || !row.style) return;
+    state.H_peekedTask = true; var w = row.parentNode; if (w && w.classList) w.classList.add('E_live');
+    E_tr(row, 120); row.style.transform = 'translateX(-32px)';
+    setTimeout(function () { E_tr(row, 120); row.style.transform = ''; setTimeout(function () { if (w && w.classList && !w.classList.contains('E_open')) w.classList.remove('E_live'); }, 160); }, 360);
   }
   function loadTasks() {
     if (!state.access) return Promise.resolve();
@@ -1186,6 +1244,7 @@
     if (v === 'payrates' && !CS.canEditRates(state.access && state.access.role)) v = 'home';
     if (v === 'reply' && !canReply()) v = 'home';
     if (v === 'hub' && state.layout !== 'admin') v = 'home';
+    if (v === 'calendar' && parts[1] === 'stays') { history.replaceState(null, '', '#calendar'); parts = ['calendar']; } // s82: Month and Stays are one screen
     if (v !== 'calendar' || CS.A_calTab(parts[1]) !== state.calTab) state.fbOpen = false; // the posts load only on a tap in the current visit to the Notices tab
     if (v === 'calendar') { var tab0 = CS.A_calTab(parts[1]); if (tab0 !== state.calTab) closeSheet(); state.calTab = tab0; }
     if (v === 'door' && DEMO) { toast('Demo: ' + doorDef(parts[1]).title + ' opens in the live app'); history.replaceState(null, '', '#home'); v = 'home'; } // a door would load a real app in the frame
@@ -1309,12 +1368,16 @@
   $('signin-form').addEventListener('submit', function (ev) { ev.preventDefault(); submitSignin(); });
   $('door-back').addEventListener('click', function () { location.replace(location.pathname + location.search + '#home'); });
   document.addEventListener('click', function (ev) {
-    var t = ev.target.closest('[data-act],[data-stay],[data-theme],[data-day],[data-warn],[data-nfilter],[data-tfilter]'); if (!t || t.getAttribute('data-act') === 'tasks-showdone') return;
+    var t = ev.target.closest('[data-act],[data-theme],[data-day],[data-warn],[data-nfilter],[data-tfilter]'); if (!t) return;
     var a = t.getAttribute('data-act');
     if (t.hasAttribute('data-F-close') && state.sheet && !state.sheet.confirm && E_dirty()) { state.sheet.confirm = true; drawSheet(); var kb = $('F_keep'); if (kb && kb.focus) kb.focus(); } // Close on a sheet with typing in it asks once
     else if (a === 'discard-keep') { if (state.sheet) { state.sheet.confirm = false; drawSheet(); var hh = $('cs-h'); if (hh && hh.focus) hh.focus(); } }
     else if (a === 'refresh') { if (current === 'home' && !state.loading) E_say = true; loadHome(); loadTasks(); if (current === 'payrates') loadRates(); }
     else if (a === 'attn-open') openSheet('attn', 'attn-open');
+    else if (a === 'day-prev') H_dayGo(-1);
+    else if (a === 'day-next') H_dayGo(1);
+    else if (a === 'legend-more') { state.legendOpen = !state.legendOpen; H_legendSave(); var lg = t.closest && t.closest('.H_legend'); if (lg) { lg.setAttribute('data-open', state.legendOpen ? '1' : '0'); t.setAttribute('aria-expanded', String(state.legendOpen)); } }
+    else if (a === 'tasks-toggle-done') { state.showDone = !state.showDone; loadTasks(); renderTasks(); }
     else if (a === 'attn-tasks') { var tf0 = t.getAttribute('data-filter'); if (/^(all|mine|due|blocks)$/.test(tf0 || '')) state.taskFilter = tf0; closeSheet(); }
     else if (a === 'dayform-open') { if (state.sheet) { state.sheet.formOpen = true; drawSheet(); var dk = $('df-kind'); if (dk) dk.focus(); } }
     else if (a === 'haptics') { CS.E_hapticsSet(!CS.E_hapticsOn(store('localStorage')), store('localStorage')); renderMore(); }
@@ -1329,7 +1392,7 @@
     else if (a === 'notice-add-cancel') { state.nadd = null; closeSheet(); }
     else if (a === 'notice-add-save') A_noticeAddSave();
     else if (a === 'notice-tell') { var nt = CS.canSeeGuestContact(role()) ? A_noticeByKey(t.getAttribute('data-nkey')) : null; var gm = nt ? CS.A_guestMessage(nt) : null; if (nt && !gm) toast('Check the notice text first.'); else if (gm) copyText(gm).then(function () { toast('Message copied. Paste it to the guest.'); E_vibe('tap'); }, function () { toast('Copy did not work on this phone.'); }); }
-    else if (a === 'notice-cal') { var nd0 = t.getAttribute('data-date'), np = nd0.split('-'); if (CS.monthInRange(+np[0], +np[1], state.payload.today)) state.month = { y: +np[0], m: +np[1] }; state.calTab = 'month'; if (location.hash !== '#calendar') { closeSheet(); state.dayAfter = nd0; location.hash = '#calendar'; } else { render('calendar'); openSheet('day', nd0); state.sheet.view = 'calendar'; } } // from another screen the day sheet opens once the calendar has settled, so a Home redraw cannot close it
+    else if (a === 'notice-cal') { var nd0 = t.getAttribute('data-date'), np = nd0.split('-'); if (CS.monthInRange(+np[0], +np[1], state.payload.today)) state.month = { y: +np[0], m: +np[1] }; state.calTab = 'calendar'; if (location.hash !== '#calendar') { closeSheet(); state.dayAfter = nd0; location.hash = '#calendar'; } else { render('calendar'); openSheet('day', nd0); state.sheet.view = 'calendar'; } } // from another screen the day sheet opens once the calendar has settled, so a Home redraw cannot close it
     else if (a === 'notice-resolve') { if (CS.canSeeGuestContact(role())) sb.rpc('ack_verifier_finding_v1', { p_key: t.getAttribute('data-id') }).then(function (r) { if (r.error) throw r.error; return A_loadNotices(); }).catch(function () { toast('That did not save. Check your signal and try again.'); }); }
     else if (t.hasAttribute('data-nfilter')) { state.noticeFilter = t.getAttribute('data-nfilter'); renderCalendar(); }
     else if (t.hasAttribute('data-tfilter')) { state.taskFilter = t.getAttribute('data-tfilter'); renderTasks(); }
@@ -1354,9 +1417,7 @@
     else if (t.hasAttribute('data-warn')) openSheet('warn', t.getAttribute('data-warn'));
     else if (a === 'prev') shiftMonth(-1);
     else if (a === 'next') shiftMonth(1);
-    else if (t.hasAttribute('data-stay')) {
-      closeSheet(); var el = $('stay-' + t.getAttribute('data-stay')); if (el) { el.scrollIntoView({ block: 'center', behavior: 'smooth' }); el.classList.add('flash'); setTimeout(function () { el.classList.remove('flash'); }, 1400); }
-    } else if (t.hasAttribute('data-theme')) { window.CSTheme.set(t.getAttribute('data-theme')); renderMore(); }
+    else if (t.hasAttribute('data-theme')) { window.CSTheme.set(t.getAttribute('data-theme')); renderMore(); }
   });
   // Reminder and pay-rate forms: remember what is typed (a refresh must not lose it) without redrawing under the keyboard.
   document.addEventListener('input', function (ev) {
@@ -1372,7 +1433,6 @@
     if (ev.target && ev.target.id === 'n-type' && state.nadd) { state.nadd.type = ev.target.value; return; }
     if (ev.target && ev.target.id === 'df-kind' && state.sheet) { state.sheet.form.kind = ev.target.value; return; }
     if (ev.target && ev.target.id === 't-who' && state.add) state.add.who = ev.target.value;
-    else if (ev.target && ev.target.getAttribute && ev.target.getAttribute('data-act') === 'tasks-showdone') { state.showDone = ev.target.checked; loadTasks(); renderTasks(); }
   });
   document.addEventListener('keydown', function (ev) { if (ev.key === 'Escape' && state.sheet) E_tryClose(); });
   // Telegram: the tg:// link opens the app. If the page is still in front ~1.2 s later the app did not open, so t.me opens instead.
@@ -1411,12 +1471,12 @@
   (function E_sheetPull() {
     var scrim = function () { return $('cal-scrim'); };
     E_drag(document, { sel: '#cal-sheet', axis: 'y', vw: E_vw, reduced: E_reduced,
-      canStart: function (el, ev) { return !!state.sheet && F_bottomSheet() && (!!(ev.target.closest && ev.target.closest('.E_grab')) || !el.scrollTop); },
+      canStart: function (el, ev) { return !!state.sheet && F_bottomSheet() && !!(ev.target.closest && ev.target.closest('.E_grab, .F_sheethead')); }, // the whole 56 px header is the pull surface; a finger on the body is the body's to scroll
       move: function (el, d) {
         E_tr(el, 0); el.style.transform = 'translateY(' + CS.E_sheetFollow(d.dy) + 'px)';
         var sc = scrim(); if (sc && sc.style) sc.style.opacity = String(Math.max(0, 1 - Math.max(0, d.dy) / Math.max(1, el.offsetHeight || 400)));
       },
-      reached: function (el, d) { return d.dy >= 96; },
+      reached: function (el, d) { return d.dy >= 80; },
       onEdge: function () { E_vibe('edge'); },
       end: function (el, d) {
         var S = state.sheet, wants = !!S && CS.E_sheetCommit(d.dy, d.vy), close = wants && !E_dirty();
@@ -1434,14 +1494,14 @@
     var openW = function (el) { return parseInt(el.getAttribute('data-E-w'), 10) || 96; };
     function shut(el) { var w = el.parentNode; if (w && w.classList) { w.classList.remove('E_open'); setTimeout(function () { if (!w.classList.contains('E_open')) w.classList.remove('E_live'); }, 220); } E_tr(el, 200); el.style.transform = ''; }
     function shutAll(except) { Array.prototype.forEach.call(document.querySelectorAll('.E_swipewrap.E_open'), function (w) { var r = w.querySelector('.taskrow'); if (r && r !== except) shut(r); }); }
-    E_drag(document, { sel: '.taskrow[data-E-swipe]', axis: 'x', vw: E_vw, reduced: E_reduced,
+    E_drag(document, { sel: '.taskrow[data-E-swipe]', axis: 'x', vw: E_vw, reduced: E_reduced, edgeR: CS.E_EDGE_R_TASK,
       start: function (el) { shutAll(el); if (el.parentNode && el.parentNode.classList) el.parentNode.classList.add('E_live'); },
       move: function (el, d) { E_tr(el, 0); el.style.transform = 'translateX(' + (-CS.E_taskFollow(d.dx, openW(el))) + 'px)'; },
-      reached: function (el, d) { return el.getAttribute('data-E-verifier') !== '1' && -d.dx >= 0.4 * (el.offsetWidth || 360); },
+      reached: function (el, d) { return el.getAttribute('data-E-verifier') !== '1' && -d.dx >= CS.E_taskDist(el.offsetWidth || 360); },
       onEdge: function () { E_vibe('edge'); },
       end: function (el, d) {
         var ver = el.getAttribute('data-E-verifier') === '1', commit = CS.E_taskCommit(d.dx, el.offsetWidth || 360, d.vx);
-        if (!ver && commit) { shut(el); setTaskDone(el.getAttribute('data-task'), el.getAttribute('data-E-swipe') === 'task-done'); }
+        if (!ver && commit) { shut(el); try { var lsw = store('localStorage'); if (lsw) lsw.setItem('cs_swiped', '1'); } catch (e) {} setTaskDone(el.getAttribute('data-task'), el.getAttribute('data-E-swipe') === 'task-done'); }
         else if (commit || CS.E_taskOpens(d.dx)) { E_tr(el, 200); el.style.transform = ''; if (el.parentNode && el.parentNode.classList) el.parentNode.classList.add('E_open'); }
         else shut(el);
       },
@@ -1450,26 +1510,41 @@
       var w = ev.target && ev.target.closest ? ev.target.closest('.E_swipewrap') : null; if (!w || !w.classList || !w.classList.contains('E_open')) shutAll(null);
     });
   })();
-  // G1. Calendar views: swipe left or right between Month, Stays and Notices; the three tabs above are the tap twin and the arrow keys move between them.
-  (function E_tabSwipe() {
-    var hashOf = function (t) { return t === 'month' ? '#calendar' : '#calendar/' + t; };
-    E_drag(document, { sel: '.E_tabbody', axis: 'x', vw: E_vw, reduced: E_reduced,
-      canStart: function (el, ev) { return current === 'calendar' && !(ev.target.closest && ev.target.closest('.A_filters,.A_hours,iframe,input,select,textarea')); },
+  // G1. The month grid: swipe left for the next month, right for the previous one. The arrows above the grid are the tap twin. The sub-tabs (Calendar | Notices) are tap only.
+  (function H_monthSwipe() {
+    var dirOf = function (d) { return d.dx < 0 ? 1 : -1; };
+    E_drag(document, { sel: '.cal', axis: 'x', vw: E_vw, reduced: E_reduced,
+      canStart: function () { return current === 'calendar' && state.calTab === 'calendar' && !state.sheet && !!state.payload; },
       move: function (el, d) {
-        var has = !!CS.E_tabNeighbour(state.calTab, d.dx < 0 ? 1 : -1), f = has ? CS.E_tabFollow(d.dx) : 0;
-        E_tr(el, 0); el.style.transform = 'translateX(' + f + 'px)'; el.style.opacity = String(1 - 0.15 * Math.abs(f) / 48);
+        var f = monthStep(dirOf(d)) ? CS.E_tabFollow(d.dx) : 0; E_tr(el, 0); el.style.transform = 'translateX(' + f + 'px)'; el.style.opacity = String(1 - 0.15 * Math.abs(f) / 96);
       },
+      reached: function (el, d) { return !!monthStep(dirOf(d)) && CS.E_tabCommit(d.dx, el.offsetWidth || E_vw(), 0); },
+      onEdge: function () { E_vibe('edge'); },
       end: function (el, d) {
         E_tr(el, 160); el.style.transform = ''; el.style.opacity = '';
-        var nb = CS.E_tabNeighbour(state.calTab, d.dx < 0 ? 1 : -1);
-        if (nb && CS.E_tabCommit(d.dx, el.offsetWidth || E_vw(), d.vx)) location.hash = hashOf(nb); // no slide-in: the new view is simply there
+        if (CS.E_tabCommit(d.dx, el.offsetWidth || E_vw(), d.vx) && shiftMonth(dirOf(d), true)) E_vibe('tap');
       },
       cancel: function (el) { E_tr(el, 160); el.style.transform = ''; el.style.opacity = ''; } });
+    var hashOf = function (t) { return t === 'calendar' ? '#calendar' : '#calendar/' + t; };
     document.addEventListener('keydown', function (ev) {
       var a = ev.target && ev.target.closest ? ev.target.closest('.A_tabs a[data-tab]') : null; if (!a || (ev.key !== 'ArrowLeft' && ev.key !== 'ArrowRight')) return;
       var nb = CS.E_tabNeighbour(a.getAttribute('data-tab'), ev.key === 'ArrowRight' ? 1 : -1); if (!nb) return;
       ev.preventDefault(); E_tabFocus = true; location.hash = hashOf(nb);
     });
+  })();
+  // G5. The day sheet: swipe left for the next day, right for the previous one; the two arrows in its header are the tap twin. The body follows the finger, the title fades.
+  (function H_daySwipe() {
+    var dirOf = function (d) { return d.dx < 0 ? 1 : -1; }, body = function () { return $('cs-body'); };
+    var rest = function (b, ms) { if (b) { E_tr(b, ms); b.style.transform = ''; b.style.opacity = ''; } };
+    E_drag(document, { sel: '#cal-sheet', axis: 'x', vw: E_vw, reduced: E_reduced,
+      canStart: function () { return !!state.sheet && state.sheet.kind === 'day' && !!state.payload; },
+      move: function (el, d) {
+        var b = body(), f = CS.H_dayStep(state.sheet.key, dirOf(d), state.payload.today) ? CS.E_tabFollow(d.dx) : 0; if (b) { E_tr(b, 0); b.style.transform = 'translateX(' + f + 'px)'; b.style.opacity = String(1 - 0.15 * Math.abs(f) / 96); }
+      },
+      reached: function (el, d) { return !!state.sheet && !!CS.H_dayStep(state.sheet.key, dirOf(d), state.payload.today) && CS.E_tabCommit(d.dx, el.offsetWidth || E_vw(), 0); },
+      onEdge: function () { E_vibe('edge'); },
+      end: function (el, d) { rest(body(), 160); if (CS.E_tabCommit(d.dx, el.offsetWidth || E_vw(), d.vx)) H_dayGo(dirOf(d), true); },
+      cancel: function () { rest(body(), 160); } });
   })();
   window.addEventListener('hashchange', route);
   window.addEventListener('scroll', function () { var b = document.querySelector('.view.on .appbar'); if (b) b.classList.toggle('scrolled', window.scrollY > 8); }, { passive: true });

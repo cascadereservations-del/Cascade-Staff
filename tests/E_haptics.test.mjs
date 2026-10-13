@@ -40,7 +40,7 @@ test('E_buzz: reduced motion and Save-Data do not turn haptics off (a buzz is no
   assert.equal(CS.E_buzz('tap', { navigator: Object.assign(v, { connection: { saveData: true } }), storage: store(), doc: { visibilityState: 'visible' } }), true);
   const src = read('app.js'); assert.doesNotMatch(src, /saveData/); assert.match(src, /function E_vibe\(kind\) \{ return CS\.E_buzz\(kind, \{ navigator: navigator, storage: store\('localStorage'\), doc: document \}\); \}/);
   const body = (re) => [...src.matchAll(re)].length;
-  assert.equal(body(/E_vibe\('edge'\)/g), 3, 'slide, sheet and task row: one edge buzz each (fired once per drag by E_drag)');
+  assert.equal(body(/E_vibe\('edge'\)/g), 5, 'slide, sheet, task row, month grid and day sheet: one edge buzz each (fired once per drag by E_drag)');
 });
 
 test('E_ haptics in the app: marking a task done buzzes once ([10]); a refused save buzzes the error pattern; with the switch off nothing buzzes', async () => {

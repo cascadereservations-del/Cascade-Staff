@@ -102,11 +102,13 @@ test('E_ pill: a cleaner\'s sheet has no admin groups even when the payload smug
   assert.match(b, /Turnover at risk/); assert.match(b, /Low stock/);
   assert.doesNotMatch(b, /To confirm|Inbox|Clash|bookings|open messages|System check|Resolve|Tell the guest|#door\/dashboard|Admin|conversations/i);
   assert.equal(app.calls.filter((c) => c[0] === 'staff_inquiry_payments_v1').length, 0, 'a cleaner never even asks for the bookings');
-  for (const hash of ['#hub', '#payrates', '#reply', '#door/dashboard/bookings/inquiries', '#door/dashboard']) {
+  for (const hash of ['#hub', '#payrates', '#manage', '#door/dashboard/bookings/inquiries', '#door/dashboard']) {
     const x = await boot({ role: 'cleaner', hash, fold: FOLD, handlers: baseHandlers('cleaner', { staff_home_v1: home(), tasks_list_v1: tasksOf([]) }) });
     assert.equal(x.els['door-frame'].getAttribute('data-door'), null, hash + ': no door opened'); assert.equal(x.els['v-hub'].innerHTML, '', hash); assert.equal(x.els['v-payrates'].innerHTML, '', hash);
     assert.match(x.els['v-home'].innerHTML, /E_pill/, hash + ': the cleaner is on her own home');
   }
+  const rp = await boot({ role: 'cleaner', hash: '#reply', fold: FOLD, handlers: baseHandlers('cleaner', { staff_home_v1: home(), tasks_list_v1: tasksOf([]) }) });
+  assert.match(rp.els['rp-body'].innerHTML, /What did the guest send/, 's82 decision 5: Cassy reply is open to a cleaner too');
 });
 
 test('E_ pill: empty, offline and loading sheets say the right thing; the cleaner empty line is her own', async () => {
