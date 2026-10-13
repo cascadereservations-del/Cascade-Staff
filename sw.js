@@ -1,22 +1,25 @@
-// sw.js - Cascade Staff service worker v1.2 (2026-10-08)
+// sw.js - Cascade Staff service worker v1.3 (2026-10-13, design v5)
 // Copied from the cleaning checklist's v1.2 strategy and tightened for a staff app:
 //   Supabase (REST, RPC, Storage, Auth, Edge Functions), Telegram -> network-only, NEVER cached or replayed.
-//   Google Fonts files and the pinned supabase-js build (jsDelivr)   -> cache-first (public, no personal data).
+//   The pinned supabase-js build (jsDelivr)                           -> cache-first (public, no personal data).
 //   Navigation                                                       -> network-first, 3 s timeout, cached shell as the fallback.
 //   Same-origin shell files                                          -> network-first, cache fallback.
 // Nothing personal is ever stored here: the cache holds the shell (HTML, CSS, JS, fonts, icons) and nothing else.
 // A shell that loads offline says "Live information needs a connection"; guest names exist only in JS memory.
-const CACHE_NAME = 'cs-shell-v11';
+const CACHE_NAME = 'cs-shell-v12';
 const NAV_TIMEOUT_MS = 3000;
-// The self-hosted font files styles.css @font-face points at. Theme v2 changes fonts: edit this one list (and styles.css), nothing else here.
-const SELF_FONTS = ['cormorant-garamond-600.woff2', 'cormorant-garamond-700.woff2'];
+// The self-hosted font files styles.css @font-face points at (v5: DM Serif Display for titles and names, nothing else). Edit this one list (and styles.css), nothing else here.
+const SELF_FONTS = ['dm-serif-display-400.woff2'];
+// Public pictures of the house (each 60 KB or less). Nothing personal is ever cached.
+const SHELL_ASSETS = ['./img/house-hero.webp', './img/house-blur.webp'];
 // Every icon the manifest and the pages name (the maskable one is what an Android home screen draws).
 const ICON_FILES = ['icon-192.png', 'icon-512.png', 'icon-512-maskable.png', 'apple-touch-icon-180.png'];
 const SHELL_URLS = [
-  './', './index.html', './styles.css', './app.js', './lib.js', './icons.js', './theme.js', './demo.js', './manifest.webmanifest',
+  './', './index.html', './tokens.css', './styles.css', './app.js', './lib.js', './icons.js', './theme.js', './demo.js', './manifest.webmanifest',
   './install/', './install/index.html', './install/install.js',
   './quick/', './quick/index.html', './pay/', './pay/index.html', './pay/pay.js', './pay/pay-lib.js', './pay/bank.html',
   './guest/', './guest/index.html', './guest/guest.js', './guest/guest-lib.js',
+  ...SHELL_ASSETS,
   ...SELF_FONTS.map((f) => './fonts/' + f),
   ...ICON_FILES.map((f) => './icons/' + f)
 ];
