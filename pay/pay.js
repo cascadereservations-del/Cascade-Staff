@@ -9,7 +9,7 @@
   var DEMO = !!(window.CSDemo && window.CSDemo.active); // ?demo: synthetic data, no Supabase client, no network, no storage (demo.js)
   function net() { return (DEMO ? window.CSDemo.fetch : window.fetch).apply(window, arguments); }
   var root = $('pay');
-  if (!DEMO && !window.supabase) { root.innerHTML = shell('Payment Request', '<div class="errbox">' + ICON('alert') + '<span>Live information needs a connection. Open the app again when you have signal.</span></div>'); return; }
+  if (!DEMO && !window.supabase) { root.innerHTML = shell('Your pay', '<div class="errbox">' + ICON('alert') + '<span>Live information needs a connection. Open the app again when you have signal.</span></div>'); return; }
   var sb = DEMO ? window.CSDemo.client('cleaner') : window.supabase.createClient(CFG.url, CFG.key, { auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: false } });
 
   // One key per submission: kept across retries of a failed send, renewed after an ok (see CSPay.keyKeeper).
@@ -104,7 +104,7 @@
       '<div class="sticky"><div class="total"><span class="cap up">Total to request</span><span class="amt num">' + esc(P.peso(total)) + '</span></div>' +
       (over ? '<div class="errbox">' + ICON('alert') + '<span>A request holds up to ' + P.MAX_LINES + ' lines. Untick some and send the rest in a second request.</span></div>' : '') +
       '<button class="btn btn-primary btn-block" type="button" data-act="review"' + (total > 0 && !over ? '' : ' disabled') + '>Review request' + ICON('chev') + '</button></div>';
-    root.innerHTML = shell('Payment Request', inner) + '<input type="file" id="x-file" accept="image/*" capture="environment" hidden>';
+    root.innerHTML = shell('Your pay', inner) + '<input type="file" id="x-file" accept="image/*" capture="environment" hidden>';
   }
 
   // ---------------------------------------------------------------- review
@@ -136,11 +136,11 @@
   function go(step) { S.step = step; S.err = ''; render(); window.scrollTo(0, 0); }
   function render() {
     if (S.loadErr) {
-      var msg = { signin: 'Sign in to the Staff app first, then open Payment Request.', denied: 'Payment Request is for the cleaning team.', notready: 'Payment Request is not switched on yet. Ask Lloyd.', offline: 'Live information needs a connection.' }[S.loadErr];
-      root.innerHTML = shell('Payment Request', '<div class="errbox">' + ICON('alert') + '<span>' + esc(msg) + '</span></div>' + (S.loadErr === 'signin' ? '<a class="btn btn-primary btn-block" href="../#signin" style="margin-top:12px">Sign in</a>' : '<button class="btn btn-secondary" type="button" data-act="retry" style="margin-top:12px">Try again</button>'));
+      var msg = { signin: 'Sign in to the Staff app first, then open Ask for your pay.', denied: 'Your pay is for the cleaning team.', notready: 'Your pay is not switched on yet. Ask Lloyd.', offline: 'Live information needs a connection.' }[S.loadErr];
+      root.innerHTML = shell('Your pay', '<div class="errbox">' + ICON('alert') + '<span>' + esc(msg) + '</span></div>' + (S.loadErr === 'signin' ? '<a class="btn btn-primary btn-block" href="../#signin" style="margin-top:12px">Sign in</a>' : '<button class="btn btn-secondary" type="button" data-act="retry" style="margin-top:12px">Try again</button>'));
       return;
     }
-    if (!S.cands) { root.innerHTML = shell('Payment Request', '<div class="stack" style="margin-top:16px"><div class="skel" style="height:180px"></div><div class="skel" style="height:120px"></div></div>'); return; }
+    if (!S.cands) { root.innerHTML = shell('Your pay', '<div class="stack" style="margin-top:16px"><div class="skel" style="height:180px"></div><div class="skel" style="height:120px"></div></div>'); return; }
     if (S.step === 'review') renderReview(); else if (S.step === 'status') renderStatus(); else renderPick();
     if (S.step !== 'review') C_pushRefresh();
   }

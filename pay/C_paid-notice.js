@@ -32,10 +32,12 @@
   }
 
   function C_html(r) {
+    // Compact (E_): a tile, the amount and the day, two buttons. The full message opens in place on "Read the message"; the card is 128 px tall until then.
     return '<div class="C_notice" role="status"><span class="C_notice-ico" aria-hidden="true">' + (G.ICON ? G.ICON('checks', 's24') : '') + '</span>' +
-      '<div class="C_notice-body"><div class="C_notice-head">You were paid</div><div class="C_notice-line">' + C_esc(T.homeLine(r)) + '</div>' +
-      '<p class="C_notice-text">' + C_esc(T.noticeText(r)) + '</p>' +
-      '<button class="btn btn-secondary C_notice-ok" type="button" data-C-ok="' + C_esc(r.ref) + '">OK, thank you</button></div></div>';
+      '<div class="C_notice-body"><div class="C_notice-head">' + C_esc(T.titleLine(r)) + '</div><div class="C_notice-line">' + C_esc(T.subLine(r)) + '</div></div>' +
+      '<div class="C_notice-acts"><button class="btn btn-secondary C_notice-ok" type="button" data-C-ok="' + C_esc(r.ref) + '">OK, thank you</button>' +
+      '<button class="btn btn-ghost C_notice-more" type="button" data-C-more="1" aria-expanded="false">Read the message</button></div>' +
+      '<p class="C_notice-text" hidden>' + C_esc(T.noticeText(r)) + '</p></div>';
   }
 
   var G = typeof self !== 'undefined' ? self : (typeof globalThis !== 'undefined' ? globalThis : {});
@@ -52,6 +54,12 @@
       if (!r) { el.innerHTML = ''; el.hidden = true; return null; }
       el.innerHTML = C_html(r); el.hidden = false;
       if (el.addEventListener) el.addEventListener('click', function (ev) {
+        var more = ev.target && ev.target.closest ? ev.target.closest('[data-C-more]') : null;
+        if (more) { // expand or fold the full message in place
+          var open = more.getAttribute('aria-expanded') !== 'true', txt = el.querySelector ? el.querySelector('.C_notice-text') : null;
+          more.setAttribute('aria-expanded', String(open)); more.textContent = open ? 'Hide the message' : 'Read the message'; if (txt) txt.hidden = !open;
+          return;
+        }
         var b = ev.target && ev.target.closest ? ev.target.closest('[data-C-ok]') : null;
         if (!b) return;
         if (!o.demo) C_write(st, b.getAttribute('data-C-ok'));

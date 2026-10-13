@@ -50,6 +50,15 @@
     var ref = String(n.bank_reference == null ? '' : n.bank_reference).replace(/[^A-Za-z0-9]/g, '');
     return 'Paid ' + C_php(n.total) + ' · ' + C_manilaDay(n.paid_at) + (ref ? ' · ref …' + ref.slice(-4) : n.ref ? ' · ref …' + String(n.ref).slice(-4) : '');
   }
+  // E_ (streamline pass): the compact card on her home. Title "You were paid ₱1,235", sub "Oct 13 · ref …5678". The amount is her own pay.
+  function C_titleLine(n) {
+    var x = Math.round(Number(n.total) * 100) / 100;
+    return 'You were paid \u20B1' + (x % 1 === 0 ? x.toFixed(0) : x.toFixed(2)).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+  }
+  function C_subLine(n) {
+    var ref = String(n.bank_reference == null ? '' : n.bank_reference).replace(/[^A-Za-z0-9]/g, '');
+    return C_manilaDay(n.paid_at) + (ref ? ' \u00B7 ref \u2026' + ref.slice(-4) : n.ref ? ' \u00B7 ref \u2026' + String(n.ref).slice(-4) : '');
+  }
   // Requested -> Paying -> Paid. Glyph + word, never colour alone. A cancelled request is its own word, not a step.
   function C_steps(status) {
     if (status === 'cancelled') return { cancelled: true, steps: [] };
@@ -60,5 +69,5 @@
         .map(function (s, i) { return { key: s.key, label: s.label, state: i < at ? 'done' : i === at ? 'now' : 'next' }; })
     };
   }
-  return { dayShort: C_dayShort, manilaDay: C_manilaDay, range: C_range, php: C_php, reference: C_reference, pushTitle: C_PUSH_TITLE, pushBody: C_pushBody, noticeText: C_noticeText, homeLine: C_homeLine, steps: C_steps };
+  return { dayShort: C_dayShort, manilaDay: C_manilaDay, range: C_range, php: C_php, reference: C_reference, pushTitle: C_PUSH_TITLE, pushBody: C_pushBody, noticeText: C_noticeText, homeLine: C_homeLine, titleLine: C_titleLine, subLine: C_subLine, steps: C_steps };
 });

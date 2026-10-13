@@ -93,7 +93,8 @@ hr.hair { width: auto; height: 1px; border: 0; background: var(--rule); }
 .appbar .ttl { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .appbar .brand { flex: 1; padding-left: 10px; }
 .iconbtn { width: var(--touch); height: var(--touch); display: inline-flex; align-items: center; justify-content: center; border: 0; background: transparent; color: var(--fg-2); border-radius: var(--r-md); cursor: pointer; text-decoration: none; transition: background var(--motion-fast) var(--ease); }
-.iconbtn:hover, .iconbtn:active { background: var(--muted); color: var(--fg); }
+.iconbtn:active { background: var(--muted); color: var(--fg); }
+@media (hover: hover) and (pointer: fine) { .iconbtn:hover { background: var(--muted); color: var(--fg); } } /* a tap must not leave a hover tint on Android */
 
 /* ---- cards and rows ---- */
 .card { background: var(--card); border: 1px solid var(--border); border-radius: var(--r-lg); padding: 16px; box-shadow: var(--shadow-sm); }
@@ -137,7 +138,7 @@ hr.hair { width: auto; height: 1px; border: 0; background: var(--rule); }
 .btn-primary:hover { filter: brightness(1.04); }
 .btn-secondary { background: var(--muted); color: var(--fg); border-color: var(--border); }
 .btn-ghost { background: transparent; color: var(--primary); }
-.btn-ghost:hover { background: var(--primary-soft); }
+@media (hover: hover) and (pointer: fine) { .btn-ghost:hover { background: var(--primary-soft); } }
 .btn-danger { background: var(--danger); color: var(--danger-btn-fg); }
 .btn-block { width: 100%; height: 52px; font-size: 13px; }
 .btn-sm { height: var(--touch); padding: 0 12px; }
@@ -507,11 +508,11 @@ html[data-plain="1"] .tabbar { background: var(--v5-panel); } html[data-plain="1
 .input input, .sel { font-size: 17px; }
 
 /* motion: press 0.97 at 160 ms ease-out. Controls used many times a day do not animate (month change, filter chips, tab switch). */
-.btn:active, .chip:active, .rowi:active, .A_slide:active, .iconbtn:active { transform: scale(var(--v5-press-scale)); transition: transform var(--v5-press-ms) ease-out; }
+.btn:active, .chip:active, .rowi:active, .A_slide:active, .iconbtn:active, .E_pill:active, .chk:active { transform: scale(var(--v5-press-scale)); transition: transform var(--v5-press-ms) ease-out; }
 .rowi:active { background: var(--v5-fill); } .btn { transition: transform var(--v5-press-ms) ease-out, background var(--v5-press-ms) ease-out; }
 .btn-primary { background: var(--primary); background-image: none; box-shadow: 0 1px 2px var(--v5-card-shadow); color: var(--primary-fg); }
 .btn-secondary { background: var(--v5-fill); border-color: var(--v5-line); }
-.btn-ghost { color: var(--v5-gold-text); } .btn-ghost:hover { background: var(--v5-gold-soft); }
+.btn-ghost { color: var(--v5-gold-text); } @media (hover: hover) and (pointer: fine) { .btn-ghost:hover { background: var(--v5-gold-soft); } }
 .chip { height: var(--touch); border-radius: var(--r-full); padding: 0 14px; background: var(--v5-fill); border-color: var(--v5-line); font-size: 15px; font-weight: 600; letter-spacing: 0; }
 .chip[aria-pressed="true"] { background: var(--v5-act); color: var(--v5-act-fg); border-color: var(--v5-act); }
 .pill { height: 28px; font-size: 13px; text-transform: none; letter-spacing: 0; font-weight: 600; }
@@ -522,7 +523,8 @@ html[data-plain="1"] .tabbar { background: var(--v5-panel); } html[data-plain="1
 .lead.A_t-power { background: var(--v5-power); color: var(--v5-notice-fg); } .lead.A_t-water { background: var(--v5-water); color: var(--v5-notice-fg); }
 .lead.A_t-rain { background: var(--v5-rain); color: var(--v5-notice-fg); } .lead.A_t-deep_clean { background: var(--v5-deep); color: var(--v5-notice-fg); }
 .lead.A_t-house, .lead.A_t-blocked, .lead.A_t-note { background: var(--v5-house-tile); color: var(--v5-notice-fg); }
-.count { background: var(--v5-danger); color: var(--v5-act-fg); min-width: 24px; height: 24px; line-height: 24px; font-size: 13px; }
+.count { background: var(--v5-act); color: var(--v5-act-fg); min-width: 24px; height: 24px; line-height: 24px; font-size: 13px; } /* a plain count is not an alarm: red only where something is late (.bad) */
+.count.bad { background: var(--v5-danger); }
 .chev { color: var(--v5-ink-3); }
 
 /* app bar and floating tab bar */
@@ -532,7 +534,8 @@ html[data-plain="1"] .tabbar { background: var(--v5-panel); } html[data-plain="1
 .tabbar { left: 12px; right: 12px; bottom: calc(10px + env(safe-area-inset-bottom)); max-width: 456px; height: 64px; padding-bottom: 0; border: 1px solid var(--v5-glass-edge); border-radius: 28px; background: var(--v5-bar); color: var(--v5-bar-fg); box-shadow: 0 12px 32px var(--v5-shadow); }
 .tab { color: var(--v5-bar-fg); font-size: 12px; line-height: 14px; font-weight: 600; min-height: var(--touch); border-radius: 24px; }
 .tab[aria-current="page"] { color: var(--v5-bar-on); } .tab[aria-current="page"] .ico { background: var(--v5-bar-on-bg); }
-.tab .badge { background: var(--v5-danger); color: var(--v5-act-fg); font-size: 12px; top: 6px; }
+.tab .badge { background: var(--v5-act); color: var(--v5-act-fg); font-size: 12px; top: 6px; }
+.tab .badge.bad { background: var(--v5-danger); }
 .screen { padding-bottom: calc(var(--tabbar-h) + env(safe-area-inset-bottom) + 28px); }
 
 /* home: photo header, greeting, content sheet */
@@ -581,7 +584,7 @@ button.A_chipglass { width: var(--touch); padding: 0; justify-content: center; c
 .A_tabs { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; padding: 4px; border-radius: var(--r-full); margin: 4px 0 8px; }
 .A_tabs a { min-height: 44px; display: inline-flex; align-items: center; justify-content: center; border-radius: var(--r-full); font: 600 15px/20px var(--font-ui); color: var(--v5-ink-2); text-decoration: none; }
 .A_tabs a[aria-current="page"] { background: var(--v5-act); color: var(--v5-act-fg); }
-.A_legend { display: flex; gap: 8px; overflow-x: auto; padding: 2px 0 8px; scrollbar-width: none; }
+.A_legend { display: flex; flex-wrap: wrap; gap: 8px; row-gap: 6px; overflow: visible; padding: 2px 0 8px; }
 .A_legend span { flex: none; display: inline-flex; align-items: center; gap: 6px; min-height: 32px; padding: 0 10px; border-radius: var(--r-full); background: var(--v5-fill); font: 600 13px/18px var(--font-ui); color: var(--v5-ink-2); white-space: nowrap; }
 .A_sw { width: 14px; height: 14px; border-radius: 4px; display: inline-block; flex: none; }
 .cal { gap: 3px; }
@@ -644,7 +647,7 @@ html[data-plain="1"] .pad button { background: var(--v5-surf); -webkit-backdrop-
 /* door frame bar follows the v5 surfaces */
 .doorbar { background: var(--v5-glass); -webkit-backdrop-filter: var(--v5-blur); backdrop-filter: var(--v5-blur); border-bottom-color: var(--v5-glass-edge); }
 html[data-plain="1"] .doorbar { background: var(--v5-bg); -webkit-backdrop-filter: none; backdrop-filter: none; }
-@media (prefers-reduced-motion: reduce) { .btn:active, .chip:active, .rowi:active, .A_slide:active, .iconbtn:active, .pad button:active { transform: none; } }
+@media (prefers-reduced-motion: reduce) { .btn:active, .chip:active, .rowi:active, .A_slide:active, .iconbtn:active, .pad button:active, .E_pill:active, .chk:active { transform: none; } }
 .A_body { grid-template-columns: minmax(0, 1fr); }
 .A_signbg { height: 300px; }
 .A_hero { margin: 0; } .A_herobar { gap: 8px; } .A_chipglass { min-width: 0; } .A_herorow { min-width: 0; }
@@ -671,3 +674,53 @@ html[data-plain="1"] .doorbar { background: var(--v5-bg); -webkit-backdrop-filte
 .cal .d.past .A_tag.in { color: var(--v5-cal-past-fg); } .cal .d.clash .A_tag.in { color: var(--v5-danger-t); }
 .A_fbbox { height: 600px; }
 .A_fbbox iframe { display: block; width: 100%; height: 600px; border: 0; border-radius: var(--v5-r-field); }
+
+/* ================= E_ streamline pass (s81, lane E) ================= */
+/* The one notification pill: the slot is fixed from the first paint (124 to 184 px wide, 44 px tall), so its text never moves the Refresh button. */
+.A_herobar .brand { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+button.A_chipglass.E_pill { width: auto; min-width: 124px; max-width: 184px; height: var(--touch); padding: 0 12px; justify-content: flex-start; overflow: hidden; }
+.E_pill .E_lbl, .E_pill .E_cnt { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.E_pill .E_cnt { display: none; }
+.E_pill svg.i { flex: none; }
+.A_chipglass i.E_dot { flex: none; }
+.A_chipglass i.E_ok { background: var(--v5-live-ok); } .A_chipglass i.E_warn { background: var(--v5-live-warn); }
+.A_chipglass i.E_bad { background: var(--v5-live-bad); } .A_chipglass i.E_idle { background: var(--v5-live-idle); }
+@media (max-width: 339px) { .E_pill .E_lbl { display: none; } .E_pill .E_cnt { display: inline; } button.A_chipglass.E_pill { max-width: 148px; } }
+.E_more .t { color: var(--v5-gold-text); font-weight: 600; }
+.A_noticecard { background: var(--v5-card-glass); } /* a painted card even before the blur resolves: never an empty block on a slow phone */
+
+/* Press: the controls used many times a day change colour only (no motion) */
+.calhdr .iconbtn:active, .A_tabs a:active { transform: none; background: var(--v5-fill); }
+.A_tabs a { transition: background var(--v5-press-ms) ease-out; }
+.chk { transition: transform var(--v5-press-ms) ease-out; }
+
+/* Toast with an Undo beside the thumb */
+.toast.E_hasact { display: flex; align-items: center; gap: 4px; padding: 0 4px 0 14px; }
+.toast.on.E_hasact { pointer-events: auto; }
+.toast .E_toastbtn { color: var(--v5-panel-fg); text-decoration: underline; padding: 0 12px; }
+.okbox.sr { position: absolute; width: 1px; height: 1px; padding: 0; margin: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+
+/* Sheets: the pull-down strip. Sticky so it stays at the top of a scrolled sheet; it takes no room (its margins cancel its height). */
+.E_grab { position: sticky; top: 0; z-index: 3; height: 56px; margin: -20px -16px -36px; touch-action: none; }
+
+/* Calendar views: the swipe surface */
+.E_tabbody { touch-action: pan-y; }
+
+/* Task rows: swipe left for Done (Undo on a finished row). The underlay is a real button, hidden from touch and keyboard until the row moves. */
+.E_swipewrap { position: relative; overflow: hidden; border-bottom: 1px solid var(--v5-sep); }
+.E_swipewrap:last-child { border-bottom: 0; }
+.E_swipewrap .payrow { border-bottom: 0; position: relative; z-index: 1; background: var(--v5-surf); touch-action: pan-y; transition: transform 200ms ease-out; }
+.E_under { position: absolute; top: 0; right: 0; bottom: 0; width: var(--E-w, 96px); display: flex; visibility: hidden; }
+.E_swipewrap.E_live .E_under, .E_swipewrap.E_open .E_under { visibility: visible; }
+.E_swipewrap.E_open .payrow { transform: translateX(calc(var(--E-w, 96px) * -1)); }
+.E_underbtn { flex: 1; min-height: var(--touch); border: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; padding: 0 6px; cursor: pointer; font: 600 17px/22px var(--v5-font-ui, var(--font-ui)); }
+.E_done .E_underbtn { background: var(--v5-ok-w); color: var(--v5-ok-t); }
+.E_undo .E_underbtn { background: var(--v5-info-w); color: var(--v5-info-t); }
+.E_underbtn:active { filter: brightness(.96); }
+
+/* More: Sign out lives on the profile card; at 320 px it drops under the name */
+.A_prof { flex-wrap: wrap; }
+.A_prof .mid { flex: 1 1 140px; min-width: 0; }
+.E_signout { flex: none; }
+.E_signhelp { flex: 1 0 100%; margin: 0; }
+@media (prefers-reduced-motion: reduce) { .E_swipewrap .payrow { transition: none; } }

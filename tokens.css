@@ -47,7 +47,7 @@
   --v5-photo-ink: #FFFFFF; --v5-photo-ink-2: #EFE8DD; --v5-photo-edge: rgba(255, 255, 255, 0.18); --v5-photo-shadow: rgba(0, 0, 0, 0.45);
   --v5-photo-fade: linear-gradient(to bottom, rgba(15, 12, 9, 0.5) 0%, rgba(15, 12, 9, 0.08) 30%, rgba(15, 12, 9, 0.5) 58%, rgba(15, 12, 9, 0.92) 100%);
   --v5-photo-fade-sign: linear-gradient(to bottom, rgba(15, 12, 9, 0.35), var(--v5-bg));
-  --v5-live-ok: #7FD3A0; --v5-live-warn: #F0B866;
+  --v5-live-ok: #7FD3A0; --v5-live-warn: #F0B866; --v5-live-bad: #F0646F; --v5-live-idle: #AEBCCB;
   --v5-bar-on: #FFFFFF; --v5-bar-on-bg: rgba(255, 255, 255, 0.16);
   /* shape */
   --v5-r-card: 24px; --v5-r-panel: 28px; --v5-r-sheet: 32px; --v5-r-field: 14px; --v5-r-full: 999px; --v5-touch: 44px;

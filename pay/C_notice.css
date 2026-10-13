@@ -1,11 +1,13 @@
-/* Cascade Staff - the "You were paid" card for the cleaner home (Lane C, s81). Only .C_notice rules, every colour a v5 token, so the shell can link
-   this one file without taking the rest of the pay skin (C_pay.css remaps the shell's variables and belongs to the pay pages). */
-.C_notice { display: flex; gap: 12px; align-items: flex-start; padding: 14px 16px; background: var(--v5-ok-w); color: var(--v5-ok-t); border: 1px solid var(--v5-card-edge); border-radius: var(--v5-r-card); }
-.C_notice-ico { flex: none; margin-top: 2px; }
-.C_notice-body { flex: 1; min-width: 0; display: grid; gap: 4px; }
-.C_notice-head { font: 700 var(--v5-t-body)/24px var(--v5-font-ui); }
-.C_notice-line { font: 700 var(--v5-t-2)/20px var(--v5-font-ui); font-variant-numeric: tabular-nums; }
-.C_notice-text { margin: 0; font-size: var(--v5-t-2); line-height: 22px; color: var(--v5-ink); }
-.C_notice-ok { justify-self: start; margin-top: 6px; }
+/* Cascade Staff - the "You were paid" card for the cleaner home (Lane C, s81; compact since the E_ streamline pass). Only .C_notice rules, every colour a v5 token, so the shell can link
+   this one file without taking the rest of the pay skin (C_pay.css remaps the shell's variables and belongs to the pay pages).
+   Compact: a 44 px tile, the amount (17 px) and the day (15 px), two buttons. Under 128 px tall until "Read the message" opens the full text in place. */
+.C_notice { display: grid; grid-template-columns: 44px minmax(0, 1fr); gap: 8px 12px; align-items: center; padding: 12px 16px; background: var(--v5-ok-w); color: var(--v5-ok-t); border: 1px solid var(--v5-card-edge); border-radius: var(--v5-r-card); }
+.C_notice-ico { width: 44px; height: 44px; border-radius: 14px; display: inline-flex; align-items: center; justify-content: center; background: var(--v5-ok-t); color: var(--v5-act-fg); }
+.C_notice-body { min-width: 0; display: grid; gap: 2px; }
+.C_notice-head { font: 600 var(--v5-t-body)/24px var(--v5-font-ui); }
+.C_notice-line { font: 400 var(--v5-t-2)/20px var(--v5-font-ui); font-variant-numeric: tabular-nums; }
+.C_notice-acts { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 8px; }
+.C_notice-text { grid-column: 1 / -1; margin: 0; font-size: var(--v5-t-2); line-height: 22px; color: var(--v5-ink); }
+.C_notice-text[hidden] { display: none; }
 
-@media (prefers-reduced-motion: reduce) { .C_notice-ok { transition: none; } }
+@media (prefers-reduced-motion: reduce) { .C_notice-ok, .C_notice-more { transition: none; } }

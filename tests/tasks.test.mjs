@@ -176,7 +176,7 @@ test('staff Tasks tab: the list is drawn, overdue shows, the tab carries the due
   const html = app.els['v-tasks'].innerHTML;
   assert.match(html, /Water plants \[hidden\] ring \[hidden\]/);
   assert.match(html, /Leaking tap in the bathroom/);
-  assert.match(html, /Overdue \(1\)/); assert.match(html, /No date \(1\)/);
+  assert.match(html, /Overdue \(1\)/); assert.match(html, /No due date \(1\)/);
   assert.match(html, /Was due 1 Oct/); assert.match(html, /Cleaning issue/);
   assert.match(html, /Yours/); assert.match(html, /Blocks arrival/);
   assert.doesNotMatch(html, /Add a reminder/);

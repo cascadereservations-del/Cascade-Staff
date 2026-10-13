@@ -50,7 +50,9 @@ test('notice: asks staff_pay_my_requests_v1 (no arguments), shows the newest pai
   const shown = await m.run();
   assert.equal(m.calls.length, 1); assert.equal(m.calls[0][0], 'staff_pay_my_requests_v1'); assert.equal(m.calls[0][1], undefined);
   assert.equal(shown.ref, 'ABCD1234'); assert.equal(m.el.hidden, false);
-  assert.match(m.el.innerHTML, /You were paid/); assert.match(m.el.innerHTML, /Paid PHP 1,235 · Oct 15 · ref …5678/);
+  // E_ compact card: the amount is the title, the day and the last four of the reference are the sub; the old one-line home text is still in C_paid-text
+  assert.match(m.el.innerHTML, /<div class="C_notice-head">You were paid ₱1,235<\/div>/); assert.match(m.el.innerHTML, /<div class="C_notice-line">Oct 15 · ref …5678<\/div>/);
+  assert.equal(T.homeLine(REQ), 'Paid PHP 1,235 · Oct 15 · ref …5678');
   assert.match(m.el.innerHTML, /Hi Honey, we have sent PHP 1,235 to your MariBank account for your work on Oct 10 to Oct 12\. Reference: 1234 5678\./);
   assert.match(m.el.innerHTML, /Marifel &amp; The Cascade Team/);
 });
@@ -76,5 +78,5 @@ test('notice: hidden when nothing is paid, older than 7 days, the RPC is absent,
 test('notice: demo shows synthetic data with no network call', async () => {
   const el = new FakeEl('s'); el.hidden = true;
   const shown = await N.mount(el, { demo: true, now: () => NOW });
-  assert.equal(shown.ref, 'DEMO0001'); assert.equal(el.hidden, false); assert.match(el.innerHTML, /Paid PHP 1,235/);
+  assert.equal(shown.ref, 'DEMO0001'); assert.equal(el.hidden, false); assert.match(el.innerHTML, /You were paid ₱1,235/);
 });
