@@ -42,7 +42,8 @@
   P.P_wireBack(window);
   function net() { return (DEMO ? function () { return Promise.resolve({ json: function () { return Promise.resolve({ ok: true, path: 'demo/path', sha256: new Array(65).join('d') }); } }); } : window.fetch).apply(window, arguments); }
   function token() { return sb.auth.getSession().then(function (s) { var t = s.data && s.data.session && s.data.session.access_token; if (!t) throw new Error('signin'); S.me = (s.data.session.user && s.data.session.user.id) || S.me; return t; }); }
-  function clearSecrets() { S.qr = null; S.noQr = false; S.showStatic = false; }
+  var payTok = 0; // each openPay call owns the screen until another starts or the pay view is left: a late answer from an older call is dropped
+  function clearSecrets() { payTok++; S.qr = null; S.noQr = false; S.showStatic = false; }
 
   // ---------------------------------------------------------------- list
   function loadList() {
@@ -152,16 +153,19 @@
   }
 
   // ---------------------------------------------------------------- pay one request
-  var payTok = 0; // each openPay call owns the screen until another starts: a late answer from an older call is dropped
   function openPay(id) {
-    var tok = ++payTok, live = function () { return tok === payTok; };
     var r = (S.list || []).filter(function (x) { return x.id === id; })[0]; if (!r || theirs(r)) return;
     S.listMsg = ''; S.listNote = ''; S.req = r; S.view = 'pay'; S.msg = ''; S.copied = ''; S.form = { file: null, amount: String(A.copyAmount(r.total)), reference: '', override: false, uploaded: null }; clearSecrets();
+    var tok = payTok, live = function () { return tok === payTok; }; // taken after clearSecrets, which advances the token
     root.innerHTML = shell('Pay ' + r.payee_name, '<div class="skel" style="height:320px;margin-top:16px"></div>', '#back');
     // Claim the payment FIRST. If the server says someone else has it, nothing is drawn: no QR, no Mark as paid.
     function backToList(res) { if (!live()) return; S.listNote = ''; S.listMsg = A.refusal(res); S.view = 'list'; clearSecrets(); return loadList().then(render); }
     return sb.rpc('staff_pay_admin_step_v1', { p_request_id: id, p_step: 'pay' }).then(function (s) {
-      var d = s.data; if (!live()) return;
+      var d = s.data;
+      if (!live()) { // the view was left before this answer: the server has claimed the request for this admin, so hand it back (the same not_sent step as I am not paying this now)
+        if (!s.error && d && d.ok !== false) sb.rpc('staff_pay_admin_step_v1', { p_request_id: id, p_step: 'not_sent' }).then(function () { redrawCard(id); return loadList(); }).then(function () { if (S.view === 'list') render(); }, function () {});
+        return;
+      }
       if (s.error || !d || d.ok === false) return backToList(d || { reason: 'offline' });
       r.status = 'paying'; r.paying_by_user_id = d.paying_by_user_id || S.me; S.sentMarked = !!r.sent_said_at; redrawCard(id);
       return sb.rpc('staff_pay_payout_qr_v1', { p_request_id: id }).then(function (res) {

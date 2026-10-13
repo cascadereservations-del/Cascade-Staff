@@ -254,3 +254,14 @@ test('P_ fix guard: no P_ name is declared twice across the pay scripts, and the
   }
   assert.ok(seen.size >= 8, 'the P_ helpers are found'); assert.equal(new Set(Object.keys(P)).size, Object.keys(P).length);
 });
+
+test('P_ fix 2: Back while the step is in flight never repaints the pay view or reads the QR, and the claimed request is handed back with not_sent', async () => {
+  const step = deferred();
+  const b = bootAdmin({ rpc: (n, a) => (n === 'staff_pay_admin_list_v1' ? LIST([OPEN]) : n === 'staff_pay_admin_step_v1' ? ((a || {}).p_step === 'pay' ? step.p : { data: { ok: true, status: 'requested' }, error: null }) : { data: { ok: true, id: 'req1', ref: 'ABCD1234', status: 'requested', payee_name: 'Honey', total: 500, payout_qrph: STATIC }, error: null }) });
+  await tick(); await click(b, { 'data-act': 'pay', 'data-id': 'req1' });
+  await fire(b.root, 'click', { target: backTarget(), preventDefault() {} }); await tick(10);
+  step.ok({ data: { ok: true, status: 'paying' }, error: null }); await tick(15);
+  assert.equal(b.rpcs.filter((r) => r[0] === 'staff_pay_payout_qr_v1').length, 0, 'no QR fetched');
+  assert.doesNotMatch(b.root.innerHTML, /Mark as paid|<svg [^>]*role="img"/); assert.match(b.root.innerHTML, /Pay staff/);
+  assert.deepEqual(plain(b.rpcs.filter((r) => r[0] === 'staff_pay_admin_step_v1').map((r) => r[1].p_step)), ['pay', 'not_sent'], 'claimed, then handed back');
+});
