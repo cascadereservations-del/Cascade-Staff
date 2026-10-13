@@ -20,7 +20,7 @@
     url: 'https://qkgfhsdppslwunarczeq.supabase.co',
     key: 'sb_publishable_JFuRYZ9csmQULcMRmHXDSg_Abo9UeCj',
     propertyId: '6ae230f4-c189-4547-84b1-cb6e0b2cc9bd',
-    version: '3.0.0'
+    version: '3.1.0'
   };
   var LINKS = {
     checklist: 'https://cascadereservations-del.github.io/CH-Cleaners-Checklist/',
@@ -112,6 +112,8 @@
     $('tabbar').hidden = name === 'signin' || name === 'door' || !state.layout;
     var shellEl = $('app'); if (shellEl && shellEl.classList) shellEl.classList.toggle('F_nav', !$('tabbar').hidden); // the rail's room is kept only while the rail is there
   }
+  // lane P: every link into pay/ carries the badge counts in its hash, even when they are zero (query first, then hash)
+  function H_payUrl(page, query) { var n = state.tasks ? CS.taskDueCount(state.tasks.tasks, state.tasks.today) : 0; return './pay/' + (page || '') + (query || '') + '#tasks=' + n + '&cal=' + warnCount(); }
   function warnCount() { return state.payload ? (state.payload.warnings || []).length : 0; }
   function errBanner() {
     return state.error ? '<div class="errbox" role="alert">' + ICON('alert') + '<span>' + esc(state.error) + ' <button class="btn btn-ghost btn-sm" type="button" data-act="refresh">Try again</button></span></div>' : '';
@@ -123,7 +125,7 @@
     var late = state.tasks ? state.tasks.tasks.some(function (t) { return t.status !== 'done' && CS.taskDue(t.due_at, state.tasks.today) === 'overdue'; }) : false; // red only when something is overdue
     var tabs = [['home', '#home', 'Today', 'house'], ['calendar', '#calendar', 'Calendar', 'calendar', warnCount()],
       ['tasks', '#tasks', 'Tasks', 'tasks', due], ['more', '#more', 'More', 'more']];
-    $('tabbar').innerHTML = tabs.map(function (t) {
+    $('tabbar').innerHTML = '<div class="H_railhead" aria-hidden="true"><b>C</b><span>' + esc(String(state.name || '').split(/\s+/)[0]) + '</span></div>' + tabs.map(function (t) {
       return '<a class="tab" href="' + esc(t[1]) + '"' + (t[0] === current ? ' aria-current="page"' : '') + '><span class="ico">' + ICON(t[3], 's24') + '</span>' + esc(t[2]) +
         (t[4] ? '<span class="badge' + (t[0] === 'tasks' && late ? ' bad' : '') + '" aria-label="' + t[4] + (t[0] === 'tasks' ? ' due' : ' warnings') + '">' + t[4] + '</span>' : '') + '</a>';
     }).join('');
@@ -173,7 +175,7 @@
   // The photo header: wordmark, the pill, refresh, greeting, date and weather (as of HH:MM when the weather is old). Drawn before the first answer too.
   function A_hero() {
     var p = state.payload, c = p && p.weather && p.weather.current, nm = CS.greetingName(state.user), stale = p && p.weather && p.weather.fetched_at && CS.weatherStale(p.weather) ? ' · as of ' + CS.clockLabel(p.weather.fetched_at) : '';
-    var wx = c && c.temp != null ? ICON('cloud', 's16') + esc(Math.round(+c.temp) + '° ' + String(c.description || '').toLowerCase() + stale) : '';
+    var wx = c && c.temp != null ? '<a class="H_wxa" href="#weather" aria-label="Weather, open the forecast">' + ICON('cloud', 's16') + esc(CS.H_weatherShort(c.temp, c.description, (window.innerWidth || 360) < 340) + stale) + '</a>' : '';
     return '<div class="A_hero"><img src="img/house-hero.webp" alt="" width="720" height="480" fetchpriority="high"><div class="A_herobar"><span class="brand">Cascade</span><div class="A_herorow">' + E_pill(E_att()) +
       '<button class="A_chipglass" type="button" data-act="refresh" aria-label="Refresh">' + ICON('refresh', 's24') + '</button></div></div>' +
       '<div class="A_greet"><h1>' + esc(CS.greeting() + (nm ? ', ' + nm : '')) + '</h1><div class="cap">' + esc(CS.dayLong(p ? p.today : CS.manilaToday())) + (wx ? '<span aria-hidden="true">·</span>' + wx : '') + '</div></div></div>';
@@ -187,6 +189,9 @@
     var dl = CS.doorLink('checklist', d.url, location.origin, trustOn);
     return '<a class="A_slide" data-slide href="' + esc(dl.href) + '"' + (dl.external ? ' target="_blank" rel="noopener"' : '') + ' aria-label="Start cleaning"><span class="knob">' + ICON('slide', 's24') + '</span><span class="txt">Slide to start cleaning</span></a>';
   }
+  function H_check(tone, word, text) {
+    return '<div class="H_check H_t-' + tone + '"><span class="dot">' + ICON(tone === 'ok' ? 'check' : tone === 'warn' ? 'alert' : 'clock', 's16') + '</span><span class="k">' + esc(word) + '</span><b>' + esc(text) + '</b></div>';
+  }
   function A_turnoverCard(staff) {
     var p = state.payload, T = A_houseT(), clock = CS.A_turnoverClock(new Date(), T), ds = dayStatusOf(p.today), outToday = !!ds.out, inToday = !!ds.arrive;
     if (!outToday && !inToday) {
@@ -195,12 +200,33 @@
       return '<section class="card glass A_card" aria-label="Turnover today"><span class="cap up">Turnover today</span><p class="sub" style="margin:0">No turnover today. ' + esc(nextOut) + '</p></section>';
     }
     var win = clock.phase === 'window', closed = clock.phase === 'after';
+    if (!staff) { // F4: the verdict. Three check rows with a glyph and a word; a row whose data is absent is not drawn.
+      var rows = '', cl = CS.H_cleanLine(state.progress, clock), hl = CS.H_houseLine(A_notices(), p.today), raw = inToday ? H_readyRaw(ds.stay) : null, rd = CS.H_ready(raw, role());
+      if (cl) rows += H_check(cl.tone, 'Clean', cl.text);
+      if (rd) rows += H_check(rd.id && rd.paid && rd.door_code ? 'ok' : 'warn', 'Arrival', CS.H_readyLine(rd));
+      if (hl) rows += H_check(hl.tone, 'House', hl.text);
+      return '<section class="card glass A_card" aria-label="Turnover today"><div class="row-between"><span class="cap up">Turnover today</span></div><p class="strong H_tline" style="margin:0">' + esc('Today · out ' + T.outLabel + ' · in ' + T.inLabel) + '</p>' +
+        (rows ? '<div class="H_checks">' + rows + '</div>' : '') + (rd && !(rd.id && rd.paid && rd.door_code) ? H_readyBlock(raw, ds.stay, true) : '') + '</section>';
+    }
     var steps = '<div class="A_steps">' +
       '<div><span class="dot">' + ICON('logout', 's16') + '</span><span>Guest out</span><b>' + esc(outToday ? T.outLabel : 'None today') + '</b></div>' +
       '<div class="' + (win ? 'now' : '') + '"><span class="dot">' + ICON('sparkles', 's16') + '</span><span>Clean</span><b>' + esc(closed ? 'Closed' : win ? 'Until ' + CS.A_shortTime(T.check_in) : 'From ' + CS.A_shortTime(T.check_out)) + '</b></div>' +
       '<div><span class="dot">' + ICON('user', 's16') + '</span><span>Guest in</span><b>' + esc(inToday ? T.inLabel : 'None today') + '</b></div></div>';
-    return '<section class="card glass A_card" aria-label="Turnover today"><div class="row-between"><span class="cap up">Turnover today</span><span class="sub num" style="font-size:var(--v5-t-2)">' + esc(CS.A_turnoverLine(clock, inToday)) + '</span></div>' +
-      steps + (staff ? A_slideStart() : '') + '</section>';
+    var title = [outToday ? 'Guest out ' + T.outLabel : '', inToday ? (ds.stay.guest_name || 'Guest') + ' in ' + T.inLabel : ''].filter(Boolean).join(' · ');
+    return '<section class="card glass A_card" aria-label="Turnover today"><div class="row-between"><span class="cap up">Turnover today</span></div><p class="strong H_tline" style="margin:0">' + esc(title) + '</p>' +
+      steps + '<p class="num H_until" style="margin:0">' + esc(CS.H_untilLine(clock, inToday)) + '</p>' + A_slideStart() + '</section>';
+  }
+  // MF1: the clean-done card (the checklist posts cs-clean-done). Primary leads straight into the pay request for that clean.
+  function H_cleanDoneCard() {
+    var c = state.cleanDone; if (!c) return '';
+    if (Date.now() - c.at > 86400000) { state.cleanDone = null; return ''; }
+    var ms = c.finishedAt && c.startedAt ? new Date(c.finishedAt).getTime() - new Date(c.startedAt).getTime() : NaN, mins = isFinite(ms) && ms > 0 ? Math.round(ms / 60000) : 0;
+    var took = mins ? (mins >= 60 ? Math.floor(mins / 60) + ' h ' + (mins % 60) + ' min' : mins + ' min') : '', ds = state.payload ? dayStatusOf(state.payload.today) : null, T = A_houseT();
+    return '<section class="card glass A_card H_cleandone" id="H_cleandone" aria-label="Clean done"><h2 class="hd">' + esc('Clean done' + (took ? ' · ' + took : '')) + '</h2>' +
+      (ds && ds.arrive ? '<p class="sub" style="margin:0">' + esc((ds.stay.guest_name || 'Guest') + ' in at ' + T.inLabel) + '</p>' : '') +
+      '<p class="sub" style="margin:0">' + esc((c.issues ? CS.plural(c.issues, 'issue') + ' logged' : 'No issues logged') + ' · ' + CS.plural(c.photos, 'photo')) + '</p>' +
+      '<a class="btn btn-primary btn-block" href="' + esc(H_payUrl('', c.id ? '?clean=' + encodeURIComponent(c.id) : '')) + '">Ask for the cleaning fee</a>' +
+      '<button class="btn btn-ghost" type="button" data-act="clean-done-hide">Not now</button></section>';
   }
   // Notices card: reads notices_v1. Absent RPC = no card. While the first read is out, a reserved block holds the place.
   function A_noticesCard() {
@@ -222,25 +248,30 @@
     var body;
     if (staff) {
       // Today, Turnover, the paid notice (under Turnover: Turnover and Slide to start never move when it lands), Notices, then the doors
-      body = '<div class="A_body">' + errBanner() + todayCard() + A_turnoverCard(true) + '<div id="slot-paid-notice" class="A_slot" hidden></div>' + A_noticesCard() +
+      body = '<div class="A_body">' + errBanner() + todayCard() + A_turnoverCard(true) + H_cleanDoneCard() + '<div id="slot-paid-notice" class="A_slot" hidden></div>' + A_noticesCard() +
         A_navCard('Work', doorRow('checklist', 'clip', 'Start or continue today’s turnover') +
-          (LINKS.pay ? row({ icon: 'cash', title: 'Ask for your pay', sub: state.payHint || 'Ask for your cleaning pay', href: LINKS.pay, subId: 'pay-sub' }) : '') +
-          row({ icon: 'calendar', title: 'Calendar', sub: 'Who is staying, who is next', href: '#calendar', count: n || '' })) +
+          (LINKS.pay ? row({ icon: 'cash', title: 'Cleaning fee', sub: state.payHint || 'Ask for payment for your cleans and expenses', href: H_payUrl(), subId: 'pay-sub' }) : '') +
+          row({ icon: 'calendar', title: 'Calendar', sub: 'Who is staying, who is next', href: '#calendar', count: n || '' }) +
+          row({ icon: 'box', title: 'Inventory', sub: 'Stock levels and what to buy', href: '#stock' }) +
+          (doorDef('manual') && CS.doorAllowed('manual', role()) ? row({ icon: 'book', title: 'House manual', sub: 'How we do things · when something breaks', door: 'manual' }) : '')) +
         A_navCard('Ask Cassy', row({ icon: 'chat', title: 'Cassy · OPS', sub: 'Report, ask, log an expense', tg: LINKS.tgOps, external: true }) +
+          (canReply() ? row({ icon: 'sparkles', title: 'Cassy reply', sub: 'Draft a warm reply to a guest message', href: '#reply' }) : '') +
           row({ icon: 'help', title: 'Quick guide', sub: 'Two minutes on telling Cassy what happened', href: LINKS.quick })) + footerLine() + '</div>';
     } else {
       var bk = CS.bookingsToConfirmRow(role(), state.bookings, A_hubLink('bookings/inquiries')), conv = A_hubLink('guests/conversations'), inbox = v ? v.inbox : null;
       // only owner and admin have an inbox; the reserve is kept while notices load, and dropped on failure, when absent, and for finance
       var inboxShown = !!conv && CS.canSeeGuestContact(role()) && !state.noticesAbsent && (v ? inbox != null : state.noticesLoading);
-      body = '<div class="A_body">' + errBanner() + todayCard() + A_turnoverCard(false) + A_noticesCard() +
+      body = '<div class="A_body">' + errBanner() + todayCard() + A_turnoverCard(false) + H_cleanDoneCard() + A_noticesCard() +
         A_navCard('Guests and bookings', (bk ? row({ icon: 'clip', title: 'Bookings to confirm', sub: 'Open the pending bookings', href: bk.href, external: bk.external, count: bk.count, countLabel: bk.n === 1 ? ' booking to confirm' : ' bookings to confirm' }) : '') +
           row({ icon: 'calendar', title: 'Calendar', sub: 'Stays, blocked nights, notices', href: '#calendar', count: n || '' }) +
           '<div id="slot-inbox"' + (inboxShown ? '' : ' hidden') + (inboxShown && !v ? ' style="min-height:64px"' : '') + '>' + (inboxShown && v ? row({ icon: 'chat', title: 'Inbox', sub: inbox ? inbox + ' open' : 'No open messages', href: conv.href, external: conv.external, count: inbox || '', countLabel: ' open messages' }) : '') + '</div>' +
           (canReply() ? row({ icon: 'sparkles', title: 'Cassy reply', sub: 'Draft a warm reply to a guest message', href: '#reply' }) : '')) +
         A_navCard('Admin', row({ icon: 'dash', title: 'Admin dashboard', sub: 'Today, bookings, money, operations', door: 'dashboard' }) +
           (trustOn ? '' : '<div class="help doornote">Sign-in is kept only on trusted devices</div>') +
-          (/^(owner|admin|finance)$/.test(role() || '') ? row({ icon: 'wallet', title: 'Pay staff', sub: 'Pay a request by QR, then add the proof', href: './pay/admin.html' }) : '') +
-          (CS.canEditRates(role()) ? row({ icon: 'cash', title: 'Pay rates', sub: 'What a clean and its transport pay', href: '#payrates' }) : '') + doorRow('inventory', 'box', 'Stock levels and usage')) + footerLine() + '</div>';
+          (/^(owner|admin|finance)$/.test(role() || '') ? row({ icon: 'wallet', title: 'Pay staff', sub: 'Pay a request by QR, then add the proof', href: H_payUrl('admin.html') }) : '') +
+          (CS.canEditRates(role()) ? row({ icon: 'cash', title: 'Pay rates', sub: 'What a clean and its transport pay', href: '#payrates' }) : '') +
+          (CS.canEditRates(role()) ? row({ icon: 'dash', title: 'Manage', sub: 'Inquiries, expenses and key figures', href: '#manage' }) + row({ icon: 'star', title: 'Key figures', sub: 'How the house is doing', href: '#manage/kpis' }) : '') +
+          row({ icon: 'box', title: 'Inventory', sub: 'Stock levels and usage', href: '#stock' })) + footerLine() + '</div>';
     }
     var keep = el.querySelector && el.querySelector('#slot-paid-notice'); if (keep && keep.parentNode) keep.parentNode.removeChild(keep);
     el.innerHTML = A_hero() + '<div class="screen" style="min-height:0;padding-top:0">' + body + '</div>';
@@ -300,7 +331,8 @@
   // act = { act, task, text, label }: an inline button (Undo) beside the thumb; the toast then stays 5 s and takes taps.
   function toast(msg, act, sub) {
     var t = $('cs-toast');
-    if (!t) { t = document.createElement('div'); t.id = 'cs-toast'; t.className = 'toast'; t.setAttribute('role', 'status'); t.setAttribute('aria-live', 'polite'); document.body.appendChild(t); }
+    if (!t) { t = document.createElement('div'); t.id = 'cs-toast'; t.className = 'toast'; t.setAttribute('role', 'status'); t.setAttribute('aria-live', 'polite'); document.body.appendChild(t);
+      t.addEventListener('click', function (ev) { if (ev.target && ev.target.closest && ev.target.closest('.E_toastbtn')) return; clearTimeout(toastTimer); t.classList.remove('on'); t.classList.remove('E_hasact'); }); } // F23: a tap on the toast itself dismisses it
     if (act) { t.innerHTML = '<span>' + esc(msg) + (sub ? '<br><span class="help">' + esc(sub) + '</span>' : '') + '</span><button class="btn btn-ghost btn-sm E_toastbtn" type="button" data-act="' + esc(act.act) + '" data-task="' + esc(act.task) + '" aria-label="' + esc(act.label || act.text) + '">' + esc(act.text) + '</button>'; t.classList.add('E_hasact'); }
     else { t.innerHTML = ''; t.textContent = msg; t.classList.remove('E_hasact'); }
     t.classList.add('on');
@@ -327,8 +359,16 @@
   }
   function putPhoto(box, url) {
     box.innerHTML = ''; var img = new Image(); img.src = url; img.alt = 'Guest ID photo'; img.draggable = false;
-    img.addEventListener('contextmenu', function (e) { e.preventDefault(); }); box.appendChild(img);
+    img.addEventListener('contextmenu', function (e) { e.preventDefault(); });
+    if (CS.canSeeGuestContact(role())) { var b = document.createElement('button'); b.type = 'button'; b.className = 'H_idbtn'; b.setAttribute('data-act', 'id-full'); b.setAttribute('aria-label', 'Show the ID photo full screen'); b.appendChild(img); box.appendChild(b); } else box.appendChild(img);
   }
+  // Full screen: the same in-memory picture, no download, no new request. A tap on the picture or Close puts it away.
+  function H_idFull(src) {
+    var o = $('H_idfull'); if (!o) { o = document.createElement('div'); o.id = 'H_idfull'; o.className = 'H_idfull'; o.setAttribute('role', 'dialog'); o.setAttribute('aria-modal', 'true'); o.setAttribute('aria-label', 'Guest ID photo'); document.body.appendChild(o); }
+    o.innerHTML = '<img alt="Guest ID photo" draggable="false" data-act="id-full-close"><button class="btn btn-secondary" type="button" data-act="id-full-close">' + ICON('close', 's16') + 'Close</button>';
+    var im = o.querySelector('img'); if (im) im.src = src; o.classList.add('on'); var cb = o.querySelector('button'); if (cb && cb.focus) cb.focus();
+  }
+  function H_idClose() { var o = $('H_idfull'); if (o && o.classList) { o.classList.remove('on'); o.innerHTML = ''; } }
   function dropPhotos() { Object.keys(state.photos).forEach(function (k) { URL.revokeObjectURL(state.photos[k].url); }); state.photos = {}; }
 
   // ---------------------------------------------------------------- Guest Calendar Info
@@ -663,7 +703,7 @@
     var S = state.sheet; if (!S || (!state.payload && S.kind !== 'attn')) return; // the pill's list can say "Loading" and "No connection" before there is a payload
     var e = sheetEls(), had = e.sheet.contains(document.activeElement);
     e.sheet.setAttribute('data-F-kind', S.kind); e.sheet.setAttribute('data-E-swipe', E_sheetTwin(S.kind)); // the pull-down's tap twin: the button with this data-act is on the sheet
-    $('cs-body').innerHTML = E_sheetPage(S, (S.kind === 'attn' ? E_attnSheet() : S.kind === 'day' ? daySheet(S) : S.kind === 'add' ? addReminderCard() : S.kind === 'news' ? A_newsSheet() : S.kind === 'nadd' ? A_noticeAddForm() : S.kind === 'rate' ? A_rateConfirm() : warnSheet(S)) +
+    $('cs-body').innerHTML = E_sheetPage(S, (S.kind === 'attn' ? E_attnSheet() : S.kind === 'day' ? daySheet(S) : S.kind === 'add' ? addReminderCard() : S.kind === 'news' ? A_newsSheet() : S.kind === 'nadd' ? A_noticeAddForm() : S.kind === 'rate' ? A_rateConfirm() : S.kind === 'tour' ? H_tourSheet(S) : warnSheet(S)) +
       (S.err ? '<div class="errbox" style="margin-top:12px">' + ICON('alert') + '<span>' + esc(S.err) + '</span></div>' : '') +
       (S.msg ? '<div class="okbox" style="margin-top:12px">' + ICON('check') + '<span>' + esc(S.msg) + '</span></div>' : '') + (S.hint ? '<p class="help" role="status" style="margin:8px 0 0">' + esc(S.hint) + '</p>' : '') +
       '');
@@ -680,6 +720,22 @@
     drawSheet(); sheetLive(CS.dayLong(d)); E_vibe('tap');
     var b = $('cs-body'); if (b && b.classList && !E_reduced()) { b.classList.add('H_fade'); setTimeout(function () { b.classList.remove('H_fade'); }, 160); }
     return true;
+  }
+  // MF4: three cards, once per phone (cs_seen_v3), Skip at any time; also from More. Never in the demo's own start.
+  var H_TOUR = [['Today', 'Today shows who is here and what is next.'],
+    ['Calendar', 'Tap a day for who is staying. Swipe the grid left or right for the next month. The Notices tab has the weather, power and water.'], ['Tasks', '']];
+  function H_tourSheet(S) {
+    var i = S.step || 0, t = H_TOUR[i], last = i === H_TOUR.length - 1, txt = i === 2 ? 'Tap a task’s box when it is done, or swipe it left. ' + (state.layout === 'staff' ? 'Your cleaning fee is under Work on Today.' : 'Pay staff is under Admin on Today.') : t[1];
+    return '<h2 class="ttl" id="cs-h" tabindex="-1">' + esc(t[0]) + '</h2><p class="sub" style="margin-top:8px">' + esc(txt) + '</p><p class="help" style="margin:8px 0 0">' + (i + 1) + ' of ' + H_TOUR.length + '</p>' +
+      '<div class="row-wrap" style="margin-top:14px"><button class="btn btn-primary" type="button" data-act="tour-next">' + (last ? 'Done' : 'Next') + '</button>' + (last ? '' : '<button class="btn btn-ghost" type="button" data-act="tour-skip">Skip</button>') + '</div>';
+  }
+  function H_tourMaybe() {
+    var delay = typeof window.H_TOUR_DELAY === 'number' ? window.H_TOUR_DELAY : 1500;
+    setTimeout(function () {
+      if (DEMO || !state.layout || state.sheet) return;
+      var ls = store('localStorage'); try { if (!ls || ls.getItem('cs_seen_v3') === '1') return; ls.setItem('cs_seen_v3', '1'); } catch (e) { return; }
+      openSheet('tour', 'tour-open'); state.sheet.step = 0; drawSheet();
+    }, delay);
   }
   function A_newsSheet() {
     var items = CS.A_whatsNew(role(), { notices: !state.noticesAbsent && !!state.notices });
@@ -709,6 +765,11 @@
 
   // ---------------------------------------------------------------- "To look at" sheet (E_): what the pill opens
   // One list, in the order of CS.E_attention: at most 3 rows a group, then "See all N". Every row is a real link or button; a tap closes the sheet first.
+  function H_attnAck(key) {
+    var w = findWarn(key), k = w && CS.findingKey(w, state.tasks && state.tasks.tasks); if (!k || !CS.canSeeGuestContact(role())) return;
+    sb.rpc('ack_verifier_finding_v1', { p_key: k }).then(function (r) { if (r.error) throw r.error; toast('Marked as handled'); E_vibe('tap'); return Promise.all([loadHome(), loadTasks()]); })
+      .catch(function () { E_vibe('error'); toast('That did not save. Check your signal and try again.'); });
+  }
   function E_go(r) { // -> { tag, attrs, ext }
     var go = r.go, l;
     if (go.kind === 'tasks') return { tag: 'a', attrs: ' href="#tasks" data-act="attn-tasks" data-filter="' + esc(go.filter) + '"', ext: false };
@@ -723,8 +784,14 @@
   }
   function E_rowHtml(r) {
     var g = E_go(r);
-    return '<' + g.tag + ' class="rowi"' + g.attrs + '><span class="lead' + (r.tile ? ' A_t-' + r.tile : '') + '">' + ICON(r.glyph) + '</span><span class="mid"><span class="t">' + esc(r.title) + '</span>' + (r.sub ? '<span class="s">' + esc(r.sub) + '</span>' : '') +
+    var inner = '<' + g.tag + ' class="rowi"' + g.attrs + '><span class="lead' + (r.tile ? ' A_t-' + r.tile : '') + '">' + ICON(r.glyph) + '</span><span class="mid"><span class="t">' + esc(r.title) + '</span>' + (r.sub ? '<span class="s">' + esc(r.sub) + '</span>' : '') +
       '</span><span class="chev">' + ICON(g.ext ? 'ext' : 'chev', g.ext ? 's16' : '') + '</span></' + g.tag + '>';
+    var isTask = r.go.kind === 'tasks' && typeof r.id === 'string' && r.id.indexOf(':') > 0, ver = isTask && r.id.indexOf('verifier_findings:') === 0;
+    if (isTask && !ver) return '<div class="H_attrow"><button class="chk H_chk" type="button" role="checkbox" aria-checked="false" aria-label="' + esc('Mark done: ' + r.title) + '" data-act="task-done" data-task="' + esc(r.id) + '">' + ICON('check', 's16') + '</button>' + inner + '</div>';
+    if (ver) return '<div class="H_attrow H_stack">' + inner + '<button class="btn btn-ghost btn-sm" type="button" data-act="task-done" data-task="' + esc(r.id) + '" aria-label="' + esc('Mark as handled: ' + r.title) + '">' + ICON('check', 's16') + 'Mark as handled</button></div>';
+    var w = r.go.kind === 'warn' ? findWarn(r.go.key) : null;
+    if (w && w.kind === 'verifier' && CS.findingKey(w, state.tasks && state.tasks.tasks)) return '<div class="H_attrow H_stack">' + inner + '<button class="btn btn-ghost btn-sm" type="button" data-act="attn-ack" data-warn="' + esc(r.go.key) + '">' + ICON('check', 's16') + 'Mark as handled</button></div>';
+    return inner;
   }
   var E_ALL = { risk: ['#tasks', 'blocks'], overdue: ['#tasks', 'due'], clash: ['#calendar', ''], warn: ['#calendar/warnings', ''], notice: ['#calendar/notices', ''] };
   function E_attnSheet() {
@@ -753,12 +820,12 @@
     var day = S.kind === 'day' && state.payload, nav = function (dir, act, label, icon) { return '<button class="iconbtn H_daynav" type="button" data-act="' + act + '" aria-label="' + label + '"' + (CS.H_dayStep(S.key, dir, state.payload.today) ? '' : ' disabled') + '>' + ICON(icon, 's24') + '</button>'; };
     return '<div class="F_sheethead' + (day ? ' H_dayhead' : '') + '">' + (day ? nav(-1, 'day-prev', 'Previous day', 'back') : '') + title + (day ? nav(1, 'day-next', 'Next day', 'chev') : '') + '<button class="btn btn-secondary btn-sm F_close" type="button" data-F-close="1" data-act="' + E_sheetTwin(S.kind) + '">' + ICON('close', 's16') + 'Close</button></div>' + ask + html.slice(title.length);
   }
-  function E_sheetTwin(kind) { return kind === 'add' ? 'task-add-cancel' : kind === 'nadd' ? 'notice-add-cancel' : kind === 'rate' ? 'rate-back' : 'sheet-close'; }
+  function E_sheetTwin(kind) { return kind === 'tour' ? 'tour-skip' : kind === 'add' ? 'task-add-cancel' : kind === 'nadd' ? 'notice-add-cancel' : kind === 'rate' ? 'rate-back' : 'sheet-close'; }
   function E_dirty() {
     var S = state.sheet, a = state.add, b = state.nadd, f = state.rateForm; if (!S) return false;
     if (S.kind === 'add') return !!(a && (String(a.title).trim() || a.due || a.who || String(a.note).trim()));
     if (S.kind === 'nadd') return !!(b && (String(b.title).trim() || b.start || b.hours || String(b.detail).trim()));
-    if (S.kind === 'rate') return !!(f && (f.regular || f.general || f.transport || f.note));
+    if (S.kind === 'rate') return false; // the confirm sheet restates what was typed on the screen behind it: Escape, the scrim and Close all just close it
     if (S.kind === 'day') { var fld = $('df-label'), live = fld && typeof fld.value === 'string' ? fld.value : ''; return !!(S.formOpen && (String(S.form.label).trim() || String(live).trim())); } // a note being typed on a day
     return false;
   }
@@ -795,7 +862,7 @@
       '<div class="payrow taskrow' + (done ? ' off' : '') + '" data-E-swipe="' + act + '" data-E-verifier="' + (ver ? '1' : '') + '" data-E-w="' + uw + '" data-task="' + esc(key) + '"><button class="chk" type="button" role="checkbox" aria-checked="' + done + '" aria-label="' + esc((done ? 'Done: ' : 'Mark done: ') + t.title) + '" data-act="' + act + '" data-task="' + esc(key) + '">' + ICON('check', 's16') + '</button>' +
       '<div><div class="t"><span' + (done ? ' style="text-decoration:line-through;color:var(--fg-2)"' : '') + '>' + esc(t.title) + '</span></div>' +
       (t.detail ? '<span class="s" style="white-space:pre-line">' + esc(t.detail) + '</span>' : '') +
-      '<span class="s' + (due === 'overdue' && !done ? ' c-danger' : '') + '">' + esc(meta.join(' · ')) + '</span>' +
+      '<span class="s' + (due === 'overdue' && !done ? ' c-danger' : '') + '">' + esc(meta.join(' · ')) + '</span>' + (state.H_offKey === key ? '<span class="s c-danger H_noconn" role="status">No connection</span>' : '') +
       (flags ? '<div class="row-wrap" style="margin-top:6px">' + flags + '</div>' : '') + '</div></div></div>';
   }
   function addReminderCard() {
@@ -853,7 +920,7 @@
     }).catch(function (e) {
       state.tasksDenied = !!(e && e.message === 'denied');
       state.tasksErr = e && e.message === 'denied' ? 'Tasks are not available for this account.' : !E_netErr(e) ? (state.tasks ? 'Could not update. Showing the last update.' : 'Could not update.') : state.tasks ? 'Live information needs a connection. Showing the last update.' : 'Live information needs a connection.';
-    }).then(function () { state.tasksLoading = false; if (state.layout && current !== 'door') { if (current === 'tasks') renderTasks(); else if (current === 'home') render('home'); renderTabs(current); } }); // Home too: the pill waits for the tasks
+    }).then(function () { state.tasksLoading = false; if (state.layout && current !== 'door') { if (current === 'tasks') renderTasks(); else if (current === 'home') render('home'); renderTabs(current); } H_offlineSync(); }); // Home too: the pill waits for the tasks
   }
   function findTask(key) {
     var i = key.indexOf(':'), src = key.slice(0, i), id = key.slice(i + 1), list = state.tasks ? state.tasks.tasks : [];
@@ -866,7 +933,9 @@
     // The server hides a finished task once the list reloads, so Undo works from the remembered one.
     if (!t && L && L.source + ':' + L.id === key) t = { source: L.source, id: L.id, title: L.title, status: done ? 'open' : 'done' };
     if (!t || t.status === (done ? 'done' : 'open')) return;
-    t.status = done ? 'done' : 'open'; state.lastDone = { source: t.source, id: t.id, title: t.title, done: done }; state.tasksErr = ''; if (current === 'tasks') renderTasks(); renderTabs(current);
+    if (navigator.onLine === false) { state.H_offKey = key; E_vibe('error'); if (current === 'tasks') renderTasks(); return; } // MF8: no queue; the row says so under itself
+    state.H_offKey = '';
+    t.status = done ? 'done' : 'open'; state.lastDone = { source: t.source, id: t.id, title: t.title, done: done }; state.tasksErr = ''; if (current === 'tasks') renderTasks(); renderTabs(current); if (state.sheet && state.sheet.kind === 'attn') drawSheet();
     E_vibe('tap'); // one buzz for the confirm; the same path whether the box, the underlay button or the swipe asked
     toast(done ? 'Marked done' : 'Back on the list', E_undoAct(t, key, done));
     var call = t.source === 'verifier_findings' ? sb.rpc('ack_verifier_finding_v1', { p_key: t.id })
@@ -986,16 +1055,21 @@
       var X = R.result, who = (X.guestName ? X.guestName + ' · ' : '') + RP_NAME[X.platform];
       body = rpErr(R) + '<div class="card"><h2 class="cap up" id="rp-h" tabindex="-1">Replying to · ' + esc(who) + '</h2><p class="rp-quote">' + esc(CS.clampText(X.guestText, 280)) + '</p></div>' +
         (X.header ? '<p class="sub" style="margin:0">' + esc(X.header) + '</p>' : '') +
-        X.replies.map(function (r, i) {
-          return '<div class="card"><span class="cap up">' + (X.replies.length > 1 ? 'Reply ' + (i + 1) : 'Reply') + '</span><p class="rp-reply">' + esc(r) + '</p>' +
+        X.options.map(function (o, i) {
+          return '<div class="card H_draft"><span class="cap up">' + esc(o.label || (X.options.length > 1 ? 'Reply ' + (i + 1) : 'Reply')) + '</span><p class="rp-reply">' + esc(o.text) + '</p>' +
             '<button class="btn btn-primary btn-block" type="button" data-act="reply-copy" data-i="' + i + '" style="margin-top:12px">' + (R.copied === i ? ICON('check', 's16') + 'Copied' : 'Copy') + '</button></div>';
         }).join('') +
+        (X.platform === 'messenger' ? ext(CS.MESSENGER_INBOX, ICON('chat', 's16') + 'Open Messenger inbox', 'btn btn-secondary btn-block', R.copied >= 0 ? ' id="rp-inbox"' : ' id="rp-inbox" hidden') : '') +
         '<button class="btn btn-secondary btn-block" type="button" data-act="reply-reset">Start over</button>';
     } else if (R.step === 'pick') {
       body = '<h2 class="dlg" id="rp-h" tabindex="-1">What did the guest send?</h2><div class="rp-pick">' +
         '<button class="btn btn-secondary rp-big" type="button" data-act="reply-mode" data-mode="text">' + ICON('chat', 's24') + 'Text</button>' +
         '<button class="btn btn-secondary rp-big" type="button" data-act="reply-mode" data-mode="image">' + ICON('image', 's24') + 'Screenshot</button></div>' +
-        '<p class="help" style="margin:0">Cassy writes the drafts in her own voice. You copy one and send it yourself.</p>';
+        '<p class="help" style="margin:0">Cassy writes the drafts in her own voice. You copy one and send it yourself.</p>' +
+        '<section class="card glass H_how" aria-label="How it goes"><h2 class="hd">How it goes</h2><ol class="H_steps"><li>Paste, or screenshot, the guest’s message.</li><li>Pick a draft.</li><li>Copy it, then paste it in Messenger.</li></ol></section>' +
+        ((state.replyRecent || []).length ? '<section class="card glass" aria-label="Recent drafts"><h2 class="hd">Recent</h2><div class="stack" style="margin-top:8px">' + state.replyRecent.map(function (r, i) {
+          return '<div class="H_recent"><p class="sub" style="margin:0"><b>' + esc(r.who) + '</b> · ' + esc(CS.clampText(r.text, 90)) + '</p><button class="btn btn-ghost btn-sm" type="button" data-act="reply-copy-recent" data-i="' + i + '">Copy</button></div>';
+        }).join('') + '</div><p class="help" style="margin:8px 0 0">Kept on this screen only, until you leave the app.</p></section>' : '');
     } else {
       var shot = R.mode === 'image';
       body = rpErr(R) +
@@ -1054,7 +1128,7 @@
       if (state.reply !== R) return; // signed out meanwhile
       R.busy = false;
       var X = o.status === 200 ? CS.replyResult(o.j) : null;
-      if (X) { R.result = X; R.step = 'done'; R.copied = -1; R.err = ''; R.signout = false; }
+      if (X) { R.result = X; R.step = 'done'; R.copied = -1; R.err = ''; R.signout = false; state.replyRecent = [{ who: (X.guestName ? X.guestName + ' · ' : '') + RP_NAME[X.platform], text: X.options[0].text }].concat(state.replyRecent || []).slice(0, 3); }
       else { R.err = CS.replyErrorText(o.status === 200 ? 502 : o.status, o.j && o.j.error); R.signout = o.status === 401; if (o.status === 401 || o.status === 403) E_vibe('error'); }
       if (current === 'reply') { renderReply(X ? 'heading' : 'error'); rpLive(X ? 'The replies are ready' : ''); window.scrollTo(0, 0); }
     });
@@ -1076,7 +1150,7 @@
   function copyReply(i) {
     var R = state.reply, t = R && R.result && R.result.replies[i]; if (t == null) return;
     copyText(t).then(function () {
-      var b = copyBtn(i); R.copied = i; R.err = ''; if (b) b.innerHTML = ICON('check', 's16') + 'Copied'; rpLive('Copied');
+      var b = copyBtn(i); R.copied = i; R.err = ''; if (b) b.innerHTML = ICON('check', 's16') + 'Copied'; rpLive('Copied'); var ib = $('rp-inbox'); if (ib) ib.hidden = false;
       clearTimeout(copyTimer); copyTimer = setTimeout(function () { if (R.copied === i) { R.copied = -1; var b2 = copyBtn(i); if (b2) b2.textContent = 'Copy'; rpLive(''); } }, 2000);
     }).catch(function () { R.err = 'Copy did not work on this phone. Press and hold the text to copy it.'; R.signout = false; if (current === 'reply') renderReply('error'); });
   }
@@ -1087,25 +1161,97 @@
     var chip = function (v, t) { return '<button class="chip" type="button" role="radio" data-theme="' + v + '" aria-checked="' + (theme === v) + '" aria-pressed="' + (theme === v) + '">' + t + '</button>'; };
     var nm = state.name || 'You', roleName = state.access ? state.access.role : '';
     $('v-more').innerHTML = appbar({ title: 'More' }) + '<div class="screen"><div class="stack">' +
-      '<div class="card glass A_prof"><span class="av" aria-hidden="true">' + esc(CS.initialOf(nm)) + '</span><div class="mid"><span class="t">' + esc(nm) + '</span><span class="s">' + esc(roleName) + (trustOn ? ' · This phone is trusted' : '') + '</span></div>' +
-        '<button class="btn btn-secondary E_signout" type="button" data-act="signout">' + ICON('logout', 's16') + 'Sign out</button>' +
-        '<p class="help E_signhelp">Signs you out of the admin dashboard as well, on this phone.</p></div>' +
-      '<nav class="card glass list" aria-label="What’s new"><button class="rowi" type="button" data-act="whatsnew"><span class="lead">' + ICON('sparkles') + '</span><span class="mid"><span class="t">What’s new</span><span class="s">What changed in this version</span></span><span class="chev">' + ICON('chev') + '</span></button></nav>' +
+      A_navCard('Search', row({ icon: 'search', title: 'Search', sub: CS.canSeeGuestContact(role()) ? 'Tasks, guests and the manual' : 'Tasks and the manual', href: '#search' })) +
+      A_navCard('How we do things', row({ icon: 'book', title: 'Cascade Manual', sub: 'How we do things', door: 'manual' }) + doorRow('guide', 'book', 'How the staff app and the house work') + row({ icon: 'help', title: 'Quick guide', sub: 'How to use Cassy in Telegram', href: LINKS.quick }) + doorRow('adminguide', 'lock', 'Owner and admin chapters')) +
       '<section class="card" aria-label="Appearance"><h2 class="hd">Appearance</h2><div class="row-wrap" role="radiogroup" aria-label="Theme" style="margin-top:10px">' + chip('auto', 'Automatic') + chip('light', 'Light') + chip('dark', 'Dark') + '</div>' +
       '<div class="A_switch" style="margin-top:10px"><span id="plain-label"><b>Plain bars</b> (no glass)</span><button class="sw" type="button" role="switch" data-act="plain" aria-checked="' + plain + '" aria-labelledby="plain-label"><i></i></button></div>' +
       '<p class="help" style="margin:4px 0 0">On by itself on slower phones. Easier to read in the sun.</p>' +
       (E_canVibrate() ? '<div class="A_switch" style="margin-top:10px"><span id="hap-label"><b>Vibrate on confirm</b></span><button class="sw" type="button" role="switch" data-act="haptics" aria-checked="' + CS.E_hapticsOn(store('localStorage')) + '" aria-labelledby="hap-label"><i></i></button></div>' +
         '<p class="help" style="margin:4px 0 0">A short buzz when something is saved or finished. Off saves nothing but the buzz.</p>' : '') + '</section>' +
-      A_navCard('Cassy', (canReply() ? row({ icon: 'sparkles', title: 'Cassy reply', sub: 'Draft a warm reply to a guest message', href: '#reply' }) : '') + row({ icon: 'help', title: 'Quick guide', sub: 'How to use Cassy in Telegram', href: LINKS.quick }) +
+      A_navCard('Cassy', (canReply() ? row({ icon: 'sparkles', title: 'Cassy reply', sub: 'Draft a warm reply to a guest message', href: '#reply' }) : '') +
         row({ icon: 'chat', title: 'Cassy · Telegram OPS', sub: 'Open in Telegram', tg: LINKS.tgOps, external: true }) + (admin ? row({ icon: 'wallet', title: 'Cassy · Telegram Finance', sub: 'Open in Telegram', tg: LINKS.tgFinance, external: true }) : '')) +
-      A_navCard('Reference', row({ icon: 'book', title: 'House manual', sub: 'How we do things', door: 'manual' }) + doorRow('guide', 'book', 'How the staff app and the house work') + doorRow('adminguide', 'lock', 'Owner and admin chapters')) +
-      (admin ? A_navCard('Admin', row({ icon: 'dash', title: 'Admin hub', sub: 'Every dashboard page, in one list', href: '#hub' }) + (CS.canEditRates(role()) ? row({ icon: 'cash', title: 'Pay rates', sub: 'What a clean and its transport pay', href: '#payrates' }) : '') + doorRow('inventory', 'box', 'Stock levels and usage')) : '') +
+      (admin ? A_navCard('Admin', row({ icon: 'dash', title: 'Admin hub', sub: 'Every dashboard page, in one list', href: '#hub' }) + (CS.canEditRates(role()) ? row({ icon: 'cash', title: 'Pay rates', sub: 'What a clean and its transport pay', href: '#payrates' }) : '') + row({ icon: 'box', title: 'Inventory', sub: 'Stock levels and usage', href: '#stock' })) : '') +
+      '<nav class="card glass list" aria-label="About this app"><button class="rowi" type="button" data-act="whatsnew"><span class="lead">' + ICON('sparkles') + '</span><span class="mid"><span class="t">What’s new</span><span class="s">What changed in this version</span></span><span class="chev">' + ICON('chev') + '</span></button>' +
+      '<button class="rowi" type="button" data-act="tour-open"><span class="lead">' + ICON('help') + '</span><span class="mid"><span class="t">Show the tour</span><span class="s">Three short cards on how the app works</span></span><span class="chev">' + ICON('chev') + '</span></button></nav>' +
       '<div class="F_group"><div class="A_label">This phone</div><section class="card" id="install-card" hidden aria-label="Install the app"><h2 class="hd">Install the app</h2><p class="sub" style="margin-top:6px">Put Cascade Staff on your Home Screen.</p><button class="btn btn-secondary" id="install-btn" type="button" style="margin-top:10px">' + ICON('plus', 's16') + 'Install</button>' +
         '<a class="btn btn-secondary" id="install-link" href="./install/" style="margin-top:10px" hidden>' + ICON('plus', 's16') + 'How to install</a></section></div>' +
+      '<div class="card glass A_prof"><span class="av" aria-hidden="true">' + esc(CS.initialOf(nm)) + '</span><div class="mid"><span class="t">' + esc(nm) + '</span><span class="s">' + esc(roleName) + (trustOn ? ' · This phone is trusted' : '') + '</span></div>' +
+        '<button class="btn btn-ghost E_signout" type="button" data-act="signout">' + ICON('logout', 's16') + 'Sign out</button>' +
+        '<p class="help E_signhelp">Signs you out of the admin dashboard as well, on this phone.</p></div>' +
       '</div>' +
       '<div class="help" style="text-align:center;margin-top:16px">Cascade Staff v' + CFG.version + '</div></div>';
     syncInstall();
   }
+  // ---------------------------------------------------------------- Search (MF5): tasks and the manual for staff; guests too for owner and admin
+  function H_manualLoad() {
+    if (state.manualProbed) return; state.manualProbed = true; state.manualIdx = null;
+    net('./manual/index.json', { cache: 'no-store' }).then(function (r) { return r && r.ok ? r.json() : null; }).catch(function () { return null; }).then(function (j) {
+      var idx = j ? CS.H_manualIndex(j) : []; state.manualIdx = idx.length ? idx : null; if (current === 'search') H_searchDraw();
+    });
+  }
+  function renderSearch() {
+    var mgr = CS.canSeeGuestContact(role());
+    $('v-search').innerHTML = appbar({ title: 'Search', back: '#more' }) + '<div class="screen"><div class="stack"><div class="field"><label for="sr-q">' + (mgr ? 'Find a task, a guest or a manual page' : 'Find a task or a manual page') + '</label><div class="input"><input id="sr-q" type="search" autocomplete="off" maxlength="60" value="' + esc(state.H_q || '') + '"></div></div><div id="sr-res" aria-live="polite"></div></div></div>';
+    H_manualLoad(); H_searchDraw();
+  }
+  function H_searchDraw() {
+    var box = $('sr-res'); if (!box) return;
+    var q = state.H_q || '', today = state.payload ? state.payload.today : CS.manilaToday();
+    var R = CS.H_search(q, { tasks: state.tasks ? state.tasks.tasks : [], stays: state.payload ? staysOf() : [], manual: state.manualIdx || [] }, role()), html = '';
+    var grp = function (label, rows) { return rows ? '<div><div class="cap up" style="margin-bottom:6px">' + esc(label) + '</div><div class="card glass list">' + rows + '</div></div>' : ''; };
+    html += grp('Tasks', R.tasks.map(function (t) { return row({ icon: 'tasks', title: t.title, sub: t.due_at ? CS.taskDueLabel(t.due_at, state.tasks.today) : CS.taskKindLabel(t.kind), href: '#tasks' }); }).join(''));
+    html += grp('Guests', R.guests.map(function (g) {
+      var day = g.checkin_date >= today ? g.checkin_date : g.checkout_date >= today ? g.checkout_date : today;
+      return '<button class="rowi" type="button" data-act="notice-cal" data-date="' + esc(day) + '"><span class="lead">' + ICON('user') + '</span><span class="mid"><span class="t">' + esc(g.guest_name || 'Guest') + '</span><span class="s num">' + esc(CS.stayDates(g)) + '</span></span><span class="chev">' + ICON('chev') + '</span></button>';
+    }).join(''));
+    html += grp('Manual', R.manual.map(function (m) { return row({ icon: 'book', title: m.title, sub: 'Open in the manual', href: '#door/manual/' + m.id }); }).join(''));
+    if (q.trim().length < 2) html = '<p class="help" style="margin:0">Type two letters or more.</p>';
+    else if (!html) html = '<p class="sub" style="margin:0">No match. Try a shorter word.</p>';
+    box.innerHTML = html;
+  }
+
+  // ---------------------------------------------------------------- Modules (s82): weather, stock and manage are separate folders, loaded the first time their route opens
+  var H_MODULES = {
+    weather: { src: 'weather/W_weather.js', css: 'weather/W_weather.css', global: 'W_Weather', title: 'Weather', roles: null },
+    stock:   { src: 'stock/I_stock.js',     css: 'stock/I_stock.css',     global: 'I_Stock',   title: 'Inventory', roles: ['owner', 'admin', 'cleaner', 'finance'] },
+    manage:  { src: 'manage/N_manage.js',   css: 'manage/N_manage.css',   global: 'N_Manage',  title: 'Manage', roles: ['owner', 'admin'] }
+  };
+  var H_mod = { mounted: '', sub: '', n: 0, p: {} }, H_sub = '';
+  function H_domLoad(m) { // a stylesheet (never waited for) and a script; a 404 on the script rejects
+    return new Promise(function (res, rej) {
+      if (m.css) { var l = document.createElement('link'); l.rel = 'stylesheet'; l.href = m.css; document.head.appendChild(l); }
+      var sc = document.createElement('script'); sc.src = m.src; sc.onload = function () { res(); }; sc.onerror = function () { rej(new Error('load')); }; document.head.appendChild(sc);
+    });
+  }
+  function H_loadModule(key) {
+    var m = H_MODULES[key]; if (H_mod.p[key]) return H_mod.p[key];
+    var load = typeof window.H_loadAsset === 'function' ? window.H_loadAsset : H_domLoad; // tests replace the loader
+    H_mod.p[key] = (window[m.global] ? Promise.resolve() : load(m)).then(function () { if (!window[m.global] || typeof window[m.global].mount !== 'function') throw new Error('no module'); });
+    return H_mod.p[key];
+  }
+  function H_unmount() {
+    var k = H_mod.mounted; H_mod.mounted = ''; H_mod.sub = ''; H_mod.n++;
+    var g = k && window[H_MODULES[k].global]; try { if (g && typeof g.unmount === 'function') g.unmount(); } catch (e) {}
+  }
+  // The folder is not shipped yet: weather goes to the Notices tab (which has the weather card), stock to the inventory door, manage to the admin hub.
+  function H_fallback(key) {
+    var fb = key === 'weather' ? '#calendar/notices' : key === 'stock' ? (doorDef('inventory') && CS.doorAllowed('inventory', role()) ? '#door/inventory' : '#home') : (state.layout === 'admin' ? '#hub' : '#home');
+    history.replaceState(null, '', fb); route();
+  }
+  function renderModule(key) {
+    var m = H_MODULES[key], el = $('v-' + key), sub = H_sub;
+    if (H_mod.mounted === key && H_mod.sub === sub) return; // a redraw of the same screen must not remount it
+    if (H_mod.mounted) H_unmount();
+    var token = ++H_mod.n;
+    el.innerHTML = appbar({ title: m.title, back: '#home' }) + '<div class="screen"><div class="H_mod" id="H_mod-' + key + '"><div class="skel" style="height:120px"></div></div></div>';
+    H_loadModule(key).then(function () {
+      if (current !== key || token !== H_mod.n) return;
+      var box = $('H_mod-' + key); if (!box) return; box.innerHTML = '';
+      H_mod.mounted = key; H_mod.sub = sub;
+      window[m.global].mount(box, { client: DEMO ? null : sb, demo: DEMO, role: role(), sub: sub, houseTimes: A_houseT(), navigate: function (h) { location.hash = String(h).charAt(0) === '#' ? h : '#' + h; }, toast: toast, haptic: E_vibe });
+    }, function () { if (current === key && token === H_mod.n) H_fallback(key); });
+  }
+
   // ---------------------------------------------------------------- Admin hub (owner, admin, finance): every dashboard page, in the groups of the admin home
   function renderHub() {
     var groups = CS.A_hubGroups(role());
@@ -1169,7 +1315,7 @@
     });
   }
   function signOutTo(msg) {
-    closeSheet(); dropPhotos(); state.reply = null; var rb = $('rp-body'); if (rb) rb.innerHTML = ''; rpLive(''); state.payload = null; state.bookings = null; state.bookingsDone = false; state.noticesDone = false; state.notices = null; state.noticesAbsent = false; state.nadd = null; state.fbOpen = false; state.tasks = null; state.access = null; state.layout = null; state.month = null; state.error = '';
+    closeSheet(); dropPhotos(); state.replyRecent = []; state.cleanDone = null; state.progress = null; state.progressAbsent = false; H_idClose(); state.reply = null; var rb = $('rp-body'); if (rb) rb.innerHTML = ''; rpLive(''); state.payload = null; state.bookings = null; state.bookingsDone = false; state.noticesDone = false; state.notices = null; state.noticesAbsent = false; state.nadd = null; state.fbOpen = false; state.tasks = null; state.access = null; state.layout = null; state.month = null; state.error = '';
     return sb.auth.signOut().catch(function () {}).then(function () { showSignin(msg); });
   }
   function showSignin(msg) {
@@ -1191,11 +1337,19 @@
       try { CS.assertNoMoney(r.data, { allowContact: CS.canSeeGuestContact(state.access && state.access.role) }); } catch (e) { state.payload = null; state.errorKind = 'blocked'; state.error = 'This page was blocked because the data carried an amount or a contact detail. Tell Lloyd.'; return; }
       if (!CS.canSeeGuestContact(state.access && state.access.role)) r.data.warnings = (r.data.warnings || []).filter(function (w) { return w.kind !== 'verifier'; });
       state.payload = r.data; state.loadedAt = Date.now(); state.error = ''; state.errorKind = '';
-      refreshWeather(); loadPayHint(); loadBookingsToConfirm(); A_loadNotices();
+      refreshWeather(); loadPayHint(); loadBookingsToConfirm(); A_loadNotices(); H_loadProgress();
     }).catch(function (e) {
       state.errorKind = E_netErr(e) ? 'network' : 'server'; // "No connection" only when the network is the problem
       state.error = state.errorKind === 'network' ? (state.payload ? 'Live information needs a connection. Showing the last update.' : 'Live information needs a connection.') : (state.payload ? 'Could not update. Showing the last update.' : 'Could not update.');
-    }).then(function () { state.loading = false; if (state.layout) render(); E_announce(); });
+    }).then(function () { state.loading = false; if (state.layout) render(); E_announce(); H_offlineSync(); });
+  }
+  // cleaning_progress_v1 (owner and admin): the "Clean" check of the Turnover card. Probed: a missing RPC hides the row, it is not an error.
+  function H_loadProgress() {
+    if (!CS.canSeeGuestContact(role()) || state.progressAbsent) return;
+    sb.rpc('cleaning_progress_v1').then(function (r) {
+      if (r.error) { if (CS.rpcMissing(r.error)) state.progressAbsent = true; state.progress = null; return; }
+      state.progress = CS.H_progress(r.data, role());
+    }).catch(function () { state.progress = null; }).then(function () { if (current === 'home' && state.layout) renderHome(); });
   }
   // weather-proxy refreshes its own cache; if it rejects the user's token, the line simply says "as of HH:MM".
   function refreshWeather() {
@@ -1244,32 +1398,42 @@
     if (v === 'payrates' && !CS.canEditRates(state.access && state.access.role)) v = 'home';
     if (v === 'reply' && !canReply()) v = 'home';
     if (v === 'hub' && state.layout !== 'admin') v = 'home';
+    if (H_MODULES[v]) { if (H_MODULES[v].roles && H_MODULES[v].roles.indexOf(role()) < 0) v = 'home'; else H_sub = parts.slice(1).join('/'); } // the role is checked before anything is loaded
     if (v === 'calendar' && parts[1] === 'stays') { history.replaceState(null, '', '#calendar'); parts = ['calendar']; } // s82: Month and Stays are one screen
     if (v !== 'calendar' || CS.A_calTab(parts[1]) !== state.calTab) state.fbOpen = false; // the posts load only on a tap in the current visit to the Notices tab
     if (v === 'calendar') { var tab0 = CS.A_calTab(parts[1]); if (tab0 !== state.calTab) closeSheet(); state.calTab = tab0; }
     if (v === 'door' && DEMO) { toast('Demo: ' + doorDef(parts[1]).title + ' opens in the live app'); history.replaceState(null, '', '#home'); v = 'home'; } // a door would load a real app in the frame
-    if (v === 'door') { doorKey = parts[1]; doorRoute = doorKey === 'dashboard' && CS.A_hubRouteOk(parts.slice(2).join('/')) ? parts.slice(2).join('/') : ''; render('door'); window.scrollTo(0, 0); return; }
+    if (v === 'door') { doorKey = parts[1]; doorRoute = doorKey === 'dashboard' && CS.A_hubRouteOk(parts.slice(2).join('/')) ? parts.slice(2).join('/') : ''; doorAnchor = doorKey === 'manual' && /^[\w.-]{1,80}$/.test(parts[2] || '') ? parts[2] : ''; render('door'); window.scrollTo(0, 0); return; }
     leaveDoor(); render(v);
     if (v === 'calendar' && state.dayAfter) { var d1 = state.dayAfter; state.dayAfter = null; openSheet('day', d1); }
-    var t = parts[1] && $(parts[1]); if (t) t.scrollIntoView({ block: 'start' }); else window.scrollTo(0, 0);
+    var t = parts[1] && !H_MODULES[v] && $(parts[1]); if (t) t.scrollIntoView({ block: 'start' }); else window.scrollTo(0, 0);
   }
-  var current = 'home', doorKey = '', doorRoute = '';
+  var current = 'home', doorKey = '', doorRoute = '', doorAnchor = '';
   function render(v) {
     v = v || current; current = v;
+    if (H_mod.mounted && H_mod.mounted !== v) H_unmount();
     setView(v);
     if (v === 'door') { renderDoor(); return; }
-    renderTabs(v === 'hub' ? 'more' : v);
-    if (v === 'hub') renderHub(); else if (v === 'home') renderHome(); else if (v === 'calendar') renderCalendar(); else if (v === 'tasks') renderTasks(); else if (v === 'payrates') { renderPayRates(); if (!state.rates) loadRates(); } else if (v === 'reply') renderReply(); else if (v === 'more') renderMore();
+    renderTabs(v === 'hub' || v === 'search' ? 'more' : v === 'weather' ? 'calendar' : v === 'stock' || v === 'manage' ? 'home' : v);
+    if (H_MODULES[v]) renderModule(v); else if (v === 'search') renderSearch(); else if (v === 'hub') renderHub(); else if (v === 'home') renderHome(); else if (v === 'calendar') renderCalendar(); else if (v === 'tasks') renderTasks(); else if (v === 'payrates') { renderPayRates(); if (!state.rates) loadRates(); } else if (v === 'reply') renderReply(); else if (v === 'more') renderMore();
     var typing = document.activeElement && /^(df-(label|kind)|t-(title|due|who|note)|n-(type|title|date|start|hours|detail))$/.test(document.activeElement.id || '');
     if (state.sheet) { if (v !== state.sheet.view) closeSheet(); else if (!typing) drawSheet(); }
   }
   // A door opens in the frame once per visit; coming back to the same door (a re-render) keeps the page where it is.
   function renderDoor() {
     var d = doorDef(doorKey), f = $('door-frame'); if (!d) return;
-    $('door-title').textContent = d.title; f.title = d.title;
-    $('door-back').innerHTML = ICON('back', 's24') + 'Back';
-    var tag = doorKey + '/' + doorRoute;
-    if (f.getAttribute('data-door') !== tag) { f.setAttribute('data-door', tag); setFrame(f, doorRoute ? CS.A_hubDoorUrl(d.url, doorRoute) : d.url); }
+    var ttl = doorKey === 'checklist' ? H_doorTitle(d.title) : d.title;
+    $('door-title').textContent = ttl; f.title = d.title;
+    $('door-back').innerHTML = ICON('back', 's24') + 'Back'; $('door-done').hidden = doorKey !== 'checklist'; $('door-done').innerHTML = ICON('check', 's16') + 'Done';
+    var tag = doorKey + '/' + doorRoute + '/' + doorAnchor;
+    if (f.getAttribute('data-door') !== tag) { f.setAttribute('data-door', tag); setFrame(f, doorRoute ? CS.A_hubDoorUrl(d.url, doorRoute) : doorAnchor ? d.url.replace(/#.*$/, '') + '#' + doorAnchor : d.url); }
+  }
+  // MF1: the checklist's bar says which turnover it is ("Cleaning · Ana out 12:00 noon · Ben in 2:00 pm"); Done goes home, the clean-done card waits there.
+  function H_doorTitle(fallback) {
+    if (!state.payload) return fallback;
+    var T = A_houseT(), ds = dayStatusOf(state.payload.today), parts = [];
+    if (ds.out) parts.push((ds.out.guest_name || 'Guest') + ' out ' + T.outLabel); if (ds.arrive) parts.push((ds.stay.guest_name || 'Guest') + ' in ' + T.inLabel);
+    return parts.length ? 'Cleaning · ' + parts.join(' · ') : fallback;
   }
   function leaveDoor() { var f = $('door-frame'); if (f && f.getAttribute('data-door')) { f.removeAttribute('data-door'); setFrame(f, 'about:blank'); if (state.layout) { loadHome(); loadTasks(); } } } // what was done inside the door may have changed the pill
   // location.replace on the frame's window: opening or closing a door adds no history entry (so Back is one press, not two).
@@ -1277,8 +1441,8 @@
   function enter() {
     state.layout = CS.layoutForRole(state.access.role);
     state.name = CS.deriveDisplayName(state.user);
-    if (!/^#(home|calendar|tasks|payrates|reply|more|hub)/.test(location.hash)) history.replaceState(null, '', '#home');
-    route(); loadHome(); loadTasks(); maybeIosHint();
+    if (!/^#(home|calendar|tasks|payrates|reply|more|hub|weather|stock|manage|search)/.test(location.hash)) history.replaceState(null, '', '#home');
+    route(); loadHome(); loadTasks(); maybeIosHint(); H_tourMaybe();
   }
   function boot() {
     sb.auth.getSession().then(function (s) {
@@ -1367,6 +1531,14 @@
   });
   $('signin-form').addEventListener('submit', function (ev) { ev.preventDefault(); submitSignin(); });
   $('door-back').addEventListener('click', function () { location.replace(location.pathname + location.search + '#home'); });
+  $('door-done').addEventListener('click', function () { location.replace(location.pathname + location.search + '#home'); });
+  // MF1: the checklist (same origin) posts cs-clean-done after a successful submit. The door closes and Home shows the clean-done card.
+  window.addEventListener('message', function (ev) {
+    var d = ev && ev.data; if (!d || typeof d !== 'object' || d.type !== 'cs-clean-done' || ev.origin !== location.origin || !state.layout) return;
+    var n = function (x) { x = Math.floor(+x); return x >= 0 && x < 1000 ? x : 0; };
+    state.cleanDone = { id: /^[\w-]{1,64}$/.test(String(d.session_id)) ? String(d.session_id) : '', startedAt: String(d.started_at || ''), finishedAt: String(d.finished_at || ''), issues: n(d.issues), photos: n(d.photos), at: Date.now() };
+    location.hash = '#home'; route();
+  });
   document.addEventListener('click', function (ev) {
     var t = ev.target.closest('[data-act],[data-theme],[data-day],[data-warn],[data-nfilter],[data-tfilter]'); if (!t) return;
     var a = t.getAttribute('data-act');
@@ -1405,6 +1577,14 @@
     else if (a === 'reply-platform') { if (state.reply) { state.reply.platform = t.getAttribute('data-platform') === 'airbnb' ? 'airbnb' : 'messenger'; Array.prototype.forEach.call(document.querySelectorAll('#v-reply [data-act="reply-platform"]'), function (b) { b.setAttribute('aria-pressed', String(b === t)); }); } }
     else if (a === 'reply-send') sendReply();
     else if (a === 'reply-copy') copyReply(+t.getAttribute('data-i'));
+    else if (a === 'reply-copy-recent') { var rr = (state.replyRecent || [])[+t.getAttribute('data-i')]; if (rr) copyText(rr.text).then(function () { toast('Copied'); }, function () { toast('Copy did not work on this phone.'); }); }
+    else if (a === 'clean-done-hide') { state.cleanDone = null; if (current === 'home') renderHome(); }
+    else if (a === 'tour-open') { openSheet('tour', 'tour-open'); state.sheet.step = 0; drawSheet(); }
+    else if (a === 'tour-next') { var TS = state.sheet; if (TS && TS.kind === 'tour') { if ((TS.step || 0) >= H_TOUR.length - 1) closeSheet(); else { TS.step = (TS.step || 0) + 1; drawSheet(); } } }
+    else if (a === 'tour-skip') closeSheet();
+    else if (a === 'id-full') { var im = t.querySelector && t.querySelector('img'); if (im && CS.canSeeGuestContact(role())) H_idFull(im.src); }
+    else if (a === 'id-full-close') H_idClose();
+    else if (a === 'attn-ack') H_attnAck(t.getAttribute('data-warn'));
     else if (a === 'reply-back') { if (state.reply) { state.reply.step = 'pick'; state.reply.err = ''; state.reply.signout = false; } renderReply('heading'); }
     else if (a === 'reply-reset') { state.reply = newReply(); renderReply('heading'); rpLive(''); window.scrollTo(0, 0); }
     else if (a === 'signout') { signOutTo(''); }
@@ -1422,6 +1602,7 @@
   // Reminder and pay-rate forms: remember what is typed (a refresh must not lose it) without redrawing under the keyboard.
   document.addEventListener('input', function (ev) {
     var id = ev.target && ev.target.id, a = state.add, f = state.rateForm;
+    if (id === 'sr-q') { state.H_q = ev.target.value; H_searchDraw(); }
     if (state.sheet && id === 'df-label') state.sheet.form.label = ev.target.value; else if (state.sheet && id === 'df-kind') state.sheet.form.kind = ev.target.value;
     if (state.reply && id === 'rp-text') { state.reply.text = ev.target.value; state.reply.err = ''; } else if (state.reply && id === 'rp-name') state.reply.name = ev.target.value;
     var na = state.nadd; if (na && /^n-(type|title|date|start|hours|detail)$/.test(id || '')) { na[{ 'n-type': 'type', 'n-title': 'title', 'n-date': 'date', 'n-start': 'start', 'n-hours': 'hours', 'n-detail': 'detail' }[id]] = ev.target.value; na.err = ''; }
@@ -1434,7 +1615,7 @@
     if (ev.target && ev.target.id === 'df-kind' && state.sheet) { state.sheet.form.kind = ev.target.value; return; }
     if (ev.target && ev.target.id === 't-who' && state.add) state.add.who = ev.target.value;
   });
-  document.addEventListener('keydown', function (ev) { if (ev.key === 'Escape' && state.sheet) E_tryClose(); });
+  document.addEventListener('keydown', function (ev) { if (ev.key === 'Escape') { H_idClose(); if (state.sheet) E_tryClose(); } });
   // Telegram: the tg:// link opens the app. If the page is still in front ~1.2 s later the app did not open, so t.me opens instead.
   document.addEventListener('click', function (ev) {
     var a = ev.target.closest && ev.target.closest('a[data-tgweb]'), web = a && a.getAttribute('data-tgweb'); if (!web) return;
@@ -1547,6 +1728,14 @@
       cancel: function () { rest(body(), 160); } });
   })();
   window.addEventListener('hashchange', route);
+  // MF8: no queue. A strip says the screen is the last one that loaded; a write tapped offline says so under its own row.
+  function H_offlineSync() {
+    var el = $('H_offline'); if (!el) return;
+    var off = navigator.onLine === false || (!!state.error && state.errorKind === 'network' && !!state.payload);
+    el.hidden = !off; if (off) el.textContent = 'No connection' + (state.loadedAt ? ' · showing ' + CS.clockLabel(new Date(state.loadedAt).toISOString()) : '');
+    if (!off && state.H_offKey) { state.H_offKey = ''; if (current === 'tasks') renderTasks(); }
+  }
+  window.addEventListener('online', function () { H_offlineSync(); if (state.layout) { loadHome(); loadTasks(); } }); window.addEventListener('offline', H_offlineSync);
   window.addEventListener('scroll', function () { var b = document.querySelector('.view.on .appbar'); if (b) b.classList.toggle('scrolled', window.scrollY > 8); }, { passive: true });
   document.addEventListener('visibilitychange', function () {
     if (document.visibilityState === 'visible' && state.layout && Date.now() - state.loadedAt > 60000) { loadHome(); loadTasks(); }

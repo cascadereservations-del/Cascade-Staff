@@ -89,7 +89,7 @@ test('clamp keeps the guest text short and on one line', () => {
 test('wiring: the reply view is gated by role in the route, the home and More rows, and posts to the function with a bearer token', () => {
   const app = read('app.js'), html = read('index.html'), sw = read('sw.js');
   assert.match(app, /if \(v === 'reply' && !canReply\(\)\) v = 'home'/);
-  assert.equal((app.match(/canReply\(\) \? row\(/g) || []).length, 2, 'home and More');
+  assert.equal((app.match(/canReply\(\) \? row\(/g) || []).length, 3, 'the staff home, the admin home and More');
   assert.match(app, /\/functions\/v1\/guest-reply-draft'.*Authorization: 'Bearer ' \+ token/);
   assert.match(html, /id="v-reply"/);
   assert.match(app, /VIEWS = \[[^\]]*'reply'/);
@@ -136,7 +136,7 @@ test('render: Write the reply is disabled while the screenshot shrinks; a 401 of
 
 test('wiring: sign-out clears the drawn view, #reply survives a reload, transparent PNGs are filled white, the live region is persistent', () => {
   const app = read('app.js'), html = read('index.html');
-  assert.match(app, /\/\^#\(home\|calendar\|tasks\|payrates\|reply\|more\|hub\)\//);
+  assert.match(app, /\/\^#\(home\|calendar\|tasks\|payrates\|reply\|more\|hub\|weather\|stock\|manage\|search\)\//);
   assert.match(app, /state\.reply = null; var rb = \$\('rp-body'\); if \(rb\) rb\.innerHTML = ''/);
   assert.match(app, /fillStyle = '#FFFFFF'; cx\.fillRect\([^)]*\); cx\.drawImage/);
   assert.match(html, /id="v-reply"><div class="sr" id="rp-live" role="status" aria-live="polite"><\/div><div id="rp-body">/);

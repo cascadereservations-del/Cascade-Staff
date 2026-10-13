@@ -67,7 +67,7 @@ test('F_ 200 percent text: a control grows instead of clipping (min-height, not 
   assert.match(payCss, /\.btn \{ min-height: var\(--v5-touch\)/); assert.match(payCss, /\.btn-block \{ min-height: 52px;/);
   assert.match(b, /\.A_hero \{ width: 100%; height: auto; min-height: 252px; display: flex; flex-direction: column; \}/); assert.match(b, /\.A_greet \{ position: static; margin-top: auto;/);
   const nowrap = [...b.matchAll(/([^{}]+)\{[^}]*white-space:\s*nowrap[^}]*\}/g)].map((x) => x[1].trim()).filter((s) => !/^\.sr$|\.okbox\.sr/.test(s));
-  const allowed = /A_noticecard|\.appbar \.ttl|\.doorbar \.ttl|A_herobar \.brand|E_pill|\.pill|\.A_steps b|\.A_tag|\.A_legend|\.A_chipglass|\.cal|\.tgbtn|\.tab|\.chip|\.A_slide|\.A_chk|\.btn|\.A_filters|\.A_mk|\.badge|\.count|\.toast|\.ctval|\.lead|\.A_switch|\.seg|\.sw|\.A_prof|\.dots|\.A_hours/;
+  const allowed = /A_noticecard|\.appbar \.ttl|\.doorbar \.ttl|A_herobar \.brand|E_pill|\.pill|\.A_steps b|\.A_tag|\.A_legend|\.A_chipglass|\.cal|\.tgbtn|\.tab|\.chip|\.A_slide|\.A_chk|\.btn|\.A_filters|\.A_mk|\.badge|\.count|\.toast|\.ctval|\.lead|\.A_switch|\.seg|\.sw|\.A_prof|\.dots|\.A_hours|\.A_greet|\.H_railhead|\.H_offline/;
   assert.deepEqual(nowrap.filter((s) => !allowed.test(s)), [], 'an unexpected no-wrap rule');
 });
 
@@ -102,7 +102,7 @@ test('F_ scoping: the card grid, the dialogs, the rail and the side sheets exist
 test('F_ reserved heights are unchanged and per-class boxes are CSS only: Notices 216, pill slot 124-184 x 44, hero 252, grabber 56, aspect-ratio crops, no JS width read', () => {
   assert.match(css, /\.A_noticecard \{ height: 216px; overflow: hidden; align-content: start; \}/);
   assert.match(css, /button\.A_chipglass\.E_pill \{ width: auto; min-width: 124px; max-width: 184px; height: var\(--touch\);/);
-  assert.match(css, /\.A_hero \{[^}]*min-height: 252px/); assert.match(css, /\.E_grab \{ position: sticky; top: 0; z-index: 3; height: 28px;/);
+  assert.match(css, /\.A_hero \{ min-height: clamp\(12\.5rem, 32vh, 15\.75rem\); \}/); assert.match(css, /\.E_grab \{ position: sticky; top: 0; z-index: 3; height: 28px;/);
   assert.match(block('(min-width: 37.5rem)'), /\.A_hero \{ aspect-ratio: 16 \/ 7; max-height: max\(15\.75rem, 34vh\); \}/); assert.match(block('(min-width: 52.5rem)'), /\.A_hero \{ aspect-ratio: 21 \/ 8; \}/);
   assert.match(block('(max-height: 30rem) and (orientation: landscape)'), /\.A_hero \{ aspect-ratio: auto; min-height: 9\.5rem;/);
   assert.match(read('index.html'), /class="A_bg"[^>]*><img [^>]*width="240" height="160"/); assert.match(read('app.js'), /<img src="img\/house-hero\.webp" alt="" width="720" height="480"/);

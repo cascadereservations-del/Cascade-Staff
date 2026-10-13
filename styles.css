@@ -880,3 +880,52 @@ button.A_chipglass.E_pill { width: auto; min-width: 124px; max-width: 184px; hei
 /* The Notices card keeps one fixed height from the first paint; owner and admin get the pinned Add row inside it */
 .A_noticecard.H_mgr { height: 268px; }
 .H_addrow { justify-self: start; }
+
+/* ---- H_ stage 3 to 5 ---- */
+/* F13: the hero is at most a third of the screen on a small phone; date and weather share one line; the weather is a link to #weather (its box is 44 px tall, its line is not) */
+.A_hero { min-height: clamp(12.5rem, 32vh, 15.75rem); }
+.A_greet h1 { line-height: 1.05; }
+.A_greet .cap { display: flex; align-items: center; gap: 6px; flex-wrap: nowrap; white-space: nowrap; overflow: hidden; }
+.H_wxa { display: inline-flex; align-items: center; gap: 4px; min-height: var(--touch); margin: -14px 0; color: inherit; text-decoration: none; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+/* F4: the admin Turnover card is a verdict: one title line and up to three check rows (glyph + word, never colour alone) */
+.H_tline { font: 600 var(--v5-t-body)/1.3 var(--v5-font-ui, var(--font-ui)); }
+.H_checks { display: grid; gap: 6px; }
+.H_check { display: flex; align-items: center; gap: 8px; min-height: 28px; color: var(--v5-ink); font-size: var(--v5-t-2); }
+.H_check .dot { flex: none; width: 24px; height: 24px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; background: var(--v5-sunk); color: var(--v5-ink-2); }
+.H_check .k { flex: none; min-width: 4.5rem; color: var(--v5-ink-2); }
+.H_check b { min-width: 0; font-weight: 600; overflow-wrap: anywhere; }
+.H_t-ok .dot { background: var(--v5-ok-w); color: var(--v5-ok-t); }
+.H_t-warn .dot { background: var(--v5-warn-w); color: var(--v5-warn-t); } .H_t-warn b { color: var(--v5-warn-t); }
+.H_until { font-variant-numeric: tabular-nums; color: var(--v5-ink); font-weight: 600; text-align: center; }
+.H_cleandone { gap: 8px; }
+/* the attention sheet: a box to tick and a Mark as handled button on the same row */
+.H_attrow { display: flex; align-items: center; border-bottom: 1px solid var(--v5-sep); }
+.H_attrow:last-child { border-bottom: 0; }
+.H_attrow > .rowi { flex: 1 1 auto; min-width: 0; border-bottom: 0; }
+.H_chk { flex: none; width: var(--touch); height: var(--touch); margin-left: 6px; border-radius: 12px; display: inline-flex; align-items: center; justify-content: center; }
+.H_attrow.H_stack { flex-wrap: wrap; padding-bottom: 6px; }
+.H_attrow.H_stack > .rowi { flex: 1 1 100%; }
+.H_attrow.H_stack > .btn { margin-left: 56px; }
+.H_noconn { display: block; margin-top: 2px; }
+/* guest ID: a tap shows it full screen (owner and admin) */
+.H_idbtn { display: block; width: 100%; padding: 0; border: 0; background: none; cursor: zoom-in; }
+.H_idbtn img { display: block; width: 100%; }
+.H_idfull { position: fixed; inset: 0; z-index: 60; display: none; flex-direction: column; align-items: center; justify-content: center; gap: 12px; padding: max(16px, env(safe-area-inset-top)) 16px max(16px, env(safe-area-inset-bottom)); background: var(--v5-scrim, var(--v5-bg)); }
+.H_idfull.on { display: flex; }
+.H_idfull img { max-width: 100%; max-height: calc(100% - 72px); object-fit: contain; border-radius: var(--v5-r-field); background: var(--v5-surf); }
+/* the offline strip: fixed under the app bar, 36 px, never takes a tap */
+.H_offline { position: fixed; z-index: 5; left: 0; right: 0; top: calc(var(--appbar-h, 56px) + env(safe-area-inset-top, 0px)); height: 36px; display: flex; align-items: center; justify-content: center; background: var(--v5-sunk); color: var(--v5-ink-2); font: 600 var(--v5-t-label)/1 var(--font-ui); pointer-events: none; }
+.H_offline[hidden] { display: none; }
+.H_railhead { display: none; }
+.H_how .H_steps { margin: 6px 0 0; padding-left: 1.25rem; display: grid; gap: 4px; }
+.H_recent { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.H_recent .sub { min-width: 0; overflow-wrap: anywhere; }
+.toast.on { pointer-events: auto; }
+.doorbar #door-done { margin-left: auto; flex: none; }
+.doorbar #door-done[hidden] { display: none; }
+@media (min-width: 52.5rem) {
+  .A_hero { max-width: 60rem; margin-left: auto; margin-right: auto; border-radius: 0 0 var(--v5-r-sheet) var(--v5-r-sheet); }
+  .H_railhead { display: grid; justify-items: center; gap: 2px; padding: 0 0 .75rem; color: var(--v5-ink); }
+  .H_railhead b { font: 400 1.5rem/1 var(--v5-font-display); }
+  .H_railhead span { font: 600 var(--v5-t-label)/1.2 var(--font-ui); color: var(--v5-ink-2); max-width: 4.5rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+}

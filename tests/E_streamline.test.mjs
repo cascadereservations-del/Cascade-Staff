@@ -14,9 +14,9 @@ test('E_ cleaner home order: Today, Turnover, the paid-notice slot, Notices, Wor
   const order = ['aria-label="Today in the house"', 'aria-label="Turnover today"', 'id="slot-paid-notice"', 'aria-label="Notices"', 'aria-label="Work"', 'aria-label="Ask Cassy"', 'Updated '].map((s) => idx(h, s));
   assert.deepEqual(order, [...order].sort((a, b) => a - b), 'the order is fixed');
   const cassy = h.slice(idx(h, 'aria-label="Ask Cassy"'), idx(h, 'Updated '));
-  assert.equal((cassy.match(/class="rowi"|class="rowi" /g) || []).length, 2, 'two rows: Cassy OPS and Quick guide'); assert.match(cassy, /Cassy · OPS/); assert.match(cassy, /Quick guide/);
-  assert.doesNotMatch(h, /House manual|System Guide|Sign out|data-act="signout"/);
-  assert.match(h, /Ask for your pay/); assert.match(h, /<span class="t">Calendar<\/span><span class="s">Who is staying, who is next/); assert.doesNotMatch(h, /Payment Request|Guest Calendar Info/);
+  assert.equal((cassy.match(/class="rowi"|class="rowi" /g) || []).length, 3, 'three rows: Cassy OPS, Cassy reply (every role) and Quick guide'); assert.match(cassy, /Cassy · OPS/); assert.match(cassy, /Quick guide/);
+  assert.match(h, /House manual/, 'F6: the manual is on the staff home'); assert.doesNotMatch(h, /System Guide|Sign out|data-act="signout"/);
+  assert.match(h, /Cleaning fee/); assert.match(h, /Ask for payment for your cleans and expenses/); assert.match(h, /<span class="t">Calendar<\/span><span class="s">Who is staying, who is next/); assert.doesNotMatch(h, /Payment Request|Guest Calendar Info/);
   // the slot is empty and reserved, so Turnover and Slide to start never move when the notice lands
   assert.match(h, /id="slot-paid-notice" class="A_slot" hidden><\/div>/);
 });
@@ -30,7 +30,7 @@ test('E_ admin home: one Admin group (dashboard, Pay staff, Pay rates, Inventory
   for (const w of ['Admin dashboard', 'Pay staff', 'Pay rates', 'Inventory']) assert.ok(admin.includes(w), w);
   assert.match(h, /<span class="t">Calendar<\/span><span class="s">Stays, blocked nights, notices/);
   const more = (await boot({ role: 'owner', hash: '#more', handlers: baseHandlers('owner') })).els['v-more'].innerHTML;
-  for (const w of ['Cassy · Telegram OPS', 'Cassy · Telegram Finance', 'Quick guide', 'House manual', 'Admin hub', 'Pay rates', 'Inventory']) assert.ok(more.includes(w), 'reachable on More: ' + w);
+  for (const w of ['Cassy · Telegram OPS', 'Cassy · Telegram Finance', 'Quick guide', 'Cascade Manual', 'Admin hub', 'Pay rates', 'Inventory']) assert.ok(more.includes(w), 'reachable on More: ' + w);
   const fin = (await boot({ role: 'finance', hash: '#home', handlers: baseHandlers('finance') })).els['v-home'].innerHTML;
   assert.doesNotMatch(fin, /Pay rates/); assert.match(fin, /Pay staff/);
 });
@@ -121,7 +121,7 @@ test('E_ More: one Sign out button, on the profile card, with the dashboard note
     const app = await boot({ role, hash: '#more', handlers: baseHandlers(role) });
     const h = app.els['v-more'].innerHTML;
     assert.equal((h.match(/data-act="signout"/g) || []).length, 1, role);
-    const prof = h.slice(idx(h, 'class="card glass A_prof"'), idx(h, 'aria-label="What’s new"'));
+    const prof = h.slice(idx(h, 'class="card glass A_prof"')); assert.ok(h.lastIndexOf('data-act="signout"') > idx(h, 'aria-label="About this app"'), 'F6: Sign out is the last control');
     assert.match(prof, /data-act="signout"/); assert.match(prof, /Signs you out of the admin dashboard as well, on this phone\./);
     assert.doesNotMatch(h, /Signed in as|aria-label="Account"/);
   }
@@ -138,7 +138,7 @@ test('E_ press and hover: the many-times-a-day controls change colour only; hove
 });
 
 test('E_ renames and wording: the pay page is "Your pay", the quick guide names the new row, the old names are gone from every screen', () => {
-  assert.match(read('pay/index.html'), /<title>Your pay<\/title>/); assert.doesNotMatch(read('pay/pay.js'), /shell\('Payment Request'/); assert.match(read('pay/pay.js'), /shell\('Your pay'/);
-  assert.match(read('quick/index.html'), /Open <strong>Ask for your pay<\/strong>/);
+  assert.match(read('pay/index.html'), /<title>(Your pay|Cleaning fee)<\/title>/); assert.doesNotMatch(read('pay/pay.js'), /shell\('Payment Request'/); assert.match(read('pay/pay.js'), /shell\('(Your pay|Cleaning fee)'/);
+  assert.match(read('quick/index.html'), /Open <strong>Cleaning fee<\/strong>/);
   assert.doesNotMatch(read('app.js'), /title: 'Payment Request'|title: 'Guest Calendar Info'|'Guest Calendar Info'/);
 });

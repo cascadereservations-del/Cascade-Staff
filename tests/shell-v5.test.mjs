@@ -166,7 +166,7 @@ async function boot({ role, hash, handlers }) {
     rpc: (name, args) => { calls.push([name, JSON.parse(JSON.stringify(args || {}))]); const h = handlers[name]; return Promise.resolve(h ? JSON.parse(JSON.stringify(h(args))) : { error: null, data: null }); },
     storage: { from: () => ({ createSignedUrl: () => Promise.resolve({ error: { message: 'x' } }) }) } };
   const win = { supabase: { createClient: () => sb }, CS, P, CSPay: P, ICON: (n, c) => '<svg class="i ' + (c || '') + '" data-i="' + n + '"></svg>', CSTheme: { get: () => 'auto', set() {}, plainOn: () => false, setPlain() {} },
-    addEventListener() {}, matchMedia: () => ({ matches: false }), scrollTo() {}, scrollY: 0, localStorage: { getItem: () => null, setItem() {}, removeItem() {} }, sessionStorage: { getItem: () => null, setItem() {}, removeItem() {} } };
+    addEventListener() {}, matchMedia: () => ({ matches: false }), scrollTo() {}, scrollY: 0, localStorage: { getItem: (k) => (k === 'cs_seen_v3' ? '1' : null), setItem() {}, removeItem() {} }, sessionStorage: { getItem: () => null, setItem() {}, removeItem() {} } };
   const ctx = { window: win, document: docObj, location, history: { replaceState(a, b, h) { location.hash = h; } }, navigator: { userAgent: 'test' }, localStorage: win.localStorage, matchMedia: () => ({ matches: false }),
     fetch: () => Promise.resolve({ ok: false }), setTimeout, clearTimeout, console, URL, Image: function () {}, Date: FixedDate, Math, JSON, Promise, crypto: { randomUUID: () => 'uuid' } };
   win.crypto = ctx.crypto; vm.createContext(ctx); vm.runInContext(read('app.js'), ctx);
@@ -190,11 +190,11 @@ test('A_ live mock: notices_v1 is called with exactly p_property_id; the cleaner
   assert.ok(iToday > 0 && iTurn > iToday && iSlot > iTurn && h.indexOf('aria-label="Notices"') > iSlot, 'E_: the paid-notice slot sits directly under the Turnover card, above Notices');
   assert.match(h, /id="slot-paid-notice" class="A_slot" hidden>/);
   assert.match(h, /out 12:00 noon/, 'a guest with no check-out time shows the house time, not a made-up one');
-  assert.match(h, /Next guest in 1 h 30 m/); assert.match(h, /Slide to start cleaning/); assert.match(h, /data-slide/);
+  assert.match(h, /1 h 30 min until check-in/); assert.match(h, /Slide to start cleaning/); assert.match(h, /data-slide/);
   assert.match(h, /aria-label="Notices"/); assert.match(h, /Rain watch, 2 to 5 pm/);
-  for (const w of ['Work', 'Ask Cassy', 'Cleaning checklist', 'Ask for your pay', 'Calendar', 'Cassy · OPS', 'Quick guide']) assert.ok(h.includes(w), w);
+  for (const w of ['Work', 'Ask Cassy', 'Cleaning checklist', 'Cleaning fee', 'Calendar', 'Cassy · OPS', 'Quick guide']) assert.ok(h.includes(w), w);
   assert.doesNotMatch(h, /Admin hub|slot-inbox|to confirm|Tell the guest/);
-  assert.doesNotMatch(h, /Payment Request|Guest Calendar Info|House manual|Sign out|aria-label="Status"|warnline/, 'E_: renamed rows, help trimmed, Sign out off the footer, no strip or warnings line');
+  assert.doesNotMatch(h, /Payment Request|Guest Calendar Info|Sign out|aria-label="Status"|warnline/, 'E_: renamed rows, help trimmed, Sign out off the footer, no strip or warnings line');
 });
 test('A_ live mock: the admin home has the one pill (no status strip), the notices, two groups, the Inbox slot with its count; the hub row is on More', async () => {
   const app = await boot({ role: 'admin', hash: '#home', handlers: base('admin') });
@@ -250,7 +250,7 @@ test('A_ live mock: Tasks has filter chips with counts and Add a reminder opens 
   assert.match(th, /data-tfilter="all" aria-pressed="true">All 2/); assert.match(th, /data-tfilter="mine"[^>]*>Mine 1/); assert.match(th, /data-tfilter="due"[^>]*>Due 1/); assert.match(th, /data-tfilter="blocks"[^>]*>Blocks arrival 1/);
   await t.click({ 'data-tfilter': 'mine' }); assert.doesNotMatch(t.els['v-tasks'].innerHTML, /Two/); assert.match(t.els['v-tasks'].innerHTML, /One/);
   const m = await boot({ role: 'owner', hash: '#more', handlers: base('owner') }), mh = m.els['v-more'].innerHTML;
-  assert.ok(mh.indexOf('What’s new') < mh.indexOf('Appearance') && mh.indexOf('Appearance') < mh.indexOf('Reference'), 'profile, What is new, Appearance and Plain bars come first, then the groups');
+  assert.ok(mh.indexOf('How we do things') < mh.indexOf('Appearance') && mh.indexOf('Appearance') < mh.indexOf('Cassy reply') && mh.indexOf('Cassy reply') < mh.indexOf('This phone') && mh.indexOf('This phone') < mh.lastIndexOf('data-act="signout"'), 'F6: the manual, Appearance, Cassy, This phone, then Sign out last');
   assert.match(mh, /role="switch" data-act="plain" aria-checked="false"/); assert.match(mh, /Admin hub/);
   await m.click({ 'data-act': 'whatsnew' }); assert.match(m.els['cs-body'].innerHTML, /Tell the guest/);
   const c = await boot({ role: 'cleaner', hash: '#more', handlers: base('cleaner') }); await c.click({ 'data-act': 'whatsnew' });
@@ -291,7 +291,7 @@ test('A_ motion and accessibility floor: press 0.97 at 160 ms, sheets 300 ms wit
   assert.match(css, /\.A_tabs a \{ min-height: 44px/); assert.match(css, /\.chip \{ min-height: var\(--touch\)/); // F_: controls grow with the text size instead of clipping it
 });
 test('A_ service worker and manifest: new cache name, tokens + house photos precached and each photo is 60 KB or less, theme colours are the v5 backgrounds', () => {
-  const sw = read('sw.js'); assert.match(sw, /CACHE_NAME = 'cs-shell-v17'/);
+  const sw = read('sw.js'); assert.match(sw, /CACHE_NAME = 'cs-shell-v18'/);
   for (const u of ['./tokens.css', './img/house-hero.webp', './img/house-blur.webp', './fonts/dm-serif-display-400.woff2']) assert.ok(sw.includes("'" + u + "'") || sw.includes(u.replace('./', '').replace('fonts/', '')) , u);
   for (const f of ['img/house-hero.webp', 'img/house-blur.webp']) assert.ok(fs.statSync(path.join(root, f)).size <= 60 * 1024, f + ' is 60 KB or less');
   const man = JSON.parse(read('manifest.webmanifest')); assert.equal(man.theme_color, '#EEF1F4'); assert.equal(man.background_color, '#EEF1F4');

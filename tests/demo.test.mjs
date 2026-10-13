@@ -157,8 +157,8 @@ test('demo app: owner, admin and cleaner each draw their own home from the fixtu
     assert.match(h, /Good (morning|afternoon|evening),/);
   }
   const c = cleaner.els['v-home'].innerHTML;
-  assert.match(c, /Demo Guest One/); assert.match(c, /Cleaning checklist/); assert.match(c, /Ask for your pay/);
-  assert.doesNotMatch(c, /Cassy reply|Pay rates|Admin dashboard/);
+  assert.match(c, /Demo Guest One/); assert.match(c, /Cleaning checklist/); assert.match(c, /Cleaning fee/);
+  assert.match(c, /Cassy reply/, 'every role'); assert.doesNotMatch(c, /Pay rates|Admin dashboard/);
 });
 
 test('demo app: the calendar draws the half-days, the turnover, the clash and the guest card with companions and the ID box', async () => {
@@ -212,6 +212,6 @@ test('demo app: the role switcher shows the new doors by the same role mapping, 
   // E_: the help rows left Home (More > Reference owns them); Inventory stays in the Admin group
   for (const r of ['owner', 'admin']) { const h = (await bootDemo(r)).els['v-home'].innerHTML; assert.match(h, /Inventory/); assert.doesNotMatch(h, /System Guide|Admin guide/); const m = (await bootDemo(r, '#more')).els['v-more'].innerHTML; assert.match(m, /System Guide/); assert.match(m, /Admin guide/); assert.match(m, /Inventory/); }
   const c = (await bootDemo('cleaner')).els['v-home'].innerHTML, cm = (await bootDemo('cleaner', '#more')).els['v-more'].innerHTML;
-  assert.doesNotMatch(c, /Inventory|Admin guide/); assert.match(cm, /System Guide/); assert.doesNotMatch(cm, /Inventory|Admin guide/);
+  assert.doesNotMatch(c, /Admin guide/); assert.match(c, /Inventory/); assert.match(cm, /System Guide/); assert.doesNotMatch(cm, /Inventory|Admin guide/);
   const t = await bootDemo('cleaner', '#door/adminguide'); assert.equal(t.location.hash, '#home');
 });

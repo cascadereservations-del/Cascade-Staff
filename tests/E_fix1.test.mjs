@@ -133,7 +133,7 @@ test('E_fix F6: a note being typed on a day is never lost to a pull; the dirty k
   const closed = await open(); await closed.click({ 'data-act': 'dayform-open' }); pull(closed); assert.ok(shut(closed), 'form open but empty: closes');
   const plain = await open(); pull(plain); assert.ok(shut(plain), 'no form: closes');
   const live = await open(); await live.click({ 'data-act': 'dayform-open' }); live.els['df-label'] = { value: 'typed, not yet synced' }; pull(live); assert.ok(!shut(live), 'the live field is read too, not only the synced state');
-  const src = read('app.js'); assert.match(src, /if \(S\.kind === 'day'\) \{ var fld = \$\('df-label'\)/); for (const k of ["'add'", "'nadd'", "'rate'"]) assert.ok(src.includes("S.kind === " + k + ") return !!("), k + ' is dirty-aware');
+  const src = read('app.js'); assert.match(src, /if \(S\.kind === 'day'\) \{ var fld = \$\('df-label'\)/); for (const k of ["'add'", "'nadd'"]) assert.ok(src.includes("S.kind === " + k + ") return !!("), k + ' is dirty-aware'); assert.match(src, /S\.kind === 'rate'\) return false;/, 'the pay-rates confirm sheet is not a form: it is out of the discard guard');
 });
 
 // ------------------------------------------------------------------------------------------------ F7

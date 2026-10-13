@@ -1,4 +1,4 @@
-// sw.js - Cascade Staff service worker v1.3 (2026-10-13, design v5)
+// sw.js - Cascade Staff service worker v1.4 (2026-10-13, design v5)
 // Copied from the cleaning checklist's v1.2 strategy and tightened for a staff app:
 //   Supabase (REST, RPC, Storage, Auth, Edge Functions), Telegram -> network-only, NEVER cached or replayed.
 //   The pinned supabase-js build (jsDelivr)                           -> cache-first (public, no personal data).
@@ -6,7 +6,7 @@
 //   Same-origin shell files                                          -> network-first, cache fallback.
 // Nothing personal is ever stored here: the cache holds the shell (HTML, CSS, JS, fonts, icons) and nothing else.
 // A shell that loads offline says "Live information needs a connection"; guest names exist only in JS memory.
-const CACHE_NAME = 'cs-shell-v17';
+const CACHE_NAME = 'cs-shell-v18';
 const NAV_TIMEOUT_MS = 3000;
 // Web Push handlers for the "You were paid" notice live with the pay screens (pay/C_push-sw.js). Absent in the unit-test sandbox.
 if (typeof importScripts === 'function') { try { importScripts('pay/C_push-sw.js'); } catch (e) { /* a missing push file must never stop the new worker installing */ } }

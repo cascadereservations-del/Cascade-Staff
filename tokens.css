@@ -61,6 +61,7 @@
   /* motion: press 0.97 at 160 ms ease-out; sheets 300 ms; nothing animates on things used many times a day */
   --v5-press-scale: 0.97; --v5-press-ms: 160ms; --v5-sheet-ms: 300ms; --v5-sheet-ease: cubic-bezier(0.32, 0.72, 0, 1);
   color-scheme: light;
+  --v5-field-line: #7B8998; --v5-gold-wash: #EBE3D5; --v5-sidebar-hover: #223A55; --v5-turn-stripe: #B9CCEB; --v5-ok-wash: #DEF3E8; /* lane D (dashboard) */
 }
 
 @media (prefers-color-scheme: dark) {
@@ -88,6 +89,7 @@
     --v5-clash: #F0646F; --v5-note-dot: #E0B872; --v5-house-tile: #B8C4D2;
     color-scheme: dark;
   }
+    --v5-field-line: #6A7E94; --v5-gold-wash: #2A2F33; --v5-sidebar-hover: #1A2B3F; --v5-turn-stripe: #24406E; --v5-ok-wash: #163628;
 }
 
 :root[data-theme="dark"] {
@@ -113,4 +115,5 @@
   --v5-blocked: #2A3A4E; --v5-blocked-hatch: rgba(200, 220, 240, 0.14); --v5-blocked-fg: #C9D3DE;
   --v5-clash: #F0646F; --v5-note-dot: #E0B872; --v5-house-tile: #B8C4D2;
   color-scheme: dark;
+  --v5-field-line: #6A7E94; --v5-gold-wash: #2A2F33; --v5-sidebar-hover: #1A2B3F; --v5-turn-stripe: #24406E; --v5-ok-wash: #163628;
 }
