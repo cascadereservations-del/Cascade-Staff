@@ -122,12 +122,12 @@
       (p.has_qr === false ? '<div class="infobox">' + ICON('info') + '<span>' + esc(p.payee_name) + ' has not saved a payout QR yet. You can still pay her usual account and add the screenshot.</span></div>' : '') +
       (over ? '<div class="errbox">' + ICON('alert') + '<span>A request holds up to ' + P.MAX_LINES + ' lines. Untick some and pay the rest next.</span></div>' : '') +
       (U.msg ? '<div class="errbox" role="alert">' + ICON('alert') + '<span>' + esc(U.msg) + '</span></div>' : '') + '</div>' +
-      '<div class="sticky"><div class="total"><span class="cap up">Total to pay</span><span class="amt num">' + esc(P.peso(total)) + '</span></div>' +
-      '<button class="btn btn-primary btn-block" type="button" data-act="u-pay"' + (total > 0 && !over && !U.busy ? '' : ' disabled') + '>' + ICON('cash') + (U.busy ? 'Making the request…' : 'Pay now') + '</button></div>';
+      '<div class="sticky"><div class="total"><span class="cap up">Total to pay</span><span class="amt num">' + esc(P.peso(total)) + '</span></div>' + (p.self ? '<p class="help" role="status">This is your own work. Another admin pays it.</p></div>' : 
+      '<button class="btn btn-primary btn-block" type="button" data-act="u-pay"' + (total > 0 && !over && !U.busy ? '' : ' disabled') + '>' + ICON('cash') + (U.busy ? 'Making the request…' : 'Pay now') + '</button></div>');
     root.innerHTML = shell('Pay ' + p.payee_name, inner, '#back');
   }
   function createRequest() {
-    var U = S.u; if (!U || U.busy) return;
+    var U = S.u; if (!U || U.busy || U.p.self) return;
     var c = uCands(), ch = P.chosen(c, U.sel); if (!ch.sessions.length && !ch.claims.length) return;
     var key = S.K.forSelection(c, U.sel); U.busy = true; U.msg = ''; renderUnreq();
     token().then(function () {

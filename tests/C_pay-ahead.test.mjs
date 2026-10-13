@@ -265,3 +265,13 @@ test('P_ fix 2: Back while the step is in flight never repaints the pay view or 
   assert.doesNotMatch(b.root.innerHTML, /Mark as paid|<svg [^>]*role="img"/); assert.match(b.root.innerHTML, /Pay staff/);
   assert.deepEqual(plain(b.rpcs.filter((r) => r[0] === 'staff_pay_admin_step_v1').map((r) => r[1].p_step)), ['pay', 'not_sent'], 'claimed, then handed back');
 });
+
+test('P_ self: an entry marked self shows the card with no Pay now and no create call; the two new refusals read calmly', async () => {
+  const b = bootAdmin({ rpc: (n) => ({ staff_pay_admin_list_v1: LIST([], [{ ...UNREQ[0], self: true }]), staff_pay_admin_create_v1: { data: { ok: true, id: 'x', ref: 'X' }, error: null } }[n]) }); await openUn(b);
+  assert.match(b.root.innerHTML, /This is your own work\. Another admin pays it\./); assert.doesNotMatch(b.root.innerHTML, /data-act="u-pay"/);
+  await click(b, { 'data-act': 'u-pay' }); await tick(); assert.equal(b.rpcs.filter((r) => r[0] === 'staff_pay_admin_create_v1').length, 0);
+  for (const [reason, text] of [['self', /You cannot pay your own request\. Ask another admin\./], ['payee_not_allowed', /not set up to be paid for cleans/]]) {
+    const c = bootAdmin({ rpc: (n) => ({ staff_pay_admin_list_v1: LIST([], UNREQ), staff_pay_admin_create_v1: { data: { ok: false, reason }, error: null } }[n]) }); await openUn(c);
+    await click(c, { 'data-act': 'u-pay' }); await until(() => text.test(c.root.innerHTML), reason);
+  }
+});
