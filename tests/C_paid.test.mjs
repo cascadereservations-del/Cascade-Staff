@@ -80,3 +80,18 @@ test('notice: demo shows synthetic data with no network call', async () => {
   const shown = await N.mount(el, { demo: true, now: () => NOW });
   assert.equal(shown.ref, 'DEMO0001'); assert.equal(el.hidden, false); assert.match(el.innerHTML, /You were paid ₱1,235/);
 });
+
+test('E_ compact notice: a title and a day, two buttons in one row, the full message folded until "Read the message" opens it in place; OK still dismisses', async () => {
+  const m = mountWith([REQ]); await m.run();
+  const h = m.el.innerHTML;
+  assert.match(h, /<div class="C_notice-acts"><button class="btn btn-secondary C_notice-ok" type="button" data-C-ok="ABCD1234">OK, thank you<\/button><button class="btn btn-ghost C_notice-more" type="button" data-C-more="1" aria-expanded="false">Read the message<\/button><\/div>/);
+  assert.match(h, /<p class="C_notice-text" hidden>Hi Honey, we have sent PHP 1,235/);
+  assert.equal(T.titleLine(REQ), 'You were paid ₱1,235'); assert.equal(T.titleLine({ ...REQ, total: 40.5 }), 'You were paid ₱40.50'); assert.equal(T.titleLine({ ...REQ, total: 12345 }), 'You were paid ₱12,345');
+  assert.equal(T.subLine(REQ), 'Oct 15 · ref …5678'); assert.equal(T.subLine({ ...REQ, bank_reference: '' }), 'Oct 15 · ref …1234');
+  const txt = { hidden: true }; m.el.querySelector = (q) => (q === '.C_notice-text' ? txt : null);
+  const attrs = { 'data-C-more': '1', 'aria-expanded': 'false' }, more = Object.assign(target(attrs), { setAttribute(k, v) { attrs[k] = v; }, textContent: 'Read the message' });
+  await fire(m.el, 'click', { target: more }); assert.equal(txt.hidden, false); assert.equal(attrs['aria-expanded'], 'true'); assert.equal(more.textContent, 'Hide the message'); assert.equal(m.el.hidden, false, 'opening the text does not dismiss the card');
+  await fire(m.el, 'click', { target: more }); assert.equal(txt.hidden, true); assert.equal(more.textContent, 'Read the message');
+  assert.equal(m.store.C_paid_seen, undefined, 'reading is not the record that she saw it: only OK is');
+  await fire(m.el, 'click', { target: target({ 'data-C-ok': 'ABCD1234' }) }); assert.equal(m.el.hidden, true); assert.equal(m.store.C_paid_seen, 'ABCD1234');
+});

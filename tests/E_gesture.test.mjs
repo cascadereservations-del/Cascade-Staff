@@ -162,10 +162,10 @@ const FOLD = { schema: 1, surfaces: { admin: { files: 84 }, checklist: { files: 
 const turnover = () => HOMEWITH([stayRow('Ana Reyes', '2026-10-12', TODAY), stayRow('Ben Cruz', TODAY, '2026-10-18')]);
 const showDone = async (app) => { for (const f of app.listeners.change || []) f({ target: { id: '', checked: true, getAttribute: (k) => (k === 'data-act' ? 'tasks-showdone' : null) } }); await app.flush(); };
 test('E_ G4: in reduced motion the knob never moves but the slide still commits; the whole pill stays a link (the tap twin)', async () => {
-  const knob = { style: {} }, a = surf({ offsetWidth: 300, querySelector: () => knob, getAttribute: (k) => (k === 'href' ? '#door/checklist' : null) });
+  const writes = [], knob = { style: new Proxy({}, { set(t, k, v) { if (k === 'transform' && v) writes.push(v); t[k] = v; return true; } }) }, a = surf({ offsetWidth: 300, querySelector: () => knob, getAttribute: (k) => (k === 'href' ? '#door/checklist' : null) });
   const app = await boot({ role: 'cleaner', hash: '#home', reduced: true, fold: FOLD, handlers: baseHandlers('cleaner', { staff_home_v1: turnover }) });
   drive(app, a, [[0, 40, 10], [100, 120, 12], [200, 260, 12], [300, 260, 12]], { sel: '[data-slide]' });
-  assert.equal(app.location.hash, '#door/checklist'); assert.equal(knob.style.transform, '');
+  assert.equal(app.location.hash, '#door/checklist'); assert.deepEqual(writes, [], 'no translateX was ever written'); assert.equal(knob.style.transform, '');
   assert.match(app.els['v-home'].innerHTML, /<a class="A_slide" data-slide href="#door\/checklist"[^>]*aria-label="Start cleaning">/);
 });
 
