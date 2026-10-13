@@ -1,0 +1,1 @@
+import{b as e}from"./button-wKk7Ucgo.js";var t=e();function n({label:e,children:n}){return(0,t.jsx)(`div`,{role:`region`,"aria-label":e,tabIndex:0,className:`max-w-full overflow-x-auto`,children:n})}export{n as t};

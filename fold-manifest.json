@@ -3,10 +3,10 @@
   "surfaces": {
     "admin": {
       "source": "dist",
-      "head": "84929fd",
-      "files": 84,
-      "bytes": 1908191,
-      "time": "2026-10-13T04:38:37.342Z"
+      "head": "6b82f5a",
+      "files": 87,
+      "bytes": 1922126,
+      "time": "2026-10-13T12:56:17.666Z"
     },
     "checklist": {
       "source": "s80-checklist",

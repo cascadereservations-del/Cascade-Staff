@@ -1,0 +1,1 @@
+import{l as e,w as t}from"./query-state-K0T2T_jw.js";import{g as n}from"./index-UW5sdmi4.js";async function r(r,i){n(r);let{data:a,error:o}=await e.rpc(r,i);if(o)throw t(o);return a}function i(e){if(e.error)throw t(e.error);let n=e.data??[];return{rows:n,total:e.count??n.length}}export{i as n,r as t};

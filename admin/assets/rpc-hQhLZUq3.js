@@ -1,1 +1,0 @@
-import{L as e,y as t}from"./query-state-DmkloS-R.js";import{g as n}from"./index-Mi15Dor7.js";async function r(r,i){n(r);let{data:a,error:o}=await t.rpc(r,i);if(o)throw e(o);return a}function i(t){if(t.error)throw e(t.error);let n=t.data??[];return{rows:n,total:t.count??n.length}}export{i as n,r as t};
