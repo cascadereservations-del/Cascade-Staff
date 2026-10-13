@@ -1,0 +1,13 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Stock test page</title>
+<link rel="stylesheet" href="../tokens.css"><link rel="stylesheet" href="../styles.css"><link rel="stylesheet" href="../stock/I_stock.css">
+</head><body>
+<main class="screen" id="host"></main>
+<script>window.I_STOCK_FLAGS = { count: true, usage: true }; /* test hook, production default is off */</script>
+<script src="../stock/I_stock.js"></script>
+<script>
+var p = new URLSearchParams(location.search), role = p.get('role') || 'cleaner';
+if (p.get('theme')) document.documentElement.setAttribute('data-theme', p.get('theme'));
+window.I_Stock.mount(document.getElementById('host'), { client: null, demo: true, role: role, sub: p.get('sub') || '', navigate: function (h) { window.__nav = h; }, toast: function (m) { window.__toast = m; }, haptic: function () {} });
+</script></body></html>
