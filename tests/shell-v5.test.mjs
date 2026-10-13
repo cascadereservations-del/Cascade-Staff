@@ -20,8 +20,8 @@ const at = (hm) => new Date('2026-10-15T' + hm + ':00+08:00');
 // ------------------------------------------------------------------------------------------------ house times and the turnover clock
 test('A_ house times: 12:00 noon / 2:00 pm is the one fallback, a backwards window is junk, labels come from fmtTime', () => {
   const f = CS.A_houseTimes(null);
-  assert.deepEqual([f.check_out, f.check_in, f.outLabel, f.inLabel], ['12:00', '14:00', '12:00 noon', '2:00 PM']);
-  assert.deepEqual(CS.A_houseTimes({ check_out: '11:00', check_in: '15:00' }).outLabel, '11:00 AM', 'a shared setting wins over the fallback');
+  assert.deepEqual([f.check_out, f.check_in, f.outLabel, f.inLabel], ['12:00', '14:00', '12:00 noon', '2:00 pm']);
+  assert.deepEqual(CS.A_houseTimes({ check_out: '11:00', check_in: '15:00' }).outLabel, '11:00 am', 'a shared setting wins over the fallback');
   assert.equal(CS.A_houseTimes({ check_out: '15:00', check_in: '11:00' }).check_out, '12:00', 'out after in falls back');
   assert.equal(CS.A_houseTimes({ check_out: 'noon', check_in: 'x' }).check_in, '14:00');
   assert.equal(CS.A_HOUSE_FALLBACK.check_out, '12:00'); assert.equal(CS.A_HOUSE_FALLBACK.check_in, '14:00');
@@ -115,7 +115,7 @@ test('A_ hub: every route is a real dashboard route, grouped like the admin home
   assert.deepEqual(CS.A_hubGroups('cleaner'), []); assert.deepEqual(CS.A_hubGroups('constructor'), []);
   assert.equal(CS.A_hubDoorUrl('./admin/#/today', 'bookings/calendar'), './admin/#/bookings/calendar');
   assert.equal(CS.A_hubDoorUrl('https://x.github.io/cascade-admin-dashboard/#/today', 'finance'), 'https://x.github.io/cascade-admin-dashboard/#/finance');
-  for (const bad of ['../x', 'today/../x', 'search', '', null, 'javascript:1', 'bookings/1234']) assert.equal(CS.A_hubDoorUrl('./admin/#/today', bad), null, String(bad));
+  for (const bad of ['../x', 'today/../x', 'searches', '', null, 'javascript:1', 'bookings/1234']) assert.equal(CS.A_hubDoorUrl('./admin/#/today', bad), null, String(bad));
   const app = read('app.js');
   assert.match(app, /'#door\/dashboard\/' \+ route/); assert.match(app, /CS\.A_hubRouteOk\(parts\.slice\(2\)\.join\('\/'\)\)/);
 });
@@ -176,7 +176,7 @@ async function boot({ role, hash, handlers }) {
 }
 const ACCESS = (role) => ({ error: null, data: { role, disabled: false, session_current: true, property_ids: ['prop-1'] } });
 const guest = (o) => Object.assign({ uid: 'g', guest_name: 'Ana Reyes', source: 'direct', checkin_date: '2026-10-12', checkout_date: TODAY, checkin_time: '14:00:00', checkout_time: null, nights: 3 }, o);
-const HOME = (cur, nxt) => ({ error: null, data: { today: TODAY, warnings: [], calendar: [], day_flags: [], weather: null, current_guest: cur || null, next_guest: nxt || null, generated_at: '2026-10-15T04:00:00Z' } });
+const HOME = (cur, nxt) => ({ error: null, data: { today: TODAY, warnings: [], calendar: [cur, nxt].filter(Boolean).map((g) => ({ guest_name: g.guest_name, checkin_date: g.checkin_date, checkout_date: g.checkout_date, status: 'confirmed', source: g.source })), day_flags: [], weather: null, current_guest: cur || null, next_guest: nxt || null, generated_at: '2026-10-15T04:00:00Z' } });
 const NOTICES = (role, extra) => ({ error: null, data: RAW(Object.assign({ role }, extra || {})) });
 const NOTASKS = { error: null, data: { ok: true, manager: false, today: TODAY, tasks: [] } };
 const base = (role, over) => Object.assign({ current_staff_access: () => ACCESS(role), staff_home_v1: () => HOME(guest(), guest({ uid: 'h', guest_name: 'Ben Cruz', checkin_date: TODAY, checkout_date: '2026-10-18' })), tasks_list_v1: () => NOTASKS, notices_v1: () => NOTICES(role) }, over || {});
@@ -200,7 +200,7 @@ test('A_ live mock: the admin home has the status strip, the notices, the three 
   const h = app.els['v-home'].innerHTML;
   assert.match(h, /aria-label="Status"/); assert.match(h, /Turnover on track/); assert.match(h, /Nothing overdue/); assert.match(h, /No clash days/);
   for (const g of ['Guests and bookings', 'Money and stock', 'Team and help']) assert.ok(h.includes(g), g);
-  assert.match(h, /id="slot-inbox">/); assert.match(h, /Inbox/); assert.match(h, /3 open/);
+  assert.match(h, /id="slot-inbox"[^>]*>/); assert.doesNotMatch(h, /id="slot-inbox" hidden/); assert.match(h, /Inbox/); assert.match(h, /3 open/);
   assert.match(h, /href="#hub"/);
   assert.match(h, /href="\.\/admin\/#\/guests\/conversations"|href="https:\/\/[^"]*#\/guests\/conversations"|#door\/dashboard\/guests\/conversations/, 'the Inbox opens guests/conversations through the dashboard door');
   const noInbox = await boot({ role: 'admin', hash: '#home', handlers: base('admin', { notices_v1: () => NOTICES('admin', { inbox_open: null }) }) });
@@ -209,7 +209,7 @@ test('A_ live mock: the admin home has the status strip, the notices, the three 
 test('A_ live mock: the turnover card walks out, clean, in against the frozen clock', async () => {
   const app = await boot({ role: 'cleaner', hash: '#home', handlers: base('cleaner') });
   const h = app.els['v-home'].innerHTML;
-  assert.match(h, /Guest out<\/span><b>12:00 noon/); assert.match(h, /Clean<\/span><b>Now/); assert.match(h, /Guest in<\/span><b>2:00 PM/);
+  assert.match(h, /Guest out<\/span><b>12:00 noon/); assert.match(h, /Clean<\/span><b>Until 2:00 pm/); assert.match(h, /Guest in<\/span><b>2:00 pm/);
   const quiet = await boot({ role: 'cleaner', hash: '#home', handlers: base('cleaner', { staff_home_v1: () => HOME(guest({ checkout_date: '2026-10-17' }), guest({ uid: 'h', checkin_date: '2026-10-17', checkout_date: '2026-10-19' })) }) });
   assert.match(quiet.els['v-home'].innerHTML, /No turnover today/); assert.doesNotMatch(quiet.els['v-home'].innerHTML, /Slide to start/);
 });
@@ -322,8 +322,7 @@ test('A_ ops_notice_add_v1 live mock: exact name and argument keys; owner/admin 
   assert.equal(sent.length, 1); assert.deepEqual(Object.keys(sent[0]).sort(), KEYS); assert.equal(sent[0].p_property_id, 'prop-1'); assert.equal(sent[0].p_type, 'note'); assert.equal(sent[0].p_date, TODAY);
   assert.match(app.els['cs-body'].innerHTML, /Please leave phone numbers out/); assert.match(app.els['cs-body'].innerHTML, /value="Call 0917"/, 'what was typed is kept');
   mode = 'missing'; await app.click({ 'data-act': 'notice-add-save' });
-  await app.click({ 'data-act': 'notice-add-open', 'data-date': TODAY });
-  assert.equal(sent.length, 2, 'once the RPC is known to be missing the form does not open again');
+  assert.match(app.els['cs-body'].innerHTML, /Available after the next update\./, 'a missing RPC is said in the open sheet, not by hiding it');
   const c = await boot({ role: 'cleaner', hash: '#calendar/notices', handlers: base('cleaner') });
   assert.doesNotMatch(c.els['v-calendar'].innerHTML, /notice-add-open/); await c.click({ 'data-act': 'notice-add-open', 'data-date': TODAY }); assert.ok(!(c.els['cs-body'] && c.els['cs-body'].innerHTML), 'no form for a cleaner even by hand');
   const f = await boot({ role: 'finance', hash: '#calendar/notices', handlers: base('finance') });

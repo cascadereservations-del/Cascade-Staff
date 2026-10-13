@@ -31,9 +31,9 @@ test('task due state uses the Manila day: 23:30 UTC on the 5th is already the 6t
 
 test('task due wording: overdue says was due, a midnight due time shows no clock, tomorrow is named', () => {
   assert.equal(CS.taskDueLabel('2026-10-04T16:00:00Z', TODAY), 'Was due 5 Oct'); // 00:00 on the 5th in Manila
-  assert.equal(CS.taskDueLabel('2026-10-06T07:00:00Z', TODAY), 'Due today 3:00 PM');
+  assert.equal(CS.taskDueLabel('2026-10-06T07:00:00Z', TODAY), 'Due today 3:00 pm');
   assert.equal(CS.taskDueLabel('2026-10-06T16:00:00Z', TODAY), 'Due tomorrow');
-  assert.equal(CS.taskDueLabel('2026-10-09T02:00:00Z', TODAY), 'Due 9 Oct 10:00 AM');
+  assert.equal(CS.taskDueLabel('2026-10-09T02:00:00Z', TODAY), 'Due 9 Oct 10:00 am');
   assert.equal(CS.taskDueLabel(null, TODAY), '');
 });
 
@@ -118,8 +118,9 @@ test('rateArgs builds the RPC arguments: commas dropped, empty or 0 transport is
 
 // ------------------------------------------------------------------------------------------------ app.js against a stub DOM
 function el() {
+  const attrs = {};
   const e = { innerHTML: '', textContent: '', hidden: false, disabled: false, value: '', checked: false, className: '', style: {}, children: [], title: '',
-    classList: { add() {}, remove() {}, toggle() {}, contains: () => false }, setAttribute() {}, getAttribute: () => null, removeAttribute() {}, addEventListener() {},
+    classList: { add() {}, remove() {}, toggle() {}, contains: () => false }, setAttribute(k, v) { attrs[k] = String(v); }, getAttribute: (k) => (k in attrs ? attrs[k] : null), removeAttribute(k) { delete attrs[k]; }, addEventListener() {},
     querySelectorAll: () => [], querySelector: () => null, contains: () => false, focus() {}, scrollIntoView() {}, closest: () => null, appendChild() {}, onclick: null };
   return e;
 }
@@ -218,6 +219,7 @@ test('admin Tasks tab: everything with who it is for, a check is acknowledged no
   assert.deepEqual(app.calls.find((c) => c[0] === 'ack_verifier_finding_v1')[1], { p_key: 'V10:abc' });
   assert.ok(!app.calls.some((c) => c[0] === 'task_set_done_v1'), 'a check never goes through task_set_done_v1');
   await app.click({ 'data-act': 'task-add-open' });
+  assert.equal(app.els['cal-sheet'].getAttribute('aria-hidden'), 'false', 'the add-a-reminder sheet is open');
   assert.match(app.els['cs-body'].innerHTML, /id="t-title"/); assert.match(app.els['cs-body'].innerHTML, /Honey \(cleaner\)/);
   await app.click({ 'data-act': 'task-add-save' });
   assert.match(app.els['cs-body'].innerHTML, /short title/); assert.ok(!app.calls.some((c) => c[0] === 'task_add_reminder_v1'), 'an empty title is not sent');
@@ -225,6 +227,7 @@ test('admin Tasks tab: everything with who it is for, a check is acknowledged no
   await app.click({ 'data-act': 'task-add-save' });
   assert.deepEqual(app.calls.find((c) => c[0] === 'task_add_reminder_v1')[1], {
     p_property_id: 'prop-1', p_title: 'Order new towels', p_due_at: '2026-10-07T16:00:00.000Z', p_assignee_user_id: 'u-1', p_note: 'Call first', p_idempotency_key: 'rem-uuid-fixed-0001' });
+  assert.equal(app.els['cal-sheet'].getAttribute('aria-hidden'), 'true', 'the form closes after a save');
 });
 
 test('Pay rates: owner sees the screen with the visible note and history; save sends the exact arguments; the button follows the typed values', async () => {

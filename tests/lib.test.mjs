@@ -81,9 +81,9 @@ test('labels and formatting', () => {
   assert.equal(CS.dayLong('2026-10-05'), 'Monday 5 October');
   assert.equal(CS.dayShort('2026-10-08'), 'Thu 8 Oct');
   assert.equal(CS.monthTitle(2026, 10), 'October 2026');
-  assert.equal(CS.fmtTime('14:00:00'), '2:00 PM');
+  assert.equal(CS.fmtTime('14:00:00'), '2:00 pm');
   assert.equal(CS.fmtTime('12:00:00'), '12:00 noon');
-  assert.equal(CS.fmtTime('00:30:00'), '12:30 AM');
+  assert.equal(CS.fmtTime('00:30:00'), '12:30 am');
   assert.equal(CS.fmtTime(null), null);
   assert.equal(CS.ordinal(1), '1st'); assert.equal(CS.ordinal(2), '2nd'); assert.equal(CS.ordinal(3), '3rd');
   assert.equal(CS.ordinal(4), '4th'); assert.equal(CS.ordinal(11), '11th'); assert.equal(CS.ordinal(22), '22nd');

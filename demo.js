@@ -89,6 +89,7 @@
         { kind: 'inventory', title: 'Low stock: Demo towels', severity: 'warn', detail: { qty: 4, unit: 'pcs', reorder_below: 6 } },
         { kind: 'verifier', title: 'Demo check: Airbnb block runs past the last guest night', severity: 'alert', key: 'V1m:demo', detail: { check_id: 'V1m' } }]
     };
+    if (!admin) home.warnings = home.warnings.filter(function (w) { return w.kind !== 'verifier'; }); // the server sends a cleaner no system checks
     // notices_v1 (Lane B builds it): house times 12:00 noon / 2:00 pm, weather with a rain watch, power and water notices, house items and the inbox count for owner and admin only.
     var hr = function (h, pct, mm) { return { time: at(0, (h < 10 ? '0' : '') + h + ':00'), rain_chance_pct: pct, mm: mm, code: pct > 50 ? 61 : 2 }; };
     var notices = { generated_at: stamp, role: r, house_times: { check_out: '12:00', check_in: '14:00' },
@@ -98,7 +99,7 @@
         { id: 'demo-n2', type: 'water', title: 'No water 9:00 am to 3:00 pm', date: d(5), start_time: '09:00', end_time: '15:00', duration_hours: 6, source: 'gscwd', detail: 'Pipe repair. Fill the water drums the day before.' },
         { id: 'demo-n3', type: 'deep_clean', title: 'Deep clean', date: d(6), start_time: null, end_time: null, duration_hours: null, source: 'manual', detail: null }],
       house: admin ? [{ kind: 'low_stock', id: 'demo-towels', title: 'Low stock: Demo towels, 4 left', detail: 'Reorder below 6' }, { kind: 'finding', id: 'V1m:demo', title: 'System check', detail: 'Airbnb block runs past the last guest night' }] : [],
-      inbox_open: admin ? 2 : null };
+      inbox_open: admin ? 2 : null, sources: { water_page: 'https://www.facebook.com/gscwaterdistrict/', power_page: 'https://www.facebook.com/socoteco2.EC/' } };
     var task = function (o) {
       return Object.assign({ source: 'follow_up_tasks', kind: 'reminder', detail: null, priority: 'normal', status: 'open', due_at: null, assignee_id: null, assignee_label: null, mine: false,
         created_at: at(-2, '09:00'), completed_at: null, version: 1, blocks_arrival: false }, o);

@@ -232,7 +232,7 @@
     var m = /^(\d{1,2}):(\d{2})/.exec(String(t)); if (!m) return null;
     var h = +m[1], min = m[2];
     if (h === 12 && min === '00') return '12:00 noon';
-    var ap = h >= 12 ? 'PM' : 'AM'; var h12 = h % 12 === 0 ? 12 : h % 12;
+    var ap = h >= 12 ? 'pm' : 'am'; var h12 = h % 12 === 0 ? 12 : h % 12;
     return h12 + ':' + min + ' ' + ap;
   }
   function fmt24(t) { var m = /^(\d{1,2}):(\d{2})/.exec(String(t || '')); return m ? pad(+m[1]) + ':' + m[2] : null; }
@@ -763,9 +763,9 @@
     deep_clean: { icon: 'sparkles', word: 'Deep clean' }, blocked: { icon: 'lock', word: 'Blocked' }, note: { icon: 'note', word: 'Note' } };
   var A_NOTICE_SOURCE = { socoteco: 'SOCOTECO II', gscwd: 'GSCWD', manual: 'Added by hand', system: 'System' };
   var A_WEATHER_SOURCE = { pirate: 'Pirate Weather', google: 'Google Weather', 'open-meteo': 'Open-Meteo' };
-  function A_hour12(iso) { var p = manilaParts(new Date(iso)); return (p.h % 12 === 0 ? 12 : p.h % 12) + (p.h >= 12 ? ' pm' : ' am'); }
+  function A_hour12(iso) { var d = new Date(iso); if (isNaN(d.getTime())) return ''; var p = manilaParts(d); return (p.h % 12 === 0 ? 12 : p.h % 12) + (p.h >= 12 ? ' pm' : ' am'); }
   // '2 to 5 pm' when both ends share am or pm, '10 am to 2 pm' when they do not.
-  function A_hourSpan(a, b) { var x = A_hour12(a).split(' '), y = A_hour12(b).split(' '); return x[1] === y[1] ? x[0] + ' to ' + y[0] + ' ' + y[1] : x.join(' ') + ' to ' + y.join(' '); }
+  function A_hourSpan(a, b) { if (!A_hour12(a) || !A_hour12(b)) return ''; var x = A_hour12(a).split(' '), y = A_hour12(b).split(' '); return x[1] === y[1] ? x[0] + ' to ' + y[0] + ' ' + y[1] : x.join(' ') + ' to ' + y.join(' '); }
   function A_timeRange(s, e) { var a = fmtTime(A_hhmm(s, null)), b = fmtTime(A_hhmm(e, null)); return a && b ? a + ' to ' + b : a || ''; }
   // The server filters by role; this filters again. A cleaner (any staff layout) never gets `house` or `inbox_open`, even if the payload carries them.
   function A_noticesView(raw, role, today) {
@@ -778,7 +778,7 @@
         hours: (Array.isArray(w.hourly) ? w.hourly : []).slice(0, 12).filter(function (h) { return h && h.time; }).map(function (h) { return { label: A_hour12(h.time), pct: typeof h.rain_chance_pct === 'number' ? Math.round(h.rain_chance_pct) : 0, mm: typeof h.mm === 'number' ? h.mm : 0 }; }),
         watch: null };
       var rw = w.rain_watch;
-      if (rw && rw.from && rw.to) weather.watch = { text: 'Rain watch, ' + A_hourSpan(rw.from, rw.to), peak: typeof rw.peak_pct === 'number' ? Math.round(rw.peak_pct) : null };
+      if (rw && rw.from && rw.to && A_hourSpan(rw.from, rw.to)) weather.watch = { text: 'Rain watch, ' + A_hourSpan(rw.from, rw.to), peak: typeof rw.peak_pct === 'number' ? Math.round(rw.peak_pct) : null };
     }
     var list = [];
     if (weather && weather.watch) list.push({ key: 'rain-watch', type: 'rain', group: 'weather', title: weather.watch.text, sub: (weather.watch.peak != null ? weather.watch.peak + '% chance today' : 'Showers likely') + (weather.source ? ' · ' + weather.source : ''),
@@ -794,9 +794,21 @@
     list.sort(function (a, b) { return (a.type === 'rain' && a.key === 'rain-watch' ? 0 : 1) - (b.type === 'rain' && b.key === 'rain-watch' ? 0 : 1) || String(a.date || '9999').localeCompare(String(b.date || '9999')) || String(a.start || '').localeCompare(String(b.start || '')); });
     var house = mgr ? (Array.isArray(raw.house) ? raw.house : []).filter(function (h) { return h && (h.kind === 'low_stock' || h.kind === 'finding') && h.title; })
       .map(function (h) { return { key: 'h:' + h.kind + ':' + h.id, id: String(h.id || ''), kind: h.kind, type: 'house', group: 'house', title: String(h.title), sub: h.detail ? String(h.detail) : '', detail: h.detail ? String(h.detail) : '' }; }) : [];
-    return { times: times, weather: weather, list: list, house: house, all: list.concat(house), inbox: mgr && typeof raw.inbox_open === 'number' ? raw.inbox_open : null, mgr: mgr,
+    var srcs = raw.sources && typeof raw.sources === 'object' ? raw.sources : {};
+    return { sources: { water: A_facebookUrl(srcs.water_page), power: A_facebookUrl(srcs.power_page) }, times: times, weather: weather, list: list, house: house, all: list.concat(house), inbox: mgr && typeof raw.inbox_open === 'number' ? raw.inbox_open : null, mgr: mgr,
       counts: { all: list.length + house.length, weather: list.filter(function (x) { return x.group === 'weather'; }).length + (weather ? 1 : 0), power: list.filter(function (x) { return x.group === 'power'; }).length,
         water: list.filter(function (x) { return x.group === 'water'; }).length, house: house.length } };
+  }
+  // Only an https address on facebook.com (no credentials, no odd port) is a source link; anything else is not drawn.
+  function A_facebookUrl(u) {
+    if (typeof u !== 'string' || u.length > 300) return null;
+    try { var x = new URL(u); return x.protocol === 'https:' && (x.hostname === 'facebook.com' || /\.facebook\.com$/.test(x.hostname)) && !x.username && !x.password && !x.port ? x.href : null; } catch (e) { return null; }
+  }
+  // Facebook's own Page Plugin for the water page: built only from a validated page URL, width capped at 500.
+  function A_fbPluginUrl(page, width) {
+    var p = A_facebookUrl(page); if (!p) return null;
+    var w = Math.max(180, Math.min(500, Math.round(+width) || 340));
+    return 'https://www.facebook.com/plugins/page.php?href=' + encodeURIComponent(p) + '&tabs=timeline&width=' + w + '&height=600&small_header=true&adapt_container_width=true&hide_cover=true&show_facepile=false';
   }
   function A_noticeFilters(view) {
     var f = [['all', 'All ' + view.counts.all], ['weather', 'Weather'], ['power', 'Power'], ['water', 'Water']];
@@ -814,9 +826,13 @@
   function A_noticeDay(view, iso) { return ((view && view.list) || []).filter(function (n) { return n.date === iso && n.key !== 'rain-watch'; }); }
   // A ready-to-send, calm sentence for the guest (owner and admin only; it is copied, never sent by the app).
   function A_guestMessage(n) {
-    var when = n && n.date ? ' on ' + dayShort(n.date) + (n.start ? ' ' + A_timeRange(n.start, n.end) : '') : '';
-    return 'Hello, a quick note about your stay: ' + String(n && n.title || 'a change') + (when && !/ on /.test(String(n && n.title || '')) ? when : '') + '. We will keep the house comfortable and tell you if anything changes.';
+    var title = String((n && n.title) || 'a change');
+    if (/\[hidden\]/i.test(title + ' ' + String((n && n.detail) || ''))) return null; // the server hid something in that text: check it before it reaches a guest
+    var hasTime = /\d{1,2}(:\d{2})? ?(am|pm)\b/i.test(title), when = n && n.date ? ' on ' + dayShort(n.date) + (n.start && !hasTime ? ' ' + A_timeRange(n.start, n.end) : '') : '';
+    return 'Hello, a quick note about your stay: ' + title + when + '. We will keep the house comfortable and tell you if anything changes.';
   }
+  // a flag the notice of the same kind already says (an automatic brownout flag and the power notice) is said once
+  function A_flagDup(flag, notices) { var t = flag.kind === 'brownout' ? 'power' : flag.kind === 'deep_clean' ? 'deep_clean' : ''; return !!t && (notices || []).some(function (n) { return n.type === t; }); }
   // ops_notice_add_v1: argument names are exactly p_type, p_title, p_date, p_start_time, p_duration_hours, p_detail, p_property_id.
   // The server is the real gate (it refuses phones, e-mails, amounts and a brownout); this only catches the empty and the oversize.
   function A_noticeAddProblem(f) {
@@ -833,7 +849,18 @@
     return { p_property_id: propertyId, p_type: f.type, p_title: String(f.title).trim(), p_date: f.date, p_start_time: f.start || null, p_duration_hours: h ? +h : null, p_detail: String(f.detail || '').trim() || null };
   }
   // the server's refusal, said plainly (its own words when short and clean, else a calm default)
-  function A_plainRefusal(msg) { var m = String(msg || '').trim(); return m && m.length <= 160 && !/[{}<>]|pgrst|sqlstate/i.test(m) ? m : 'The notice was not accepted. Check the text and try again.'; }
+  var A_NOTICE_HINT = 'Put the date in the date field. No phone numbers, e-mails or amounts in the text.';
+  var A_REFUSALS = [['type_not_allowed', 'Choose water, maintenance, deep cleaning or note.'], ['title_length', 'Keep the title between 1 and 80 characters.'], ['detail_length', 'Keep the detail to 200 characters.'],
+    ['contact_or_amount_not_allowed', A_NOTICE_HINT], ['date_out_of_range', 'Pick a date that is not too far from today.'], ['duration_out_of_range', 'Hours must be between 1 and 72.']];
+  // The server's refusal said plainly. Only a refusal (22023 / P0001) is echoed; a known code becomes a plain sentence; anything else is a connection problem.
+  function A_noticeAddError(e) {
+    var code = e && e.code, msg = String((e && e.message) || '');
+    if (code === '42501') return 'Only an owner or admin can add a notice.';
+    if (code !== '22023' && code !== 'P0001') return 'No connection. Try again.';
+    for (var i = 0; i < A_REFUSALS.length; i++) if (msg.indexOf(A_REFUSALS[i][0]) >= 0) return A_REFUSALS[i][1];
+    return msg && msg.length <= 160 && !/[{}<>]|pgrst|sqlstate/i.test(msg) ? msg : 'The notice was not accepted. ' + A_NOTICE_HINT;
+  }
+  function A_plainRefusal(msg) { return A_noticeAddError({ code: '22023', message: msg }); }
   var A_CAL_TABS = ['month', 'stays', 'notices'];
   function A_calTab(part) { return part === 'stays' || part === 'house' || part === 'warnings' ? 'stays' : part === 'notices' ? 'notices' : 'month'; }
   var A_SHADES = [1, 2, 3, 4, 6]; // tokens.css has --v5-g1..g4 and g6; g5 does not exist
@@ -844,11 +871,11 @@
     finance: ['read_finance', 'read_operations'] };
   var A_HUB = [
     { title: 'Guests and bookings', items: [['today', 'Today', 'The dashboard home', 'dash', 'read_operations'], ['bookings', 'Bookings', 'Reservations and payments', 'clip', 'read_operations'], ['bookings/calendar', 'Booking calendar', 'Every stay on one grid', 'calendar', 'read_operations'],
-      ['bookings/inquiries', 'Inquiries', 'Guests who asked and have not booked', 'chat', 'read_operations'], ['guests', 'Guests', 'Guest records', 'users', 'manage_operations'], ['guests/conversations', 'Conversations', 'Messages from guests', 'chat', 'manage_operations']] },
+      ['bookings/inquiries', 'Inquiries', 'Guests who asked and have not booked', 'chat', 'read_operations'], ['search', 'Search', 'Find a guest, booking or task', 'search', 'read_operations'], ['guests', 'Guests', 'Guest records', 'users', 'manage_operations'], ['guests/conversations', 'Conversations', 'Messages from guests', 'chat', 'manage_operations']] },
     { title: 'Money and stock', items: [['finance', 'Finance', 'What needs a decision', 'wallet', 'read_finance'], ['finance/transactions', 'Transactions', 'Money in and out', 'cash', 'read_finance'], ['finance/journals', 'Journals', 'Entries', 'book', 'read_finance'],
       ['finance/statements', 'Statements', 'Reports', 'clip', 'read_finance'], ['finance/reconciliation', 'Reconciliation', 'Match the bank', 'checks', 'read_finance'], ['finance/book', 'Account book', 'Every account', 'book', 'read_finance'],
       ['finance/setup', 'Accounting setup', 'Accounts and rules', 'wrench', 'read_finance'], ['inventory', 'Inventory', 'Stock levels and usage', 'box', 'read_operations'], ['inventory/counts', 'Stock counts', 'Count the shelves', 'tasks', 'manage_inventory'],
-      ['inventory/purchases', 'Purchases', 'What was bought', 'bag', 'read_operations'], ['pricing', 'Pricing', 'The rate card', 'cash', 'publish_rate_policy'], ['insights', 'Insights', 'How the house is doing', 'star', 'read_finance']] },
+      ['inventory/purchases', 'Purchases', 'What was bought', 'bag', 'read_operations'], ['pricing', 'Pricing', 'The rate card', 'cash', 'publish_rate_policy'], ['pricing/advisor', 'Price advisor', 'Suggestions only, never changes a price', 'sparkles', 'read_finance'], ['insights', 'Insights', 'How the house is doing', 'star', 'read_finance']] },
     { title: 'Team and help', items: [['operations', 'Cleaning', 'Turnovers and inspections', 'sparkles', 'read_operations'], ['operations/tasks', 'Tasks', 'Everything that needs a person', 'tasks', 'read_operations'], ['operations/work-orders', 'Work orders', 'Repairs', 'wrench', 'read_operations'],
       ['operations/notices', 'Notices', 'Brownouts, water and house notes', 'bell', 'read_operations'], ['settings', 'Staff', 'Team and access', 'users', 'manage_staff'], ['settings/health', 'System health', 'Checks and findings', 'checks', 'read_operations'],
       ['settings/audit', 'Audit log', 'Who changed what', 'book', 'manage_staff'], ['settings/guest-contact', 'Guest contact', 'Who may see phones', 'lock', 'manage_staff'], ['settings/pay-rates', 'Pay rates', 'What a clean pays', 'cash', 'manage_staff']] }
@@ -895,6 +922,6 @@
     parseNotes: parseNotes, returningLabel: returningLabel, earlierLine: earlierLine, companionsLine: companionsLine, todayCardState: todayCardState,
     orderWarnings: orderWarnings, brownoutText: brownoutText, lowStockText: lowStockText, warningSummary: warningSummary,
     weatherLine: weatherLine, rainLine: rainLine, weatherStale: weatherStale, esc: esc,
-    A_HOUSE_FALLBACK: A_HOUSE_FALLBACK, A_houseTimes: A_houseTimes, A_turnoverClock: A_turnoverClock, A_turnoverLine: A_turnoverLine, A_hm: A_hm, A_NOTICE_TYPES: A_NOTICE_TYPES, A_noticesView: A_noticesView, A_noticeFilters: A_noticeFilters, A_dayMarks: A_dayMarks, A_noticeDay: A_noticeDay, A_guestMessage: A_guestMessage, A_CAL_TABS: A_CAL_TABS, A_calTab: A_calTab, A_stayShade: A_stayShade, A_hubGroups: A_hubGroups, A_hubRoutes: A_hubRoutes, A_hubRouteOk: A_hubRouteOk, A_hubDoorUrl: A_hubDoorUrl, A_whatsNew: A_whatsNew, A_noticeAddProblem: A_noticeAddProblem, A_noticeAddArgs: A_noticeAddArgs, A_plainRefusal: A_plainRefusal, A_hour12: A_hour12, A_timeRange: A_timeRange
+    A_HOUSE_FALLBACK: A_HOUSE_FALLBACK, A_houseTimes: A_houseTimes, A_turnoverClock: A_turnoverClock, A_turnoverLine: A_turnoverLine, A_hm: A_hm, A_NOTICE_TYPES: A_NOTICE_TYPES, A_noticesView: A_noticesView, A_noticeFilters: A_noticeFilters, A_dayMarks: A_dayMarks, A_noticeDay: A_noticeDay, A_guestMessage: A_guestMessage, A_CAL_TABS: A_CAL_TABS, A_calTab: A_calTab, A_stayShade: A_stayShade, A_hubGroups: A_hubGroups, A_hubRoutes: A_hubRoutes, A_hubRouteOk: A_hubRouteOk, A_hubDoorUrl: A_hubDoorUrl, A_whatsNew: A_whatsNew, A_noticeAddError: A_noticeAddError, A_NOTICE_HINT: A_NOTICE_HINT, A_flagDup: A_flagDup, A_facebookUrl: A_facebookUrl, A_fbPluginUrl: A_fbPluginUrl, A_noticeAddProblem: A_noticeAddProblem, A_noticeAddArgs: A_noticeAddArgs, A_plainRefusal: A_plainRefusal, A_hour12: A_hour12, A_timeRange: A_timeRange
   };
 });

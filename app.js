@@ -62,7 +62,7 @@
     storage: CS.authStorage(store('localStorage'), store('sessionStorage'), function () { return trustOn; }) } });
 
   var state = { access: null, user: null, name: '', layout: null, payload: null, loadedAt: 0, loading: false, error: '', month: null, payHint: null, photos: {},
-    notices: null, noticesAbsent: false, noticesLoading: false, noticeFilter: 'all', nadd: null, noticeAddMissing: false, calTab: 'month', taskFilter: 'all', hubRoute: '', tasks: null, tasksErr: '', tasksLoading: false, showDone: false, lastDone: null, add: null, assignees: null, rates: null, ratesErr: '', rateForm: null, rateSaving: false, reply: null, bookings: null };
+    notices: null, noticesAbsent: false, noticesLoading: false, noticeFilter: 'all', nadd: null, fbOpen: false, calTab: 'month', taskFilter: 'all', hubRoute: '', tasks: null, tasksErr: '', tasksLoading: false, showDone: false, lastDone: null, add: null, assignees: null, rates: null, ratesErr: '', rateForm: null, rateSaving: false, reply: null, bookings: null };
   var $ = function (id) { return document.getElementById(id); };
   var VIEWS = ['signin', 'home', 'calendar', 'tasks', 'payrates', 'more', 'door', 'reply', 'hub'];
   function pid() { return (state.access && state.access.property_ids && state.access.property_ids[0]) || CFG.propertyId; }
@@ -165,17 +165,17 @@
     return '<a class="A_slide" data-slide href="' + esc(dl.href) + '"' + (dl.external ? ' target="_blank" rel="noopener"' : '') + ' aria-label="Start cleaning"><span class="knob">' + ICON('slide', 's24') + '</span><span class="txt">Slide to start cleaning</span></a>';
   }
   function A_turnoverCard(staff) {
-    var p = state.payload, cur = p.current_guest, nxt = p.next_guest, T = A_houseT(), clock = CS.A_turnoverClock(new Date(), T);
-    var outToday = !!cur && cur.checkout_date === p.today, inToday = !!nxt && nxt.checkin_date === p.today;
+    var p = state.payload, T = A_houseT(), clock = CS.A_turnoverClock(new Date(), T), ds = dayStatusOf(p.today), outToday = !!ds.out, inToday = !!ds.arrive;
     if (!outToday && !inToday) {
-      var nextOut = cur && cur.checkout_date ? 'Next guest out ' + CS.dayLabel(cur.checkout_date) + ', ' + T.outLabel + '.' : 'Nothing is booked to leave soon.';
+      var nx = staysOf().filter(function (st) { return st.checkout_date > p.today; })[0];
+      var nextOut = nx ? 'Next guest out ' + CS.dayLabel(nx.checkout_date) + ', ' + T.outLabel + '.' : 'Nothing is booked to leave soon.';
       return '<section class="card glass A_card" aria-label="Turnover today"><span class="cap up">Turnover today</span><p class="sub" style="margin:0">No turnover today. ' + esc(nextOut) + '</p></section>';
     }
-    var done = function (c) { return c ? ' done' : ''; }, after = clock.phase === 'after', win = clock.phase === 'window';
+    var win = clock.phase === 'window', closed = clock.phase === 'after';
     var steps = '<div class="A_steps">' +
-      '<div class="' + (outToday && clock.phase !== 'before' ? 'done' : '') + '"><span class="dot">' + (outToday && clock.phase !== 'before' ? ICON('check', 's16') : '') + '</span><span>Guest out</span><b>' + esc(outToday ? T.outLabel : 'None today') + '</b></div>' +
-      '<div class="' + (after ? 'done' : win ? 'now' : '') + '"><span class="dot">' + (after ? ICON('check', 's16') : win ? ICON('sparkles', 's16') : '') + '</span><span>Clean</span><b>' + esc(win ? 'Now' : after ? 'Done' : 'Waiting') + '</b></div>' +
-      '<div class="' + (inToday && after ? 'done' : '') + '"><span class="dot">' + (inToday && after ? ICON('check', 's16') : '') + '</span><span>Guest in</span><b>' + esc(inToday ? T.inLabel : 'None today') + '</b></div></div>';
+      '<div><span class="dot">' + ICON('logout', 's16') + '</span><span>Guest out</span><b>' + esc(outToday ? T.outLabel : 'None today') + '</b></div>' +
+      '<div class="' + (win ? 'now' : '') + '"><span class="dot">' + ICON('sparkles', 's16') + '</span><span>Clean</span><b>' + esc(closed ? 'Window closed' : win ? 'Until ' + T.inLabel : 'From ' + T.outLabel) + '</b></div>' +
+      '<div><span class="dot">' + ICON('user', 's16') + '</span><span>Guest in</span><b>' + esc(inToday ? T.inLabel : 'None today') + '</b></div></div>';
     return '<section class="card glass A_card" aria-label="Turnover today"><div class="row-between"><span class="cap up">Turnover today</span><span class="sub num" style="font-size:15px">' + esc(CS.A_turnoverLine(clock, inToday)) + '</span></div>' +
       steps + (staff ? A_slideStart() : '') + '</section>';
   }
@@ -183,10 +183,10 @@
   function A_noticesCard() {
     var v = A_notices();
     if (state.noticesAbsent) return '';
-    if (!v) return state.noticesLoading ? '<section class="card glass A_card A_skel" aria-label="Notices" aria-busy="true"><div class="skel" style="height:72px"></div></section>' : '';
-    var items = v.all.slice(0, 4);
-    return '<section class="card glass A_card" aria-label="Notices"><div class="A_head"><h2>Notices</h2><a href="#calendar/notices">' + (v.counts.all ? 'See all ' + v.counts.all : 'Open') + ICON('chev', 's16') + '</a></div>' +
-      (items.length ? '<div class="A_nlist">' + items.map(function (n) { return row({ icon: A_noticeIcon(n.type), tile: n.type, title: n.title, sub: n.sub, href: '#calendar/notices' }); }).join('') + '</div>' : '<p class="sub" style="margin:0">No notices. Nothing to plan around.</p>') + '</section>';
+    var loading = !v && state.noticesLoading, items = v ? v.all.slice(0, 2) : [], body;
+    if (!v) body = loading ? '<div class="skel" style="height:72px"></div>' : '<p class="sub" style="margin:0">No connection. <button class="btn btn-ghost btn-sm" type="button" data-act="refresh">Try again</button></p>';
+    else body = items.length ? '<div class="A_nlist">' + items.map(function (n) { return row({ icon: A_noticeIcon(n.type), tile: n.type, title: n.title, sub: n.sub, href: '#calendar/notices' }); }).join('') + '</div>' : '<p class="sub" style="margin:0">No notices. Nothing to plan around.</p>';
+    return '<section class="card glass A_card A_noticecard" aria-label="Notices"' + (loading ? ' aria-busy="true"' : '') + '><div class="A_head"><h2>Notices</h2>' + (v ? '<a href="#calendar/notices">' + (v.counts.all ? 'See all ' + v.counts.all : 'Open') + ICON('chev', 's16') + '</a>' : '') + '</div>' + body + '</section>';
   }
   function A_noticeIcon(type) { return type === 'house' ? 'house' : (CS.A_NOTICE_TYPES[type] || CS.A_NOTICE_TYPES.note).icon; }
   function A_navCard(label, rows) { return rows ? '<div class="A_label">' + esc(label) + '</div><nav class="card glass list" aria-label="' + esc(label) + '">' + rows + '</nav>' : ''; }
@@ -224,7 +224,7 @@
       body = '<div class="A_body">' + errBanner() + A_statusStrip(bk) + todayCard() + A_turnoverCard(false) + A_noticesCard() + warnLine() +
         A_navCard('Guests and bookings', (bk ? row({ icon: 'clip', title: 'Bookings to confirm', sub: 'Open the pending bookings', href: bk.href, external: true, count: bk.count, countLabel: bk.n === 1 ? ' booking to confirm' : ' bookings to confirm' }) : '') +
           row({ icon: 'calendar', title: 'Guest Calendar Info', sub: 'Stays, blocked nights, notices', href: '#calendar', count: n || '' }) +
-          '<div id="slot-inbox"' + (inbox == null || !conv ? ' hidden' : '') + '>' + (conv ? row({ icon: 'chat', title: 'Inbox', sub: inbox ? inbox + ' open' : 'No open messages', href: conv.href, external: conv.external, count: inbox || '', countLabel: ' open messages' }) : '') + '</div>' +
+          '<div id="slot-inbox"' + (state.noticesAbsent || (v && inbox == null) || !conv ? ' hidden' : '') + (!v && !state.noticesAbsent ? ' style="min-height:64px"' : '') + '>' + (conv && v && inbox != null ? row({ icon: 'chat', title: 'Inbox', sub: inbox ? inbox + ' open' : 'No open messages', href: conv.href, external: conv.external, count: inbox || '', countLabel: ' open messages' }) : '') + '</div>' +
           (canReply() ? row({ icon: 'sparkles', title: 'Cassy reply', sub: 'Draft a warm reply to a guest message', href: '#reply' }) : '')) +
         A_navCard('Money and stock', row({ icon: 'dash', title: 'Admin dashboard', sub: 'Today, bookings, money, operations', door: 'dashboard' }) + hubRow +
           (trustOn ? '' : '<div class="help doornote">Sign-in is kept only on trusted devices</div>') +
@@ -233,7 +233,9 @@
           row({ icon: 'help', title: 'Quick guide', sub: 'How to use Cassy in Telegram', href: LINKS.quick }) + row({ icon: 'book', title: 'House manual', sub: 'Operations manual', door: 'manual' }) +
           doorRow('guide', 'book', 'How the staff app and the house work') + doorRow('adminguide', 'lock', 'Owner and admin chapters')) + footerLine() + '</div>';
     }
+    var keep = el.querySelector && el.querySelector('#slot-paid-notice'); if (keep && keep.parentNode) keep.parentNode.removeChild(keep);
     el.innerHTML = A_hero() + '<div class="screen" style="min-height:0;padding-top:0">' + body + '</div>';
+    if (keep) { var fresh = el.querySelector('#slot-paid-notice'); if (fresh && fresh.parentNode) fresh.parentNode.replaceChild(keep, fresh); }
   }
   function loadingBlock() { return '<div class="stack" style="margin-top:16px"><div class="skel" style="height:40px;width:70%"></div><div class="skel" style="height:110px"></div><div class="skel" style="height:240px"></div></div>'; }
 
@@ -364,6 +366,7 @@
         var prev = i > 0 ? info[i - 1] : null, starts = col === 0 || !prev || prev.stay !== ds.stay || prev.arrive;
         if (starts) { var run = 1; while (col + run < 7 && info[i + run] && info[i + run].stay === ds.stay && !info[i + run].arrive) run++; tag = '<span class="A_tag" style="width:calc(' + run + '00% + ' + (run - 1) * 3 + 'px - 8px)">' + esc(A_firstName(ds.stay)) + '</span>'; }
       }
+      if (booked && ds.arrive && !ds.cont) tag = '<span class="A_tag in">' + esc(A_firstName(ds.stay)) + '</span>';
       var marks = CS.A_dayMarks(c.iso, view, ds.flags); marks.forEach(function (k) { monthHas.marks[k] = true; });
       var mk = marks.length ? '<span class="A_marks" aria-hidden="true">' + marks.map(function (k) { return '<span class="A_mk ' + k + '">' + ICON(MARK_ICON[k] || 'note', 's12') + '</span>'; }).join('') + '</span>' : '';
       var inner = halves(ds) + '<span class="n">' + (+c.iso.slice(8)) + '</span>' + tag +
@@ -372,7 +375,7 @@
       var moves = CS.dayMoves(ds), night = booked ? (ds.arrive ? 'booked' : 'booked, ' + ds.why) : blk ? 'blocked, ' + ds.why : 'free', nd = CS.A_noticeDay(view, c.iso);
       var label = CS.dayLong(c.iso) + (c.iso === p.today ? ', today' : '') + (ds.turnover ? ', turnover' : '') + (moves ? ', ' + moves : '') + ', ' + night +
         (ds.clash.length ? ', clash with ' + ds.clash.map(function (s) { return s.guest_name || 'another guest'; }).join(', ') : '') +
-        (ds.flags.length ? '; ' + ds.flags.map(function (f) { return CS.flagName(f.kind); }).join(', ') : '') + (nd.length ? '; ' + nd.map(function (x) { return x.title; }).join(', ') : '');
+        (ds.flags.filter(function (f) { return !CS.A_flagDup(f, nd); }).length ? '; ' + ds.flags.filter(function (f) { return !CS.A_flagDup(f, nd); }).map(function (f) { return CS.flagName(f.kind); }).join(', ') : '') + (nd.length ? '; ' + nd.map(function (x) { return x.title; }).join(', ') : '');
       return '<button class="' + cls + '" type="button" style="' + A_shadeOf(ds.out || ds.stay) + '" data-day="' + c.iso + '" aria-label="' + esc(label) + '" aria-haspopup="dialog">' + inner + '</button>';
     }).join('');
     return '<div class="cal" role="group" aria-label="' + esc(CS.monthTitle(m.y, m.m)) + '">' + dows + body + '</div>';
@@ -444,9 +447,24 @@
   }
   function A_houseRow(h) {
     var mgr = CS.canSeeGuestContact(role()), inv = h.kind === 'low_stock' ? A_hubLink('inventory') : null;
+    var acts = (mgr && h.kind === 'finding' && h.id ? '<button class="btn btn-secondary btn-sm" type="button" data-act="notice-resolve" data-id="' + esc(h.id) + '">Resolve</button>' : '') +
+      (h.kind === 'finding' ? '<a class="btn btn-ghost btn-sm" href="#tasks">Go to' + ICON('chev', 's16') + '</a>' : inv ? '<a class="btn btn-ghost btn-sm" href="' + esc(inv.href) + '"' + (inv.external ? ' target="_blank" rel="noopener"' : '') + '>Go to' + ICON('chev', 's16') + '</a>' : '');
     return '<div class="rowi" style="cursor:default;flex-wrap:wrap"><span class="lead A_t-house">' + ICON(h.kind === 'low_stock' ? 'box' : 'alert') + '</span><span class="mid"><span class="t">' + esc(h.title) + '</span>' + (h.detail ? '<span class="s">' + esc(h.detail) + '</span>' : '') + '</span>' +
-      (mgr && h.kind === 'finding' && h.id ? '<button class="btn btn-secondary btn-sm" type="button" data-act="notice-resolve" data-id="' + esc(h.id) + '">Resolve</button>' : '') +
-      (h.kind === 'finding' ? '<a class="btn btn-ghost btn-sm" href="#tasks">Go to' + ICON('chev', 's16') + '</a>' : inv ? '<a class="btn btn-ghost btn-sm" href="' + esc(inv.href) + '"' + (inv.external ? ' target="_blank" rel="noopener"' : '') + '>Go to' + ICON('chev', 's16') + '</a>' : '') + '</div>';
+      (acts ? '<div class="A_acts">' + acts + '</div>' : '') + '</div>';
+  }
+  // Where the notices come from: a plain link for every role (https facebook.com only, validated in lib), and an opt-in panel of the page's latest posts.
+  var SRC_WORD = { water: 'GSCWD', power: 'SOCOTECO II' };
+  function A_sourceRow(kind, url) {
+    return '<nav class="card glass list" aria-label="' + SRC_WORD[kind] + ' page"><a class="rowi" href="' + esc(url) + '" target="_blank" rel="noopener noreferrer"><span class="lead">' + ICON('ext') + '</span><span class="mid"><span class="t">Check the ' + SRC_WORD[kind] + ' page</span><span class="s">Opens Facebook in a new tab</span></span><span class="chev">' + ICON('ext', 's16') + '</span></a></nav>';
+  }
+  // Never loaded by itself (data cost, and a third-party frame); never in demo; never cached by the service worker.
+  function A_fbPanel(page) {
+    if (!state.fbOpen) return '<button class="btn btn-secondary btn-block" type="button" data-act="fb-show">Show the latest GSCWD posts</button>';
+    var cap = 'From GSCWD’s Facebook page.' + (CS.canSeeGuestContact(role()) ? ' To add one to the calendar, send the post link to Cassy.' : '');
+    var body = '';
+    if (DEMO) body = '<p class="sub" style="margin:0">Demo: the live posts are not loaded here.</p>';
+    else { var url = CS.A_fbPluginUrl(page, Math.min(500, (window.innerWidth || 360) - 32)); if (url) body = '<div class="A_fbbox"><iframe title="Latest GSCWD posts" loading="lazy" referrerpolicy="no-referrer" sandbox="allow-scripts allow-same-origin allow-popups" src="' + esc(url) + '"></iframe></div>'; }
+    return '<div class="card glass A_card" aria-label="Latest GSCWD posts">' + body + '<p class="help" style="margin:0">' + esc(cap) + '</p><button class="btn btn-secondary" type="button" data-act="fb-hide">Hide</button></div>';
   }
   function calNotices() {
     var v = A_notices();
@@ -463,14 +481,14 @@
         '<p class="help" style="margin:0">' + esc(W.source ? W.source + ' forecast' : 'Forecast') + (W.fetched_at ? ' · as of ' + esc(CS.clockLabel(W.fetched_at)) : '') + '</p></section>';
     } else if ((f === 'all' || f === 'weather') && !W) html += '<div class="A_label">Weather</div><div class="card glass"><p class="sub">The forecast is not available right now. It comes back by itself.</p></div>';
     [['power', 'Power'], ['water', 'Water']].forEach(function (g) {
-      var rows = v.list.filter(function (n) { return n.group === g[0]; });
-      if ((f === 'all' || f === g[0]) && rows.length) html += '<div class="A_label">' + g[1] + '</div>' + rows.map(A_noticeRow).join('');
+      var rows = v.list.filter(function (n) { return n.group === g[0]; }), link = v.sources[g[0]];
+      if ((f === 'all' || f === g[0]) && (rows.length || link)) html += '<div class="A_label">' + g[1] + '</div>' + rows.map(A_noticeRow).join('') + (link ? A_sourceRow(g[0], link) : '') + (g[0] === 'water' && link ? A_fbPanel(link) : '');
     });
     if (f === 'all') { var other = v.list.filter(function (n) { return n.group === 'other' || (n.group === 'weather' && n.key !== 'rain-watch'); }); if (other.length) html += '<div class="A_label">Other</div>' + other.map(A_noticeRow).join(''); }
     if (v.mgr && (f === 'all' || f === 'house')) html += '<div class="A_label">House</div>' + (v.house.length ? '<section class="card glass list" aria-label="House">' + v.house.map(A_houseRow).join('') + '</section>' : '<div class="card glass"><p class="sub">Nothing needs a person in the house.</p></div>');
     if (f !== 'weather' && f !== 'house' && !v.list.length && f === 'all' && !W) html += '<div class="card glass"><p class="sub">No notices right now.</p></div>';
     if (CS.canSeeGuestContact(role())) html += '<section class="card glass A_card" aria-label="Add a notice"><h2 class="hd">Add a notice</h2><p class="sub" style="margin:0">Saw an advisory from SOCOTECO II or GSCWD? Forward the post to Cassy in Telegram and tap Save. It shows here and on the calendar.</p>' +
-      (state.noticeAddMissing ? '' : '<button class="btn btn-primary btn-sm" type="button" data-act="notice-add-open" data-date="' + esc(state.payload.today) + '">' + ICON('plus', 's16') + 'Add a notice</button>') +
+      ('<button class="btn btn-primary btn-sm" type="button" data-act="notice-add-open" data-date="' + esc(state.payload.today) + '">' + ICON('plus', 's16') + 'Add a notice</button>') +
       tgA(LINKS.tgOps, ICON('chat', 's16') + 'Open Cassy · OPS', 'btn btn-secondary btn-sm') + '</section>';
     return html;
   }
@@ -537,9 +555,10 @@
         (n.tell && CS.canSeeGuestContact(role()) ? '<button class="btn btn-secondary btn-sm" type="button" data-act="notice-tell" data-nkey="' + esc(n.key) + '">Tell the guest</button>' : '') + '</li>';
     }).join('') + '</ul>';
     html += '<div class="cap up" style="margin:14px 0 6px">Cleaning</div><p class="sub" style="margin:0">' + (ds.out || ds.arrive ? (ds.out ? esc((ds.out.guest_name || 'Guest') + ' out ' + T.outLabel) : '') + (ds.out && ds.arrive ? ', ' : '') + (ds.arrive ? esc((ds.stay.guest_name || 'Guest') + ' in ' + T.inLabel) : '') + '.' : 'No turnover this day.') + '</p>';
-    if (canFlag && !state.noticeAddMissing) html += '<button class="btn btn-secondary btn-sm" type="button" data-act="notice-add-open" data-date="' + esc(S.key) + '" style="margin-top:8px">' + ICON('plus', 's16') + 'Add a notice</button>';
+    if (canFlag && state.notices && !state.noticesAbsent) html += '<button class="btn btn-secondary btn-sm" type="button" data-act="notice-add-open" data-date="' + esc(S.key) + '" style="margin-top:8px">' + ICON('plus', 's16') + 'Add a notice</button>';
     html += '<div class="cap up" style="margin:14px 0 6px">Also on this day</div>';
-    html += ds.flags.length ? '<ul class="wlist">' + ds.flags.map(function (f) {
+    var fl = ds.flags.filter(function (f) { return f.source === 'manual' || !CS.A_flagDup(f, nd); });
+    html += fl.length ? '<ul class="wlist">' + fl.map(function (f) {
       var lbl = f.label && f.label !== CS.flagName(f.kind) ? ' · ' + esc(f.label) : '';
       return '<li>' + ICON(FLAG_ICON[f.kind] || 'note').replace('class="i"', 'class="i ' + (f.kind === 'brownout' ? 'c-warn' : 'c-fg2') + '"') + '<span style="flex:1"><b>' + esc(CS.flagName(f.kind)) + '</b>' + lbl +
         (f.source === 'auto' ? ' <span class="help">(added automatically)</span>' : '') + '</span>' +
@@ -932,6 +951,7 @@
     return '<h2 class="ttl" id="cs-h" tabindex="-1">Add a notice</h2><p class="help" style="margin:4px 0 0">No phone numbers, e-mails or amounts.</p><div class="stack" style="margin-top:10px">' +
       '<div class="field"><label for="n-type">Kind</label><select class="sel" id="n-type" style="max-width:none;text-align:left;text-align-last:left">' + NADD_TYPES.map(function (t) { return '<option value="' + t[0] + '"' + (a.type === t[0] ? ' selected' : '') + '>' + t[1] + '</option>'; }).join('') + '</select></div>' +
       '<div class="field"><label for="n-title">What is happening</label><div class="input"><input id="n-title" maxlength="80" value="' + esc(a.title) + '" autocomplete="off"></div></div>' +
+      '<p class="help" style="margin:-6px 0 0">' + esc(CS.A_NOTICE_HINT) + '</p>' +
       '<div class="field"><label for="n-date">Date</label><div class="input"><input id="n-date" type="date" value="' + esc(a.date) + '"></div></div>' +
       '<div class="field"><label for="n-start">Starts (optional)</label><div class="input"><input id="n-start" type="time" value="' + esc(a.start) + '"></div></div>' +
       '<div class="field"><label for="n-hours">Lasts, in hours (optional)</label><div class="input"><input id="n-hours" inputmode="decimal" maxlength="4" value="' + esc(a.hours) + '"></div></div>' +
@@ -950,8 +970,7 @@
       state.nadd = null; closeSheet(); toast('Notice added.'); return A_loadNotices();
     }).catch(function (e) {
       a.busy = false;
-      if (CS.rpcMissing(e)) { state.noticeAddMissing = true; closeSheet(); render(current); return; }
-      a.err = e && e.code === '42501' ? 'Only an owner or admin can add a notice.' : e && e.message && e.code !== '' && !/fetch|network/i.test(e.message) ? CS.A_plainRefusal(e.message) : 'That did not save. Check your signal and try again.';
+      a.err = CS.rpcMissing(e) ? 'Available after the next update.' : CS.A_noticeAddError(e);
       A_noticeAddDraw();
     });
   }
@@ -965,7 +984,7 @@
     });
   }
   function signOutTo(msg) {
-    closeSheet(); dropPhotos(); state.reply = null; var rb = $('rp-body'); if (rb) rb.innerHTML = ''; rpLive(''); state.payload = null; state.bookings = null; state.notices = null; state.noticesAbsent = false; state.nadd = null; state.noticeAddMissing = false; state.tasks = null; state.access = null; state.layout = null; state.month = null; state.error = '';
+    closeSheet(); dropPhotos(); state.reply = null; var rb = $('rp-body'); if (rb) rb.innerHTML = ''; rpLive(''); state.payload = null; state.bookings = null; state.notices = null; state.noticesAbsent = false; state.nadd = null; state.fbOpen = false; state.tasks = null; state.access = null; state.layout = null; state.month = null; state.error = '';
     return sb.auth.signOut().catch(function () {}).then(function () { showSignin(msg); });
   }
   function showSignin(msg) {
@@ -985,6 +1004,7 @@
         throw r.error;
       }
       try { CS.assertNoMoney(r.data, { allowContact: CS.canSeeGuestContact(state.access && state.access.role) }); } catch (e) { state.payload = null; state.error = 'This page was blocked because the data carried an amount or a contact detail. Tell Lloyd.'; return; }
+      if (!CS.canSeeGuestContact(state.access && state.access.role)) r.data.warnings = (r.data.warnings || []).filter(function (w) { return w.kind !== 'verifier'; });
       state.payload = r.data; state.loadedAt = Date.now(); state.error = '';
       refreshWeather(); loadPayHint(); loadBookingsToConfirm(); A_loadNotices();
     }).catch(function () {
@@ -1167,10 +1187,12 @@
     else if (a === 'task-add-cancel') { state.add = null; closeSheet(); }
     else if (a === 'plain') { window.CSTheme.setPlain(!window.CSTheme.plainOn()); renderMore(); }
     else if (a === 'whatsnew') openSheet('news', 'news');
-    else if (a === 'notice-add-open') { if (CS.canSeeGuestContact(role()) && !state.noticeAddMissing) { state.nadd = { type: 'water', title: '', date: t.getAttribute('data-date') || '', start: '', hours: '', detail: '', err: '', busy: false }; openSheet('nadd', 'notice-add-open'); } }
+    else if (a === 'fb-show') { state.fbOpen = true; renderCalendar(); }
+    else if (a === 'fb-hide') { state.fbOpen = false; renderCalendar(); }
+    else if (a === 'notice-add-open') { if (CS.canSeeGuestContact(role()) && state.notices && !state.noticesAbsent) { state.nadd = { type: 'water', title: '', date: t.getAttribute('data-date') || '', start: '', hours: '', detail: '', err: '', busy: false }; openSheet('nadd', 'notice-add-open'); } }
     else if (a === 'notice-add-cancel') { state.nadd = null; closeSheet(); }
     else if (a === 'notice-add-save') A_noticeAddSave();
-    else if (a === 'notice-tell') { var nt = CS.canSeeGuestContact(role()) ? A_noticeByKey(t.getAttribute('data-nkey')) : null; if (nt) copyText(CS.A_guestMessage(nt)).then(function () { toast('Message copied. Paste it to the guest.'); }, function () { toast('Copy did not work on this phone.'); }); }
+    else if (a === 'notice-tell') { var nt = CS.canSeeGuestContact(role()) ? A_noticeByKey(t.getAttribute('data-nkey')) : null; var gm = nt ? CS.A_guestMessage(nt) : null; if (nt && !gm) toast('Check the notice text first.'); else if (gm) copyText(gm).then(function () { toast('Message copied. Paste it to the guest.'); }, function () { toast('Copy did not work on this phone.'); }); }
     else if (a === 'notice-cal') { var nd0 = t.getAttribute('data-date'), np = nd0.split('-'); if (CS.monthInRange(+np[0], +np[1], state.payload.today)) state.month = { y: +np[0], m: +np[1] }; state.calTab = 'month'; if (location.hash !== '#calendar') location.hash = '#calendar'; else render('calendar'); openSheet('day', nd0); }
     else if (a === 'notice-resolve') { if (CS.canSeeGuestContact(role())) sb.rpc('ack_verifier_finding_v1', { p_key: t.getAttribute('data-id') }).then(function (r) { if (r.error) throw r.error; return A_loadNotices(); }).catch(function () { toast('That did not save. Check your signal and try again.'); }); }
     else if (t.hasAttribute('data-nfilter')) { state.noticeFilter = t.getAttribute('data-nfilter'); renderCalendar(); }
@@ -1232,14 +1254,14 @@
   // Slide to start: drag the knob across (or just tap). A drag that stops short springs back and does nothing.
   (function A_slideInit() {
     var el = null, x0 = 0, dx = 0, moved = false, max = 0;
-    document.addEventListener('pointerdown', function (ev) { var a = ev.target.closest && ev.target.closest('[data-slide]'); if (!a || ev.button > 0) return; el = a; x0 = ev.clientX; dx = 0; moved = false; max = Math.max(1, a.offsetWidth - 56); });
+    document.addEventListener('pointerdown', function (ev) { var old = document.querySelector && document.querySelector('[data-slid]'); if (old) old.removeAttribute('data-slid'); var a = ev.target.closest && ev.target.closest('[data-slide]'); if (!a || ev.button > 0) return; el = a; x0 = ev.clientX; dx = 0; moved = false; max = Math.max(1, a.offsetWidth - 56); });
     document.addEventListener('pointermove', function (ev) {
       if (!el) return; dx = Math.max(0, Math.min(max, ev.clientX - x0)); if (dx > 8) moved = true;
       var k = el.querySelector('.knob'); if (k && moved) k.style.transform = 'translateX(' + dx + 'px)';
     });
     function end() {
       if (!el) return; var a = el, go = moved && dx >= max * 0.7, k = a.querySelector('.knob'); el = null; if (k) k.style.transform = '';
-      if (moved) a.setAttribute('data-slid', '1'); // the click that follows a drag is ours to swallow
+      if (moved) { a.setAttribute('data-slid', '1'); setTimeout(function () { a.removeAttribute('data-slid'); }, 400); } // the click that follows a drag is ours to swallow, for 400 ms at most
       if (go) { if (a.getAttribute('target') === '_blank') window.open(a.href, '_blank', 'noopener'); else location.hash = a.getAttribute('href'); }
     }
     document.addEventListener('pointerup', end); document.addEventListener('pointercancel', end);
@@ -1271,7 +1293,7 @@
   function maybeIosHint() { if (isIOS && !standalone && !seen()) setTimeout(showA2hs, 800); }
   $('a2hs-ok').addEventListener('click', hideA2hs); $('a2hs-scrim').addEventListener('click', hideA2hs);
 
-  if ('serviceWorker' in navigator) window.addEventListener('load', function () { navigator.serviceWorker.register('sw.js').catch(function () {}); });
+  if (!DEMO && 'serviceWorker' in navigator) window.addEventListener('load', function () { navigator.serviceWorker.register('sw.js').catch(function () {}); });
   // Which sibling surfaces are folded into this deployment? Read once, network-first (no-store); 404 or offline-without-cache = none folded.
   if (DEMO) applyFold(null);
   else if (typeof window.fetch === 'function') window.fetch('./fold-manifest.json', { cache: 'no-store' }).then(function (r) { return r.ok ? r.json() : null; }).catch(function () { return null; })
