@@ -82,11 +82,12 @@ test('E_drag: reduced motion keeps the 1:1 follow (a control that does not move 
 });
 
 test('E_drag: the click that follows a drag is swallowed on that surface for 400 ms, once', async () => {
+  let now = 0; CS.E_setClock(() => now);
   const a = helper(); a.down(100, 100); a.mv(150, 100, 10); a.up(150, 100, 20);
   let n = 0; const ev = (t) => ({ target: t, preventDefault() { n++; }, stopPropagation() {} });
   a.root.fire('click', ev({ contains: () => false })); assert.equal(n, 0, 'a click on something else');
   a.root.fire('click', ev(a.el)); assert.equal(n, 1); a.root.fire('click', ev(a.el)); assert.equal(n, 1, 'only once');
-  const b = helper(); b.down(100, 100); b.mv(150, 100, 10); b.up(150, 100, 20); await new Promise((r) => setTimeout(r, 450)); b.root.fire('click', ev(b.el)); assert.equal(n, 1, 'and not after 400 ms');
+  const b = helper(); b.down(100, 100); b.mv(150, 100, 10); b.up(150, 100, 20); now = 450; b.root.fire('click', ev(b.el)); assert.equal(n, 1, 'and not after 400 ms (frozen clock)'); CS.E_setClock(null);
 });
 
 // ---------------------------------------------------------------------------------------------------- G2 sheet pull-down

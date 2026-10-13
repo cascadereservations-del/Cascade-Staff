@@ -20,7 +20,7 @@ export function el() {
   return e;
 }
 // E_ options (all optional): fold = a fold-manifest.json object; reduced = prefers-reduced-motion; nav = extra navigator members (vibrate); width = innerWidth; ls = a localStorage stand-in; visible = false hides the page.
-export async function boot({ role, hash, handlers, now, demo, els: pre, docQuery, serviceWorker, fold, reduced, nav: navExtra, width, ls, visible }) {
+export async function boot({ role, hash, handlers, now, demo, els: pre, docQuery, serviceWorker, fold, foldFetch, reduced, nav: navExtra, width, ls, visible }) {
   const when = now || NOW;
   class FixedDate extends Date { constructor(...a) { if (a.length) super(...a); else super(when.getTime()); } static now() { return when.getTime(); } }
   const els = pre || {}, listeners = {}, winListeners = {}, calls = [], location = { hash, pathname: '/', search: demo ? '?demo' : '', origin: 'https://staff.example', replace() {} };
@@ -32,6 +32,7 @@ export async function boot({ role, hash, handlers, now, demo, els: pre, docQuery
   const win = { supabase: { createClient: () => sb }, CS, P, CSPay: P, ICON: (n, c) => '<svg class="i ' + (c || '') + '" data-i="' + n + '"></svg>', CSTheme: { get: () => 'auto', set() {}, plainOn: () => false, setPlain() {} },
     addEventListener: (t, fn) => { (winListeners[t] ||= []).push(fn); }, matchMedia: (q) => ({ matches: !!(reduced && /reduced-motion/.test(String(q))) || (/min-width: 37\.5rem/.test(String(q)) && (width || 360) >= 600) }), scrollTo() {}, scrollY: 0, innerWidth: width || 360, localStorage: ls || { getItem: () => null, setItem() {}, removeItem() {} }, sessionStorage: { getItem: () => null, setItem() {}, removeItem() {} } };
   if (fold) win.fetch = () => Promise.resolve({ ok: true, json: () => Promise.resolve(fold) });
+  if (foldFetch) win.fetch = foldFetch; // F_/E_: a manifest fetch that never answers, or fails
   if (demo) win.CSDemo = { active: true, role: () => role, client: () => sb, fetch: () => Promise.resolve({ ok: false }) };
   const registered = [];
   const nav = Object.assign({ userAgent: 'test' }, navExtra || {}); if (serviceWorker !== false) nav.serviceWorker = { register: (u) => { registered.push(u); return Promise.resolve(); } };

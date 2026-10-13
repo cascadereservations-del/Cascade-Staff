@@ -79,7 +79,10 @@
     return '<a class="' + (cls || '') + '" href="' + esc(link.app) + '" data-tgweb="' + esc(link.web) + '">' + inner + '</a>';
   }
   function row(opts) { // title and sub-title always on separate lines (D-300.7)
-    if (opts.door) { var dl = CS.doorLink(opts.door, doorDef(opts.door).url, location.origin, trustOn); opts.href = dl.href; opts.external = dl.external; }
+    if (opts.door) {
+      var dl = CS.doorLink(opts.door, doorDef(opts.door).url, location.origin, trustOn); opts.href = dl.href; opts.external = dl.external;
+      if ((opts.door === 'dashboard' || opts.door === 'inventory') && !foldKnown && CS.doorFramed(opts.door, state.layout, trustOn)) { opts.href = '#door/' + opts.door; opts.external = false; } // both live in the admin build // before the manifest answers: the in-app door, not a flash of the stand-alone address
+    }
     var inner = '<span class="lead' + (opts.tile ? ' A_t-' + opts.tile : '') + '">' + ICON(opts.icon) + '</span><span class="mid"><span class="t">' + esc(opts.title) + '</span><span class="s"' + (opts.subId ? ' id="' + opts.subId + '"' : '') + '>' + esc(opts.sub || '') + '</span></span>' +
       (opts.count ? '<span class="count' + (opts.countCls ? ' ' + opts.countCls : '') + '" aria-label="' + esc(opts.count + (opts.countLabel || ' warnings')) + '">' + esc(opts.count) + '</span>' : '') +
       '<span class="chev">' + ICON(opts.external ? 'ext' : 'chev', opts.external ? 's16' : '') + '</span>';

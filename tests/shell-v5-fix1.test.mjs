@@ -100,10 +100,14 @@ test('A_fix M3 (E_: now through E_drag): slide-to-start swallows only the click 
   const slide = (x, t0) => { const at0 = { target: { closest: (s) => (s === '[data-slide]' ? a : null) }, button: 0, clientX: 40, clientY: 10, pointerId: 1, timeStamp: t0 };
     fire('pointerdown', at0); fire('pointermove', { clientX: 40 + x, clientY: 10, pointerId: 1, timeStamp: t0 + 90 }); fire('pointerup', { clientX: 40 + x, clientY: 10, pointerId: 1, timeStamp: t0 + 100 }); };
   const click = (target) => { let p = 0; fire('click', { target, preventDefault() { p++; }, stopPropagation() {} }); return p; };
-  slide(60, 0); assert.equal(click(a), 1, 'a short drag swallows the click that follows it');
-  assert.equal(click(a), 0, 'once');
-  slide(60, 200); assert.equal(click({ closest: () => null }), 0, 'a click anywhere else is never swallowed');
-  await wait(450); assert.equal(click(a), 0, 'and 400 ms is the longest it lives');
+  let now = 0; CS.E_setClock(() => now); // frozen: no real waiting
+  try {
+    slide(60, 0); assert.equal(click(a), 1, 'a short drag swallows the click that follows it');
+    assert.equal(click(a), 0, 'once');
+    slide(60, 200); assert.equal(click({ closest: () => null }), 0, 'a click anywhere else is never swallowed');
+    now = 500; assert.equal(click(a), 0, 'and 400 ms is the longest it lives');
+    slide(60, 600); fire('pointerdown', { target: { closest: () => null }, button: 0, clientX: 5, clientY: 5, pointerId: 3, timeStamp: 650 }); assert.equal(click(a), 0, 'the next pointerdown clears it: a real tap on the slide right after a drag is a tap'); // the M3 guarantee, restored (review F5)
+  } finally { CS.E_setClock(null); }
 });
 
 // ---------------------------------------------------------------- M4 M5

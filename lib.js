@@ -927,7 +927,9 @@
     var d = w.detail || {}, m = /^(\d{1,2}):(\d{2})/.exec(String(d.time || '')), h = +d.hours, head = 'Brownout' + (d.date ? ' ' + dayShort(d.date) : '');
     if (!m) return b.head;
     var s = +m[1] * 60 + +m[2], e = h > 0 ? s + Math.round(h * 60) : null;
-    return head + ', ' + (e != null && e < 1440 ? A_timeRange(pad(+m[1]) + ':' + m[2], pad(Math.floor(e / 60)) + ':' + pad(e % 60)) : fmtTime(pad(+m[1]) + ':' + m[2]));
+    var from = fmtTime(pad(+m[1]) + ':' + m[2]), to = e != null && e < 1440 ? fmtTime(pad(Math.floor(e / 60)) + ':' + pad(e % 60)) : '';
+    if (!to) return head + ', ' + from;
+    var sa = from.slice(-2), sb = to.slice(-2); return head + ', ' + (sa === sb ? from.slice(0, -3) : from) + ' to ' + to; // "1:00 to 4:00 pm", "10:00 am to 1:00 pm"
   }
   function E_warnKey(w) { return w.kind + '|' + (w.title || '') + '|' + ((w.detail && w.detail.date) || ''); }
   function E_dueSub(t, today) { var l = t.due_at ? taskDueLabel(t.due_at, today) : ''; return l; }
