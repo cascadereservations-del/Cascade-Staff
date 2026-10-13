@@ -84,7 +84,7 @@ test('the fake client answers every call the pages make, for every role, and nev
       const r = await D.fetch('https://x.supabase.co/functions/v1/' + fn, { method: 'POST', body: body && JSON.stringify(body) }); assert.equal(r.status, 200, fn);
     }
     assert.equal((await D.fetch('https://x.supabase.co/functions/v1/other')).status, 404);
-    assert.equal(CS.replyResult(await (await D.fetch('https://x/functions/v1/guest-reply-draft', { body: '{}' })).json()).replies.length, 2);
+    assert.equal(CS.replyResult(await (await D.fetch('https://x/functions/v1/guest-reply-draft', { body: '{}' })).json()).replies.length, 3, 'three drafts: Short, Warm, With details');
   } finally { globalThis.fetch = realFetch; }
 });
 

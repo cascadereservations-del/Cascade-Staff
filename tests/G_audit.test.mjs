@@ -110,7 +110,7 @@ test('G_ errors say what happened: a 5xx or a server statement timeout is "Could
   }
   const t = await boot({ role: 'cleaner', hash: '#tasks', handlers: baseHandlers('cleaner', { tasks_list_v1: () => ({ error: { code: '500', message: 'boom' }, data: null }) }) }); assert.match(t.els['v-tasks'].innerHTML, /Could not update\./); assert.doesNotMatch(t.els['v-tasks'].innerHTML, /needs a connection/);
   const a = CS.E_attention({ role: 'admin', today: TODAY, ready: { payload: true, tasks: true, bookings: true, notices: true }, failed: { notices: true }, tasks: [T({ blocks_arrival: true })] });
-  assert.equal(a.phase, 'items'); assert.equal(a.pill.text, '1 · Turnover at risk'); assert.equal(a.partial, true);
+  assert.equal(a.phase, 'items'); assert.equal(a.pill.text, '1 task · 1 blocks arrival'); assert.equal(a.partial, true);
   const app = await boot({ role: 'admin', hash: '#home', handlers: baseHandlers('admin', { staff_home_v1: () => HOMEWITH([]), tasks_list_v1: tasksOf([T({ blocks_arrival: true })], true), notices_v1: () => ({ error: { code: '500', message: 'x' }, data: null }) }) });
   await app.click({ 'data-act': 'attn-open' }); assert.match(app.els['cs-body'].innerHTML, /Some items could not be loaded<\/span><button class="btn btn-ghost btn-sm" type="button" data-act="refresh">Try again/);
 });

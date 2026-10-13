@@ -40,9 +40,9 @@ test('E_ pill: text and aria-label per state (clear, one, many, no connection), 
   const clear = await boot({ role: 'cleaner', hash: '#home', handlers: baseHandlers('cleaner', { staff_home_v1: home(), tasks_list_v1: tasksOf([]) }) });
   let p = pillOf(clear.els['v-home'].innerHTML); assert.equal(textOf(p), 'All clear'); assert.equal(aria(p), 'All clear. Nothing needs attention. Opens the list'); assert.match(p, /E_dot E_ok/);
   const one = await boot({ role: 'cleaner', hash: '#home', handlers: baseHandlers('cleaner', { staff_home_v1: home(), tasks_list_v1: tasksOf([T({})]) }) });
-  p = pillOf(one.els['v-home'].innerHTML); assert.equal(textOf(p), '1 · Turnover at risk'); assert.match(p, /<span class="E_cnt">1 to look at<\/span>/); assert.match(p, /E_dot E_bad/); assert.match(p, /data-i="alert"/);
+  p = pillOf(one.els['v-home'].innerHTML); assert.equal(textOf(p), '1 task · 1 blocks arrival'); assert.match(p, /<span class="E_cnt">1 to look at<\/span>/); assert.match(p, /E_dot E_bad/); assert.match(p, /data-i="alert"/);
   const many = await boot({ role: 'cleaner', hash: '#home', handlers: baseHandlers('cleaner', { staff_home_v1: home(), tasks_list_v1: tasksOf([T({}), T({ id: 'b', blocks_arrival: false }), T({ id: 'c', blocks_arrival: false })]) }) });
-  p = pillOf(many.els['v-home'].innerHTML); assert.equal(textOf(p), '3 · Turnover at risk'); assert.equal(aria(p), '3 things to look at. Most urgent: turnover at risk. Opens the list');
+  p = pillOf(many.els['v-home'].innerHTML); assert.equal(textOf(p), '3 tasks · 1 blocks arrival'); assert.equal(aria(p), '3 things to look at. Most urgent: turnover at risk. Opens the list');
   const warn = await boot({ role: 'cleaner', hash: '#home', handlers: baseHandlers('cleaner', { staff_home_v1: home({ warnings: [{ kind: 'inventory', title: 'Low stock: soap', detail: {} }] }), tasks_list_v1: tasksOf([]) }) });
   p = pillOf(warn.els['v-home'].innerHTML); assert.equal(textOf(p), '1 · Low stock'); assert.match(p, /E_dot E_warn/); assert.match(p, /data-i="clock"/);
   const off = await boot({ role: 'cleaner', hash: '#home', handlers: baseHandlers('cleaner', { staff_home_v1: () => ({ error: { message: 'TypeError: Failed to fetch' }, data: null }) }) });

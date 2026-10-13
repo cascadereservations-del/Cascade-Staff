@@ -189,7 +189,7 @@
     if (Array.isArray(value)) { value.forEach(function (v, i) { moneyKeys(v, path + '[' + i + ']', out); }); return out; }
     if (value && typeof value === 'object') {
       Object.keys(value).forEach(function (k) {
-        if (keyTokens(k).some(function (t) { return MONEY_TOKEN.test(t); })) out.push(path + '.' + k);
+        if (keyTokens(k).some(function (t) { return MONEY_TOKEN.test(t); })) out.push(path + '.' + k + (k === 'paid' && /\.arrival_ready$/.test(path) && typeof value[k] === 'boolean' ? '#bool' : ''));
         moneyKeys(value[k], path + '.' + k, out);
       });
     }
@@ -198,10 +198,11 @@
   // s77: owner and admin may receive the guest's phone and e-mail on the two guest cards, nowhere else. Money keys stay refused for
   // every role, and a contact key anywhere else (or for any other role) still blocks the page.
   var CONTACT_OK = /^\$\.(current_guest|next_guest)\.(phone|email)$/;
+  var ARRIVAL_OK = /\.arrival_ready\.paid#bool$/; // s82: whether the balance is received, as true or false, for owner and admin; never an amount
   function canSeeGuestContact(role) { return role === 'owner' || role === 'admin'; }
   function assertNoMoney(payload, opts) {
     var allow = !!(opts && opts.allowContact);
-    var bad = moneyKeys(payload).filter(function (p) { return !(allow && CONTACT_OK.test(p)); });
+    var bad = moneyKeys(payload).filter(function (p) { return !(allow && (CONTACT_OK.test(p) || ARRIVAL_OK.test(p))); });
     if (bad.length) throw new Error('payload carries money or contact keys: ' + bad.join(', '));
     return true;
   }
@@ -919,12 +920,17 @@
   // ---- what's new: only what this person can use ----
   function A_whatsNew(role, flags) {
     flags = flags || {};
-    var admin = layoutForRole(role) === 'admin', items = [
-      ['Month, Stays and Notices', 'The calendar now has three views. Tap a day to see who is staying and what is planned.'],
+    var admin = layoutForRole(role) === 'admin', mgr = canSeeGuestContact(role), items = [
+      ['Swipes that work', 'Swipe the month grid for the next month, a task left to mark it done, and pull a sheet down by its title bar to close it. Every swipe has a button too.'],
+      ['One calendar', 'Month and Stays are one screen: the month, then the next 14 days. Notices is the other tab.'],
+      ['Search', 'In More, find a task or a page of the manual.'], ['A short tour', 'In More, “Show the tour” plays three short cards.'],
       ['Plain bars', 'In More, switch glass off for a calmer, easier-to-read screen. It turns on by itself on slower phones.']];
-    if (flags.notices) items.push(['Notices', 'Rain watch, brownouts and water interruptions show on Today and on the calendar.']);
+    if (flags.notices) items.push(['Notices', 'Rain watch, brownouts and water interruptions show on Today and on the calendar. Tap the weather for the forecast.']);
+    items.push(['Cassy reply', 'Draft a warm reply to a guest message. You get two or three drafts to pick from.']);
+    items.push(['Cleaning fee', 'Ask for payment for your cleans and expenses. When you finish a clean, a card on Today takes you there.']);
     if (admin) items.push(['Admin hub', 'More lists every dashboard page in one place.']);
-    if (flags.notices && canSeeGuestContact(role)) items.push(['Tell the guest', 'On a notice, copy a ready message to send to the guest yourself.']);
+    if (mgr) items.push(['Arrival checks', 'Each arriving guest shows whether the ID, the balance and the door code are in place.']);
+    if (flags.notices && mgr) items.push(['Tell the guest', 'On a notice, copy a ready message to send to the guest yourself.']);
     return items.map(function (i) { return { title: i[0], text: i[1] }; });
   }
 
@@ -995,7 +1001,7 @@
     if (first) {
       var rs = by[first], c = rs.length;
       top = first === 'risk' ? 'Turnover at risk' : first === 'overdue' ? c + ' overdue' : first === 'due' ? c + ' due today' : first === 'clash' ? (c === 1 ? 'Clash day' : c + ' clash days') : first === 'confirm' ? rs[0].n + ' to confirm' : first === 'inbox' ? rs[0].n + ' in inbox' : rs[0].word;
-      word = first === 'risk' ? 'Turnover at risk' : first === 'overdue' ? 'Overdue' : first === 'due' ? 'Due today' : first === 'due' ? 'Due today' : first === 'clash' ? (c === 1 ? 'Clash day' : 'Clash days') : first === 'confirm' ? 'To confirm' : first === 'inbox' ? 'In inbox' : rs[0].word;
+      word = first === 'risk' ? (c === 1 ? '1 blocks arrival' : c + ' block arrival') : first === 'overdue' ? 'Overdue' : first === 'due' ? 'Due today' : first === 'due' ? 'Due today' : first === 'clash' ? (c === 1 ? 'Clash day' : 'Clash days') : first === 'confirm' ? 'To confirm' : first === 'inbox' ? 'In inbox' : rs[0].word;
       tone = first === 'risk' || first === 'overdue' || first === 'clash' ? 'danger' : 'warn';
     }
     var sections = E_SECTIONS.filter(function (s) { return by[s[0]].length; }).map(function (s) {
@@ -1010,7 +1016,7 @@
     else if (phase === 'offline') pill = { text: 'No connection', short: 'No connection', dot: 'idle', glyph: 'info', aria: 'No connection.' + (i.lastAt ? ' Showing the last update from ' + clockLabel(i.lastAt) + '.' : '') + ' Opens the list' };
     else if (phase === 'stale') pill = { text: 'Could not update', short: 'Could not update', dot: 'idle', glyph: 'info', aria: 'Could not update.' + (i.lastAt ? ' Showing the last update from ' + clockLabel(i.lastAt) + '.' : '') + ' Opens the list' };
     else if (phase === 'clear') pill = { text: 'All clear', short: 'All clear', dot: 'ok', glyph: 'check', aria: 'All clear. Nothing needs attention. Opens the list' };
-    else pill = { text: shown + ' · ' + word, short: shown + ' to look at', dot: tone === 'danger' ? 'bad' : 'warn', glyph: tone === 'danger' ? 'alert' : 'clock',
+    else pill = { text: (first === 'risk' && n === by.risk.length + by.overdue.length + by.due.length ? shown + (n === 1 ? ' task' : ' tasks') : shown) + ' · ' + word, short: shown + ' to look at', dot: tone === 'danger' ? 'bad' : 'warn', glyph: tone === 'danger' ? 'alert' : 'clock',
       aria: n === 1 ? '1 thing to look at: ' + top.toLowerCase() + '. Opens the list' : shown + ' things to look at. Most urgent: ' + top.toLowerCase() + '. Opens the list' };
     var empty = !sections.length;
     return { partial: failed && n > 0, phase: phase, n: n, top: top, topWord: word, tone: tone, sections: sections, pill: pill, empty: empty, say: phase === 'items' ? shown + (n === 1 ? ' thing' : ' things') + ' to look at' : phase === 'clear' ? 'All clear' : phase === 'offline' ? 'No connection' : phase === 'stale' ? 'Could not update' : '' };
