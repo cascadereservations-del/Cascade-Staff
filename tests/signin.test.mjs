@@ -161,21 +161,22 @@ test('app.js wiring: the three doors are same-origin (so they frame), the rows u
     assert.equal(CS.doorTarget(url, ORIGIN), 'frame', m[1]);
   }
   assert.ok(!/href: LINKS\.(checklist|dashboard|manual), external: true/.test(app), 'no door row opens a new tab any more');
-  for (const k of ['checklist', 'dashboard', 'manual']) assert.match(app, new RegExp("door: '" + k + "'"));
+  for (const k of ['checklist', 'dashboard', 'manual']) assert.match(app, new RegExp("(door: |doorRow\\()'" + k + "'"));
   assert.match(html, /id="door-frame"/); assert.match(html, /id="door-back"/);
   assert.match(app, /VIEWS = \[[^\]]*'door'/);
 });
 
-test('Theme v2: deep bronze action, Raleway and Style Script loaded, no Inter, no teal action colour', () => {
+test('Theme v5: old variable names map onto the v5 tokens, system UI font, DM Serif Display only, no Raleway / Cormorant / Style Script / Google Fonts', () => {
   const css = read('styles.css');
-  assert.match(css, /--primary: #7A5A2B;/); assert.match(css, /--primary: #D2B788;/); // s77 calm-luxury dark
-  assert.match(css, /--bg: #F9F6F0;/); assert.match(css, /--bg: #12100D;/);
-  assert.match(css, /--font-ui: "Raleway"/); assert.match(css, /--font-script: "Style Script"/);
-  assert.doesNotMatch(css, /--primary: #146C70|--primary: #63C5C7/);
-  for (const f of ['index.html', 'pay/index.html', 'quick/index.html']) {
+  assert.match(css, /--bg: var\(--v5-bg\);/); assert.match(css, /--primary: var\(--v5-act\);/); assert.match(css, /--card: var\(--v5-surf\);/);
+  assert.match(css, /--font-ui: var\(--v5-font-ui\)/); assert.match(css, /--font-display: var\(--v5-font-display\)/);
+  assert.doesNotMatch(css, /Raleway|Cormorant|Style Script/);
+  assert.doesNotMatch(css, /^\s*--[a-z0-9-]+:\s*#[0-9a-fA-F]{3,8}/m, 'styles.css holds no raw hex in a custom property: every colour comes from tokens.css');
+  for (const f of ['index.html', 'quick/index.html', 'install/index.html', 'guest/index.html']) {
     const h = read(f);
-    assert.match(h, /family=Raleway:wght@400;500;600;700&family=Cormorant\+Garamond:ital,wght@0,500;0,600;0,700;1,500;1,600&family=Style\+Script&display=swap/, f);
-    assert.doesNotMatch(h, /family=Inter/, f);
+    assert.doesNotMatch(h, /fonts\.googleapis|fonts\.gstatic|Raleway|Cormorant|Style\+Script/, f);
+    assert.match(h, /<link rel="stylesheet" href="(\.\.\/)?tokens\.css">\s*<link rel="stylesheet" href="(\.\.\/)?styles\.css">/, f + ': tokens.css before styles.css');
+    assert.match(h, /theme-color" content="#EEF1F4"/); assert.match(h, /theme-color" content="#0B1420"/);
   }
 });
 

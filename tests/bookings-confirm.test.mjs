@@ -61,7 +61,7 @@ async function boot({ role, hash, handlers }) {
     storage: { from: () => ({ createSignedUrl: () => Promise.resolve({ error: { message: 'x' } }) }) },
   };
   const win = {
-    supabase: { createClient: () => sb }, CS, P, CSPay: P, ICON: (n, c) => `<svg class="i ${c || ''}" data-i="${n}"></svg>`, CSTheme: { get: () => 'auto', set() {} },
+    supabase: { createClient: () => sb }, CS, P, CSPay: P, ICON: (n, c) => `<svg class="i ${c || ''}" data-i="${n}"></svg>`, CSTheme: { get: () => 'auto', set() {}, plainOn: () => false, setPlain() {} },
     addEventListener() {}, matchMedia: () => ({ matches: false }), scrollTo() {}, scrollY: 0, localStorage: { getItem: () => null, setItem() {}, removeItem() {} }, sessionStorage: { getItem: () => null, setItem() {}, removeItem() {} },
   };
   const ctx = { window: win, document: docObj, location, history: { replaceState(a, b, h) { location.hash = h; } }, navigator: { userAgent: 'test' }, localStorage: win.localStorage,

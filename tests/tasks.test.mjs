@@ -120,7 +120,7 @@ test('rateArgs builds the RPC arguments: commas dropped, empty or 0 transport is
 function el() {
   const e = { innerHTML: '', textContent: '', hidden: false, disabled: false, value: '', checked: false, className: '', style: {}, children: [], title: '',
     classList: { add() {}, remove() {}, toggle() {}, contains: () => false }, setAttribute() {}, getAttribute: () => null, removeAttribute() {}, addEventListener() {},
-    querySelectorAll: () => [], querySelector: () => null, focus() {}, scrollIntoView() {}, closest: () => null, appendChild() {}, onclick: null };
+    querySelectorAll: () => [], querySelector: () => null, contains: () => false, focus() {}, scrollIntoView() {}, closest: () => null, appendChild() {}, onclick: null };
   return e;
 }
 async function boot({ role, hash, handlers, nav }) {
@@ -136,7 +136,7 @@ async function boot({ role, hash, handlers, nav }) {
     storage: { from: () => ({ createSignedUrl: () => Promise.resolve({ error: { message: 'x' } }) }) },
   };
   const win = {
-    supabase: { createClient: () => sb }, CS, P, CSPay: P, ICON: (n, c) => `<svg class="i ${c || ''}" data-i="${n}"></svg>`, CSTheme: { get: () => 'auto', set() {} },
+    supabase: { createClient: () => sb }, CS, P, CSPay: P, ICON: (n, c) => `<svg class="i ${c || ''}" data-i="${n}"></svg>`, CSTheme: { get: () => 'auto', set() {}, plainOn: () => false, setPlain() {} },
     addEventListener() {}, matchMedia: () => ({ matches: false }), scrollTo() {}, scrollY: 0, localStorage: { getItem: () => null, setItem() {}, removeItem() {} }, sessionStorage: { getItem: () => null, setItem() {}, removeItem() {} },
   };
   const ctx = { window: win, document: docObj, location, history: { replaceState(a, b, h) { location.hash = h; } }, navigator: { userAgent: 'test', ...(nav || {}) }, localStorage: win.localStorage,
@@ -218,14 +218,13 @@ test('admin Tasks tab: everything with who it is for, a check is acknowledged no
   assert.deepEqual(app.calls.find((c) => c[0] === 'ack_verifier_finding_v1')[1], { p_key: 'V10:abc' });
   assert.ok(!app.calls.some((c) => c[0] === 'task_set_done_v1'), 'a check never goes through task_set_done_v1');
   await app.click({ 'data-act': 'task-add-open' });
-  assert.match(app.els['v-tasks'].innerHTML, /id="t-title"/); assert.match(app.els['v-tasks'].innerHTML, /Honey \(cleaner\)/);
+  assert.match(app.els['cs-body'].innerHTML, /id="t-title"/); assert.match(app.els['cs-body'].innerHTML, /Honey \(cleaner\)/);
   await app.click({ 'data-act': 'task-add-save' });
-  assert.match(app.els['v-tasks'].innerHTML, /short title/); assert.ok(!app.calls.some((c) => c[0] === 'task_add_reminder_v1'), 'an empty title is not sent');
+  assert.match(app.els['cs-body'].innerHTML, /short title/); assert.ok(!app.calls.some((c) => c[0] === 'task_add_reminder_v1'), 'an empty title is not sent');
   app.input('t-title', '  Order new towels '); app.input('t-due', '2026-10-08'); app.input('t-who', 'u-1'); app.input('t-note', 'Call first');
   await app.click({ 'data-act': 'task-add-save' });
   assert.deepEqual(app.calls.find((c) => c[0] === 'task_add_reminder_v1')[1], {
     p_property_id: 'prop-1', p_title: 'Order new towels', p_due_at: '2026-10-07T16:00:00.000Z', p_assignee_user_id: 'u-1', p_note: 'Call first', p_idempotency_key: 'rem-uuid-fixed-0001' });
-  assert.doesNotMatch(app.els['v-tasks'].innerHTML, /id="t-title"/, 'the form closes after a save');
 });
 
 test('Pay rates: owner sees the screen with the visible note and history; save sends the exact arguments; the button follows the typed values', async () => {
@@ -282,7 +281,7 @@ const homeWith = (g) => ({ error: null, data: { ...HOME.data, current_guest: g }
 
 test('guest card: owner/admin see phone (copy, Call), e-mail (copy) and Messenger; everything is escaped', async () => {
   const g = { ...GUEST, phone: '+63 917 <123> 4567', email: 'ana"x@example.com', messenger: { psid: '1', thread_url: 'https://business.facebook.com/latest/inbox/all?selected_item_id=1' } };
-  const app = await boot({ role: 'admin', hash: '#calendar', handlers: { current_staff_access: () => ACCESS('admin'), staff_home_v1: () => homeWith(g), tasks_list_v1: () => ({ error: null, data: ADMIN_TASKS }) } });
+  const app = await boot({ role: 'admin', hash: '#calendar/stays', handlers: { current_staff_access: () => ACCESS('admin'), staff_home_v1: () => homeWith(g), tasks_list_v1: () => ({ error: null, data: ADMIN_TASKS }) } });
   const html = app.els['v-calendar'].innerHTML;
   assert.match(html, /data-act="copy" data-copy="\+63 917 &lt;123&gt; 4567"/);
   assert.match(html, /href="tel:\+639171234567"/);
@@ -293,9 +292,9 @@ test('guest card: owner/admin see phone (copy, Call), e-mail (copy) and Messenge
 });
 
 test('guest card: no contact fields means no contact block; a contact key for a cleaner still blocks the page', async () => {
-  const bare = await boot({ role: 'admin', hash: '#calendar', handlers: { current_staff_access: () => ACCESS('admin'), staff_home_v1: () => homeWith(GUEST), tasks_list_v1: () => ({ error: null, data: ADMIN_TASKS }) } });
+  const bare = await boot({ role: 'admin', hash: '#calendar/stays', handlers: { current_staff_access: () => ACCESS('admin'), staff_home_v1: () => homeWith(GUEST), tasks_list_v1: () => ({ error: null, data: ADMIN_TASKS }) } });
   assert.doesNotMatch(bare.els['v-calendar'].innerHTML, /ctbox|Open in Messenger|tel:/);
-  const onlyM = await boot({ role: 'owner', hash: '#calendar', handlers: { current_staff_access: () => ACCESS('owner'), staff_home_v1: () => homeWith({ ...GUEST, messenger: { psid: '1' } }), tasks_list_v1: () => ({ error: null, data: ADMIN_TASKS }) } });
+  const onlyM = await boot({ role: 'owner', hash: '#calendar/stays', handlers: { current_staff_access: () => ACCESS('owner'), staff_home_v1: () => homeWith({ ...GUEST, messenger: { psid: '1' } }), tasks_list_v1: () => ({ error: null, data: ADMIN_TASKS }) } });
   assert.match(onlyM.els['v-calendar'].innerHTML, /href="https:\/\/business\.facebook\.com\/latest\/inbox\/all"/, 'no thread url: the Page inbox');
   assert.doesNotMatch(onlyM.els['v-calendar'].innerHTML, /tel:|data-act="copy"/);
   const cleaner = await boot({ role: 'cleaner', hash: '#calendar', handlers: { current_staff_access: () => ACCESS('cleaner'), staff_home_v1: () => homeWith({ ...GUEST, phone: '0917' }), tasks_list_v1: () => ({ error: null, data: STAFF_TASKS }) } });

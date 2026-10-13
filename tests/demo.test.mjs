@@ -138,7 +138,7 @@ async function bootDemo(role, hash = '#home') {
   const denied = () => { throw new Error('demo reached the network or storage'); };
   const stor = { getItem: denied, setItem: denied, removeItem: denied, key: denied, length: 0 };
   const win = { supabase: { createClient: () => { throw new Error('a Supabase client was created in demo'); } }, CS, P, CSPay: P,
-    CSDemo: { ...D, active: true, role: () => role, client: (r) => D.client(r, NOW) }, ICON: (n, c) => `<svg class="i ${c || ''}" data-i="${n}"></svg>`, CSTheme: { get: () => 'auto', set() {} },
+    CSDemo: { ...D, active: true, role: () => role, client: (r) => D.client(r, NOW) }, ICON: (n, c) => `<svg class="i ${c || ''}" data-i="${n}"></svg>`, CSTheme: { get: () => 'auto', set() {}, plainOn: () => false, setPlain() {} },
     addEventListener() {}, matchMedia: () => ({ matches: false }), scrollTo() {}, scrollY: 0, localStorage: stor, sessionStorage: stor, fetch: denied };
   const ctx = { window: win, document: docObj, location, history: { replaceState(a, b, h) { location.hash = h; } }, navigator: { userAgent: 'test' }, localStorage: stor,
     matchMedia: () => ({ matches: false }), fetch: denied, setTimeout, clearTimeout, console, URL, Image: function () {}, Date, Math, JSON, Promise, crypto: { randomUUID: () => 'uuid' } };
@@ -162,12 +162,13 @@ test('demo app: owner, admin and cleaner each draw their own home from the fixtu
 });
 
 test('demo app: the calendar draws the half-days, the turnover, the clash and the guest card with companions and the ID box', async () => {
-  const owner = await bootDemo('owner', '#calendar'), html = owner.els['v-calendar'].innerHTML;
-  assert.match(html, /hx hx-out/); assert.match(html, /hx hx-in/); assert.match(html, / turn/); assert.match(html, / clash/); assert.match(html, /Turnover/);
+  const month = await bootDemo('owner', '#calendar'), mh = month.els['v-calendar'].innerHTML;
+  assert.match(mh, /hx hx-out/); assert.match(mh, /hx hx-in/); assert.match(mh, / turn/); assert.match(mh, / clash/); assert.match(mh, /Turnover/);
+  const owner = await bootDemo('owner', '#calendar/stays'), html = owner.els['v-calendar'].innerHTML;
   assert.match(html, /With: Demo Companion One, Demo Companion Two \(ID on file for 1 of 2\)/);
   assert.match(html, /data-idpath="demo\/id-1"/); assert.match(html, /No ID photo yet/); assert.match(html, /Add a companion/);
   assert.match(html, /0900-000-0000/);
-  const cl = await bootDemo('cleaner', '#calendar'), ch = cl.els['v-calendar'].innerHTML;
+  const cl = await bootDemo('cleaner', '#calendar/stays'), ch = cl.els['v-calendar'].innerHTML;
   assert.doesNotMatch(ch, /With: |0900-000|example\.invalid|Add a companion/);
   assert.match(ch, /No ID photo to show/);
 });
