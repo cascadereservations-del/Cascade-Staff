@@ -60,7 +60,7 @@ test('E_ Notices card rows: the title keeps the time, the sub is date and source
 test('E_ paid notice: compact (a tile, the amount, the day, two buttons), under the Turnover card, max 128 px tall', () => {
   const N = read('pay/C_paid-notice.js'), c = read('pay/C_notice.css');
   assert.match(N, /C_notice-head">' \+ C_esc\(T\.titleLine\(r\)\)/); assert.match(N, /data-C-ok=/); assert.match(N, /data-C-more="1" aria-expanded="false">Read the message/); assert.match(N, /<p class="C_notice-text" hidden>/);
-  assert.match(c, /\.C_notice-ico \{ width: 44px; height: 44px;/); assert.match(c, /\.C_notice-head \{ font: 600 var\(--v5-t-body\)\/24px/); assert.match(c, /\.C_notice-line \{ font: 400 var\(--v5-t-2\)\/20px/);
+  assert.match(c, /\.C_notice-ico \{ width: 44px; height: 44px;/); assert.match(c, /\.C_notice-head \{ font: 600 var\(--v5-t-body\)\/clamp\(1\.5rem/); assert.match(c, /\.C_notice-line \{ font: 400 var\(--v5-t-2\)\/clamp\(1\.25rem/);
   // 12 + 44 (tile and the two text lines) + 8 + 44 (buttons) + 12 + 2 (border) = 122
   assert.ok(12 + 44 + 8 + 44 + 12 + 2 <= 128);
 });

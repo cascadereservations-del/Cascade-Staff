@@ -256,7 +256,7 @@ test('E_ G3: the underlay is hidden from touch and keyboard until the row moves,
   const css = read('styles.css');
   assert.match(css, /\.E_under \{[^}]*visibility: hidden; \}/); assert.match(css, /\.E_swipewrap\.E_live \.E_under, \.E_swipewrap\.E_open \.E_under \{ visibility: visible; \}/);
   assert.match(css, /\.E_swipewrap \.payrow \{[^}]*touch-action: pan-y;/); assert.match(css, /\.E_done \.E_underbtn \{ background: var\(--v5-ok-w\); color: var\(--v5-ok-t\); \}/); assert.match(css, /\.E_undo \.E_underbtn \{ background: var\(--v5-info-w\); color: var\(--v5-info-t\); \}/);
-  assert.match(css, /\.E_underbtn \{ flex: 1; min-height: var\(--touch\);[^}]*font: 600 17px\/22px/);
+  assert.match(css, /\.E_underbtn \{ flex: 1; min-height: var\(--touch\);[^}]*font: 600 var\(--v5-t-body\)\/clamp\(1\.375rem/);
   assert.match(read('app.js'), /a touch anywhere else closes an open row/);
 });
 

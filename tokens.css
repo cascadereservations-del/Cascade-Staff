@@ -41,7 +41,14 @@
   /* type: the phone's own font for everything; DM Serif Display (one self-hosted woff2) for titles and names only */
   --v5-font-ui: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, "Noto Sans", sans-serif;
   --v5-font-display: "DM Serif Display", Georgia, "Times New Roman", serif;
-  --v5-t-display: 36px; --v5-t-section: 24px; --v5-t-num: 22px; --v5-t-body: 17px; --v5-t-2: 15px; --v5-t-label: 13px; --v5-t-min: 12px;
+  /* F_ fluid type: rem + vw clamp(). Each equals today's px at 360 px wide (16 px root), grows gently to its max by about 1024 px, never under 12 px,
+     and follows the user's own text size (rem). Sizes between the seven steps use the same curve inline: clamp(N/16 rem, N*0.9349/16 rem + N*0.01807 vw, N*1.12/16 rem). */
+  --v5-t-display: clamp(1.875rem, 1.979rem + 1.205vw, 2.75rem); --v5-t-section: clamp(1.25rem, 1.297rem + 0.904vw, 1.875rem); --v5-t-num: clamp(1.25rem, 1.172rem + 0.904vw, 1.75rem);
+  --v5-t-body: clamp(1rem, 0.995rem + 0.301vw, 1.1875rem); --v5-t-2: clamp(0.875rem, 0.870rem + 0.301vw, 1.0625rem); --v5-t-label: clamp(0.75rem, 0.779rem + 0.151vw, 0.875rem); --v5-t-min: clamp(0.75rem, 0.716rem + 0.151vw, 0.8125rem);
+  --v5-t-chrome: clamp(12px, 0.75rem, 14px);
+  /* F_ spacing: the same method (value at 360, value at 1024); hairlines, targets (44 px), the pill slot and the grabber never scale */
+  --v5-gutter: clamp(1rem, 0.458rem + 2.41vw, 2rem); --v5-gap: clamp(0.875rem, 0.672rem + 0.904vw, 1.25rem); --v5-pad: clamp(1rem, 0.864rem + 0.6vw, 1.25rem);
+  --v5-nav-w: 0px; --v5-nav-h: 72px;
   /* photo header, sign-in photo, live dots and the tab bar's active tab: the same in light and dark (they sit on a photo or on the dark bar) */
   --v5-scrim: rgba(10, 20, 32, 0.52);
   --v5-photo-ink: #FFFFFF; --v5-photo-ink-2: #EFE8DD; --v5-photo-edge: rgba(255, 255, 255, 0.18); --v5-photo-shadow: rgba(0, 0, 0, 0.45);
@@ -50,7 +57,7 @@
   --v5-live-ok: #7FD3A0; --v5-live-warn: #F0B866; --v5-live-bad: #F0646F; --v5-live-idle: #AEBCCB;
   --v5-bar-on: #FFFFFF; --v5-bar-on-bg: rgba(255, 255, 255, 0.16);
   /* shape */
-  --v5-r-card: 24px; --v5-r-panel: 28px; --v5-r-sheet: 32px; --v5-r-field: 14px; --v5-r-full: 999px; --v5-touch: 44px;
+  --v5-r-card: clamp(1.25rem, 1.364rem + 0.602vw, 1.75rem); --v5-r-panel: clamp(1.5rem, 1.569rem + 0.602vw, 2rem); --v5-r-sheet: 32px; --v5-r-field: 14px; --v5-r-full: 999px; --v5-touch: 44px;
   /* motion: press 0.97 at 160 ms ease-out; sheets 300 ms; nothing animates on things used many times a day */
   --v5-press-scale: 0.97; --v5-press-ms: 160ms; --v5-sheet-ms: 300ms; --v5-sheet-ease: cubic-bezier(0.32, 0.72, 0, 1);
   color-scheme: light;

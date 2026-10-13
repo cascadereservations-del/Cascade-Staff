@@ -288,7 +288,7 @@ test('A_ motion and accessibility floor: press 0.97 at 160 ms, sheets 300 ms wit
   assert.match(css, /\.sheet \{[^}]*transition: transform var\(--v5-sheet-ms\) var\(--v5-sheet-ease\)/);
   assert.match(css, /prefers-reduced-motion: reduce/);
   for (const m of css.matchAll(/font(?:-size)?:[^;}]*?\b(\d+(?:\.\d+)?)px/g)) assert.ok(+m[1] >= 12 || /line-height/.test(m[0]) || +m[1] === 0, 'text under 12 px: ' + m[0]);
-  assert.match(css, /\.A_tabs a \{ min-height: 44px/); assert.match(css, /\.chip \{ height: var\(--touch\)/);
+  assert.match(css, /\.A_tabs a \{ min-height: 44px/); assert.match(css, /\.chip \{ min-height: var\(--touch\)/); // F_: controls grow with the text size instead of clipping it
 });
 test('A_ service worker and manifest: new cache name, tokens + house photos precached and each photo is 60 KB or less, theme colours are the v5 backgrounds', () => {
   const sw = read('sw.js'); assert.match(sw, /CACHE_NAME = 'cs-shell-v14'/);
