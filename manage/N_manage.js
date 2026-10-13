@@ -119,6 +119,34 @@
   ];
   var KPI_TITLE = { occupancy: 'Occupancy', adr: 'Accommodation ADR', revpar: 'RevPAR', accommodation_revenue: 'Accommodation revenue', cash_received: 'Cash received', expected_payout: 'Expected payout', sold_nights: 'Sold nights', future_booked_nights: 'Future booked nights', average_length_of_stay: 'Average length of stay', returning_guest_rate: 'Returning-guest rate', cancellation_rate: 'Cancellation rate', booking_lead_time: 'Booking lead time' };
 
+  // ---- 3.1.1 charts: the last six full calendar months, as the same [start, end) arguments the prev-month preset builds ----
+  function lastMonths(today, n) {
+    var p = today.split('-'), y = +p[0], m = +p[1] - 1, out = [], first = function (yy, mm) { return isoOf(Date.UTC(yy, mm, 1)); };
+    for (var i = n; i >= 1; i--) { var st = first(y, m - i); out.push({ month: st.slice(0, 7), start: st, endExclusive: first(y, m - i + 1), label: MON[new Date(utc(st)).getUTCMonth()] }); }
+    return out;
+  }
+  function monthTitle(mo) { var y = mo.month.slice(0, 4); return mo.label + ' ' + y; }
+  // The series is built only from what the server answered: a failed month or a null value is a gap (null), never zero.
+  function metricNum(res, key) { var m = res && res.metrics && res.metrics[key]; return m && m.value !== null && m.value !== undefined && isFinite(Number(m.value)) ? Number(m.value) : null; }
+  function buildSeries(months, answers) {
+    return months.map(function (mo, i) {
+      var a = answers[i];
+      return { month: mo.month, label: mo.label, start: mo.start, endExclusive: mo.endExclusive, failed: !a,
+        rev: metricNum(a, 'accommodation_revenue'), occ: metricNum(a, 'occupancy'), adr: metricNum(a, 'adr'), nights: metricNum(a, 'sold_nights'),
+        raw: { rev: a && a.metrics ? a.metrics.accommodation_revenue : null, occ: a && a.metrics ? a.metrics.occupancy : null } };
+    });
+  }
+  // headline chip: glyph + word + figure, from the same two metric results the number rows use
+  function chipFor(cur, prev) {
+    if (!cur || !prev || cur.value === null || cur.value === undefined || prev.value === null || prev.value === undefined) return null;
+    var c = num(cur.value), p = num(prev.value); if (!isFinite(c) || !isFinite(p)) return null;
+    var v, unit;
+    if (cur.unit === 'percent') { v = c - p; unit = ' pts'; } else { v = pctDelta(c, p); unit = '%'; if (v === null) return null; }
+    var r = Math.round(Math.abs(v));
+    if (r === 0) return { dir: 'flat', glyph: '–', text: 'Flat' };
+    return v > 0 ? { dir: 'up', glyph: '▲', text: 'Up ' + r + unit } : { dir: 'down', glyph: '▼', text: 'Down ' + r + unit };
+  }
+
   // ---- inquiries: confirm-model.ts ----
   function str(v) { return typeof v === 'string' && v.trim() !== '' ? v : null; }
   function amountStr(v) { return (typeof v === 'string' || typeof v === 'number') ? (toCentavos(v) === null ? null : String(v)) : null; }
@@ -232,6 +260,9 @@
         { id: 'n-demo-t1', transaction_date: d(-1), txn_type: 'expense', category: 'supplies', gross_amount: '640.00', payee_name: 'Sample shop', notes: 'Sample: kitchen supplies', status: 'confirmed' },
         { id: 'n-demo-t2', transaction_date: d(-2), txn_type: 'income', category: 'direct_income', gross_amount: '5000.00', payee_name: null, notes: 'Sample: deposit', status: 'confirmed' }
       ],
+      series: function (months) { return months.map(function (mo, i) { var f = 1 + i * 0.06; return { metrics: {
+        occupancy: { value: String(Math.min(95, 52 + i * 4)), unit: 'percent' }, accommodation_revenue: { value: (24000 * f).toFixed(2), unit: 'PHP' },
+        adr: { value: (2000 + i * 90).toFixed(2), unit: 'PHP' }, sold_nights: { value: String(12 + i), unit: 'night' } } }; }); },
       metrics: function (start, end) { // a flat sample so every period renders; the "before" period is a little lower
         var f = start < d(-40) ? 0.9 : 1, mk = function (key, unit, v) { return { key: key, value: v === null ? null : String((v * f).toFixed(unit === 'PHP' ? 2 : 1)), unit: unit, coverage: 'complete', periodStart: start, periodEndExclusive: end }; };
         var m = {}; [['occupancy', 'percent', 62], ['sold_nights', 'night', 14], ['future_booked_nights', 'night', 9], ['average_length_of_stay', 'day', 2.5], ['accommodation_revenue', 'PHP', 31000], ['adr', 'PHP', 2214], ['revpar', 'PHP', 1372],
@@ -280,7 +311,36 @@
     if (t === 'today') { load('overview', force); load('inq', force); }
     else if (t === 'inquiries') load('inq', force);
     else if (t === 'money') load('txns', force);
-    else if (t === 'kpis') load('kpi', force);
+    else if (t === 'kpis') { load('kpi', force); loadSeries(force); }
+  }
+  // Six monthly get_hospitality_metrics_v1 calls (same arguments as the dashboard's metrics call), two at a time, kept in memory for the session.
+  var SERIES_CONCURRENCY = 2;
+  function loadSeries(force) {
+    var st = S.d.series || (S.d.series = {}); if (st.busy) return;
+    if (st.ok && !force && clock() - (st.at || 0) <= 5 * 60000) return;
+    var months = lastMonths(S.today, 6), gen = S.gen, answers = new Array(months.length), next = 0, active = 0, absent = false, denied = false;
+    st.busy = true; st.err = false; st.months = months; draw();
+    var finish = function () {
+      if (!S || S.gen !== gen) return; st.busy = false; st.absent = absent; st.denied = denied;
+      if (!absent && !denied) { st.series = buildSeries(months, answers); st.ok = true; st.at = clock(); } else { st.ok = false; }
+      draw();
+    };
+    if (S.demo) { Promise.resolve().then(function () { answers = S.demoData.series(months); finish(); }); return; }
+    if (!S.client || !online()) { Promise.resolve().then(function () { st.busy = false; st.ok = false; st.err = true; draw(); }); return; }
+    var pump = function () {
+      if (!S || S.gen !== gen) return;
+      while (active < SERIES_CONCURRENCY && next < months.length) {
+        (function (i) {
+          active++;
+          callRpc('get_hospitality_metrics_v1', { p_property_id: pid(), p_start: months[i].start, p_end_exclusive: months[i].endExclusive }).then(function (r) {
+            active--;
+            if (r.error) { if (isMissing(r.error)) absent = true; else if (isDenied(r.error)) denied = true; } else answers[i] = r.data;
+            if (next >= months.length && active === 0) finish(); else pump();
+          });
+        })(next++);
+      }
+    };
+    pump();
   }
   function stale() { return clock() - (S.loadedAt || 0) > 5 * 60000; }
 
@@ -407,8 +467,9 @@
       PRESETS.map(function (p) { return '<option value="' + p[0] + '"' + (p[0] === S.period ? ' selected' : '') + '>' + esc(p[1]) + '</option>'; }).join('') + '</select>' +
       '<button class="btn btn-secondary" type="button" data-n="refresh"' + (k.busy ? ' disabled' : '') + '>Refresh</button></div>';
     out += '<p class="N_sub">' + esc(per.label + ': ' + fmtDate(per.start, 'long') + ' to ' + fmtDate(per.endExclusive, 'long') + ' (end day not counted). Compared with ' + fmtDate(cmp.start, 'long') + ' to ' + fmtDate(cmp.endExclusive, 'long') + '.') + '</p>';
-    var box = stateBox(k, 'KPIs', 'kpis'); if (box) return out + box;
+    var box = stateBox(k, 'KPIs', 'kpis'); if (box) return out + (k.busy || (!k.ok && !k.err && !k.absent && !k.denied) ? chartsSkeleton() : '') + box;
     var now = k.data && k.data.now, prev = k.data && k.data.prev, mNow = (now && now.metrics) || {}, mPrev = (prev && prev.metrics) || {};
+    out += chartsHtml(mNow, mPrev, !!prev);
     KPI_GROUPS.forEach(function (g) {
       var rows = g.keys.filter(function (key) { return mNow[key]; }); if (!rows.length) return;
       out += '<section class="N_card N_list" aria-label="' + esc(g.title) + '"><h3 class="N_h3 N_pad">' + esc(g.title) + '</h3>' + rows.map(function (key) {
@@ -421,6 +482,66 @@
     });
     if (now && now.blockedNights > 0) out += '<p class="N_foot">' + esc(count(now.blockedNights, 'calendar-blocked night is', 'calendar-blocked nights are') + ' unexplained and still count as sellable, so occupancy may read low.') + '</p>';
     out += '<p class="N_foot"><a class="N_link" href="#door/dashboard/insights" data-n="go" data-v="insights">Open full KPIs in the dashboard</a></p>';
+    return out;
+  }
+
+  // ---- 3.1.1 chart cards (inline SVG and CSS only; every figure is a server figure) ----
+  function chartsSkeleton() {
+    return '<div class="N_charts" aria-hidden="true">' + [1, 2, 3, 4].map(function () { return '<div class="N_card N_hcard N_skel"></div>'; }).join('') + '<div class="N_card N_wide N_skel"></div></div>';
+  }
+  function sparkPoints(vals, W, H) { // x evenly spaced, y scaled to the series max; null = gap
+    var mx = 0; vals.forEach(function (v) { if (v !== null && v > mx) mx = v; }); if (mx <= 0) mx = 1;
+    return vals.map(function (v, i) { return v === null ? null : { x: vals.length > 1 ? 2 + (W - 4) * i / (vals.length - 1) : W / 2, y: H - 2 - (H - 4) * (v / mx), v: v, i: i }; });
+  }
+  function sparkLine(vals) {
+    var W = 120, H = 32, pts = sparkPoints(vals, W, H), segs = [], cur = [];
+    pts.forEach(function (p) { if (p) cur.push(p); else { if (cur.length) segs.push(cur); cur = []; } }); if (cur.length) segs.push(cur);
+    return '<svg class="N_spark" viewBox="0 0 ' + W + ' ' + H + '" preserveAspectRatio="none" aria-hidden="true" focusable="false">' + segs.map(function (sg) {
+      var d = sg.map(function (p, i) { return (i ? 'L' : 'M') + p.x.toFixed(1) + ' ' + p.y.toFixed(1); }).join(' ');
+      return '<path class="N_sarea" d="' + d + ' L' + sg[sg.length - 1].x.toFixed(1) + ' ' + H + ' L' + sg[0].x.toFixed(1) + ' ' + H + ' Z"/><path class="N_sline" d="' + d + '"/>';
+    }).join('') + '</svg>';
+  }
+  function sparkBars(vals) {
+    var W = 120, H = 32, n = vals.length, mx = 0; vals.forEach(function (v) { if (v !== null && v > mx) mx = v; }); if (mx <= 0) mx = 1;
+    var bw = W / n * 0.62;
+    return '<svg class="N_spark" viewBox="0 0 ' + W + ' ' + H + '" preserveAspectRatio="none" aria-hidden="true" focusable="false">' + vals.map(function (v, i) {
+      if (v === null) return ''; var h = Math.max(1.5, (H - 2) * (v / mx)), x = W / n * i + (W / n - bw) / 2;
+      return '<rect class="N_sbar" x="' + x.toFixed(1) + '" y="' + (H - h).toFixed(1) + '" width="' + bw.toFixed(1) + '" height="' + h.toFixed(1) + '" rx="2"/>';
+    }).join('') + '</svg>';
+  }
+  function chipHtml(c) { return c ? '<span class="N_chipd N_' + c.dir + '"><span aria-hidden="true">' + c.glyph + '</span> ' + esc(c.text) + ' <span class="N_vs">vs before</span></span>' : '<span class="N_chipd N_flat N_vs">No comparison</span>'; }
+  var HEADS = [['occupancy', 'Occupancy', 'occ', 'line'], ['accommodation_revenue', 'Accommodation revenue', 'rev', 'bars'], ['adr', 'Accommodation ADR', 'adr', 'line'], ['sold_nights', 'Sold nights', 'nights', 'bars']];
+  function monthFigures(m) { return m.failed || (m.rev === null && m.occ === null) ? esc(monthTitle(m)) + ': No data' : esc(monthTitle(m)) + ': Revenue ' + (m.rev === null ? 'No data' : esc(formatPHP(String(m.rev)))) + ' · Occupancy ' + (m.occ === null ? 'No data' : esc(formatPercent(m.occ))); }
+  function chartsHtml(mNow, mPrev, hasPrev) {
+    var se = S.d.series || {};
+    if (se.absent || se.denied || se.err) return ''; // old server or refused: the number rows below remain
+    if (se.busy || !se.ok) return chartsSkeleton();
+    var series = se.series, out = '<div class="N_charts">';
+    HEADS.forEach(function (h) {
+      var m = mNow[h[0]]; if (!m) return;
+      var vals = series.map(function (x) { return x[h[2]]; });
+      out += '<section class="N_card N_hcard" aria-label="' + esc(h[1]) + '"><span class="N_hl">' + esc(h[1]) + '</span><span class="N_hv N_num">' + esc(formatMetricValue(m)) + '</span>' + chipHtml(hasPrev ? chipFor(m, mPrev[h[0]]) : null) +
+        (vals.some(function (v) { return v !== null; }) ? (h[3] === 'line' ? sparkLine(vals) : sparkBars(vals)) + '<span class="N_hs">Last 6 months</span>' : '<span class="N_hs">No data for the last 6 months</span>') + '</section>';
+    });
+    // the wide card
+    var W = 600, H = 160, col = W / 6, mxR = 0; series.forEach(function (x) { if (x.rev !== null && x.rev > mxR) mxR = x.rev; }); if (mxR <= 0) mxR = 1;
+    var sel = S.monSel; if (sel == null || sel < 0 || sel > 5) { sel = -1; for (var i = series.length - 1; i >= 0; i--) if (!series[i].failed && (series[i].rev !== null || series[i].occ !== null)) { sel = i; break; } if (sel < 0) sel = 5; }
+    var grid = [0.25, 0.5, 0.75, 1].map(function (f) { return '<line class="N_grid" x1="0" x2="' + W + '" y1="' + (H - H * f).toFixed(1) + '" y2="' + (H - H * f).toFixed(1) + '"/>'; }).join('');
+    var bars = series.map(function (x, i) { if (x.rev === null) return ''; var h = Math.max(2, (H - 6) * (x.rev / mxR)); return '<rect class="N_bar' + (i === sel ? ' N_on' : '') + '" x="' + (col * i + col * 0.2).toFixed(1) + '" y="' + (H - h).toFixed(1) + '" width="' + (col * 0.6).toFixed(1) + '" height="' + h.toFixed(1) + '" rx="5"/>'; }).join('');
+    var pts = series.map(function (x, i) { return x.occ === null ? null : { x: col * i + col / 2, y: H - 8 - (H - 16) * Math.min(100, Math.max(0, x.occ)) / 100, i: i }; });
+    var segs = [], cur = []; pts.forEach(function (p) { if (p) cur.push(p); else { if (cur.length) segs.push(cur); cur = []; } }); if (cur.length) segs.push(cur);
+    var line = segs.filter(function (sg) { return sg.length > 1; }).map(function (sg) { return '<path class="N_oline" d="' + sg.map(function (p, j) { return (j ? 'L' : 'M') + p.x.toFixed(1) + ' ' + p.y.toFixed(1); }).join(' ') + '"/>'; }).join('');
+    var dots = pts.map(function (p) { return p ? '<circle class="N_odot" cx="' + p.x.toFixed(1) + '" cy="' + p.y.toFixed(1) + '" r="4.5"/>' : ''; }).join('');
+    var hits = series.map(function (x, i) { return '<button class="N_hit" type="button" data-n="mon" data-v="' + i + '" aria-pressed="' + (i === sel) + '" aria-label="' + esc(monthFigures(x).replace(/<[^>]+>/g, '')) + '"></button>'; }).join('');
+    var labels = series.map(function (x, i) { return '<button class="N_mlab' + (i === sel ? ' N_on' : '') + '" type="button" data-n="mon" data-v="' + i + '" tabindex="-1" aria-hidden="true">' + esc(x.label) + '</button>'; }).join('');
+    out += '<section class="N_card N_wide" aria-labelledby="N_ch1"><h3 class="N_h3" id="N_ch1">Last 6 months</h3><p class="N_sub">Full calendar months, newest on the right. Bars are accommodation revenue; dots are occupancy.</p>' +
+      '<div class="N_plot"><svg class="N_svg" viewBox="0 0 ' + W + ' ' + H + '" preserveAspectRatio="none" role="img" aria-label="Bar chart of accommodation revenue for the last six months with occupancy dots. The same figures are in the table.">' + grid + bars + line + dots + '</svg><div class="N_hits">' + hits + '</div></div>' +
+      '<div class="N_mlabs" aria-hidden="true">' + labels + '</div>' +
+      '<p class="N_cap" role="status" aria-live="polite">' + monthFigures(series[sel]) + '</p>' +
+      '<button class="N_link N_tbtn" type="button" data-n="tbl" aria-expanded="' + !!S.showTable + '">' + (S.showTable ? 'Hide the table' : 'Show as a table') + '</button>' +
+      (S.showTable ? '<div class="N_tw"><table class="N_table"><thead><tr><th scope="col">Month</th><th scope="col">Revenue</th><th scope="col">Occupancy</th></tr></thead><tbody>' + series.map(function (x) {
+        return '<tr><th scope="row">' + esc(monthTitle(x)) + '</th><td class="N_num">' + (x.rev === null ? 'No data' : esc(formatPHP(String(x.rev)))) + '</td><td class="N_num">' + (x.occ === null ? 'No data' : esc(formatPercent(x.occ))) + '</td></tr>';
+      }).join('') + '</tbody></table></div>' : '') + '</section></div>';
     return out;
   }
 
@@ -582,6 +703,8 @@
     if (a === 'retry') { var m = { today: 'today', inquiries: 'inquiries', money: 'money', kpis: 'kpis' }; loadTab(m[v] || S.tab, true); return; }
     if (a === 'refresh') { S.notice = ''; loadTab(S.tab, true); return; }
     S.notice = '';
+    if (a === 'mon') { S.monSel = +v; draw(); return; }
+    if (a === 'tbl') { S.showTable = !S.showTable; draw(); return; }
     if (a === 'inq-open') return openInq(v);
     if (a === 'exp-open') { S.sheet = { kind: 'expense', step: 'form', key: mintKey('txn'), busy: false, msg: '', errs: {}, focus: true, f: { date: manilaToday(), amount: '', category: 'other', notes: '', payee: '' } }; draw(); return; }
     if (!sh) return;
@@ -640,8 +763,9 @@
   var api = {
     mount: mount, unmount: unmount,
     _setRpcTimeout: function (ms) { RPC_TIMEOUT_MS = ms; },
+    _setSeriesConcurrency: function (n) { SERIES_CONCURRENCY = n; },
     _setClock: function (fn) { clock = fn || function () { return Date.now(); }; },
-    lib: { canManage: canManage, manilaToday: manilaToday, addDays: addDays, nightsBetween: nightsBetween, fmtDate: fmtDate, fmtDateTime: fmtDateTime, toCentavos: toCentavos, fromCentavos: fromCentavos, formatPHP: formatPHP, formatPercent: formatPercent, formatNumber: formatNumber,
+    lib: { lastMonths: lastMonths, buildSeries: buildSeries, chipFor: chipFor, canManage: canManage, manilaToday: manilaToday, addDays: addDays, nightsBetween: nightsBetween, fmtDate: fmtDate, fmtDateTime: fmtDateTime, toCentavos: toCentavos, fromCentavos: fromCentavos, formatPHP: formatPHP, formatPercent: formatPercent, formatNumber: formatNumber,
       formatMetricValue: formatMetricValue, parseAmount: parseAmount, periodPreset: periodPreset, comparablePeriod: comparablePeriod, compareMode: compareMode, pctDelta: pctDelta, fmtDeltaPct: fmtDeltaPct, deltaLine: deltaLine,
       normalizePayments: normalizePayments, paymentLine: paymentLine, validateConfirm: validateConfirm, confirmArgs: confirmArgs, confirmSentence: confirmSentence, declineSentence: declineSentence, declineReason: declineReason,
       validateExpense: validateExpense, expenseTxn: expenseTxn, isMissing: isMissing, isDenied: isDenied, isOffline: isOffline, plainError: plainError, PRESETS: PRESETS, METHODS: METHODS, EXPENSE_CATEGORIES: EXPENSE_CATEGORIES, KPI_GROUPS: KPI_GROUPS, NO_CONNECTION: NO_CONNECTION }
