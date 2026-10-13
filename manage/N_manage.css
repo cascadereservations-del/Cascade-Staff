@@ -67,3 +67,44 @@
 .N_sheet { position: fixed; left: 0; right: 0; bottom: 0; margin: 0 auto; max-width: 480px; max-height: 92vh; overflow-y: auto; overscroll-behavior: contain; z-index: 41; background: var(--v5-surf); border: 1px solid var(--v5-glass-edge); border-bottom: 0; border-radius: var(--v5-r-sheet) var(--v5-r-sheet) 0 0; padding: 16px 16px calc(16px + env(safe-area-inset-bottom)); box-shadow: 0 -12px 40px var(--v5-shadow); }
 .N_grab { width: 40px; height: 4px; border-radius: 2px; background: var(--v5-line-2); margin: 0 auto 12px; }
 @media (prefers-reduced-motion: reduce) { .N_tap:active { transform: none; } }
+
+/* 3.1.1 chart cards: shadcn restraint, one gold accent on the navy/ink scale, 1px low-contrast grid, tabular numbers. SVG and CSS only. */
+.N_charts { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; }
+@media (min-width: 37.5rem) { .N_charts { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.N_hcard { align-content: start; gap: 6px; min-height: 9.5rem; padding: 16px; }
+.N_hl { color: var(--fg-2); font-size: 0.8125rem; font-weight: 600; line-height: 1.3; }
+.N_hv { font: 600 max(1.5rem, var(--v5-t-num))/1.15 var(--font-ui); letter-spacing: -0.01em; overflow-wrap: anywhere; }
+.N_hs { color: var(--fg-3); font-size: 0.8125rem; line-height: 1.3; }
+.N_chipd { display: inline-flex; align-items: center; gap: 4px; justify-self: start; min-height: 24px; padding: 0 10px; border-radius: var(--r-full); font: 600 0.8125rem/1.2 var(--font-ui); background: var(--muted); color: var(--fg-2); }
+.N_chipd.N_up { background: var(--ok-soft); color: var(--ok); }
+.N_chipd.N_down { background: var(--danger-soft); color: var(--danger); }
+.N_vs { font-weight: 400; color: inherit; opacity: .85; }
+.N_spark { display: block; width: 100%; height: 32px; overflow: visible; }
+.N_sline { fill: none; stroke: var(--v5-gold-text); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; vector-effect: non-scaling-stroke; }
+.N_sarea { fill: var(--v5-gold-soft); stroke: none; }
+.N_sbar { fill: var(--v5-gold); }
+.N_wide { grid-column: 1 / -1; min-height: 19.5rem; padding: 16px 10px 12px; }
+.N_wide > .N_h3, .N_wide > .N_sub, .N_wide > .N_cap, .N_wide > .N_tbtn { padding: 0 6px; }
+.N_skel { background: var(--muted); border-color: transparent; box-shadow: none; }
+.N_plot { position: relative; height: 10rem; }
+.N_svg { display: block; width: 100%; height: 100%; overflow: visible; }
+.N_grid { stroke: var(--v5-line); stroke-width: 1; vector-effect: non-scaling-stroke; opacity: .7; }
+.N_bar { fill: var(--v5-gold); opacity: .55; transform-box: fill-box; transform-origin: bottom; animation: N_grow .45s ease-out both; }
+.N_bar.N_on { opacity: 1; }
+.N_oline { fill: none; stroke: var(--v5-ink-2); stroke-width: 1.5; vector-effect: non-scaling-stroke; }
+.N_odot { fill: var(--card); stroke: var(--v5-ink); stroke-width: 2; vector-effect: non-scaling-stroke; }
+.N_hits { position: absolute; inset: 0; display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); }
+.N_hit { min-height: 44px; border: 0; background: transparent; cursor: pointer; padding: 0; border-radius: 6px; }
+.N_hit:focus-visible { outline: 2px solid var(--ring); outline-offset: -2px; }
+.N_mlabs { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); margin-top: 4px; }
+.N_mlab { min-height: 44px; border: 0; background: transparent; color: var(--fg-2); font: 400 0.8125rem/1.2 var(--font-ui); cursor: pointer; padding: 0; }
+.N_mlab.N_on { color: var(--fg); font-weight: 700; }
+.N_cap { margin: 0; min-height: 2.6em; color: var(--fg); font-size: 0.875rem; line-height: 1.4; font-variant-numeric: tabular-nums; }
+.N_tbtn { justify-self: start; }
+.N_tw { overflow-x: auto; }
+.N_table { width: 100%; border-collapse: collapse; font-size: 0.875rem; font-variant-numeric: tabular-nums; }
+.N_table th, .N_table td { padding: 8px 6px; border-top: 1px solid var(--border); text-align: right; font-weight: 400; }
+.N_table th:first-child, .N_table tbody th { text-align: left; font-weight: 600; }
+@keyframes N_grow { from { transform: scaleY(0); } to { transform: scaleY(1); } }
+@media (prefers-reduced-motion: reduce) { .N_bar { animation: none; } }
+@media (min-width: 37.5rem) { .N_plot { height: 14rem; } .N_wide { min-height: 23.5rem; } }

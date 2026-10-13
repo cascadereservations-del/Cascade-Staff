@@ -92,9 +92,13 @@ async function boot(o = {}) {
     click: (act, v) => fire('click', { target: target({ 'data-n': act, ...(v !== undefined ? { 'data-v': v } : {}) }), preventDefault() {} }),
     type: (f, value, extra = {}) => fire('input', { target: target({ 'data-f': f }, { value, type: 'text', ...extra }) }),
     text: () => el.innerHTML.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' '),
+    period: () => (c ? c.calls.filter((x) => x[0] === 'get_hospitality_metrics_v1' && !isMonthCall(x)) : []),
+    series: () => (c ? c.calls.filter((x) => x[0] === 'get_hospitality_metrics_v1' && isMonthCall(x)) : []),
     sent: (name) => (c ? c.calls.filter((x) => x[0] === name) : [])
   };
 }
+// a full calendar month [first, first of next month) is a chart call; the period presets used by the older tests never are
+const isMonthCall = (x) => x[1].p_start.endsWith('-01') && x[1].p_end_exclusive.endsWith('-01') && (Date.parse(x[1].p_end_exclusive) - Date.parse(x[1].p_start)) / 864e5 <= 31;
 const keys = (o) => Object.keys(o).sort();
 const dashRpcKeys = (file, name) => { const s = dash(file); if (!s) return null; const i = s.indexOf(`'${name}'`); if (i < 0) return null; const j = s.indexOf('{', i), k = s.indexOf('}', j); return [...new Set((s.slice(j, k + 1).match(/\bp_\w+/g) || []))].sort(); };
 
@@ -152,7 +156,7 @@ test('N rpc shape: the property id comes from opts when the shell passes it', as
 });
 test('N rpc shape: KPIs call get_hospitality_metrics_v1 twice (period and comparison) with p_property_id, p_start, p_end_exclusive', async () => {
   const t = await boot({ sub: 'kpis', handlers: { get_hospitality_metrics_v1: (a) => ({ data: METRICS(a.p_start.startsWith('2026-10') ? 1 : 0.8), error: null }) } });
-  const m = t.sent('get_hospitality_metrics_v1');
+  const m = t.period();
   assert.equal(m.length, 2);
   for (const c of m) assert.deepEqual(keys(c[1]), ['p_end_exclusive', 'p_property_id', 'p_start']);
   assert.deepEqual(m.map((c) => [c[1].p_start, c[1].p_end_exclusive]), [['2026-10-01', '2026-10-14'], ['2026-09-01', '2026-09-14']]);
@@ -357,8 +361,8 @@ test('N KPIs: one card per group, label left and number right, delta versus the 
   assert.match(x, /Occupancy .*Before: 48\.0% · \+12 pts .*60\.0%/); assert.match(x, /Accommodation revenue .*Before: .*24,000\.00 · \+25% .*30,000\.00/); assert.match(x, /Expected payout .*Not available/);
   assert.match(x, /Month to date \(13 of 31 nights elapsed\): 1 Oct 2026 to 14 Oct 2026/); assert.match(x, /Compared with 1 Sep 2026 to 14 Sep 2026/);
   assert.match(t.html(), /N_num/); assert.match(t.html(), /Open full KPIs in the dashboard/); assert.match(t.html(), /data-n="refresh"/);
-  await t.click('refresh'); assert.equal(t.sent('get_hospitality_metrics_v1').length, 4);
-  await t.type('period', 'ytd'); const m = t.sent('get_hospitality_metrics_v1').slice(-2).map((c) => [c[1].p_start, c[1].p_end_exclusive]);
+  await t.click('refresh'); assert.equal(t.period().length, 4);
+  await t.type('period', 'ytd'); const m = t.period().slice(-2).map((c) => [c[1].p_start, c[1].p_end_exclusive]);
   assert.deepEqual(m, [['2026-01-01', '2026-10-14'], ['2025-01-01', '2025-10-14']]);
   assert.ok(t.touched.every((k) => /^cs_n_/.test(k)), 'only cs_n_* keys: ' + t.touched);
   assert.equal(t.store.cs_n_period, 'ytd');
@@ -375,8 +379,8 @@ test('N KPIs: the tab list is the dashboard\'s twelve metrics and its period pre
 test('N KPIs: refresh on visibility only after five minutes, never under an open sheet', async () => {
   let now = NOW; const t = await boot({ sub: 'kpis', handlers: { get_hospitality_metrics_v1: () => ({ data: METRICS(1), error: null }) } });
   t.M._setClock(() => now); const fire = async () => { for (const f of t.ctx.document.listeners.visibilitychange || []) f(); await tick(); };
-  now += 4 * 60000; await fire(); assert.equal(t.sent('get_hospitality_metrics_v1').length, 2, 'under five minutes: nothing');
-  now += 2 * 60000; await fire(); assert.equal(t.sent('get_hospitality_metrics_v1').length, 4, 'over five minutes: refreshed');
+  now += 4 * 60000; await fire(); assert.equal(t.period().length, 2, 'under five minutes: nothing');
+  now += 2 * 60000; await fire(); assert.equal(t.period().length, 4, 'over five minutes: refreshed');
 });
 
 // ------------------------------------------------------------------------------------------------ KPI formulas against a shared fixture
@@ -504,9 +508,9 @@ test('N server reasons: 22023 and P0002 show the server message (escaped); only 
 });
 test('N clock: a screen opened after midnight uses the new day for its periods', async () => {
   let now = NOW; const t = await boot({ sub: 'kpis', handlers: { get_hospitality_metrics_v1: () => ({ data: METRICS(1), error: null }) } });
-  assert.equal(t.sent('get_hospitality_metrics_v1')[0][1].p_end_exclusive, '2026-10-14');
+  assert.equal(t.period()[0][1].p_end_exclusive, '2026-10-14');
   now = Date.parse('2026-10-15T20:00:00Z'); t.M._setClock(() => now); // 04:00 on 16 Oct in Manila
-  await t.click('refresh'); assert.equal(t.sent('get_hospitality_metrics_v1').slice(-2)[0][1].p_end_exclusive, '2026-10-16');
+  await t.click('refresh'); assert.equal(t.period().slice(-2)[0][1].p_end_exclusive, '2026-10-16');
 });
 test('N no client, not demo: every tab shows the calm error with Try again, never an endless Loading', async () => {
   const env = load(); const el = new FakeEl();
@@ -534,4 +538,116 @@ test('N timeout: a hung write settles as a dropped connection after the limit, k
   late(REPLY.confirmed); await tick(); assert.equal(t.toasts.length, 0, 'a late answer after the timeout changes nothing');
   await t.click('cf-send'); const ks = t.sent('staff_confirm_direct_booking_v1').map((c) => c[1].p_idempotency_key); assert.equal(ks.length, 2); assert.equal(ks[0], ks[1], 'same key on the repeat');
   t.M._setRpcTimeout(30000);
+});
+
+// ------------------------------------------------------------------------------------------------ 3.1.1 chart cards
+// Every plotted figure comes from get_hospitality_metrics_v1, called once per full calendar month. Frozen clock: 2026-10-14 11:00 Manila,
+// so the six months are 2026-04 .. 2026-09 ([first, first of next) like the prev-month preset).
+const MONTH_STARTS = ['2026-04-01', '2026-05-01', '2026-06-01', '2026-07-01', '2026-08-01', '2026-09-01'];
+const monthAnswer = (start) => { const i = MONTH_STARTS.indexOf(start); return METRICS(1, { accommodation_revenue: METRIC('accommodation_revenue', 'PHP', String(20000 + i * 2500) + '.00'), occupancy: METRIC('occupancy', 'percent', String(50 + i * 5)) }); };
+const monthHandlers = (fail = {}) => ({ get_hospitality_metrics_v1: (a) => {
+  if (MONTH_STARTS.includes(a.p_start) && /-01$/.test(a.p_end_exclusive)) { if (fail[a.p_start]) return fail[a.p_start]; return { data: monthAnswer(a.p_start), error: null }; }
+  return { data: METRICS(a.p_start === '2026-10-01' ? 1 : 0.8), error: null };
+} });
+const count = (html, re) => (html.match(re) || []).length;
+
+test('N charts: six monthly calls with the preset arguments, two at a time, in Manila months', async () => {
+  let live = 0, peak = 0;
+  const base = monthHandlers();
+  const h = { get_hospitality_metrics_v1: (a) => { live++; peak = Math.max(peak, live); return new Promise((r) => setTimeout(() => { live--; r(base.get_hospitality_metrics_v1(a)); }, 3)); } };
+  const t = await boot({ sub: 'kpis', handlers: h }); await new Promise((r) => setTimeout(r, 80)); await tick();
+  const m = t.series();
+  assert.equal(m.length, 6); assert.ok(peak <= 2 + 2, 'bounded: ' + peak); // two period calls plus at most two month calls at once
+  assert.deepEqual(m.map((c) => [c[1].p_start, c[1].p_end_exclusive]).sort(), MONTH_STARTS.map((s, i) => [s, MONTH_STARTS[i + 1] || '2026-10-01']).sort());
+  for (const c of m) assert.deepEqual(keys(c[1]), ['p_end_exclusive', 'p_property_id', 'p_start']);
+  // Asia/Manila boundaries: 23:00 on 31 Oct (UTC 15:00) is still October; 01:00 on 1 Nov is November
+  const { M } = load(); const L = M.lib;
+  assert.equal(L.lastMonths(L.manilaToday(Date.parse('2026-10-31T15:00:00Z')), 6)[5].month, '2026-09');
+  assert.equal(L.lastMonths(L.manilaToday(Date.parse('2026-10-31T17:00:00Z')), 6)[5].month, '2026-10');
+  assert.deepEqual(plain(L.lastMonths('2026-01-10', 6)).map((x) => x.month), ['2025-07', '2025-08', '2025-09', '2025-10', '2025-11', '2025-12']);
+});
+test('N charts: the series, the caption and the table all carry the server figures; a tap on a bar shows that month', async () => {
+  const t = await boot({ sub: 'kpis', handlers: monthHandlers() }); await tick(20);
+  const x = t.text(); assert.match(x, /Last 6 months/);
+  assert.match(x, /Sep 2026: Revenue .*32,500\.00 · Occupancy 75\.0%/, 'newest month is selected first');
+  assert.equal(count(t.html(), /class="N_bar/g), 6); assert.equal(count(t.html(), /class="N_odot"/g), 6);
+  await t.click('mon', 0); assert.match(t.text(), /Apr 2026: Revenue .*20,000\.00 · Occupancy 50\.0%/);
+  assert.match(t.html(), /class="N_hit"[^>]*aria-label="Apr 2026: Revenue/);
+  assert.ok(!/<table/.test(t.html())); assert.match(t.text(), /Show as a table/);
+  await t.click('tbl'); const h = t.html(); assert.match(h, /<table/);
+  for (const i of [0, 1, 2, 3, 4, 5]) { const rev = t.M.lib.formatPHP((20000 + i * 2500) + '.00'); assert.ok(h.includes(rev), 'table row ' + i); assert.ok(h.includes((50 + i * 5) + '.0%')); }
+  assert.match(h, /scope="row">Apr 2026/); assert.match(t.text(), /Hide the table/);
+});
+test('N charts: a failed month and a null value are gaps with "No data", never zero', async () => {
+  const nullRev = { data: METRICS(1, { accommodation_revenue: METRIC('accommodation_revenue', 'PHP', null), occupancy: METRIC('occupancy', 'percent', '61') }), error: null };
+  const t = await boot({ sub: 'kpis', handlers: monthHandlers({ '2026-06-01': { data: null, error: { message: 'boom', code: 'XX000' } }, '2026-07-01': nullRev }) }); await tick(20);
+  assert.equal(count(t.html(), /class="N_bar/g), 4, 'no bar for the failed month or the null revenue'); assert.equal(count(t.html(), /class="N_odot"/g), 5, 'the null-revenue month keeps its occupancy dot');
+  await t.click('mon', 2); assert.match(t.text(), /Jun 2026: No data/); await t.click('mon', 3); assert.match(t.text(), /Jul 2026: Revenue No data · Occupancy 61\.0%/);
+  await t.click('tbl'); const row = (m) => t.html().match(new RegExp('<tr><th scope="row">' + m + ' 2026</th>(.*?)</tr>'))[1];
+  assert.equal(count(row('Jun'), /No data/g), 2); assert.match(row('Jul'), /No data.*61\.0%/);
+  assert.ok(!/₱0\.00|\b0\.0%/.test(t.html().replace(/class="[^"]*"/g, '')), 'no zero was invented');
+  assert.deepEqual(plain(t.M.lib.buildSeries([{ month: '2026-06', label: 'Jun' }], [undefined]))[0].rev, null);
+});
+test('N charts: four headline cards with big number, delta chip (glyph, word, figure) and a sparkline; nothing from client money maths', async () => {
+  const t = await boot({ sub: 'kpis', handlers: monthHandlers() }); await tick(20);
+  const h = t.html(); assert.equal(count(h, /class="N_card N_hcard"/g), 4);
+  for (const name of ['Occupancy', 'Accommodation revenue', 'Accommodation ADR', 'Sold nights']) assert.ok(new RegExp('aria-label="' + name + '"').test(h), name);
+  assert.match(t.text(), /Occupancy 60\.0% ▲ Up 12 pts vs before/); assert.match(t.text(), /Accommodation revenue .*30,000\.00 ▲ Up 25% vs before/);
+  assert.equal(count(h, /class="N_spark"/g), 4); assert.ok(count(h, /class="N_sline"/g) >= 2 && count(h, /class="N_sbar"/g) >= 6);
+  const L = load().M.lib;
+  assert.deepEqual(plain(L.chipFor({ value: '50', unit: 'percent' }, { value: '60', unit: 'percent' })), { dir: 'down', glyph: '▼', text: 'Down 10 pts' });
+  assert.deepEqual(plain(L.chipFor({ value: '100.0', unit: 'PHP' }, { value: '100.4', unit: 'PHP' })), { dir: 'flat', glyph: '–', text: 'Flat' });
+  assert.equal(L.chipFor({ value: null, unit: 'PHP' }, { value: '5', unit: 'PHP' }), null); assert.equal(L.chipFor({ value: '5', unit: 'PHP' }, { value: '0', unit: 'PHP' }), null);
+  assert.ok(!/Where bookings come from/.test(t.text()), 'the metrics RPC returns no direct-versus-Airbnb split, so that card is omitted');
+});
+test('N charts: hidden when the RPC refuses or is old (number rows remain); skeletons of the final count while loading', async () => {
+  const ok = monthHandlers().get_hospitality_metrics_v1;
+  const old = await boot({ sub: 'kpis', handlers: { get_hospitality_metrics_v1: (a) => (MONTH_STARTS.includes(a.p_start) && /-01$/.test(a.p_end_exclusive) ? { data: null, error: { code: 'PGRST202', message: 'Could not find the function' } } : ok(a)) } }); await tick(20);
+  assert.ok(!/N_charts|Last 6 months/.test(old.html())); assert.match(old.text(), /Occupancy .*60\.0%/); assert.match(old.text(), /Stays/);
+  const denied = await boot({ sub: 'kpis', handlers: { get_hospitality_metrics_v1: (a) => (MONTH_STARTS.includes(a.p_start) && /-01$/.test(a.p_end_exclusive) ? { data: null, error: { code: '42501', message: 'denied' } } : ok(a)) } }); await tick(20);
+  assert.ok(!/N_charts/.test(denied.html())); assert.match(denied.text(), /Stays/);
+  let release; const gate = new Promise((r) => { release = r; });
+  const slow = await boot({ sub: 'kpis', handlers: { get_hospitality_metrics_v1: (a) => (MONTH_STARTS.includes(a.p_start) && /-01$/.test(a.p_end_exclusive) ? gate.then(() => ok(a)) : ok(a)) } }); await tick(10);
+  assert.equal(count(slow.html(), /N_skel/g), 5, 'four headline skeletons and one wide'); assert.ok(!/class="N_bar/.test(slow.html()));
+  release(); await tick(30); assert.equal(count(slow.html(), /N_skel/g), 0); assert.ok(/class="N_bar/.test(slow.html()));
+});
+test('N charts: kept in memory for the session (not storage); Refresh fetches the six again; a tab round trip does not', async () => {
+  const t = await boot({ sub: 'kpis', handlers: monthHandlers() }); await tick(20);
+  assert.equal(t.series().length, 6);
+  await t.click('tab', 'money'); await t.click('tab', 'kpis'); await tick(20); assert.equal(t.series().length, 6, 'cached');
+  await t.click('refresh'); await tick(20); assert.equal(t.series().length, 12, 'refresh reloads');
+  assert.ok(t.touched.every((k) => /^cs_n_/.test(k)), 'only cs_n_*: ' + t.touched);
+});
+test('N charts: demo draws the cards with no network; the stylesheet has the card rules (stack under 37.5rem, 44px hits, reduced motion, tokens)', async () => {
+  const t = await boot({ demo: true, sub: 'kpis' }); await tick(20);
+  assert.match(t.text(), /Last 6 months/); assert.equal(count(t.html(), /class="N_bar/g), 6);
+  assert.match(CSS, /@media \(min-width: 37\.5rem\) \{ \.N_charts \{ grid-template-columns: repeat\(2/);
+  assert.match(CSS, /\.N_hit \{[^}]*min-height: 44px/); assert.match(CSS, /\.N_mlab \{[^}]*min-height: 44px/);
+  assert.match(CSS, /prefers-reduced-motion: reduce\) \{ \.N_bar \{ animation: none/); assert.ok(!/<canvas|chart\.js|d3/i.test(SRC));
+  assert.ok(/var\(--v5-gold\)/.test(CSS) && /var\(--v5-line\)/.test(CSS));
+});
+
+// ------------------------------------------------------------------------------------------------ 3.1.1b chart honesty
+test('N charts: a month with zero or negative revenue draws no bar (no sliver); the caption and table still give the figure', async () => {
+  const mk = (rev) => ({ data: METRICS(1, { accommodation_revenue: METRIC('accommodation_revenue', 'PHP', rev), occupancy: METRIC('occupancy', 'percent', '60') }), error: null });
+  const t = await boot({ sub: 'kpis', handlers: monthHandlers({ '2026-05-01': mk('0.00'), '2026-06-01': mk('-150.00') }) }); await tick(20);
+  assert.equal(count(t.html(), /class="N_bar/g), 4, 'no bar for 0 and for a negative');
+  await t.click('mon', 1); assert.match(t.text(), /May 2026: Revenue .*0\.00 · Occupancy 60\.0%/);
+  await t.click('mon', 2); assert.match(t.text(), /Jun 2026: Revenue .*150\.00/);
+  await t.click('tbl'); assert.match(t.html(), /scope="row">May 2026<\/th><td class="N_num">[^<]*0\.00</);
+});
+test('N charts: sparklines use a 0-100 scale for percent and a zero floor for money, so a flat 60-61-60 reads flat', () => {
+  const html = (vals) => { const { M } = load(); return M; };
+  // drive through the real cards: occupancy 60,61,60 across months must stay in the top band of the 32px sparkline with a tiny wobble
+  const wobble = async () => {
+    const h = { get_hospitality_metrics_v1: (a) => { const i = MONTH_STARTS.indexOf(a.p_start); if (i >= 0 && /-01$/.test(a.p_end_exclusive)) return { data: METRICS(1, { occupancy: METRIC('occupancy', 'percent', ['60', '61', '60', '61', '60', '61'][i]), adr: METRIC('adr', 'PHP', ['2000.00', '2010.00', '2000.00', '2010.00', '2000.00', '2010.00'][i]) }), error: null }; return { data: METRICS(1), error: null }; } };
+    const t = await boot({ sub: 'kpis', handlers: h }); await tick(20);
+    const ys = (label) => { const sec = t.html().split('aria-label="' + label + '"')[1].split('</section>')[0]; return [...sec.match(/class="N_sline" d="([^"]+)"/)[1].matchAll(/[ML][\d.]+ ([\d.]+)/g)].map((m) => +m[1]); };
+    return { occ: ys('Occupancy'), adr: ys('Accommodation ADR') };
+  };
+  return wobble().then(({ occ, adr }) => {
+    assert.ok(Math.max(...occ) - Math.min(...occ) < 1, 'percent 60-61 spans under 1 of 32 units: ' + (Math.max(...occ) - Math.min(...occ)));
+    assert.ok(Math.max(...adr) - Math.min(...adr) < 1, 'money 2000-2010 spans under 1 of 32 units');
+    assert.ok(Math.min(...occ) > 32 * 0.3 && Math.max(...occ) < 32 * 0.6, 'a 60% value sits at 60% of the scale, not pinned to an edge');
+  });
 });
