@@ -34,6 +34,8 @@
       case 'duplicate_proof': return 'This screenshot or reference was already used for request ' + (res.other_ref || 'another one') + ', so nothing changed. Add the screenshot for this payment.';
       case 'amount_mismatch': return 'The amount you typed (' + P.peso(res.typed) + ') is not the request (' + P.peso(res.total) + '). If the screenshot really shows ' + P.peso(res.typed) + ', tick the box and send again.';
       case 'already_paid': return 'One of the cleans was already paid another way, so nothing was marked paid. Ask Finance to cancel this request.';
+      case 'session_taken': case 'claim_taken': return 'One of these was already requested or paid, so nothing was made. The list is refreshed.';
+      case 'too_many_lines': return 'A request holds up to ' + P.MAX_LINES + ' lines. Untick some and pay the rest next.';
       case 'offline': return 'No connection, so nothing was sent. Try again when you have signal.';
       default: return 'Nothing changed (' + r + ').';
     }
