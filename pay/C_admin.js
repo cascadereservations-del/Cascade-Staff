@@ -36,7 +36,7 @@
   if (!DEMO && !window.supabase) { root.innerHTML = shell('Pay staff', '<div class="errbox">' + ICON('alert') + '<span>Live information needs a connection. Open the app again when you have signal.</span></div>'); return; }
   var sb = DEMO ? demoClient() : window.supabase.createClient(CFG.url, CFG.key, { auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: false } });
 
-  var S = { unreq: null, u: null, K: P.keyKeeper(undefined, null), me: null, listMsg: '', confirmTake: '', sentMarked: false, view: 'list', list: null, loadErr: '', req: null, qr: null, noQr: false, showStatic: false, form: { file: null, amount: '', reference: '', override: false, uploaded: null }, busy: false, msg: '', msgOk: false, copied: '' };
+  var S = { listNote: '', unreq: null, u: null, K: P.keyKeeper(undefined, null), me: null, listMsg: '', confirmTake: '', sentMarked: false, view: 'list', list: null, loadErr: '', req: null, qr: null, noQr: false, showStatic: false, form: { file: null, amount: '', reference: '', override: false, uploaded: null }, busy: false, msg: '', msgOk: false, copied: '' };
 
   function shell(title, inner, back) { return P.P_shell(title, inner, { back: back, icon: ICON, esc: esc, hash: P.P_hash(window) }); } // F7: the app's own bar and tab bar, badges from the hash
   P.P_wireBack(window);
@@ -89,7 +89,7 @@
   function renderList() {
     var open = (S.list || []).filter(function (r) { return r.status === 'requested' || r.status === 'paying'; }), paid = (S.list || []).filter(function (r) { return r.status === 'paid'; });
     var un = (S.unreq || []).filter(function (u) { return (u.sessions || []).length + (u.claims || []).length > 0; });
-    var inner = '<div class="stack">' + (S.listMsg ? '<div class="errbox" role="alert">' + ICON('alert') + '<span>' + esc(S.listMsg) + '</span></div>' : '') +
+    var inner = '<div class="stack">' + (S.listMsg ? '<div class="errbox" role="alert">' + ICON('alert') + '<span>' + esc(S.listMsg) + '</span></div>' : '') + (S.listNote ? '<div class="okbox" role="status">' + ICON('checks') + '<span>' + esc(S.listNote) + '</span></div>' : '') +
       (open.length || un.length || paid.length ? (open.length ? group('To pay', open.map(row).join('')) : '') + (un.length ? group('Not yet requested', un.map(unreqRow).join('')) : '') + (paid.length ? group('Paid recently', paid.map(paidRow).join('')) : '')
         : '<div class="card empty"><div class="disc">' + ICON('checks') + '</div><h2 class="hd">Nothing to pay right now</h2><p>Unpaid cleans appear here as soon as a report is sent.</p></div>') + '</div>';
     root.innerHTML = shell('Pay staff', inner);
@@ -102,7 +102,7 @@
     var sel = { sessions: {}, claims: {}, extras: [] };
     (p.sessions || []).forEach(function (s) { sel.sessions[s.id] = { on: true, transport: false }; });
     (p.claims || []).forEach(function (c) { sel.claims[c.id] = true; });
-    S.listMsg = ''; S.u = { p: p, sel: sel, busy: false, msg: '' }; S.view = 'unreq'; renderUnreq();
+    S.listMsg = ''; S.listNote = ''; S.u = { p: p, sel: sel, busy: false, msg: '' }; S.view = 'unreq'; renderUnreq();
   }
   function renderUnreq() {
     var U = S.u, p = U.p, c = uCands(), total = P.computeTotal(c, U.sel), lines = P.lineCount(c, U.sel), over = lines > P.MAX_LINES;
@@ -132,40 +132,47 @@
     token().then(function () {
       return sb.rpc('staff_pay_admin_create_v1', { p_payee_user_id: U.p.payee_user_id, p_sessions: ch.sessions.map(function (x) { return { id: x.s.id, transport: x.transport }; }), p_claim_ids: ch.claims.map(function (x) { return x.id; }), p_idempotency_key: key });
     }).then(function (res) {
-      U.busy = false; var d = res.data;
-      if (res.error || !d) { U.msg = A.isAbsent(res.error) ? 'Paying ahead is not switched on yet. Ask Lloyd.' : A.refusal({ reason: 'offline' }); return renderUnreq(); }
+      U.busy = false; var d = res.data, left = S.u !== U || S.view !== 'unreq'; // left: the view was closed while the call was in flight, so this answer only refreshes the list
+      if (res.error || !d) {
+        if (left) return loadList().then(render);
+        U.msg = A.isAbsent(res.error) ? 'Paying ahead is not switched on yet. Ask Lloyd.' : res.error && (/42501|not_authorized/.test(String(res.error.code) + String(res.error.message)) || res.error.status === 403) ? A.refusal({ reason: 'not_authorized' }) : A.refusal({ reason: 'offline' }); return renderUnreq();
+      }
       if (d.ok === false) {
-        if (d.reason === 'session_taken' || d.reason === 'claim_taken') { S.view = 'list'; S.listMsg = A.refusal(d); return loadList().then(render); }
+        if (left) return loadList().then(render);
+        if (d.reason === 'session_taken' || d.reason === 'claim_taken') { S.view = 'list'; S.listMsg = A.refusal(d); S.listNote = ''; return loadList().then(render); }
         U.msg = A.refusal(d); return renderUnreq();
       }
       S.K.settle(d);
       return loadList().then(function () { // straight on into the normal Pay flow for the new request
-        if ((S.list || []).some(function (x) { return x.id === d.id; })) return openPay(d.id);
-        S.view = 'list'; S.listMsg = 'Request ' + (d.ref || '') + ' was made. Open it from To pay.'; render();
+        if (S.u !== U || S.view !== 'unreq') return render(); // left meanwhile: the request exists, the list shows it, nothing is opened
+        if (!S.loadErr && (S.list || []).some(function (x) { return x.id === d.id; })) return openPay(d.id);
+        S.view = 'list'; S.listMsg = ''; S.listNote = 'Request ' + (d.ref || '') + ' was made. Open it from To pay.'; render();
       });
-    }).catch(function (e) { U.busy = false; U.msg = e && e.message === 'signin' ? 'Sign in to the Staff app first.' : A.refusal({ reason: 'offline' }); renderUnreq(); });
+    }).catch(function (e) { U.busy = false; if (S.u !== U || S.view !== 'unreq') return loadList().then(render); U.msg = e && e.message === 'signin' ? 'Sign in to the Staff app first.' : A.refusal({ reason: 'offline' }); renderUnreq(); });
   }
 
   // ---------------------------------------------------------------- pay one request
+  var payTok = 0; // each openPay call owns the screen until another starts: a late answer from an older call is dropped
   function openPay(id) {
+    var tok = ++payTok, live = function () { return tok === payTok; };
     var r = (S.list || []).filter(function (x) { return x.id === id; })[0]; if (!r || theirs(r)) return;
-    S.listMsg = ''; S.req = r; S.view = 'pay'; S.msg = ''; S.copied = ''; S.form = { file: null, amount: String(A.copyAmount(r.total)), reference: '', override: false, uploaded: null }; clearSecrets();
+    S.listMsg = ''; S.listNote = ''; S.req = r; S.view = 'pay'; S.msg = ''; S.copied = ''; S.form = { file: null, amount: String(A.copyAmount(r.total)), reference: '', override: false, uploaded: null }; clearSecrets();
     root.innerHTML = shell('Pay ' + r.payee_name, '<div class="skel" style="height:320px;margin-top:16px"></div>', '#back');
     // Claim the payment FIRST. If the server says someone else has it, nothing is drawn: no QR, no Mark as paid.
-    function backToList(res) { S.listMsg = A.refusal(res); S.view = 'list'; clearSecrets(); return loadList().then(render); }
+    function backToList(res) { if (!live()) return; S.listNote = ''; S.listMsg = A.refusal(res); S.view = 'list'; clearSecrets(); return loadList().then(render); }
     return sb.rpc('staff_pay_admin_step_v1', { p_request_id: id, p_step: 'pay' }).then(function (s) {
-      var d = s.data;
+      var d = s.data; if (!live()) return;
       if (s.error || !d || d.ok === false) return backToList(d || { reason: 'offline' });
-      S.req.status = 'paying'; S.req.paying_by_user_id = d.paying_by_user_id || S.me; S.sentMarked = !!S.req.sent_said_at; redrawCard(id);
+      r.status = 'paying'; r.paying_by_user_id = d.paying_by_user_id || S.me; S.sentMarked = !!r.sent_said_at; redrawCard(id);
       return sb.rpc('staff_pay_payout_qr_v1', { p_request_id: id }).then(function (res) {
-        var q = res.data;
+        var q = res.data; if (!live()) { if (q) q.payout_qrph = null; return; }
         if (res.error || !q || q.ok === false) return backToList(q || { reason: A.isAbsent(res.error) ? 'unknown' : 'offline' });
         if (q.payout_qrph) { try { S.qr = A.qrs(q.payout_qrph, q.total); S.qr.total = q.total; } catch (e) { S.qr = null; S.noQr = true; S.msg = 'The saved QR could not be read, so use the account you usually pay.'; } }
         else S.noQr = true;
         q.payout_qrph = null; // not kept on the response either
         renderPay();
       });
-    }).catch(function () { S.msg = A.refusal({ reason: 'offline' }); renderPay(); });
+    }).catch(function () { if (!live()) return; S.msg = A.refusal({ reason: 'offline' }); renderPay(); });
   }
   // From the first Save QR, Open bank app, Copy amount or picked screenshot the money may be on its way: say so to the server once, so a take-over or a
   // Telegram cancel is refused from then on. The payer can still step back with "I have not sent it".
@@ -342,7 +349,7 @@
     else if (a === 'retry') { S.loadErr = ''; S.list = null; render(); loadList().then(render); }
   });
   root.addEventListener('click', function (ev) { // the app bar Back inside a pay view returns to the list, not out of the page
-    var b = ev.target.closest('.appbar a'); if (b && S.view !== 'list') { ev.preventDefault(); clearSecrets(); S.view = 'list'; loadList().then(render); }
+    var b = ev.target.closest('.appbar a'); if (b && S.view !== 'list') { ev.preventDefault(); if (S.u && S.u.busy && S.view === 'unreq') return; /* the request is being made: stay until it answers */ clearSecrets(); S.view = 'list'; loadList().then(render); }
   });
   window.addEventListener('pagehide', function () { clearSecrets(); S.form = { file: null, amount: '', reference: '', override: false, uploaded: null }; root.innerHTML = ''; });
 
