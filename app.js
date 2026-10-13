@@ -47,8 +47,9 @@
     adminguide: { title: 'Admin guide', url: '' }
   };
   var FALLBACK = {}; Object.keys(DOORS).forEach(function (k) { FALLBACK[k] = DOORS[k].url; });
+  var foldKnown = false; // false until fold-manifest.json has answered (or failed): until then the dashboard links are the in-app door, never the old stand-alone address
   function applyFold(manifest) { // pure over DOORS: folded relative url where the surface exists, else the fallback again
-    var f = CS.foldedDoorUrls(manifest);
+    var f = CS.foldedDoorUrls(manifest); foldKnown = true;
     Object.keys(DOORS).forEach(function (k) { DOORS[k].url = DEMO ? (CS.FOLD_DOORS[k][1]) : (f[k] || FALLBACK[k]); }); // demo: every door exists, none opens (route toasts)
   }
   // A door row only for a role that may have it and only if it has somewhere to go.
@@ -62,7 +63,7 @@
     storage: CS.authStorage(store('localStorage'), store('sessionStorage'), function () { return trustOn; }) } });
 
   var state = { access: null, user: null, name: '', layout: null, payload: null, loadedAt: 0, loading: false, error: '', month: null, payHint: null, photos: {},
-    notices: null, noticesAbsent: false, noticesLoading: false, noticeFilter: 'all', nadd: null, fbOpen: false, ratesMore: false, calTab: 'month', taskFilter: 'all', hubRoute: '', tasks: null, tasksErr: '', tasksLoading: false, showDone: false, lastDone: null, add: null, assignees: null, rates: null, ratesErr: '', rateForm: null, rateSaving: false, reply: null, bookings: null, bookingsDone: false, noticesDone: false };
+    notices: null, noticesAbsent: false, noticesLoading: false, noticeFilter: 'all', nadd: null, fbOpen: false, ratesMore: false, calTab: 'month', taskFilter: 'all', hubRoute: '', tasks: null, tasksErr: '', tasksLoading: false, showDone: false, lastDone: null, add: null, assignees: null, rates: null, ratesErr: '', rateForm: null, rateSaving: false, reply: null, bookings: null, bookingsDone: false, noticesDone: false, tasksDenied: false, noticesFailed: false, bookingsFailed: false, errorKind: '' };
   var $ = function (id) { return document.getElementById(id); };
   var VIEWS = ['signin', 'home', 'calendar', 'tasks', 'payrates', 'more', 'door', 'reply', 'hub'];
   function pid() { return (state.access && state.access.property_ids && state.access.property_ids[0]) || CFG.propertyId; }
@@ -89,6 +90,7 @@
   }
   // A_hubLink: a dashboard page by its route (admin/#/<route>), through the existing door frame when the role and the trust setting allow it.
   function A_hubLink(route) {
+    if (!foldKnown && CS.A_hubRouteOk(route) && CS.doorFramed('dashboard', state.layout, trustOn) && CS.doorAllowed('dashboard', role())) return { href: '#door/dashboard/' + route, external: false };
     var d = doorDef('dashboard'); if (!d || !CS.A_hubRouteOk(route)) return null;
     if (CS.doorFramed('dashboard', state.layout, trustOn) && CS.doorTarget(d.url, location.origin) === 'frame') return { href: '#door/dashboard/' + route, external: false };
     return { href: CS.A_hubDoorUrl(d.url, route), external: true };
@@ -152,7 +154,8 @@
   }
   function E_input() {
     var p = state.payload, v = A_notices(), money = state.layout === 'admin';
-    return { role: role(), today: p ? p.today : CS.manilaToday(), error: !!state.error, lastAt: state.loadedAt ? new Date(state.loadedAt).toISOString() : '',
+    return { role: role(), today: p ? p.today : CS.manilaToday(), error: !!state.error, errorKind: state.errorKind || 'network',
+      failed: { tasks: !!state.tasksErr && !state.tasksDenied, notices: state.noticesFailed, bookings: state.bookingsFailed }, lastAt: state.loadedAt ? new Date(state.loadedAt).toISOString() : '',
       ready: { payload: !!p, tasks: !!state.tasks || !!state.tasksErr, bookings: state.bookingsDone, notices: state.noticesDone || state.noticesAbsent },
       tasks: state.tasks ? state.tasks.tasks : [], clashDays: p && money ? A_clashList() : [], bookings: state.bookings, inbox: v ? v.inbox : null,
       warnings: p ? p.warnings || [] : [], notices: v ? v.list : [] };
@@ -290,11 +293,11 @@
   // A short "Copied" note: visible for 2 s and read out by screen readers (polite). Made once, outside every redrawn view.
   var toastTimer = 0;
   // act = { act, task, text, label }: an inline button (Undo) beside the thumb; the toast then stays 5 s and takes taps.
-  function toast(msg, act) {
+  function toast(msg, act, sub) {
     var t = $('cs-toast');
     if (!t) { t = document.createElement('div'); t.id = 'cs-toast'; t.className = 'toast'; t.setAttribute('role', 'status'); t.setAttribute('aria-live', 'polite'); document.body.appendChild(t); }
-    if (act) { t.innerHTML = '<span>' + esc(msg) + '</span><button class="btn btn-ghost btn-sm E_toastbtn" type="button" data-act="' + esc(act.act) + '" data-task="' + esc(act.task) + '" aria-label="' + esc(act.label || act.text) + '">' + esc(act.text) + '</button>'; t.classList.add('E_hasact'); }
-    else { t.textContent = msg; t.classList.remove('E_hasact'); }
+    if (act) { t.innerHTML = '<span>' + esc(msg) + (sub ? '<br><span class="help">' + esc(sub) + '</span>' : '') + '</span><button class="btn btn-ghost btn-sm E_toastbtn" type="button" data-act="' + esc(act.act) + '" data-task="' + esc(act.task) + '" aria-label="' + esc(act.label || act.text) + '">' + esc(act.text) + '</button>'; t.classList.add('E_hasact'); }
+    else { t.innerHTML = ''; t.textContent = msg; t.classList.remove('E_hasact'); }
     t.classList.add('on');
     clearTimeout(toastTimer); toastTimer = setTimeout(function () { t.classList.remove('on'); t.classList.remove('E_hasact'); t.textContent = ''; }, act ? 5000 : 2000);
   }
@@ -531,7 +534,7 @@
     return { sheet: sh, scrim: $('cal-scrim') };
   }
   function openSheet(kind, key) {
-    state.sheet = { kind: kind, key: key, form: { kind: 'brownout', label: '' }, busy: false, err: '', msg: '', missing: false };
+    state.sheet = { kind: kind, key: key, view: current, form: { kind: 'brownout', label: '' }, busy: false, err: '', msg: '', missing: false };
     var e = sheetEls(); $('cs-live').textContent = ''; drawSheet();
     e.sheet.classList.add('on'); e.sheet.setAttribute('aria-hidden', 'false'); e.scrim.classList.add('on');
     var h = kind === 'add' ? $('t-title') : kind === 'nadd' ? $('n-title') : $('cs-h'); if (h) h.focus();
@@ -613,10 +616,10 @@
     var S = state.sheet; if (!S || (!state.payload && S.kind !== 'attn')) return; // the pill's list can say "Loading" and "No connection" before there is a payload
     var e = sheetEls(), had = e.sheet.contains(document.activeElement);
     e.sheet.setAttribute('data-F-kind', S.kind); e.sheet.setAttribute('data-E-swipe', E_sheetTwin(S.kind)); // the pull-down's tap twin: the button with this data-act is on the sheet
-    $('cs-body').innerHTML = (S.kind === 'attn' ? E_attnSheet() : S.kind === 'day' ? daySheet(S) : S.kind === 'add' ? addReminderCard() : S.kind === 'news' ? A_newsSheet() : S.kind === 'nadd' ? A_noticeAddForm() : S.kind === 'rate' ? A_rateConfirm() : warnSheet(S)) +
+    $('cs-body').innerHTML = E_sheetHead(S) + (S.kind === 'attn' ? E_attnSheet() : S.kind === 'day' ? daySheet(S) : S.kind === 'add' ? addReminderCard() : S.kind === 'news' ? A_newsSheet() : S.kind === 'nadd' ? A_noticeAddForm() : S.kind === 'rate' ? A_rateConfirm() : warnSheet(S)) +
       (S.err ? '<div class="errbox" style="margin-top:12px">' + ICON('alert') + '<span>' + esc(S.err) + '</span></div>' : '') +
       (S.msg ? '<div class="okbox" style="margin-top:12px">' + ICON('check') + '<span>' + esc(S.msg) + '</span></div>' : '') +
-      (S.kind === 'add' || S.kind === 'nadd' || S.kind === 'rate' ? '' : '<button class="btn btn-ghost btn-block" type="button" data-act="sheet-close" style="margin-top:12px">Close</button>');
+      '';
     if (had && !e.sheet.contains(document.activeElement)) { var h = $('cs-h'); if (h) h.focus(); }
   }
   function A_newsSheet() {
@@ -668,11 +671,11 @@
   function E_attnSheet() {
     var att = E_att(), S = state.sheet, staff = state.layout === 'staff', html;
     var at = state.loadedAt ? new Date(state.loadedAt).toISOString() : '';
-    var help = att.phase === 'offline' ? 'No connection' + (at ? ' · showing ' + CS.clockLabel(at) : '') : att.phase === 'loading' ? 'Loading' : 'Updated ' + (at ? CS.agoLabel(at) : 'just now');
+    var help = att.phase === 'offline' || att.phase === 'stale' ? (att.phase === 'offline' ? 'No connection' : 'Could not update') + (at ? ' · showing ' + CS.clockLabel(at) : '') : att.phase === 'loading' ? 'Loading' : 'Updated ' + (at ? CS.agoLabel(at) : 'just now');
     html = '<h2 class="ttl" id="cs-h" tabindex="-1">To look at</h2><div class="row-between" style="margin-top:4px"><span class="help">' + esc(help) + '</span>' +
-      (att.phase === 'offline' ? '<button class="btn btn-ghost btn-sm" type="button" data-act="refresh">Try again</button>' : '') + '</div>';
+      (att.phase === 'offline' || att.phase === 'stale' ? '<button class="btn btn-ghost btn-sm" type="button" data-act="refresh">Try again</button>' : '') + '</div>';
     if (att.phase === 'loading') return html + '<div class="skel" style="height:96px;margin-top:12px"></div>';
-    if (att.phase === 'offline' && !state.payload) return html + '<div class="errbox" role="alert" style="margin-top:12px">' + ICON('alert') + '<span>Live information needs a connection.</span></div>';
+    if ((att.phase === 'offline' || att.phase === 'stale') && !state.payload) return html + '<div class="errbox" role="alert" style="margin-top:12px">' + ICON('alert') + '<span>' + (att.phase === 'offline' ? 'Live information needs a connection.' : 'Live information could not be updated.') + '</span></div>';
     if (att.empty) return html + '<div class="card glass empty" style="margin-top:12px"><div class="disc">' + ICON('checks') + '</div><h2 class="hd">Nothing to look at</h2><p>' +
       (staff ? 'Your tasks and today’s warnings are clear.' : 'Tasks, bookings, the inbox and warnings are all clear.') + '</p></div>';
     att.sections.forEach(function (sec) {
@@ -683,12 +686,15 @@
     return html;
   }
   // A pull on the sheet is the same decision as its Cancel / Close button, so each sheet names its twin; a form with something typed in it never closes on a pull.
+  // Close lives in a sticky header on every sheet (44 px, glyph + word, always in view); the bottom of a sheet carries only its own primary action
+  function E_sheetHead(S) { return '<div class="F_sheethead"><button class="btn btn-secondary btn-sm F_close" type="button" data-act="' + E_sheetTwin(S.kind) + '">' + ICON('close', 's16') + 'Close</button></div>'; }
   function E_sheetTwin(kind) { return kind === 'add' ? 'task-add-cancel' : kind === 'nadd' ? 'notice-add-cancel' : kind === 'rate' ? 'rate-back' : 'sheet-close'; }
   function E_dirty() {
     var S = state.sheet, a = state.add, b = state.nadd, f = state.rateForm; if (!S) return false;
     if (S.kind === 'add') return !!(a && (String(a.title).trim() || a.due || a.who || String(a.note).trim()));
     if (S.kind === 'nadd') return !!(b && (String(b.title).trim() || b.start || b.hours || String(b.detail).trim()));
     if (S.kind === 'rate') return !!(f && (f.regular || f.general || f.transport || f.note));
+    if (S.kind === 'day') { var fld = $('df-label'), live = fld && typeof fld.value === 'string' ? fld.value : ''; return !!(S.formOpen && (String(S.form.label).trim() || String(live).trim())); } // a note being typed on a day
     return false;
   }
   function E_sheetReset(sheet, scrim) { if (sheet && sheet.style) { sheet.style.transition = ''; sheet.style.transform = ''; } if (scrim && scrim.style) scrim.style.opacity = ''; }
@@ -701,6 +707,7 @@
   function E_canVibrate() { return 'vibrate' in navigator; }
   function E_reduced() { try { return !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches); } catch (e) { return false; } }
   function E_vw() { return window.innerWidth || 360; }
+  function E_netErr(e) { var m = String((e && e.message) || e || ''); return /fetch|network|load failed|time ?out|offline/i.test(m) || !!(e && e.status === 0); }
   // F_: a sheet is a bottom sheet only below 600 px (37.5 rem, so a large text size gets the dialog sooner too); wider, it is a centred dialog or a side sheet and closes by its button, Escape or the scrim
   function F_bottomSheet() { try { return !(window.matchMedia && window.matchMedia('(min-width: 37.5rem)').matches); } catch (e) { return true; } }
 
@@ -752,7 +759,7 @@
     }).join('');
     body += '<div class="A_chk-row" role="group" aria-label="Filter reminders">' + chips + '</div>';
     if (state.lastDone) body += '<div class="okbox sr" role="status">' + ICON('check') + '<span>' + esc(state.lastDone.done ? 'Marked done: ' : 'Back on the list: ') + esc(state.lastDone.title) +
-      (state.lastDone.source === 'verifier_findings' ? '' : ' <button class="btn btn-ghost btn-sm" type="button" data-act="task-' + (state.lastDone.done ? 'undo' : 'done') + '" data-task="' + esc(state.lastDone.source + ':' + state.lastDone.id) + '">' + (state.lastDone.done ? 'Undo' : 'Done again') + '</button>') + '</span></div>'; // read out for screen readers; the toast beside the thumb carries the visible Undo
+      (state.lastDone.source === 'verifier_findings' ? '' : ' <button class="btn btn-ghost btn-sm" type="button" data-act="task-' + (state.lastDone.done ? 'undo' : 'done') + '" data-task="' + esc(state.lastDone.source + ':' + state.lastDone.id) + '" tabindex="-1">' + (state.lastDone.done ? 'Undo' : 'Done again') + '</button>') + '</span></div>'; // read out for screen readers; the toast beside the thumb carries the visible Undo
     if (state.tasksErr) body += '<div class="errbox" role="alert">' + ICON('alert') + '<span>' + esc(state.tasksErr) + '</span></div>';
     if (manager()) body += '<button class="btn btn-secondary" type="button" data-act="task-add-open">' + ICON('plus', 's16') + 'Add a reminder</button>';
     if (!groups.length) body += '<div class="card glass empty"><div class="disc">' + ICON('checks') + '</div><h2 class="hd">Nothing to do</h2><p>' + (manager() ? 'Add a reminder, or wait for a cleaning issue or a check to land here.' : 'Nothing is waiting for you.') + '</p></div>';
@@ -767,8 +774,9 @@
       if (r.error) throw r.error;
       var d = r.data; if (!d || d.ok === false) throw new Error('denied');
       CS.assertNoMoney(d.tasks || []);
-      state.tasks = { manager: d.manager === true, today: d.today || CS.manilaToday(), tasks: d.tasks || [] }; state.tasksErr = '';
+      state.tasks = { manager: d.manager === true, today: d.today || CS.manilaToday(), tasks: d.tasks || [] }; state.tasksErr = ''; state.tasksDenied = false;
     }).catch(function (e) {
+      state.tasksDenied = !!(e && e.message === 'denied');
       state.tasksErr = e && e.message === 'denied' ? 'Tasks are not available for this account.' : state.tasks ? 'Live information needs a connection. Showing the last update.' : 'Live information needs a connection.';
     }).then(function () { state.tasksLoading = false; if (state.layout && current !== 'door') { if (current === 'tasks') renderTasks(); else if (current === 'home') render('home'); renderTabs(current); } }); // Home too: the pill waits for the tasks
   }
@@ -777,21 +785,22 @@
     for (var k = 0; k < list.length; k++) if (list[k].source === src && list[k].id === id) return list[k];
     return null;
   }
+  function E_undoAct(t, key, done) { return t.source === 'verifier_findings' ? null : { act: done ? 'task-undo' : 'task-done', task: key, text: done ? 'Undo' : 'Done again', label: (done ? 'Undo: ' : 'Done again: ') + t.title }; }
   function setTaskDone(key, done) {
     var t = findTask(key), L = state.lastDone;
     // The server hides a finished task once the list reloads, so Undo works from the remembered one.
     if (!t && L && L.source + ':' + L.id === key) t = { source: L.source, id: L.id, title: L.title, status: done ? 'open' : 'done' };
     if (!t || t.status === (done ? 'done' : 'open')) return;
-    t.status = done ? 'done' : 'open'; state.lastDone = { source: t.source, id: t.id, title: t.title, done: done }; state.tasksErr = ''; renderTasks(); renderTabs('tasks');
+    t.status = done ? 'done' : 'open'; state.lastDone = { source: t.source, id: t.id, title: t.title, done: done }; state.tasksErr = ''; if (current === 'tasks') renderTasks(); renderTabs(current);
     E_vibe('tap'); // one buzz for the confirm; the same path whether the box, the underlay button or the swipe asked
-    toast(done ? 'Marked done' : 'Back on the list', t.source === 'verifier_findings' ? null : { act: done ? 'task-undo' : 'task-done', task: key, text: done ? 'Undo' : 'Done again', label: (done ? 'Undo: ' : 'Done again: ') + t.title });
+    toast(done ? 'Marked done' : 'Back on the list', E_undoAct(t, key, done));
     var call = t.source === 'verifier_findings' ? sb.rpc('ack_verifier_finding_v1', { p_key: t.id })
       : sb.rpc('task_set_done_v1', { p_property_id: pid(), p_source: t.source, p_id: t.id, p_done: done });
     var msg = '';
-    call.then(function (r) { if (r.error) throw r.error; }).catch(function (e) {
+    call.then(function (r) { if (r.error) throw r.error; if (DEMO) toast(done ? 'Marked done' : 'Back on the list', E_undoAct(t, key, done), 'Demo: nothing was saved'); }).catch(function (e) { // demo: the real toast stays, the demo note is its sub-line
       t.status = done ? 'open' : 'done'; state.lastDone = null;
       msg = e && (e.code === '42501' || e.code === 'P0002') ? 'That task is not yours to change.' : 'That did not save. Check your signal and try again.'; E_vibe('error');
-    }).then(function () { return loadTasks(); }).then(function () { if (msg) { state.tasksErr = msg; renderTasks(); } });
+    }).then(function () { return loadTasks(); }).then(function () { if (msg) { toast(msg); if (current === 'tasks') renderTasks(); } }); // a failed save: the plain error replaces the Undo toast, the row is back
   }
   function openAdd() {
     state.add = { title: '', due: '', who: '', note: '', err: '', busy: false, key: 'rem-' + (window.crypto && crypto.randomUUID ? crypto.randomUUID() : Date.now() + '-' + Math.random().toString(16).slice(2)) };
@@ -1041,9 +1050,9 @@
       CS.assertNoMoney(r.data);
       var v = CS.A_noticesView(r.data, role(), state.payload ? state.payload.today : CS.manilaToday());
       if (!v) throw new Error('shape');
-      state.notices = v; state.noticesAbsent = false;
+      state.notices = v; state.noticesAbsent = false; state.noticesFailed = false;
     }).catch(function (e) {
-      if (CS.rpcMissing(e)) { state.noticesAbsent = true; state.notices = null; }
+      if (CS.rpcMissing(e)) { state.noticesAbsent = true; state.notices = null; state.noticesFailed = false; } else state.noticesFailed = true; // a missing feature is not a failure; a failed read is
     }).then(function () { state.noticesLoading = false; state.noticesDone = true; if (state.layout && (current === 'home' || current === 'calendar')) render(current); });
   }
   var NADD_TYPES = [['water', 'Water interruption'], ['maintenance', 'Maintenance'], ['deep_clean', 'Deep cleaning'], ['note', 'Note']]; // a brownout is refused by the server
@@ -1104,11 +1113,12 @@
         if (r.error.code === '42501' || /forbidden/i.test(r.error.message || '')) return signOutTo('Your access was turned off. Ask Lloyd.');
         throw r.error;
       }
-      try { CS.assertNoMoney(r.data, { allowContact: CS.canSeeGuestContact(state.access && state.access.role) }); } catch (e) { state.payload = null; state.error = 'This page was blocked because the data carried an amount or a contact detail. Tell Lloyd.'; return; }
+      try { CS.assertNoMoney(r.data, { allowContact: CS.canSeeGuestContact(state.access && state.access.role) }); } catch (e) { state.payload = null; state.errorKind = 'blocked'; state.error = 'This page was blocked because the data carried an amount or a contact detail. Tell Lloyd.'; return; }
       if (!CS.canSeeGuestContact(state.access && state.access.role)) r.data.warnings = (r.data.warnings || []).filter(function (w) { return w.kind !== 'verifier'; });
-      state.payload = r.data; state.loadedAt = Date.now(); state.error = '';
+      state.payload = r.data; state.loadedAt = Date.now(); state.error = ''; state.errorKind = '';
       refreshWeather(); loadPayHint(); loadBookingsToConfirm(); A_loadNotices();
-    }).catch(function () {
+    }).catch(function (e) {
+      state.errorKind = E_netErr(e) ? 'network' : 'server'; // "No connection" only when the network is the problem
       state.error = state.payload ? 'Live information needs a connection. Showing the last update.' : 'Live information needs a connection.';
     }).then(function () { state.loading = false; if (state.layout) render(); E_announce(); });
   }
@@ -1143,10 +1153,10 @@
   var bkWarned = false;
   function loadBookingsToConfirm() {
     if (state.layout !== 'admin' || !CS.canSeeBookingsToConfirm(state.access && state.access.role)) return;
-    var fail = function (e) { state.bookings = null; state.bookingsDone = true; if (!bkWarned) { bkWarned = true; console.warn('bookings to confirm unavailable', e && e.message ? e.message : e); } };
+    var fail = function (e) { state.bookings = null; state.bookingsDone = true; state.bookingsFailed = !CS.rpcMissing(e && e.code ? e : { message: String((e && e.message) || e || '') }); if (!bkWarned) { bkWarned = true; console.warn('bookings to confirm unavailable', e && e.message ? e.message : e); } };
     sb.rpc('staff_inquiry_payments_v1', { p_property_id: pid() }).then(function (r) {
       if (r.error) return fail(r.error);
-      state.bookings = CS.bookingsToConfirmCount(r.data); // the count only; the payment rows are never kept
+      state.bookings = CS.bookingsToConfirmCount(r.data); state.bookingsFailed = false; // the count only; the payment rows are never kept
     }).catch(fail).then(function () { state.bookingsDone = true; if (current === 'home' && state.layout) render('home'); });
   }
 
@@ -1174,7 +1184,7 @@
     renderTabs(v === 'hub' ? 'more' : v);
     if (v === 'hub') renderHub(); else if (v === 'home') renderHome(); else if (v === 'calendar') renderCalendar(); else if (v === 'tasks') renderTasks(); else if (v === 'payrates') { renderPayRates(); if (!state.rates) loadRates(); } else if (v === 'reply') renderReply(); else if (v === 'more') renderMore();
     var typing = document.activeElement && /^(df-(label|kind)|t-(title|due|who|note)|n-(type|title|date|start|hours|detail))$/.test(document.activeElement.id || '');
-    if (state.sheet) { if (v !== (state.sheet.kind === 'attn' ? 'home' : state.sheet.kind === 'add' ? 'tasks' : state.sheet.kind === 'rate' ? 'payrates' : state.sheet.kind === 'news' ? 'more' : 'calendar')) closeSheet(); else if (!typing) drawSheet(); }
+    if (state.sheet) { if (v !== state.sheet.view) closeSheet(); else if (!typing) drawSheet(); }
   }
   // A door opens in the frame once per visit; coming back to the same door (a re-render) keeps the page where it is.
   function renderDoor() {
@@ -1184,7 +1194,7 @@
     var tag = doorKey + '/' + doorRoute;
     if (f.getAttribute('data-door') !== tag) { f.setAttribute('data-door', tag); setFrame(f, doorRoute ? CS.A_hubDoorUrl(d.url, doorRoute) : d.url); }
   }
-  function leaveDoor() { var f = $('door-frame'); if (f && f.getAttribute('data-door')) { f.removeAttribute('data-door'); setFrame(f, 'about:blank'); } }
+  function leaveDoor() { var f = $('door-frame'); if (f && f.getAttribute('data-door')) { f.removeAttribute('data-door'); setFrame(f, 'about:blank'); if (state.layout) { loadHome(); loadTasks(); } } } // what was done inside the door may have changed the pill
   // location.replace on the frame's window: opening or closing a door adds no history entry (so Back is one press, not two).
   function setFrame(f, url) { try { f.contentWindow.location.replace(url); } catch (e) { f.src = url; } }
   function enter() {
@@ -1283,7 +1293,7 @@
   document.addEventListener('click', function (ev) {
     var t = ev.target.closest('[data-act],[data-stay],[data-theme],[data-day],[data-warn],[data-nfilter],[data-tfilter]'); if (!t || t.getAttribute('data-act') === 'tasks-showdone') return;
     var a = t.getAttribute('data-act');
-    if (a === 'refresh') { if (current === 'home') E_say = true; loadHome(); loadTasks(); if (current === 'payrates') loadRates(); }
+    if (a === 'refresh') { if (current === 'home' && !state.loading) E_say = true; loadHome(); loadTasks(); if (current === 'payrates') loadRates(); }
     else if (a === 'attn-open') openSheet('attn', 'attn-open');
     else if (a === 'attn-tasks') { var tf0 = t.getAttribute('data-filter'); if (/^(all|mine|due|blocks)$/.test(tf0 || '')) state.taskFilter = tf0; closeSheet(); }
     else if (a === 'dayform-open') { if (state.sheet) { state.sheet.formOpen = true; drawSheet(); var dk = $('df-kind'); if (dk) dk.focus(); } }
@@ -1299,7 +1309,7 @@
     else if (a === 'notice-add-cancel') { state.nadd = null; closeSheet(); }
     else if (a === 'notice-add-save') A_noticeAddSave();
     else if (a === 'notice-tell') { var nt = CS.canSeeGuestContact(role()) ? A_noticeByKey(t.getAttribute('data-nkey')) : null; var gm = nt ? CS.A_guestMessage(nt) : null; if (nt && !gm) toast('Check the notice text first.'); else if (gm) copyText(gm).then(function () { toast('Message copied. Paste it to the guest.'); E_vibe('tap'); }, function () { toast('Copy did not work on this phone.'); }); }
-    else if (a === 'notice-cal') { var nd0 = t.getAttribute('data-date'), np = nd0.split('-'); if (CS.monthInRange(+np[0], +np[1], state.payload.today)) state.month = { y: +np[0], m: +np[1] }; state.calTab = 'month'; if (location.hash !== '#calendar') location.hash = '#calendar'; else render('calendar'); openSheet('day', nd0); }
+    else if (a === 'notice-cal') { var nd0 = t.getAttribute('data-date'), np = nd0.split('-'); if (CS.monthInRange(+np[0], +np[1], state.payload.today)) state.month = { y: +np[0], m: +np[1] }; state.calTab = 'month'; if (location.hash !== '#calendar') location.hash = '#calendar'; else render('calendar'); openSheet('day', nd0); state.sheet.view = 'calendar'; }
     else if (a === 'notice-resolve') { if (CS.canSeeGuestContact(role())) sb.rpc('ack_verifier_finding_v1', { p_key: t.getAttribute('data-id') }).then(function (r) { if (r.error) throw r.error; return A_loadNotices(); }).catch(function () { toast('That did not save. Check your signal and try again.'); }); }
     else if (t.hasAttribute('data-nfilter')) { state.noticeFilter = t.getAttribute('data-nfilter'); renderCalendar(); }
     else if (t.hasAttribute('data-tfilter')) { state.taskFilter = t.getAttribute('data-tfilter'); renderTasks(); }
@@ -1362,11 +1372,11 @@
   });
   // Gestures (E_): four swipes, each through the one helper CS.E_drag, each with a visible tap twin on the same screen. The thresholds live in lib.js.
   var E_drag = CS.E_drag;
-  function E_tr(el, ms) { if (el && el.style) el.style.transition = ms ? 'transform ' + ms + 'ms ease-out, opacity ' + ms + 'ms ease-out' : 'none'; }
+  function E_tr(el, ms) { if (el && el.style) el.style.transition = ms && !E_reduced() ? 'transform ' + ms + 'ms ease-out, opacity ' + ms + 'ms ease-out' : 'none'; }
   // G4. Slide to start cleaning: 70% of the travel, or a fast flick after 40%. The knob follows the finger 1:1 and returns over 200 ms.
   (function A_slideInit() {
-    var travel = function (a) { return Math.max(1, a.offsetWidth - 56); };
-    E_drag(document, { sel: '[data-slide]', axis: 'x', vw: E_vw, reduced: E_reduced,
+    var t0 = 1, travel = function () { return t0; }; // measured once when the drag starts: a redrawn (detached) pill must never read 0 and commit
+    E_drag(document, { sel: '[data-slide]', axis: 'x', vw: E_vw, reduced: E_reduced, start: function (a) { t0 = Math.max(1, a.offsetWidth - 56); },
       move: function (a, d) { var k = a.querySelector('.knob'); if (k) { E_tr(k, 0); k.style.transform = 'translateX(' + Math.max(0, Math.min(travel(a), d.dx)) + 'px)'; } },
       reached: function (a, d) { return d.dx >= travel(a) * 0.7; },
       onEdge: function () { E_vibe('edge'); },
@@ -1471,5 +1481,6 @@
   if (DEMO) applyFold(null);
   else if (typeof window.fetch === 'function') window.fetch('./fold-manifest.json', { cache: 'no-store' }).then(function (r) { return r.ok ? r.json() : null; }).catch(function () { return null; })
     .then(function (m) { applyFold(m); if (state.layout && current !== 'door') render(current); });
+  if (!DEMO && typeof window.fetch !== 'function') applyFold(null);
   boot();
 })();

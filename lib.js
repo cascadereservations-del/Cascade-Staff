@@ -920,8 +920,15 @@
   // ================================================================ E_ streamline pass (s81, lane E) ================================================
   // ---- the one notification pill: what needs a person, counted once ----
   // Groups in priority order. n counts rows in the first six; notices are shown in the sheet but never counted (the Notices card carries them).
-  var E_SECTIONS = [['risk', 'Turnover at risk'], ['overdue', 'Overdue'], ['clash', 'Clash days'], ['confirm', 'To confirm'], ['inbox', 'Inbox'], ['warn', 'Warnings'], ['notice', 'Notices today and tomorrow']];
+  var E_SECTIONS = [['risk', 'Turnover at risk'], ['overdue', 'Overdue'], ['due', 'Due today'], ['clash', 'Clash days'], ['confirm', 'To confirm'], ['inbox', 'Inbox'], ['warn', 'Warnings'], ['notice', 'Notices today and tomorrow']];
   var E_MAX_ROWS = 3;
+  // "Brownout Fri 16 Oct, 1:00 to 4:00 pm": the one time format used everywhere (not the 24-hour "13:00, 3 h" of the Stays list)
+  function E_brownTitle(w, b) {
+    var d = w.detail || {}, m = /^(\d{1,2}):(\d{2})/.exec(String(d.time || '')), h = +d.hours, head = 'Brownout' + (d.date ? ' ' + dayShort(d.date) : '');
+    if (!m) return b.head;
+    var s = +m[1] * 60 + +m[2], e = h > 0 ? s + Math.round(h * 60) : null;
+    return head + ', ' + (e != null && e < 1440 ? A_timeRange(pad(+m[1]) + ':' + m[2], pad(Math.floor(e / 60)) + ':' + pad(e % 60)) : fmtTime(pad(+m[1]) + ':' + m[2]));
+  }
   function E_warnKey(w) { return w.kind + '|' + (w.title || '') + '|' + ((w.detail && w.detail.date) || ''); }
   function E_dueSub(t, today) { var l = t.due_at ? taskDueLabel(t.due_at, today) : ''; return l; }
   // i = { role, today, error, lastAt, ready:{payload,tasks,bookings,notices}, tasks:[open or all tasks], clashDays:[iso], bookings:n, inbox:n|null, warnings:[], notices:[A_noticesView list] }
@@ -929,7 +936,7 @@
   function E_attention(i) {
     i = i || {}; var role = i.role, today = i.today || manilaToday(), rd = i.ready || {};
     var money = layoutForRole(role) === 'admin', mgr = canSeeGuestContact(role), canBk = canSeeBookingsToConfirm(role);
-    var by = { risk: [], overdue: [], clash: [], confirm: [], inbox: [], warn: [], notice: [] }, taken = {};
+    var by = { risk: [], overdue: [], due: [], clash: [], confirm: [], inbox: [], warn: [], notice: [] }, taken = {};
     (Array.isArray(i.tasks) ? i.tasks : []).forEach(function (t) {
       if (!t || t.status === 'done') return;
       var key = t.source + ':' + t.id, due = taskDue(t.due_at, today);
@@ -938,6 +945,11 @@
     (Array.isArray(i.tasks) ? i.tasks : []).forEach(function (t) {
       if (!t || t.status === 'done' || taken[t.source + ':' + t.id] || taskDue(t.due_at, today) !== 'overdue') return;
       by.overdue.push({ group: 'overdue', id: t.source + ':' + t.id, glyph: 'alert', title: t.title, sub: E_dueSub(t, today), go: { kind: 'tasks', filter: 'due' } });
+    });
+    // due today is counted too, so the pill and the Tasks tab badge (overdue + due today) always agree
+    (Array.isArray(i.tasks) ? i.tasks : []).forEach(function (t) {
+      if (!t || t.status === 'done' || taken[t.source + ':' + t.id] || taskDue(t.due_at, today) !== 'today') return;
+      by.due.push({ group: 'due', id: t.source + ':' + t.id, glyph: 'clock', title: t.title, sub: E_dueSub(t, today) || 'Due today', go: { kind: 'tasks', filter: 'due' } });
     });
     if (money) {
       var seen = {}; (Array.isArray(i.clashDays) ? i.clashDays : []).slice().sort().forEach(function (d) {
@@ -953,7 +965,7 @@
     orderWarnings((Array.isArray(i.warnings) ? i.warnings : []).filter(function (w) { return w && w.kind && (w.kind !== 'verifier' || mgr); })).forEach(function (w) {
       if (w.kind === 'brownout') {
         var b = brownoutText(w), d = w.detail && w.detail.date; if (d) brown[d] = 1;
-        by.warn.push({ group: 'warn', id: E_warnKey(w), glyph: 'alert', word: 'Brownout' + (d ? ' ' + dayShort(d).split(' ')[0] : ''), title: b.head, sub: b.rest, go: { kind: 'notices' } });
+        by.warn.push({ group: 'warn', id: E_warnKey(w), glyph: 'alert', word: 'Brownout' + (d ? ' ' + dayShort(d).split(' ')[0] : ''), title: E_brownTitle(w, b), sub: b.rest, go: { kind: 'notices' } });
       } else if (w.kind === 'inventory') {
         var l = lowStockText(w); by.warn.push({ group: 'warn', id: E_warnKey(w), glyph: 'alert', word: 'Low stock', title: 'Low stock · ' + l.rest, sub: 'Inventory', go: { kind: 'inventory' } });
       } else by.warn.push({ group: 'warn', id: E_warnKey(w), glyph: 'info', word: 'System check', title: 'System check · ' + (w.title || ''), sub: 'Needs a person to look', go: { kind: 'warn', key: E_warnKey(w) } });
@@ -964,27 +976,31 @@
       if (n.type === 'power' && brown[n.date]) return; // the brownout warning already says it
       by.notice.push({ group: 'notice', id: n.key, glyph: (A_NOTICE_TYPES[n.type] || A_NOTICE_TYPES.note).icon, title: n.title, sub: n.sub || '', go: { kind: 'notices' } });
     });
-    var counted = ['risk', 'overdue', 'clash', 'confirm', 'inbox', 'warn'], n = 0, first = null;
+    var counted = ['risk', 'overdue', 'due', 'clash', 'confirm', 'inbox', 'warn'], n = 0, first = null;
     counted.forEach(function (k) { n += by[k].length; if (!first && by[k].length) first = k; });
     var top = '', word = '', tone = 'ok';
     if (first) {
       var rs = by[first], c = rs.length;
-      top = first === 'risk' ? 'Turnover at risk' : first === 'overdue' ? c + ' overdue' : first === 'clash' ? (c === 1 ? 'Clash day' : c + ' clash days') : first === 'confirm' ? rs[0].n + ' to confirm' : first === 'inbox' ? rs[0].n + ' in inbox' : rs[0].word;
-      word = first === 'risk' ? 'Turnover at risk' : first === 'overdue' ? 'Overdue' : first === 'clash' ? (c === 1 ? 'Clash day' : 'Clash days') : first === 'confirm' ? 'To confirm' : first === 'inbox' ? 'In inbox' : rs[0].word;
+      top = first === 'risk' ? 'Turnover at risk' : first === 'overdue' ? c + ' overdue' : first === 'due' ? c + ' due today' : first === 'clash' ? (c === 1 ? 'Clash day' : c + ' clash days') : first === 'confirm' ? rs[0].n + ' to confirm' : first === 'inbox' ? rs[0].n + ' in inbox' : rs[0].word;
+      word = first === 'risk' ? 'Turnover at risk' : first === 'overdue' ? 'Overdue' : first === 'due' ? 'Due today' : first === 'due' ? 'Due today' : first === 'clash' ? (c === 1 ? 'Clash day' : 'Clash days') : first === 'confirm' ? 'To confirm' : first === 'inbox' ? 'In inbox' : rs[0].word;
       tone = first === 'risk' || first === 'overdue' || first === 'clash' ? 'danger' : 'warn';
     }
     var sections = E_SECTIONS.filter(function (s) { return by[s[0]].length; }).map(function (s) {
       var rows = by[s[0]]; return { key: s[0], label: s[1], rows: rows, shown: rows.slice(0, E_MAX_ROWS), more: rows.length > E_MAX_ROWS ? rows.length : 0 };
     });
-    var ready = !!rd.payload && !!rd.tasks && (!money || ((!canBk || !!rd.bookings) && !!rd.notices)), phase = i.error ? 'offline' : !ready ? 'loading' : n ? 'items' : 'clear';
+    // a source this role depends on that failed (a missing feature is not a failure) means the pill cannot say All clear
+    var fl = i.failed || {}, failed = !!fl.tasks || (money && (!!fl.notices || (canBk && !!fl.bookings)));
+    var ready = !!rd.payload && !!rd.tasks && (!money || ((!canBk || !!rd.bookings) && !!rd.notices)), offlineKind = !i.errorKind || i.errorKind === 'network';
+    var phase = i.error ? (offlineKind ? 'offline' : 'stale') : !ready ? 'loading' : failed && !n ? 'stale' : n ? 'items' : 'clear';
     var shown = n > 99 ? '99+' : String(n), pill;
     if (phase === 'loading') pill = { text: 'Loading', short: 'Loading', dot: 'idle', glyph: 'refresh', aria: 'Loading what needs attention' };
     else if (phase === 'offline') pill = { text: 'No connection', short: 'No connection', dot: 'idle', glyph: 'info', aria: 'No connection.' + (i.lastAt ? ' Showing the last update from ' + clockLabel(i.lastAt) + '.' : '') + ' Opens the list' };
+    else if (phase === 'stale') pill = { text: 'Could not update', short: 'Could not update', dot: 'idle', glyph: 'info', aria: 'Could not update.' + (i.lastAt ? ' Showing the last update from ' + clockLabel(i.lastAt) + '.' : '') + ' Opens the list' };
     else if (phase === 'clear') pill = { text: 'All clear', short: 'All clear', dot: 'ok', glyph: 'check', aria: 'All clear. Nothing needs attention. Opens the list' };
     else pill = { text: shown + ' · ' + word, short: shown + ' to look at', dot: tone === 'danger' ? 'bad' : 'warn', glyph: tone === 'danger' ? 'alert' : 'clock',
       aria: n === 1 ? '1 thing to look at: ' + top.toLowerCase() + '. Opens the list' : shown + ' things to look at. Most urgent: ' + top.toLowerCase() + '. Opens the list' };
     var empty = !sections.length;
-    return { phase: phase, n: n, top: top, topWord: word, tone: tone, sections: sections, pill: pill, empty: empty, say: phase === 'items' ? shown + (n === 1 ? ' thing' : ' things') + ' to look at' : phase === 'clear' ? 'All clear' : phase === 'offline' ? 'No connection' : '' };
+    return { phase: phase, n: n, top: top, topWord: word, tone: tone, sections: sections, pill: pill, empty: empty, say: phase === 'items' ? shown + (n === 1 ? ' thing' : ' things') + ' to look at' : phase === 'clear' ? 'All clear' : phase === 'offline' ? 'No connection' : phase === 'stale' ? 'Could not update' : '' };
   }
 
   // ---- haptics: three words, one guard. A silent no-op where navigator.vibrate is missing (iOS Safari), when switched off, or when the page is hidden. ----
@@ -1006,6 +1022,8 @@
 
   // ---- gestures: the numbers, then the one helper (E_drag) that every swipe goes through ----
   var E_EDGE = 24, E_LOCK = 12, E_RATIO = 1.5, E_WINDOW = 80;
+  var E_nowFn = function () { return Date.now(); };
+  function E_setClock(fn) { E_nowFn = typeof fn === 'function' ? fn : function () { return Date.now(); }; } // tests freeze it
   function E_lockOf(dx, dy) { var ax = Math.abs(dx), ay = Math.abs(dy); return ax > E_LOCK && ax > E_RATIO * ay ? 'x' : ay > E_LOCK && ay > E_RATIO * ax ? 'y' : ''; }
   function E_inEdge(x, w) { return x < E_EDGE || x > w - E_EDGE; }
   // px/ms over the last 80 ms of {t,x,y} samples
@@ -1015,11 +1033,12 @@
     var dt = last.t - a.t; return dt > 0 ? { vx: (last.x - a.x) / dt, vy: (last.y - a.y) / dt } : { vx: 0, vy: 0 };
   }
   function E_tabFollow(dx) { return Math.max(-48, Math.min(48, dx * 0.35)); } // damped: "there is a page beside this"
-  function E_tabCommit(dx, w, vx) { return Math.abs(dx) >= 0.25 * w || Math.abs(vx) >= 0.4; }
+  // a fast flick commits only past a 48 px floor and only the way the finger went: a 13 px twitch or a drag flicked back is not a swipe
+  function E_tabCommit(dx, w, vx) { return Math.abs(dx) >= 0.25 * w || (Math.abs(dx) >= 48 && Math.abs(vx) >= 0.4 && (vx < 0) === (dx < 0)); }
   function E_sheetFollow(dy) { return dy >= 0 ? dy : Math.max(-16, dy * 0.2); }
-  function E_sheetCommit(dy, vy) { return dy >= 96 || vy >= 0.5; }
+  function E_sheetCommit(dy, vy) { return dy >= 96 || (dy >= 48 && vy >= 0.5); }
   function E_taskFollow(dx, open) { var a = -dx; return a <= 0 ? 0 : a <= open ? a : open + (a - open) * 0.25; } // px the row has moved left
-  function E_taskCommit(dx, w, vx) { return -dx >= 0.4 * w || -vx >= 0.5; }
+  function E_taskCommit(dx, w, vx) { return -dx >= 0.4 * w || (-dx >= 48 && -vx >= 0.5); }
   function E_taskOpens(dx) { return -dx > 48; }
   function E_slideCommit(dx, travel, vx) { return dx >= 0.7 * travel || (dx >= 0.4 * travel && vx >= 0.6); }
   // E_drag(root, o): pointer events only, first pointer only, no main-button-less starts. o = { sel, axis:'x'|'y', vw(), reduced(), canStart(el, ev),
@@ -1029,7 +1048,9 @@
     function stamp(ev) { return typeof ev.timeStamp === 'number' ? ev.timeStamp : Date.now(); }
     function dOf(ev) { var dx = ev.clientX - g.x0, dy = ev.clientY - g.y0, v = E_velocity(g.s); return { dx: dx, dy: dy, vx: v.vx, vy: v.vy }; }
     function down(ev) {
-      if (g || ev.button > 0) return;
+      swallow.el = null; // a new touch starts fresh: the click it makes is a real tap, never the tail of the last drag
+      if (ev.button > 0) return;
+      if (g) { if (ev.isPrimary === false) return; g = null; } // a second finger is ignored; a new primary touch means the last pointerup was lost: start over
       var el = ev.target && ev.target.closest ? ev.target.closest(o.sel) : null; if (!el || (o.canStart && !o.canStart(el, ev))) return;
       if (o.axis === 'x' && E_inEdge(ev.clientX, o.vw ? o.vw() : 360)) return;
       g = { el: el, id: ev.pointerId, x0: ev.clientX, y0: ev.clientY, lock: '', s: [{ t: stamp(ev), x: ev.clientX, y: ev.clientY }], edged: false, reduced: !!(o.reduced && o.reduced()) };
@@ -1043,7 +1064,7 @@
         g.lock = L; try { if (g.el.setPointerCapture && ev.pointerId != null) g.el.setPointerCapture(ev.pointerId); } catch (e) {}
         if (o.start) o.start(g.el);
       }
-      var d = dOf(ev); if (!g.reduced && o.move) o.move(g.el, d);
+      var d = dOf(ev); if (o.move) o.move(g.el, d); // reduced motion keeps the 1:1 follow (a control that does not move under the finger feels broken); only release animations are dropped
       var over = o.reached ? !!o.reached(g.el, d) : false;
       if (over && !g.edged) { g.edged = true; if (o.onEdge) o.onEdge(g.el, d); } else if (!over) g.edged = false;
     }
@@ -1052,11 +1073,12 @@
       var G = g; g = null; if (!G.lock) return;
       G.s.push({ t: stamp(ev), x: ev.clientX, y: ev.clientY });
       var d = { dx: ev.clientX - G.x0, dy: ev.clientY - G.y0 }, v = E_velocity(G.s); d.vx = v.vx; d.vy = v.vy; d.reduced = G.reduced;
-      swallow = { el: G.el, until: Date.now() + 400 }; // the click that follows a drag is ours to swallow, for 400 ms at most
+      swallow = { el: G.el, until: E_nowFn() + 400 }; // the click that follows a drag is ours to swallow, for 400 ms at most
+      if (G.el.isConnected === false) { if (o.cancel) o.cancel(G.el); return; } // the screen was redrawn under the finger: a stale node never commits
       if (o.end) o.end(G.el, d);
     }
     function cancel(ev) { if (!g || ev.pointerId !== g.id) return; var G = g; g = null; if (G.lock && o.cancel) o.cancel(G.el); }
-    function click(ev) { if (swallow.el && Date.now() < swallow.until && swallow.el.contains && swallow.el.contains(ev.target)) { swallow.el = null; ev.preventDefault(); ev.stopPropagation(); } }
+    function click(ev) { if (swallow.el && E_nowFn() < swallow.until && swallow.el.contains && swallow.el.contains(ev.target)) { swallow.el = null; ev.preventDefault(); ev.stopPropagation(); } }
     root.addEventListener('pointerdown', down); root.addEventListener('pointermove', move); root.addEventListener('pointerup', up); root.addEventListener('pointercancel', cancel);
     root.addEventListener('click', click, true);
     return { down: down, move: move, up: up, cancel: cancel, busy: function () { return !!g; } };
@@ -1090,6 +1112,6 @@
     A_HOUSE_FALLBACK: A_HOUSE_FALLBACK, A_houseTimes: A_houseTimes, A_turnoverClock: A_turnoverClock, A_turnoverLine: A_turnoverLine, A_hm: A_hm, A_NOTICE_TYPES: A_NOTICE_TYPES, A_noticesView: A_noticesView, A_noticeFilters: A_noticeFilters, A_dayMarks: A_dayMarks, A_noticeDay: A_noticeDay, A_guestMessage: A_guestMessage, A_CAL_TABS: A_CAL_TABS, A_calTab: A_calTab, A_stayShade: A_stayShade, A_hubGroups: A_hubGroups, A_hubRoutes: A_hubRoutes, A_hubRouteOk: A_hubRouteOk, A_hubDoorUrl: A_hubDoorUrl, A_whatsNew: A_whatsNew, A_shortTime: A_shortTime, A_PINNED: A_PINNED, A_noticeAddError: A_noticeAddError, A_NOTICE_HINT: A_NOTICE_HINT, A_flagDup: A_flagDup, A_facebookUrl: A_facebookUrl, A_fbPluginUrl: A_fbPluginUrl, A_noticeAddProblem: A_noticeAddProblem, A_noticeAddArgs: A_noticeAddArgs, A_plainRefusal: A_plainRefusal, A_hour12: A_hour12, A_timeRange: A_timeRange,
     taskPriorityLabel: taskPriorityLabel, E_attention: E_attention, E_warnKey: E_warnKey, E_buzz: E_buzz, E_hapticsOn: E_hapticsOn, E_hapticsSet: E_hapticsSet, E_PATTERNS: E_PATTERNS,
     E_drag: E_drag, E_lockOf: E_lockOf, E_inEdge: E_inEdge, E_velocity: E_velocity, E_tabFollow: E_tabFollow, E_tabCommit: E_tabCommit, E_sheetFollow: E_sheetFollow, E_sheetCommit: E_sheetCommit,
-    E_taskFollow: E_taskFollow, E_taskCommit: E_taskCommit, E_taskOpens: E_taskOpens, E_slideCommit: E_slideCommit, E_tabNeighbour: E_tabNeighbour, F_widthClass: F_widthClass
+    E_taskFollow: E_taskFollow, E_taskCommit: E_taskCommit, E_taskOpens: E_taskOpens, E_slideCommit: E_slideCommit, E_tabNeighbour: E_tabNeighbour, F_widthClass: F_widthClass, E_setClock: E_setClock
   };
 });

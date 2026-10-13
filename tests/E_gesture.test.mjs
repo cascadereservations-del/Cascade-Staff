@@ -32,11 +32,11 @@ test('E_drag numbers: lock at 12 px and a 1.5 ratio, a 24 px edge zone, velocity
 });
 
 test('E_drag numbers: every commit rule from the spec', () => {
-  assert.equal(CS.E_tabCommit(-90, 360, 0), true); assert.equal(CS.E_tabCommit(-89, 360, 0), false); assert.equal(CS.E_tabCommit(-10, 360, -0.4), true); assert.equal(CS.E_tabCommit(-10, 360, -0.39), false);
+  assert.equal(CS.E_tabCommit(-90, 360, 0), true); assert.equal(CS.E_tabCommit(-89, 360, 0), false); assert.equal(CS.E_tabCommit(-48, 360, -0.4), true); assert.equal(CS.E_tabCommit(-48, 360, -0.39), false); assert.equal(CS.E_tabCommit(-47, 360, -2), false, 'a flick needs a 48 px floor');
   assert.equal(CS.E_tabFollow(-100), -35); assert.equal(CS.E_tabFollow(-300), -48, 'damped to 0.35 and clamped to 48');
-  assert.equal(CS.E_sheetCommit(96, 0), true); assert.equal(CS.E_sheetCommit(95, 0.49), false); assert.equal(CS.E_sheetCommit(10, 0.5), true);
+  assert.equal(CS.E_sheetCommit(96, 0), true); assert.equal(CS.E_sheetCommit(95, 0.49), false); assert.equal(CS.E_sheetCommit(48, 0.5), true); assert.equal(CS.E_sheetCommit(47, 5), false, 'a flick needs a 48 px floor');
   assert.equal(CS.E_sheetFollow(50), 50, '1:1 downward'); assert.equal(CS.E_sheetFollow(-40), -8, 'upward damped by 0.2'); assert.equal(CS.E_sheetFollow(-200), -16, 'and capped at 16 px');
-  assert.equal(CS.E_taskCommit(-144, 360, 0), true); assert.equal(CS.E_taskCommit(-143, 360, 0), false); assert.equal(CS.E_taskCommit(-20, 360, -0.5), true); assert.equal(CS.E_taskCommit(60, 360, 0.9), false, 'a swipe the other way is nothing');
+  assert.equal(CS.E_taskCommit(-144, 360, 0), true); assert.equal(CS.E_taskCommit(-143, 360, 0), false); assert.equal(CS.E_taskCommit(-48, 360, -0.5), true); assert.equal(CS.E_taskCommit(-47, 360, -9), false, 'a flick needs a 48 px floor'); assert.equal(CS.E_taskCommit(60, 360, 0.9), false, 'a swipe the other way is nothing');
   assert.equal(CS.E_taskFollow(-60, 96), 60); assert.equal(CS.E_taskFollow(-196, 96), 96 + 100 * 0.25, 'past the underlay it is damped'); assert.equal(CS.E_taskFollow(40, 96), 0);
   assert.equal(CS.E_taskOpens(-49), true); assert.equal(CS.E_taskOpens(-48), false);
   assert.equal(CS.E_slideCommit(70, 100, 0), true); assert.equal(CS.E_slideCommit(69, 100, 0.59), false); assert.equal(CS.E_slideCommit(40, 100, 0.6), true); assert.equal(CS.E_slideCommit(39, 100, 2), false, 'a fast flick needs 40% of the travel first');
@@ -63,7 +63,7 @@ test('E_drag: nothing moves before the lock; the other direction is left to the 
 test('E_drag: a drag that starts inside 24 px of either screen edge is ignored (the system back swipe), a second finger is ignored, a non-main button is ignored', () => {
   for (const x of [10, 23, 337, 350]) { const a = helper(); a.down(x, 100); a.mv(x + 40, 100, 10); a.up(x + 40, 100, 20); assert.deepEqual(a.log, [], 'x = ' + x); assert.equal(a.seen.length, 0); }
   const ok = helper(); ok.down(24, 100); ok.mv(60, 100, 10); assert.deepEqual(ok.log, ['start', ['move', 36]], 'x = 24 is just outside');
-  const two = helper(); two.down(100, 100, 1); two.down(200, 200, 2); two.mv(150, 100, 10, 2); assert.deepEqual(two.log, [], 'the second finger moves nothing'); two.mv(130, 100, 10, 1); assert.equal(two.log[0], 'start');
+  const two = helper(); two.down(100, 100, 1); two.root.fire('pointerdown', { target: { closest: () => two.el }, clientX: 200, clientY: 200, pointerId: 2, isPrimary: false, timeStamp: 0, button: 0 }); two.mv(150, 100, 10, 2); assert.deepEqual(two.log, [], 'the second finger moves nothing'); two.mv(130, 100, 10, 1); assert.equal(two.log[0], 'start');
   two.up(130, 100, 20, 2); assert.equal(two.seen.length, 0, 'and cannot end the first finger\'s drag'); two.up(130, 100, 30, 1); assert.equal(two.seen.length, 1);
   const btn = helper(); btn.down(100, 100, 1, 2); btn.mv(160, 100, 10); assert.deepEqual(btn.log, []);
   // the sheet is vertical: the edge zone is about left and right, so it does not apply
@@ -76,9 +76,9 @@ test('E_drag: the edge buzz fires once per drag and again after the finger went 
   a.root.fire('pointercancel', { pointerId: 1 }); assert.equal(a.log.at(-1), 'cancel'); assert.equal(a.seen.length, 0); assert.equal(a.h.busy(), false);
 });
 
-test('E_drag: reduced motion writes no movement at all, but the drag still ends with the same numbers so the gesture still commits', () => {
+test('E_drag: reduced motion keeps the 1:1 follow (a control that does not move under the finger feels broken); the drag ends with the same numbers', () => {
   const a = helper({ reduced: () => true }); a.down(100, 100); a.mv(160, 100, 10); a.mv(260, 100, 20); a.up(260, 100, 30);
-  assert.deepEqual(a.log.filter((x) => Array.isArray(x)), [], 'no follow-the-finger'); assert.equal(a.seen.length, 1); assert.equal(a.seen[0].dx, 160); assert.ok(a.seen[0].vx > 0);
+  assert.deepEqual(a.log.filter((x) => Array.isArray(x)).map((x) => x[1]), [60, 160], 'the finger is followed'); assert.equal(a.seen.length, 1); assert.equal(a.seen[0].dx, 160); assert.ok(a.seen[0].vx > 0);
 });
 
 test('E_drag: the click that follows a drag is swallowed on that surface for 400 ms, once', async () => {
@@ -135,13 +135,13 @@ test('E_ G2: a form with something typed in it never closes on a pull; its Cance
   n.input('n-title', 'Pipe repair'); pullSheet(n, [[0, 180, 100], [20, 180, 200], [40, 180, 320], [60, 180, 400]]); assert.ok(!shut(n), 'a notice being typed is kept');
 });
 
-test('E_ G2: a pull that starts in the body only counts when the sheet is scrolled to the top; in reduced motion nothing is written but it still closes', async () => {
+test('E_ G2: a pull that starts in the body only counts when the sheet is scrolled to the top; in reduced motion the sheet still follows the finger and closes', async () => {
   const app = await openDay('admin'); const sh = app.els['cal-sheet']; sh.scrollTop = 120;
   pullSheet(app, [[0, 180, 300], [20, 180, 340], [40, 180, 380], [60, 180, 420]], { grab: false }); assert.ok(!shut(app), 'scrolled down: the body is the sheet\'s to scroll');
   pullSheet(app, [[0, 180, 300], [20, 180, 340], [40, 180, 380], [60, 180, 420]], { grab: true }); assert.ok(shut(app), 'the grab strip always works');
   const r = await openDay('admin', { reduced: true }); const rs = pullSheet(r, [[0, 180, 300], [30, 180, 340], [60, 180, 400], [90, 180, 410]]);
-  assert.ok(shut(r), 'still commits'); assert.equal(rs.style.transform, '', 'no follow-the-finger was ever written');
-  const src = read('styles.css'); assert.match(src, /\.E_grab \{ position: sticky; top: 0; z-index: 3; height: 56px;[^}]*touch-action: none; \}/);
+  assert.ok(shut(r), 'still commits'); assert.equal(rs.style.transform, '', 'the pull was handed back to the stylesheet on release (instant under reduced motion)');
+  const src = read('styles.css'); assert.match(src, /\.E_grab \{ position: sticky; top: 0; z-index: 3; height: 28px;[^}]*touch-action: none; \}/);
 });
 
 // ---------------------------------------------------------------------------------------------------- G4 slide
@@ -161,11 +161,11 @@ test('E_ G4: the slide commits at 70% of the travel, or a flick after 40%; the k
 const FOLD = { schema: 1, surfaces: { admin: { files: 84 }, checklist: { files: 8 }, manual: { files: 16 }, guide: { files: 48, adminGuide: true } } };
 const turnover = () => HOMEWITH([stayRow('Ana Reyes', '2026-10-12', TODAY), stayRow('Ben Cruz', TODAY, '2026-10-18')]);
 const showDone = async (app) => { for (const f of app.listeners.change || []) f({ target: { id: '', checked: true, getAttribute: (k) => (k === 'data-act' ? 'tasks-showdone' : null) } }); await app.flush(); };
-test('E_ G4: in reduced motion the knob never moves but the slide still commits; the whole pill stays a link (the tap twin)', async () => {
+test('E_ G4: in reduced motion the knob still follows the finger, the release is instant, and the slide still commits; the whole pill stays a link (the tap twin)', async () => {
   const writes = [], knob = { style: new Proxy({}, { set(t, k, v) { if (k === 'transform' && v) writes.push(v); t[k] = v; return true; } }) }, a = surf({ offsetWidth: 300, querySelector: () => knob, getAttribute: (k) => (k === 'href' ? '#door/checklist' : null) });
   const app = await boot({ role: 'cleaner', hash: '#home', reduced: true, fold: FOLD, handlers: baseHandlers('cleaner', { staff_home_v1: turnover }) });
   drive(app, a, [[0, 40, 10], [100, 120, 12], [200, 260, 12], [300, 260, 12]], { sel: '[data-slide]' });
-  assert.equal(app.location.hash, '#door/checklist'); assert.deepEqual(writes, [], 'no translateX was ever written'); assert.equal(knob.style.transform, '');
+  assert.equal(app.location.hash, '#door/checklist'); assert.ok(writes.length >= 1, 'the knob followed the finger'); assert.equal(knob.style.transform, ''); assert.equal(knob.style.transition, 'none', 'and came back instantly');
   assert.match(app.els['v-home'].innerHTML, /<a class="A_slide" data-slide href="#door\/checklist"[^>]*aria-label="Start cleaning">/);
 });
 
@@ -177,7 +177,7 @@ test('E_ G1: a swipe of 25% of the width or 0.4 px/ms changes the view (hash fir
   const a = await calApp('#calendar'); swipeTab(a, [[0, 300, 300], [100, 250, 302], [200, 200, 302], [600, 200, 302]]);
   assert.equal(a.location.hash, '#calendar/stays', 'left from Month goes to Stays (110 px of 360)');
   const slow = await calApp('#calendar'); swipeTab(slow, [[0, 300, 300], [300, 280, 302], [900, 230, 302], [1200, 230, 302]]); assert.equal(slow.location.hash, '#calendar', '70 px, slow: no');
-  const flick = await calApp('#calendar'); swipeTab(flick, [[0, 300, 300], [30, 280, 302], [60, 262, 302], [70, 262, 302]]); assert.equal(flick.location.hash, '#calendar/stays', '38 px at over 0.4 px/ms');
+  const flick = await calApp('#calendar'); swipeTab(flick, [[0, 300, 300], [30, 280, 302], [60, 244, 302], [70, 244, 302]]); assert.equal(flick.location.hash, '#calendar/stays', '56 px at over 0.4 px/ms');
   const month = await calApp('#calendar'); swipeTab(month, [[0, 100, 300], [100, 160, 302], [200, 260, 302], [260, 260, 302]]); assert.equal(month.location.hash, '#calendar', 'Month cannot swipe right: no wrap');
   const stays = await calApp('#calendar/stays'); swipeTab(stays, [[0, 100, 300], [100, 160, 302], [200, 260, 302], [260, 260, 302]]); assert.equal(stays.location.hash, '#calendar', 'right from Stays is Month');
   const stays2 = await calApp('#calendar/stays'); swipeTab(stays2, [[0, 300, 300], [100, 250, 302], [200, 150, 302], [260, 150, 302]]); assert.equal(stays2.location.hash, '#calendar/notices');
@@ -234,8 +234,8 @@ test('E_ G3: a short swipe past 48 px leaves the row open on a real Done button;
   assert.ok(row.wrap.cls.has('E_open'), 'open at 60 px'); assert.equal(app.calls.filter((c) => c[0] === 'task_set_done_v1').length, 0, 'nothing sent: the person taps Done');
   const small = rowEl('follow_up_tasks:a', 'task-done'); swipeTask(app, small, [[0, 330, 200], [200, 310, 201], [400, 290, 201], [800, 290, 201]]); assert.ok(!small.wrap.cls.has('E_open'), '40 px: closes');
   const right = rowEl('follow_up_tasks:a', 'task-done'); swipeTask(app, right, [[0, 100, 200], [200, 160, 201], [400, 250, 201], [800, 250, 201]]); assert.ok(!right.wrap.cls.has('E_open'), 'to the right: nothing');
-  const flick = rowEl('follow_up_tasks:a', 'task-done'); swipeTask(app, flick, [[0, 330, 200], [30, 310, 201], [60, 290, 201], [70, 290, 201]]); await app.flush();
-  assert.equal(app.calls.filter((c) => c[0] === 'task_set_done_v1').length, 1, 'a 40 px flick at 0.57 px/ms commits');
+  const flick = rowEl('follow_up_tasks:a', 'task-done'); swipeTask(app, flick, [[0, 330, 200], [30, 310, 201], [60, 270, 201], [70, 270, 201]]); await app.flush();
+  assert.equal(app.calls.filter((c) => c[0] === 'task_set_done_v1').length, 1, 'a 60 px flick at 0.86 px/ms commits');
 });
 
 test('E_ G3: a finished row swipes to Undo; the markup carries an Undo underlay; a system check row only opens "Mark as handled" and never auto-commits', async () => {
@@ -255,7 +255,7 @@ test('E_ G3: a finished row swipes to Undo; the markup carries an Undo underlay;
 test('E_ G3: the underlay is hidden from touch and keyboard until the row moves, and a touch elsewhere closes an open row', () => {
   const css = read('styles.css');
   assert.match(css, /\.E_under \{[^}]*visibility: hidden; \}/); assert.match(css, /\.E_swipewrap\.E_live \.E_under, \.E_swipewrap\.E_open \.E_under \{ visibility: visible; \}/);
-  assert.match(css, /\.E_swipewrap \.payrow \{[^}]*touch-action: pan-y;/); assert.match(css, /\.E_done \.E_underbtn \{ background: var\(--v5-ok-w\); color: var\(--v5-ok-t\); \}/); assert.match(css, /\.E_undo \.E_underbtn \{ background: var\(--v5-info-w\); color: var\(--v5-info-t\); \}/);
+  assert.match(css, /\.E_swipewrap \.payrow \{[^}]*touch-action: pan-y pinch-zoom;/); assert.match(css, /\.E_done \.E_underbtn \{ background: var\(--v5-ok-w\); color: var\(--v5-ok-t\); \}/); assert.match(css, /\.E_undo \.E_underbtn \{ background: var\(--v5-info-w\); color: var\(--v5-info-t\); \}/);
   assert.match(css, /\.E_underbtn \{ flex: 1; min-height: var\(--touch\);[^}]*font: 600 var\(--v5-t-body\)\/clamp\(1\.375rem/);
   assert.match(read('app.js'), /a touch anywhere else closes an open row/);
 });

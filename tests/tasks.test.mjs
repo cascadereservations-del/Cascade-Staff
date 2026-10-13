@@ -204,7 +204,7 @@ test('tapping the box finishes a task through task_set_done_v1 and the Undo line
 test('a task the server refuses goes back on the list with a plain sentence', async () => {
   const app = await boot({ role: 'cleaner', hash: '#tasks', handlers: { current_staff_access: () => ACCESS('cleaner'), staff_home_v1: () => HOME, tasks_list_v1: () => ({ error: null, data: STAFF_TASKS }), task_set_done_v1: () => ({ error: { code: 'P0002', message: 'task not found' }, data: null }) } });
   await app.click({ 'data-act': 'task-done', 'data-task': 'work_orders:w1' });
-  assert.match(app.els['v-tasks'].innerHTML, /That task is not yours to change/);
+  assert.equal(app.els['cs-toast'].textContent, 'That task is not yours to change.', 'the plain error replaces the Undo toast'); assert.equal(app.els['cs-toast'].innerHTML, '');
   assert.doesNotMatch(app.els['v-tasks'].innerHTML, /Marked done:/);
 });
 

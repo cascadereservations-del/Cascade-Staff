@@ -89,7 +89,7 @@ test('E_ Calendar day sheet: the admin note form is collapsed behind one button 
   let b = app.els['cs-body'].innerHTML;
   assert.match(b, /<button class="btn btn-secondary btn-sm" type="button" data-act="dayform-open"[^>]*>[^]*Add a note for this day<\/button>/); assert.doesNotMatch(b, /id="df-kind"|id="df-label"|data-act="flag-save"/);
   assert.doesNotMatch(b, /Nothing else noted/);
-  assert.match(b, /data-act="sheet-close"[^>]*>Close<\/button>/);
+  assert.match(b, /^<div class="F_sheethead"><button class="btn btn-secondary btn-sm F_close" type="button" data-act="sheet-close"><svg[^>]*><\/svg>Close<\/button><\/div>/, 'Close is in the sticky header');
   await app.click({ 'data-act': 'dayform-open' });
   b = app.els['cs-body'].innerHTML; assert.match(b, /id="df-kind"/); assert.match(b, /id="df-label"/); assert.match(b, /data-act="flag-save"/); assert.doesNotMatch(b, /data-act="dayform-open"/);
   const cl = await boot({ role: 'cleaner', hash: '#calendar', handlers: baseHandlers('cleaner', { staff_home_v1: () => HOMEWITH(cal) }) });

@@ -45,7 +45,7 @@ test('E_ pill: text and aria-label per state (clear, one, many, no connection), 
   p = pillOf(many.els['v-home'].innerHTML); assert.equal(textOf(p), '3 · Turnover at risk'); assert.equal(aria(p), '3 things to look at. Most urgent: turnover at risk. Opens the list');
   const warn = await boot({ role: 'cleaner', hash: '#home', handlers: baseHandlers('cleaner', { staff_home_v1: home({ warnings: [{ kind: 'inventory', title: 'Low stock: soap', detail: {} }] }), tasks_list_v1: tasksOf([]) }) });
   p = pillOf(warn.els['v-home'].innerHTML); assert.equal(textOf(p), '1 · Low stock'); assert.match(p, /E_dot E_warn/); assert.match(p, /data-i="clock"/);
-  const off = await boot({ role: 'cleaner', hash: '#home', handlers: baseHandlers('cleaner', { staff_home_v1: () => ({ error: { code: '500', message: 'x' }, data: null }) }) });
+  const off = await boot({ role: 'cleaner', hash: '#home', handlers: baseHandlers('cleaner', { staff_home_v1: () => ({ error: { message: 'TypeError: Failed to fetch' }, data: null }) }) });
   p = pillOf(off.els['v-home'].innerHTML); assert.equal(textOf(p), 'No connection'); assert.match(p, /E_dot E_idle/); assert.match(p, /data-i="info"/);
 });
 
@@ -116,7 +116,7 @@ test('E_ pill: empty, offline and loading sheets say the right thing; the cleane
   const cl = await boot({ role: 'cleaner', hash: '#home', handlers: baseHandlers('cleaner', { staff_home_v1: home(), tasks_list_v1: tasksOf([]), notices_v1: notices('cleaner', { notices: [], weather: null }) }) });
   await cl.click({ 'data-act': 'attn-open' });
   assert.match(cl.els['cs-body'].innerHTML, /Your tasks and today’s warnings are clear\./);
-  const off = await boot({ role: 'cleaner', hash: '#home', handlers: baseHandlers('cleaner', { staff_home_v1: () => ({ error: { code: '500', message: 'x' }, data: null }) }) });
+  const off = await boot({ role: 'cleaner', hash: '#home', handlers: baseHandlers('cleaner', { staff_home_v1: () => ({ error: { message: 'TypeError: Failed to fetch' }, data: null }) }) });
   await off.click({ 'data-act': 'attn-open' });
   assert.match(off.els['cs-body'].innerHTML, /Live information needs a connection\./); assert.match(off.els['cs-body'].innerHTML, /data-act="refresh">Try again/);
   const load = await boot({ role: 'cleaner', hash: '#home', handlers: baseHandlers('cleaner', { staff_home_v1: () => never }) });
