@@ -736,6 +736,128 @@
   }
   var INSTALL_URL = 'https://cascadereservations-del.github.io/Cascade-Staff/install/';
 
+  // ---- v5 shell (Lane A, s81). Everything new carries the A_ prefix. Pure; the screens in app.js only draw what these return. ------------------------
+  // The house times: check-out 12:00 noon, check-in 2:00 pm (turnover window 12:00 to 2:00 pm). Read from notices_v1.house_times; this is the one fallback.
+  var A_HOUSE_FALLBACK = { check_out: '12:00', check_in: '14:00' };
+  function A_hhmm(t, fb) { var m = /^(\d{1,2}):(\d{2})/.exec(String(t || '')); return m && +m[1] < 24 && +m[2] < 60 ? pad(+m[1]) + ':' + m[2] : fb; }
+  function A_houseTimes(h) {
+    var out = A_hhmm(h && h.check_out, A_HOUSE_FALLBACK.check_out), inn = A_hhmm(h && h.check_in, A_HOUSE_FALLBACK.check_in);
+    if (+out.slice(0, 2) * 60 + +out.slice(3) >= +inn.slice(0, 2) * 60 + +inn.slice(3)) { out = A_HOUSE_FALLBACK.check_out; inn = A_HOUSE_FALLBACK.check_in; } // a window that runs backwards is junk
+    return { check_out: out, check_in: inn, outLabel: fmtTime(out), inLabel: fmtTime(inn), outMin: +out.slice(0, 2) * 60 + +out.slice(3), inMin: +inn.slice(0, 2) * 60 + +inn.slice(3) };
+  }
+  // Where "now" (Manila) sits against the turnover window: before check-out, inside the window, or after check-in.
+  function A_turnoverClock(now, houseTimes) {
+    var t = A_houseTimes(houseTimes), p = manilaParts(now), m = p.h * 60 + p.min;
+    var phase = m < t.outMin ? 'before' : m < t.inMin ? 'window' : 'after';
+    return { phase: phase, minsToOut: Math.max(0, t.outMin - m), minsToIn: Math.max(0, t.inMin - m), times: t };
+  }
+  function A_hm(mins) { var h = Math.floor(mins / 60), m = mins % 60; return h ? h + ' h ' + m + ' m' : m + ' m'; }
+  function A_turnoverLine(clock, arrivesToday) {
+    if (!arrivesToday) return 'No arrival today';
+    if (clock.phase === 'after') return 'Check-in time has passed';
+    return 'Next guest in ' + A_hm(clock.minsToIn);
+  }
+
+  // ---- notices_v1 (Lane B builds the RPC; the client reads it and trusts nothing) ----
+  var A_NOTICE_TYPES = { power: { icon: 'zap', word: 'Power' }, water: { icon: 'drop', word: 'Water' }, rain: { icon: 'rain', word: 'Rain' },
+    deep_clean: { icon: 'sparkles', word: 'Deep clean' }, blocked: { icon: 'lock', word: 'Blocked' }, note: { icon: 'note', word: 'Note' } };
+  var A_NOTICE_SOURCE = { socoteco: 'SOCOTECO II', gscwd: 'GSCWD', manual: 'Added by hand', system: 'System' };
+  var A_WEATHER_SOURCE = { pirate: 'Pirate Weather', google: 'Google Weather', 'open-meteo': 'Open-Meteo' };
+  function A_hour12(iso) { var p = manilaParts(new Date(iso)); return (p.h % 12 === 0 ? 12 : p.h % 12) + (p.h >= 12 ? ' pm' : ' am'); }
+  // '2 to 5 pm' when both ends share am or pm, '10 am to 2 pm' when they do not.
+  function A_hourSpan(a, b) { var x = A_hour12(a).split(' '), y = A_hour12(b).split(' '); return x[1] === y[1] ? x[0] + ' to ' + y[0] + ' ' + y[1] : x.join(' ') + ' to ' + y.join(' '); }
+  function A_timeRange(s, e) { var a = fmtTime(A_hhmm(s, null)), b = fmtTime(A_hhmm(e, null)); return a && b ? a + ' to ' + b : a || ''; }
+  // The server filters by role; this filters again. A cleaner (any staff layout) never gets `house` or `inbox_open`, even if the payload carries them.
+  function A_noticesView(raw, role, today) {
+    if (!raw || typeof raw !== 'object' || raw.ok === false || Array.isArray(raw)) return null;
+    var mgr = layoutForRole(role) === 'admin', times = A_houseTimes(raw.house_times);
+    var w = raw.weather && typeof raw.weather === 'object' ? raw.weather : null, weather = null;
+    if (w && typeof w.temp_c === 'number') {
+      weather = { source: A_WEATHER_SOURCE[w.source] || '', temp: Math.round(w.temp_c), condition: String(w.condition || ''), rain: typeof w.rain_chance_pct === 'number' ? Math.round(w.rain_chance_pct) : null,
+        aqi: typeof w.aqi === 'number' ? Math.round(w.aqi) : null, fetched_at: w.fetched_at || null,
+        hours: (Array.isArray(w.hourly) ? w.hourly : []).slice(0, 12).filter(function (h) { return h && h.time; }).map(function (h) { return { label: A_hour12(h.time), pct: typeof h.rain_chance_pct === 'number' ? Math.round(h.rain_chance_pct) : 0, mm: typeof h.mm === 'number' ? h.mm : 0 }; }),
+        watch: null };
+      var rw = w.rain_watch;
+      if (rw && rw.from && rw.to) weather.watch = { text: 'Rain watch, ' + A_hourSpan(rw.from, rw.to), peak: typeof rw.peak_pct === 'number' ? Math.round(rw.peak_pct) : null };
+    }
+    var list = [];
+    if (weather && weather.watch) list.push({ key: 'rain-watch', type: 'rain', group: 'weather', title: weather.watch.text, sub: (weather.watch.peak != null ? weather.watch.peak + '% chance today' : 'Showers likely') + (weather.source ? ' · ' + weather.source : ''),
+      date: today || null, detail: 'Close the windows and bring in the laundry before the rain.', source: weather.source, tell: false });
+    (Array.isArray(raw.notices) ? raw.notices : []).forEach(function (n) {
+      if (!n || typeof n !== 'object' || !n.id || !n.title) return;
+      var type = A_NOTICE_TYPES[n.type] ? n.type : 'note', date = /^\d{4}-\d{2}-\d{2}$/.test(String(n.date || '')) ? n.date : null;
+      if (today && date && date < today) return;
+      var src = A_NOTICE_SOURCE[n.source] || '';
+      list.push({ key: 'n:' + n.id, id: String(n.id), type: type, group: type === 'power' || type === 'water' ? type : 'other', title: String(n.title), date: date, start: n.start_time || null, end: n.end_time || null,
+        sub: [date ? dayShort(date) : '', A_timeRange(n.start_time, n.end_time), src].filter(Boolean).join(' · '), detail: n.detail ? String(n.detail) : '', source: src, tell: canSeeGuestContact(role) && (type === 'power' || type === 'water' || type === 'rain') });
+    });
+    list.sort(function (a, b) { return (a.type === 'rain' && a.key === 'rain-watch' ? 0 : 1) - (b.type === 'rain' && b.key === 'rain-watch' ? 0 : 1) || String(a.date || '9999').localeCompare(String(b.date || '9999')) || String(a.start || '').localeCompare(String(b.start || '')); });
+    var house = mgr ? (Array.isArray(raw.house) ? raw.house : []).filter(function (h) { return h && (h.kind === 'low_stock' || h.kind === 'finding') && h.title; })
+      .map(function (h) { return { key: 'h:' + h.kind + ':' + h.id, id: String(h.id || ''), kind: h.kind, type: 'house', group: 'house', title: String(h.title), sub: h.detail ? String(h.detail) : '', detail: h.detail ? String(h.detail) : '' }; }) : [];
+    return { times: times, weather: weather, list: list, house: house, all: list.concat(house), inbox: mgr && typeof raw.inbox_open === 'number' ? raw.inbox_open : null, mgr: mgr,
+      counts: { all: list.length + house.length, weather: list.filter(function (x) { return x.group === 'weather'; }).length + (weather ? 1 : 0), power: list.filter(function (x) { return x.group === 'power'; }).length,
+        water: list.filter(function (x) { return x.group === 'water'; }).length, house: house.length } };
+  }
+  function A_noticeFilters(view) {
+    var f = [['all', 'All ' + view.counts.all], ['weather', 'Weather'], ['power', 'Power'], ['water', 'Water']];
+    if (view.mgr) f.push(['house', 'House']);
+    return f;
+  }
+  // What the calendar draws on a day for notices: the notices dated that day plus the day's own brownout / deep-clean flags, one glyph per kind.
+  function A_dayMarks(iso, view, flags) {
+    var seen = {}, out = [];
+    var add = function (k) { if (!seen[k]) { seen[k] = 1; out.push(k); } };
+    ((view && view.list) || []).forEach(function (n) { if (n.date === iso && n.key !== 'rain-watch') add(n.type); });
+    (flags || []).forEach(function (f) { if (f.date === iso || f.date == null) add(f.kind === 'brownout' ? 'power' : f.kind === 'deep_clean' ? 'deep_clean' : f.kind === 'maintenance' ? 'blocked' : 'note'); });
+    return out.slice(0, 3);
+  }
+  function A_noticeDay(view, iso) { return ((view && view.list) || []).filter(function (n) { return n.date === iso && n.key !== 'rain-watch'; }); }
+  // A ready-to-send, calm sentence for the guest (owner and admin only; it is copied, never sent by the app).
+  function A_guestMessage(n) {
+    var when = n && n.date ? ' on ' + dayShort(n.date) + (n.start ? ' ' + A_timeRange(n.start, n.end) : '') : '';
+    return 'Hello, a quick note about your stay: ' + String(n && n.title || 'a change') + (when && !/ on /.test(String(n && n.title || '')) ? when : '') + '. We will keep the house comfortable and tell you if anything changes.';
+  }
+  var A_CAL_TABS = ['month', 'stays', 'notices'];
+  function A_calTab(part) { return part === 'stays' || part === 'house' || part === 'warnings' ? 'stays' : part === 'notices' ? 'notices' : 'month'; }
+  var A_SHADES = [1, 2, 3, 4, 6]; // tokens.css has --v5-g1..g4 and g6; g5 does not exist
+  function A_stayShade(i) { var n = A_SHADES[((i % A_SHADES.length) + A_SHADES.length) % A_SHADES.length]; return '--A_g:var(--v5-g' + n + ');--A_gfg:var(--v5-g' + n + '-fg)'; }
+
+  // ---- admin hub: every dashboard route, in the same groups as the admin home. Route strings are the real ones in the dashboard's routes.tsx. ----
+  var A_ROLE_ACTIONS = { owner: ['manage_staff', 'read_finance', 'read_operations', 'manage_operations', 'manage_inventory', 'publish_rate_policy'], admin: ['manage_staff', 'read_finance', 'read_operations', 'manage_operations', 'manage_inventory', 'publish_rate_policy'],
+    finance: ['read_finance', 'read_operations'] };
+  var A_HUB = [
+    { title: 'Guests and bookings', items: [['today', 'Today', 'The dashboard home', 'dash', 'read_operations'], ['bookings', 'Bookings', 'Reservations and payments', 'clip', 'read_operations'], ['bookings/calendar', 'Booking calendar', 'Every stay on one grid', 'calendar', 'read_operations'],
+      ['bookings/inquiries', 'Inquiries', 'Guests who asked and have not booked', 'chat', 'read_operations'], ['guests', 'Guests', 'Guest records', 'users', 'manage_operations'], ['guests/conversations', 'Conversations', 'Messages from guests', 'chat', 'manage_operations']] },
+    { title: 'Money and stock', items: [['finance', 'Finance', 'What needs a decision', 'wallet', 'read_finance'], ['finance/transactions', 'Transactions', 'Money in and out', 'cash', 'read_finance'], ['finance/journals', 'Journals', 'Entries', 'book', 'read_finance'],
+      ['finance/statements', 'Statements', 'Reports', 'clip', 'read_finance'], ['finance/reconciliation', 'Reconciliation', 'Match the bank', 'checks', 'read_finance'], ['finance/book', 'Account book', 'Every account', 'book', 'read_finance'],
+      ['finance/setup', 'Accounting setup', 'Accounts and rules', 'wrench', 'read_finance'], ['inventory', 'Inventory', 'Stock levels and usage', 'box', 'read_operations'], ['inventory/counts', 'Stock counts', 'Count the shelves', 'tasks', 'manage_inventory'],
+      ['inventory/purchases', 'Purchases', 'What was bought', 'bag', 'read_operations'], ['pricing', 'Pricing', 'The rate card', 'cash', 'publish_rate_policy'], ['insights', 'Insights', 'How the house is doing', 'star', 'read_finance']] },
+    { title: 'Team and help', items: [['operations', 'Cleaning', 'Turnovers and inspections', 'sparkles', 'read_operations'], ['operations/tasks', 'Tasks', 'Everything that needs a person', 'tasks', 'read_operations'], ['operations/work-orders', 'Work orders', 'Repairs', 'wrench', 'read_operations'],
+      ['operations/notices', 'Notices', 'Brownouts, water and house notes', 'bell', 'read_operations'], ['settings', 'Staff', 'Team and access', 'users', 'manage_staff'], ['settings/health', 'System health', 'Checks and findings', 'checks', 'read_operations'],
+      ['settings/audit', 'Audit log', 'Who changed what', 'book', 'manage_staff'], ['settings/guest-contact', 'Guest contact', 'Who may see phones', 'lock', 'manage_staff'], ['settings/pay-rates', 'Pay rates', 'What a clean pays', 'cash', 'manage_staff']] }
+  ];
+  function A_hubRoutes() { var r = []; A_HUB.forEach(function (g) { g.items.forEach(function (i) { r.push(i[0]); }); }); return r; }
+  function A_hubGroups(role) {
+    var acts = Object.prototype.hasOwnProperty.call(A_ROLE_ACTIONS, role) ? A_ROLE_ACTIONS[role] : [];
+    return A_HUB.map(function (g) { return { title: g.title, items: g.items.filter(function (i) { return acts.indexOf(i[4]) >= 0; }).map(function (i) { return { route: i[0], title: i[1], sub: i[2], icon: i[3] }; }) }; })
+      .filter(function (g) { return g.items.length; });
+  }
+  function A_hubRouteOk(route) { return typeof route === 'string' && A_hubRoutes().indexOf(route) >= 0; }
+  // base 'https://x/#/today' or './admin/#/today' + 'bookings/calendar' -> '.../#/bookings/calendar'; null for a route that is not in the list.
+  function A_hubDoorUrl(base, route) { return A_hubRouteOk(route) ? String(base || '').replace(/#.*$/, '') + '#/' + route : null; }
+
+  // ---- what's new: only what this person can use ----
+  function A_whatsNew(role, flags) {
+    flags = flags || {};
+    var admin = layoutForRole(role) === 'admin', items = [
+      ['Month, Stays and Notices', 'The calendar now has three views. Tap a day to see who is staying and what is planned.'],
+      ['Plain bars', 'In More, switch glass off for a calmer, easier-to-read screen. It turns on by itself on slower phones.']];
+    if (flags.notices) items.push(['Notices', 'Rain watch, brownouts and water interruptions show on Today and on the calendar.']);
+    if (admin) items.push(['Admin hub', 'More lists every dashboard page in one place.']);
+    if (flags.notices && canSeeGuestContact(role)) items.push(['Tell the guest', 'On a notice, copy a ready message to send to the guest yourself.']);
+    return items.map(function (i) { return { title: i[0], text: i[1] }; });
+  }
+
   return {
     isInAppBrowser: isInAppBrowser, installState: installState, openInBrowserLink: openInBrowserLink, INSTALL_URL: INSTALL_URL,
     taskKindLabel: taskKindLabel, manilaDayOf: manilaDayOf, taskDue: taskDue, taskDueLabel: taskDueLabel, dueFromDate: dueFromDate, taskGroups: taskGroups,
@@ -755,6 +877,7 @@
     canFlagDays: canFlagDays, guestContact: guestContact, canSeeGuestContact: canSeeGuestContact, MESSENGER_INBOX: MESSENGER_INBOX, rpcMissing: rpcMissing, tgLink: tgLink, warningInfo: warningInfo, findingKey: findingKey, initialOf: initialOf, sourceLabel: sourceLabel, stayDates: stayDates, monthInRange: monthInRange,
     parseNotes: parseNotes, returningLabel: returningLabel, earlierLine: earlierLine, companionsLine: companionsLine, todayCardState: todayCardState,
     orderWarnings: orderWarnings, brownoutText: brownoutText, lowStockText: lowStockText, warningSummary: warningSummary,
-    weatherLine: weatherLine, rainLine: rainLine, weatherStale: weatherStale, esc: esc
+    weatherLine: weatherLine, rainLine: rainLine, weatherStale: weatherStale, esc: esc,
+    A_HOUSE_FALLBACK: A_HOUSE_FALLBACK, A_houseTimes: A_houseTimes, A_turnoverClock: A_turnoverClock, A_turnoverLine: A_turnoverLine, A_hm: A_hm, A_NOTICE_TYPES: A_NOTICE_TYPES, A_noticesView: A_noticesView, A_noticeFilters: A_noticeFilters, A_dayMarks: A_dayMarks, A_noticeDay: A_noticeDay, A_guestMessage: A_guestMessage, A_CAL_TABS: A_CAL_TABS, A_calTab: A_calTab, A_stayShade: A_stayShade, A_hubGroups: A_hubGroups, A_hubRoutes: A_hubRoutes, A_hubRouteOk: A_hubRouteOk, A_hubDoorUrl: A_hubDoorUrl, A_whatsNew: A_whatsNew, A_hour12: A_hour12, A_timeRange: A_timeRange
   };
 });

@@ -68,11 +68,11 @@
       if (!admin) { delete o.companions; delete o.phone; delete o.email; delete o.messenger; }
       return o;
     };
-    var g1 = guest({ uid: 'demo-stay-1', guest_name: 'Demo Guest One', checkin_date: d(-1), checkout_date: d(2), checkin_time: '14:00:00', checkout_time: '11:00:00', nights: 3, source: 'airbnb',
+    var g1 = guest({ uid: 'demo-stay-1', guest_name: 'Demo Guest One', checkin_date: d(-1), checkout_date: d(2), checkin_time: '14:00:00', checkout_time: '12:00:00', nights: 3, source: 'airbnb',
       repeat: true, stay_count: 2, earlier_stays: [{ month: d(-120).slice(0, 7), nights: 2 }], notes: d(-120) + ': Special request: extra pillows | Courtesy: late check-out was offered',
       id_photo_path: 'demo/id-1', companions: [{ name: 'Demo Companion One', has_photo: true }, { name: 'Demo Companion Two', has_photo: false }],
       phone: '0900-000-0000', email: 'demo.guest.one@example.invalid', messenger: {} });
-    var g2 = guest({ uid: 'demo-stay-2', guest_name: 'Demo Guest Two', checkin_date: d(2), checkout_date: d(5), checkin_time: '15:00:00', checkout_time: '11:00:00', nights: 3, source: 'direct',
+    var g2 = guest({ uid: 'demo-stay-2', guest_name: 'Demo Guest Two', checkin_date: d(2), checkout_date: d(5), checkin_time: '14:00:00', checkout_time: '12:00:00', nights: 3, source: 'direct',
       repeat: false, stay_count: 1, earlier_stays: [], notes: null, id_photo_path: null, companions: [], phone: '0900-000-0001', email: 'demo.guest.two@example.invalid' });
     var row = function (name, a, b, src) { return { guest_name: name, checkin_date: d(a), checkout_date: d(b), status: 'confirmed', source: src }; };
     var block = function (a, b, why, label) { return { guest_name: null, checkin_date: d(a), checkout_date: d(b), status: 'blocked', source: 'manual', block_reason: why, block_label: label }; };
@@ -89,6 +89,16 @@
         { kind: 'inventory', title: 'Low stock: Demo towels', severity: 'warn', detail: { qty: 4, unit: 'pcs', reorder_below: 6 } },
         { kind: 'verifier', title: 'Demo check: Airbnb block runs past the last guest night', severity: 'alert', key: 'V1m:demo', detail: { check_id: 'V1m' } }]
     };
+    // notices_v1 (Lane B builds it): house times 12:00 noon / 2:00 pm, weather with a rain watch, power and water notices, house items and the inbox count for owner and admin only.
+    var hr = function (h, pct, mm) { return { time: at(0, (h < 10 ? '0' : '') + h + ':00'), rain_chance_pct: pct, mm: mm, code: pct > 50 ? 61 : 2 }; };
+    var notices = { generated_at: stamp, role: r, house_times: { check_out: '12:00', check_in: '14:00' },
+      weather: { source: 'open-meteo', fetched_at: stamp, temp_c: 29, condition: 'Partly cloudy', code: 2, rain_chance_pct: 70, aqi: 42,
+        hourly: [hr(10, 10, 0), hr(11, 20, 0), hr(12, 30, 0), hr(13, 40, 0), hr(14, 70, 1.2), hr(15, 80, 2.4), hr(16, 70, 1.6), hr(17, 40, 0.2), hr(18, 20, 0)], rain_watch: { from: at(0, '14:00'), to: at(0, '17:00'), peak_pct: 80 } },
+      notices: [{ id: 'demo-n1', type: 'power', title: 'Brownout 1:00 to 4:00 pm', date: d(3), start_time: '13:00', end_time: '16:00', duration_hours: 3, source: 'socoteco', detail: 'San Isidro feeder · line maintenance' },
+        { id: 'demo-n2', type: 'water', title: 'No water 9:00 am to 3:00 pm', date: d(5), start_time: '09:00', end_time: '15:00', duration_hours: 6, source: 'gscwd', detail: 'Pipe repair. Fill the water drums the day before.' },
+        { id: 'demo-n3', type: 'deep_clean', title: 'Deep clean', date: d(6), start_time: null, end_time: null, duration_hours: null, source: 'manual', detail: null }],
+      house: admin ? [{ kind: 'low_stock', id: 'demo-towels', title: 'Low stock: Demo towels, 4 left', detail: 'Reorder below 6' }, { kind: 'finding', id: 'V1m:demo', title: 'System check', detail: 'Airbnb block runs past the last guest night' }] : [],
+      inbox_open: admin ? 2 : null };
     var task = function (o) {
       return Object.assign({ source: 'follow_up_tasks', kind: 'reminder', detail: null, priority: 'normal', status: 'open', due_at: null, assignee_id: null, assignee_label: null, mine: false,
         created_at: at(-2, '09:00'), completed_at: null, version: 1, blocks_arrival: false }, o);
@@ -106,7 +116,7 @@
       role: r,
       access: { role: r, disabled: false, session_current: true, property_ids: ['demo-property'] },
       user: { id: 'demo-user-' + r, email: 'demo.' + r + '@example.invalid', user_metadata: { display_name: 'Demo ' + r.charAt(0).toUpperCase() + r.slice(1) } },
-      home: home,
+      home: home, notices: notices,
       tasks: function (includeDone) { return { ok: true, manager: admin, today: today, tasks: all.filter(function (t) { return (includeDone || t.status !== 'done') && (admin || mine(t)); }) }; },
       assignees: { ok: true, staff: [{ user_id: 'demo-u-1', label: 'Demo Cleaner', role: 'cleaner' }, { user_id: 'demo-u-2', label: 'Demo Admin', role: 'admin' }] },
       rates: { ok: true, today: today,
@@ -134,6 +144,7 @@
       switch (name) {
         case 'current_staff_access': return done(X.access);
         case 'staff_home_v1': return done(X.home);
+        case 'notices_v1': return done(X.notices);
         case 'tasks_list_v1': return done(X.tasks(!!(args && args.p_include_done)));
         case 'task_assignees_v1': return done(X.assignees);
         case 'admin_pay_rates_v1': return done(X.rates);
