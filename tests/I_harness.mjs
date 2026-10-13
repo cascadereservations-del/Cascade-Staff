@@ -73,7 +73,7 @@ export async function setup(o = {}) {
   vm.createContext(ctx);
   vm.runInContext(fs.readFileSync(srcPath, 'utf8'), ctx, { filename: 'I_stock.js' });
   const root = new Root();
-  const opts = { client, demo: !!o.demo, role, sub: o.sub || '', navigate: (h) => { navs.push(h); if (o.remount !== false) { const m = /^#stock\/?(.*)$/.exec(h); if (m) { opts.sub = m[1]; win.I_Stock.mount(root, opts); } } }, /* the shell re-mounts on a sub-route change */ toast: (m) => toasts.push(m), haptic: (k) => hapts.push(k) };
+  const opts = { client, demo: !!o.demo, role, sub: o.sub || '', navigate: (h) => { navs.push(h); if (o.remount !== false) { const m = /^#stock\/?(.*)$/.exec(h); if (m) { const sub = m[1]; Promise.resolve().then(() => { opts.sub = sub; win.I_Stock.mount(root, opts); }); } } }, /* the shell re-mounts on a sub-route change */ toast: (m) => toasts.push(m), haptic: (k) => hapts.push(k) };
   if (o.propertyId) opts.propertyId = o.propertyId;
   const fire = async (type, ev) => { for (const f of root.l[type] || []) await f(ev); await flush(); };
   const env = {

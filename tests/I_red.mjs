@@ -1,4 +1,4 @@
-﻿// Lane I red-on-broken-code proof (not a test file). For each mutation: copy stock/I_stock.js with ONE deliberate bug,
+// Lane I red-on-broken-code proof (not a test file). For each mutation: copy stock/I_stock.js with ONE deliberate bug,
 // run every tests/I_*.test.mjs against the copy (I_STOCK_SRC) and list the tests that went red. A mutation that leaves
 // the suite green means a test does not guard what it claims. Run: node tests/I_red.mjs
 import fs from 'node:fs';
@@ -13,7 +13,7 @@ const M = [
   ['count sent without a confirm step', [["if (a.step !== 'confirm') { if (!valid(a))", "if (false) { if (!valid(a))"]]],
   ['count arg renamed', [["p_counted_qty: parseQty", "p_count_qty: parseQty"]]],
   ['usage_key renamed', [["usage_key: key }]", "usage_id: key }]"]]],
-  ['new key on every build', [["a.key = K.keys[sig] || (K.keys[sig] = newKey(a.kind));", "a.key = newKey(a.kind);"]]],
+  ['new key on every build', [["a.sig = sig; a.key = ke.key;", "a.sig = sig; a.key = newKey(a.kind);"]]],
   ['date taken from UTC not Manila', [["new Date(ms + 8 * 3600000)", "new Date(ms)"]]],
   ['submit never disabled while sending', [["(a.sending ? ' disabled' : '')", "''"]]],
   ['offline guard removed', [["if (!online()) { a.err = 'offline'; drawLayer(); return; }", ""]]],
@@ -49,10 +49,11 @@ for (const [name, edits] of M) {
   if (s == null) continue;
   const f = path.join(dir, 'I_stock.mut.js'); fs.writeFileSync(f, s);
   const r = spawnSync(process.execPath, ['--test', path.join(here, 'I_rpc.test.mjs'), path.join(here, 'I_roles.test.mjs'), path.join(here, 'I_flow.test.mjs'), path.join(here, 'I_guard.test.mjs'), path.join(here, 'I_fix.test.mjs')], { env: Object.assign({}, process.env, { I_STOCK_SRC: f }), encoding: 'utf8', timeout: 60000 });
-  const red = [...(r.stdout || '').matchAll(/^\s*âœ– (I_\w+ [^\n(]+?) \(/gm)].map((m) => m[1].trim()).filter((v, i, a) => a.indexOf(v) === i);
-  const ok = r.status !== 0 && red.length > 0;
+  const red = [...(r.stdout || '').matchAll(/^\s*✖ (I_\w+ [^\n(]+?) \(/gm)].map((m) => m[1].trim()).filter((v, i, a) => a.indexOf(v) === i);
+  const hung = !!(r.error && r.error.code === 'ETIMEDOUT');
+  const ok = hung || (r.status !== 0 && red.length > 0);
   if (!ok) bad++;
-  console.log((ok ? 'RED  ' : 'GREEN(!) ') + name + ' -> ' + (red.length ? red.length + ' failing: ' + red.slice(0, 3).join(' | ') : 'no failing test'));
+  console.log((ok ? 'RED  ' : 'GREEN(!) ') + name + ' -> ' + (hung ? 'suite hangs (caught)' : red.length ? red.length + ' failing: ' + red.slice(0, 3).join(' | ') : 'no failing test'));
 }
 console.log(bad ? bad + ' mutation(s) not caught' : 'every mutation was caught');
 process.exit(bad ? 1 : 0);

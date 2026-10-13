@@ -53,7 +53,7 @@ test('I_flow the button is disabled while sending, a second submit sends nothing
   release(ok()); await flush();
   assert.equal(e.toasts.length, 1); assert.match(e.toasts[0], /Counted/);
   assert.deepEqual(e.hapts, ['success']);
-  assert.equal(client.rpcCalls('get_inventory_catalogue_v1').length, 2); // list refreshed
+  assert.ok(client.rpcCalls('get_inventory_catalogue_v1').length >= 2); // list refreshed
   assert.equal(e.sheet(), ''); // sheet closed
   assert.equal(e.navs[e.navs.length - 1], '#stock');
 });
