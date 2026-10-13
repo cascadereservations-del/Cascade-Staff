@@ -176,11 +176,11 @@ test('A_fix LOW: a flag and a notice of one kind read once on the cell and on th
   assert.doesNotMatch(dayCell(html(app), '2026-10-16'), /; Brownout; Brownout 1:00/); assert.match(dayCell(html(app), '2026-10-16'), /Brownout 1:00 to 4:00 pm/);
   await app.click({ 'data-day': '2026-10-16' }); assert.doesNotMatch(app.els['cs-body'].innerHTML, /<b>Brownout<\/b>/, 'the automatic brownout flag is not listed beside the power notice');
 });
-test('A_fix LOW: no raw colour in styles.css, tokens added for both themes, no Google Fonts host and no font preload for the missing file', () => {
+test('A_fix LOW: no raw colour in styles.css, tokens added for both themes, no Google Fonts host, and the font preload names a file that exists', () => {
   const raw = css.split('\n').filter((l) => /#[0-9a-fA-F]{3,8}\b|rgba?\(/.test(l)); assert.deepEqual(raw, []);
   const tk = read('tokens.css'); for (const t of ['--v5-photo-ink', '--v5-photo-fade', '--v5-live-ok', '--v5-bar-on', '--v5-scrim']) assert.ok(tk.includes(t + ':'), t);
   const sw = read('sw.js'); assert.doesNotMatch(sw, /fonts\.googleapis|fonts\.gstatic/); assert.doesNotMatch(sw, /facebook/, 'a cross-origin frame never reaches our worker');
-  assert.doesNotMatch(read('index.html'), /rel="preload"/);
+  const pre = [...read('index.html').matchAll(/rel="preload" href="([^"]+)"/g)].map((m) => m[1]); assert.deepEqual(pre, ['fonts/dm-serif-display-400.woff2']); for (const p of pre) assert.ok(fs.existsSync(path.join(root, p)), p);
 });
 test('A_fix LOW: one time format ("2:00 pm", "12:00 noon"); the demo registers no service worker, a live page does', async () => {
   assert.deepEqual([CS.fmtTime('14:00:00'), CS.fmtTime('12:00:00'), CS.fmtTime('09:05:00'), CS.fmtTime('00:30:00')], ['2:00 pm', '12:00 noon', '9:05 am', '12:30 am']);

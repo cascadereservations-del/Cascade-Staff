@@ -230,6 +230,7 @@
           (canReply() ? row({ icon: 'sparkles', title: 'Cassy reply', sub: 'Draft a warm reply to a guest message', href: '#reply' }) : '')) +
         A_navCard('Money and stock', row({ icon: 'dash', title: 'Admin dashboard', sub: 'Today, bookings, money, operations', door: 'dashboard' }) + hubRow +
           (trustOn ? '' : '<div class="help doornote">Sign-in is kept only on trusted devices</div>') +
+          (/^(owner|admin|finance)$/.test(role() || '') ? row({ icon: 'wallet', title: 'Pay staff', sub: 'Pay a request by QR, then add the proof', href: './pay/admin.html' }) : '') +
           (CS.canEditRates(role()) ? row({ icon: 'cash', title: 'Pay rates', sub: 'What a clean and its transport pay', href: '#payrates' }) : '') + doorRow('inventory', 'box', 'Stock levels and usage')) +
         A_navCard('Team and help', row({ icon: 'wallet', title: 'Cassy · Finance', sub: 'Open in Telegram', tg: LINKS.tgFinance, external: true }) + row({ icon: 'chat', title: 'Cassy · OPS', sub: 'Open in Telegram', tg: LINKS.tgOps, external: true }) +
           row({ icon: 'help', title: 'Quick guide', sub: 'How to use Cassy in Telegram', href: LINKS.quick }) + row({ icon: 'book', title: 'House manual', sub: 'Operations manual', door: 'manual' }) +
@@ -238,6 +239,9 @@
     var keep = el.querySelector && el.querySelector('#slot-paid-notice'); if (keep && keep.parentNode) keep.parentNode.removeChild(keep);
     el.innerHTML = A_hero() + '<div class="screen" style="min-height:0;padding-top:0">' + body + '</div>';
     if (keep) { var fresh = el.querySelector('#slot-paid-notice'); if (fresh && fresh.parentNode) fresh.parentNode.replaceChild(keep, fresh); }
+    // "You were paid" notice (pay/C_paid-notice.js): mounted once per slot node; the node is carried across redraws above and is new again after a sign-in.
+    var paid = el.querySelector && el.querySelector('#slot-paid-notice');
+    if (paid && !paid.__paidMounted && window.C_PaidNotice && state.access) { paid.__paidMounted = true; try { window.C_PaidNotice.mount(paid, { client: sb, demo: DEMO }); } catch (e) {} }
   }
   function loadingBlock() { return '<div class="stack" style="margin-top:16px"><div class="skel" style="height:40px;width:70%"></div><div class="skel" style="height:110px"></div><div class="skel" style="height:240px"></div></div>'; }
 

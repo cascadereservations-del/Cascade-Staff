@@ -6,7 +6,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 const root = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 // The v5 title font is wired and cached but its file is added by the integrator (no downloads in the lane). The exemption holds only while the file is absent.
-const PENDING = ['./fonts/dm-serif-display-400.woff2'];
+const PENDING = [];
 const read = (f) => fs.readFileSync(path.join(root, f), 'utf8');
 
 function loadSw() {

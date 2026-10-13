@@ -36,6 +36,8 @@
   --v5-deep: linear-gradient(135deg, #A8E3C9 0%, #6CC4A1 100%); --v5-deep-solid: #6CC4A1;
   --v5-blocked: #D5DBE2; --v5-blocked-hatch: rgba(74, 88, 105, 0.22); --v5-blocked-fg: #3B4756;
   --v5-clash: #E5484D; --v5-note-dot: #C9962F; --v5-notice-fg: #0F1B2A; --v5-house-tile: #D5DBE2;
+  /* white in both themes on purpose: a QR needs a light quiet zone to scan */
+  --v5-qr-paper: #FFFFFF;
   /* type: the phone's own font for everything; DM Serif Display (one self-hosted woff2) for titles and names only */
   --v5-font-ui: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, "Noto Sans", sans-serif;
   --v5-font-display: "DM Serif Display", Georgia, "Times New Roman", serif;

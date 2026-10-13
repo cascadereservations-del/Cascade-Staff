@@ -46,11 +46,11 @@ test('parse: every pay script compiles; every inline script in the pay pages com
   assert.match(read('pay/admin.html'), /C_admin-lib\.js[\s\S]*C_admin\.js/); assert.match(read('pay/index.html'), /C_paid-text\.js[\s\S]*C_push\.js[\s\S]*pay\.js/);
 });
 
-test('css: every colour is a v5 token; the one literal is the white QR quiet zone the QR standard requires', () => {
+test('css: every colour is a v5 token; the white QR quiet zone is the shared --v5-qr-paper token', () => {
   const c = read('pay/C_pay.css').replace(/\/\*[\s\S]*?\*\//g, '');
   const hexes = [...c.matchAll(/#[0-9a-fA-F]{3,8}\b/g)].map((m) => m[0]);
-  assert.deepEqual(hexes, ['#FFFFFF'], 'the only literal is --v5-qr-paper, the white a QR needs behind it');
-  assert.match(c, /--v5-qr-paper:\s*#FFFFFF/); assert.match(c, /\.C_qrframe\s*\{[^}]*background:\s*var\(--v5-qr-paper\)/);
+  assert.deepEqual(hexes, [], 'no literal colour: the QR paper is a token in tokens.css since the s81 integration');
+  assert.match(read('tokens.css'), /--v5-qr-paper:\s*#FFFFFF/); assert.match(c, /\.C_qrframe\s*\{[^}]*background:\s*var\(--v5-qr-paper\)/);
   assert.doesNotMatch(c, /\brgba?\(|\bhsla?\(/, 'no literal colour functions either');
   assert.ok((c.match(/var\(--v5-/g) || []).length > 70);
   const n = read('pay/C_notice.css').replace(/\/\*[\s\S]*?\*\//g, '');
