@@ -788,9 +788,10 @@ button.A_chipglass.E_pill { width: auto; min-width: 124px; max-width: 184px; hei
 
 /* ---- the two-column card grid starts at 42 rem (672 px): at 600 each card would be 270 px, narrower than a 360 px phone ---- */
 @media (min-width: 42rem) {
-  .A_body { grid-template-columns: repeat(2, minmax(0, 1fr)); grid-auto-flow: row dense; }
-  .A_body > .F_span, .A_body > .errbox, .A_body > #slot-paid-notice { grid-column: 1 / -1; }
-  .A_body > [aria-label="Turnover today"] { align-self: start; } /* a quiet day is a short card, not one stretched to the Notices card */
+  .A_body { display: block; column-count: 2; column-gap: var(--v5-gap); } /* 3.1.1: two independent stacks that balance themselves, so nothing sits beside a hole */
+  .A_body > * { break-inside: avoid; margin-bottom: var(--v5-gap); }
+  .A_body > .F_span, .A_body > .errbox, .A_body > #slot-paid-notice { column-span: all; }
+  .A_body > [aria-label="Turnover today"] { align-self: start; }
 }
 /* ---- F_wide: 840 px and up, and a short landscape phone: the tab bar becomes a left rail (same four tabs, same order, same badges) ---- */
 @media (min-width: 52.5rem), (min-width: 37.5rem) and (max-height: 30rem) {
@@ -804,7 +805,10 @@ button.A_chipglass.E_pill { width: auto; min-width: 124px; max-width: 184px; hei
 }
 @media (min-width: 52.5rem) {
   #v-calendar .screen { max-width: 64rem; }
-  .cal { max-width: 46rem; margin-left: auto; margin-right: auto; }
+  .cal { max-width: none; }
+  #v-calendar [data-F-tab="calendar"] { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); gap: var(--v5-gap) 1.5rem; align-items: start; } /* the month beside the next 14 days */
+  #v-calendar [data-F-tab="calendar"] > .help { grid-column: 1 / -1; }
+  #v-calendar [data-F-tab="calendar"] .H_agendahd { margin-top: 0; }
   .A_hero { aspect-ratio: 21 / 8; }
   .scrim[data-F-kind="day"], .scrim[data-F-kind="attn"] { left: var(--v5-nav-w); } /* a side sheet dims the page, not the rail */
   /* the Today card: guest on the left, the dates on the right, so it is not a wide strip with little in it */
@@ -974,3 +978,4 @@ button.A_chipglass.E_pill { width: auto; min-width: 124px; max-width: 184px; hei
 .H_kind { display: flex; align-items: center; justify-content: center; gap: 8px; min-height: 56px; border-radius: var(--v5-r-field); border: 2px solid var(--v5-line-2); background: var(--v5-surf); color: var(--v5-ink); font: 600 var(--v5-t-body)/1.2 var(--font-ui); cursor: pointer; }
 .H_kind[aria-pressed="true"] { border-color: var(--v5-gold); background: var(--v5-gold-soft); color: var(--v5-ink); }
 .A_noticecard.H_mgr { height: 304px; }
+.H_g { display: block; min-width: 0; } .H_g:has(> .F_group > #install-card[hidden]) { display: none; }

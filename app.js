@@ -1187,19 +1187,19 @@
     var theme = window.CSTheme.get(), plain = window.CSTheme.plainOn(), admin = state.layout !== 'staff';
     var chip = function (v, t) { return '<button class="chip" type="button" role="radio" data-theme="' + v + '" aria-checked="' + (theme === v) + '" aria-pressed="' + (theme === v) + '">' + t + '</button>'; };
     var g = [];
-    g.push({ w: 2, html: A_navCard('Search', row({ icon: 'search', title: 'Search', sub: CS.canSeeGuestContact(role()) ? 'Tasks, guests and the manual' : 'Tasks and the manual', href: '#search' })) });
-    g.push({ w: 5, html: A_navCard('How we do things', row({ icon: 'book', title: 'Cascade Manual', sub: 'How we do things', door: 'manual' }) + doorRow('guide', 'book', 'How the staff app and the house work') + row({ icon: 'help', title: 'Quick guide', sub: 'How to use Cassy in Telegram', href: LINKS.quick }) + doorRow('adminguide', 'lock', 'Owner and admin chapters')) });
-    g.push({ w: 4, html: A_navCard('Cassy', (canReply() ? row({ icon: 'sparkles', title: 'Cassy reply', sub: 'Draft a warm reply to a guest message', href: '#reply' }) : '') +
+    g.push({ w: 2, id: 'search', html: A_navCard('Search', row({ icon: 'search', title: 'Search', sub: CS.canSeeGuestContact(role()) ? 'Tasks, guests and the manual' : 'Tasks and the manual', href: '#search' })) });
+    g.push({ w: 5, id: 'how', html: A_navCard('How we do things', row({ icon: 'book', title: 'Cascade Manual', sub: 'How we do things', door: 'manual' }) + doorRow('guide', 'book', 'How the staff app and the house work') + row({ icon: 'help', title: 'Quick guide', sub: 'How to use Cassy in Telegram', href: LINKS.quick }) + doorRow('adminguide', 'lock', 'Owner and admin chapters')) });
+    g.push({ w: 4, id: 'cassy', html: A_navCard('Cassy', (canReply() ? row({ icon: 'sparkles', title: 'Cassy reply', sub: 'Draft a warm reply to a guest message', href: '#reply' }) : '') +
       row({ icon: 'chat', title: 'Cassy · Telegram OPS', sub: 'Open in Telegram', tg: LINKS.tgOps, external: true }) + (admin ? row({ icon: 'wallet', title: 'Cassy · Telegram Finance', sub: 'Open in Telegram', tg: LINKS.tgFinance, external: true }) : '')) });
-    if (admin) g.push({ w: 4, html: A_navCard('Admin', row({ icon: 'dash', title: 'Admin hub', sub: 'Every dashboard page, in one list', href: '#hub' }) + (CS.canEditRates(role()) ? row({ icon: 'cash', title: 'Pay rates', sub: 'What a clean and its transport pay', href: '#payrates' }) : '') + row({ icon: 'box', title: 'Inventory', sub: 'Stock levels and usage', href: '#stock' })) });
-    g.push({ w: 6, html: '<div class="F_group"><div class="A_label">Appearance</div><section class="card glass" aria-label="Appearance"><h2 class="hd">Theme and bars</h2><div class="row-wrap" role="radiogroup" aria-label="Theme" style="margin-top:10px">' + chip('auto', 'Automatic') + chip('light', 'Light') + chip('dark', 'Dark') + '</div>' +
+    if (admin) g.push({ w: 4, id: 'admin', html: A_navCard('Admin', row({ icon: 'dash', title: 'Admin hub', sub: 'Every dashboard page, in one list', href: '#hub' }) + (CS.canEditRates(role()) ? row({ icon: 'cash', title: 'Pay rates', sub: 'What a clean and its transport pay', href: '#payrates' }) : '') + row({ icon: 'box', title: 'Inventory', sub: 'Stock levels and usage', href: '#stock' })) });
+    g.push({ w: 6, id: 'appearance', html: '<div class="F_group"><div class="A_label">Appearance</div><section class="card glass" aria-label="Appearance"><div class="row-wrap" role="radiogroup" aria-label="Theme">' + chip('auto', 'Automatic') + chip('light', 'Light') + chip('dark', 'Dark') + '</div>' +
       '<div class="A_switch" style="margin-top:10px"><span id="plain-label"><b>Plain bars</b> (no glass)</span><button class="sw" type="button" role="switch" data-act="plain" aria-checked="' + plain + '" aria-labelledby="plain-label"><i></i></button></div>' +
       '<p class="help" style="margin:4px 0 0">On by itself on slower phones. Easier to read in the sun.</p>' +
       (E_canVibrate() ? '<div class="A_switch" style="margin-top:10px"><span id="hap-label"><b>Vibrate on confirm</b></span><button class="sw" type="button" role="switch" data-act="haptics" aria-checked="' + CS.E_hapticsOn(store('localStorage')) + '" aria-labelledby="hap-label"><i></i></button></div>' +
         '<p class="help" style="margin:4px 0 0">A short buzz when something is saved or finished. Off saves nothing but the buzz.</p>' : '') + '</section></div>' });
-    g.push({ w: 3, html: '<div class="F_group"><div class="A_label">Help</div><nav class="card glass list" aria-label="Help"><button class="rowi" type="button" data-act="whatsnew"><span class="lead">' + ICON('sparkles') + '</span><span class="mid"><span class="t">What’s new</span><span class="s">What changed in this version</span></span><span class="chev">' + ICON('chev') + '</span></button>' +
+    g.push({ w: 3, id: 'help', html: '<div class="F_group"><div class="A_label">Help</div><nav class="card glass list" aria-label="Help"><button class="rowi" type="button" data-act="whatsnew"><span class="lead">' + ICON('sparkles') + '</span><span class="mid"><span class="t">What’s new</span><span class="s">What changed in this version</span></span><span class="chev">' + ICON('chev') + '</span></button>' +
       '<button class="rowi" type="button" data-act="tour-open"><span class="lead">' + ICON('help') + '</span><span class="mid"><span class="t">Show the tour</span><span class="s">Three short cards on how the app works</span></span><span class="chev">' + ICON('chev') + '</span></button></nav></div>' });
-    g.push({ w: 3, html: '<div class="F_group"><div class="A_label">This phone</div><section class="card glass" id="install-card" hidden aria-label="Install the app"><h2 class="hd">Install the app</h2><p class="sub" style="margin-top:6px">Put Cascade Staff on your Home Screen.</p><button class="btn btn-secondary" id="install-btn" type="button" style="margin-top:10px">' + ICON('plus', 's16') + 'Install</button>' +
+    g.push({ w: 3, id: 'phone', html: '<div class="F_group"><div class="A_label">This phone</div><section class="card glass" id="install-card" hidden aria-label="Install the app"><h2 class="hd">Install the app</h2><p class="sub" style="margin-top:6px">Put Cascade Staff on your Home Screen.</p><button class="btn btn-secondary" id="install-btn" type="button" style="margin-top:10px">' + ICON('plus', 's16') + 'Install</button>' +
       '<a class="btn btn-secondary" id="install-link" href="./install/" style="margin-top:10px" hidden>' + ICON('plus', 's16') + 'How to install</a></section></div>' });
     return g;
   }
@@ -1209,8 +1209,26 @@
     groups.forEach(function (x, i) { run += x.w; var d = Math.abs(total - 2 * run); if (i < groups.length - 1 && d < bestD) { bestD = d; best = i + 1; } });
     return best;
   }
+  // In a browser the split is refined by what the groups really measure: every group goes into the first stack, is measured at the column width, and the order and the split that
+  // leave the two stacks closest in height are used (all the orders read sensibly in one column too). Under 600 px the stacks follow each other, so nothing is moved.
+  var H_MORE_ORDERS = [['search', 'how', 'cassy', 'admin', 'appearance', 'help', 'phone'], ['search', 'how', 'appearance', 'cassy', 'admin', 'help', 'phone'], ['search', 'appearance', 'how', 'cassy', 'admin', 'help', 'phone'], ['search', 'how', 'cassy', 'appearance', 'admin', 'help', 'phone']];
+  function H_moreBalance() {
+    var root = $('v-more'), cols = root && root.querySelectorAll ? root.querySelectorAll('.H_col') : []; if (cols.length !== 2 || F_bottomSheet()) return;
+    var A = cols[0], B = cols[1], all = Array.prototype.slice.call(A.children).concat(Array.prototype.slice.call(B.children)), by = {}; all.forEach(function (g) { by[g.getAttribute('data-g')] = g; A.appendChild(g); });
+    var h = {}, gap = 16; Object.keys(by).forEach(function (k) { h[k] = by[k].getBoundingClientRect().height; });
+    var best = null;
+    H_MORE_ORDERS.forEach(function (o, oi) {
+      var ids = o.filter(function (k) { return by[k]; });
+      for (var k = 1; k < ids.length; k++) {
+        var side = function (list) { var v = list.filter(function (x) { return h[x] > 0; }); return v.reduce(function (a, x) { return a + h[x]; }, 0) + gap * Math.max(0, v.length - 1); };
+        var d = Math.abs(side(ids.slice(0, k)) - side(ids.slice(k))); if (!best || d < best.d - 1) best = { d: d, ids: ids, k: k };
+      }
+    });
+    if (best) best.ids.forEach(function (id, i) { (i < best.k ? A : B).appendChild(by[id]); });
+  }
+  window.addEventListener('resize', function () { if (current === 'more' && state.layout && !state.sheet) renderMore(); });
   function renderMore() {
-    var nm = state.name || 'You', roleName = state.access ? state.access.role : '', g = H_moreGroups(), k = H_moreSplit(g), col = function (a) { return '<div class="H_col">' + a.map(function (x) { return x.html; }).join('') + '</div>'; };
+    var nm = state.name || 'You', roleName = state.access ? state.access.role : '', g = H_moreGroups(), k = H_moreSplit(g), col = function (a) { return '<div class="H_col">' + a.map(function (x) { return '<div class="H_g" data-g="' + x.id + '">' + x.html + '</div>'; }).join('') + '</div>'; };
     $('v-more').innerHTML = appbar({ title: 'More' }) + '<div class="screen"><div class="stack H_more">' +
       '<div class="H_cols">' + col(g.slice(0, k)) + col(g.slice(k)) + '</div>' +
       '<div class="F_group H_you"><div class="A_label">You</div><div class="card glass A_prof"><span class="av" aria-hidden="true">' + esc(CS.initialOf(nm)) + '</span><div class="mid"><span class="t">' + esc(nm) + '</span><span class="s">' + esc(roleName) + (trustOn ? ' · This phone is trusted' : '') + '</span></div>' +
@@ -1218,7 +1236,7 @@
         '<p class="help E_signhelp">Signs you out of the admin dashboard as well, on this phone.</p></div></div>' +
       '</div>' +
       '<div class="help" style="text-align:center;margin-top:16px">Cascade Staff v' + CFG.version + '</div></div>';
-    syncInstall();
+    syncInstall(); H_moreBalance();
   }
   // ---------------------------------------------------------------- Search (MF5): tasks and the manual for staff; guests too for owner and admin
   function H_manualLoad() {
