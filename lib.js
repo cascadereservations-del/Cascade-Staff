@@ -589,7 +589,7 @@
     if (!/^\d{4}-\d{2}-\d{2}$/.test(String(iso || ''))) return null;
     var t = Date.parse(iso + 'T00:00:00+08:00'); return isFinite(t) ? new Date(t).toISOString() : null;
   }
-  var TASK_GROUPS = [['overdue', 'Overdue'], ['today', 'Today'], ['later', 'Coming up'], ['none', 'No date'], ['done', 'Done recently']];
+  var TASK_GROUPS = [['overdue', 'Overdue'], ['today', 'Today'], ['later', 'Coming up'], ['none', 'No due date'], ['done', 'Done recently']];
   var PRIORITY_RANK = { urgent: 0, high: 1, normal: 2, low: 3 };
   // Open tasks by due state (overdue first), then the done ones. Empty groups are left out. Inside a group: due time, priority, age.
   function taskGroups(tasks, today) {
@@ -606,6 +606,8 @@
   function taskDueCount(tasks, today) {
     return (Array.isArray(tasks) ? tasks : []).filter(function (t) { var s = taskDue(t.due_at, today); return t.status !== 'done' && (s === 'overdue' || s === 'today'); }).length;
   }
+  // E_: the word on a priority pill ("high" is a raw value). Normal and low priority get no pill.
+  function taskPriorityLabel(p) { return p === 'urgent' ? 'Urgent' : p === 'high' ? 'High priority' : ''; }
   function reminderProblem(title) {
     var t = String(title == null ? '' : title).trim();
     return t.length < 3 ? 'Give the reminder a short title.' : t.length > 200 ? 'Keep the title under 200 characters.' : '';
@@ -659,9 +661,10 @@
   // staff_inquiry_payments_v1 returns an array of pending bookings. Anything else (error, null, {ok:false}) is 0, so the row hides.
   // A whole number passes through, so the stored count can go back through the same gate.
   function bookingsToConfirmCount(data) { return Array.isArray(data) ? data.length : (Number.isInteger(data) && data > 0 ? data : 0); }
-  function bookingsToConfirmRow(role, data) {
+  // E_: hubLink = the in-app door for bookings/inquiries ({href, external}); the old stand-alone dashboard URL is only the fallback when no dashboard is folded in.
+  function bookingsToConfirmRow(role, data, hubLink) {
     var n = canSeeBookingsToConfirm(role) ? bookingsToConfirmCount(data) : 0;
-    return n > 0 ? { count: n > 99 ? '99+' : String(n), n: n, href: INQUIRIES_URL } : null;
+    return n > 0 ? { count: n > 99 ? '99+' : String(n), n: n, href: hubLink && hubLink.href ? hubLink.href : INQUIRIES_URL, external: hubLink && hubLink.href ? !!hubLink.external : true } : null;
   }
   // Longest edge capped at max, aspect kept, never enlarged, never 0.
   function shrinkSize(w, h, max) {
@@ -768,6 +771,7 @@
   function A_hour12(iso) { var d = new Date(iso); if (isNaN(d.getTime())) return ''; var p = manilaParts(d); return (p.h % 12 === 0 ? 12 : p.h % 12) + (p.h >= 12 ? ' pm' : ' am'); }
   // '2 to 5 pm' when both ends share am or pm, '10 am to 2 pm' when they do not.
   function A_hourSpan(a, b) { if (!A_hour12(a) || !A_hour12(b)) return ''; var x = A_hour12(a).split(' '), y = A_hour12(b).split(' '); return x[1] === y[1] ? x[0] + ' to ' + y[0] + ' ' + y[1] : x.join(' ') + ' to ' + y.join(' '); }
+  function A_titleHasTime(t) { return /\d{1,2}(:\d{2})? ?(am|pm)\b/i.test(String(t || '')); } // E_: the title already says the time, so the sub does not
   function A_timeRange(s, e) { var a = fmtTime(A_hhmm(s, null)), b = fmtTime(A_hhmm(e, null)); return a && b ? a + ' to ' + b : a || ''; }
   // The server filters by role; this filters again. A cleaner (any staff layout) never gets `house` or `inbox_open`, even if the payload carries them.
   function A_noticesView(raw, role, today) {
@@ -783,7 +787,7 @@
       if (rw && rw.from && rw.to && A_hourSpan(rw.from, rw.to)) weather.watch = { text: 'Rain watch, ' + A_hourSpan(rw.from, rw.to), peak: typeof rw.peak_pct === 'number' ? Math.round(rw.peak_pct) : null };
     }
     var list = [];
-    if (weather && weather.watch) list.push({ key: 'rain-watch', type: 'rain', group: 'weather', title: weather.watch.text, sub: (weather.watch.peak != null ? weather.watch.peak + '% chance today' : 'Showers likely') + (weather.source ? ' · ' + weather.source : ''),
+    if (weather && weather.watch) list.push({ key: 'rain-watch', type: 'rain', group: 'weather', title: weather.watch.text, sub: weather.watch.peak != null ? weather.watch.peak + '% chance today' : 'Showers likely',
       date: today || null, detail: 'Close the windows and bring in the laundry before the rain.', source: weather.source, tell: false });
     (Array.isArray(raw.notices) ? raw.notices : []).forEach(function (n) {
       if (!n || typeof n !== 'object' || !n.id || !n.title) return;
@@ -791,7 +795,7 @@
       if (today && date && date < today) return;
       var src = A_NOTICE_SOURCE[n.source] || '';
       list.push({ key: 'n:' + n.id, id: String(n.id), type: type, group: type === 'power' || type === 'water' ? type : 'other', title: String(n.title), date: date, start: n.start_time || null, end: n.end_time || null,
-        sub: [date ? dayShort(date) : '', A_timeRange(n.start_time, n.end_time), src].filter(Boolean).join(' · '), detail: n.detail ? String(n.detail) : '', source: src, tell: canSeeGuestContact(role) && (type === 'power' || type === 'water' || type === 'rain') });
+        sub: [date ? dayShort(date) : '', A_titleHasTime(n.title) ? '' : A_timeRange(n.start_time, n.end_time), src].filter(Boolean).join(' · '), detail: n.detail ? String(n.detail) : '', source: src, tell: canSeeGuestContact(role) && (type === 'power' || type === 'water' || type === 'rain') });
     });
     list.sort(function (a, b) { return (a.type === 'rain' && a.key === 'rain-watch' ? 0 : 1) - (b.type === 'rain' && b.key === 'rain-watch' ? 0 : 1) || String(a.date || '9999').localeCompare(String(b.date || '9999')) || String(a.start || '').localeCompare(String(b.start || '')); });
     var house = mgr ? (Array.isArray(raw.house) ? raw.house : []).filter(function (h) { return h && (h.kind === 'low_stock' || h.kind === 'finding') && h.title; })
@@ -913,6 +917,153 @@
     return items.map(function (i) { return { title: i[0], text: i[1] }; });
   }
 
+  // ================================================================ E_ streamline pass (s81, lane E) ================================================
+  // ---- the one notification pill: what needs a person, counted once ----
+  // Groups in priority order. n counts rows in the first six; notices are shown in the sheet but never counted (the Notices card carries them).
+  var E_SECTIONS = [['risk', 'Turnover at risk'], ['overdue', 'Overdue'], ['clash', 'Clash days'], ['confirm', 'To confirm'], ['inbox', 'Inbox'], ['warn', 'Warnings'], ['notice', 'Notices today and tomorrow']];
+  var E_MAX_ROWS = 3;
+  function E_warnKey(w) { return w.kind + '|' + (w.title || '') + '|' + ((w.detail && w.detail.date) || ''); }
+  function E_dueSub(t, today) { var l = t.due_at ? taskDueLabel(t.due_at, today) : ''; return l; }
+  // i = { role, today, error, lastAt, ready:{payload,tasks,bookings,notices}, tasks:[open or all tasks], clashDays:[iso], bookings:n, inbox:n|null, warnings:[], notices:[A_noticesView list] }
+  // -> { phase: 'loading'|'clear'|'items'|'offline', n, top, topWord, tone, sections:[{key,label,rows,shown,more}], pill:{text,short,dot,glyph,aria}, empty }
+  function E_attention(i) {
+    i = i || {}; var role = i.role, today = i.today || manilaToday(), rd = i.ready || {};
+    var money = layoutForRole(role) === 'admin', mgr = canSeeGuestContact(role), canBk = canSeeBookingsToConfirm(role);
+    var by = { risk: [], overdue: [], clash: [], confirm: [], inbox: [], warn: [], notice: [] }, taken = {};
+    (Array.isArray(i.tasks) ? i.tasks : []).forEach(function (t) {
+      if (!t || t.status === 'done') return;
+      var key = t.source + ':' + t.id, due = taskDue(t.due_at, today);
+      if (t.blocks_arrival) { taken[key] = 1; by.risk.push({ group: 'risk', id: key, glyph: 'alert', title: t.title, sub: 'Blocks the next arrival' + (E_dueSub(t, today) ? ' · ' + E_dueSub(t, today) : ''), go: { kind: 'tasks', filter: 'blocks' } }); }
+    });
+    (Array.isArray(i.tasks) ? i.tasks : []).forEach(function (t) {
+      if (!t || t.status === 'done' || taken[t.source + ':' + t.id] || taskDue(t.due_at, today) !== 'overdue') return;
+      by.overdue.push({ group: 'overdue', id: t.source + ':' + t.id, glyph: 'alert', title: t.title, sub: E_dueSub(t, today), go: { kind: 'tasks', filter: 'due' } });
+    });
+    if (money) {
+      var seen = {}; (Array.isArray(i.clashDays) ? i.clashDays : []).slice().sort().forEach(function (d) {
+        if (typeof d !== 'string' || d < today || d > addDays(today, 59) || seen[d]) return; seen[d] = 1;
+        by.clash.push({ group: 'clash', id: d, glyph: 'alert', title: 'Two guests on ' + dayShort(d), sub: 'One booking needs to move', go: { kind: 'day', date: d } });
+      });
+    }
+    var bn = canBk ? bookingsToConfirmCount(i.bookings) : 0;
+    if (bn > 0) by.confirm.push({ group: 'confirm', id: 'confirm', glyph: 'clip', n: bn, title: plural(bn, 'booking') + ' to confirm', sub: 'Open the pending bookings', go: { kind: 'bookings' } });
+    var inn = mgr && typeof i.inbox === 'number' && i.inbox > 0 ? Math.floor(i.inbox) : 0;
+    if (inn > 0) by.inbox.push({ group: 'inbox', id: 'inbox', glyph: 'chat', n: inn, title: inn === 1 ? '1 open message' : inn + ' open messages', sub: 'Guests waiting for a reply', go: { kind: 'inbox' } });
+    var brown = {};
+    orderWarnings((Array.isArray(i.warnings) ? i.warnings : []).filter(function (w) { return w && w.kind && (w.kind !== 'verifier' || mgr); })).forEach(function (w) {
+      if (w.kind === 'brownout') {
+        var b = brownoutText(w), d = w.detail && w.detail.date; if (d) brown[d] = 1;
+        by.warn.push({ group: 'warn', id: E_warnKey(w), glyph: 'alert', word: 'Brownout' + (d ? ' ' + dayShort(d).split(' ')[0] : ''), title: b.head, sub: b.rest, go: { kind: 'notices' } });
+      } else if (w.kind === 'inventory') {
+        var l = lowStockText(w); by.warn.push({ group: 'warn', id: E_warnKey(w), glyph: 'alert', word: 'Low stock', title: 'Low stock · ' + l.rest, sub: 'Inventory', go: { kind: 'inventory' } });
+      } else by.warn.push({ group: 'warn', id: E_warnKey(w), glyph: 'info', word: 'System check', title: 'System check · ' + (w.title || ''), sub: 'Needs a person to look', go: { kind: 'warn', key: E_warnKey(w) } });
+    });
+    var tomorrow = addDays(today, 1);
+    (Array.isArray(i.notices) ? i.notices : []).forEach(function (n) {
+      if (!n || !n.date || (n.date !== today && n.date !== tomorrow)) return;
+      if (n.type === 'power' && brown[n.date]) return; // the brownout warning already says it
+      by.notice.push({ group: 'notice', id: n.key, glyph: (A_NOTICE_TYPES[n.type] || A_NOTICE_TYPES.note).icon, title: n.title, sub: n.sub || '', go: { kind: 'notices' } });
+    });
+    var counted = ['risk', 'overdue', 'clash', 'confirm', 'inbox', 'warn'], n = 0, first = null;
+    counted.forEach(function (k) { n += by[k].length; if (!first && by[k].length) first = k; });
+    var top = '', word = '', tone = 'ok';
+    if (first) {
+      var rs = by[first], c = rs.length;
+      top = first === 'risk' ? 'Turnover at risk' : first === 'overdue' ? c + ' overdue' : first === 'clash' ? (c === 1 ? 'Clash day' : c + ' clash days') : first === 'confirm' ? rs[0].n + ' to confirm' : first === 'inbox' ? rs[0].n + ' in inbox' : rs[0].word;
+      word = first === 'risk' ? 'Turnover at risk' : first === 'overdue' ? 'Overdue' : first === 'clash' ? (c === 1 ? 'Clash day' : 'Clash days') : first === 'confirm' ? 'To confirm' : first === 'inbox' ? 'In inbox' : rs[0].word;
+      tone = first === 'risk' || first === 'overdue' || first === 'clash' ? 'danger' : 'warn';
+    }
+    var sections = E_SECTIONS.filter(function (s) { return by[s[0]].length; }).map(function (s) {
+      var rows = by[s[0]]; return { key: s[0], label: s[1], rows: rows, shown: rows.slice(0, E_MAX_ROWS), more: rows.length > E_MAX_ROWS ? rows.length : 0 };
+    });
+    var ready = !!rd.payload && !!rd.tasks && (!money || ((!canBk || !!rd.bookings) && !!rd.notices)), phase = i.error ? 'offline' : !ready ? 'loading' : n ? 'items' : 'clear';
+    var shown = n > 99 ? '99+' : String(n), pill;
+    if (phase === 'loading') pill = { text: 'Loading', short: 'Loading', dot: 'idle', glyph: 'refresh', aria: 'Loading what needs attention' };
+    else if (phase === 'offline') pill = { text: 'No connection', short: 'No connection', dot: 'idle', glyph: 'info', aria: 'No connection.' + (i.lastAt ? ' Showing the last update from ' + clockLabel(i.lastAt) + '.' : '') + ' Opens the list' };
+    else if (phase === 'clear') pill = { text: 'All clear', short: 'All clear', dot: 'ok', glyph: 'check', aria: 'All clear. Nothing needs attention. Opens the list' };
+    else pill = { text: shown + ' · ' + word, short: shown + ' to look at', dot: tone === 'danger' ? 'bad' : 'warn', glyph: tone === 'danger' ? 'alert' : 'clock',
+      aria: n === 1 ? '1 thing to look at: ' + top.toLowerCase() + '. Opens the list' : shown + ' things to look at. Most urgent: ' + top.toLowerCase() + '. Opens the list' };
+    var empty = !sections.length;
+    return { phase: phase, n: n, top: top, topWord: word, tone: tone, sections: sections, pill: pill, empty: empty, say: phase === 'items' ? shown + (n === 1 ? ' thing' : ' things') + ' to look at' : phase === 'clear' ? 'All clear' : phase === 'offline' ? 'No connection' : '' };
+  }
+
+  // ---- haptics: three words, one guard. A silent no-op where navigator.vibrate is missing (iOS Safari), when switched off, or when the page is hidden. ----
+  var E_PATTERNS = { tap: [10], error: [30, 60, 30], edge: [6] };
+  var E_hapMem = true; // the switch for this page load; demo keeps only this (no storage)
+  function E_hapticsOn(storage) {
+    if (!E_hapMem) return false;
+    try { return !(storage && storage.getItem('cs_haptics') === '0'); } catch (e) { return true; }
+  }
+  function E_hapticsSet(on, storage) { E_hapMem = !!on; try { if (storage) storage.setItem('cs_haptics', on ? '1' : '0'); } catch (e) { /* blocked storage: the choice lasts until the page closes */ } return E_hapMem; }
+  // env = { navigator, storage, doc }; returns true only when a buzz was asked for
+  function E_buzz(kind, env) {
+    env = env || {}; var nav = env.navigator, p = Object.prototype.hasOwnProperty.call(E_PATTERNS, kind) ? E_PATTERNS[kind] : null;
+    if (!p || !nav || !('vibrate' in nav) || typeof nav.vibrate !== 'function') return false;
+    if (!E_hapticsOn(env.storage)) return false;
+    if (env.doc && env.doc.visibilityState && env.doc.visibilityState !== 'visible') return false;
+    try { nav.vibrate(p.slice()); return true; } catch (e) { return false; }
+  }
+
+  // ---- gestures: the numbers, then the one helper (E_drag) that every swipe goes through ----
+  var E_EDGE = 24, E_LOCK = 12, E_RATIO = 1.5, E_WINDOW = 80;
+  function E_lockOf(dx, dy) { var ax = Math.abs(dx), ay = Math.abs(dy); return ax > E_LOCK && ax > E_RATIO * ay ? 'x' : ay > E_LOCK && ay > E_RATIO * ax ? 'y' : ''; }
+  function E_inEdge(x, w) { return x < E_EDGE || x > w - E_EDGE; }
+  // px/ms over the last 80 ms of {t,x,y} samples
+  function E_velocity(s) {
+    var n = s.length; if (n < 2) return { vx: 0, vy: 0 };
+    var last = s[n - 1], a = s[n - 2], k; for (k = n - 2; k >= 0; k--) { if (last.t - s[k].t <= E_WINDOW) a = s[k]; else break; }
+    var dt = last.t - a.t; return dt > 0 ? { vx: (last.x - a.x) / dt, vy: (last.y - a.y) / dt } : { vx: 0, vy: 0 };
+  }
+  function E_tabFollow(dx) { return Math.max(-48, Math.min(48, dx * 0.35)); } // damped: "there is a page beside this"
+  function E_tabCommit(dx, w, vx) { return Math.abs(dx) >= 0.25 * w || Math.abs(vx) >= 0.4; }
+  function E_sheetFollow(dy) { return dy >= 0 ? dy : Math.max(-16, dy * 0.2); }
+  function E_sheetCommit(dy, vy) { return dy >= 96 || vy >= 0.5; }
+  function E_taskFollow(dx, open) { var a = -dx; return a <= 0 ? 0 : a <= open ? a : open + (a - open) * 0.25; } // px the row has moved left
+  function E_taskCommit(dx, w, vx) { return -dx >= 0.4 * w || -vx >= 0.5; }
+  function E_taskOpens(dx) { return -dx > 48; }
+  function E_slideCommit(dx, travel, vx) { return dx >= 0.7 * travel || (dx >= 0.4 * travel && vx >= 0.6); }
+  // E_drag(root, o): pointer events only, first pointer only, no main-button-less starts. o = { sel, axis:'x'|'y', vw(), reduced(), canStart(el, ev),
+  //   start(el), move(el, d), reached(el, d) -> bool (fires onEdge once per drag), onEdge(el, d), end(el, d), cancel(el) }.  d = { dx, dy, vx, vy }
+  function E_drag(root, o) {
+    var g = null, swallow = { el: null, until: 0 };
+    function stamp(ev) { return typeof ev.timeStamp === 'number' ? ev.timeStamp : Date.now(); }
+    function dOf(ev) { var dx = ev.clientX - g.x0, dy = ev.clientY - g.y0, v = E_velocity(g.s); return { dx: dx, dy: dy, vx: v.vx, vy: v.vy }; }
+    function down(ev) {
+      if (g || ev.button > 0) return;
+      var el = ev.target && ev.target.closest ? ev.target.closest(o.sel) : null; if (!el || (o.canStart && !o.canStart(el, ev))) return;
+      if (o.axis === 'x' && E_inEdge(ev.clientX, o.vw ? o.vw() : 360)) return;
+      g = { el: el, id: ev.pointerId, x0: ev.clientX, y0: ev.clientY, lock: '', s: [{ t: stamp(ev), x: ev.clientX, y: ev.clientY }], edged: false, reduced: !!(o.reduced && o.reduced()) };
+    }
+    function move(ev) {
+      if (!g || ev.pointerId !== g.id) return;
+      g.s.push({ t: stamp(ev), x: ev.clientX, y: ev.clientY }); if (g.s.length > 12) g.s.shift();
+      if (!g.lock) {
+        var L = E_lockOf(ev.clientX - g.x0, ev.clientY - g.y0); if (!L) return;
+        if (L !== o.axis) { g = null; return; } // the other direction is the page's to scroll
+        g.lock = L; try { if (g.el.setPointerCapture && ev.pointerId != null) g.el.setPointerCapture(ev.pointerId); } catch (e) {}
+        if (o.start) o.start(g.el);
+      }
+      var d = dOf(ev); if (!g.reduced && o.move) o.move(g.el, d);
+      var over = o.reached ? !!o.reached(g.el, d) : false;
+      if (over && !g.edged) { g.edged = true; if (o.onEdge) o.onEdge(g.el, d); } else if (!over) g.edged = false;
+    }
+    function up(ev) {
+      if (!g || ev.pointerId !== g.id) return;
+      var G = g; g = null; if (!G.lock) return;
+      G.s.push({ t: stamp(ev), x: ev.clientX, y: ev.clientY });
+      var d = { dx: ev.clientX - G.x0, dy: ev.clientY - G.y0 }, v = E_velocity(G.s); d.vx = v.vx; d.vy = v.vy; d.reduced = G.reduced;
+      swallow = { el: G.el, until: Date.now() + 400 }; // the click that follows a drag is ours to swallow, for 400 ms at most
+      if (o.end) o.end(G.el, d);
+    }
+    function cancel(ev) { if (!g || ev.pointerId !== g.id) return; var G = g; g = null; if (G.lock && o.cancel) o.cancel(G.el); }
+    function click(ev) { if (swallow.el && Date.now() < swallow.until && swallow.el.contains && swallow.el.contains(ev.target)) { swallow.el = null; ev.preventDefault(); ev.stopPropagation(); } }
+    root.addEventListener('pointerdown', down); root.addEventListener('pointermove', move); root.addEventListener('pointerup', up); root.addEventListener('pointercancel', cancel);
+    root.addEventListener('click', click, true);
+    return { down: down, move: move, up: up, cancel: cancel, busy: function () { return !!g; } };
+  }
+  // the order of the three calendar views, for the swipe and for the arrow keys; no wrap
+  function E_tabNeighbour(cur, dir) { var i = A_CAL_TABS.indexOf(cur) + dir; return i < 0 || i >= A_CAL_TABS.length ? null : A_CAL_TABS[i]; }
+
   return {
     isInAppBrowser: isInAppBrowser, installState: installState, openInBrowserLink: openInBrowserLink, INSTALL_URL: INSTALL_URL,
     taskKindLabel: taskKindLabel, manilaDayOf: manilaDayOf, taskDue: taskDue, taskDueLabel: taskDueLabel, dueFromDate: dueFromDate, taskGroups: taskGroups,
@@ -933,6 +1084,9 @@
     parseNotes: parseNotes, returningLabel: returningLabel, earlierLine: earlierLine, companionsLine: companionsLine, todayCardState: todayCardState,
     orderWarnings: orderWarnings, brownoutText: brownoutText, lowStockText: lowStockText, warningSummary: warningSummary,
     weatherLine: weatherLine, rainLine: rainLine, weatherStale: weatherStale, esc: esc,
-    A_HOUSE_FALLBACK: A_HOUSE_FALLBACK, A_houseTimes: A_houseTimes, A_turnoverClock: A_turnoverClock, A_turnoverLine: A_turnoverLine, A_hm: A_hm, A_NOTICE_TYPES: A_NOTICE_TYPES, A_noticesView: A_noticesView, A_noticeFilters: A_noticeFilters, A_dayMarks: A_dayMarks, A_noticeDay: A_noticeDay, A_guestMessage: A_guestMessage, A_CAL_TABS: A_CAL_TABS, A_calTab: A_calTab, A_stayShade: A_stayShade, A_hubGroups: A_hubGroups, A_hubRoutes: A_hubRoutes, A_hubRouteOk: A_hubRouteOk, A_hubDoorUrl: A_hubDoorUrl, A_whatsNew: A_whatsNew, A_shortTime: A_shortTime, A_PINNED: A_PINNED, A_noticeAddError: A_noticeAddError, A_NOTICE_HINT: A_NOTICE_HINT, A_flagDup: A_flagDup, A_facebookUrl: A_facebookUrl, A_fbPluginUrl: A_fbPluginUrl, A_noticeAddProblem: A_noticeAddProblem, A_noticeAddArgs: A_noticeAddArgs, A_plainRefusal: A_plainRefusal, A_hour12: A_hour12, A_timeRange: A_timeRange
+    A_HOUSE_FALLBACK: A_HOUSE_FALLBACK, A_houseTimes: A_houseTimes, A_turnoverClock: A_turnoverClock, A_turnoverLine: A_turnoverLine, A_hm: A_hm, A_NOTICE_TYPES: A_NOTICE_TYPES, A_noticesView: A_noticesView, A_noticeFilters: A_noticeFilters, A_dayMarks: A_dayMarks, A_noticeDay: A_noticeDay, A_guestMessage: A_guestMessage, A_CAL_TABS: A_CAL_TABS, A_calTab: A_calTab, A_stayShade: A_stayShade, A_hubGroups: A_hubGroups, A_hubRoutes: A_hubRoutes, A_hubRouteOk: A_hubRouteOk, A_hubDoorUrl: A_hubDoorUrl, A_whatsNew: A_whatsNew, A_shortTime: A_shortTime, A_PINNED: A_PINNED, A_noticeAddError: A_noticeAddError, A_NOTICE_HINT: A_NOTICE_HINT, A_flagDup: A_flagDup, A_facebookUrl: A_facebookUrl, A_fbPluginUrl: A_fbPluginUrl, A_noticeAddProblem: A_noticeAddProblem, A_noticeAddArgs: A_noticeAddArgs, A_plainRefusal: A_plainRefusal, A_hour12: A_hour12, A_timeRange: A_timeRange,
+    taskPriorityLabel: taskPriorityLabel, E_attention: E_attention, E_warnKey: E_warnKey, E_buzz: E_buzz, E_hapticsOn: E_hapticsOn, E_hapticsSet: E_hapticsSet, E_PATTERNS: E_PATTERNS,
+    E_drag: E_drag, E_lockOf: E_lockOf, E_inEdge: E_inEdge, E_velocity: E_velocity, E_tabFollow: E_tabFollow, E_tabCommit: E_tabCommit, E_sheetFollow: E_sheetFollow, E_sheetCommit: E_sheetCommit,
+    E_taskFollow: E_taskFollow, E_taskCommit: E_taskCommit, E_taskOpens: E_taskOpens, E_slideCommit: E_slideCommit, E_tabNeighbour: E_tabNeighbour
   };
 });
