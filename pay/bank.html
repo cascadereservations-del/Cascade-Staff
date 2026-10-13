@@ -7,6 +7,8 @@
 <meta name="robots" content="noindex">
 <meta name="referrer" content="no-referrer">
 <link rel="stylesheet" href="../styles.css">
+<link rel="stylesheet" href="../tokens.css">
+<link rel="stylesheet" href="C_pay.css">
 <script src="../theme.js"></script>
 </head>
 <body>
@@ -20,14 +22,17 @@
   var P = window.CSPay, el = document.getElementById('bank');
   var key = new URLSearchParams(location.search).get('app'), listed = P.listedBankApps();
   function e(s) { return String(s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+  // Lane C: the how-to is the same for every bank. The exact menu name in the BPI app is unconfirmed, so the words stay generic.
+  var HOW = '<p class="sub">Open your bank app yourself, choose the option to pay with a QR code, then pick the saved QR photo from your gallery. The amount is already in the QR.</p>';
   if (listed.indexOf(key) < 0) {
-    el.innerHTML = '<h1 class="dlg">Open your bank app</h1><p class="sub">Open your bank or e-wallet app yourself, choose <b>Scan QR</b>, then upload the QR photo from your gallery.</p>';
+    // BPI first: the table order is the list order. Only apps verified on Lloyd's phone are ever offered.
+    el.innerHTML = '<h1 class="dlg">Open your bank app</h1>' + listed.map(function (k) { return '<a class="btn btn-primary btn-block" href="bank.html?app=' + encodeURIComponent(k) + '">Open ' + e(P.BANK_APPS[k].name) + '</a>'; }).join('') + HOW;
     return;
   }
   var a = P.BANK_APPS[key], ios = /iphone|ipad|ipod/i.test(navigator.userAgent);
   var href = ios ? (a.ios || a.store) : P.bankIntentUrl(key);
   el.innerHTML = '<h1 class="dlg">Open ' + e(a.name) + '</h1><a class="btn btn-primary btn-block" href="' + e(href) + '">Open ' + e(a.name) + '</a>' +
-    '<p class="sub">In the app: <b>Scan QR</b>, then upload the QR photo from your gallery. The amount is already in the QR.</p>';
+    HOW;
 })();
 </script>
 </body>

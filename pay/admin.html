@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Pay staff</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="description" content="Pay a staff payment request with a QR, then add the payment screenshot.">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0B1420" media="(prefers-color-scheme: dark)">
+<meta name="robots" content="noindex">
+<meta name="referrer" content="no-referrer">
+<link rel="icon" type="image/png" sizes="192x192" href="../icons/icon-192.png">
+<link rel="stylesheet" href="../styles.css">
+<link rel="stylesheet" href="../tokens.css">
+<link rel="stylesheet" href="C_pay.css">
+<script src="../theme.js"></script>
+</head>
+<body>
+<!-- Lane C (s81). The payout QR is shown here for one open request and kept in memory only; nothing on this page is stored or cached. -->
+<div class="shell" id="C_pay_admin" aria-live="polite"></div>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.116.0/dist/umd/supabase.js" integrity="sha384-iLddHTLokph6Omwoyid4XKxHaWa6w41BnoEj0q5oOrzmYPpHIKt1wyjReA7s//pP" crossorigin="anonymous"></script>
+<script src="../icons.js"></script>
+<script src="../lib.js"></script>
+<script src="../demo.js"></script>
+<script src="pay-lib.js"></script>
+<script src="C_qrph.js"></script>
+<script src="C_qr.js"></script>
+<script src="C_admin-lib.js"></script>
+<script src="C_admin.js"></script>
+</body>
+</html>

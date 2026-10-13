@@ -1,0 +1,84 @@
+/* Cascade Staff - v5 skin for the pay pages (Lane C, s81). Loaded after ../styles.css and ../tokens.css on pay/index.html, pay/admin.html and pay/bank.html.
+   It does not edit pay.js: it points the shell's variable names at the v5 tokens (so light and dark follow tokens.css) and restyles the pay components
+   to the Pay and PayRates mock-ups: 17 px body, 44 px targets, 24 px glass cards, status with a glyph and a word. Every colour is a var(--v5-*). */
+:root, :root:not([data-theme="light"]), :root[data-theme="dark"] {
+  --bg: var(--v5-bg); --card: var(--v5-surf); --muted: var(--v5-sunk); --border: var(--v5-line);
+  --fg: var(--v5-ink); --fg-2: var(--v5-ink-2); --fg-3: var(--v5-ink-3);
+  --primary: var(--v5-act); --primary-fg: var(--v5-act-fg); --primary-soft: var(--v5-fill); --ring: var(--v5-act);
+  --accent: var(--v5-gold); --accent-text: var(--v5-gold-text); --accent-soft: var(--v5-gold-soft);
+  --ok: var(--v5-ok-t); --ok-soft: var(--v5-ok-w); --warn: var(--v5-warn-t); --warn-soft: var(--v5-warn-w);
+  --danger: var(--v5-danger-t); --danger-soft: var(--v5-danger-w); --info: var(--v5-info-t); --info-soft: var(--v5-info-w);
+  --font-ui: var(--v5-font-ui); --font-display: var(--v5-font-display); --hairline: var(--v5-sep);
+  --r-lg: var(--v5-r-card); --r-md: var(--v5-r-field); --touch: var(--v5-touch);
+}
+body { background: var(--v5-ambient), var(--v5-bg); color: var(--v5-ink); font: 400 var(--v5-t-body)/24px var(--v5-font-ui); letter-spacing: -.01em; }
+.appbar { background: var(--v5-glass); -webkit-backdrop-filter: var(--v5-blur); backdrop-filter: var(--v5-blur); border-bottom: 1px solid var(--v5-card-edge); }
+.appbar .ttl { font: 400 24px/30px var(--v5-font-display); letter-spacing: 0; }
+.iconbtn { min-width: var(--v5-touch); min-height: var(--v5-touch); }
+.card { background: var(--v5-card-glass); -webkit-backdrop-filter: var(--v5-blur); backdrop-filter: var(--v5-blur); border: 1px solid var(--v5-card-edge); border-radius: var(--v5-r-card);
+  box-shadow: inset 0 1px 0 var(--v5-card-hi), 0 8px 24px var(--v5-card-shadow); }
+.cap.up { font: 700 13px/18px var(--v5-font-ui); letter-spacing: .08em; color: var(--v5-gold-text); }
+.help, .payrow .s, .mid .s { font-size: var(--v5-t-2); line-height: 20px; color: var(--v5-ink-2); }
+.payrow .t, .mid .t { font-size: var(--v5-t-body); line-height: 24px; }
+.payrow .t .val, .payrow .t.val { font-weight: 700; font-variant-numeric: tabular-nums; }
+.btn { height: var(--v5-touch); min-height: var(--v5-touch); font-size: var(--v5-t-2); letter-spacing: 0; border-radius: var(--v5-r-field); }
+.btn-sm { height: var(--v5-touch); min-height: var(--v5-touch); }
+.btn-block { height: 52px; font-size: var(--v5-t-body); border-radius: var(--v5-r-card); }
+.btn-primary { background: var(--v5-act); color: var(--v5-act-fg); box-shadow: 0 4px 12px var(--v5-card-shadow); background-image: none; }
+.btn-secondary { background: var(--v5-fill); color: var(--v5-ink); border-color: var(--v5-line); }
+.btn:focus-visible, .chk:focus-visible, .sw:focus-visible, summary:focus-visible, .C_check input:focus-visible { outline: 2px solid var(--v5-act); outline-offset: 2px; }
+.chk { width: 28px; height: 28px; border-radius: 8px; position: relative; border-color: var(--v5-line-2); }
+.chk::before, .sw::before { content: ""; position: absolute; inset: -8px; }
+.sw { position: relative; min-height: var(--v5-touch); font-size: var(--v5-t-2); color: var(--v5-ink-2); }
+.sw i { width: 48px; height: 28px; background: var(--v5-sunk); border: 1px solid var(--v5-line-2); box-sizing: border-box; }
+.sw i::after { top: 3px; left: 3px; width: 20px; height: 20px; background: var(--v5-surf); }
+.sw[aria-checked="true"] i { background: var(--v5-act); border-color: var(--v5-act); } .sw[aria-checked="true"] i::after { background: var(--v5-act-fg); transform: translateX(20px); }
+.input { height: var(--v5-touch); border-radius: var(--v5-r-field); background: var(--v5-surf); border-color: var(--v5-line); }
+.input input { font-size: var(--v5-t-body); }
+.field label { font-size: var(--v5-t-2); }
+.pill { min-height: 28px; font-size: 12px; letter-spacing: .04em; }
+.errbox, .okbox, .infobox { font-size: var(--v5-t-2); line-height: 20px; border-radius: var(--v5-r-field); }
+.infobox { background: var(--v5-warn-glass); color: var(--v5-warn-t); }
+.total .amt { font: 700 28px/32px var(--v5-font-ui); font-variant-numeric: tabular-nums; }
+.sticky { background: linear-gradient(to top, var(--v5-bg) 82%, transparent); }
+.tabbar { background: var(--v5-bar); border-top: 0; color: var(--v5-bar-fg); }
+.tab { min-height: var(--v5-touch); }
+
+/* ---- admin Pay screen ---- */
+.C_amountbox { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 12px; }
+.C_amountbox .cap { flex-basis: 100%; }
+.C_amount { font: 700 44px/48px var(--v5-font-ui); letter-spacing: -.02em; color: var(--v5-ink); }
+.C_qrbox { display: grid; gap: 8px; justify-items: center; }
+.C_qrframe { background: #fff; padding: 12px; border-radius: 20px; width: min(86vw, 340px); aspect-ratio: 1 / 1; box-shadow: 0 8px 24px var(--v5-card-shadow); box-sizing: border-box; }
+.C_qrframe svg { width: 100%; height: 100%; display: block; }
+.C_actions { justify-content: center; }
+.C_fallback { border: 1px solid var(--v5-line); border-radius: var(--v5-r-field); padding: 0 14px; }
+.C_fallback summary { min-height: var(--v5-touch); display: flex; align-items: center; cursor: pointer; font-weight: 600; }
+.C_fallback .stack { padding-bottom: 14px; }
+.C_check { display: flex; align-items: center; gap: 10px; min-height: var(--v5-touch); font-size: var(--v5-t-2); }
+.C_check input { width: 24px; height: 24px; }
+.C_rowstatus { padding: 0 16px 12px 68px; border-bottom: 1px solid var(--v5-sep); }
+
+/* ---- "You were paid" notice on the cleaner home ---- */
+.C_notice { display: flex; gap: 12px; align-items: flex-start; padding: 14px 16px; background: var(--v5-ok-w); color: var(--v5-ok-t); border: 1px solid var(--v5-card-edge); border-radius: var(--v5-r-card); }
+.C_notice-ico { flex: none; margin-top: 2px; }
+.C_notice-body { flex: 1; min-width: 0; display: grid; gap: 4px; }
+.C_notice-head { font: 700 var(--v5-t-body)/24px var(--v5-font-ui); }
+.C_notice-line { font: 700 var(--v5-t-2)/20px var(--v5-font-ui); font-variant-numeric: tabular-nums; }
+.C_notice-text { margin: 0; font-size: var(--v5-t-2); line-height: 22px; color: var(--v5-ink); }
+.C_notice-ok { justify-self: start; margin-top: 6px; }
+
+/* ---- Your requests: Requested -> Paying -> Paid ---- */
+.C_steps { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-top: 6px; }
+.C_step { display: inline-flex; align-items: center; gap: 4px; min-height: 28px; padding: 0 10px 0 8px; border-radius: var(--v5-r-full); font: 600 12px/16px var(--v5-font-ui); border: 1px solid var(--v5-line); color: var(--v5-ink-2); }
+.C_step[data-state="done"] { color: var(--v5-ok-t); background: var(--v5-ok-w); border-color: transparent; }
+.C_step[data-state="now"] { color: var(--v5-act-fg); background: var(--v5-act); border-color: transparent; }
+.C_step-sep { width: 8px; height: 1px; background: var(--v5-line-2); }
+.C_ref { font-variant-numeric: tabular-nums; }
+
+/* ---- the push toggle ---- */
+.C_push { display: grid; gap: 6px; padding: 12px 16px; }
+.C_push .sw { width: 100%; }
+
+@media (prefers-reduced-motion: reduce) { .btn, .sw i, .sw i::after { transition: none; } .btn:active { transform: none; } }
+@media (max-width: 340px) { .C_amount { font-size: 36px; line-height: 40px; } }
