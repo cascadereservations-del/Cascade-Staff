@@ -1,0 +1,46 @@
+/* Native Inventory screen (lane I). Tokens only; the shell's card, rowi, btn, chip, field, input, sheet and scrim classes do the rest. */
+.I_wrap { display: grid; gap: 12px; min-width: 0; padding-top: 4px; }
+.I_wrap > * { min-width: 0; }
+.I_tabs .btn { min-height: 48px; }
+.I_sum { display: flex; align-items: center; gap: 12px; }
+.I_g { display: inline-flex; align-items: center; justify-content: center; width: 40px; height: 40px; flex: none; border-radius: var(--r-full); font-size: var(--v5-t-body); font-weight: 700; }
+.I_sumok .I_g { background: var(--v5-ok-w); color: var(--v5-ok-t); }
+.I_sumlow .I_g { background: var(--v5-warn-w); color: var(--v5-warn-t); }
+.I_sumt { font: 600 var(--v5-t-body)/1.3 var(--font-display, var(--font-ui)); color: var(--fg); }
+.I_chips .chip { font-size: var(--v5-t-2); }
+.I_list .I_row { align-items: center; }
+.I_row .t { overflow-wrap: anywhere; }
+.I_row .s { font-size: var(--v5-t-2); }
+div.I_row { cursor: default; }
+.I_lv { flex: none; display: inline-flex; align-items: center; gap: 4px; padding: 4px 10px; border-radius: var(--r-full); font: 600 var(--v5-t-2)/1.2 var(--font-ui); white-space: nowrap; }
+.I_ok { background: var(--v5-ok-w); color: var(--v5-ok-t); }
+.I_low { background: var(--v5-warn-w); color: var(--v5-warn-t); }
+.I_out { background: var(--v5-danger-w); color: var(--v5-danger-t); }
+.I_bar { position: relative; display: block; width: 100%; height: 6px; margin-top: 6px; border-radius: 3px; background: var(--v5-sunk); overflow: hidden; }
+.I_bar i { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 3px; background: var(--v5-ok-t); }
+.I_bar.I_blow i { background: var(--v5-warn-t); }
+.I_bar.I_bout i { background: var(--v5-danger); }
+.I_bar b { position: absolute; left: 50%; top: 0; bottom: 0; width: 2px; background: var(--v5-ink); opacity: .55; } /* the reorder point */
+.I_bar.I_bout i { width: 0 !important; }
+.I_load { padding: 24px 0; text-align: center; }
+.I_fail .btn { margin-top: 12px; }
+.I_sheet { max-height: 92vh; overflow-y: auto; overscroll-behavior: contain; display: block; }
+.I_sheet .I_sht { font: 600 var(--v5-t-section)/1.25 var(--font-display, var(--font-ui)); margin: 0 0 4px; overflow-wrap: anywhere; }
+.I_sheet .I_sht:focus { outline: none; }
+.I_sheet form, .I_sheet .I_btns { display: grid; gap: 12px; }
+.I_sheet .help { font-size: var(--v5-t-2); margin: 0; }
+.I_lvline { margin: 8px 0 0; }
+.I_dl { margin: 12px 0; display: grid; gap: 0; }
+.I_kv { display: flex; justify-content: space-between; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--v5-sep); font-size: var(--v5-t-2); }
+.I_kv dt { color: var(--fg-2); } .I_kv dd { margin: 0; text-align: right; font-weight: 600; overflow-wrap: anywhere; }
+.I_conf { margin: 12px 0 0; font-size: var(--v5-t-body); overflow-wrap: anywhere; }
+.I_btns { margin-top: 12px; }
+.I_step { display: grid; grid-template-columns: 48px 1fr 48px; gap: 8px; align-items: stretch; }
+.I_step .I_sb { padding: 0; min-width: 48px; min-height: 48px; font-size: var(--v5-t-section); }
+.I_step .input input { text-align: center; font-size: var(--v5-t-section); font-weight: 600; }
+.I_more { margin-top: 12px; text-align: center; }
+.I_more a { display: inline-flex; align-items: center; min-height: var(--touch); color: var(--v5-gold-text); }
+.I_sheet .errbox, .I_sheet .okbox { font-size: var(--v5-t-2); }
+.I_sheet .field .err { font-size: var(--v5-t-2); }
+.I_wrap .input input, .I_sheet .input input { min-height: 44px; }
+.I_wrap .field label, .I_wrap .help, .I_wrap .field .lbl { font-size: max(0.8125rem, var(--v5-t-label)); }
