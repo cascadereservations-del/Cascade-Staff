@@ -182,7 +182,7 @@ test('E_fix F9: leaving a door reloads Home and Tasks, so the pill is not stale 
 // ------------------------------------------------------------------------------------------------ F11
 test('E_fix F11: touch-action keeps pinch-zoom, the grab strip is 28 px, the hidden Undo is out of the Tab order, reduced motion keeps the follow and drops the spring-back', async () => {
   assert.match(css, /\.E_tabbody \{ touch-action: pan-y pinch-zoom; \}/); assert.match(css, /\.E_swipewrap \.payrow \{[^}]*touch-action: pan-y pinch-zoom;/); assert.match(css, /\.A_slide \{[^}]*touch-action: pan-y pinch-zoom;/); assert.doesNotMatch(css, /touch-action: pan-y;/);
-  assert.match(css, /\.E_grab \{ position: sticky; top: 0; z-index: 3; height: 28px; margin: -20px -16px -8px; touch-action: none; \}/);
+  assert.match(css, /\.E_grab \{ position: sticky; top: 0; z-index: 3; height: 28px; margin: -16px -16px -12px; touch-action: none; \}/);
   const gone = new Set(), app = await boot({ role: 'admin', hash: '#tasks', handlers: baseHandlers('admin', { tasks_list_v1: () => tasksOf([T({})].filter((t) => !gone.has(t.id)), true)(), task_set_done_v1: (a) => { gone.add(a.p_id); return { error: null, data: { ok: true } }; } }) });
   await app.click({ 'data-act': 'task-done', 'data-task': 'follow_up_tasks:a' }); assert.match(app.els['v-tasks'].innerHTML, /<div class="okbox sr" role="status">[^]*<button class="btn btn-ghost btn-sm" type="button" data-act="task-undo"[^>]*tabindex="-1">Undo<\/button>/);
   // reduced motion: the knob still follows, and comes back with no transition

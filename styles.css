@@ -696,9 +696,11 @@ button.A_chipglass.E_pill { width: auto; min-width: 124px; max-width: 184px; hei
 .okbox.sr { position: absolute; width: 1px; height: 1px; padding: 0; margin: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
 
 /* Sheets: the pull-down strip. Sticky so it stays at the top of a scrolled sheet; it takes no room (its margins cancel its height). */
-.E_grab { position: sticky; top: 0; z-index: 3; height: 28px; margin: -20px -16px -8px; touch-action: none; } /* the strip over the visible handle (.sheet::before): 28 px, so it hides little of the content under it */
+.E_grab { position: sticky; top: 0; z-index: 3; height: 28px; margin: -16px -16px -12px; touch-action: none; } /* the strip over the visible handle (.sheet::before): 28 px, so it hides little of the content under it */
 /* the sheet's header is a real sticky row: the title (wraps) on the left, Close on the right, its own height and an opaque background; the content starts below it */
-.F_sheethead { position: sticky; top: 0; z-index: 4; display: flex; align-items: flex-start; gap: 8px; margin: -20px -16px 8px; padding: 28px 16px 8px; background: var(--v5-surf); }
+.F_sheethead { position: sticky; top: 0; z-index: 4; display: flex; align-items: flex-start; gap: 8px; margin: 0 -16px 8px; padding: 12px 16px 8px; background: var(--v5-surf); }
+.sheet.calsheet { padding-top: 0; } /* no padding strip above the header for scrolled content to show in */
+.sheet.calsheet::before { margin: 8px auto 4px; }
 .F_sheethead h2 { flex: 1; min-width: 0; margin: 0; padding-top: 8px; }
 .F_close { flex: none; margin-left: auto; }
 .toast .help { color: var(--v5-panel-fg-2); }
@@ -768,15 +770,10 @@ button.A_chipglass.E_pill { width: auto; min-width: 124px; max-width: 184px; hei
 /* ---- F_medium and up: 600 px ---- */
 @media (min-width: 37.5rem) {
   #app { max-width: calc(70rem + var(--v5-nav-w)); }
-@@@ END
-@@@ OLD
-  .A_hero { aspect-ratio: 16 / 7; max-height: 22rem; }
-@@@ NEW
   .A_hero { aspect-ratio: 16 / 7; max-height: max(15.75rem, 34vh); }
   /* long-form screens keep a readable line */
   #v-calendar .screen, #v-tasks .screen, #v-payrates .screen, #v-reply .screen, #v-hub .screen { width: 100%; max-width: 46rem; margin-left: auto; margin-right: auto; }
   #v-more .screen { max-width: 56rem; margin-left: auto; margin-right: auto; }
-  .A_hero { aspect-ratio: 16 / 7; max-height: 22rem; }
   .cal .d { aspect-ratio: 5 / 4; }
   .tabbar { max-width: 30rem; }
   /* sheets: a centred dialog; no grabber, no pull (the button, Escape or the scrim close it) */
@@ -785,6 +782,7 @@ button.A_chipglass.E_pill { width: auto; min-width: 124px; max-width: 184px; hei
     transition: transform var(--v5-sheet-ms) var(--v5-sheet-ease), opacity var(--v5-sheet-ms) var(--v5-sheet-ease), visibility 0s linear var(--v5-sheet-ms); }
   .sheet.on, .sheet.calsheet.on { transform: translate(-50%, -50%); opacity: 1; visibility: visible; transition-delay: 0s; }
   .sheet::before, .E_grab { display: none; }
+  .F_sheethead { padding-top: 20px; }
 }
 
 /* ---- the two-column card grid starts at 42 rem (672 px): at 600 each card would be 270 px, narrower than a 360 px phone ---- */
@@ -844,3 +842,4 @@ button.A_chipglass.E_pill { width: auto; min-width: 124px; max-width: 184px; hei
 .A_herobar .brand { font-size: var(--v5-t-wordmark); }
 .A_chipglass, .E_pill { font-size: var(--v5-t-pill); }
 .card, .sheet, .screen, .A_body { overflow-wrap: break-word; }
+.row-between { flex-wrap: wrap; } /* a label and its pill stack at a large text size instead of pushing the page sideways */

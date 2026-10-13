@@ -103,7 +103,7 @@ test('F_ reserved heights are unchanged and per-class boxes are CSS only: Notice
   assert.match(css, /\.A_noticecard \{ height: 216px; overflow: hidden; align-content: start; \}/);
   assert.match(css, /button\.A_chipglass\.E_pill \{ width: auto; min-width: 124px; max-width: 184px; height: var\(--touch\);/);
   assert.match(css, /\.A_hero \{[^}]*min-height: 252px/); assert.match(css, /\.E_grab \{ position: sticky; top: 0; z-index: 3; height: 28px;/);
-  assert.match(block('(min-width: 37.5rem)'), /\.A_hero \{ aspect-ratio: 16 \/ 7; max-height: 22rem; \}/); assert.match(block('(min-width: 52.5rem)'), /\.A_hero \{ aspect-ratio: 21 \/ 8; \}/);
+  assert.match(block('(min-width: 37.5rem)'), /\.A_hero \{ aspect-ratio: 16 \/ 7; max-height: max\(15\.75rem, 34vh\); \}/); assert.match(block('(min-width: 52.5rem)'), /\.A_hero \{ aspect-ratio: 21 \/ 8; \}/);
   assert.match(block('(max-height: 30rem) and (orientation: landscape)'), /\.A_hero \{ aspect-ratio: auto; min-height: 9\.5rem;/);
   assert.match(read('index.html'), /class="A_bg"[^>]*><img [^>]*width="240" height="160"/); assert.match(read('app.js'), /<img src="img\/house-hero\.webp" alt="" width="720" height="480"/);
   assert.doesNotMatch(read('app.js'), /innerWidth\s*[<>]=?\s*\d{3}/, 'no layout is picked by reading the width in script');
