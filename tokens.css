@@ -45,7 +45,7 @@
      and follows the user's own text size (rem). Sizes between the seven steps use the same curve inline: clamp(N/16 rem, N*0.9349/16 rem + N*0.01807 vw, N*1.12/16 rem). */
   --v5-t-display: clamp(1.875rem, 1.979rem + 1.205vw, 2.75rem); --v5-t-section: clamp(1.25rem, 1.297rem + 0.904vw, 1.875rem); --v5-t-num: clamp(1.25rem, 1.172rem + 0.904vw, 1.75rem);
   --v5-t-body: clamp(1rem, 0.995rem + 0.301vw, 1.1875rem); --v5-t-2: clamp(0.875rem, 0.870rem + 0.301vw, 1.0625rem); --v5-t-label: clamp(0.75rem, 0.779rem + 0.151vw, 0.875rem); --v5-t-min: clamp(0.75rem, 0.716rem + 0.151vw, 0.8125rem);
-  --v5-t-chrome: clamp(12px, 0.75rem, 14px);
+  --v5-t-chrome: clamp(12px, 0.75rem, 14px); --v5-t-pill: clamp(13px, 0.8125rem, 15px); --v5-t-wordmark: clamp(18px, 1.375rem, 24px); /* px-capped chrome: the wordmark and the pill follow the text size only a little, so they never collapse */
   /* F_ spacing: the same method (value at 360, value at 1024); hairlines, targets (44 px), the pill slot and the grabber never scale */
   --v5-gutter: clamp(1rem, 0.458rem + 2.41vw, 2rem); --v5-gap: clamp(0.875rem, 0.672rem + 0.904vw, 1.25rem); --v5-pad: clamp(1rem, 0.864rem + 0.6vw, 1.25rem);
   --v5-nav-w: 0px; --v5-nav-h: 72px;

@@ -6,10 +6,10 @@
 //   Same-origin shell files                                          -> network-first, cache fallback.
 // Nothing personal is ever stored here: the cache holds the shell (HTML, CSS, JS, fonts, icons) and nothing else.
 // A shell that loads offline says "Live information needs a connection"; guest names exist only in JS memory.
-const CACHE_NAME = 'cs-shell-v16';
+const CACHE_NAME = 'cs-shell-v17';
 const NAV_TIMEOUT_MS = 3000;
 // Web Push handlers for the "You were paid" notice live with the pay screens (pay/C_push-sw.js). Absent in the unit-test sandbox.
-if (typeof importScripts === 'function') importScripts('pay/C_push-sw.js');
+if (typeof importScripts === 'function') { try { importScripts('pay/C_push-sw.js'); } catch (e) { /* a missing push file must never stop the new worker installing */ } }
 // The self-hosted font files styles.css @font-face points at (v5: DM Serif Display for titles and names, nothing else). Edit this one list (and styles.css), nothing else here.
 const SELF_FONTS = ['dm-serif-display-400.woff2'];
 // Public pictures of the house (each 60 KB or less). Nothing personal is ever cached.
@@ -42,7 +42,7 @@ function swRoute(pathname, base) {
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME)
-      .then((cache) => Promise.all(SHELL_URLS.map((u) => cache.add(u).catch(() => {}))))
+      .then((cache) => Promise.all(SHELL_URLS.map((u) => cache.add(new Request(u, { cache: 'reload' })).catch(() => {}))))
       .then(() => self.skipWaiting())
   );
 });

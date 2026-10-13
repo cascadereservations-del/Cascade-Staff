@@ -88,7 +88,7 @@ const outsideF = () => { let s = strip(css); const i = s.indexOf('F_ adaptive pa
 
 test('F_ scoping: the card grid, the dialogs, the rail and the side sheets exist only inside their width class; the base rules stay the phone layout', () => {
   const medium = block('(min-width: 37.5rem)'), rail = block('(min-width: 52.5rem), (min-width: 37.5rem) and (max-height: 30rem)'), wide = block('(min-width: 52.5rem)'), base = outsideF();
-  assert.match(medium, /\.A_body \{ grid-template-columns: repeat\(2, minmax\(0, 1fr\)\)/); assert.match(medium, /#v-more \.stack \{ grid-template-columns: repeat\(2/); assert.match(medium, /\.A_body > \.F_span/);
+  const grid = block('(min-width: 42rem)'); assert.match(grid, /\.A_body \{ grid-template-columns: repeat\(2, minmax\(0, 1fr\)\)/, 'two columns start at 42 rem (672 px), not 600'); assert.match(grid, /#v-more \.stack \{ grid-template-columns: repeat\(2/); assert.match(grid, /\.A_body > \.F_span/); assert.doesNotMatch(medium, /grid-template-columns: repeat\(2/, 'the 37.5 rem block keeps the bar and the dialogs only');
   assert.match(medium, /translate\(-50%, -50%\)/); assert.match(medium, /width: min\(36rem, calc\(100% - 2 \* var\(--gutter\)\)\)/); assert.match(medium, /max-height: 85dvh/); assert.match(medium, /\.E_grab \{ display: none; \}/);
   assert.match(medium, /\.tabbar \{ max-width: 30rem; \}/);
   assert.match(rail, /\.tabbar \{ left: 0; right: auto; top: 0; bottom: 0; width: var\(--v5-nav-w\)/); assert.match(rail, /flex-direction: column/); assert.match(rail, /#app\.F_nav \{ padding-left: var\(--v5-nav-w\); \}/);
@@ -122,7 +122,10 @@ test('F_ targets: every rule that ends in an interactive class keeps 44 px (or t
 
 test('F_ the door frame uses the whole window in every class, inside the safe area; the page head carries viewport-fit=cover with no zoom lock; the rail is first in the Tab order', () => {
   const b = strip(css);
-  assert.match(b, /\.doorbar, \.doorframe \{ max-width: none; \}/); assert.match(b, /\.doorframe \{ left: env\(safe-area-inset-left, 0px\); right: env\(safe-area-inset-right, 0px\); width: auto; \}/);
+  assert.match(b, /\.doorbar, \.doorframe \{ max-width: none; \}/); // an iframe is a replaced element: "width: auto" gives it 300 x 150. Resolve the cascade of every .doorframe rule outside a media query and demand an explicit width AND height.
+  const eff = {}; for (const m of b.replace(/@media[^{]+\{(?:[^{}]*\{[^}]*\})*[^{}]*\}/g, '').matchAll(/([^{}]+)\{([^{}]*)\}/g)) if (m[1].split(',').map((x) => x.trim()).includes('.doorframe')) for (const d of m[2].split(';')) { const i = d.indexOf(':'); if (i > 0) eff[d.slice(0, i).trim()] = d.slice(i + 1).trim(); }
+  assert.ok(eff.width && eff.width !== 'auto', 'the door frame has an explicit width, got ' + eff.width); assert.ok(eff.height && eff.height !== 'auto', 'and an explicit height, got ' + eff.height);
+  assert.match(eff.width, /100%/); assert.match(eff.height, /100%/); assert.equal(eff.position, 'fixed'); assert.ok(!/max-width: 480px/.test(eff['max-width'] || ''), 'no phone-width cap');
   for (const f of ['index.html', 'pay/index.html', 'pay/admin.html', 'quick/index.html', 'install/index.html', 'guest/index.html']) { const h = read(f), v = /<meta name="viewport" content="([^"]*)"/.exec(h); assert.ok(v, f); assert.match(v[1], /viewport-fit=cover/, f); assert.doesNotMatch(v[1], /user-scalable|maximum-scale/, f); }
   const html = read('index.html'); assert.ok(html.indexOf('id="tabbar"') < html.indexOf('id="v-home"'), 'the tab bar (the rail on a wide screen) comes first in the markup, so Tab reaches it first');
   assert.match(read('app.js'), /shellEl\.classList\.toggle\('F_nav', !\$\('tabbar'\)\.hidden\)/);

@@ -198,7 +198,7 @@
       '<div><span class="dot">' + ICON('logout', 's16') + '</span><span>Guest out</span><b>' + esc(outToday ? T.outLabel : 'None today') + '</b></div>' +
       '<div class="' + (win ? 'now' : '') + '"><span class="dot">' + ICON('sparkles', 's16') + '</span><span>Clean</span><b>' + esc(closed ? 'Closed' : win ? 'Until ' + CS.A_shortTime(T.check_in) : 'From ' + CS.A_shortTime(T.check_out)) + '</b></div>' +
       '<div><span class="dot">' + ICON('user', 's16') + '</span><span>Guest in</span><b>' + esc(inToday ? T.inLabel : 'None today') + '</b></div></div>';
-    return '<section class="card glass A_card" aria-label="Turnover today"><div class="row-between"><span class="cap up">Turnover today</span><span class="sub num" style="font-size:15px">' + esc(CS.A_turnoverLine(clock, inToday)) + '</span></div>' +
+    return '<section class="card glass A_card" aria-label="Turnover today"><div class="row-between"><span class="cap up">Turnover today</span><span class="sub num" style="font-size:var(--v5-t-2)">' + esc(CS.A_turnoverLine(clock, inToday)) + '</span></div>' +
       steps + (staff ? A_slideStart() : '') + '</section>';
   }
   // Notices card: reads notices_v1. Absent RPC = no card. While the first read is out, a reserved block holds the place.
@@ -438,7 +438,7 @@
     if (upcoming.length) {
       html += '<div class="sect"><span class="cap up">Coming up</span><div class="stack">' + upcoming.map(function (r) {
         var i = confirmedAll.indexOf(r), src = CS.sourceLabel(r.source), joined = r.rows.length > 1 ? r.rows.length + ' bookings shown as one stay' : '';
-        return '<div class="card glass staycard" id="stay-' + i + '" style="' + CS.A_stayShade(i).replace(/--A_g:var\(([^)]+)\);.*/, 'border-left:6px solid var($1)') + '"><div class="strong">' + esc(r.guest_name || 'Guest') + (src ? ' · ' + esc(src) : '') + '</div><div class="sub num" style="font-size:15px;line-height:20px">' + esc(CS.stayDates(r)) + '</div>' +
+        return '<div class="card glass staycard" id="stay-' + i + '" style="' + CS.A_stayShade(i).replace(/--A_g:var\(([^)]+)\);.*/, 'border-left:6px solid var($1)') + '"><div class="strong">' + esc(r.guest_name || 'Guest') + (src ? ' · ' + esc(src) : '') + '</div><div class="sub num" style="font-size:var(--v5-t-2);line-height:1.35">' + esc(CS.stayDates(r)) + '</div>' +
           (joined ? '<div class="help">' + esc(joined) + '</div>' : '') + '</div>';
       }).join('') + '</div></div>';
     }
@@ -529,7 +529,7 @@
   function sheetEls() {
     var sh = $('cal-sheet');
     if (!sh) {
-      var sc = document.createElement('div'); sc.className = 'scrim'; sc.id = 'cal-scrim'; sc.addEventListener('click', closeSheet); document.body.appendChild(sc);
+      var sc = document.createElement('div'); sc.className = 'scrim'; sc.id = 'cal-scrim'; sc.addEventListener('click', E_tryClose); document.body.appendChild(sc);
       sh = document.createElement('div'); sh.className = 'sheet calsheet'; sh.id = 'cal-sheet'; sh.setAttribute('role', 'dialog'); sh.setAttribute('aria-modal', 'true');
       sh.setAttribute('aria-labelledby', 'cs-h'); sh.setAttribute('aria-hidden', 'true');
       sh.innerHTML = '<div class="E_grab" aria-hidden="true"></div><div class="sr" id="cs-live" role="status" aria-live="polite"></div><div id="cs-body"></div>'; document.body.appendChild(sh);
@@ -537,20 +537,29 @@
     return { sheet: sh, scrim: $('cal-scrim') };
   }
   function openSheet(kind, key) {
-    state.sheet = { kind: kind, key: key, view: current, form: { kind: 'brownout', label: '' }, busy: false, err: '', msg: '', missing: false };
+    var opener = document.activeElement;
+    state.sheet = { kind: kind, key: key, view: current, opener: opener, form: { kind: 'brownout', label: '' }, busy: false, err: '', msg: '', missing: false };
     var e = sheetEls(); $('cs-live').textContent = ''; drawSheet();
-    e.sheet.classList.add('on'); e.sheet.setAttribute('aria-hidden', 'false'); e.scrim.classList.add('on');
+    e.sheet.classList.add('on'); e.sheet.setAttribute('aria-hidden', 'false'); e.scrim.classList.add('on'); e.scrim.setAttribute('data-F-kind', kind);
+    var appEl = $('app'); if (appEl && appEl.setAttribute) appEl.setAttribute('inert', ''); // the sheet says aria-modal: what is behind it cannot be tabbed to or read
     var h = kind === 'add' ? $('t-title') : kind === 'nadd' ? $('n-title') : $('cs-h'); if (h) h.focus();
   }
   function closeSheet() {
     var S = state.sheet; if (!S) return; state.sheet = null;
+    var appEl = $('app'); if (appEl && appEl.removeAttribute) appEl.removeAttribute('inert');
     var e = sheetEls(), attr = S.kind === 'day' ? 'data-day' : S.kind === 'warn' ? 'data-warn' : 'data-act';
     e.sheet.classList.remove('on'); e.sheet.setAttribute('aria-hidden', 'true'); e.scrim.classList.remove('on');
     var want = S.kind === 'add' ? 'task-add-open' : S.kind === 'nadd' ? 'notice-add-open' : S.kind === 'news' ? 'whatsnew' : S.kind === 'attn' ? 'attn-open' : S.key;
     E_sheetReset(e.sheet, e.scrim);
     var back = Array.prototype.filter.call(document.querySelectorAll('[' + attr + ']'), function (b) { return b.getAttribute(attr) === want; })[0];
-    if (back) back.focus();
+    if (back) back.focus(); else if (S.opener && S.opener.isConnected !== false && S.opener.focus && S.opener !== document.body) S.opener.focus(); // back to what opened it
   }
+  // Escape and a tap on the scrim never throw away something typed: they say how to leave, and keep the focus where the person was typing
+  function E_keep() {
+    var S = state.sheet; if (!S) return; var ae = document.activeElement && document.activeElement.id;
+    S.hint = 'Close with the Close button to discard what you typed.'; sheetLive(S.hint); drawSheet(); var f = ae ? $(ae) : null; if (f && f.focus) f.focus();
+  }
+  function E_tryClose() { if (!state.sheet) return; if (E_dirty()) E_keep(); else closeSheet(); }
   function sheetLive(msg) { var l = $('cs-live'); if (l) l.textContent = msg || ''; }
   function findWarn(key) { return ((state.payload && state.payload.warnings) || []).filter(function (w) { return warnKey(w) === key; })[0] || null; }
   function role() { return state.access && state.access.role; }
@@ -619,10 +628,10 @@
     var S = state.sheet; if (!S || (!state.payload && S.kind !== 'attn')) return; // the pill's list can say "Loading" and "No connection" before there is a payload
     var e = sheetEls(), had = e.sheet.contains(document.activeElement);
     e.sheet.setAttribute('data-F-kind', S.kind); e.sheet.setAttribute('data-E-swipe', E_sheetTwin(S.kind)); // the pull-down's tap twin: the button with this data-act is on the sheet
-    $('cs-body').innerHTML = E_sheetHead(S) + (S.kind === 'attn' ? E_attnSheet() : S.kind === 'day' ? daySheet(S) : S.kind === 'add' ? addReminderCard() : S.kind === 'news' ? A_newsSheet() : S.kind === 'nadd' ? A_noticeAddForm() : S.kind === 'rate' ? A_rateConfirm() : warnSheet(S)) +
+    $('cs-body').innerHTML = E_sheetPage(S, (S.kind === 'attn' ? E_attnSheet() : S.kind === 'day' ? daySheet(S) : S.kind === 'add' ? addReminderCard() : S.kind === 'news' ? A_newsSheet() : S.kind === 'nadd' ? A_noticeAddForm() : S.kind === 'rate' ? A_rateConfirm() : warnSheet(S)) +
       (S.err ? '<div class="errbox" style="margin-top:12px">' + ICON('alert') + '<span>' + esc(S.err) + '</span></div>' : '') +
-      (S.msg ? '<div class="okbox" style="margin-top:12px">' + ICON('check') + '<span>' + esc(S.msg) + '</span></div>' : '') +
-      '';
+      (S.msg ? '<div class="okbox" style="margin-top:12px">' + ICON('check') + '<span>' + esc(S.msg) + '</span></div>' : '') + (S.hint ? '<p class="help" role="status" style="margin:8px 0 0">' + esc(S.hint) + '</p>' : '') +
+      '');
     if (had && !e.sheet.contains(document.activeElement)) { var h = $('cs-h'); if (h) h.focus(); }
   }
   function A_newsSheet() {
@@ -674,9 +683,9 @@
   function E_attnSheet() {
     var att = E_att(), S = state.sheet, staff = state.layout === 'staff', html;
     var at = state.loadedAt ? new Date(state.loadedAt).toISOString() : '';
-    var help = att.phase === 'offline' || att.phase === 'stale' ? (att.phase === 'offline' ? 'No connection' : 'Could not update') + (at ? ' · showing ' + CS.clockLabel(at) : '') : att.phase === 'loading' ? 'Loading' : 'Updated ' + (at ? CS.agoLabel(at) : 'just now');
+    var help = att.partial ? 'Some items could not be loaded' : att.phase === 'offline' || att.phase === 'stale' ? (att.phase === 'offline' ? 'No connection' : 'Could not update') + (at ? ' · showing ' + CS.clockLabel(at) : '') : att.phase === 'loading' ? 'Loading' : 'Updated ' + (at ? CS.agoLabel(at) : 'just now');
     html = '<h2 class="ttl" id="cs-h" tabindex="-1">To look at</h2><div class="row-between" style="margin-top:4px"><span class="help">' + esc(help) + '</span>' +
-      (att.phase === 'offline' || att.phase === 'stale' ? '<button class="btn btn-ghost btn-sm" type="button" data-act="refresh">Try again</button>' : '') + '</div>';
+      (att.phase === 'offline' || att.phase === 'stale' || att.partial ? '<button class="btn btn-ghost btn-sm" type="button" data-act="refresh">Try again</button>' : '') + '</div>';
     if (att.phase === 'loading') return html + '<div class="skel" style="height:96px;margin-top:12px"></div>';
     if ((att.phase === 'offline' || att.phase === 'stale') && !state.payload) return html + '<div class="errbox" role="alert" style="margin-top:12px">' + ICON('alert') + '<span>' + (att.phase === 'offline' ? 'Live information needs a connection.' : 'Live information could not be updated.') + '</span></div>';
     if (att.empty) return html + '<div class="card glass empty" style="margin-top:12px"><div class="disc">' + ICON('checks') + '</div><h2 class="hd">Nothing to look at</h2><p>' +
@@ -690,7 +699,12 @@
   }
   // A pull on the sheet is the same decision as its Cancel / Close button, so each sheet names its twin; a form with something typed in it never closes on a pull.
   // Close lives in a sticky header on every sheet (44 px, glyph + word, always in view); the bottom of a sheet carries only its own primary action
-  function E_sheetHead(S) { return '<div class="F_sheethead"><button class="btn btn-secondary btn-sm F_close" type="button" data-act="' + E_sheetTwin(S.kind) + '">' + ICON('close', 's16') + 'Close</button></div>'; }
+  // the title moves into the header row (title left, Close right); everything else is the body below it
+  function E_sheetPage(S, html) {
+    var m = /^<h2 class="ttl"[^>]*>[\s\S]*?<\/h2>/.exec(html), title = m ? m[0] : '';
+    var ask = S.confirm ? '<div class="errbox" role="alert" style="margin-bottom:10px"><span>Discard what you typed?</span><span class="row-wrap" style="margin-top:6px"><button class="btn btn-secondary btn-sm" type="button" id="F_keep" data-act="discard-keep">Keep editing</button><button class="btn btn-primary btn-sm" type="button" data-act="' + E_sheetTwin(S.kind) + '">Discard</button></span></div>' : '';
+    return '<div class="F_sheethead">' + title + '<button class="btn btn-secondary btn-sm F_close" type="button" data-F-close="1" data-act="' + E_sheetTwin(S.kind) + '">' + ICON('close', 's16') + 'Close</button></div>' + ask + html.slice(title.length);
+  }
   function E_sheetTwin(kind) { return kind === 'add' ? 'task-add-cancel' : kind === 'nadd' ? 'notice-add-cancel' : kind === 'rate' ? 'rate-back' : 'sheet-close'; }
   function E_dirty() {
     var S = state.sheet, a = state.add, b = state.nadd, f = state.rateForm; if (!S) return false;
@@ -710,7 +724,7 @@
   function E_canVibrate() { return 'vibrate' in navigator; }
   function E_reduced() { try { return !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches); } catch (e) { return false; } }
   function E_vw() { return window.innerWidth || 360; }
-  function E_netErr(e) { var m = String((e && e.message) || e || ''); return /fetch|network|load failed|time ?out|offline/i.test(m) || !!(e && e.status === 0); }
+  function E_netErr(e) { var m = String((e && e.message) || e || ''); return /fetch|network|load failed|offline|abort|request timed? ?out|timeout.{0,12}(?:fetch|request)|(?:fetch|request).{0,12}time ?out/i.test(m) || !!(e && e.status === 0); } // a server statement timeout is not "no connection"
   // F_: a sheet is a bottom sheet only below 600 px (37.5 rem, so a large text size gets the dialog sooner too); wider, it is a centred dialog or a side sheet and closes by its button, Escape or the scrim
   function F_bottomSheet() { try { return !(window.matchMedia && window.matchMedia('(min-width: 37.5rem)').matches); } catch (e) { return true; } }
 
@@ -780,7 +794,7 @@
       state.tasks = { manager: d.manager === true, today: d.today || CS.manilaToday(), tasks: d.tasks || [] }; state.tasksErr = ''; state.tasksDenied = false;
     }).catch(function (e) {
       state.tasksDenied = !!(e && e.message === 'denied');
-      state.tasksErr = e && e.message === 'denied' ? 'Tasks are not available for this account.' : state.tasks ? 'Live information needs a connection. Showing the last update.' : 'Live information needs a connection.';
+      state.tasksErr = e && e.message === 'denied' ? 'Tasks are not available for this account.' : !E_netErr(e) ? (state.tasks ? 'Could not update. Showing the last update.' : 'Could not update.') : state.tasks ? 'Live information needs a connection. Showing the last update.' : 'Live information needs a connection.';
     }).then(function () { state.tasksLoading = false; if (state.layout && current !== 'door') { if (current === 'tasks') renderTasks(); else if (current === 'home') render('home'); renderTabs(current); } }); // Home too: the pill waits for the tasks
   }
   function findTask(key) {
@@ -1122,7 +1136,7 @@
       refreshWeather(); loadPayHint(); loadBookingsToConfirm(); A_loadNotices();
     }).catch(function (e) {
       state.errorKind = E_netErr(e) ? 'network' : 'server'; // "No connection" only when the network is the problem
-      state.error = state.payload ? 'Live information needs a connection. Showing the last update.' : 'Live information needs a connection.';
+      state.error = state.errorKind === 'network' ? (state.payload ? 'Live information needs a connection. Showing the last update.' : 'Live information needs a connection.') : (state.payload ? 'Could not update. Showing the last update.' : 'Could not update.');
     }).then(function () { state.loading = false; if (state.layout) render(); E_announce(); });
   }
   // weather-proxy refreshes its own cache; if it rejects the user's token, the line simply says "as of HH:MM".
@@ -1177,6 +1191,7 @@
     if (v === 'door' && DEMO) { toast('Demo: ' + doorDef(parts[1]).title + ' opens in the live app'); history.replaceState(null, '', '#home'); v = 'home'; } // a door would load a real app in the frame
     if (v === 'door') { doorKey = parts[1]; doorRoute = doorKey === 'dashboard' && CS.A_hubRouteOk(parts.slice(2).join('/')) ? parts.slice(2).join('/') : ''; render('door'); window.scrollTo(0, 0); return; }
     leaveDoor(); render(v);
+    if (v === 'calendar' && state.dayAfter) { var d1 = state.dayAfter; state.dayAfter = null; openSheet('day', d1); }
     var t = parts[1] && $(parts[1]); if (t) t.scrollIntoView({ block: 'start' }); else window.scrollTo(0, 0);
   }
   var current = 'home', doorKey = '', doorRoute = '';
@@ -1296,7 +1311,9 @@
   document.addEventListener('click', function (ev) {
     var t = ev.target.closest('[data-act],[data-stay],[data-theme],[data-day],[data-warn],[data-nfilter],[data-tfilter]'); if (!t || t.getAttribute('data-act') === 'tasks-showdone') return;
     var a = t.getAttribute('data-act');
-    if (a === 'refresh') { if (current === 'home' && !state.loading) E_say = true; loadHome(); loadTasks(); if (current === 'payrates') loadRates(); }
+    if (t.hasAttribute('data-F-close') && state.sheet && !state.sheet.confirm && E_dirty()) { state.sheet.confirm = true; drawSheet(); var kb = $('F_keep'); if (kb && kb.focus) kb.focus(); } // Close on a sheet with typing in it asks once
+    else if (a === 'discard-keep') { if (state.sheet) { state.sheet.confirm = false; drawSheet(); var hh = $('cs-h'); if (hh && hh.focus) hh.focus(); } }
+    else if (a === 'refresh') { if (current === 'home' && !state.loading) E_say = true; loadHome(); loadTasks(); if (current === 'payrates') loadRates(); }
     else if (a === 'attn-open') openSheet('attn', 'attn-open');
     else if (a === 'attn-tasks') { var tf0 = t.getAttribute('data-filter'); if (/^(all|mine|due|blocks)$/.test(tf0 || '')) state.taskFilter = tf0; closeSheet(); }
     else if (a === 'dayform-open') { if (state.sheet) { state.sheet.formOpen = true; drawSheet(); var dk = $('df-kind'); if (dk) dk.focus(); } }
@@ -1312,7 +1329,7 @@
     else if (a === 'notice-add-cancel') { state.nadd = null; closeSheet(); }
     else if (a === 'notice-add-save') A_noticeAddSave();
     else if (a === 'notice-tell') { var nt = CS.canSeeGuestContact(role()) ? A_noticeByKey(t.getAttribute('data-nkey')) : null; var gm = nt ? CS.A_guestMessage(nt) : null; if (nt && !gm) toast('Check the notice text first.'); else if (gm) copyText(gm).then(function () { toast('Message copied. Paste it to the guest.'); E_vibe('tap'); }, function () { toast('Copy did not work on this phone.'); }); }
-    else if (a === 'notice-cal') { var nd0 = t.getAttribute('data-date'), np = nd0.split('-'); if (CS.monthInRange(+np[0], +np[1], state.payload.today)) state.month = { y: +np[0], m: +np[1] }; state.calTab = 'month'; if (location.hash !== '#calendar') location.hash = '#calendar'; else render('calendar'); openSheet('day', nd0); state.sheet.view = 'calendar'; }
+    else if (a === 'notice-cal') { var nd0 = t.getAttribute('data-date'), np = nd0.split('-'); if (CS.monthInRange(+np[0], +np[1], state.payload.today)) state.month = { y: +np[0], m: +np[1] }; state.calTab = 'month'; if (location.hash !== '#calendar') { closeSheet(); state.dayAfter = nd0; location.hash = '#calendar'; } else { render('calendar'); openSheet('day', nd0); state.sheet.view = 'calendar'; } } // from another screen the day sheet opens once the calendar has settled, so a Home redraw cannot close it
     else if (a === 'notice-resolve') { if (CS.canSeeGuestContact(role())) sb.rpc('ack_verifier_finding_v1', { p_key: t.getAttribute('data-id') }).then(function (r) { if (r.error) throw r.error; return A_loadNotices(); }).catch(function () { toast('That did not save. Check your signal and try again.'); }); }
     else if (t.hasAttribute('data-nfilter')) { state.noticeFilter = t.getAttribute('data-nfilter'); renderCalendar(); }
     else if (t.hasAttribute('data-tfilter')) { state.taskFilter = t.getAttribute('data-tfilter'); renderTasks(); }
@@ -1357,7 +1374,7 @@
     if (ev.target && ev.target.id === 't-who' && state.add) state.add.who = ev.target.value;
     else if (ev.target && ev.target.getAttribute && ev.target.getAttribute('data-act') === 'tasks-showdone') { state.showDone = ev.target.checked; loadTasks(); renderTasks(); }
   });
-  document.addEventListener('keydown', function (ev) { if (ev.key === 'Escape' && state.sheet) closeSheet(); });
+  document.addEventListener('keydown', function (ev) { if (ev.key === 'Escape' && state.sheet) E_tryClose(); });
   // Telegram: the tg:// link opens the app. If the page is still in front ~1.2 s later the app did not open, so t.me opens instead.
   document.addEventListener('click', function (ev) {
     var a = ev.target.closest && ev.target.closest('a[data-tgweb]'), web = a && a.getAttribute('data-tgweb'); if (!web) return;
@@ -1402,8 +1419,9 @@
       reached: function (el, d) { return d.dy >= 96; },
       onEdge: function () { E_vibe('edge'); },
       end: function (el, d) {
-        var S = state.sheet, close = !!S && CS.E_sheetCommit(d.dy, d.vy) && !E_dirty();
+        var S = state.sheet, wants = !!S && CS.E_sheetCommit(d.dy, d.vy), close = wants && !E_dirty();
         E_sheetReset(el, scrim()); // back to the stylesheet: it springs home over --v5-sheet-ms, or carries on out if the sheet closes
+        if (wants && !close) E_keep(); // typed text: it springs back and says how to leave
         if (!close) return;
         if (S.kind === 'add') state.add = null; else if (S.kind === 'nadd') state.nadd = null;
         closeSheet();

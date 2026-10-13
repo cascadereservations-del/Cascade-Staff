@@ -6,9 +6,15 @@
   var C_FALLBACK_TITLE = 'Cascade Staff';
   var C_FALLBACK_BODY = 'Open Cascade Staff for the details.';
 
+  // Any currency marker next to digits (PHP 1,235, ₱1,235, P500, 500 pesos, 500 php) or a run of 4 or more digits: the lock screen says no amount.
+  var C_AMOUNT = /(?:PHP|Php|php|₱|\bP)\s*\d|\d[\d,.]*\s*(?:[Pp]esos?\b|PHP|Php|php|₱)|\d[\d,]{3,}/;
   function C_safeBody(b) {
     var s = String(b == null ? '' : b).slice(0, 240);
-    return /(?:PHP|₱|\bPhp\b)\s*\d|\d[\d,]{3,}/.test(s) ? C_FALLBACK_BODY : (s || C_FALLBACK_BODY);
+    return C_AMOUNT.test(s) ? C_FALLBACK_BODY : (s || C_FALLBACK_BODY);
+  }
+  function C_safeTitle(t) {
+    var s = String(t == null ? '' : t).slice(0, 80);
+    return C_AMOUNT.test(s) || !s ? C_FALLBACK_TITLE : s;
   }
   function C_parse(e) {
     try { return e.data ? e.data.json() : {}; } catch (err) { return {}; }
@@ -21,7 +27,7 @@
 
   self.addEventListener('push', function (event) {
     var d = C_parse(event);
-    event.waitUntil(self.registration.showNotification(String(d.title || C_FALLBACK_TITLE).slice(0, 80), {
+    event.waitUntil(self.registration.showNotification(C_safeTitle(d.title), {
       body: C_safeBody(d.body),
       tag: String(d.tag || 'cascade-paid').slice(0, 40),
       icon: 'icons/icon-192.png',

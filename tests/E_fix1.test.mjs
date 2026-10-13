@@ -161,11 +161,11 @@ test('E_fix F8: every sheet has a 44 px Close in a sticky header (glyph and word
   const add = await boot({ role: 'admin', hash: '#tasks', handlers: baseHandlers('admin', { tasks_list_v1: tasksOf([], true) }) }); await add.click({ 'data-act': 'task-add-open' }); sheets.push(['add', add, 'task-add-cancel']);
   const nadd = await boot({ role: 'admin', hash: '#calendar', handlers: baseHandlers('admin') }); await nadd.click({ 'data-act': 'notice-add-open', 'data-date': TODAY }); sheets.push(['nadd', nadd, 'notice-add-cancel']);
   for (const [name, app, act] of sheets) {
-    const b = app.els['cs-body'].innerHTML; assert.ok(b.startsWith('<div class="F_sheethead"><button class="btn btn-secondary btn-sm F_close" type="button" data-act="' + act + '"><svg'), name + ': the header Close comes first');
+    const b = app.els['cs-body'].innerHTML; assert.match(b, /^<div class="F_sheethead"><h2 class="ttl"[^>]*>[^]*?<\/h2><button class="btn btn-secondary btn-sm F_close" type="button" data-F-close="1" data-act="/, name + ': the header row is title + Close'); assert.ok(b.includes('data-act="' + act + '"><svg'), name);
     assert.match(b.slice(0, 260), /Close<\/button><\/div>/, name); assert.doesNotMatch(b, /btn-block" type="button" data-act="sheet-close" style="margin-top:12px">Close/, name + ': no Close at the very end');
   }
-  assert.match(css, /\.F_sheethead \{ position: sticky; top: 28px; z-index: 4; height: 0;/); assert.match(css, /\.F_close \{ position: relative; top: -8px;/); assert.match(css, /\.btn-sm \{ min-height: var\(--touch\);/);
-  assert.match(css, /#cs-body h2\.ttl \{ padding-right: 7rem; \}/, 'a long title never runs under it');
+  assert.match(css, /\.F_sheethead \{ position: sticky; top: 0; z-index: 4; display: flex;[^}]*background: var\(--v5-surf\); \}/); assert.match(css, /\.F_close \{ flex: none; margin-left: auto; \}/); assert.match(css, /\.btn-sm \{ min-height: var\(--touch\);/);
+  assert.match(css, /\.F_sheethead h2 \{ flex: 1; min-width: 0;/, 'a long title wraps beside Close, never under it');
 });
 
 // ------------------------------------------------------------------------------------------------ F9

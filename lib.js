@@ -1002,7 +1002,7 @@
     else pill = { text: shown + ' · ' + word, short: shown + ' to look at', dot: tone === 'danger' ? 'bad' : 'warn', glyph: tone === 'danger' ? 'alert' : 'clock',
       aria: n === 1 ? '1 thing to look at: ' + top.toLowerCase() + '. Opens the list' : shown + ' things to look at. Most urgent: ' + top.toLowerCase() + '. Opens the list' };
     var empty = !sections.length;
-    return { phase: phase, n: n, top: top, topWord: word, tone: tone, sections: sections, pill: pill, empty: empty, say: phase === 'items' ? shown + (n === 1 ? ' thing' : ' things') + ' to look at' : phase === 'clear' ? 'All clear' : phase === 'offline' ? 'No connection' : phase === 'stale' ? 'Could not update' : '' };
+    return { partial: failed && n > 0, phase: phase, n: n, top: top, topWord: word, tone: tone, sections: sections, pill: pill, empty: empty, say: phase === 'items' ? shown + (n === 1 ? ' thing' : ' things') + ' to look at' : phase === 'clear' ? 'All clear' : phase === 'offline' ? 'No connection' : phase === 'stale' ? 'Could not update' : '' };
   }
 
   // ---- haptics: three words, one guard. A silent no-op where navigator.vibrate is missing (iOS Safari), when switched off, or when the page is hidden. ----
@@ -1050,9 +1050,10 @@
     function stamp(ev) { return typeof ev.timeStamp === 'number' ? ev.timeStamp : Date.now(); }
     function dOf(ev) { var dx = ev.clientX - g.x0, dy = ev.clientY - g.y0, v = E_velocity(g.s); return { dx: dx, dy: dy, vx: v.vx, vy: v.vy }; }
     function down(ev) {
+      if (ev.pointerType === 'mouse') return; // swipes are for a finger or a pen: a mouse drag is selecting text, never a task done (the buttons are the mouse's way)
       swallow.el = null; // a new touch starts fresh: the click it makes is a real tap, never the tail of the last drag
       if (ev.button > 0) return;
-      if (g) { if (ev.isPrimary === false) return; g = null; } // a second finger is ignored; a new primary touch means the last pointerup was lost: start over
+      if (g) { if (ev.isPrimary === false) return; var old = g; g = null; if (old.lock && o.cancel) o.cancel(old.el); } // the dropped gesture hands its row or sheet back // a second finger is ignored; a new primary touch means the last pointerup was lost: start over
       var el = ev.target && ev.target.closest ? ev.target.closest(o.sel) : null; if (!el || (o.canStart && !o.canStart(el, ev))) return;
       if (o.axis === 'x' && E_inEdge(ev.clientX, o.vw ? o.vw() : 360)) return;
       g = { el: el, id: ev.pointerId, x0: ev.clientX, y0: ev.clientY, lock: '', s: [{ t: stamp(ev), x: ev.clientX, y: ev.clientY }], edged: false, reduced: !!(o.reduced && o.reduced()) };
