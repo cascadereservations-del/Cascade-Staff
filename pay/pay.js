@@ -14,7 +14,7 @@
 
   // One key per submission: kept across retries of a failed send, renewed after an ok (see CSPay.keyKeeper).
   var K = DEMO ? P.keyKeeper(undefined, null) : P.keyKeeper(); // demo: the in-flight key is kept in memory only
-  var S = { step: 'pick', cands: null, sel: null, err: '', note: '', sending: false, draftOpen: false, askedOnce: false, askOpen: false, draft: { description: '', amount: '', file: null }, result: null, loadErr: '' };
+  var S = { step: 'pick', cands: null, sel: null, err: '', note: '', sending: false, draftOpen: false, askedOnce: false, askOpen: false, draft: { description: '', amount: '', file: null }, result: null, loadErr: '', mine: null, pushState: null, pushMsg: '' };
 
   function shell(title, inner, back) {
     return '<header class="appbar"><a class="iconbtn" href="' + (back || '../#home') + '" aria-label="Back">' + ICON('back', 's24') + '</a><h1 class="ttl">' + esc(title) + '</h1></header><div class="screen">' + inner + '</div>' +
@@ -36,6 +36,8 @@
         var d = res.data;
         if (!d || d.ok === false) { S.loadErr = d && d.reason === 'not_authorized' ? 'denied' : 'offline'; return; }
         S.loadErr = ''; S.cands = d; S.sel = freshSel(d);
+        // Lane C: HER requests with their steps and bank reference. A missing RPC (site ahead of the database) keeps the older list.
+        return sb.rpc('staff_pay_my_requests_v1').then(function (m) { S.mine = m && !m.error && m.data && m.data.ok ? m.data.requests : null; }, function () { S.mine = null; });
       });
     }).catch(function () { S.loadErr = 'offline'; });
   }
@@ -60,7 +62,7 @@
     var x = P.parseExtra(e);
     return '<div class="payrow"><span class="lead" style="width:24px;height:24px">' + ICON('plus', 's16') + '</span><div><div class="t"><span>' + esc(e.description) + '</span><span class="val">' + esc(x ? P.peso(x.amount) : '') + '</span></div>' +
       '<span class="s">' + (e.file ? 'Receipt photo: ' + esc(e.file.name || 'photo') : 'No receipt photo') + '</span>' +
-      '<div class="opt"><button class="btn btn-ghost btn-sm" type="button" data-rmx="' + i + '" style="padding:0;height:28px">Remove</button></div></div></div>';
+      '<div class="opt"><button class="btn btn-ghost btn-sm" type="button" data-rmx="' + i + '" style="padding:0 8px">Remove</button></div></div></div>';
   }
   function draftForm() {
     var d = S.draft;
@@ -70,14 +72,24 @@
       '<div class="row-wrap"><button class="btn btn-primary btn-sm" type="button" data-act="addx">Add expense</button><button class="btn btn-ghost btn-sm" type="button" data-act="cancelx">Cancel</button></div>' +
       (S.err && S.step === 'pick' ? '<div class="field"><div class="err">' + ICON('xcircle', 's16') + esc(S.err) + '</div></div>' : '') + '</div>';
   }
+  // Lane C: Requested -> Paying -> Paid, each a glyph and a word, with her request ref and (once paid) the bank's reference.
+  function C_stepper(status) {
+    var T = window.C_PaidText, st = T.steps(status);
+    if (st.cancelled) return '<span class="pill p-neutral">' + ICON('minus', 's16') + 'Cancelled</span>';
+    var glyph = { done: 'check', next: 'minus' };
+    return '<span class="C_steps" role="list">' + st.steps.map(function (x, i) {
+      var g = x.state === 'now' ? (x.key === 'paid' ? 'checks' : x.key === 'paying' ? 'send' : 'clock') : glyph[x.state];
+      return (i ? '<span class="C_step-sep" aria-hidden="true"></span>' : '') + '<span class="C_step" role="listitem" data-state="' + x.state + '">' + ICON(g, 's16') + esc(x.label) + '</span>';
+    }).join('') + '</span>';
+  }
   function history() {
-    var rs = (S.cands.requests || []).slice(0, 5);
-    if (!rs.length) return '';
+    var rs = (S.mine || S.cands.requests || []).slice(0, 5);
+    var slot = '<div id="C_push-slot"></div>';
+    if (!rs.length) return slot;
     return '<div><div class="cap up" style="margin-bottom:6px">Your requests</div><div class="card list">' + rs.map(function (r) {
-      var st = P.requestStatus(r);
-      return '<div class="rowi" style="cursor:default"><span class="lead">' + ICON('cash') + '</span><span class="mid"><span class="t num">' + esc(P.peso(r.total)) + '</span><span class="s num">Ref ' + esc(String(r.ref || '').replace(/^CASCADE-/, '')) + (r.created_at ? ' · sent ' + esc(P.shortDate(r.created_at)) : '') + '</span></span>' +
-        '<span class="pill p-' + st.tone + '">' + ICON(st.tone === 'ok' ? 'checks' : st.tone === 'warn' ? 'clock' : st.tone === 'info' ? 'info' : 'minus', 's16') + esc(st.label) + '</span></div>';
-    }).join('') + '</div></div>';
+      var bank = r.status === 'paid' && r.bank_reference ? ' · Bank ref ' + esc(window.C_PaidText.reference({ bank_reference: r.bank_reference })) : '';
+      return '<div class="rowi" style="cursor:default"><span class="lead">' + ICON('cash') + '</span><span class="mid"><span class="t num">' + esc(P.peso(r.total)) + '</span><span class="s num C_ref">Ref ' + esc(String(r.ref || '').replace(/^CASCADE-/, '')) + (r.created_at ? ' · sent ' + esc(P.shortDate(r.created_at)) : '') + (r.status === 'paid' && r.paid_at ? ' · paid ' + esc(P.shortDate(r.paid_at)) : '') + bank + '</span>' + C_stepper(r.status) + '</span></div>';
+    }).join('') + '</div></div>' + slot;
   }
   function renderPick() {
     var c = S.cands, hasRows = (c.sessions || []).length || (c.claims || []).length;
@@ -130,6 +142,7 @@
     }
     if (!S.cands) { root.innerHTML = shell('Payment Request', '<div class="stack" style="margin-top:16px"><div class="skel" style="height:180px"></div><div class="skel" style="height:120px"></div></div>'); return; }
     if (S.step === 'review') renderReview(); else if (S.step === 'status') renderStatus(); else renderPick();
+    if (S.step !== 'review') C_pushRefresh();
   }
 
   // ---------------------------------------------------------------- receipt photo and send
@@ -172,6 +185,40 @@
     });
   }
   function renderPickNotice(t) { var s = root.querySelector('.stack'); if (s) s.insertAdjacentHTML('afterbegin', '<div class="errbox" role="alert">' + ICON('alert') + '<span>' + esc(t) + '</span></div>'); }
+
+  // ---------------------------------------------------------------- Lane C: "Tell me on this phone when I am paid"
+  // The slot is the last thing in the page body, so filling it later moves nothing above it. Hidden when the browser, the server key or the RPC is missing.
+  function C_pushCall(body) {
+    return sb.auth.getSession().then(function (s) {
+      var tok = s.data && s.data.session && s.data.session.access_token; if (!tok) throw new Error('signin');
+      return net(CFG.url + '/functions/v1/notify-cleaner-payment', { method: 'POST', headers: { Authorization: 'Bearer ' + tok, apikey: CFG.key, 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    }).then(function (r) { return r.json(); });
+  }
+  function C_pushPaint() {
+    var slot = $('C_push-slot'); if (!slot) return;
+    var st = S.pushState;
+    if (!st || st === 'hidden') { slot.innerHTML = ''; return; }
+    var K = window.C_Push, on = st === 'on';
+    slot.innerHTML = '<div class="card C_push">' +
+      (st === 'off' || st === 'on'
+        ? '<button class="sw" type="button" role="switch" aria-checked="' + on + '" data-C-push="1"><i aria-hidden="true"></i>' + esc(K.words('off')) + '</button><span class="help">' + esc(on ? K.words('on') : 'A short message, with no amount on the lock screen.') + '</span>'
+        : '<span class="help">' + ICON('bell', 's16') + ' ' + esc(K.words(st)) + '</span>') +
+      (S.pushMsg ? '<span class="help" role="alert">' + esc(S.pushMsg) + '</span>' : '') + '</div>';
+  }
+  function C_pushRefresh() {
+    if (DEMO || !window.C_Push || !$('C_push-slot')) return;
+    if (S.pushState) { C_pushPaint(); return; } // already probed: just redraw the slot
+    window.C_Push.status({ client: sb }).then(function (r) { S.pushState = r.state; C_pushPaint(); }, function () { S.pushState = 'hidden'; });
+  }
+  root.addEventListener('click', function (ev) {
+    var b = ev.target.closest('[data-C-push]'); if (!b || DEMO || !window.C_Push) return;
+    var K = window.C_Push, on = S.pushState === 'on'; S.pushMsg = '';
+    (on ? K.disable({ client: sb }) : K.enable({ client: sb, call: C_pushCall })).then(function (r) {
+      if (r.ok) S.pushState = on ? 'off' : 'on';
+      else S.pushMsg = K.words(r.reason === 'not_configured' ? 'not_configured' : r.reason === 'blocked' ? 'blocked' : 'failed');
+      C_pushPaint();
+    });
+  });
 
   // ---------------------------------------------------------------- events
   root.addEventListener('input', function (ev) { var t = ev.target; if (t.id === 'x-d') S.draft.description = t.value; if (t.id === 'x-a') S.draft.amount = t.value; });

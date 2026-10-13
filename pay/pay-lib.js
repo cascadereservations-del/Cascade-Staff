@@ -154,9 +154,11 @@
   }
 
   // ---- bank.html (SPEC-37 7.B, 7.C): only apps whose ids are verified are listed. None is verified yet, so none is offered.
+  // Lane C (s81): BPI is first (the key order is the order bank.html lists apps). com.bpi.ng.app is the current BPI package (an older
+  // BPI package id is not). Every entry stays verified:false until Lloyd's phone test flips it.
   var BANK_APPS = {
+    bpi: { name: 'BPI', pkg: 'com.bpi.ng.app', ios: null, store: 'https://apps.apple.com/ph/app/bpi/id6443950982', verified: false },
     gcash: { name: 'GCash', pkg: 'com.globe.gcash.android', ios: 'gcash://', store: 'https://apps.apple.com/ph/app/gcash/id520020791', verified: false },
-    bpi: { name: 'BPI', pkg: null, ios: null, store: null, verified: false },
     ownbank: { name: 'OwnBank', pkg: null, ios: null, store: null, verified: false }
   };
   function listedBankApps(table) { table = table || BANK_APPS; return Object.keys(table).filter(function (k) { return table[k].verified && table[k].pkg; }); }
