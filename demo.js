@@ -204,7 +204,7 @@
 
   // ---- the page furniture: a "Demo data" pill and a role switcher on every screen -------------------------------------------------
   var STYLE = '.demo-bar{position:sticky;top:0;z-index:40;display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:4px;padding:2px 8px;background:var(--card);border-bottom:1px solid var(--border-strong)}' +
-    '.demo-roles{display:flex;flex-wrap:wrap;gap:4px}.demo-roles button{min-height:44px;min-width:44px;padding:0 8px;border-radius:var(--r-md);border:1px solid var(--border);background:var(--muted);color:var(--fg);font:600 13px/18px var(--font-ui);cursor:pointer}' +
+    '.demo-roles{display:flex;flex-wrap:wrap;gap:4px}.demo-bar{flex-wrap:nowrap}.demo-bar .pill{min-height:26px;padding:0 6px;flex:none}.demo-roles{flex-wrap:nowrap;gap:2px}.demo-roles button{min-height:44px;min-width:44px;padding:0 5px;border-radius:var(--r-md);border:1px solid var(--border);background:var(--muted);color:var(--fg);font:600 13px/18px var(--font-ui);cursor:pointer}' +
     '.demo-roles button[aria-pressed="true"]{background:var(--primary);border-color:var(--primary);color:var(--primary-fg)}.demo-on .appbar{top:var(--demo-h,52px)}';
   var scriptDir = ''; try { if (root.document && root.document.currentScript) scriptDir = new URL('./', root.document.currentScript.src).pathname; } catch (e) {}
   function rootPath() { return scriptDir || '/'; }

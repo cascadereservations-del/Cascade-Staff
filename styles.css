@@ -929,3 +929,21 @@ button.A_chipglass.E_pill { width: auto; min-width: 124px; max-width: 184px; hei
   .H_railhead b { font: 400 1.5rem/1 var(--v5-font-display); }
   .H_railhead span { font: 600 var(--v5-t-label)/1.2 var(--font-ui); color: var(--v5-ink-2); max-width: 4.5rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 }
+/* the calendar screen is tight on a 320 x 640 phone: the sub-tabs, header, legend and help line sit close so the whole month grid and its help line clear the tab bar */
+.A_tabs.card { padding: 4px; margin: 0 0 6px; }
+.calhdr { margin: 0 0 2px; }
+.H_legend { padding: 0 0 4px; }
+.H_help { margin-top: 4px; }
+/* the tick box: a 44 px target around the same 28 px box (the border is the room, the inset ring is the edge) */
+.chk, .H_chk { box-sizing: border-box; width: var(--touch); height: var(--touch); border: 8px solid transparent; background-clip: padding-box; box-shadow: inset 0 0 0 1px var(--v5-line-2); border-radius: 17px; }
+.chk[aria-checked="true"] { box-shadow: none; border-color: transparent; }
+.F_sheethead *, .E_grab * { touch-action: none; } /* the header and everything in it: the pull surface the browser must never pan from */
+/* F3: a task's title is body size (17 at 360); its detail lines are 15 and never under 13 */
+.payrow .t { font-size: var(--v5-t-body); line-height: clamp(1.5rem, 1.4023rem + 0.4337vw, 1.68rem); }
+.payrow .s { font-size: var(--v5-t-2); line-height: clamp(1.25rem, 1.1686rem + 0.3614vw, 1.4rem); }
+/* 320 px: the Today card's label and its pill stay on one line (tighter tracking, a slimmer pill) */
+@media (max-width: 22.4375rem) {
+  .A_card > .row-between { flex-wrap: nowrap; gap: 6px; }
+  .A_card > .row-between .cap.up { letter-spacing: .04em; min-width: 0; }
+  .A_card > .row-between .pill { padding: 0 8px 0 6px; flex: 0 1 auto; }
+}

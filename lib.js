@@ -189,7 +189,7 @@
     if (Array.isArray(value)) { value.forEach(function (v, i) { moneyKeys(v, path + '[' + i + ']', out); }); return out; }
     if (value && typeof value === 'object') {
       Object.keys(value).forEach(function (k) {
-        if (keyTokens(k).some(function (t) { return MONEY_TOKEN.test(t); })) out.push(path + '.' + k + (k === 'paid' && /\.arrival_ready$/.test(path) && typeof value[k] === 'boolean' ? '#bool' : ''));
+        if (keyTokens(k).some(function (t) { return MONEY_TOKEN.test(t); })) out.push(path + '.' + k + (k === 'paid' && /\.arrival_ready$/.test(path) && (typeof value[k] === 'boolean' || value[k] === null) ? '#bool' : ''));
         moneyKeys(value[k], path + '.' + k, out);
       });
     }
@@ -1056,13 +1056,21 @@
   // MF2: three booleans per stay, owner and admin only, and only when the server sent the field. Anything else is "no row".
   function H_ready(raw, role) {
     if (!canSeeGuestContact(role) || !raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
-    if (['id', 'paid', 'door_code'].every(function (k) { return typeof raw[k] !== 'boolean'; })) return null;
-    return { id: raw.id === true, paid: raw.paid === true, door_code: raw.door_code === true };
+    // each of the three is true, false or null; null is "not known yet" and draws nothing at all (never as missing)
+    var r = {}; ['id', 'paid', 'door_code'].forEach(function (k) { r[k] = typeof raw[k] === 'boolean' ? raw[k] : null; });
+    return r.id === null && r.paid === null && r.door_code === null ? null : r;
   }
   function H_readyChips(r) {
-    return r ? [{ key: 'id', ok: r.id, word: r.id ? 'ID on file' : 'No ID yet' }, { key: 'paid', ok: r.paid, word: r.paid ? 'Balance received' : 'Balance due' }, { key: 'door_code', ok: r.door_code, word: r.door_code ? 'Door code set' : 'No door code' }] : [];
+    if (!r) return [];
+    var out = []; if (r.id !== null) out.push({ key: 'id', ok: r.id, word: r.id ? 'ID on file' : 'No ID yet' });
+    if (r.paid !== null) out.push({ key: 'paid', ok: r.paid, word: r.paid ? 'Balance received' : 'Balance due' });
+    if (r.door_code !== null) out.push({ key: 'door_code', ok: r.door_code, word: r.door_code ? 'Door code set' : 'No door code' });
+    return out;
   }
-  function H_readyLine(r) { return r ? (r.id ? 'ID on file' : 'No ID yet') + ' · ' + (r.paid ? 'balance received' : 'balance due') + (r.door_code ? ' · door code set' : ' · no door code') : ''; }
+  function H_readyOk(r) { return !!r && H_readyChips(r).every(function (c) { return c.ok; }); }
+  function H_readyLine(r) { return H_readyChips(r).map(function (c, i) { return i ? c.word.charAt(0).toLowerCase() + c.word.slice(1) : c.word; }).join(' · '); }
+  // 1:42 pm (Manila)
+  function H_clock12(iso) { var d = new Date(iso); if (isNaN(d.getTime())) return ''; var p = manilaParts(d); return (p.h % 12 === 0 ? 12 : p.h % 12) + ':' + pad(p.min) + ' ' + (p.h >= 12 ? 'pm' : 'am'); }
   // cleaning_progress_v1 (owner and admin): null = the feature or the answer is absent, so the row is hidden.
   function H_progress(raw, role) {
     if (!canSeeGuestContact(role) || !raw || typeof raw !== 'object' || raw.ok === false) return null;
@@ -1075,6 +1083,7 @@
   // The "Clean" check row of the admin Turnover card. Fifteen minutes into the window with no progress it turns amber.
   function H_cleanLine(prog, clock) {
     if (!prog) return null;
+    if (prog.active && prog.active.step >= prog.active.of) return { tone: 'ok', text: 'Clean finished' + (prog.active.at ? ' ' + H_clock12(prog.active.at) : '') }; // the last step was ticked
     if (prog.active) { var a = prog.active; return { tone: 'ok', text: (a.name ? a.name + ' · ' : '') + 'step ' + a.step + ' of ' + a.of + (a.at ? ' · ' + clockLabel(a.at) : '') }; }
     var late = !!clock && clock.phase !== 'before' && (clock.phase === 'after' || clock.times.inMin - clock.minsToIn - clock.times.outMin >= 15);
     return { tone: late ? 'warn' : 'idle', text: 'Not started' };
@@ -1224,7 +1233,7 @@
     weatherLine: weatherLine, rainLine: rainLine, weatherStale: weatherStale, esc: esc,
     A_HOUSE_FALLBACK: A_HOUSE_FALLBACK, A_houseTimes: A_houseTimes, A_turnoverClock: A_turnoverClock, A_turnoverLine: A_turnoverLine, A_hm: A_hm, A_NOTICE_TYPES: A_NOTICE_TYPES, A_noticesView: A_noticesView, A_noticeFilters: A_noticeFilters, A_dayMarks: A_dayMarks, A_noticeDay: A_noticeDay, A_guestMessage: A_guestMessage, A_CAL_TABS: A_CAL_TABS, A_calTab: A_calTab, A_stayShade: A_stayShade, A_hubGroups: A_hubGroups, A_hubRoutes: A_hubRoutes, A_hubRouteOk: A_hubRouteOk, A_hubDoorUrl: A_hubDoorUrl, A_whatsNew: A_whatsNew, A_shortTime: A_shortTime, A_PINNED: A_PINNED, A_noticeAddError: A_noticeAddError, A_NOTICE_HINT: A_NOTICE_HINT, A_flagDup: A_flagDup, A_facebookUrl: A_facebookUrl, A_fbPluginUrl: A_fbPluginUrl, A_noticeAddProblem: A_noticeAddProblem, A_noticeAddArgs: A_noticeAddArgs, A_plainRefusal: A_plainRefusal, A_hour12: A_hour12, A_timeRange: A_timeRange,
     taskPriorityLabel: taskPriorityLabel, E_attention: E_attention, E_warnKey: E_warnKey, E_buzz: E_buzz, E_hapticsOn: E_hapticsOn, E_hapticsSet: E_hapticsSet, E_PATTERNS: E_PATTERNS,
-    H_noticeUrl: H_noticeUrl, H_noticeHead: H_noticeHead, H_weatherShort: H_weatherShort, H_agenda: H_agenda, H_ready: H_ready, H_readyChips: H_readyChips, H_readyLine: H_readyLine, H_progress: H_progress, H_cleanLine: H_cleanLine, H_houseLine: H_houseLine, H_untilLine: H_untilLine, H_manualIndex: H_manualIndex, H_search: H_search, H_dayStep: H_dayStep,
+    H_noticeUrl: H_noticeUrl, H_noticeHead: H_noticeHead, H_weatherShort: H_weatherShort, H_agenda: H_agenda, H_ready: H_ready, H_readyChips: H_readyChips, H_readyOk: H_readyOk, H_clock12: H_clock12, H_readyLine: H_readyLine, H_progress: H_progress, H_cleanLine: H_cleanLine, H_houseLine: H_houseLine, H_untilLine: H_untilLine, H_manualIndex: H_manualIndex, H_search: H_search, H_dayStep: H_dayStep,
     E_drag: E_drag, E_lockOf: E_lockOf, E_inEdge: E_inEdge, E_velocity: E_velocity, E_tabFollow: E_tabFollow, E_tabCommit: E_tabCommit, E_sheetFollow: E_sheetFollow, E_sheetCommit: E_sheetCommit,
     E_taskFollow: E_taskFollow, E_taskCommit: E_taskCommit, E_taskDist: E_taskDist, E_EDGE_R_TASK: E_EDGE_R_TASK, E_taskOpens: E_taskOpens, E_slideCommit: E_slideCommit, E_tabNeighbour: E_tabNeighbour, F_widthClass: F_widthClass, E_setClock: E_setClock
   };

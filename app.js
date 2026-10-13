@@ -65,6 +65,7 @@
   var state = { access: null, user: null, name: '', layout: null, payload: null, loadedAt: 0, loading: false, error: '', month: null, payHint: null, photos: {},
     notices: null, noticesAbsent: false, noticesLoading: false, noticeFilter: 'all', nadd: null, fbOpen: false, ratesMore: false, calTab: 'calendar', legendOpen: false, H_peekedCal: false, H_peekedTask: false, progress: null, progressAbsent: false, taskFilter: 'all', hubRoute: '', tasks: null, tasksErr: '', tasksLoading: false, showDone: false, lastDone: null, add: null, assignees: null, rates: null, ratesErr: '', rateForm: null, rateSaving: false, reply: null, bookings: null, bookingsDone: false, noticesDone: false, tasksDenied: false, noticesFailed: false, bookingsFailed: false, errorKind: '' };
   var $ = function (id) { return document.getElementById(id); };
+  try { var lsLegend = store('localStorage'); state.legendOpen = !!lsLegend && lsLegend.getItem('cs_legend_open') === '1'; } catch (e) {} // F2: the legend's More stays as it was left
   var VIEWS = ['signin', 'home', 'calendar', 'tasks', 'payrates', 'more', 'door', 'reply', 'hub', 'weather', 'stock', 'manage', 'search'];
   function pid() { return (state.access && state.access.property_ids && state.access.property_ids[0]) || CFG.propertyId; }
   function canReply() { return CS.canDraftReply(state.access && state.access.role); } // s82 decision 5: every signed-in staff role
@@ -203,10 +204,10 @@
     if (!staff) { // F4: the verdict. Three check rows with a glyph and a word; a row whose data is absent is not drawn.
       var rows = '', cl = CS.H_cleanLine(state.progress, clock), hl = CS.H_houseLine(A_notices(), p.today), raw = inToday ? H_readyRaw(ds.stay) : null, rd = CS.H_ready(raw, role());
       if (cl) rows += H_check(cl.tone, 'Clean', cl.text);
-      if (rd) rows += H_check(rd.id && rd.paid && rd.door_code ? 'ok' : 'warn', 'Arrival', CS.H_readyLine(rd));
+      if (rd) rows += H_check(CS.H_readyOk(rd) ? 'ok' : 'warn', 'Arrival', CS.H_readyLine(rd));
       if (hl) rows += H_check(hl.tone, 'House', hl.text);
       return '<section class="card glass A_card" aria-label="Turnover today"><div class="row-between"><span class="cap up">Turnover today</span></div><p class="strong H_tline" style="margin:0">' + esc('Today · out ' + T.outLabel + ' · in ' + T.inLabel) + '</p>' +
-        (rows ? '<div class="H_checks">' + rows + '</div>' : '') + (rd && !(rd.id && rd.paid && rd.door_code) ? H_readyBlock(raw, ds.stay, true) : '') + '</section>';
+        (rows ? '<div class="H_checks">' + rows + '</div>' : '') + (rd && !CS.H_readyOk(rd) ? H_readyBlock(raw, ds.stay, true) : '') + '</section>';
     }
     var steps = '<div class="A_steps">' +
       '<div><span class="dot">' + ICON('logout', 's16') + '</span><span>Guest out</span><b>' + esc(outToday ? T.outLabel : 'None today') + '</b></div>' +
@@ -474,10 +475,10 @@
     var r = CS.H_ready(raw, role()); if (!r) return '';
     var chips = CS.H_readyChips(r).map(function (c) { return pill(c.ok ? 'ok' : 'warn', c.ok ? 'check' : 'clock', c.word); }).join(''), acts = '';
     if (actions) {
-      var bk = !r.paid ? A_hubLink('bookings') : null;
+      var bk = r.paid === false ? A_hubLink('bookings') : null;
       if (bk) acts += bk.external ? ext(bk.href, 'Open booking' + ICON('ext', 's16'), 'btn btn-ghost btn-sm') : '<a class="btn btn-ghost btn-sm" href="' + esc(bk.href) + '">Open booking</a>';
-      if (!r.id && g && g.uid && canAddDetails()) acts += '<a class="btn btn-ghost btn-sm" href="./guest/?for=id#' + encodeURIComponent(g.uid) + '">Add ID photo</a>';
-      if (!r.door_code) acts += tgA(LINKS.tgOps, ICON('chat', 's16') + 'Set the door code in Cassy', 'btn btn-ghost btn-sm');
+      if (r.id === false && g && g.uid && canAddDetails()) acts += '<a class="btn btn-ghost btn-sm" href="./guest/?for=id#' + encodeURIComponent(g.uid) + '">Add ID photo</a>';
+      if (r.door_code === false) acts += tgA(LINKS.tgOps, ICON('chat', 's16') + 'Set the door code in Cassy', 'btn btn-ghost btn-sm');
     }
     return '<div class="H_ready" role="group" aria-label="Arrival checklist"><div class="row-wrap">' + chips + '</div>' + (acts ? '<div class="row-wrap">' + acts + '</div>' : '') + '</div>';
   }
@@ -487,6 +488,7 @@
     var p = state.payload, g = [p && p.next_guest, p && p.current_guest].filter(function (x) { return x && x.arrival_ready && x.guest_name === st.guest_name && x.checkin_date === st.checkin_date; })[0];
     return g ? g.arrival_ready : null;
   }
+  function H_noticeLink(u) { return '<a class="btn btn-ghost btn-sm" href="' + esc(u) + '" target="_blank" rel="noopener noreferrer">Open the original notice' + ICON('ext', 's16') + '</a>'; }
   function H_agendaRow(a) {
     var st = a.st, nights = st.nights != null ? st.nights : CS.daysBetween(st.checkin_date, st.checkout_date), src = CS.sourceLabel(st.source);
     var lead = a.kind === 'arrive' ? 'Arrives ' + CS.dayShort(st.checkin_date) : 'Leaves ' + CS.dayShort(st.checkout_date);
@@ -524,7 +526,7 @@
     return '<section class="card glass A_nrow" aria-label="' + esc(n.title) + '"><div class="top"><span class="lead A_t-' + esc(n.type) + '">' + ICON(A_noticeIcon(n.type)) + '</span><div class="mid"><span class="t">' + esc(n.title) + '</span>' +
       (n.sub ? '<span class="s">' + esc(n.sub) + '</span>' : '') + (n.detail ? '<span class="A_det">' + esc(n.detail) + '</span>' : '') + '</div></div>' +
       (tell || n.date || n.url ? '<div class="acts">' + (tell ? '<button class="btn btn-secondary btn-sm" type="button" data-act="notice-tell" data-nkey="' + esc(n.key) + '">Tell the guest</button>' : '') +
-        (n.url ? ext(n.url, 'Open the original notice' + ICON('ext', 's16'), 'btn btn-ghost btn-sm') : '') +
+        (n.url ? H_noticeLink(n.url) : '') +
         (n.date ? '<button class="btn btn-ghost btn-sm" type="button" data-act="notice-cal" data-date="' + esc(n.date) + '">Open on calendar</button>' : '') + '</div>' : '') + '</section>';
   }
   function A_houseRow(h) {
@@ -659,7 +661,7 @@
       ds.clashIn.map(function (s) { return '<p class="sub num" style="margin:8px 0 0"><b>' + esc('Second arrival: ' + (s.guest_name || 'Guest')) + '</b> · ' + esc(CS.stayDates(s)) + '</p>'; }).join('');
     var nd = CS.A_noticeDay(A_notices(), S.key), T = A_houseT();
     if (nd.length) html += '<div class="cap up" style="margin:14px 0 6px">Notices</div><ul class="wlist">' + nd.map(function (n) {
-      return '<li>' + ICON(A_noticeIcon(n.type)) + '<span style="flex:1"><b>' + esc(n.title) + '</b>' + (n.sub ? '<br><span class="help">' + esc(n.sub) + '</span>' : '') + (n.url ? '<br>' + ext(n.url, 'Open the original notice' + ICON('ext', 's16'), 'btn btn-ghost btn-sm') : '') + '</span>' +
+      return '<li>' + ICON(A_noticeIcon(n.type)) + '<span style="flex:1"><b>' + esc(n.title) + '</b>' + (n.sub ? '<br><span class="help">' + esc(n.sub) + '</span>' : '') + (n.url ? '<br>' + H_noticeLink(n.url) : '') + '</span>' +
         (n.tell && CS.canSeeGuestContact(role()) ? '<button class="btn btn-secondary btn-sm" type="button" data-act="notice-tell" data-nkey="' + esc(n.key) + '">Tell the guest</button>' : '') + '</li>';
     }).join('') + '</ul>';
     html += '<div class="cap up" style="margin:14px 0 6px">Cleaning</div><p class="sub" style="margin:0">' + (ds.out || ds.arrive ? (ds.out ? esc((ds.out.guest_name || 'Guest') + ' out ' + T.outLabel) : '') + (ds.out && ds.arrive ? ', ' : '') + (ds.arrive ? esc((ds.stay.guest_name || 'Guest') + ' in ' + T.inLabel) : '') + '.' : 'No turnover this day.') + '</p>';
@@ -1248,7 +1250,7 @@
       if (current !== key || token !== H_mod.n) return;
       var box = $('H_mod-' + key); if (!box) return; box.innerHTML = '';
       H_mod.mounted = key; H_mod.sub = sub;
-      window[m.global].mount(box, { client: DEMO ? null : sb, demo: DEMO, role: role(), sub: sub, houseTimes: A_houseT(), navigate: function (h) { location.hash = String(h).charAt(0) === '#' ? h : '#' + h; }, toast: toast, haptic: E_vibe });
+      window[m.global].mount(box, { client: DEMO ? null : sb, demo: DEMO, role: role(), sub: sub, propertyId: pid(), houseTimes: A_houseT(), navigate: function (h) { location.hash = String(h).charAt(0) === '#' ? h : '#' + h; }, toast: toast, haptic: E_vibe });
     }, function () { if (current === key && token === H_mod.n) H_fallback(key); });
   }
 
@@ -1315,7 +1317,7 @@
     });
   }
   function signOutTo(msg) {
-    closeSheet(); dropPhotos(); state.replyRecent = []; state.cleanDone = null; state.progress = null; state.progressAbsent = false; H_idClose(); state.reply = null; var rb = $('rp-body'); if (rb) rb.innerHTML = ''; rpLive(''); state.payload = null; state.bookings = null; state.bookingsDone = false; state.noticesDone = false; state.notices = null; state.noticesAbsent = false; state.nadd = null; state.fbOpen = false; state.tasks = null; state.access = null; state.layout = null; state.month = null; state.error = '';
+    H_unmount(); closeSheet(); dropPhotos(); state.replyRecent = []; state.cleanDone = null; state.progress = null; state.progressAbsent = false; H_idClose(); state.reply = null; var rb = $('rp-body'); if (rb) rb.innerHTML = ''; rpLive(''); state.payload = null; state.bookings = null; state.bookingsDone = false; state.noticesDone = false; state.notices = null; state.noticesAbsent = false; state.nadd = null; state.fbOpen = false; state.tasks = null; state.access = null; state.layout = null; state.month = null; state.error = '';
     return sb.auth.signOut().catch(function () {}).then(function () { showSignin(msg); });
   }
   function showSignin(msg) {

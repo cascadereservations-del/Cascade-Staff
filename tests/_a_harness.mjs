@@ -20,7 +20,7 @@ export function el() {
   return e;
 }
 // E_ options (all optional): fold = a fold-manifest.json object; reduced = prefers-reduced-motion; nav = extra navigator members (vibrate); width = innerWidth; ls = a localStorage stand-in; visible = false hides the page.
-export async function boot({ tour, tourDelay, role, hash, handlers, now, demo, els: pre, docQuery, serviceWorker, fold, foldFetch, reduced, nav: navExtra, width, ls, visible }) {
+export async function boot({ winInit, tour, tourDelay, role, hash, handlers, now, demo, els: pre, docQuery, serviceWorker, fold, foldFetch, reduced, nav: navExtra, width, ls, visible }) {
   const when = now || NOW;
   class FixedDate extends Date { constructor(...a) { if (a.length) super(...a); else super(when.getTime()); } static now() { return when.getTime(); } }
   const els = pre || {}, listeners = {}, winListeners = {}, calls = [], location = { hash, pathname: '/', search: demo ? '?demo' : '', origin: 'https://staff.example', replace() {} };
@@ -39,6 +39,7 @@ export async function boot({ tour, tourDelay, role, hash, handlers, now, demo, e
   const ctx = { window: win, document: docObj, location, history: { replaceState(a, b, h) { location.hash = h; } }, navigator: nav, localStorage: win.localStorage, matchMedia: win.matchMedia,
     fetch: () => Promise.resolve({ ok: false }), setTimeout, clearTimeout, console, URL, Image: function () {}, Date: FixedDate, Math, JSON, Promise, crypto: { randomUUID: () => 'uuid' } };
   if (tourDelay != null) win.H_TOUR_DELAY = tourDelay;
+  if (winInit) winInit(win);
   win.crypto = ctx.crypto; vm.createContext(ctx); vm.runInContext(read('app.js'), ctx);
   const flush = async () => { for (let i = 0; i < 14; i++) await new Promise((r) => setImmediate(r)); }; await flush();
   const click = async (attrs) => { const btn = { getAttribute: (n) => (n in attrs ? attrs[n] : null), hasAttribute: (n) => n in attrs }; for (const fn of listeners.click || []) fn({ target: { closest: () => btn } }); await flush(); };
