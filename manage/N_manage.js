@@ -14,6 +14,7 @@
   var TABS = ['today', 'inquiries', 'money', 'kpis'];
   var TAB_LABEL = { today: 'Today', inquiries: 'Inquiries', money: 'Money', kpis: 'KPIs' };
   var NO_CONNECTION = 'No connection, so nothing was sent.';
+  var DROPPED = 'The connection dropped before an answer came. Tap again; a repeat is safe.';
 
   var clock = function () { return Date.now(); };
   function pad2(n) { return (n < 10 ? '0' : '') + n; }
@@ -203,11 +204,12 @@
   function errCode(e) { return e && (e.code || (e.error && e.error.code)) || ''; }
   function errMsg(e) { return String((e && (e.message || (e.error && e.error.message))) || e || ''); }
   function isMissing(e) { var c = String(errCode(e)), m = errMsg(e); return c === 'PGRST202' || c === '42883' || c === '42P01' || c === 'PGRST205' || e && e.status === 404 || /could not find the function|does not exist|schema cache/i.test(m); }
-  function isDenied(e) { var c = String(errCode(e)), m = errMsg(e); return c === '42501' || e && (e.status === 401 || e.status === 403) || /not authori|permission denied|is required$/i.test(m); }
+  function isDenied(e) { var c = String(errCode(e)), m = errMsg(e); return c === '42501' || e && (e.status === 401 || e.status === 403) || /not authori|permission denied/i.test(m); }
   function isOffline(e) { var m = errMsg(e); return /failed to fetch|networkerror|network request failed|load failed|timeout|fetch failed/i.test(m) || (e && e.status === 0); }
   function plainError(e, writing) {
-    if (isOffline(e)) return writing ? NO_CONNECTION : 'No connection.';
+    if (isOffline(e)) return writing ? DROPPED : 'No connection.'; // NO_CONNECTION is only for a request that was never sent
     if (isDenied(e)) return 'Your account is not allowed to do this.';
+    if (writing && (String(errCode(e)) === '22023' || String(errCode(e)) === 'P0002') && errMsg(e)) return errMsg(e); // the server's own reason (escaped when drawn)
     return writing ? 'The server did not answer clearly. Check the list before you try again.' : 'This could not be loaded.';
   }
 
@@ -276,6 +278,7 @@
 
   // load(kind): each kind has its own state { ok, data, err, absent, busy }. A missing RPC sets absent and hides that section.
   function load(kind, force) {
+    S.today = manilaToday(); // a screen opened past midnight uses today's periods
     var st = S.d[kind] || (S.d[kind] = {}); if (st.busy) return; if (st.ok && !force && !stale()) return;
     st.busy = true; st.err = ''; var gen = S.gen, key = kind === 'kpi' ? S.period : '';
     draw();
@@ -291,7 +294,7 @@
       var sample = kind === 'overview' ? dd.overview : kind === 'inq' ? normalizePayments(dd.inquiries) : kind === 'txns' ? dd.txns : { now: dd.metrics(per.start, per.endExclusive), prev: dd.metrics(cmp.start, cmp.endExclusive) };
       Promise.resolve().then(function () { done({ data: sample, error: null }); }); return;
     }
-    if (!online()) { Promise.resolve().then(function () { done({ data: null, error: { message: 'failed to fetch' } }); }); return; }
+    if (!online() || !S.client) { Promise.resolve().then(function () { done({ data: null, error: { message: 'failed to fetch' } }); }); return; }
     if (kind === 'overview') {
       callRpc('get_admin_overview_v1', { p_property_id: pid() }).then(done); // admin-dashboard features/today/api.ts:31
     } else if (kind === 'inq') {
@@ -452,7 +455,7 @@
         b += sheetErr(sh) + btns('Review', 'cf-review', 'Back', 'sheet-back');
       } else {
         var amt = parseAmount(f.amount), mth = rc ? 'GCash via Messenger (receipt on file)' : methodLabel(f.method), ref = (rc && pc.reference ? pc.reference : f.reference || '').trim();
-        b += '<p class="N_sub">Check these before you confirm. This cannot be undone here.</p><dl class="N_dl"><dt>Guest</dt><dd>' + esc(pc.guest_name || 'A guest') + '</dd><dt>Dates</dt><dd>' + esc(fmtDate(pc.checkin_date, 'long') + ' to ' + fmtDate(pc.checkout_date, 'long')) + '</dd>' +
+        b += '<p class="N_sub">Check these before you confirm. This cannot be undone here. The guest is messaged when you confirm.</p><dl class="N_dl"><dt>Guest</dt><dd>' + esc(pc.guest_name || 'A guest') + '</dd><dt>Dates</dt><dd>' + esc(fmtDate(pc.checkin_date, 'long') + ' to ' + fmtDate(pc.checkout_date, 'long')) + '</dd>' +
           '<dt>Amount received</dt><dd class="N_num">' + esc(formatPHP(amt)) + '</dd><dt>Paid by</dt><dd>' + esc(mth) + '</dd>' + (ref ? '<dt>Reference</dt><dd>' + esc(ref) + '</dd>' : '') + (String(f.note || '').trim() ? '<dt>Note</dt><dd>' + esc(f.note.trim()) + '</dd>' : '') + '</dl>' +
           sheetErr(sh) + btns('Confirm booking', 'cf-send', 'Back', 'cf-edit', sh.busy);
       }
@@ -465,7 +468,7 @@
           DECLINE_REASONS.map(function (r) { return '<button class="N_chip" type="button" data-n="dc-chip" data-v="' + esc(r) + '" aria-pressed="' + (sh.chip === r) + '">' + esc(r) + '</button>'; }).join('') + '</div></div>' +
           field('N_dtxt', 'Anything to add (optional)', '<textarea class="N_input N_ta" id="N_dtxt" data-f="text" rows="2">' + esc(sh.text) + '</textarea>') + sheetErr(sh) + btns('Review', 'dc-review', 'Back', 'sheet-back');
       } else {
-        db += '<p class="N_sub">Check this before you decline.</p><dl class="N_dl"><dt>Guest</dt><dd>' + esc(pd.guest_name || 'A guest') + '</dd><dt>Dates</dt><dd>' + esc(fmtDate(pd.checkin_date, 'long') + ' to ' + fmtDate(pd.checkout_date, 'long')) + '</dd><dt>Reason</dt><dd>' + esc(declineReason(sh.chip, sh.text) || '') + '</dd></dl>' + sheetErr(sh) + btns('Decline request', 'dc-send', 'Back', 'dc-edit', sh.busy, true);
+        db += '<p class="N_sub">Check this before you decline. The booking and its calendar entry are cancelled, and its income row is voided. The guest is not messaged from here.</p><dl class="N_dl"><dt>Guest</dt><dd>' + esc(pd.guest_name || 'A guest') + '</dd><dt>Dates</dt><dd>' + esc(fmtDate(pd.checkin_date, 'long') + ' to ' + fmtDate(pd.checkout_date, 'long')) + '</dd><dt>Reason</dt><dd>' + esc(declineReason(sh.chip, sh.text) || '') + '</dd></dl>' + sheetErr(sh) + btns('Decline request', 'dc-send', 'Back', 'dc-edit', sh.busy, true);
       }
       return sheetShell('Decline request', db);
     }
@@ -477,7 +480,7 @@
           field('N_xc', 'Category', '<select class="N_select N_full" id="N_xc" data-f="category">' + EXPENSE_CATEGORIES.map(function (c) { return '<option value="' + c + '"' + (f2.category === c ? ' selected' : '') + '>' + esc(catLabel(c)) + '</option>'; }).join('') + '</select>', e2.category) +
           field('N_xn', 'What was it for?', inp('N_xn', 'notes', f2.notes), e2.notes) + field('N_xp', 'Paid to (optional)', inp('N_xp', 'payee', f2.payee)) + sheetErr(sh) + btns('Review', 'ex-review', 'Cancel', 'sheet-close');
       } else {
-        xb += '<p class="N_sub">Check this before you save. It goes into the books.</p><dl class="N_dl"><dt>Date</dt><dd>' + esc(fmtDate(f2.date, 'long')) + '</dd><dt>Amount</dt><dd class="N_num">' + esc(formatPHP(parseAmount(f2.amount))) + '</dd><dt>Category</dt><dd>' + esc(catLabel(f2.category)) + '</dd>' +
+        xb += '<p class="N_sub">Check this before you save. It is counted in the books at once.</p><dl class="N_dl"><dt>Date</dt><dd>' + esc(fmtDate(f2.date, 'long')) + '</dd><dt>Amount</dt><dd class="N_num">' + esc(formatPHP(parseAmount(f2.amount))) + '</dd><dt>Category</dt><dd>' + esc(catLabel(f2.category)) + '</dd>' +
           '<dt>For</dt><dd>' + esc(f2.notes.trim()) + '</dd>' + (f2.payee.trim() ? '<dt>Paid to</dt><dd>' + esc(f2.payee.trim()) + '</dd>' : '') + '</dl>' + sheetErr(sh) + btns('Save expense', 'ex-send', 'Back', 'ex-edit', sh.busy);
       }
       return sheetShell('Log an expense', xb);
@@ -488,7 +491,7 @@
   function tabsHtml() {
     var hide = {}; // a tab whose only data source is missing is hidden
     if (S.d.inq && S.d.inq.absent) hide.inquiries = true;
-    return '<div class="N_seg" role="tablist" aria-label="Manage">' + TABS.filter(function (t) { return !hide[t]; }).map(function (t) {
+    return '<div class="N_seg" role="tablist" aria-label="Manage"' + (S.sheet ? ' inert aria-hidden="true"' : '') + '>' + TABS.filter(function (t) { return !hide[t]; }).map(function (t) {
       return '<button class="N_tab" type="button" role="tab" id="N_tab_' + t + '" aria-selected="' + (S.tab === t) + '" data-n="tab" data-v="' + t + '">' + TAB_LABEL[t] + '</button>';
     }).join('') + '</div>';
   }
@@ -565,6 +568,7 @@
     if (!S) return; var t = ev.target && ev.target.closest ? ev.target.closest('[data-n]') : null; if (!t) return;
     var a = t.getAttribute('data-n'), v = t.getAttribute('data-v'), sh = S.sheet;
     if (t.disabled || t.getAttribute('aria-busy') === 'true') return;
+    if (sh && sh.busy && (a === 'go' || a === 'tab' || a === 'refresh' || a === 'retry')) return; // a request is in flight: nothing may orphan its sheet
     if (a === 'go') { if (ev.preventDefault) ev.preventDefault(); S.sheet = null; S.opts.navigate('#door/dashboard/' + v); return; }
     if (a === 'tab') { setTab(v, true); return; }
     if (a === 'retry') { var m = { today: 'today', inquiries: 'inquiries', money: 'money', kpis: 'kpis' }; loadTab(m[v] || S.tab, true); return; }
@@ -610,7 +614,7 @@
     var today = manilaToday(), sub = TABS.indexOf(opts.sub) >= 0 ? opts.sub : null, stored = ls('get', 'cs_n_tab'), sp = ls('get', 'cs_n_period');
     S = { el: el, opts: opts, client: opts.client, demo: !!opts.demo, role: opts.role, gen: ++N_gen, today: today, d: {}, sheet: null, notice: '', loadedAt: 0,
       tab: sub || (TABS.indexOf(stored) >= 0 ? stored : 'today'), period: PRESETS.some(function (p) { return p[0] === sp; }) ? sp : 'mtd', demoData: demoData(today) };
-    if (!S.demo && !S.client) { S.d.overview = { err: 'No connection.' }; }
+    if (!S.demo && !S.client) { ['overview', 'inq', 'txns', 'kpi'].forEach(function (k) { S.d[k] = { err: 'No connection.' }; }); }
     S.onClick = onClick; S.onInput = onInput; S.onVis = onVisible;
     el.addEventListener('click', S.onClick); el.addEventListener('input', S.onInput); el.addEventListener('change', S.onInput);
     el.addEventListener('submit', function (e) { if (e && e.preventDefault) e.preventDefault(); });

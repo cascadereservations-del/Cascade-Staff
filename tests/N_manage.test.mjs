@@ -250,7 +250,7 @@ test('N offline: a write with no connection says so inline, sends nothing and ke
   // a request that dies in flight: same key on the second try
   const dying = fakeClient({ get_admin_overview_v1: () => ({ data: OV(), error: null }), staff_inquiry_payments_v1: () => ({ data: [Q1], error: null }), staff_confirm_direct_booking_v1: () => ({ data: null, error: { message: 'TypeError: Failed to fetch' } }) });
   const u = await boot({ client: dying }); await openConfirm(u); await u.type('checked', true, { type: 'checkbox', checked: true }); await u.click('cf-review'); await u.click('cf-send');
-  assert.match(u.text(), /No connection, so nothing was sent\./);
+  assert.match(u.text(), /The connection dropped before an answer came\. Tap again; a repeat is safe\./); assert.ok(!/nothing was sent/.test(u.text()));
   await u.click('cf-send');
   const ks = u.sent('staff_confirm_direct_booking_v1').map((c) => c[1].p_idempotency_key); assert.equal(ks.length, 2); assert.equal(ks[0], ks[1], 'retry after a dropped connection reuses the key');
 });
@@ -308,7 +308,7 @@ test('N expense: date, amount, category, what for, paid to; review; then admin_s
 test('N expense: the key is minted once per confirm; a dropped connection keeps it, a readable refusal replaces it; nothing else is offered (no edit, delete, bulk)', async () => {
   let n = 0; const t = await boot({ handlers: { admin_save_transaction_v1: () => (++n === 1 ? { data: null, error: { message: 'Failed to fetch' } } : { ok: true, id: 'tx', status: 'confirmed' }) } });
   await openExpense(t); await t.type('amount', '100'); await t.type('notes', 'Ice'); await t.click('ex-review'); await t.click('ex-send');
-  assert.match(t.text(), /No connection, so nothing was sent\./); await t.click('ex-send');
+  assert.match(t.text(), /connection dropped before an answer came/); await t.click('ex-send');
   const ks = t.sent('admin_save_transaction_v1').map((c) => c[1].p_idempotency_key); assert.equal(ks[0], ks[1]);
   assert.ok(!/data-n="(tx-edit|tx-delete|tx-bulk|journal)/.test(t.html()) && !/Edit|Delete|Void|Journal/.test(t.text()));
 });
@@ -449,4 +449,77 @@ test('N a11y/layout rules in the stylesheet: tokens only, 44px targets, no font 
   const sizes = [...CSS.matchAll(/font(?:-size)?:\s*(?:\d+\s+)?(?:max\()?([\d.]+)(rem|px)/g)].map((m) => (m[2] === 'rem' ? +m[1] * 16 : +m[1])); assert.ok(sizes.length > 5 && sizes.every((s) => s >= 13), 'font floor: ' + sizes.filter((s) => s < 13));
   for (const sel of ['.N_tab', '.N_row', '.N_chip', '.N_select, .N_input', '.N_chk', '.N_link']) assert.match(CSS, new RegExp(sel.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '[^{]*\\{[^}]*min-height: 44px'), sel);
   assert.ok(!/(^|[^-])overflow-x:\s*scroll/.test(CSS));
+});
+
+// ------------------------------------------------------------------------------------------------ fix round (Fable review of 5234e80)
+// Reply shapes taken from stay-site/supabase/migrations/20261008100000_inquiry_one_tap.sql: _confirm_direct_booking_core returns
+// v_base (booking_id, booking_ref, guest_name, checkin, checkout) || {ok, outcome, reason?, already_processed} || {comparison_id, ...};
+// a replayed key answers { ok: outcome = 'confirmed', outcome, already_processed: true }; staff_decline answers v_base || {ok, outcome, ...};
+// the wrappers answer { ok:false, outcome:'denied'|'invalid_state' (reason not_found), booking_id } without the base.
+const BASE = { booking_id: Q1.id, booking_ref: 'B1000000', guest_name: 'Ella Tan', checkin: '2026-10-20', checkout: '2026-10-22' };
+const REPLY = {
+  confirmed: { ...BASE, ok: true, outcome: 'confirmed', already_processed: false, comparison_id: Q1.comparison_id, comparison_outcome: 'match', reattested: false, finance_review_id: 'r1', reviewer_user_id: 'u1' },
+  replay: { ...BASE, ok: true, outcome: 'confirmed', already_processed: true, finance_review_id: 'r1' },
+  conflict: { ...BASE, ok: false, outcome: 'conflict', reason: 'active_hold', already_processed: false },
+  reused: { ...BASE, ok: false, outcome: 'reference_reused', prior_ref: 'A1B2C3D4' },
+  denied: { ok: false, outcome: 'denied', booking_id: Q1.id },
+  notFound: { ok: false, outcome: 'invalid_state', reason: 'not_found', booking_id: Q1.id },
+  declined: { ...BASE, ok: true, outcome: 'declined', already_processed: false, finance_review_id: null, comparison_id: null },
+  notPending: { ...BASE, ok: false, outcome: 'invalid_state', reason: 'not_pending', status: 'cancelled' }
+};
+async function reviewed(t) { await openConfirm(t); await t.type('checked', true, { type: 'checkbox', checked: true }); await t.click('cf-review'); }
+async function declineReviewed(t) { await t.click('tab', 'inquiries'); await t.click('inq-open', Q1.id); await t.click('dc-start'); await t.click('dc-chip', 'Duplicate request'); await t.click('dc-review'); }
+test('N reply shapes: every SQL reply shape reads correctly (a replayed confirm is a success, a bare denied has no guest name)', async () => {
+  const cases = [[REPLY.confirmed, true, /Booking confirmed for Ella Tan, 20 Oct 2026 to 22 Oct 2026/], [REPLY.replay, true, /Booking confirmed for Ella Tan/], [REPLY.conflict, false, /clash with another stay/], [REPLY.reused, false, /A1B2C3D4/], [REPLY.denied, false, /not allowed to confirm/], [REPLY.notFound, false, /no longer waiting/]];
+  for (const [r, ok, re] of cases) {
+    const t = await boot({ handlers: { staff_confirm_direct_booking_v1: () => r } }); await reviewed(t); await t.click('cf-send');
+    if (ok) { assert.match(t.toasts.join(' '), re); assert.ok(!t.html().includes('role="dialog"')); } else { assert.match(t.text(), re); assert.ok(t.html().includes('role="dialog"')); }
+  }
+  const d = await boot({ handlers: { staff_decline_direct_booking_v1: () => REPLY.declined } }); await declineReviewed(d); await d.click('dc-send');
+  assert.match(d.toasts.join(' '), /Request declined for Ella Tan/);
+  const n = await boot({ handlers: { staff_decline_direct_booking_v1: () => REPLY.notPending } }); await declineReviewed(n); await n.click('dc-send');
+  assert.match(n.text(), /no longer waiting for a decision/);
+});
+test('N in flight: tab, go, refresh and retry are ignored while a write is sending; the tab list is inert under any sheet', async () => {
+  let release; const gate = new Promise((r) => { release = r; });
+  const t = await boot({ handlers: { staff_confirm_direct_booking_v1: () => gate.then(() => REPLY.conflict) } });
+  await t.click('tab', 'inquiries'); await t.click('inq-open', Q1.id);
+  assert.match(t.html(), /class="N_seg"[^>]*inert/, 'tab list inert while a sheet is open');
+  await t.click('cf-start'); await t.type('checked', true, { type: 'checkbox', checked: true }); await t.click('cf-review'); await t.click('cf-send');
+  await t.click('tab', 'money'); await t.click('go', 'finance'); await t.click('refresh'); await t.click('retry', 'inquiries');
+  assert.deepEqual(t.nav, []); assert.ok(t.html().includes('role="dialog"'), 'the sheet is still there'); assert.match(t.html(), /id="N_tab_inquiries" aria-selected="true"/);
+  release(); await tick(); assert.match(t.text(), /clash with another stay/, 'the answer lands on a visible sheet');
+});
+test('N copy: a request that left and died says a repeat is safe, never that nothing was sent', async () => {
+  const t = await boot({ handlers: { staff_confirm_direct_booking_v1: () => ({ data: null, error: { message: 'Failed to fetch' } }) } });
+  await reviewed(t); await t.click('cf-send'); assert.match(t.text(), /dropped before an answer came\. Tap again; a repeat is safe/); assert.ok(!/nothing was sent/.test(t.text())); assert.equal(t.sent('staff_confirm_direct_booking_v1').length, 1);
+});
+test('N server reasons: 22023 and P0002 show the server message (escaped); only 42501/401/403 mean not allowed', async () => {
+  const t = await boot({ handlers: { admin_save_transaction_v1: () => ({ data: null, error: { code: '22023', message: 'amount and date are required <b>x</b>' } }) } });
+  await openExpense(t); await t.type('amount', '5'); await t.type('notes', 'x'); await t.click('ex-review'); await t.click('ex-send');
+  assert.match(t.html(), /amount and date are required &lt;b&gt;x&lt;\/b&gt;/); assert.ok(!/<b>x/.test(t.html()));
+  const { M } = load();
+  assert.equal(M.lib.isDenied({ code: 'P0001', message: 'read_finance or approve_payment is required' }), false);
+  for (const e of [{ code: '42501' }, { status: 401 }, { status: 403 }]) assert.equal(M.lib.isDenied(e), true);
+});
+test('N clock: a screen opened after midnight uses the new day for its periods', async () => {
+  let now = NOW; const t = await boot({ sub: 'kpis', handlers: { get_hospitality_metrics_v1: () => ({ data: METRICS(1), error: null }) } });
+  assert.equal(t.sent('get_hospitality_metrics_v1')[0][1].p_end_exclusive, '2026-10-14');
+  now = Date.parse('2026-10-15T20:00:00Z'); t.M._setClock(() => now); // 04:00 on 16 Oct in Manila
+  await t.click('refresh'); assert.equal(t.sent('get_hospitality_metrics_v1').slice(-2)[0][1].p_end_exclusive, '2026-10-16');
+});
+test('N no client, not demo: every tab shows the calm error with Try again, never an endless Loading', async () => {
+  const env = load(); const el = new FakeEl();
+  env.M.mount(el, { role: 'owner', navigate() {} }); await tick();
+  for (const tab of ['today', 'inquiries', 'money', 'kpis']) {
+    const tg = { getAttribute: (k) => ({ 'data-n': 'tab', 'data-v': tab })[k] ?? null }; tg.closest = () => tg;
+    for (const f of el.l.click || []) f({ target: tg }); await tick(); const x = el.innerHTML.replace(/<[^>]+>/g, ' ');
+    assert.match(x, /No connection/, tab); assert.ok(!/Loading/.test(x), tab); assert.match(el.innerHTML, /data-n="retry"/, tab);
+  }
+});
+test('N review wording: each review step says what happens next, as the SQL does', async () => {
+  const t = await boot({}); await reviewed(t); assert.match(t.text(), /The guest is messaged when you confirm\./);
+  const d = await boot({}); await declineReviewed(d);
+  assert.match(d.text(), /The booking and its calendar entry are cancelled, and its income row is voided\. The guest is not messaged from here\./);
+  const e = await boot({}); await openExpense(e); await e.type('amount', '5'); await e.type('notes', 'x'); await e.click('ex-review'); assert.match(e.text(), /It is counted in the books at once\./);
 });
