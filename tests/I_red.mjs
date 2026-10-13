@@ -27,6 +27,8 @@ const M = [
   ['short note sent as typed', [["return t.length >= 3 ? t : 'Counted in the staff app';", "return t || 'Counted in the staff app';"]]],
   ['controlled item can receive', [["&& !(it && it.controlled);", ";"]]],
   ['no reload after failure', [["{ me.loading = false; load(); } // the write may have landed", "{ }"]]],
+  ['count default off', [["var I_FLAGS = { count: true, usage: false };", "var I_FLAGS = { count: false, usage: false };"]]],
+  ['one-way warning dropped', [["After this, ' + esc(it.name)", "Done, ' + esc(it.name)"]]],
   ['syntax error', [["function canManage(role) {", "function canManage(role) { ((("]]],
   ['listeners left on unmount', [["M.el.removeEventListener && M.el.removeEventListener(l[0], l[1]);", ""]]],
   ['cached list shown to another role', [["if (K.role !== opts.role) {", "if (false) {"]]],

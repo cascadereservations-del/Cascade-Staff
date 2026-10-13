@@ -12,8 +12,8 @@ const SHOP = [
 const cl = (o) => mockClient(Object.assign({ catalogue: CAT, shop: SHOP }, o));
 
 for (const role of ['owner', 'admin', 'cleaner', 'finance']) {
-  test('I_fix flags default OFF: ' + role + ' gets no Count it or Used some, and a hand-typed click or route opens nothing', async () => {
-    const e = await setup({ role, flags: null, client: cl() });
+  test('I_fix flags OFF: ' + role + ' gets no Count it or Used some, and a hand-typed click or route opens nothing', async () => {
+    const e = await setup({ role, flags: { count: false, usage: false }, client: cl() });
     await e.mount('item/i1');
     assert.match(e.sheet(), /Toilet paper/);
     assert.doesNotMatch(e.sheet(), /data-kind="count"|data-kind="used"/);
@@ -102,4 +102,24 @@ test('I_fix a refused approve hides Approve and Remove, not Stock received', asy
   assert.match(e.sheet(), /shop-bought/);
   await e.act('close'); await e.mount('item/i1');
   assert.match(e.sheet(), /data-kind="recv"/);
+});
+
+test('I_fix defaults: Count it is ON for owner and admin only, Used some is OFF for every role', async () => {
+  for (const [role, count] of [['owner', true], ['admin', true], ['cleaner', false], ['finance', false]]) {
+    const e = await setup({ role, flags: null, client: cl() });
+    await e.mount('item/i1');
+    assert.equal(/data-kind="count"/.test(e.sheet()), count, role + ' count');
+    assert.doesNotMatch(e.sheet(), /data-kind="used"/);
+  }
+});
+
+test('I_fix count confirm: a first count says it is one-way; a controlled item gets the plain question', async () => {
+  const e = await setup({ role: 'owner', flags: null, client: cl() });
+  await e.mount(''); await e.open('i1'); await e.begin('count'); await e.input('I_f_qty', '9'); await e.submit();
+  assert.match(e.sheet(), /Set Toilet paper to 9\?/);
+  assert.match(e.sheet(), /After this, Toilet paper is counted in the app\. Telegram \/count will skip it\./);
+  await e.act('back'); await e.act('back'); await e.act('close');
+  await e.open('c1'); await e.begin('count'); await e.input('I_f_qty', '3'); await e.submit();
+  assert.match(e.sheet(), /Set Controlled soap to 3\?/);
+  assert.doesNotMatch(e.sheet(), /Telegram/);
 });

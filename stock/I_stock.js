@@ -8,8 +8,8 @@
 
   var PROPERTY_ID = '6ae230f4-c189-4547-84b1-cb6e0b2cc9bd'; // same constant as the shell's CFG.propertyId; opts.propertyId wins
   var DEMO_NOTE = 'Demo only, nothing was saved.';
-  // Owner decision pending (counting makes an item ledger-controlled; Used some doubles the checklist supply log). Read once; the test hook is window.I_STOCK_FLAGS.
-  var I_FLAGS = { count: false, usage: false };
+  // Owner decision 2026-10-13: counts move to the app (a first count is one-way); Used some stays off (it would double the checklist supply log). Read once; the test hook is window.I_STOCK_FLAGS.
+  var I_FLAGS = { count: true, usage: false };
   if (root.I_STOCK_FLAGS) { I_FLAGS.count = !!root.I_STOCK_FLAGS.count; I_FLAGS.usage = !!root.I_STOCK_FLAGS.usage; }
 
   /* ------------------------------------------------------------------ pure helpers (exported as I_Stock.lib) */
@@ -328,7 +328,7 @@
     if (a.kind === 'count') {
       var n = parseQty(v.qty, true), d = n == null || it.qty == null ? null : Math.round((n - it.qty) * 100) / 100;
       return head(c ? 'Set ' + it.name + ' to ' + fmt(n) + '?' : 'Count ' + it.name, c ? null : 'Count what is in the storeroom.') + '<form data-i-form>' +
-        (c ? '<p class="I_conf">Now ' + (it.qty == null ? 'not counted' : esc(fmt(it.qty) + ' ' + it.unit)) + (d != null ? ', a change of ' + (d > 0 ? '+' : '') + fmt(d) : '') + '.</p>'
+        (c ? '<p class="I_conf">Now ' + (it.qty == null ? 'not counted' : esc(fmt(it.qty) + ' ' + it.unit)) + (d != null ? ', a change of ' + (d > 0 ? '+' : '') + fmt(d) : '') + '.</p>' + (it.controlled ? '' : '<p class="I_conf">After this, ' + esc(it.name) + ' is counted in the app. Telegram /count will skip it.</p>')
           : stepper('qty', 'Counted (' + esc(unitOf(it)) + ')', v.qty, true) + textField('note', 'Note (optional)', v.note || '', 'maxlength="200" placeholder="Where you counted"') + (a.bad ? '<div class="field"><span class="err">▲ Enter a number such as 12 or 2.5.</span></div>' : '')) +
         actions(a, c ? 'Yes, set it' : 'Continue') + '</form>';
     }
