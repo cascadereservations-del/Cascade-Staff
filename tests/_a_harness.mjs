@@ -37,7 +37,7 @@ export async function boot({ winInit, tour, tourDelay, role, hash, handlers, now
   const registered = [];
   const nav = Object.assign({ userAgent: 'test' }, navExtra || {}); if (serviceWorker !== false) nav.serviceWorker = { register: (u) => { registered.push(u); return Promise.resolve(); } };
   const ctx = { window: win, document: docObj, location, history: { replaceState(a, b, h) { location.hash = h; } }, navigator: nav, localStorage: win.localStorage, matchMedia: win.matchMedia,
-    fetch: () => Promise.resolve({ ok: false }), setTimeout, clearTimeout, console, URL, Image: function () {}, Date: FixedDate, Math, JSON, Promise, crypto: { randomUUID: () => 'uuid' } };
+    fetch: () => Promise.resolve({ ok: false }), setTimeout, clearTimeout, console, URL, AbortController, Image: function () {}, Date: FixedDate, Math, JSON, Promise, crypto: { randomUUID: () => 'uuid' } };
   if (tourDelay != null) win.H_TOUR_DELAY = tourDelay;
   if (winInit) winInit(win);
   win.crypto = ctx.crypto; vm.createContext(ctx); vm.runInContext(read('app.js'), ctx);

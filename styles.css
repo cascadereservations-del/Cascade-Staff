@@ -979,4 +979,4 @@ button.A_chipglass.E_pill { width: auto; min-width: 124px; max-width: 184px; hei
 .H_kind[aria-pressed="true"] { border-color: var(--v5-gold); background: var(--v5-gold-soft); color: var(--v5-ink); }
 .A_noticecard.H_mgr { height: 304px; }
 .H_g { display: block; min-width: 0; } .H_g:has(> .F_group > #install-card[hidden]) { display: none; }
-@media (min-width: 52.5rem) { .H_calleft { position: sticky; top: calc(var(--appbar-h) + env(safe-area-inset-top, 0px) + 8px); } } /* the month stays in view while the long list beside it scrolls */
+@media (min-width: 52.5rem) and (min-height: 40rem) { .H_calleft { position: sticky; top: calc(var(--appbar-h) + env(safe-area-inset-top, 0px) + 8px); } } /* the month stays in view while the long list beside it scrolls */

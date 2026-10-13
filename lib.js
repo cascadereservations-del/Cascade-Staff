@@ -1136,7 +1136,22 @@
     return H_monthOk(+a[0], +a[1], today) ? d : null;
   }
   // The wait for a Cassy reply: honest steps on a timer (seconds since the tap).
-  function H_waitStep(sec) { return sec < 4 ? 'Reading the message' : sec < 12 ? 'Writing three replies' : 'Almost there'; }
+  function H_waitStep(sec) { return sec < 4 ? 'Reading the message' : sec < 12 ? 'Writing the reply' : 'Almost there'; }
+  // Manual brownout and maintenance day flags of the next 14 days, as notices, so a hand-added one shows in the list it was added from. Automatic flags already have their notice.
+  function H_withFlags(view, flags, today) {
+    if (!view || !Array.isArray(flags) || !today) return view;
+    var end = addDays(today, 14), have = {}; (view.list || []).forEach(function (n) { have[n.type + '|' + n.date] = 1; });
+    var extra = flags.filter(function (f) { return f && f.source === 'manual' && f.id && (f.kind === 'brownout' || f.kind === 'maintenance') && /^\d{4}-\d{2}-\d{2}$/.test(String(f.date || '')) && f.date >= today && f.date <= end; }).map(function (f) {
+      var type = f.kind === 'brownout' ? 'power' : 'blocked'; if (have[type + '|' + f.date]) return null;
+      return { key: 'f:' + f.id, id: String(f.id), type: type, group: type === 'power' ? 'power' : 'other', title: String(f.label || flagName(f.kind)), date: f.date, start: null, end: null, sub: dayShort(f.date) + ' · Added by hand', detail: '', source: 'Added by hand', tell: false, url: null, fromFlag: true };
+    }).filter(Boolean);
+    if (!extra.length) return view;
+    var out = {}; Object.keys(view).forEach(function (k) { out[k] = view[k]; });
+    out.list = (view.list || []).concat(extra).sort(function (a, b) { return (a.key === 'rain-watch' ? 0 : 1) - (b.key === 'rain-watch' ? 0 : 1) || String(a.date || '9999').localeCompare(String(b.date || '9999')) || String(a.start || '').localeCompare(String(b.start || '')); });
+    out.all = out.list.concat(view.house || []);
+    out.counts = Object.assign({}, view.counts, { all: view.counts.all + extra.length, power: view.counts.power + extra.filter(function (x) { return x.group === 'power'; }).length });
+    return out;
+  }
   // A power notice is saved as a brownout on its day (the notice call refuses power): a short title and a date.
   function H_powerProblem(f) {
     if (!String(f.title || '').trim()) return 'Add a short title, for example the hours.';
@@ -1254,7 +1269,7 @@
     weatherLine: weatherLine, rainLine: rainLine, weatherStale: weatherStale, esc: esc,
     A_HOUSE_FALLBACK: A_HOUSE_FALLBACK, A_houseTimes: A_houseTimes, A_turnoverClock: A_turnoverClock, A_turnoverLine: A_turnoverLine, A_hm: A_hm, A_NOTICE_TYPES: A_NOTICE_TYPES, A_noticesView: A_noticesView, A_noticeFilters: A_noticeFilters, A_dayMarks: A_dayMarks, A_noticeDay: A_noticeDay, A_guestMessage: A_guestMessage, A_CAL_TABS: A_CAL_TABS, A_calTab: A_calTab, A_stayShade: A_stayShade, A_hubGroups: A_hubGroups, A_hubRoutes: A_hubRoutes, A_hubRouteOk: A_hubRouteOk, A_hubDoorUrl: A_hubDoorUrl, A_whatsNew: A_whatsNew, A_shortTime: A_shortTime, A_PINNED: A_PINNED, A_noticeAddError: A_noticeAddError, A_NOTICE_HINT: A_NOTICE_HINT, A_flagDup: A_flagDup, A_facebookUrl: A_facebookUrl, A_fbPluginUrl: A_fbPluginUrl, A_noticeAddProblem: A_noticeAddProblem, A_noticeAddArgs: A_noticeAddArgs, A_plainRefusal: A_plainRefusal, A_hour12: A_hour12, A_timeRange: A_timeRange,
     taskPriorityLabel: taskPriorityLabel, E_attention: E_attention, E_warnKey: E_warnKey, E_buzz: E_buzz, E_hapticsOn: E_hapticsOn, E_hapticsSet: E_hapticsSet, E_PATTERNS: E_PATTERNS,
-    H_monthOk: H_monthOk, H_dataFrom: H_dataFrom, H_waitStep: H_waitStep, H_powerProblem: H_powerProblem, H_noticeUrl: H_noticeUrl, H_noticeHead: H_noticeHead, H_weatherShort: H_weatherShort, H_agenda: H_agenda, H_ready: H_ready, H_readyChips: H_readyChips, H_readyOk: H_readyOk, H_clock12: H_clock12, H_readyLine: H_readyLine, H_progress: H_progress, H_cleanLine: H_cleanLine, H_houseLine: H_houseLine, H_untilLine: H_untilLine, H_manualIndex: H_manualIndex, H_search: H_search, H_dayStep: H_dayStep,
+    H_monthOk: H_monthOk, H_dataFrom: H_dataFrom, H_waitStep: H_waitStep, H_withFlags: H_withFlags, H_powerProblem: H_powerProblem, H_noticeUrl: H_noticeUrl, H_noticeHead: H_noticeHead, H_weatherShort: H_weatherShort, H_agenda: H_agenda, H_ready: H_ready, H_readyChips: H_readyChips, H_readyOk: H_readyOk, H_clock12: H_clock12, H_readyLine: H_readyLine, H_progress: H_progress, H_cleanLine: H_cleanLine, H_houseLine: H_houseLine, H_untilLine: H_untilLine, H_manualIndex: H_manualIndex, H_search: H_search, H_dayStep: H_dayStep,
     E_drag: E_drag, E_lockOf: E_lockOf, E_inEdge: E_inEdge, E_velocity: E_velocity, E_tabFollow: E_tabFollow, E_tabCommit: E_tabCommit, E_sheetFollow: E_sheetFollow, E_sheetCommit: E_sheetCommit,
     E_taskFollow: E_taskFollow, E_taskCommit: E_taskCommit, E_taskDist: E_taskDist, E_EDGE_R_TASK: E_EDGE_R_TASK, E_taskOpens: E_taskOpens, E_slideCommit: E_slideCommit, E_tabNeighbour: E_tabNeighbour, F_widthClass: F_widthClass, E_setClock: E_setClock
   };

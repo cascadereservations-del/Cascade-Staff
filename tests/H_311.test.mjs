@@ -65,7 +65,7 @@ test('3.1.1 Cassy reply: a calm honest wait with the usual time and Cancel; the 
   answer({ ok: true, status: 200, json: () => Promise.resolve({ ok: true, options: [{ label: 'Short', text: 'A' }, { label: 'Warm', text: 'B' }, { label: 'With details', text: 'C' }] }) }); await app.flush();
   assert.doesNotMatch(app.els['rp-body'].innerHTML, /Replying to|H_draft/, 'the late answer was ignored'); assert.match(app.els['rp-body'].innerHTML, /Is early check-in possible\?/);
   const src = read('app.js'); assert.match(src, /class="H_thumb" alt="The screenshot Cassy is reading"/, 'a screenshot shows its thumbnail while waiting'); assert.match(read('styles.css'), /@media \(prefers-reduced-motion: reduce\) \{ \.H_bar i \{ animation: none;/);
-  assert.equal(CS.H_waitStep(0), 'Reading the message'); assert.equal(CS.H_waitStep(4), 'Writing three replies'); assert.equal(CS.H_waitStep(11), 'Writing three replies'); assert.equal(CS.H_waitStep(12), 'Almost there'); assert.equal(CS.H_waitStep(60), 'Almost there');
+  assert.equal(CS.H_waitStep(0), 'Reading the message'); assert.equal(CS.H_waitStep(4), 'Writing the reply'); assert.equal(CS.H_waitStep(11), 'Writing the reply'); assert.equal(CS.H_waitStep(12), 'Almost there'); assert.equal(CS.H_waitStep(60), 'Almost there');
 });
 
 test('3.1.1 Cassy reply: an answer that arrives in time still draws the replies', async () => {
@@ -95,7 +95,7 @@ test('3.1.1 notices: Today has a visible Add a notice button for owner and admin
   assert.match(f, /data-kind="water" aria-pressed="true"/, 'Water is already chosen'); assert.match(f, new RegExp('id="n-date" type="date" value="' + TODAY + '"'), 'today is already the date');
   w.input('n-title', 'No water 9 am to 3 pm'); await w.click({ 'data-act': 'notice-add-save' });
   assert.deepEqual(w.calls.find((c) => c[0] === 'ops_notice_add_v1')[1], { p_property_id: 'prop-1', p_type: 'water', p_title: 'No water 9 am to 3 pm', p_date: TODAY, p_start_time: null, p_duration_hours: null, p_detail: null });
-  const p = await h('admin'); await p.click({ 'data-act': 'notice-add-open', 'data-date': TODAY }); await p.click({ 'data-act': 'nkind', 'data-kind': 'power' }); assert.match(p.els['cs-body'].innerHTML, /data-kind="power" aria-pressed="true"/); assert.match(p.els['cs-body'].innerHTML, /Saved as a brownout on that day/);
+  const p = await h('admin'); await p.click({ 'data-act': 'notice-add-open', 'data-date': TODAY }); await p.click({ 'data-act': 'nkind', 'data-kind': 'power' }); assert.match(p.els['cs-body'].innerHTML, /data-kind="power" aria-pressed="true"/); assert.match(p.els['cs-body'].innerHTML, /Shows on the calendar\. SOCOTECO II notices arrive by themselves\./);
   p.input('n-title', 'Brownout 1 to 4 pm'); await p.click({ 'data-act': 'notice-add-save' });
   assert.deepEqual(p.calls.find((c) => c[0] === 'calendar_day_flag_set_v1')[1], { p_property_id: 'prop-1', p_date: TODAY, p_kind: 'brownout', p_label: 'Brownout 1 to 4 pm' }); assert.equal(p.calls.filter((c) => c[0] === 'ops_notice_add_v1').length, 0, 'the notice call refuses power, so it is not used');
   assert.equal(p.els['cal-sheet'].getAttribute('aria-hidden'), 'true'); assert.equal(CS.H_powerProblem({ title: '', date: TODAY }), 'Add a short title, for example the hours.'); assert.equal(CS.H_powerProblem({ title: 'x'.repeat(61), date: TODAY }), 'Keep the title to 60 characters.');
@@ -129,4 +129,47 @@ test('3.1.1 layout: the scroll area always clears the tab bar and the safe area;
   assert.match(css, /#v-calendar \[data-F-tab="calendar"\] \{ display: grid; grid-template-columns: minmax\(0, 1\.15fr\) minmax\(0, 1fr\);/); assert.match(css, /\.H_calleft \{ position: sticky;/);
   assert.match(css, /\.A_body \{ display: block; column-count: 2; column-gap: var\(--v5-gap\);/); assert.match(css, /\.A_body > \* \{ break-inside: avoid; margin-bottom: var\(--v5-gap\); \}/);
   assert.match(read('app.js'), /var H_MORE_ORDERS = \[/);
+});
+
+// ------------------------------------------------------------------------------------------------ 3.1.1 fix round
+test('3.1.1 fix Undo: after the reload has landed, Undo puts the row back at once (before the write answers), in its old place; a failed write takes it out again', async () => {
+  let open = true, release, fail = false; const gate = () => new Promise((res, rej) => { release = () => (fail ? rej({ code: 'x', message: 'boom' }) : res({ error: null, data: { ok: true } })); });
+  const jobs = () => [T({ id: 'a', title: 'First job' }), T({ id: 'b', title: 'Water the plants' }), T({ id: 'c', title: 'Third job' })];
+  const make = () => boot({ role: 'admin', hash: '#tasks', handlers: baseHandlers('admin', {
+    tasks_list_v1: () => list(jobs().filter((x) => x.id !== 'b' || open), true),
+    task_set_done_v1: (a) => (a.p_done ? (open = false, { error: null, data: { ok: true } }) : gate().then((r) => { open = true; return r; })) }) });
+  const row = (app) => /data-E-swipe="task-done"[^>]*data-task="follow_up_tasks:b"/.test(app.els['v-tasks'].innerHTML);
+  const app = await make(); await app.click({ 'data-act': 'task-done', 'data-task': 'follow_up_tasks:b' }); assert.ok(!row(app), 'done: gone after the reload landed');
+  await app.click({ 'data-act': 'task-undo', 'data-task': 'follow_up_tasks:b' });
+  assert.ok(row(app), 'the row is back before the un-done write has answered');
+  release(); await app.flush(); assert.ok(row(app), 'and it stays after the write and the reload'); assert.equal(app.calls.filter((c) => c[0] === 'task_set_done_v1' && !c[1].p_done).length, 1);
+  open = true; fail = true; const bad = await make(); await bad.click({ 'data-act': 'task-done', 'data-task': 'follow_up_tasks:b' }); await bad.click({ 'data-act': 'task-undo', 'data-task': 'follow_up_tasks:b' }); assert.ok(row(bad), 'back at once');
+  release(); await bad.flush(); assert.ok(!row(bad) || open === true, 'the write failed: the row is taken out again (the server still has it done)'); assert.match(bad.els['cs-toast'].textContent, /That did not save/);
+});
+
+test('3.1.1 fix demo: the demo note never replaces or shortens an Undo toast', async () => {
+  const vm = await import('node:vm'); const el = { textContent: 'Marked done', classList: { contains: (c) => c === 'E_hasact', add() {}, remove() {} }, setAttribute() {} };
+  const ctx = vm.createContext({ module: { exports: {} }, require: () => CS, document: { getElementById: () => el, createElement: () => el, body: { appendChild() {} } }, location: { search: '' }, setTimeout: () => 1, clearTimeout() {}, console, Promise, JSON, Date });
+  vm.runInContext(read('demo.js'), ctx); ctx.module.exports.toast('Demo: nothing was saved'); assert.equal(el.textContent, 'Marked done', 'the Undo toast keeps its words (and the app gives it the full 7 s)');
+});
+
+test('3.1.1 fix notices: a hand-added Power notice says it is on the calendar, and shows in the lists it was added from (manual brownout and maintenance flags of the next 14 days)', async () => {
+  const flags = [{ id: 'f1', date: '2026-10-17', kind: 'brownout', label: 'Brownout 1 to 4 pm', source: 'manual' }, { id: 'f2', date: '2026-10-18', kind: 'brownout', label: 'Auto flag', source: 'auto' }, { id: 'f3', date: '2026-10-16', kind: 'brownout', label: 'Same day as a notice', source: 'manual' },
+    { id: 'f4', date: '2026-10-19', kind: 'maintenance', label: 'Aircon service', source: 'manual' }, { id: 'f5', date: '2026-12-01', kind: 'brownout', label: 'Too far', source: 'manual' }, { id: 'f6', date: '2026-10-20', kind: 'deep_clean', label: 'Deep one', source: 'manual' }];
+  const app = await boot({ role: 'owner', hash: '#home', handlers: baseHandlers('owner', { staff_home_v1: () => HOMEWITH([], { day_flags: flags }) }) });
+  assert.match(app.els['v-home'].innerHTML, /Brownout · Fri 16 Oct/, 'the real SOCOTECO notice is still first');
+  await app.click({ 'data-act': 'notice-add-open', 'data-date': TODAY }); await app.click({ 'data-act': 'nkind', 'data-kind': 'power' }); app.input('n-title', 'Brownout 5 to 7 pm'); await app.click({ 'data-act': 'notice-add-save' });
+  assert.match(app.els['cs-toast'].textContent, /Marked on the calendar for that day\./); assert.doesNotMatch(app.els['cs-toast'].textContent, /Notice added/);
+  app.location.hash = '#calendar/notices'; for (const f of app.winListeners.hashchange || []) f(); await app.flush(); const n = app.els['v-calendar'].innerHTML;
+  assert.match(n, /Brownout 1 to 4 pm/); assert.match(n, /Aircon service/); assert.doesNotMatch(n, /Auto flag|Too far|Same day as a notice|Deep one/, 'no automatic flag, none past 14 days, none that repeats a notice, no deep clean');
+  const v = CS.H_withFlags(CS.A_noticesView(NOTICES_RAW({}), 'owner', TODAY), flags, TODAY); assert.equal(v.counts.all, 2 + 2); assert.equal(v.counts.power, 1 + 1); assert.ok(v.list.every((x, i, a) => !i || String(a[i - 1].date) <= String(x.date)), 'in date order');
+  assert.equal(CS.H_withFlags(null, flags, TODAY), null);
+});
+
+test('3.1.1 fix Cassy: Cancel aborts the request, a resend gets a new one; the middle step reads Writing the reply; the sticky month needs a tall screen', async () => {
+  const signals = []; const fetcher = (u, init) => { if (/guest-reply-draft/.test(String(u))) { signals.push(init.signal); return new Promise(() => {}); } return Promise.resolve({ ok: false }); };
+  const app = await boot({ role: 'owner', hash: '#reply', foldFetch: fetcher, handlers: baseHandlers('owner') }); await app.click({ 'data-act': 'reply-mode', 'data-mode': 'text' }); app.input('rp-text', 'Hi'); await app.click({ 'data-act': 'reply-send' });
+  assert.equal(signals.length, 1); assert.equal(signals[0].aborted, false); await app.click({ 'data-act': 'reply-cancel' }); assert.equal(signals[0].aborted, true, 'the first request was abandoned');
+  await app.click({ 'data-act': 'reply-send' }); assert.equal(signals.length, 2); assert.equal(signals[1].aborted, false); assert.notEqual(signals[0], signals[1]); await app.click({ 'data-act': 'reply-cancel' });
+  assert.equal(CS.H_waitStep(5), 'Writing the reply'); assert.match(read('styles.css'), /@media \(min-width: 52\.5rem\) and \(min-height: 40rem\) \{ \.H_calleft \{ position: sticky;/);
 });

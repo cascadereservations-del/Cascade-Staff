@@ -139,7 +139,13 @@
     var n = g.nights != null ? g.nights : CS.daysBetween(g.checkin_date, g.checkout_date);
     return ci + ' → ' + co + ' · ' + CS.plural(n, 'night');
   }
-  function A_notices() { return state.notices; }
+  // 3.1.1: a hand-added brownout is a day flag on the calendar (the notice call refuses power); it is merged into the notice list so it shows where it was added from
+  var H_nm = { v: null, p: null, out: null };
+  function A_notices() {
+    var v = state.notices, p = state.payload; if (!v || !p) return v;
+    if (H_nm.v !== v || H_nm.p !== p) H_nm = { v: v, p: p, out: CS.H_withFlags(v, p.day_flags, p.today) };
+    return H_nm.out;
+  }
   function A_houseT() { var v = A_notices(); return v ? v.times : CS.A_houseTimes(null); } // 12:00 noon / 2:00 pm, from notices_v1.house_times, one fallback in lib.js
   // The Today card (glass). Check-out time falls back to the house time, never a hard-coded one.
   function todayCard() {
@@ -667,7 +673,7 @@
     }
     if (ds.clash.length) html += '<div class="errbox" style="margin-top:10px">' + ICON('alert') + '<span>' + esc('Two different guests on this night: ' + ds.clash.map(function (s) { return (s.guest_name || 'Guest') + ' (' + CS.stayDates(s) + ')'; }).join(', ') + '. One booking needs to move.') + '</span></div>' +
       ds.clashIn.map(function (s) { return '<p class="sub num" style="margin:8px 0 0"><b>' + esc('Second arrival: ' + (s.guest_name || 'Guest')) + '</b> · ' + esc(CS.stayDates(s)) + '</p>'; }).join('');
-    var nd = CS.A_noticeDay(A_notices(), S.key), T = A_houseT();
+    var nd = CS.A_noticeDay(A_notices(), S.key).filter(function (n) { return !n.fromFlag; }), T = A_houseT(); // a hand-added flag already has its own line under Also on this day
     if (nd.length) html += '<div class="cap up" style="margin:14px 0 6px">Notices</div><ul class="wlist">' + nd.map(function (n) {
       return '<li>' + ICON(A_noticeIcon(n.type)) + '<span style="flex:1"><b>' + esc(n.title) + '</b>' + (n.sub ? '<br><span class="help">' + esc(n.sub) + '</span>' : '') + (n.url ? '<br>' + H_noticeLink(n.url) : '') + '</span>' +
         (n.tell && CS.canSeeGuestContact(role()) ? '<button class="btn btn-secondary btn-sm" type="button" data-act="notice-tell" data-nkey="' + esc(n.key) + '">Tell the guest</button>' : '') + '</li>';
@@ -947,11 +953,14 @@
   function setTaskDone(key, done) {
     var t = findTask(key), L = state.lastDone;
     // The server hides a finished task once the list reloads, so Undo works from the remembered one.
-    if (!t && L && L.source + ':' + L.id === key) t = { source: L.source, id: L.id, title: L.title, status: done ? 'open' : 'done' };
+    var restored = false; // 3.1.1: Undo after the reload has landed puts the remembered row back into the list at once, before any write
+    if (!t && L && L.source + ':' + L.id === key) t = Object.assign({}, L.task || { source: L.source, id: L.id, title: L.title }, { status: done ? 'open' : 'done' });
     if (!t || t.status === (done ? 'done' : 'open')) return;
     if (navigator.onLine === false) { state.H_offKey = key; E_vibe('error'); if (current === 'tasks') renderTasks(); if (state.sheet && state.sheet.kind === 'attn') drawSheet(); return; } // MF8: no queue; the row says so under itself
     state.H_offKey = '';
-    t.status = done ? 'done' : 'open'; state.lastDone = { source: t.source, id: t.id, title: t.title, done: done }; state.tasksErr = ''; if (current === 'tasks') renderTasks(); renderTabs(current); if (state.sheet && state.sheet.kind === 'attn') drawSheet();
+    t.status = done ? 'done' : 'open';
+    if (!done && state.tasks && !findTask(key)) { var at = L && typeof L.idx === 'number' ? Math.max(0, Math.min(L.idx, state.tasks.tasks.length)) : state.tasks.tasks.length; state.tasks.tasks.splice(at, 0, t); restored = true; }
+    state.lastDone = { source: t.source, id: t.id, title: t.title, done: done, task: t, idx: state.tasks ? Math.max(0, state.tasks.tasks.indexOf(t)) : 0 }; state.tasksErr = ''; if (current === 'tasks') renderTasks(); renderTabs(current); if (state.sheet && state.sheet.kind === 'attn') drawSheet();
     E_vibe('tap'); // one buzz for the confirm; the same path whether the box, the underlay button or the swipe asked
     toast(done ? 'Marked done' : 'Back on the list', E_undoAct(t, key, done));
     var call = H_serial(key, function () { return t.source === 'verifier_findings' ? sb.rpc('ack_verifier_finding_v1', { p_key: t.id })
@@ -959,6 +968,7 @@
     var msg = '';
     call.then(function (r) { if (r.error) throw r.error; if (DEMO) toast(done ? 'Marked done' : 'Back on the list', E_undoAct(t, key, done), 'Demo: nothing was saved'); }).catch(function (e) { // demo: the real toast stays, the demo note is its sub-line
       t.status = done ? 'open' : 'done'; state.lastDone = null;
+      if (restored && state.tasks) { var gone = state.tasks.tasks.indexOf(t); if (gone >= 0) state.tasks.tasks.splice(gone, 1); if (current === 'tasks') renderTasks(); } // the un-done write failed: the row goes out again
       msg = e && (e.code === '42501' || e.code === 'P0002') ? 'That task is not yours to change.' : 'That did not save. Check your signal and try again.'; E_vibe('error');
     }).then(function () { return loadTasks(); }).then(function () { if (msg) { toast(msg); if (current === 'tasks') renderTasks(); } }); // a failed save: the plain error replaces the Undo toast, the row is back
   }
@@ -1143,11 +1153,11 @@
     var R = state.reply; if (!R || R.busy || R.shrinking) return;
     var bad = CS.replyProblem({ mode: R.mode, text: R.text, image: R.image });
     if (bad) { R.err = bad; R.signout = false; renderReply('error'); return; }
-    var myId = ++H_rpSeq; R.reqId = myId; R.t0 = Date.now(); R.busy = true; R.err = ''; R.signout = false; renderReply('heading'); rpLive('Cassy is writing'); window.scrollTo(0, 0); H_rpTick(R);
+    var myId = ++H_rpSeq; R.reqId = myId; R.ctl = typeof AbortController === 'function' ? new AbortController() : null; R.t0 = Date.now(); R.busy = true; R.err = ''; R.signout = false; renderReply('heading'); rpLive('Cassy is writing'); window.scrollTo(0, 0); H_rpTick(R);
     var body = JSON.stringify(CS.replyBody({ mode: R.mode, text: R.text, image: R.image, guestName: R.name, platform: R.platform }));
     sb.auth.getSession().then(function (s) {
       var token = s.data && s.data.session && s.data.session.access_token; if (!token) return { status: 401, j: null };
-      return net(CFG.url + '/functions/v1/guest-reply-draft', { method: 'POST', headers: { Authorization: 'Bearer ' + token, apikey: CFG.key, 'Content-Type': 'application/json' }, body: body })
+      return net(CFG.url + '/functions/v1/guest-reply-draft', { signal: R.ctl ? R.ctl.signal : undefined, method: 'POST', headers: { Authorization: 'Bearer ' + token, apikey: CFG.key, 'Content-Type': 'application/json' }, body: body })
         .then(function (r) { return r.json().catch(function () { return null; }).then(function (j) { return { status: r.status, j: j }; }); });
     }).catch(function () { return { status: 0, j: null }; }).then(function (o) {
       if (state.reply !== R || R.reqId !== myId) return; // signed out meanwhile, or the wait was cancelled: a late answer is ignored
@@ -1344,7 +1354,7 @@
         [['water', 'Water', 'drop'], ['power', 'Power', 'zap']].map(function (k) { return '<button class="H_kind" type="button" data-act="nkind" data-kind="' + k[0] + '" aria-pressed="' + (a.type === k[0]) + '">' + ICON(k[2], 's24') + k[1] + '</button>'; }).join('') + '</div></div>' +
       '<div class="field"><label for="n-type">Or another kind</label><select class="sel" id="n-type" style="max-width:none;text-align:left;text-align-last:left"><option value=""' + (a.type === 'water' || a.type === 'power' ? ' selected' : '') + '>Choose, if not water or power</option>' + NADD_TYPES.filter(function (t) { return t[0] !== 'water'; }).map(function (t) { return '<option value="' + t[0] + '"' + (a.type === t[0] ? ' selected' : '') + '>' + t[1] + '</option>'; }).join('') + '</select></div>' +
       '<div class="field"><label for="n-title">What is happening</label><div class="input"><input id="n-title" maxlength="80" value="' + esc(a.title) + '" autocomplete="off"></div></div>' +
-      '<p class="help" style="margin:-6px 0 0">' + esc(a.type === 'power' ? 'Saved as a brownout on that day. Put the hours in the title.' : CS.A_NOTICE_HINT) + '</p>' +
+      '<p class="help" style="margin:-6px 0 0">' + esc(a.type === 'power' ? 'Shows on the calendar. SOCOTECO II notices arrive by themselves. Put the hours in the title.' : CS.A_NOTICE_HINT) + '</p>' +
       '<div class="field"><label for="n-date">Date</label><div class="input"><input id="n-date" type="date" value="' + esc(a.date) + '"></div></div>' +
       '<div class="field"><label for="n-start">Starts (optional)</label><div class="input"><input id="n-start" type="time" value="' + esc(a.start) + '"></div></div>' +
       '<div class="field"><label for="n-hours">Lasts, in hours (optional)</label><div class="input"><input id="n-hours" inputmode="decimal" maxlength="4" value="' + esc(a.hours) + '"></div></div>' +
@@ -1362,7 +1372,7 @@
     call.then(function (r) {
       if (r.error) throw r.error;
       if (r.data && r.data.ok === false) throw { message: r.data.error || 'not ok', code: '22023' };
-      state.nadd = null; closeSheet(); toast('Notice added.'); E_vibe('tap'); return Promise.all([A_loadNotices(), power ? loadHome() : null]);
+      state.nadd = null; closeSheet(); toast(power ? 'Marked on the calendar for that day.' : 'Notice added.'); E_vibe('tap'); return Promise.all([A_loadNotices(), power ? loadHome() : null]);
     }).catch(function (e) {
       a.busy = false; E_vibe('error');
       a.err = CS.rpcMissing(e) ? 'Available after the next update.' : CS.A_noticeAddError(e);
@@ -1651,7 +1661,7 @@
     else if (a === 'id-full-close') H_idClose();
     else if (a === 'attn-ack') H_attnAck(t.getAttribute('data-warn'));
     else if (a === 'reply-back') { if (state.reply) { state.reply.step = 'pick'; state.reply.err = ''; state.reply.signout = false; } renderReply('heading'); }
-    else if (a === 'reply-cancel') { var RC = state.reply; if (RC) { RC.busy = false; RC.reqId = ++H_rpSeq; clearTimeout(H_rpT); rpLive('Cancelled'); renderReply(RC.mode === 'text' ? '' : 'heading'); if (RC.mode === 'text') rpFocus('rp-text'); } }
+    else if (a === 'reply-cancel') { var RC = state.reply; if (RC) { try { if (RC.ctl) RC.ctl.abort(); } catch (e) {} RC.busy = false; RC.reqId = ++H_rpSeq; clearTimeout(H_rpT); rpLive('Cancelled'); renderReply(RC.mode === 'text' ? '' : 'heading'); if (RC.mode === 'text') rpFocus('rp-text'); } }
     else if (a === 'nkind') { if (state.nadd) { state.nadd.type = t.getAttribute('data-kind') === 'power' ? 'power' : 'water'; state.nadd.err = ''; A_noticeAddDraw(); } }
     else if (a === 'reply-reset') { state.reply = newReply(); renderReply('heading'); rpLive(''); window.scrollTo(0, 0); }
     else if (a === 'signout') { signOutTo(''); }
