@@ -1,6 +1,7 @@
 /* Cascade Staff - weather screen (s82 lane W). Tokens only (var(--v5-*)) and the shell's own classes. Text never under 13px, taps at least 44px. */
 .W_wrap { display: flex; flex-direction: column; gap: var(--v5-gap); min-width: 0; padding-top: 4px; }
 .W_wrap * { min-width: 0; }
+.W_part { display: contents; }
 .W_sec { display: flex; flex-direction: column; gap: 8px; }
 .W_sec > .A_label { margin: 6px 4px 0; font-size: max(0.8125rem, var(--v5-t-label)); }
 .W_src .help, .W_data { font-size: max(0.8125rem, var(--v5-t-label)); }
@@ -40,7 +41,7 @@
 
 /* the 24 hour strip */
 .W_stripcard { padding: 10px 0; }
-.W_strip { list-style: none; margin: 0; padding: 0 0 4px 12px; display: flex; gap: 2px; overflow-x: auto; overscroll-behavior-x: contain; touch-action: pan-x; scrollbar-width: none;
+.W_strip { list-style: none; margin: 0; padding: 0 0 4px 12px; display: flex; gap: 2px; overflow-x: auto; overscroll-behavior-x: contain; scrollbar-width: none;
   -webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 32px), transparent); mask-image: linear-gradient(90deg, #000 calc(100% - 32px), transparent); }
 .W_strip::-webkit-scrollbar { display: none; }
 .W_strip::after { content: ""; flex: 0 0 32px; }

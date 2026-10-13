@@ -9,7 +9,9 @@
   var W_FRESH_MS = 15 * 60000;          // refetch on return to the screen after this long
   var W_OLD_MS = 3 * 3600000;           // older than this shows "offline copy"
   var W_GUST_KPH = 62, W_RAIN_PCT = 70, W_HOURS_SHOWN = 24, W_LOOKAHEAD = 6;
-  var W_LAT = 6.1164, W_LNG = 125.1716; // the house, same point weather-proxy asks for
+  var W_LAT = 6.12, W_LNG = 125.17;     // the house to two decimals (the server asks for 6.1164, 125.1716); no pin is sent to Windy
+  var W_TIMEOUT_MS = 15000;             // a call that has not answered by then counts as failed
+  var W_PARTS = ['hero', 'alerts', 'hours', 'days', 'sun', 'map', 'src'];
   var W_HOUSE = { out: 12 * 60, inn: 14 * 60 }; // fallback turnover window, noon to 2:00 pm; the shell may pass opts.houseTimes
   var W_LAYERS = [['rain', 'Rain'], ['wind', 'Wind'], ['temp', 'Temp']];
   var W_SOURCES = { pirate_weather: 'PirateWeather', google_weather: 'Google Weather', open_meteo: 'Open-Meteo', google: 'Google Weather', demo: 'Sample data' };
@@ -68,8 +70,8 @@
 
   /** "5:47 AM" to minutes after midnight; null when unreadable. */
   function W_minutesOf(text) {
-    var m = /^\s*(\d{1,2}):(\d{2})\s*([ap]m)?/i.exec(String(text == null ? '' : text)); if (!m) return null;
-    var h = +m[1], mi = +m[2]; if (m[3]) { h = h % 12; if (m[3].toLowerCase() === 'pm') h += 12; }
+    var m = /^\s*(\d{1,2})(?::(\d{2}))?\s*([ap]m)?/i.exec(String(text == null ? '' : text)); if (!m || (m[2] == null && !m[3])) return null;
+    var h = +m[1], mi = m[2] == null ? 0 : +m[2]; if (m[3]) { h = h % 12; if (m[3].toLowerCase() === 'pm') h += 12; }
     return h * 60 + mi;
   }
   function W_hhmm(text) { var m = /^(\d{1,2}):(\d{2})$/.exec(String(text || '')); return m ? (+m[1]) * 60 + (+m[2]) : null; }
@@ -107,11 +109,13 @@
     next.forEach(function (h) { if (h.pct != null && (mx == null || h.pct > mx)) mx = h.pct; if (h.code != null && h.code >= 95) thunderSoon = true; });
     m.rain6 = mx; m.thunderSoon = thunderSoon;
     // days
-    var fc = Array.isArray(raw.forecast) ? raw.forecast : [], days = [], k;
+    var fc = Array.isArray(raw.forecast) ? raw.forecast : [], days = [], k, tp = W_manila(nowMs), todayMs = Date.parse(tp.y + '-' + W_pad(tp.mo) + '-' + W_pad(tp.d) + 'T00:00:00+08:00');
     for (k = 0; k < fc.length; k++) {
       var d = fc[k]; if (!d || W_num(d.high) == null || W_num(d.low) == null) continue;
       var dayMs = Date.parse(String(d.date || '') + 'T00:00:00+08:00');
-      var label = d.label ? String(d.label) : (isFinite(dayMs) ? W_DOW[W_manila(dayMs).dow] : '');
+      var diff = isFinite(dayMs) ? Math.round((dayMs - todayMs) / 86400000) : null;
+      if (diff != null && diff < 0) continue; // a day that is over
+      var label = diff === 0 ? 'Today' : diff === 1 ? 'Tomorrow' : diff != null ? W_DOW[W_manila(dayMs).dow] : (d.label ? String(d.label) : '');
       days.push({ label: label, high: W_round(d.high), low: W_round(d.low), code: W_num(d.code) != null ? W_num(d.code) : W_textToCode(d.description), desc: d.description ? String(d.description) : '',
         rain: W_round(d.rain_prob), fh: W_round(d.feels_like_high), fl: W_round(d.feels_like_low), wind: W_round(d.wind_kph), gust: W_round(d.wind_gust_kph),
         uv: W_round(d.uv_index), uvLabel: d.uv_label ? String(d.uv_label) : null, sunrise: d.sunrise ? String(d.sunrise) : null, sunset: d.sunset ? String(d.sunset) : null });
@@ -125,9 +129,10 @@
   function W_alerts(m, houseTimes) {
     var out = [];
     if (!m) return out;
-    if (m.code != null && m.code >= 95) out.push({ kind: 'thunder', glyph: 'zap', text: 'Thunderstorms are nearby. It is safest to stay indoors and keep appliances unplugged.' });
+    var live = !m.offlineCopy; // an old copy cannot say what the sky is doing now: only the hours still ahead count
+    if (live && m.code != null && m.code >= 95) out.push({ kind: 'thunder', glyph: 'zap', text: 'Thunderstorms are nearby. It is safest to stay indoors and keep appliances unplugged.' });
     else if (m.thunderSoon) out.push({ kind: 'thunder', glyph: 'zap', text: 'Thunderstorms are possible in the next few hours. It is wise to stay close to shelter.' });
-    if (m.gust != null && m.gust >= W_GUST_KPH) out.push({ kind: 'gust', glyph: 'alert', text: 'Strong gusts of ' + m.gust + ' km/h. Loose items outside are best secured.' });
+    if (live && m.gust != null && m.gust >= W_GUST_KPH) out.push({ kind: 'gust', glyph: 'alert', text: 'Strong gusts of ' + m.gust + ' km/h. Loose items outside are best secured.' });
     if (m.rain6 != null && m.rain6 >= W_RAIN_PCT) out.push({ kind: 'rain', glyph: 'rain', text: 'Rain is likely in the next 6 hours (' + m.rain6 + '%).' });
     var rainy = out.some(function (a) { return a.kind === 'rain' || a.kind === 'thunder'; }) || !!m.rainWatch;
     if (rainy && W_inTurnover(m.nowMs, houseTimes)) out.push({ kind: 'turnover', glyph: 'house', text: 'Close the windows and bring in the laundry before the rain.' });
@@ -173,7 +178,7 @@
       default: return W_cloud(6, -4, 'W_far') + W_cloud(0, 1);
     }
   }
-  function W_svg(g, night, cls) { return '<svg class="W_ico ' + (cls || '') + '" viewBox="0 0 32 32" aria-hidden="true" focusable="false">' + W_art(g, night) + '</svg>'; }
+  function W_svg(g, night, cls, label) { return '<svg class="W_ico ' + (cls || '') + '" viewBox="0 0 32 32" ' + (label ? 'role="img" aria-label="' + W_esc(label) + '"' : 'aria-hidden="true"') + ' focusable="false">' + W_art(g, night) + '</svg>'; }
   function W_glyph(name) { return typeof root.ICON === 'function' ? root.ICON(name, 's16') : ''; }
 
   function W_section(title, inner, id) { return '<section class="W_sec" aria-labelledby="' + id + '"><h2 class="A_label" id="' + id + '">' + W_esc(title) + '</h2>' + inner + '</section>'; }
@@ -215,7 +220,7 @@
     if (!m.hours.length) return '';
     var items = m.hours.map(function (h, i) {
       var g = W_group(h.code != null ? h.code : m.code, 0, 0);
-      return '<li class="W_h"><span class="W_ht">' + (i === 0 ? 'Now' : W_hourWord(h.ms)) + '</span>' + W_svg(g, !W_isDayHour(h.ms)) + (h.temp != null ? '<span class="W_hd">' + h.temp + '°</span>' : '') +
+      return '<li class="W_h"><span class="W_ht">' + (i === 0 && h.ms <= m.nowMs ? 'Now' : W_hourWord(h.ms)) + '</span>' + W_svg(g, !W_isDayHour(h.ms), '', W_groupWord(g)) + (h.temp != null ? '<span class="W_hd">' + h.temp + '°</span>' : '') +
         '<span class="W_hr">' + (h.pct != null && h.pct >= 20 ? h.pct + '%' : '&nbsp;') + '</span></li>';
     }).join('');
     return W_section('Next 24 hours', '<div class="card glass W_stripcard"><ul class="W_strip" role="list" tabindex="0" aria-label="Next 24 hours, scroll sideways">' + items + '</ul></div>', 'W_t_hours');
@@ -257,8 +262,8 @@
   }
 
   function W_mapUrl(layer) {
-    return 'https://embed.windy.com/embed2.html?lat=' + W_LAT + '&lon=' + W_LNG + '&detailLat=' + W_LAT + '&detailLon=' + W_LNG + '&zoom=8&level=surface&overlay=' + layer +
-      '&product=ecmwf&menu=&message=true&marker=true&calendar=now&pressure=&type=map&location=coordinates&detail=&metricWind=km%2Fh&metricTemp=%C2%B0C&radarRange=-1';
+    return 'https://embed.windy.com/embed2.html?lat=' + W_LAT + '&lon=' + W_LNG + '&zoom=8&level=surface&overlay=' + layer +
+      '&product=ecmwf&menu=&message=true&calendar=now&pressure=&type=map&location=coordinates&detail=&metricWind=km%2Fh&metricTemp=%C2%B0C&radarRange=-1';
   }
   function W_mapBlock(S) {
     var btns = W_LAYERS.map(function (l) { return '<button type="button" class="chip W_layer" data-w-layer="' + l[0] + '" aria-pressed="' + (S.layer === l[0]) + '">' + l[1] + '</button>'; }).join('');
@@ -276,14 +281,18 @@
       (S.demo ? '' : '<button type="button" class="btn btn-ghost" data-w-refresh="1"' + (S.busy ? ' disabled' : '') + '>' + (S.busy ? 'Refreshing' : 'Refresh') + '</button>') + '</div>';
   }
 
-  function W_page(S) {
-    var m = S.model;
+  /** The screen in named parts. Each part is rewritten only when its markup changed, so the map, the focus and the announced alerts stay put. */
+  function W_parts(S) {
+    var m = S.model, o = {}, n; for (n = 0; n < W_PARTS.length; n++) o[W_PARTS[n]] = '';
     if (!m) {
-      if (S.busy && !S.failed) return '<div class="W_wrap"><div class="card glass W_empty" role="status"><p class="sub">Loading the forecast.</p></div></div>';
-      return '<div class="W_wrap"><div class="card glass W_empty" role="status"><p class="W_big2">No connection</p><p class="sub">The forecast could not be loaded.</p><button type="button" class="btn btn-primary" data-w-retry="1">Try again</button></div></div>';
+      o.hero = S.busy && !S.failed ? '<div class="card glass W_empty" role="status"><p class="sub">Loading the forecast.</p></div>'
+        : '<div class="card glass W_empty" role="status"><p class="W_big2">No connection</p><p class="sub">The forecast could not be loaded.</p><button type="button" class="btn btn-primary" data-w-retry="1">Try again</button></div>';
+      return o;
     }
-    return '<div class="W_wrap">' + W_hero(m, S) + W_alertBlock(m, S.houseTimes) + W_hoursBlock(m) + W_daysBlock(m, S.open) + W_sunBlock(m) + W_mapBlock(S) + W_sourceBlock(m, S) + '</div>';
+    o.hero = W_hero(m, S); o.alerts = W_alertBlock(m, S.houseTimes); o.hours = W_hoursBlock(m); o.days = W_daysBlock(m, S.open); o.sun = W_sunBlock(m); o.map = W_mapBlock(S); o.src = W_sourceBlock(m, S);
+    return o;
   }
+  function W_page(S) { var o = W_parts(S); return '<div class="W_wrap">' + W_PARTS.map(function (k) { return '<div class="W_part" data-w-part="' + k + '">' + o[k] + '</div>'; }).join('') + '</div>'; }
 
   // ---------- the screen ----------
   var W_S = null;
@@ -293,9 +302,15 @@
   function W_render() {
     var S = W_S; if (!S || S.dead) return;
     S.model = S.raw ? W_parse(S.raw, W_nowMs(), S.cacheAt) : null;
-    var strip = S.el.querySelector ? S.el.querySelector('.W_strip') : null, left = strip ? strip.scrollLeft : 0;
-    S.el.innerHTML = W_page(S);
-    if (left && S.el.querySelector) { var s2 = S.el.querySelector('.W_strip'); if (s2) s2.scrollLeft = left; }
+    if (!S.built) { S.el.innerHTML = '<div class="W_wrap">' + W_PARTS.map(function (k) { return '<div class="W_part" data-w-part="' + k + '"></div>'; }).join('') + '</div>'; S.built = true; S.parts = {}; S.last = {}; }
+    var o = W_parts(S);
+    W_PARTS.forEach(function (k) {
+      if (S.last[k] === o[k]) return;
+      var node = S.parts[k] || (S.parts[k] = S.el.querySelector('[data-w-part="' + k + '"]')); if (!node) return;
+      var strip = k === 'hours' && node.querySelector ? node.querySelector('.W_strip') : null, left = strip ? strip.scrollLeft : 0;
+      node.innerHTML = o[k]; S.last[k] = o[k];
+      if (left && node.querySelector) { var s2 = node.querySelector('.W_strip'); if (s2) s2.scrollLeft = left; }
+    });
   }
 
   function W_load() {
@@ -303,8 +318,10 @@
     if (!S.client || !S.client.functions || typeof S.client.functions.invoke !== 'function') { S.failed = true; W_render(); return; }
     if (S.busy) return;
     S.busy = true; W_render();
+    var tok = S.req = (S.req || 0) + 1, timer = null;
     var done = function (ok, data) {
-      if (W_S !== S || S.dead) return;
+      if (W_S !== S || S.dead || S.req !== tok) return;
+      S.req = tok + 1; if (timer) clearTimeout(timer);
       S.busy = false; S.lastTry = W_nowMs();
       if (ok && W_parse(data, W_nowMs())) {
         S.raw = typeof data === 'string' ? JSON.parse(data) : data; S.cacheAt = W_nowMs(); S.failed = false; S.lastOk = S.cacheAt;
@@ -315,6 +332,7 @@
       S.manual = false;
     };
     var p; try { p = Promise.resolve(S.client.functions.invoke('weather-proxy')); } catch (e) { p = Promise.reject(e); }
+    timer = S.timer = setTimeout(function () { done(false); }, S.timeoutMs);
     p.then(function (r) { done(!!(r && !r.error && r.data), r && r.data); }, function () { done(false); });
   }
 
@@ -322,7 +340,11 @@
     var S = W_S; if (!S || S.dead || !ev || !ev.target || !ev.target.closest) return;
     var t = ev.target.closest('[data-w-day],[data-w-layer],[data-w-map],[data-w-retry],[data-w-refresh]'); if (!t) return;
     var v;
-    if ((v = t.getAttribute('data-w-day')) != null) { S.open[+v] = !S.open[+v]; W_render(); }
+    if ((v = t.getAttribute('data-w-day')) != null) {
+      var on = S.open[+v] = !S.open[+v], more = t.nextElementSibling;
+      if (t.setAttribute && more) { t.setAttribute('aria-expanded', String(on)); more.hidden = !on; S.last.days = W_daysBlock(S.model, S.open); } // in place: focus and scroll stay
+      else W_render();
+    }
     else if ((v = t.getAttribute('data-w-layer')) != null) { S.layer = v; W_render(); }
     else if (t.getAttribute('data-w-map') != null) { S.mapOn = true; W_render(); }
     else if (t.getAttribute('data-w-retry') != null) { S.failed = false; W_load(); }
@@ -337,7 +359,7 @@
 
   function mount(el, opts) {
     opts = opts || {}; unmount();
-    var S = W_S = { el: el, client: opts.client || null, demo: !!opts.demo, toast: opts.toast || null, houseTimes: opts.houseTimes || null, raw: null, cacheAt: null, failed: false, busy: false,
+    var S = W_S = { el: el, client: opts.client || null, demo: !!opts.demo, toast: opts.toast || null, houseTimes: opts.houseTimes || null, timeoutMs: opts.timeoutMs > 0 ? opts.timeoutMs : W_TIMEOUT_MS, raw: null, cacheAt: null, failed: false, busy: false,
       open: {}, layer: 'rain', mapOn: false, dead: false, lastOk: 0, model: null, manual: false };
     S.clickFn = W_click; el.addEventListener('click', S.clickFn);
     if (root.document && root.document.addEventListener) { S.visFn = W_visible; root.document.addEventListener('visibilitychange', S.visFn); }
@@ -348,7 +370,7 @@
   }
   function unmount() {
     var S = W_S; if (!S) return;
-    S.dead = true; try { S.el.removeEventListener('click', S.clickFn); } catch (e) { /* element already gone */ }
+    S.dead = true; if (S.timer) clearTimeout(S.timer); try { S.el.removeEventListener('click', S.clickFn); } catch (e) { /* element already gone */ }
     if (S.visFn && root.document && root.document.removeEventListener) root.document.removeEventListener('visibilitychange', S.visFn);
     W_S = null;
   }

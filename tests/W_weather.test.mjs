@@ -15,8 +15,15 @@ const NOW = Date.parse('2026-10-13T08:00:00Z');       // 16:00 Manila, outside t
 const NOON = Date.parse('2026-10-13T04:20:00Z');      // 12:20 Manila, inside it
 const HR = 3600000;
 
+// A fake container: setting innerHTML to the scaffold creates named parts (data-w-part); a part counts its writes. Reading innerHTML joins the parts.
 function el() {
-  const e = { _h: '', listeners: {}, innerHTML: '' };
+  const e = { listeners: {}, parts: null, _h: '' };
+  Object.defineProperty(e, 'innerHTML', {
+    get: () => (e.parts ? Object.values(e.parts).map((p) => p.html).join('') : e._h),
+    set: (v) => { e._h = String(v); e.parts = null; const names = [...e._h.matchAll(/data-w-part="(\w+)"/g)].map((m) => m[1]);
+      if (names.length) { e.parts = {}; for (const n of names) { const p = { html: '', writes: 0, querySelector: () => null }; Object.defineProperty(p, 'innerHTML', { get: () => p.html, set: (x) => { p.html = String(x); p.writes++; } }); e.parts[n] = p; } } },
+  });
+  e.querySelector = (sel) => { const m = /data-w-part="(\w+)"/.exec(sel); return m && e.parts ? e.parts[m[1]] || null : null; };
   e.addEventListener = (t, f) => { (e.listeners[t] = e.listeners[t] || []).push(f); };
   e.removeEventListener = (t, f) => { e.listeners[t] = (e.listeners[t] || []).filter((x) => x !== f); };
   return e;
@@ -245,7 +252,7 @@ test('7 days: a row opens to feels like, wind, gusts, UV, sunrise and sunset; a 
   assert.ok(!e2.innerHTML.includes('data-w-day'), 'a row with nothing to open is not a button');
 });
 
-test('the live map loads only after a tap; layers switch the overlay; the data line is there; the house point is the one weather-proxy uses', async () => {
+test('the live map loads only after a tap; layers switch the overlay; the data line is there; two-decimal house point, no pin', async () => {
   const w = world({ invoke: ok(full()) }); const e = el();
   w.W.mount(e, { client: w.client }); await settle();
   assert.ok(!e.innerHTML.includes('<iframe') && !e.innerHTML.includes('embed.windy.com'), 'no iframe before the tap');
@@ -256,8 +263,9 @@ test('the live map loads only after a tap; layers switch the overlay; the data l
   await click(e, { 'data-w-map': '1' });
   const m = /<iframe[^>]*src="([^"]+)"/.exec(e.innerHTML); assert.ok(m, 'iframe after the tap');
   const u = new URL(m[1].replace(/&amp;/g, '&'));
+  assert.ok(!u.searchParams.has('marker') && !u.searchParams.has('detailLat'), 'no pin');
   assert.equal(u.hostname, 'embed.windy.com'); assert.equal(u.pathname, '/embed2.html');
-  assert.deepEqual([u.searchParams.get('lat'), u.searchParams.get('lon'), u.searchParams.get('overlay')], ['6.1164', '125.1716', 'wind']);
+  assert.deepEqual([u.searchParams.get('lat'), u.searchParams.get('lon'), u.searchParams.get('overlay')], ['6.12', '125.17', 'wind']);
   await click(e, { 'data-w-layer': 'temp' });
   assert.equal(new URL(/<iframe[^>]*src="([^"]+)"/.exec(e.innerHTML)[1].replace(/&amp;/g, '&')).searchParams.get('overlay'), 'temp');
   assert.ok(/referrerpolicy="no-referrer"/.test(e.innerHTML) && /title="Live weather map/.test(e.innerHTML));
@@ -317,4 +325,78 @@ test('guard: every function in the weather files carries the W_ prefix (mount an
 
 test('the folder holds only the files this lane owns', () => {
   assert.deepEqual(fs.readdirSync(path.join(root, 'weather')).sort(), ['W_weather.css', 'W_weather.js']);
+});
+
+// ---- fix round ----
+const rich = (attrs, sib) => { const t = tgt(attrs); t.setAttribute = (k, v) => { t.attrs = { ...(t.attrs || {}), [k]: v }; }; t.nextElementSibling = sib; return t; };
+const clickT = async (e, t) => { for (const f of e.listeners.click || []) f({ target: t }); await settle(); };
+
+test('fix 1: a day row opens in place (attribute and hidden flip, no markup rewrite, so focus stays); the map and alerts are not rebuilt by other redraws', async () => {
+  const wet = full(NOW, { hourly: hourly(NOW, 24, (i) => (i === 1 ? { rain_chance_pct: 90 } : {})) });
+  const w = world({ invoke: ok(wet) }); const e = el();
+  w.W.mount(e, { client: w.client }); await settle();
+  const sib = { hidden: true };
+  const t = rich({ 'data-w-day': '2' }, sib), daysBefore = e.parts.days.writes;
+  await clickT(e, t);
+  assert.equal(e.parts.days.writes, daysBefore, 'no rewrite of the days');
+  assert.deepEqual([t.attrs['aria-expanded'], sib.hidden], ['true', false]);
+  await clickT(e, t); assert.deepEqual([t.attrs['aria-expanded'], sib.hidden], ['false', true]);
+  await click(e, { 'data-w-day': '3' }); // a target that cannot be edited in place still works, by redraw
+  assert.ok(/data-w-day="3" aria-expanded="true"/.test(e.innerHTML));
+  await click(e, { 'data-w-map': '1' });
+  const mapW = e.parts.map.writes, alertW = e.parts.alerts.writes; assert.ok(mapW >= 1 && alertW >= 1);
+  await click(e, { 'data-w-day': '1' });
+  w.clock.t = NOW + 15 * 60000; w.docL.visibilitychange(); await settle(); await click(e, { 'data-w-refresh': '1' });
+  assert.ok(w.calls.length >= 3, 'refreshes happened');
+  assert.equal(e.parts.map.writes, mapW, 'the map (iframe) was not rebuilt by a day toggle, a refresh or a return to the tab');
+  assert.equal(e.parts.alerts.writes, alertW, 'an unchanged alert is not written again, so it is not announced again');
+  await click(e, { 'data-w-layer': 'wind' });
+  assert.equal(e.parts.map.writes, mapW + 1, 'only a changed layer reloads the map');
+  await click(e, { 'data-w-layer': 'wind' }); assert.equal(e.parts.map.writes, mapW + 1, 'the same layer again changes nothing');
+});
+
+test('fix 2: the 24-hour strip no longer blocks vertical page scroll (no touch-action), and still scrolls sideways', () => {
+  const css = fs.readFileSync(path.join(root, 'weather', 'W_weather.css'), 'utf8');
+  assert.ok(!/touch-action/.test(css)); assert.ok(/\.W_strip \{[^}]*overflow-x: auto/.test(css));
+});
+
+test('fix 3: an old copy labels days against Manila today, drops days that are over, and keeps no "now" alerts', async () => {
+  const L = world().W.lib;
+  const old = full(NOW - 4 * HR, { forecast: days(7).map((d, i) => ({ ...d, date: `2026-10-${11 + i}` })) }); // server labels are frozen at fetch time
+  const m = L.parse(old, NOW);
+  assert.deepEqual(Array.from(m.days, (d) => d.label), ['Today', 'Tomorrow', 'Thu', 'Fri', 'Sat'], 'Oct 11 and 12 are over; Oct 13 is Today whatever the server said');
+  assert.equal(m.days.length, 5);
+  const stale = full(NOW - 4 * HR, { hourly: hourly(NOW, 24, (i) => (i === 2 ? { rain_chance_pct: 90 } : {})) }); stale.current.code = 96; stale.current.wind_gust_kph = 80;
+  assert.equal(L.parse(stale, NOW).offlineCopy, true);
+  assert.deepEqual(Array.from(L.alerts(L.parse(stale, NOW), null), (a) => a.kind), ['rain'], 'thunder nearby and strong gusts are not claimed from an old copy; rain still ahead is kept');
+  const fresh = full(NOW, { hourly: hourly(NOW, 24, (i) => (i === 2 ? { rain_chance_pct: 90 } : {})) }); fresh.current.code = 96; fresh.current.wind_gust_kph = 80;
+  assert.deepEqual(Array.from(L.alerts(L.parse(fresh, NOW), null), (a) => a.kind), ['thunder', 'gust', 'rain']);
+});
+
+test('fix 4: a call that never answers ends after the timeout: Refresh comes back, the saved copy stays with the failed-refresh line, and a late answer is ignored', async () => {
+  let late; const hang = new Promise((r) => { late = r; });
+  const w = world({ store: { cs_w_wx: JSON.stringify({ at: NOW - HR, j: full(NOW - HR) }) }, invoke: () => hang }); const e = el();
+  w.W.mount(e, { client: w.client, timeoutMs: 30 }); await settle();
+  assert.ok(e.innerHTML.includes('data-w-refresh="1" disabled'), 'busy while the call is out');
+  await new Promise((r) => setTimeout(r, 80)); await settle();
+  assert.ok(!e.innerHTML.includes('data-w-refresh="1" disabled') && e.innerHTML.includes('data-w-refresh="1"'), 'Refresh is usable again');
+  assert.ok(e.innerHTML.includes('Could not refresh. Showing the saved forecast.'));
+  const before = e.innerHTML; late({ data: full(NOW + HR), error: null }); await settle();
+  assert.equal(e.innerHTML, before, 'the late answer changes nothing');
+  const w2 = world({ invoke: () => new Promise(() => {}) }); const e2 = el();
+  w2.W.mount(e2, { client: w2.client, timeoutMs: 30 }); await new Promise((r) => setTimeout(r, 80)); await settle();
+  assert.ok(e2.innerHTML.includes('No connection') && e2.innerHTML.includes('Try again'));
+});
+
+test('fix 5: hourly icons have a text alternative; "Now" only on the current hour; "6 AM" reads like "6:00 AM"', () => {
+  const w = world(); const L = w.W.lib;
+  const html = L.page({ model: L.parse(full(), NOW), open: {}, layer: 'rain', mapOn: false });
+  assert.ok(/class="W_h"><span class="W_ht">Now<\/span><svg[^>]*role="img" aria-label="(Partly cloudy|Clear|Cloudy)"/.test(html), html.match(/class="W_h">.{0,200}/)?.[0]);
+  const next = full(NOW, { hourly: hourly(NOW + HR, 24) }); // the first row starts in the NEXT hour
+  const h2 = L.page({ model: L.parse(next, NOW), open: {}, layer: 'rain', mapOn: false });
+  assert.ok(!/<span class="W_ht">Now<\/span>/.test(h2) && /class="W_h"><span class="W_ht">5 pm/.test(h2));
+  const dayAt = (hhmm, rise, set) => { const t = Date.parse('2026-10-13T' + hhmm + ':00+08:00'), p = oldPayload(t); p.current.sunrise = rise; p.current.sunset = set; return L.parse(p, t).isDay; };
+  assert.equal(dayAt('17:30', '6 AM', '5 PM'), false, 'sunset 5 PM, read as 17:00');
+  assert.equal(dayAt('05:30', '6 AM', '5 PM'), false); assert.equal(dayAt('06:30', '6 AM', '5 PM'), true);
+  assert.equal(dayAt('17:30', '6:00 AM', '5:00 PM'), false);
 });
