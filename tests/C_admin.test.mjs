@@ -30,7 +30,7 @@ function boot(handlers = {}) {
       createElement: (tag) => (tag === 'canvas' ? { getContext: () => ({ drawImage() {}, fillRect() {} }), toBlob(cb) { cb({ arrayBuffer: async () => new Uint8Array([1, 2, 3, 4]).buffer, type: 'image/jpeg' }); } } : { click() {}, select() {} }),
       body: { appendChild() {}, removeChild() {} }, execCommand: () => true,
     },
-    fetch: async (url, init) => { fetches.push({ url, init }); return { json: async () => (handlers.fetch ? handlers.fetch(url, init) : { ok: true, path: `${PROP}/c5100000-0000-4000-8000-0000000000a3/sub/shot.jpg` }) }; },
+    fetch: async (url, init) => { fetches.push({ url, init }); return { json: async () => (handlers.fetch ? handlers.fetch(url, init) : { ok: true, path: `${PROP}/c5100000-0000-4000-8000-0000000000a3/sub/shot.jpg`, sha256: '1'.repeat(64) }) }; },
     supabase: { createClient: () => ({
       auth: { getSession: async () => ({ data: { session: { access_token: 'tok', user: { id: 'me-1' } } } }) },
       rpc: async (name, args) => { rpcs.push([name, args]); return (handlers.rpc && handlers.rpc(name, args)) || { data: null, error: { code: 'PGRST202' } }; },
@@ -107,7 +107,7 @@ test('Mark as paid: needs the screenshot, an amount and a reference; uploads, th
   assert.match(settle[1].p_proof.sha256, /^[0-9a-f]{64}$/); assert.equal(settle[1].p_proof.amount, 500); assert.equal(settle[1].p_proof.reference, 'AB12345678'); assert.match(settle[1].p_proof.path, new RegExp('^' + PROP + '/'));
   const upload = b.fetches.find((f) => /upload-photo$/.test(f.url));
   assert.equal(upload.init.headers['x-cascade-property-id'], PROP); assert.match(upload.init.headers['x-cascade-submission-id'], /^[0-9a-f-]{36}$/);
-  const notify = b.fetches.find((f) => /notify-cleaner-payment$/.test(f.url));
+  const notify = b.fetches.find((f) => /notify-cleaner-payment$/.test(f.url) && JSON.parse(f.init.body).action === 'paid');
   assert.deepEqual(JSON.parse(notify.init.body), { action: 'paid', request_id: 'req1' });
   assert.match(b.root.innerHTML, /Marked paid\. Honey is told by message, in Telegram and in the app\./);
   assert.deepEqual(plain(b.touched), { local: [], session: [], caches: [] });
@@ -237,4 +237,68 @@ test('the upload response sha256 (the server\'s own figure) is what is sent to t
 test('refusal sentences for the new reasons are plain', () => {
   for (const [res, re] of [[{ reason: 'being_paid', paying_by_name: 'Marifel' }, /^Marifel is paying this now\.$/], [{ reason: 'not_open', status: 'paying' }, /Someone else is already paying/], [{ reason: 'not_open', status: 'paid' }, /already closed/],
     [{ reason: 'not_yours' }, /Only the person who started/], [{ reason: 'not_your_payment' }, /cannot mark it paid/], [{ reason: 'sha_mismatch' }, /changed after it was uploaded/]]) assert.match(A.refusal(res), re);
+});
+
+// ---- M-A: the first sign that money may be on its way tells the server once
+const stepsOf = (b) => plain(b.rpcs.filter((r) => r[0] === 'staff_pay_admin_step_v1').map((r) => r[1].p_step));
+async function openOwn(b) { await tick(); await fire(b.root, 'click', { target: target({ 'data-act': 'pay', 'data-id': 'req1' }) }); await tick(); }
+
+test('M-A: each of Save QR, Open bank app, Copy amount and a picked screenshot says "sent" to the server, once, and the screen shows it', async () => {
+  for (const [label, fireIt] of [
+    ['Save QR', (b) => fire(b.root, 'click', { target: target({ 'data-act': 'saveqr' }) })],
+    ['Open bank app', (b) => fire(b.root, 'click', { target: target({ 'data-act': 'bank' }) })],
+    ['Copy amount', (b) => fire(b.root, 'click', { target: target({ 'data-act': 'copyamt' }) })],
+    ['picked screenshot', (b) => fire(b.root, 'change', { target: { id: 'C_file', files: [{ name: 'shot.png' }] } })],
+  ]) {
+    const b = boot(happy()); await openOwn(b);
+    assert.deepEqual(stepsOf(b), ['pay'], label + ': nothing is said before the first trigger');
+    assert.doesNotMatch(b.root.innerHTML, /Marked as sent/);
+    await fireIt(b); await until(() => /Marked as sent, so nobody else can take this over/.test(b.root.innerHTML), label);
+    assert.deepEqual(stepsOf(b), ['pay', 'sent'], label);
+    const sent = plain(b.rpcs.filter((r) => r[1] && r[1].p_step === 'sent')[0]); assert.deepEqual(sent, ['staff_pay_admin_step_v1', { p_request_id: 'req1', p_step: 'sent' }]);
+    await fire(b.root, 'click', { target: target({ 'data-act': 'copyamt' }) }); await fire(b.root, 'click', { target: target({ 'data-act': 'bank' }) }); await tick();
+    assert.deepEqual(stepsOf(b), ['pay', 'sent'], label + ': only once');
+    assert.match(b.root.innerHTML, /I have not sent it/); assert.doesNotMatch(b.root.innerHTML, /I am not paying this now/);
+  }
+});
+
+test('M-A: "I have not sent it" steps back with not_sent; a refused sent (somebody took over) shows the sentence and clears the mark; reopening my sent payment starts marked', async () => {
+  const b = boot(happy()); await openOwn(b);
+  await fire(b.root, 'click', { target: target({ 'data-act': 'copyamt' }) }); await until(() => /I have not sent it/.test(b.root.innerHTML), 'marked');
+  await fire(b.root, 'click', { target: target({ 'data-act': 'unpay' }) }); await tick();
+  assert.deepEqual(stepsOf(b), ['pay', 'sent', 'not_sent']);
+  const r = boot(happy({ staff_pay_admin_step_v1: { data: { ok: false, reason: 'not_yours' }, error: null } })); await tick();
+  r.ctx.document.getElementById('C_pay_admin');
+  const lost = boot({ rpc: (name, a) => (name === 'staff_pay_admin_step_v1' && a.p_step === 'sent' ? { data: { ok: false, reason: 'not_yours' }, error: null } : happy().rpc(name)) }); await openOwn(lost);
+  await fire(lost.root, 'click', { target: target({ 'data-act': 'copyamt' }) }); await until(() => /Only the person who started paying can stop it/.test(lost.root.innerHTML), 'refusal');
+  const again = boot(happy({ staff_pay_admin_list_v1: { data: { ok: true, requests: [{ ...REQ, status: 'paying', paying_by_user_id: 'me-1', paying_by_name: 'Me', sent_said_at: '2026-10-13T03:00:00Z' }] }, error: null } })); await openOwn(again);
+  assert.match(again.root.innerHTML, /Marked as sent/); assert.match(again.root.innerHTML, /I have not sent it/);
+});
+
+test('M-A list: another admin payment that may already be sent says so and offers no take-over', async () => {
+  const b = boot(multi({ staff_pay_admin_list_v1: { data: { ok: true, requests: [{ ...ROWS[2], sent_said_at: '2026-10-13T03:00:00Z' }, { ...ROWS[3] }] }, error: null } })); await tick();
+  const h = b.root.innerHTML;
+  assert.match(h, /Marifel may already have sent this\. Ask Marifel before doing anything\./);
+  assert.doesNotMatch(h, /data-act="takeover-ask" data-id="oth"/); assert.match(h, /data-act="takeover-ask" data-id="tg"/);
+});
+
+test('L-B: an upload answer without sha256 never reaches the settle; the screenshot stays chosen; the sentence says to ask Lloyd', async () => {
+  const c = boot({ rpc: happy().rpc, fetch: () => ({ ok: true, path: PROP + '/u/s/x.jpg' }) }); await openOwn(c);
+  await fire(c.root, 'change', { target: { id: 'C_file', files: [{ name: 'shot.png' }] } }); await fire(c.root, 'input', { target: { id: 'C_ref', value: 'ref12345' } });
+  await fire(c.root, 'click', { target: target({ 'data-act': 'settle' }) }); await until(() => /not fully switched on yet\. Ask Lloyd\./.test(c.root.innerHTML), 'sentence');
+  assert.ok(!c.rpcs.some((r) => r[0] === 'staff_pay_admin_settle_v1'), 'settle is not called');
+  assert.match(c.root.innerHTML, /Change screenshot/, 'the chosen screenshot is kept'); assert.match(c.root.innerHTML, /shot\.png/);
+  assert.doesNotMatch(c.root.innerHTML, /Marked paid/);
+});
+
+test('L-A: opening, taking over and stepping back redraw the Finance card through the card action (best effort)', async () => {
+  const b = boot(multi()); await tick();
+  await fire(b.root, 'click', { target: target({ 'data-act': 'takeover', 'data-id': 'oth' }) }); await until(() => /<svg [^>]*role="img"/.test(b.root.innerHTML), 'pay view');
+  await until(() => b.fetches.some((f) => /notify-cleaner-payment$/.test(f.url)), 'card call');
+  const cards = b.fetches.filter((f) => /notify-cleaner-payment$/.test(f.url)).map((f) => plain(JSON.parse(f.init.body)));
+  assert.ok(cards.length >= 1 && cards.every((c) => c.action === 'card' && c.request_id === 'oth'), JSON.stringify(cards));
+  const before = cards.length;
+  await fire(b.root, 'click', { target: target({ 'data-act': 'unpay' }) }); await until(() => b.fetches.filter((f) => /notify-cleaner-payment$/.test(f.url)).length > before, 'card after step back');
+  const down = boot({ rpc: happy().rpc, fetch: () => { throw new Error('offline'); } }); await openOwn(down);
+  assert.match(down.root.innerHTML, /Mark as paid/, 'a failed card call never blocks the screen');
 });

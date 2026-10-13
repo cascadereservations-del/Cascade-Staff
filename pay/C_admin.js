@@ -33,14 +33,14 @@
   if (!DEMO && !window.supabase) { root.innerHTML = shell('Pay staff', '<div class="errbox">' + ICON('alert') + '<span>Live information needs a connection. Open the app again when you have signal.</span></div>'); return; }
   var sb = DEMO ? demoClient() : window.supabase.createClient(CFG.url, CFG.key, { auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: false } });
 
-  var S = { me: null, listMsg: '', confirmTake: '', view: 'list', list: null, loadErr: '', req: null, qr: null, noQr: false, showStatic: false, form: { file: null, amount: '', reference: '', override: false, uploaded: null }, busy: false, msg: '', msgOk: false, copied: '' };
+  var S = { me: null, listMsg: '', confirmTake: '', sentMarked: false, view: 'list', list: null, loadErr: '', req: null, qr: null, noQr: false, showStatic: false, form: { file: null, amount: '', reference: '', override: false, uploaded: null }, busy: false, msg: '', msgOk: false, copied: '' };
 
   function shell(title, inner, back) {
     return '<header class="appbar"><a class="iconbtn" href="' + (back || '../#home') + '" aria-label="Back">' + ICON('back', 's24') + '</a><h1 class="ttl">' + esc(title) + '</h1></header><div class="screen">' + inner + '</div>' +
       '<nav class="tabbar" aria-label="Primary"><a class="tab" href="../#home"><span class="ico">' + ICON('house', 's24') + '</span>Today</a><a class="tab" href="../#calendar"><span class="ico">' + ICON('calendar', 's24') + '</span>Calendar</a>' +
       '<a class="tab" href="../#tasks"><span class="ico">' + ICON('tasks', 's24') + '</span>Tasks</a><a class="tab" href="../#more"><span class="ico">' + ICON('more', 's24') + '</span>More</a></nav>';
   }
-  function net() { return (DEMO ? function () { return Promise.resolve({ json: function () { return Promise.resolve({ ok: true, path: 'demo/path' }); } }); } : window.fetch).apply(window, arguments); }
+  function net() { return (DEMO ? function () { return Promise.resolve({ json: function () { return Promise.resolve({ ok: true, path: 'demo/path', sha256: new Array(65).join('d') }); } }); } : window.fetch).apply(window, arguments); }
   function token() { return sb.auth.getSession().then(function (s) { var t = s.data && s.data.session && s.data.session.access_token; if (!t) throw new Error('signin'); S.me = (s.data.session.user && s.data.session.user.id) || S.me; return t; }); }
   function clearSecrets() { S.qr = null; S.noQr = false; S.showStatic = false; }
 
@@ -61,7 +61,8 @@
       return '<div class="rowi C_row" style="cursor:default"><span class="lead">' + ICON('cash') + '</span><span class="mid"><span class="t">' + esc(r.payee_name) + ' · <span class="num">' + esc(P.peso(r.total)) + '</span></span>' +
         '<span class="s num">Ref ' + esc(r.ref) + '</span></span></div>' +
         '<div class="C_rowstatus"><span class="pill p-info">' + ICON('info', 's16') + esc(who) + ' is paying this now.</span>' +
-        (S.confirmTake === r.id
+        (r.sent_said_at ? '<p class="help" role="alert">' + esc(who) + ' may already have sent this. Ask ' + esc(who) + ' before doing anything.</p>' :
+        S.confirmTake === r.id
           ? '<p class="help" role="alert">Check with ' + esc(who) + ' first. Only one person should send the money.</p><div class="row-wrap"><button class="btn btn-primary btn-sm" type="button" data-act="takeover" data-id="' + esc(r.id) + '">Yes, I am paying it</button><button class="btn btn-ghost btn-sm" type="button" data-act="takecancel">Cancel</button></div>'
           : '<div class="row-wrap"><button class="btn btn-secondary btn-sm" type="button" data-act="takeover-ask" data-id="' + esc(r.id) + '">I am paying it instead</button></div>') + '</div>';
     }
@@ -89,7 +90,7 @@
     return sb.rpc('staff_pay_admin_step_v1', { p_request_id: id, p_step: 'pay' }).then(function (s) {
       var d = s.data;
       if (s.error || !d || d.ok === false) return backToList(d || { reason: 'offline' });
-      S.req.status = 'paying'; S.req.paying_by_user_id = d.paying_by_user_id || S.me;
+      S.req.status = 'paying'; S.req.paying_by_user_id = d.paying_by_user_id || S.me; S.sentMarked = !!S.req.sent_said_at; redrawCard(id);
       return sb.rpc('staff_pay_payout_qr_v1', { p_request_id: id }).then(function (res) {
         var q = res.data;
         if (res.error || !q || q.ok === false) return backToList(q || { reason: A.isAbsent(res.error) ? 'unknown' : 'offline' });
@@ -99,6 +100,22 @@
         renderPay();
       });
     }).catch(function () { S.msg = A.refusal({ reason: 'offline' }); renderPay(); });
+  }
+  // From the first Save QR, Open bank app, Copy amount or picked screenshot the money may be on its way: say so to the server once, so a take-over or a
+  // Telegram cancel is refused from then on. The payer can still step back with "I have not sent it".
+  function markSent() {
+    if (!S.req || S.sentMarked) return;
+    S.sentMarked = true;
+    sb.rpc('staff_pay_admin_step_v1', { p_request_id: S.req.id, p_step: 'sent' }).then(function (s) {
+      var d = s.data;
+      if (s.error || !d || d.ok === false) { S.sentMarked = false; if (d && (d.reason === 'not_yours' || d.reason === 'not_paying')) { S.msg = A.refusal(d); S.msgOk = false; renderPay(); } return; }
+      S.req.sent_said_at = S.req.sent_said_at || 'now'; renderPay();
+    }, function () { S.sentMarked = false; });
+  }
+  // Keep the Telegram Finance card in step (it names the Staff-app payer and drops the buttons, or gets them back). Best effort, never blocks the screen.
+  function redrawCard(id) {
+    if (DEMO) return;
+    token().then(function (tok) { return net(CFG.url + '/functions/v1/notify-cleaner-payment', { method: 'POST', headers: { Authorization: 'Bearer ' + tok, apikey: CFG.key, 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'card', request_id: id }) }); }).catch(function () {});
   }
   function takeOver(id) {
     S.confirmTake = '';
@@ -118,7 +135,7 @@
       ? '<div class="C_qrbox"><div class="C_qrframe">' + (S.showStatic ? S.qr.staticSvg : S.qr.dynamicSvg) + '</div><p class="help" style="text-align:center">' +
         (S.showStatic ? 'This QR has no amount. Type ' + esc(P.peso(total)) + ' in your bank app.' : 'Scan with your bank app. The amount is already set.') + '</p></div>' +
         '<div class="row-wrap C_actions">' + (S.showStatic ? '' : '<button class="btn btn-secondary" type="button" data-act="saveqr">' + ICON('share', 's16') + 'Save QR to phone</button>') +
-        '<a class="btn btn-secondary" href="' + esc(bankLink()) + '" target="_blank" rel="noopener">' + ICON('bank', 's16') + 'Open bank app</a></div>' +
+        '<a class="btn btn-secondary" data-act="bank" href="' + esc(bankLink()) + '" target="_blank" rel="noopener">' + ICON('bank', 's16') + 'Open bank app</a></div>' +
         '<p class="help">Pay in your bank app with the QR saved to your gallery, then delete the QR photo from your phone.</p>' +
         '<details class="C_fallback"><summary>If your bank ignores the amount</summary><div class="stack">' +
         '<p class="help">Some banks scan the QR but leave the amount empty. Use the QR with no amount and type the amount yourself.</p>' +
@@ -126,7 +143,7 @@
         '<div class="C_amountbox"><div class="C_amount num">' + esc(P.peso(total)) + '</div><button class="btn btn-secondary btn-sm" type="button" data-act="copyamt">' + ICON('clip', 's16') + 'Copy amount</button>' +
         '<button class="btn btn-secondary btn-sm" type="button" data-act="copyref">' + ICON('clip', 's16') + 'Copy reference</button></div></div></details>'
       : '<div class="infobox">' + ICON('info') + '<span>' + (S.noQr ? esc(r.payee_name) + '\'s payout QR is not saved yet. Pay her usual account for the amount above, then add the screenshot.' : esc(S.msg || 'The QR could not be loaded. Go back and try again.')) + '</span></div>' +
-        '<div class="row-wrap C_actions"><a class="btn btn-secondary" href="' + esc(bankLink()) + '" target="_blank" rel="noopener">' + ICON('bank', 's16') + 'Open bank app</a>' +
+        '<div class="row-wrap C_actions"><a class="btn btn-secondary" data-act="bank" href="' + esc(bankLink()) + '" target="_blank" rel="noopener">' + ICON('bank', 's16') + 'Open bank app</a>' +
         '<button class="btn btn-secondary btn-sm" type="button" data-act="copyref">' + ICON('clip', 's16') + 'Copy reference</button></div>';
     var f = S.form;
     var proof = '<div class="card"><div class="cap up">After you have paid</div><p class="help" style="margin:6px 0 10px">Add the payment screenshot. The request is marked paid only with it.</p>' +
@@ -137,7 +154,8 @@
       (S.msg ? '<div class="' + (S.msgOk ? 'okbox' : 'errbox') + '" role="alert">' + ICON(S.msgOk ? 'checks' : 'alert') + '<span>' + esc(S.msg) + '</span></div>' : '') + '</div>';
     var inner = '<div class="stack">' + amountBlock + qrBlock + proof + '</div>' +
       '<div class="sticky"><button class="btn btn-primary btn-block" type="button" id="C_done" data-act="settle"' + (A.ready(f) && !S.busy ? '' : ' disabled') + '>' + ICON('checks') + (S.busy ? 'Saving…' : 'Mark as paid') + '</button>' +
-      '<button class="btn btn-ghost" type="button" data-act="unpay" style="width:100%"' + (S.busy ? ' disabled' : '') + '>I am not paying this now</button></div>' +
+      (S.sentMarked ? '<p class="help" id="C_sentnote" role="status">Marked as sent, so nobody else can take this over. If you have not sent it, tap I have not sent it.</p>' : '') +
+      '<button class="btn btn-ghost" type="button" data-act="unpay" style="width:100%"' + (S.busy ? ' disabled' : '') + '>' + (S.sentMarked ? 'I have not sent it' : 'I am not paying this now') + '</button></div>' +
       '<input type="file" id="C_file" accept="image/*" hidden>';
     root.innerHTML = shell('Pay ' + r.payee_name, inner, '#back');
   }
@@ -167,7 +185,7 @@
     return toJpegBlob(file).then(function (blob) {
       return blob.arrayBuffer().then(function (buf) { return A.sha256Hex(buf).then(function (sha) {
         return net(CFG.url + '/functions/v1/upload-photo', { method: 'POST', headers: { Authorization: 'Bearer ' + tok, apikey: CFG.key, 'Content-Type': 'image/jpeg', 'x-cascade-file-name': 'payment-proof.jpg', 'x-cascade-property-id': CFG.propertyId, 'x-cascade-submission-id': key }, body: blob })
-          .then(function (r) { return r.json(); }).then(function (j) { if (!j || !j.ok || !j.path) throw new Error('upload'); S.form.uploaded = { path: j.path, sha256: j.sha256 || sha }; return S.form.uploaded; });
+          .then(function (r) { return r.json(); }).then(function (j) { if (!j || !j.ok || !j.path) throw new Error('upload'); if (!j.sha256) throw new Error('nosha'); S.form.uploaded = { path: j.path, sha256: j.sha256 }; return S.form.uploaded; });
       }); });
     });
   }
@@ -186,7 +204,7 @@
           S.msg = A.refusal(d); S.msgOk = false; renderPay();
         });
       });
-    }).catch(function () { S.busy = false; S.msg = 'The screenshot could not be sent, so nothing was marked paid. Add it again.'; S.msgOk = false; renderPay(); });
+    }).catch(function (e) { S.busy = false; S.msg = e && e.message === 'nosha' ? 'Pay staff is not fully switched on yet. Ask Lloyd.' : 'The screenshot could not be sent, so nothing was marked paid. Add it again.'; S.msgOk = false; renderPay(); });
   }
   // The database trigger already asks for the notice; this second ask is harmless (the notice is claimed once) and covers a trigger that cannot reach the function.
   function notifyPaid(tok, id) {
@@ -215,7 +233,7 @@
     var id = S.req.id;
     clearSecrets();
     var go = function () { S.view = 'list'; return loadList().then(renderList); };
-    if (S.req.status === 'paying') return sb.rpc('staff_pay_admin_step_v1', { p_request_id: id, p_step: 'not_sent' }).then(function (s) { if (s.data && s.data.ok === false) S.listMsg = A.refusal(s.data); return go(); }, go);
+    if (S.req.status === 'paying') return sb.rpc('staff_pay_admin_step_v1', { p_request_id: id, p_step: 'not_sent' }).then(function (s) { if (s.data && s.data.ok === false) S.listMsg = A.refusal(s.data); else redrawCard(id); return go(); }, go);
     return go();
   }
 
@@ -225,7 +243,7 @@
     var b = $('C_done'); if (b) b.disabled = !(A.ready(S.form) && !S.busy);
   });
   root.addEventListener('change', function (ev) {
-    if (ev.target.id === 'C_file' && ev.target.files && ev.target.files[0]) { S.form.file = ev.target.files[0]; S.form.uploaded = null; renderPay(); }
+    if (ev.target.id === 'C_file' && ev.target.files && ev.target.files[0]) { S.form.file = ev.target.files[0]; S.form.uploaded = null; markSent(); renderPay(); }
   });
   root.addEventListener('click', function (ev) {
     var t = ev.target.closest('[data-act]'); if (!t) return;
@@ -234,9 +252,10 @@
     else if (a === 'takeover-ask') { S.confirmTake = t.getAttribute('data-id'); renderList(); }
     else if (a === 'takecancel') { S.confirmTake = ''; renderList(); }
     else if (a === 'takeover') takeOver(t.getAttribute('data-id'));
-    else if (a === 'copyamt') copy(A.copyAmount(S.req.total), 'Amount');
+    else if (a === 'copyamt') { markSent(); copy(A.copyAmount(S.req.total), 'Amount'); }
+    else if (a === 'bank') markSent();
     else if (a === 'copyref') copy('CASCADE-' + S.req.ref, 'Reference');
-    else if (a === 'saveqr') saveQr();
+    else if (a === 'saveqr') { markSent(); saveQr(); }
     else if (a === 'togglestatic') { S.showStatic = !S.showStatic; renderPay(); }
     else if (a === 'pickfile') { var f = $('C_file'); if (f) f.click(); }
     else if (a === 'settle') settle();
