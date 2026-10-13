@@ -311,6 +311,7 @@
       node.innerHTML = o[k]; S.last[k] = o[k];
       if (left && node.querySelector) { var s2 = node.querySelector('.W_strip'); if (s2) s2.scrollLeft = left; }
     });
+    if (S.focusSel) { var f = S.el.querySelector(S.focusSel); if (f && !f.disabled) { f.focus(); S.focusSel = null; } } // the tapped control was rewritten: give focus back
   }
 
   function W_load() {
@@ -345,10 +346,10 @@
       if (t.setAttribute && more) { t.setAttribute('aria-expanded', String(on)); more.hidden = !on; S.last.days = W_daysBlock(S.model, S.open); } // in place: focus and scroll stay
       else W_render();
     }
-    else if ((v = t.getAttribute('data-w-layer')) != null) { S.layer = v; W_render(); }
+    else if ((v = t.getAttribute('data-w-layer')) != null) { S.layer = v; S.focusSel = '[data-w-layer="' + v + '"]'; W_render(); }
     else if (t.getAttribute('data-w-map') != null) { S.mapOn = true; W_render(); }
     else if (t.getAttribute('data-w-retry') != null) { S.failed = false; W_load(); }
-    else if (t.getAttribute('data-w-refresh') != null) { S.manual = true; W_load(); }
+    else if (t.getAttribute('data-w-refresh') != null) { S.manual = true; S.focusSel = '[data-w-refresh="1"]'; W_load(); }
   }
 
   function W_visible() {

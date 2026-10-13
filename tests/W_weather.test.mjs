@@ -400,3 +400,15 @@ test('fix 5: hourly icons have a text alternative; "Now" only on the current hou
   assert.equal(dayAt('05:30', '6 AM', '5 PM'), false); assert.equal(dayAt('06:30', '6 AM', '5 PM'), true);
   assert.equal(dayAt('17:30', '6:00 AM', '5:00 PM'), false);
 });
+
+test('fix 2: after a layer chip or Refresh rewrites its part, keyboard focus goes back to that control', async () => {
+  const w = world({ invoke: ok(full()) }); const e = el(); const focused = [];
+  const base = e.querySelector;
+  e.querySelector = (sel) => (/data-w-(layer|refresh)/.test(sel) ? { disabled: /data-w-refresh/.test(sel) && w.calls.length > 1 && !e.settled, focus: () => focused.push(sel) } : base(sel));
+  w.W.mount(e, { client: w.client }); await settle();
+  await click(e, { 'data-w-layer': 'wind' });
+  assert.deepEqual(focused, ['[data-w-layer="wind"]']);
+  e.settled = true; await click(e, { 'data-w-refresh': '1' });
+  assert.equal(focused[focused.length - 1], '[data-w-refresh="1"]');
+  assert.equal(focused.length, 2, 'once per tap');
+});
