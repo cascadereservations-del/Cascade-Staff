@@ -122,3 +122,11 @@ test('3.1.1 version: 3.1.1, cache v19, What is new names the new things for the 
   for (const r of ['cleaner', 'owner']) for (const t of ['Undo works every time', 'Earlier months', 'Cassy reply shows its progress', 'Better on a tablet']) assert.ok(titles(r).includes(t), r + ': ' + t);
   assert.ok(titles('owner').includes('Add a notice from Today')); assert.ok(!titles('cleaner').includes('Add a notice from Today')); assert.match(CS.A_whatsNew('cleaner', {}).find((i) => i.title === 'Earlier months').text, /not shown here/); assert.match(CS.A_whatsNew('owner', {}).find((i) => i.title === 'Earlier months').text, /admin dashboard/);
 });
+
+test('3.1.1 layout: the scroll area always clears the tab bar and the safe area; every wide stack uses the one 60 rem width; the month sits beside the next 14 days from 840 px', () => {
+  const css = read('styles.css'); assert.match(css, /\.screen \{ padding: 0 var\(--gutter\) calc\(var\(--tabbar-h\) \+ env\(safe-area-inset-bottom\) \+ 24px\);/, 'bottom padding = tab bar + safe area + 24 px at every width');
+  assert.match(css, /#v-more \.screen, #v-calendar \.screen, #v-search \.screen \{ max-width: 60rem; margin-left: auto; margin-right: auto; \}/); assert.match(css, /\.H_mod \{ max-width: 60rem; margin: 0 auto; \}/);
+  assert.match(css, /#v-calendar \[data-F-tab="calendar"\] \{ display: grid; grid-template-columns: minmax\(0, 1\.15fr\) minmax\(0, 1fr\);/); assert.match(css, /\.H_calleft \{ position: sticky;/);
+  assert.match(css, /\.A_body \{ display: block; column-count: 2; column-gap: var\(--v5-gap\);/); assert.match(css, /\.A_body > \* \{ break-inside: avoid; margin-bottom: var\(--v5-gap\); \}/);
+  assert.match(read('app.js'), /var H_MORE_ORDERS = \[/);
+});
