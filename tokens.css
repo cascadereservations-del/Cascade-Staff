@@ -1,0 +1,100 @@
+/* Cascade Staff - design tokens v5 (approved 2026-10-13). The ONE token sheet for the shell and every folded surface
+   (admin/, checklist/, manual/, guide/). Source: design canvas board "Design system v5" and the L / D objects in each screen.
+   Light is bare :root; dark follows the system unless data-theme="light"; data-theme="dark" forces it (same rule as theme.js).
+   Surfaces map their own variable names onto these; never copy a hex out of this file. */
+:root {
+  /* surfaces */
+  --v5-bg: #EEF1F4; --v5-ambient: linear-gradient(180deg, #EEF1F4 0%, #E3E9EF 100%); --v5-ambient-opacity: 0.20;
+  --v5-surf: #FFFFFF; --v5-surf-2: #F7F9FB; --v5-sunk: #E8ECF1;
+  --v5-line: #D9DFE6; --v5-line-2: #A9B4C0; --v5-sep: rgba(16, 28, 44, 0.08);
+  /* text */
+  --v5-ink: #0F1B2A; --v5-ink-2: #4A5869; --v5-ink-3: #5E6B7A;
+  /* action and panels */
+  --v5-act: #17324D; --v5-act-fg: #FFFFFF; --v5-fill: rgba(16, 40, 70, 0.07);
+  --v5-panel: #16283C; --v5-panel-fg: #F2F5F8; --v5-panel-fg-2: #B9C6D3;
+  /* champagne gold: the one complementary accent */
+  --v5-gold: #E0B872; --v5-gold-fg: #0F1B2A; --v5-gold-text: #8A5A12; --v5-gold-soft: rgba(224, 184, 114, 0.24);
+  /* floating tab bar and glass */
+  --v5-bar: rgba(15, 27, 42, 0.84); --v5-bar-fg: #C9D3DE;
+  --v5-glass: rgba(255, 255, 255, 0.66); --v5-glass-edge: rgba(255, 255, 255, 0.7); --v5-glass-dark: rgba(10, 20, 32, 0.42);
+  --v5-card-glass: rgba(255, 255, 255, 0.60); --v5-card-edge: rgba(255, 255, 255, 0.65); --v5-card-hi: rgba(255, 255, 255, 0.75);
+  --v5-card-shadow: rgba(20, 40, 70, 0.10); --v5-shadow: rgba(15, 27, 42, 0.18); --v5-warn-glass: rgba(255, 238, 214, 0.70);
+  --v5-blur: blur(18px) saturate(140%);
+  /* status: always glyph + word */
+  --v5-ok-t: #1B5E3F; --v5-ok-w: rgba(222, 243, 232, 0.92); --v5-warn-t: #7A4304; --v5-warn-w: #FFEED6;
+  --v5-danger: #D23B4B; --v5-danger-t: #8E1F2A; --v5-danger-w: #FBE4E6; --v5-info-t: #1F4C8F; --v5-info-w: #E3ECFA;
+  /* bookings: one blue family, a shade per guest */
+  --v5-g1: #1F3A68; --v5-g1-fg: #FFFFFF; --v5-g2: #3563A8; --v5-g2-fg: #FFFFFF; --v5-g3: #5B8BD0; --v5-g3-fg: #0F1B2A;
+  --v5-g4: #8DB2E3; --v5-g4-fg: #0F1B2A; --v5-g6: #27508A; --v5-g6-fg: #FFFFFF;
+  --v5-cal-booked: #1F3A68; --v5-cal-booked-fg: #FFFFFF; --v5-cal-2nd: #8DB2E3; --v5-cal-2nd-fg: #0F1B2A; --v5-cal-2nd-bar: #3563A8;
+  --v5-cal-blocked: #D5DBE2; --v5-cal-blocked-fg: #3B4756; --v5-cal-hatch: rgba(74, 88, 105, 0.22);
+  --v5-cal-clash-ring: #E5484D; --v5-cal-free-edge: #8FA6BC; --v5-cal-past-fg: #5E6B7A;
+  /* notices: gradient + glyph + word. Text on a notice tile is always --v5-notice-fg */
+  --v5-power: linear-gradient(135deg, #F6C453 0%, #EE9B3B 100%); --v5-power-solid: #EE9B3B;
+  --v5-water: linear-gradient(135deg, #6FD3D6 0%, #2A9DB0 100%); --v5-water-solid: #2A9DB0;
+  --v5-rain: linear-gradient(135deg, #C6BEF0 0%, #9A8BDB 100%); --v5-rain-solid: #9A8BDB;
+  --v5-deep: linear-gradient(135deg, #A8E3C9 0%, #6CC4A1 100%); --v5-deep-solid: #6CC4A1;
+  --v5-blocked: #D5DBE2; --v5-blocked-hatch: rgba(74, 88, 105, 0.22); --v5-blocked-fg: #3B4756;
+  --v5-clash: #E5484D; --v5-note-dot: #C9962F; --v5-notice-fg: #0F1B2A; --v5-house-tile: #D5DBE2;
+  /* type: the phone's own font for everything; DM Serif Display (one self-hosted woff2) for titles and names only */
+  --v5-font-ui: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, "Noto Sans", sans-serif;
+  --v5-font-display: "DM Serif Display", Georgia, "Times New Roman", serif;
+  --v5-t-display: 36px; --v5-t-section: 24px; --v5-t-num: 22px; --v5-t-body: 17px; --v5-t-2: 15px; --v5-t-label: 13px; --v5-t-min: 12px;
+  /* shape */
+  --v5-r-card: 24px; --v5-r-panel: 28px; --v5-r-sheet: 32px; --v5-r-field: 14px; --v5-r-full: 999px; --v5-touch: 44px;
+  /* motion: press 0.97 at 160 ms ease-out; sheets 300 ms; nothing animates on things used many times a day */
+  --v5-press-scale: 0.97; --v5-press-ms: 160ms; --v5-sheet-ms: 300ms; --v5-sheet-ease: cubic-bezier(0.32, 0.72, 0, 1);
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --v5-bg: #0B1420; --v5-ambient: linear-gradient(180deg, #0F1A28 0%, #0B1420 100%); --v5-ambient-opacity: 0.28;
+    --v5-surf: #132132; --v5-surf-2: #1A2B3F; --v5-sunk: #1C2C40;
+    --v5-line: #24364B; --v5-line-2: #4A5C70; --v5-sep: rgba(200, 220, 240, 0.10);
+    --v5-ink: #EEF3F8; --v5-ink-2: #AEBCCB; --v5-ink-3: #8C9BAB;
+    --v5-act: #EEF3F8; --v5-act-fg: #0F1B2A; --v5-fill: rgba(200, 220, 240, 0.09);
+    --v5-panel: #1A2B3F; --v5-panel-fg: #F2F5F8; --v5-panel-fg-2: #B9C6D3;
+    --v5-gold-text: #E0B872; --v5-gold-soft: rgba(224, 184, 114, 0.16);
+    --v5-bar: rgba(22, 38, 58, 0.84);
+    --v5-glass: rgba(19, 33, 50, 0.66); --v5-glass-edge: rgba(255, 255, 255, 0.10); --v5-glass-dark: rgba(8, 14, 22, 0.45);
+    --v5-card-glass: rgba(20, 34, 52, 0.55); --v5-card-edge: rgba(255, 255, 255, 0.10); --v5-card-hi: rgba(255, 255, 255, 0.08);
+    --v5-card-shadow: rgba(0, 0, 0, 0.45); --v5-shadow: rgba(0, 0, 0, 0.5); --v5-warn-glass: rgba(58, 42, 18, 0.62);
+    --v5-ok-t: #7FD3A0; --v5-ok-w: rgba(22, 54, 40, 0.9); --v5-warn-t: #F0B866; --v5-warn-w: #3A2A12;
+    --v5-danger: #F0646F; --v5-danger-t: #F4A3AA; --v5-danger-w: #3B1A1E; --v5-info-t: #A9C4F5; --v5-info-w: #17284A;
+    --v5-g1: #8DB2E3; --v5-g1-fg: #0F1B2A; --v5-g2: #5B8BD0; --v5-g2-fg: #0F1B2A; --v5-g3: #3563A8; --v5-g3-fg: #FFFFFF;
+    --v5-g4: #C3D6F0; --v5-g4-fg: #0F1B2A; --v5-g6: #A9C4F5; --v5-g6-fg: #0F1B2A;
+    --v5-cal-booked: #8DB2E3; --v5-cal-booked-fg: #0F1B2A; --v5-cal-2nd: #3563A8; --v5-cal-2nd-fg: #FFFFFF; --v5-cal-2nd-bar: #C3D6F0;
+    --v5-cal-blocked: #2A3A4E; --v5-cal-blocked-fg: #C9D3DE; --v5-cal-hatch: rgba(200, 220, 240, 0.14);
+    --v5-cal-clash-ring: #F0646F; --v5-cal-free-edge: #4A6580; --v5-cal-past-fg: #8C9BAB;
+    --v5-water-solid: #4FC3C7; --v5-rain-solid: #B3A8EA; --v5-deep-solid: #7FD1AE;
+    --v5-blocked: #2A3A4E; --v5-blocked-hatch: rgba(200, 220, 240, 0.14); --v5-blocked-fg: #C9D3DE;
+    --v5-clash: #F0646F; --v5-note-dot: #E0B872; --v5-house-tile: #B8C4D2;
+    color-scheme: dark;
+  }
+}
+
+:root[data-theme="dark"] {
+  --v5-bg: #0B1420; --v5-ambient: linear-gradient(180deg, #0F1A28 0%, #0B1420 100%); --v5-ambient-opacity: 0.28;
+  --v5-surf: #132132; --v5-surf-2: #1A2B3F; --v5-sunk: #1C2C40;
+  --v5-line: #24364B; --v5-line-2: #4A5C70; --v5-sep: rgba(200, 220, 240, 0.10);
+  --v5-ink: #EEF3F8; --v5-ink-2: #AEBCCB; --v5-ink-3: #8C9BAB;
+  --v5-act: #EEF3F8; --v5-act-fg: #0F1B2A; --v5-fill: rgba(200, 220, 240, 0.09);
+  --v5-panel: #1A2B3F; --v5-panel-fg: #F2F5F8; --v5-panel-fg-2: #B9C6D3;
+  --v5-gold-text: #E0B872; --v5-gold-soft: rgba(224, 184, 114, 0.16);
+  --v5-bar: rgba(22, 38, 58, 0.84);
+  --v5-glass: rgba(19, 33, 50, 0.66); --v5-glass-edge: rgba(255, 255, 255, 0.10); --v5-glass-dark: rgba(8, 14, 22, 0.45);
+  --v5-card-glass: rgba(20, 34, 52, 0.55); --v5-card-edge: rgba(255, 255, 255, 0.10); --v5-card-hi: rgba(255, 255, 255, 0.08);
+  --v5-card-shadow: rgba(0, 0, 0, 0.45); --v5-shadow: rgba(0, 0, 0, 0.5); --v5-warn-glass: rgba(58, 42, 18, 0.62);
+  --v5-ok-t: #7FD3A0; --v5-ok-w: rgba(22, 54, 40, 0.9); --v5-warn-t: #F0B866; --v5-warn-w: #3A2A12;
+  --v5-danger: #F0646F; --v5-danger-t: #F4A3AA; --v5-danger-w: #3B1A1E; --v5-info-t: #A9C4F5; --v5-info-w: #17284A;
+  --v5-g1: #8DB2E3; --v5-g1-fg: #0F1B2A; --v5-g2: #5B8BD0; --v5-g2-fg: #0F1B2A; --v5-g3: #3563A8; --v5-g3-fg: #FFFFFF;
+  --v5-g4: #C3D6F0; --v5-g4-fg: #0F1B2A; --v5-g6: #A9C4F5; --v5-g6-fg: #0F1B2A;
+  --v5-cal-booked: #8DB2E3; --v5-cal-booked-fg: #0F1B2A; --v5-cal-2nd: #3563A8; --v5-cal-2nd-fg: #FFFFFF; --v5-cal-2nd-bar: #C3D6F0;
+  --v5-cal-blocked: #2A3A4E; --v5-cal-blocked-fg: #C9D3DE; --v5-cal-hatch: rgba(200, 220, 240, 0.14);
+  --v5-cal-clash-ring: #F0646F; --v5-cal-free-edge: #4A6580; --v5-cal-past-fg: #8C9BAB;
+  --v5-water-solid: #4FC3C7; --v5-rain-solid: #B3A8EA; --v5-deep-solid: #7FD1AE;
+  --v5-blocked: #2A3A4E; --v5-blocked-hatch: rgba(200, 220, 240, 0.14); --v5-blocked-fg: #C9D3DE;
+  --v5-clash: #F0646F; --v5-note-dot: #E0B872; --v5-house-tile: #B8C4D2;
+  color-scheme: dark;
+}
