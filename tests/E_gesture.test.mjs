@@ -199,7 +199,7 @@ test('E_ G1 (s82): swiping the month grid left shows the next month, right the p
   const edge = await calApp('#calendar'); swipeCal(edge, [[0, 345, 300], [100, 290, 302], [200, 220, 302], [260, 220, 302]]); assert.equal(monthOf(edge), 'October 2026', 'starts at x = 345 of 360: the system Back gesture\'s');
   const vert = await calApp('#calendar'); swipeCal(vert, [[0, 300, 300], [100, 292, 360], [200, 285, 440], [260, 285, 500]]); assert.equal(monthOf(vert), 'October 2026', 'a vertical scroll');
   const stop = await calApp('#calendar'); for (let i = 0; i < 3; i++) swipeCal(stop, [[0, 300, 300], [100, 250, 304], [200, 200, 306], [600, 200, 306]]); assert.equal(monthOf(stop), 'December 2026', 'the calendar offers 60 days ahead and no more');
-  const back = await calApp('#calendar'); swipeCal(back, [[0, 100, 300], [100, 160, 304], [200, 260, 306], [600, 260, 306]]); assert.equal(monthOf(back), 'October 2026', 'September is past the week the calendar keeps');
+  const back = await calApp('#calendar'); swipeCal(back, [[0, 100, 300], [100, 160, 304], [200, 260, 306], [600, 260, 306]]); assert.equal(monthOf(back), 'September 2026', '3.1.1: the calendar goes back, so a swipe right shows the month before');
 });
 
 test('E_ G1 (s82): the month follows the finger at 0.6x (cap 96 px), a month that is not there does not follow, and the release snaps back over 160 ms', async () => {
@@ -210,7 +210,7 @@ test('E_ G1 (s82): the month follows the finger at 0.6x (cap 96 px), a month tha
   fire('pointerup', { clientX: 30, clientY: 301, pointerId: 1, timeStamp: 210 }); assert.equal(cal.style.transition, 'transform 160ms ease-out, opacity 160ms ease-out'); assert.equal(monthOf(a), 'November 2026');
   const none = await calApp('#calendar'); const c2 = surf({ offsetWidth: 328 }), f2 = (t, ev) => (none.listeners[t] || []).forEach((f) => f(ev));
   f2('pointerdown', { target: { closest: (s) => (s === '.cal' ? c2 : null) }, clientX: 100, clientY: 300, pointerId: 1, timeStamp: 0, button: 0 });
-  f2('pointermove', { clientX: 200, clientY: 301, pointerId: 1, timeStamp: 100 }); assert.equal(c2.style.transform, 'translateX(0px)', 'right of October is September: not offered, so the grid does not move');
+  f2('pointermove', { clientX: 200, clientY: 301, pointerId: 1, timeStamp: 100 }); assert.equal(c2.style.transform, 'translateX(60px)', '3.1.1: right of October is September: it is offered, so the grid follows');
   f2('pointerup', { clientX: 200, clientY: 301, pointerId: 1, timeStamp: 110 });
 });
 

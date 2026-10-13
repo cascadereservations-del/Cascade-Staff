@@ -20,7 +20,7 @@
     url: 'https://qkgfhsdppslwunarczeq.supabase.co',
     key: 'sb_publishable_JFuRYZ9csmQULcMRmHXDSg_Abo9UeCj',
     propertyId: '6ae230f4-c189-4547-84b1-cb6e0b2cc9bd',
-    version: '3.1.0'
+    version: '3.1.1'
   };
   var LINKS = {
     checklist: 'https://cascadereservations-del.github.io/CH-Cleaners-Checklist/',
@@ -236,7 +236,7 @@
     var loading = !v && state.noticesLoading, items = v ? v.all.slice(0, 2) : [], body;
     if (!v) body = loading ? '<div class="skel" style="height:72px"></div>' : '<p class="sub" style="margin:0">No connection. <button class="btn btn-ghost btn-sm" type="button" data-act="refresh">Try again</button></p>';
     else body = items.length ? '<div class="A_nlist">' + items.map(function (n) { var h = CS.H_noticeHead(n); return row({ icon: A_noticeIcon(n.type), tile: n.type, title: h.title, sub: h.sub, href: '#calendar/notices', hint: n.title + (n.sub ? ' · ' + n.sub : '') }); }).join('') + '</div>' : '<p class="sub" style="margin:0">No notices. Nothing to plan around.</p>';
-    var mgr = CS.canSeeGuestContact(role()), add = mgr && v ? '<button class="btn btn-ghost H_addrow" type="button" data-act="notice-add-open" data-date="' + esc(state.payload.today) + '">' + ICON('plus', 's16') + 'Add a notice</button>' : '';
+    var mgr = CS.canSeeGuestContact(role()), add = mgr && v ? '<button class="btn btn-secondary btn-block H_addrow" type="button" data-act="notice-add-open" data-date="' + esc(state.payload.today) + '">' + ICON('plus', 's16') + 'Add a notice</button>' : '';
     return '<section class="card glass A_card A_noticecard' + (mgr ? ' H_mgr' : '') + '" aria-label="Notices"' + (loading ? ' aria-busy="true"' : '') + '><div class="A_head"><h2>Notices</h2>' + (v ? '<a href="#calendar/notices">' + (v.counts.all ? 'See all ' + v.counts.all : 'Open') + ICON('chev', 's16') + '</a>' : '') + '</div>' + body + add + '</section>';
   }
   function A_noticeIcon(type) { return type === 'house' ? 'house' : (CS.A_NOTICE_TYPES[type] || CS.A_NOTICE_TYPES.note).icon; }
@@ -337,7 +337,7 @@
     if (act) { t.innerHTML = '<span>' + esc(msg) + (sub ? '<br><span class="help">' + esc(sub) + '</span>' : '') + '</span><button class="btn btn-ghost btn-sm E_toastbtn" type="button" data-act="' + esc(act.act) + '" data-task="' + esc(act.task) + '" aria-label="' + esc(act.label || act.text) + '">' + esc(act.text) + '</button>'; t.classList.add('E_hasact'); }
     else { t.innerHTML = ''; t.textContent = msg; t.classList.remove('E_hasact'); }
     t.classList.add('on');
-    clearTimeout(toastTimer); toastTimer = setTimeout(function () { t.classList.remove('on'); t.classList.remove('E_hasact'); t.textContent = ''; }, act ? 5000 : 2000);
+    clearTimeout(toastTimer); toastTimer = setTimeout(function () { t.classList.remove('on'); t.classList.remove('E_hasact'); t.textContent = ''; }, act ? 7000 : 2000);
   }
 
   // The ID photo comes from the private guest-id-photos bucket through a 5-minute signed URL made with the user's own session
@@ -381,7 +381,7 @@
   function monthStep(d) { // the month d steps away, or null past the months the calendar offers
     var m = monthState(), y = m.y, mm = m.m + d;
     if (mm < 1) { mm = 12; y--; } if (mm > 12) { mm = 1; y++; }
-    return CS.monthInRange(y, mm, state.payload.today) ? { y: y, m: mm } : null;
+    return CS.H_monthOk(y, mm, state.payload.today) ? { y: y, m: mm } : null; // 3.1.1: back a year
   }
   function shiftMonth(d, fade) {
     var n = monthStep(d); if (!n) return false;
@@ -415,9 +415,9 @@
     var info = cells.map(function (c) { return c.iso ? dayStatusOf(c.iso) : null; });
     var body = cells.map(function (c, i) {
       if (!c.iso) return '<div class="d off" aria-hidden="true"></div>';
-      var ds = info[i], booked = ds.primary === 'booked', blk = ds.primary === 'blocked', col = i % 7;
+      var ds = info[i], booked = ds.primary === 'booked', blk = ds.primary === 'blocked', col = i % 7, nodata = c.iso < CS.H_dataFrom(p.today) && ds.primary === 'free' && !ds.out;
       if (ds.turnover) monthHas.turn = true; if (ds.clash.length) monthHas.clash = true;
-      var cls = 'd s-' + ds.primary + (c.iso < p.today ? ' past' : '') + (c.iso === p.today ? ' today' : '') + (booked ? ' stay' : '') + (booked && ds.cont ? ' cont' : '') + (blk ? ' blk' : '') +
+      var cls = 'd s-' + ds.primary + (nodata ? ' nodata' : '') + (c.iso < p.today ? ' past' : '') + (c.iso === p.today ? ' today' : '') + (booked ? ' stay' : '') + (booked && ds.cont ? ' cont' : '') + (blk ? ' blk' : '') +
         (ds.arrive ? ' arr' : '') + (ds.out ? ' dep' : '') + (ds.turnover ? ' turn' : '') + (ds.clash.length ? ' clash' : '');
       // the guest's name starts on the first night cell of the stay and again at the start of each week row; it runs along the bar
       var tag = '';
@@ -431,7 +431,7 @@
       var inner = halves(ds) + '<span class="n">' + (+c.iso.slice(8)) + '</span>' + tag +
         (blk && !ds.out ? '<span class="g">' + ICON(BLOCK_ICON[ds.block.block_reason] || 'lock', 's12') + '</span>' : '') +
         (ds.clash.length ? '<span class="cx" aria-hidden="true">' + ICON('alert', 's12') + '</span>' : '') + mk;
-      var moves = CS.dayMoves(ds), night = booked ? (ds.arrive ? 'booked' : 'booked, ' + ds.why) : blk ? 'blocked, ' + ds.why : 'free', nd = CS.A_noticeDay(view, c.iso);
+      var moves = CS.dayMoves(ds), night = booked ? (ds.arrive ? 'booked' : 'booked, ' + ds.why) : blk ? 'blocked, ' + ds.why : nodata ? 'no stay information here' : 'free', nd = CS.A_noticeDay(view, c.iso);
       var label = CS.dayLong(c.iso) + (c.iso === p.today ? ', today' : '') + (ds.turnover ? ', turnover' : '') + (moves ? ', ' + moves : '') + ', ' + night +
         (ds.clash.length ? ', clash with ' + ds.clash.map(function (s) { return s.guest_name || 'another guest'; }).join(', ') : '') +
         (ds.flags.filter(function (f) { return !CS.A_flagDup(f, nd); }).length ? '; ' + ds.flags.filter(function (f) { return !CS.A_flagDup(f, nd); }).map(function (f) { return CS.flagName(f.kind); }).join(', ') : '') + (nd.length ? '; ' + nd.map(function (x) { return x.title; }).join(', ') : '');
@@ -504,7 +504,8 @@
     var same = function (st, g) { return !!g && st.guest_name === g.guest_name && st.checkin_date === g.checkin_date; };
     var rows = CS.H_agenda(staysOf(), p.today, 14, function (st) { return same(st, ng) || same(st, cg); });
     var html = '<div class="calhdr"><button class="iconbtn" type="button" data-act="prev" aria-label="Previous month"' + (prevOk ? '' : ' disabled style="opacity:.35"') + '>' + ICON('back', 's24') + '</button><h2 class="dlg" aria-live="polite">' + esc(CS.monthTitle(m.y, m.m)) + '</h2><button class="iconbtn" type="button" data-act="next" aria-label="Next month"' + (nextOk ? '' : ' disabled style="opacity:.35"') + '>' + ICON('chev', 's24') + '</button></div>' +
-      legend() + grid + '<p class="help H_help" style="text-align:center;margin:8px 0 0">Tap a day for who is staying. Swipe for the next month.</p>';
+      legend() + grid + '<p class="help H_help" style="text-align:center;margin:8px 0 0">Tap a day for who is staying. Swipe for the next month.</p>' + H_olderLine(m, p.today);
+    html = '<div class="H_calleft">' + html + '</div><div class="H_calright">';
     html += '<div class="sect" id="agenda"><h2 class="hd H_agendahd">Next 14 days</h2>';
     if (ng) html += '<div class="stack">' + guestBlock(ng, 'next') + '</div>'; else if (!cg && !rows.length) html += '<p class="sub" style="margin:0">Nothing is booked to arrive or leave in the next 14 days.</p>';
     if (cg) html += '<div class="stack">' + guestBlock(cg, 'house') + '</div>';
@@ -518,7 +519,14 @@
     }
     var wi = warningItems();
     html += '<div class="sect" id="warnings"><span class="cap up">Warnings</span>' + (wi.length ? '<ul class="wlist">' + wi.join('') + '</ul>' : '<div class="card glass"><p class="sub">No warnings today.</p></div>') + '</div>';
-    return html;
+    return html + '</div>';
+  }
+  // The server sends stays from a week back. An earlier month shows what exists and says where the rest is; the days it cannot know are dashed, never "free".
+  function H_olderLine(m, today) {
+    var from = CS.H_dataFrom(today); if (m.y + '-' + (m.m < 10 ? '0' : '') + m.m + '-01' >= from) return '';
+    var l = CS.canSeeGuestContact(role()) ? A_hubLink('bookings/calendar') : null;
+    return '<p class="help H_older" style="text-align:center;margin:6px 0 0">' + esc('Stays before ' + CS.dayLabel(from) + ' are ' + (l ? 'in the admin dashboard.' : 'not shown here.')) + '</p>' +
+      (l ? '<div style="text-align:center">' + (l.external ? ext(l.href, 'Open the booking calendar' + ICON('ext', 's16'), 'btn btn-ghost btn-sm') : '<a class="btn btn-ghost btn-sm" href="' + esc(l.href) + '">Open the booking calendar</a>') + '</div>' : '');
   }
   // The Notices view: weather with the rain watch, power and water notices, house items (owner and admin), how to add one. Cleaners never get Tell the guest, Resolve or the House list.
   function A_noticeRow(n) {
@@ -641,7 +649,7 @@
   function role() { return state.access && state.access.role; }
   function daySheet(S) {
     var p = state.payload, ds = dayStatusOf(S.key), canFlag = CS.canFlagDays(role());
-    var prim = ds.primary === 'booked' ? pill('brand', 'house', 'Booked') : ds.primary === 'blocked' ? pill('neutral', 'lock', 'Blocked') : pill('ok', 'check', 'Free');
+    var old = S.key < CS.H_dataFrom(p.today) && ds.primary === 'free' && !ds.out && !ds.arrive, prim = ds.primary === 'booked' ? pill('brand', 'house', 'Booked') : ds.primary === 'blocked' ? pill('neutral', 'lock', 'Blocked') : old ? pill('neutral', 'info', 'Not shown here') : pill('ok', 'check', 'Free');
     var html = '<h2 class="ttl" id="cs-h" tabindex="-1">' + esc(CS.dayLong(S.key)) + '</h2><div class="row-wrap" style="margin-top:8px">' + prim +
       (ds.turnover ? pill('info', 'repeat', 'Turnover') : '') + (ds.clash.length ? pill('danger', 'alert', 'Clash') : '') + '<span class="sub">' + esc(ds.why) + '</span></div>';
     var all = staysOf();
@@ -912,18 +920,23 @@
     E_tr(row, 120); row.style.transform = 'translateX(-32px)';
     setTimeout(function () { E_tr(row, 120); row.style.transform = ''; setTimeout(function () { if (w && w.classList && !w.classList.contains('E_open')) w.classList.remove('E_live'); }, 160); }, 360);
   }
+  var H_tasksGen = 0, H_taskQ = {};
+  // The writes for one task go out one after the other (done, then Undo), so the server sees them in the order the person tapped.
+  function H_serial(key, fn) { var p = (H_taskQ[key] || Promise.resolve()).then(fn, fn); H_taskQ[key] = p.then(null, function () {}); return p; }
   function loadTasks() {
     if (!state.access) return Promise.resolve();
-    state.tasksLoading = true;
+    state.tasksLoading = true; var gen = ++H_tasksGen; // 3.1.1: only the newest read counts. A slow read that started before an Undo must never land after the read that followed it
     return sb.rpc('tasks_list_v1', { p_property_id: pid(), p_include_done: state.showDone }).then(function (r) {
+      if (gen !== H_tasksGen) return;
       if (r.error) throw r.error;
       var d = r.data; if (!d || d.ok === false) throw new Error('denied');
       CS.assertNoMoney(d.tasks || []);
       state.tasks = { manager: d.manager === true, today: d.today || CS.manilaToday(), tasks: d.tasks || [] }; state.tasksErr = ''; state.tasksDenied = false;
     }).catch(function (e) {
+      if (gen !== H_tasksGen) return;
       state.tasksDenied = !!(e && e.message === 'denied');
       state.tasksErr = e && e.message === 'denied' ? 'Tasks are not available for this account.' : !E_netErr(e) ? (state.tasks ? 'Could not update. Showing the last update.' : 'Could not update.') : state.tasks ? 'Live information needs a connection. Showing the last update.' : 'Live information needs a connection.';
-    }).then(function () { state.tasksLoading = false; if (state.layout && current !== 'door') { if (current === 'tasks') renderTasks(); else if (current === 'home') render('home'); renderTabs(current); } H_offlineSync(); }); // Home too: the pill waits for the tasks
+    }).then(function () { if (gen !== H_tasksGen) return; state.tasksLoading = false; if (state.layout && current !== 'door') { if (current === 'tasks') renderTasks(); else if (current === 'home') render('home'); renderTabs(current); } H_offlineSync(); }); // Home too: the pill waits for the tasks
   }
   function findTask(key) {
     var i = key.indexOf(':'), src = key.slice(0, i), id = key.slice(i + 1), list = state.tasks ? state.tasks.tasks : [];
@@ -941,8 +954,8 @@
     t.status = done ? 'done' : 'open'; state.lastDone = { source: t.source, id: t.id, title: t.title, done: done }; state.tasksErr = ''; if (current === 'tasks') renderTasks(); renderTabs(current); if (state.sheet && state.sheet.kind === 'attn') drawSheet();
     E_vibe('tap'); // one buzz for the confirm; the same path whether the box, the underlay button or the swipe asked
     toast(done ? 'Marked done' : 'Back on the list', E_undoAct(t, key, done));
-    var call = t.source === 'verifier_findings' ? sb.rpc('ack_verifier_finding_v1', { p_key: t.id })
-      : sb.rpc('task_set_done_v1', { p_property_id: pid(), p_source: t.source, p_id: t.id, p_done: done });
+    var call = H_serial(key, function () { return t.source === 'verifier_findings' ? sb.rpc('ack_verifier_finding_v1', { p_key: t.id })
+      : sb.rpc('task_set_done_v1', { p_property_id: pid(), p_source: t.source, p_id: t.id, p_done: done }); });
     var msg = '';
     call.then(function (r) { if (r.error) throw r.error; if (DEMO) toast(done ? 'Marked done' : 'Back on the list', E_undoAct(t, key, done), 'Demo: nothing was saved'); }).catch(function (e) { // demo: the real toast stays, the demo note is its sub-line
       t.status = done ? 'open' : 'done'; state.lastDone = null;
@@ -1052,9 +1065,7 @@
   // focus: 'heading' (the new screen's heading), 'error' (the error message), or nothing (the user is mid-typing).
   function renderReply(focus) {
     var el = $('rp-body'), R = state.reply || (state.reply = newReply()), head = appbar({ title: 'Cassy reply', back: '#home' }), body;
-    if (R.busy) {
-      body = '<div class="card" role="status"><h2 class="hd" id="rp-h" tabindex="-1">Cassy is writing</h2><p class="sub" style="margin-top:6px">This takes a few seconds. Please keep this screen open.</p><div class="skel" style="height:96px;margin-top:12px"></div></div>';
-    } else if (R.step === 'done' && R.result) {
+    if (R.step === 'done' && R.result && !R.busy) {
       var X = R.result, who = (X.guestName ? X.guestName + ' · ' : '') + RP_NAME[X.platform];
       body = rpErr(R) + '<div class="card"><h2 class="cap up" id="rp-h" tabindex="-1">Replying to · ' + esc(who) + '</h2><p class="rp-quote">' + esc(CS.clampText(X.guestText, 280)) + '</p></div>' +
         (X.header ? '<p class="sub" style="margin:0">' + esc(X.header) + '</p>' : '') +
@@ -1064,7 +1075,7 @@
         }).join('') +
         (X.platform === 'messenger' ? ext(CS.MESSENGER_INBOX, ICON('chat', 's16') + 'Open Messenger inbox', 'btn btn-secondary btn-block', R.copied >= 0 ? ' id="rp-inbox"' : ' id="rp-inbox" hidden') : '') +
         '<button class="btn btn-secondary btn-block" type="button" data-act="reply-reset">Start over</button>';
-    } else if (R.step === 'pick') {
+    } else if (R.step === 'pick' && !R.busy) {
       body = '<h2 class="dlg" id="rp-h" tabindex="-1">What did the guest send?</h2><div class="rp-pick">' +
         '<button class="btn btn-secondary rp-big" type="button" data-act="reply-mode" data-mode="text">' + ICON('chat', 's24') + 'Text</button>' +
         '<button class="btn btn-secondary rp-big" type="button" data-act="reply-mode" data-mode="image">' + ICON('image', 's24') + 'Screenshot</button></div>' +
@@ -1075,17 +1086,28 @@
         }).join('') + '</div><p class="help" style="margin:8px 0 0">Kept on this screen only, until you leave the app.</p></section>' : '');
     } else {
       var shot = R.mode === 'image';
-      body = rpErr(R) +
+      body = (R.busy ? H_waitCard(R) : '') + rpErr(R) +
         (shot ? '<div class="field"><span class="lbl">Screenshot of the guest’s message</span><label class="btn btn-secondary btn-block rp-file">' + ICON('image', 's16') + (R.image ? 'Choose another' : 'Choose a screenshot') +
-            '<input class="sr" id="rp-file" type="file" accept="image/*"></label>' + (R.shrinking ? '<p class="help" role="status" style="margin:0">Preparing the screenshot…</p>' : R.image ? '<div class="okbox">' + ICON('check') + '<span>Ready: ' + esc(R.imageName || 'screenshot') + '</span></div>' : '') + '</div>'
-          : '<div class="field"><label for="rp-text">What the guest sent</label><textarea class="ta" id="rp-text" rows="7" maxlength="4000" placeholder="Paste the guest’s message here">' + esc(R.text) + '</textarea></div>') +
-        '<div class="field"><label for="rp-name">Guest name (optional)</label><div class="input"><input id="rp-name" maxlength="80" value="' + esc(R.name) + '" autocomplete="off"></div></div>' +
+            '<input class="sr" id="rp-file" type="file" accept="image/*"' + (R.busy ? ' disabled' : '') + '></label>' + (R.shrinking ? '<p class="help" role="status" style="margin:0">Preparing the screenshot…</p>' : R.image ? '<div class="okbox">' + ICON('check') + '<span>Ready: ' + esc(R.imageName || 'screenshot') + '</span></div>' : '') + (R.busy && R.image ? '<img class="H_thumb" alt="The screenshot Cassy is reading" src="data:' + esc(R.image.mime) + ';base64,' + esc(R.image.base64) + '">' : '') + '</div>'
+          : '<div class="field"><label for="rp-text">What the guest sent</label><textarea class="ta" id="rp-text" rows="7" maxlength="4000"' + (R.busy ? ' disabled' : '') + ' placeholder="Paste the guest’s message here">' + esc(R.text) + '</textarea></div>') +
+        '<div class="field"><label for="rp-name">Guest name (optional)</label><div class="input"><input id="rp-name" maxlength="80" value="' + esc(R.name) + '" autocomplete="off"' + (R.busy ? ' disabled' : '') + '></div></div>' +
         rpPlatform(R) +
-        '<button class="btn btn-primary btn-block" type="button" data-act="reply-send"' + (R.shrinking ? ' disabled' : '') + '>Write the reply</button>' +
-        '<button class="btn btn-ghost btn-block" type="button" data-act="reply-back">Back</button>';
+        '<button class="btn btn-primary btn-block" type="button" data-act="reply-send"' + (R.shrinking || R.busy ? ' disabled' : '') + '>' + (R.busy ? 'Writing…' : 'Write the reply') + '</button>' +
+        (R.busy ? '' : '<button class="btn btn-ghost btn-block" type="button" data-act="reply-back">Back</button>');
     }
     el.innerHTML = head + '<div class="screen"><div class="stack">' + body + '</div></div>';
     if (focus === 'error') rpFocus('rp-err'); else if (focus === 'heading') rpFocus('rp-h');
+  }
+  // 3.1.1: while Cassy writes, a calm honest wait: the step advances on a timer, a bar that only moves if motion is allowed, the usual time, and Cancel.
+  var H_rpSeq = 0, H_rpT = 0;
+  function H_waitCard(R) {
+    return '<div class="card glass H_wait" role="status"><h2 class="hd" id="rp-h" tabindex="-1">Cassy is writing</h2><p class="sub" id="rp-step" style="margin:6px 0 0">' + esc(CS.H_waitStep(Math.floor((Date.now() - (R.t0 || Date.now())) / 1000))) + '</p>' +
+      '<div class="H_bar" aria-hidden="true"><i></i></div><p class="help" style="margin:8px 0 0">Usually 10 to 20 seconds. Please keep this screen open.</p><button class="btn btn-secondary" type="button" data-act="reply-cancel">Cancel</button></div>';
+  }
+  function H_rpTick(R) {
+    clearTimeout(H_rpT); if (!R.busy || state.reply !== R) return;
+    var el = $('rp-step'); if (el) el.textContent = CS.H_waitStep(Math.floor((Date.now() - R.t0) / 1000));
+    H_rpT = setTimeout(function () { H_rpTick(R); }, 1000);
   }
   function readBlobAsBase64(blob) {
     return new Promise(function (res, rej) {
@@ -1121,15 +1143,15 @@
     var R = state.reply; if (!R || R.busy || R.shrinking) return;
     var bad = CS.replyProblem({ mode: R.mode, text: R.text, image: R.image });
     if (bad) { R.err = bad; R.signout = false; renderReply('error'); return; }
-    R.busy = true; R.err = ''; R.signout = false; renderReply('heading'); rpLive('Cassy is writing'); window.scrollTo(0, 0);
+    var myId = ++H_rpSeq; R.reqId = myId; R.t0 = Date.now(); R.busy = true; R.err = ''; R.signout = false; renderReply('heading'); rpLive('Cassy is writing'); window.scrollTo(0, 0); H_rpTick(R);
     var body = JSON.stringify(CS.replyBody({ mode: R.mode, text: R.text, image: R.image, guestName: R.name, platform: R.platform }));
     sb.auth.getSession().then(function (s) {
       var token = s.data && s.data.session && s.data.session.access_token; if (!token) return { status: 401, j: null };
       return net(CFG.url + '/functions/v1/guest-reply-draft', { method: 'POST', headers: { Authorization: 'Bearer ' + token, apikey: CFG.key, 'Content-Type': 'application/json' }, body: body })
         .then(function (r) { return r.json().catch(function () { return null; }).then(function (j) { return { status: r.status, j: j }; }); });
     }).catch(function () { return { status: 0, j: null }; }).then(function (o) {
-      if (state.reply !== R) return; // signed out meanwhile
-      R.busy = false;
+      if (state.reply !== R || R.reqId !== myId) return; // signed out meanwhile, or the wait was cancelled: a late answer is ignored
+      R.busy = false; clearTimeout(H_rpT);
       var X = o.status === 200 ? CS.replyResult(o.j) : null;
       if (X) { R.result = X; R.step = 'done'; R.copied = -1; R.err = ''; R.signout = false; state.replyRecent = [{ who: (X.guestName ? X.guestName + ' · ' : '') + RP_NAME[X.platform], text: X.options[0].text }].concat(state.replyRecent || []).slice(0, 3); }
       else { R.err = CS.replyErrorText(o.status === 200 ? 502 : o.status, o.j && o.j.error); R.signout = o.status === 401; if (o.status === 401 || o.status === 403) E_vibe('error'); }
@@ -1159,28 +1181,41 @@
   }
 
   // ---------------------------------------------------------------- More
-  function renderMore() {
-    var theme = window.CSTheme.get(), staff = state.layout === 'staff', plain = window.CSTheme.plainOn(), admin = !staff;
+  // 3.1.1: every group on More has the same gold caps label and the same card; the groups are dealt into two independent column stacks (one stack under 600 px),
+  // split where the two columns come out about the same height, so nothing sits beside a hole. DOM order is reading order: Search, How we do things, Cassy, Admin, Appearance, Help, This phone, then You.
+  function H_moreGroups() {
+    var theme = window.CSTheme.get(), plain = window.CSTheme.plainOn(), admin = state.layout !== 'staff';
     var chip = function (v, t) { return '<button class="chip" type="button" role="radio" data-theme="' + v + '" aria-checked="' + (theme === v) + '" aria-pressed="' + (theme === v) + '">' + t + '</button>'; };
-    var nm = state.name || 'You', roleName = state.access ? state.access.role : '';
-    $('v-more').innerHTML = appbar({ title: 'More' }) + '<div class="screen"><div class="stack">' +
-      A_navCard('Search', row({ icon: 'search', title: 'Search', sub: CS.canSeeGuestContact(role()) ? 'Tasks, guests and the manual' : 'Tasks and the manual', href: '#search' })) +
-      A_navCard('How we do things', row({ icon: 'book', title: 'Cascade Manual', sub: 'How we do things', door: 'manual' }) + doorRow('guide', 'book', 'How the staff app and the house work') + row({ icon: 'help', title: 'Quick guide', sub: 'How to use Cassy in Telegram', href: LINKS.quick }) + doorRow('adminguide', 'lock', 'Owner and admin chapters')) +
-      '<section class="card" aria-label="Appearance"><h2 class="hd">Appearance</h2><div class="row-wrap" role="radiogroup" aria-label="Theme" style="margin-top:10px">' + chip('auto', 'Automatic') + chip('light', 'Light') + chip('dark', 'Dark') + '</div>' +
+    var g = [];
+    g.push({ w: 2, html: A_navCard('Search', row({ icon: 'search', title: 'Search', sub: CS.canSeeGuestContact(role()) ? 'Tasks, guests and the manual' : 'Tasks and the manual', href: '#search' })) });
+    g.push({ w: 5, html: A_navCard('How we do things', row({ icon: 'book', title: 'Cascade Manual', sub: 'How we do things', door: 'manual' }) + doorRow('guide', 'book', 'How the staff app and the house work') + row({ icon: 'help', title: 'Quick guide', sub: 'How to use Cassy in Telegram', href: LINKS.quick }) + doorRow('adminguide', 'lock', 'Owner and admin chapters')) });
+    g.push({ w: 4, html: A_navCard('Cassy', (canReply() ? row({ icon: 'sparkles', title: 'Cassy reply', sub: 'Draft a warm reply to a guest message', href: '#reply' }) : '') +
+      row({ icon: 'chat', title: 'Cassy · Telegram OPS', sub: 'Open in Telegram', tg: LINKS.tgOps, external: true }) + (admin ? row({ icon: 'wallet', title: 'Cassy · Telegram Finance', sub: 'Open in Telegram', tg: LINKS.tgFinance, external: true }) : '')) });
+    if (admin) g.push({ w: 4, html: A_navCard('Admin', row({ icon: 'dash', title: 'Admin hub', sub: 'Every dashboard page, in one list', href: '#hub' }) + (CS.canEditRates(role()) ? row({ icon: 'cash', title: 'Pay rates', sub: 'What a clean and its transport pay', href: '#payrates' }) : '') + row({ icon: 'box', title: 'Inventory', sub: 'Stock levels and usage', href: '#stock' })) });
+    g.push({ w: 6, html: '<div class="F_group"><div class="A_label">Appearance</div><section class="card glass" aria-label="Appearance"><h2 class="hd">Theme and bars</h2><div class="row-wrap" role="radiogroup" aria-label="Theme" style="margin-top:10px">' + chip('auto', 'Automatic') + chip('light', 'Light') + chip('dark', 'Dark') + '</div>' +
       '<div class="A_switch" style="margin-top:10px"><span id="plain-label"><b>Plain bars</b> (no glass)</span><button class="sw" type="button" role="switch" data-act="plain" aria-checked="' + plain + '" aria-labelledby="plain-label"><i></i></button></div>' +
       '<p class="help" style="margin:4px 0 0">On by itself on slower phones. Easier to read in the sun.</p>' +
       (E_canVibrate() ? '<div class="A_switch" style="margin-top:10px"><span id="hap-label"><b>Vibrate on confirm</b></span><button class="sw" type="button" role="switch" data-act="haptics" aria-checked="' + CS.E_hapticsOn(store('localStorage')) + '" aria-labelledby="hap-label"><i></i></button></div>' +
-        '<p class="help" style="margin:4px 0 0">A short buzz when something is saved or finished. Off saves nothing but the buzz.</p>' : '') + '</section>' +
-      A_navCard('Cassy', (canReply() ? row({ icon: 'sparkles', title: 'Cassy reply', sub: 'Draft a warm reply to a guest message', href: '#reply' }) : '') +
-        row({ icon: 'chat', title: 'Cassy · Telegram OPS', sub: 'Open in Telegram', tg: LINKS.tgOps, external: true }) + (admin ? row({ icon: 'wallet', title: 'Cassy · Telegram Finance', sub: 'Open in Telegram', tg: LINKS.tgFinance, external: true }) : '')) +
-      (admin ? A_navCard('Admin', row({ icon: 'dash', title: 'Admin hub', sub: 'Every dashboard page, in one list', href: '#hub' }) + (CS.canEditRates(role()) ? row({ icon: 'cash', title: 'Pay rates', sub: 'What a clean and its transport pay', href: '#payrates' }) : '') + row({ icon: 'box', title: 'Inventory', sub: 'Stock levels and usage', href: '#stock' })) : '') +
-      '<nav class="card glass list" aria-label="About this app"><button class="rowi" type="button" data-act="whatsnew"><span class="lead">' + ICON('sparkles') + '</span><span class="mid"><span class="t">What’s new</span><span class="s">What changed in this version</span></span><span class="chev">' + ICON('chev') + '</span></button>' +
-      '<button class="rowi" type="button" data-act="tour-open"><span class="lead">' + ICON('help') + '</span><span class="mid"><span class="t">Show the tour</span><span class="s">Three short cards on how the app works</span></span><span class="chev">' + ICON('chev') + '</span></button></nav>' +
-      '<div class="F_group"><div class="A_label">This phone</div><section class="card" id="install-card" hidden aria-label="Install the app"><h2 class="hd">Install the app</h2><p class="sub" style="margin-top:6px">Put Cascade Staff on your Home Screen.</p><button class="btn btn-secondary" id="install-btn" type="button" style="margin-top:10px">' + ICON('plus', 's16') + 'Install</button>' +
-        '<a class="btn btn-secondary" id="install-link" href="./install/" style="margin-top:10px" hidden>' + ICON('plus', 's16') + 'How to install</a></section></div>' +
-      '<div class="card glass A_prof"><span class="av" aria-hidden="true">' + esc(CS.initialOf(nm)) + '</span><div class="mid"><span class="t">' + esc(nm) + '</span><span class="s">' + esc(roleName) + (trustOn ? ' · This phone is trusted' : '') + '</span></div>' +
+        '<p class="help" style="margin:4px 0 0">A short buzz when something is saved or finished. Off saves nothing but the buzz.</p>' : '') + '</section></div>' });
+    g.push({ w: 3, html: '<div class="F_group"><div class="A_label">Help</div><nav class="card glass list" aria-label="Help"><button class="rowi" type="button" data-act="whatsnew"><span class="lead">' + ICON('sparkles') + '</span><span class="mid"><span class="t">What’s new</span><span class="s">What changed in this version</span></span><span class="chev">' + ICON('chev') + '</span></button>' +
+      '<button class="rowi" type="button" data-act="tour-open"><span class="lead">' + ICON('help') + '</span><span class="mid"><span class="t">Show the tour</span><span class="s">Three short cards on how the app works</span></span><span class="chev">' + ICON('chev') + '</span></button></nav></div>' });
+    g.push({ w: 3, html: '<div class="F_group"><div class="A_label">This phone</div><section class="card glass" id="install-card" hidden aria-label="Install the app"><h2 class="hd">Install the app</h2><p class="sub" style="margin-top:6px">Put Cascade Staff on your Home Screen.</p><button class="btn btn-secondary" id="install-btn" type="button" style="margin-top:10px">' + ICON('plus', 's16') + 'Install</button>' +
+      '<a class="btn btn-secondary" id="install-link" href="./install/" style="margin-top:10px" hidden>' + ICON('plus', 's16') + 'How to install</a></section></div>' });
+    return g;
+  }
+  // the split that leaves the two stacks closest in height (weights are rows and cards, not pixels)
+  function H_moreSplit(groups) {
+    var total = groups.reduce(function (a, x) { return a + x.w; }, 0), best = 1, bestD = 1e9, run = 0;
+    groups.forEach(function (x, i) { run += x.w; var d = Math.abs(total - 2 * run); if (i < groups.length - 1 && d < bestD) { bestD = d; best = i + 1; } });
+    return best;
+  }
+  function renderMore() {
+    var nm = state.name || 'You', roleName = state.access ? state.access.role : '', g = H_moreGroups(), k = H_moreSplit(g), col = function (a) { return '<div class="H_col">' + a.map(function (x) { return x.html; }).join('') + '</div>'; };
+    $('v-more').innerHTML = appbar({ title: 'More' }) + '<div class="screen"><div class="stack H_more">' +
+      '<div class="H_cols">' + col(g.slice(0, k)) + col(g.slice(k)) + '</div>' +
+      '<div class="F_group H_you"><div class="A_label">You</div><div class="card glass A_prof"><span class="av" aria-hidden="true">' + esc(CS.initialOf(nm)) + '</span><div class="mid"><span class="t">' + esc(nm) + '</span><span class="s">' + esc(roleName) + (trustOn ? ' · This phone is trusted' : '') + '</span></div>' +
         '<button class="btn btn-ghost E_signout" type="button" data-act="signout">' + ICON('logout', 's16') + 'Sign out</button>' +
-        '<p class="help E_signhelp">Signs you out of the admin dashboard as well, on this phone.</p></div>' +
+        '<p class="help E_signhelp">Signs you out of the admin dashboard as well, on this phone.</p></div></div>' +
       '</div>' +
       '<div class="help" style="text-align:center;margin-top:16px">Cascade Staff v' + CFG.version + '</div></div>';
     syncInstall();
@@ -1287,9 +1322,11 @@
   function A_noticeAddForm() {
     var a = state.nadd;
     return '<h2 class="ttl" id="cs-h" tabindex="-1">Add a notice</h2><p class="help" style="margin:4px 0 0">No phone numbers, e-mails or amounts.</p><div class="stack" style="margin-top:10px">' +
-      '<div class="field"><label for="n-type">Kind</label><select class="sel" id="n-type" style="max-width:none;text-align:left;text-align-last:left">' + NADD_TYPES.map(function (t) { return '<option value="' + t[0] + '"' + (a.type === t[0] ? ' selected' : '') + '>' + t[1] + '</option>'; }).join('') + '</select></div>' +
+      '<div class="field"><span class="lbl" id="n-kind-l">What kind of notice</span><div class="H_kinds" role="group" aria-labelledby="n-kind-l">' +
+        [['water', 'Water', 'drop'], ['power', 'Power', 'zap']].map(function (k) { return '<button class="H_kind" type="button" data-act="nkind" data-kind="' + k[0] + '" aria-pressed="' + (a.type === k[0]) + '">' + ICON(k[2], 's24') + k[1] + '</button>'; }).join('') + '</div></div>' +
+      '<div class="field"><label for="n-type">Or another kind</label><select class="sel" id="n-type" style="max-width:none;text-align:left;text-align-last:left"><option value=""' + (a.type === 'water' || a.type === 'power' ? ' selected' : '') + '>Choose, if not water or power</option>' + NADD_TYPES.filter(function (t) { return t[0] !== 'water'; }).map(function (t) { return '<option value="' + t[0] + '"' + (a.type === t[0] ? ' selected' : '') + '>' + t[1] + '</option>'; }).join('') + '</select></div>' +
       '<div class="field"><label for="n-title">What is happening</label><div class="input"><input id="n-title" maxlength="80" value="' + esc(a.title) + '" autocomplete="off"></div></div>' +
-      '<p class="help" style="margin:-6px 0 0">' + esc(CS.A_NOTICE_HINT) + '</p>' +
+      '<p class="help" style="margin:-6px 0 0">' + esc(a.type === 'power' ? 'Saved as a brownout on that day. Put the hours in the title.' : CS.A_NOTICE_HINT) + '</p>' +
       '<div class="field"><label for="n-date">Date</label><div class="input"><input id="n-date" type="date" value="' + esc(a.date) + '"></div></div>' +
       '<div class="field"><label for="n-start">Starts (optional)</label><div class="input"><input id="n-start" type="time" value="' + esc(a.start) + '"></div></div>' +
       '<div class="field"><label for="n-hours">Lasts, in hours (optional)</label><div class="input"><input id="n-hours" inputmode="decimal" maxlength="4" value="' + esc(a.hours) + '"></div></div>' +
@@ -1300,12 +1337,14 @@
   function A_noticeAddDraw() { if (state.sheet && state.sheet.kind === 'nadd') drawSheet(); }
   function A_noticeAddSave() {
     var a = state.nadd; if (!a || a.busy || !CS.canSeeGuestContact(role())) return;
-    var bad = CS.A_noticeAddProblem(a); if (bad) { a.err = bad; A_noticeAddDraw(); return; }
+    var power = a.type === 'power', bad = power ? CS.H_powerProblem(a) : CS.A_noticeAddProblem(a); if (bad) { a.err = bad; A_noticeAddDraw(); return; }
     a.busy = true; a.err = ''; A_noticeAddDraw();
-    sb.rpc('ops_notice_add_v1', CS.A_noticeAddArgs(pid(), a)).then(function (r) {
+    // Power is saved as a brownout flag on the day (the notice call refuses a power notice); the rest go through ops_notice_add_v1
+    var call = power ? sb.rpc('calendar_day_flag_set_v1', { p_property_id: pid(), p_date: a.date, p_kind: 'brownout', p_label: String(a.title).trim().slice(0, 60) }) : sb.rpc('ops_notice_add_v1', CS.A_noticeAddArgs(pid(), a));
+    call.then(function (r) {
       if (r.error) throw r.error;
       if (r.data && r.data.ok === false) throw { message: r.data.error || 'not ok', code: '22023' };
-      state.nadd = null; closeSheet(); toast('Notice added.'); E_vibe('tap'); return A_loadNotices();
+      state.nadd = null; closeSheet(); toast('Notice added.'); E_vibe('tap'); return Promise.all([A_loadNotices(), power ? loadHome() : null]);
     }).catch(function (e) {
       a.busy = false; E_vibe('error');
       a.err = CS.rpcMissing(e) ? 'Available after the next update.' : CS.A_noticeAddError(e);
@@ -1322,7 +1361,7 @@
     });
   }
   function signOutTo(msg) {
-    state.H_q = ''; state.H_offKey = ''; H_unmount(); closeSheet(); dropPhotos(); state.replyRecent = []; state.cleanDone = null; state.progress = null; state.progressAbsent = false; H_idClose(); state.reply = null; var rb = $('rp-body'); if (rb) rb.innerHTML = ''; rpLive(''); state.payload = null; state.bookings = null; state.bookingsDone = false; state.noticesDone = false; state.notices = null; state.noticesAbsent = false; state.nadd = null; state.fbOpen = false; state.tasks = null; state.access = null; state.layout = null; state.month = null; state.error = '';
+    clearTimeout(H_rpT); state.H_q = ''; state.H_offKey = ''; H_unmount(); closeSheet(); dropPhotos(); state.replyRecent = []; state.cleanDone = null; state.progress = null; state.progressAbsent = false; H_idClose(); state.reply = null; var rb = $('rp-body'); if (rb) rb.innerHTML = ''; rpLive(''); state.payload = null; state.bookings = null; state.bookingsDone = false; state.noticesDone = false; state.notices = null; state.noticesAbsent = false; state.nadd = null; state.fbOpen = false; state.tasks = null; state.access = null; state.layout = null; state.month = null; state.error = '';
     return sb.auth.signOut().catch(function () {}).then(function () { showSignin(msg); });
   }
   function showSignin(msg) {
@@ -1594,6 +1633,8 @@
     else if (a === 'id-full-close') H_idClose();
     else if (a === 'attn-ack') H_attnAck(t.getAttribute('data-warn'));
     else if (a === 'reply-back') { if (state.reply) { state.reply.step = 'pick'; state.reply.err = ''; state.reply.signout = false; } renderReply('heading'); }
+    else if (a === 'reply-cancel') { var RC = state.reply; if (RC) { RC.busy = false; RC.reqId = ++H_rpSeq; clearTimeout(H_rpT); rpLive('Cancelled'); renderReply(RC.mode === 'text' ? '' : 'heading'); if (RC.mode === 'text') rpFocus('rp-text'); } }
+    else if (a === 'nkind') { if (state.nadd) { state.nadd.type = t.getAttribute('data-kind') === 'power' ? 'power' : 'water'; state.nadd.err = ''; A_noticeAddDraw(); } }
     else if (a === 'reply-reset') { state.reply = newReply(); renderReply('heading'); rpLive(''); window.scrollTo(0, 0); }
     else if (a === 'signout') { signOutTo(''); }
     else if (a === 'sheet-close') closeSheet();
@@ -1619,7 +1660,7 @@
   });
   document.addEventListener('change', function (ev) {
     if (ev.target && ev.target.id === 'rp-file') { var f0 = ev.target.files && ev.target.files[0]; if (f0) pickShot(f0); return; }
-    if (ev.target && ev.target.id === 'n-type' && state.nadd) { state.nadd.type = ev.target.value; return; }
+    if (ev.target && ev.target.id === 'n-type' && state.nadd) { if (ev.target.value) { state.nadd.type = ev.target.value; A_noticeAddDraw(); } return; }
     if (ev.target && ev.target.id === 'df-kind' && state.sheet) { state.sheet.form.kind = ev.target.value; return; }
     if (ev.target && ev.target.id === 't-who' && state.add) state.add.who = ev.target.value;
   });

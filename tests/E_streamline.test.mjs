@@ -121,7 +121,7 @@ test('E_ More: one Sign out button, on the profile card, with the dashboard note
     const app = await boot({ role, hash: '#more', handlers: baseHandlers(role) });
     const h = app.els['v-more'].innerHTML;
     assert.equal((h.match(/data-act="signout"/g) || []).length, 1, role);
-    const prof = h.slice(idx(h, 'class="card glass A_prof"')); assert.ok(h.lastIndexOf('data-act="signout"') > idx(h, 'aria-label="About this app"'), 'F6: Sign out is the last control');
+    const prof = h.slice(idx(h, 'class="card glass A_prof"')); assert.ok(h.lastIndexOf('data-act="signout"') > idx(h, 'aria-label="Help"'), 'F6: Sign out is the last control');
     assert.match(prof, /data-act="signout"/); assert.match(prof, /Signs you out of the admin dashboard as well, on this phone\./);
     assert.doesNotMatch(h, /Signed in as|aria-label="Account"/);
   }

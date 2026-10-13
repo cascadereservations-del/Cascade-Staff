@@ -68,7 +68,7 @@ test('E_ haptics setting: "Vibrate on confirm" is on More > Appearance only wher
   const app = await boot({ role: 'cleaner', hash: '#more', nav: v, ls, handlers: baseHandlers('cleaner') });
   let h = app.els['v-more'].innerHTML;
   assert.match(h, /<b>Vibrate on confirm<\/b>/); assert.match(h, /data-act="haptics" aria-checked="true"/); assert.match(h, /A short buzz when something is saved or finished\. Off saves nothing but the buzz\./);
-  assert.ok(h.indexOf('Plain bars') < h.indexOf('Vibrate on confirm') && h.indexOf('Vibrate on confirm') < h.indexOf('aria-label="Cassy"'), 'under Plain bars, inside Appearance');
+  assert.ok(h.indexOf('Plain bars') < h.indexOf('Vibrate on confirm') && h.indexOf('Vibrate on confirm') < h.indexOf('aria-label="Help"'), 'under Plain bars, inside Appearance');
   await app.click({ 'data-act': 'haptics' });
   assert.deepEqual(ls.m, { cs_haptics: '0' }); assert.match(app.els['v-more'].innerHTML, /data-act="haptics" aria-checked="false"/);
   await app.click({ 'data-act': 'haptics' }); assert.deepEqual(ls.m, { cs_haptics: '1' }); assert.match(app.els['v-more'].innerHTML, /data-act="haptics" aria-checked="true"/);

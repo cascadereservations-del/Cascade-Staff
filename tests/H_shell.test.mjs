@@ -29,7 +29,7 @@ test('H_ lib: the agenda lists arrivals and departures in the next 14 days, by t
   const st = (name, a, b) => ({ guest_name: name, checkin_date: a, checkout_date: b });
   const list = CS.H_agenda([st('Gone', '2026-10-01', '2026-10-10'), st('Here', '2026-10-12', '2026-10-17'), st('Soon', '2026-10-20', '2026-10-22'), st('Far', '2026-11-20', '2026-11-22'), st('Skip', '2026-10-16', '2026-10-18')], TODAY, 14, (s) => s.guest_name === 'Skip');
   assert.deepEqual(list.map((x) => [x.st.guest_name, x.kind, x.day]), [['Here', 'house', '2026-10-17'], ['Soon', 'arrive', '2026-10-20']]);
-  assert.equal(CS.H_dayStep('2026-10-15', 1, TODAY), '2026-10-16'); assert.equal(CS.H_dayStep('2026-10-08', -1, TODAY), '2026-10-07'); assert.equal(CS.H_dayStep('2026-10-01', -1, TODAY), null, 'September is past the week the calendar keeps'); assert.equal(CS.H_dayStep('2026-12-14', 1, TODAY), '2026-12-15'); assert.equal(CS.H_dayStep('2026-12-31', 1, TODAY), null);
+  assert.equal(CS.H_dayStep('2026-10-15', 1, TODAY), '2026-10-16'); assert.equal(CS.H_dayStep('2026-10-08', -1, TODAY), '2026-10-07'); assert.equal(CS.H_dayStep('2026-10-01', -1, TODAY), '2026-09-30', '3.1.1: back a year'); assert.equal(CS.H_dayStep('2025-10-01', -1, TODAY), null, 'a year back is the edge'); assert.equal(CS.H_dayStep('2026-12-14', 1, TODAY), '2026-12-15'); assert.equal(CS.H_dayStep('2026-12-31', 1, TODAY), null);
 });
 
 test('H_ lib: arrival checks are owner and admin only, three states each, and an unknown draws nothing', () => {
@@ -158,7 +158,7 @@ test('H_ home: the admin Turnover card is a verdict (clean, arrival, house); row
 
 test('H_ More: the manual, Appearance, Cassy, This phone, then Sign out last as a quiet button; search and the tour are rows', async () => {
   const m = await boot({ role: 'admin', hash: '#more', handlers: baseHandlers('admin') }); const h = m.els['v-more'].innerHTML; const at = (s) => h.indexOf(s);
-  assert.ok(at('How we do things') < at('Appearance') && at('Appearance') < at('Cassy reply') && at('Cassy reply') < at('This phone') && at('This phone') < at('data-act="signout"'));
+  assert.ok(at('How we do things') < at('Cassy reply') && at('Cassy reply') < at('Appearance') && at('Appearance') < at('This phone') && at('This phone') < at('data-act="signout"'));
   assert.match(h, /btn btn-ghost E_signout/); assert.match(h, /href="#search"/); assert.match(h, /data-act="tour-open"/); assert.equal((h.match(/data-act="signout"/g) || []).length, 1);
 });
 
@@ -271,7 +271,7 @@ test('H_ guard: no duplicate top-level H_ names in app.js or lib.js, the files p
   }
   const html = read('index.html'); for (const id of ['v-search', 'v-weather', 'v-stock', 'v-manage', 'H_offline', 'door-done']) assert.ok(html.includes('id="' + id + '"'), id);
   assert.match(html, /Your name, as Lloyd wrote it/); assert.match(html, /placeholder="Honey"/);
-  assert.equal(JSON.parse(read('package.json')).version, '3.1.0'); assert.match(read('sw.js'), /CACHE_NAME = 'cs-shell-v18'/);
+  assert.equal(JSON.parse(read('package.json')).version, '3.1.1'); assert.match(read('sw.js'), /CACHE_NAME = 'cs-shell-v19'/);
 });
 
 // the bodies of the three theme rules: :root, :root:not([data-theme="light"]) inside the dark media query, :root[data-theme="dark"]
@@ -329,7 +329,7 @@ test('H_ fix: the tour waits while the Add to Home Screen hint is showing; sign-
   const ls = mem(); const hint = { classList: { contains: (c) => c === 'on', add() {}, remove() {} }, setAttribute() {}, getAttribute: () => null };
   const app = await boot({ role: 'cleaner', hash: '#home', tour: true, tourDelay: 0, ls, els: { a2hs: hint }, handlers: baseHandlers('cleaner') }); await new Promise((r) => setTimeout(r, 20));
   assert.ok(!app.els['cal-sheet'] || app.els['cal-sheet'].getAttribute('aria-hidden') !== 'false', 'no tour over the install hint'); assert.equal(ls.getItem('cs_seen_v3'), null, 'and it is not marked seen: it starts on the next open');
-  assert.match(read('app.js'), /signOutTo\(msg\) \{\s*state\.H_q = ''/); assert.match(read('styles.css'), /@media \(max-width: 37\.4375rem\) \{ \.F_sheethead \{ touch-action: none; \} \}/);
+  assert.match(read('app.js'), /signOutTo\(msg\) \{\s*clearTimeout\(H_rpT\); state\.H_q = ''/); assert.match(read('styles.css'), /@media \(max-width: 37\.4375rem\) \{ \.F_sheethead \{ touch-action: none; \} \}/);
 });
 
 test('H_ fix: the three module folders are precached best effort, apart from the required shell list', () => {
