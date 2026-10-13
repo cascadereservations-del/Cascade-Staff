@@ -49,8 +49,8 @@ test('parse: every pay script compiles; every inline script in the pay pages com
 test('css: every colour is a v5 token; the one literal is the white QR quiet zone the QR standard requires', () => {
   const c = read('pay/C_pay.css').replace(/\/\*[\s\S]*?\*\//g, '');
   const hexes = [...c.matchAll(/#[0-9a-fA-F]{3,8}\b/g)].map((m) => m[0]);
-  assert.deepEqual(hexes, ['#fff'], 'only the QR frame is a literal colour');
-  assert.match(c, /\.C_qrframe\s*\{[^}]*background:\s*#fff/);
+  assert.deepEqual(hexes, ['#FFFFFF'], 'the only literal is --v5-qr-paper, the white a QR needs behind it');
+  assert.match(c, /--v5-qr-paper:\s*#FFFFFF/); assert.match(c, /\.C_qrframe\s*\{[^}]*background:\s*var\(--v5-qr-paper\)/);
   assert.doesNotMatch(c, /\brgba?\(|\bhsla?\(/, 'no literal colour functions either');
   assert.ok((c.match(/var\(--v5-/g) || []).length > 70);
   const n = read('pay/C_notice.css').replace(/\/\*[\s\S]*?\*\//g, '');
@@ -89,4 +89,17 @@ test('payout QR hygiene: no real QR Ph string in the lane\'s files, and no stora
   }
   // the page asks for no caching and leaks no referrer
   assert.match(read('pay/admin.html'), /name="referrer" content="no-referrer"/);
+});
+
+test('pay pages: no Google Fonts, tokens.css before styles.css, the v5 theme-color pair, no inline control height under 44px', () => {
+  for (const f of html) {
+    const src = read('pay/' + f);
+    assert.doesNotMatch(src, /fonts\.googleapis|fonts\.gstatic/, f);
+    assert.ok(src.indexOf('../tokens.css') > 0 && src.indexOf('../tokens.css') < src.indexOf('../styles.css'), f + ': tokens.css first');
+    assert.match(src, /name="theme-color" content="#EEF1F4" media="\(prefers-color-scheme: light\)"/, f); assert.match(src, /name="theme-color" content="#0B1420" media="\(prefers-color-scheme: dark\)"/, f);
+  }
+  for (const f of js) for (const m of read('pay/' + f).matchAll(/style="[^"]*height:\s*(\d+)px/g)) assert.ok(+m[1] >= 44 || /skel|disc/.test(m[0]) || +m[1] > 60, `${f}: inline height ${m[1]}px`);
+  assert.doesNotMatch(read('pay/pay.js'), /data-rmx[^>]*height:28px/);
+  assert.match(read('pay/C_pay.css'), /\.btn-sm\s*\{[^}]*min-height:\s*var\(--v5-touch\)/);
+  for (const f of js) assert.doesNotMatch(read('pay/' + f), /(?:11:00|3:00) ?(?:am|pm)|11 ?am|3 ?pm/i, f);
 });

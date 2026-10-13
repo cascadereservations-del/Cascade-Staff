@@ -62,7 +62,7 @@
     var x = P.parseExtra(e);
     return '<div class="payrow"><span class="lead" style="width:24px;height:24px">' + ICON('plus', 's16') + '</span><div><div class="t"><span>' + esc(e.description) + '</span><span class="val">' + esc(x ? P.peso(x.amount) : '') + '</span></div>' +
       '<span class="s">' + (e.file ? 'Receipt photo: ' + esc(e.file.name || 'photo') : 'No receipt photo') + '</span>' +
-      '<div class="opt"><button class="btn btn-ghost btn-sm" type="button" data-rmx="' + i + '" style="padding:0;height:28px">Remove</button></div></div></div>';
+      '<div class="opt"><button class="btn btn-ghost btn-sm" type="button" data-rmx="' + i + '" style="padding:0 8px">Remove</button></div></div></div>';
   }
   function draftForm() {
     var d = S.draft;

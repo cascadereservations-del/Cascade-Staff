@@ -2,6 +2,7 @@
    It does not edit pay.js: it points the shell's variable names at the v5 tokens (so light and dark follow tokens.css) and restyles the pay components
    to the Pay and PayRates mock-ups: 17 px body, 44 px targets, 24 px glass cards, status with a glyph and a word. Every colour is a var(--v5-*). */
 :root, :root:not([data-theme="light"]), :root[data-theme="dark"] {
+  --v5-qr-paper: #FFFFFF; /* white in both themes on purpose: a QR needs a light quiet zone to scan. Local until the integrator moves it into tokens.css. */
   --bg: var(--v5-bg); --card: var(--v5-surf); --muted: var(--v5-sunk); --border: var(--v5-line);
   --fg: var(--v5-ink); --fg-2: var(--v5-ink-2); --fg-3: var(--v5-ink-3);
   --primary: var(--v5-act); --primary-fg: var(--v5-act-fg); --primary-soft: var(--v5-fill); --ring: var(--v5-act);
@@ -49,7 +50,7 @@ body { background: var(--v5-ambient), var(--v5-bg); color: var(--v5-ink); font: 
 .C_amountbox .cap { flex-basis: 100%; }
 .C_amount { font: 700 44px/48px var(--v5-font-ui); letter-spacing: -.02em; color: var(--v5-ink); }
 .C_qrbox { display: grid; gap: 8px; justify-items: center; }
-.C_qrframe { background: #fff; padding: 12px; border-radius: 20px; width: min(86vw, 340px); aspect-ratio: 1 / 1; box-shadow: 0 8px 24px var(--v5-card-shadow); box-sizing: border-box; }
+.C_qrframe { background: var(--v5-qr-paper); padding: 12px; border-radius: 20px; width: min(86vw, 340px); aspect-ratio: 1 / 1; box-shadow: 0 8px 24px var(--v5-card-shadow); box-sizing: border-box; }
 .C_qrframe svg { width: 100%; height: 100%; display: block; }
 .C_actions { justify-content: center; }
 .C_fallback { border: 1px solid var(--v5-line); border-radius: var(--v5-r-field); padding: 0 14px; }

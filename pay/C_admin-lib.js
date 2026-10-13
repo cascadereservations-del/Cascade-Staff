@@ -22,7 +22,12 @@
     switch (r) {
       case 'not_authorized': return 'Paying staff is for the owner, admin and finance.';
       case 'not_paying': return 'This request is not being paid right now. Open it from the list again.';
-      case 'not_open': return 'This request is already closed.';
+      case 'not_open': return res.status === 'paying' ? 'Someone else is already paying this one.' : 'This request is already closed.';
+      case 'being_paid': return (res.paying_by_name || 'Someone') + ' is paying this now.';
+      case 'not_yours': return 'Only the person who started paying can stop it.';
+      case 'not_your_payment': return 'Someone else is paying this one now, so you cannot mark it paid.';
+      case 'money_may_be_sent': return 'They have already said the money was sent, so it cannot be taken over. Check with them.';
+      case 'sha_mismatch': return 'The screenshot changed after it was uploaded, so nothing was marked paid. Add it again.';
       case 'not_found': return 'That request no longer exists.';
       case 'bad_proof': return 'The screenshot, the amount or the reference is missing or not valid. Check all three and try again.';
       case 'no_stored_proof': return 'The screenshot did not finish uploading, so nothing was marked paid. Add it again.';

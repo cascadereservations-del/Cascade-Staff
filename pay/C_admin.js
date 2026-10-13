@@ -20,7 +20,7 @@
   function demoClient() {
     var list = [{ id: 'demo-1', ref: 'DEMO0001', status: 'requested', payee_name: 'Honey', total: 1235, created_at: '2026-10-13T02:00:00Z', has_qr: true, lines: [{ kind: 'clean', date: '2026-10-10', type: 'turnover', amount: 500 }, { kind: 'clean', date: '2026-10-12', type: 'deep_clean', amount: 735 }] }];
     return {
-      auth: { getSession: function () { return Promise.resolve({ data: { session: { access_token: 'demo' } } }); } },
+      auth: { getSession: function () { return Promise.resolve({ data: { session: { access_token: 'demo', user: { id: 'demo-me' } } } }); } },
       rpc: function (name, a) {
         if (name === 'staff_pay_admin_list_v1') return Promise.resolve({ data: { ok: true, requests: list }, error: null });
         if (name === 'staff_pay_payout_qr_v1') return Promise.resolve({ data: { ok: true, id: a.p_request_id, ref: 'DEMO0001', status: 'requested', payee_name: 'Honey', total: 1235, payout_qrph: DEMO_STATIC }, error: null });
@@ -33,7 +33,7 @@
   if (!DEMO && !window.supabase) { root.innerHTML = shell('Pay staff', '<div class="errbox">' + ICON('alert') + '<span>Live information needs a connection. Open the app again when you have signal.</span></div>'); return; }
   var sb = DEMO ? demoClient() : window.supabase.createClient(CFG.url, CFG.key, { auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: false } });
 
-  var S = { view: 'list', list: null, loadErr: '', req: null, qr: null, noQr: false, showStatic: false, form: { file: null, amount: '', reference: '', override: false, uploaded: null }, busy: false, msg: '', msgOk: false, copied: '' };
+  var S = { me: null, listMsg: '', confirmTake: '', view: 'list', list: null, loadErr: '', req: null, qr: null, noQr: false, showStatic: false, form: { file: null, amount: '', reference: '', override: false, uploaded: null }, busy: false, msg: '', msgOk: false, copied: '' };
 
   function shell(title, inner, back) {
     return '<header class="appbar"><a class="iconbtn" href="' + (back || '../#home') + '" aria-label="Back">' + ICON('back', 's24') + '</a><h1 class="ttl">' + esc(title) + '</h1></header><div class="screen">' + inner + '</div>' +
@@ -41,7 +41,7 @@
       '<a class="tab" href="../#tasks"><span class="ico">' + ICON('tasks', 's24') + '</span>Tasks</a><a class="tab" href="../#more"><span class="ico">' + ICON('more', 's24') + '</span>More</a></nav>';
   }
   function net() { return (DEMO ? function () { return Promise.resolve({ json: function () { return Promise.resolve({ ok: true, path: 'demo/path' }); } }); } : window.fetch).apply(window, arguments); }
-  function token() { return sb.auth.getSession().then(function (s) { var t = s.data && s.data.session && s.data.session.access_token; if (!t) throw new Error('signin'); return t; }); }
+  function token() { return sb.auth.getSession().then(function (s) { var t = s.data && s.data.session && s.data.session.access_token; if (!t) throw new Error('signin'); S.me = (s.data.session.user && s.data.session.user.id) || S.me; return t; }); }
   function clearSecrets() { S.qr = null; S.noQr = false; S.showStatic = false; }
 
   // ---------------------------------------------------------------- list
@@ -53,8 +53,18 @@
       S.loadErr = ''; S.list = d.requests || [];
     }).catch(function (e) { S.loadErr = e && e.message === 'signin' ? 'signin' : 'offline'; });
   }
+  // Who may press Pay: a requested row, or a paying row this signed-in person started. Anyone else's (or Telegram's) paying row has no Pay button.
+  function theirs(r) { return r.status === 'paying' && !(S.me && r.paying_by_user_id === S.me); }
   function row(r) {
-    var st = A.status(r), open = r.status === 'requested' || r.status === 'paying';
+    var st = A.status(r), open = (r.status === 'requested' || r.status === 'paying') && !theirs(r), other = theirs(r), who = r.paying_by_name || 'Someone';
+    if (other) {
+      return '<div class="rowi C_row" style="cursor:default"><span class="lead">' + ICON('cash') + '</span><span class="mid"><span class="t">' + esc(r.payee_name) + ' · <span class="num">' + esc(P.peso(r.total)) + '</span></span>' +
+        '<span class="s num">Ref ' + esc(r.ref) + '</span></span></div>' +
+        '<div class="C_rowstatus"><span class="pill p-info">' + ICON('info', 's16') + esc(who) + ' is paying this now.</span>' +
+        (S.confirmTake === r.id
+          ? '<p class="help" role="alert">Check with ' + esc(who) + ' first. Only one person should send the money.</p><div class="row-wrap"><button class="btn btn-primary btn-sm" type="button" data-act="takeover" data-id="' + esc(r.id) + '">Yes, I am paying it</button><button class="btn btn-ghost btn-sm" type="button" data-act="takecancel">Cancel</button></div>'
+          : '<div class="row-wrap"><button class="btn btn-secondary btn-sm" type="button" data-act="takeover-ask" data-id="' + esc(r.id) + '">I am paying it instead</button></div>') + '</div>';
+    }
     return '<div class="rowi C_row" style="cursor:default"><span class="lead">' + ICON('cash') + '</span><span class="mid"><span class="t">' + esc(r.payee_name) + ' · <span class="num">' + esc(P.peso(r.total)) + '</span></span>' +
       '<span class="s num">Ref ' + esc(r.ref) + (r.created_at ? ' · sent ' + esc(P.shortDate(r.created_at)) : '') + '</span></span>' +
       (open ? '<button class="btn btn-primary btn-sm" type="button" data-act="pay" data-id="' + esc(r.id) + '">Pay</button>' : '<span class="pill p-' + st.tone + '">' + ICON(st.glyph, 's16') + esc(st.label) + '</span>') + '</div>' +
@@ -62,7 +72,7 @@
   }
   function renderList() {
     var open = (S.list || []).filter(function (r) { return r.status === 'requested' || r.status === 'paying'; }), paid = (S.list || []).filter(function (r) { return r.status === 'paid'; });
-    var inner = '<div class="stack">' +
+    var inner = '<div class="stack">' + (S.listMsg ? '<div class="errbox" role="alert">' + ICON('alert') + '<span>' + esc(S.listMsg) + '</span></div>' : '') +
       (open.length ? '<div><div class="cap up" style="margin-bottom:6px">Waiting to be paid</div><div class="card list">' + open.map(row).join('') + '</div></div>'
         : '<div class="card empty"><div class="disc">' + ICON('checks') + '</div><h2 class="hd">Nothing to pay</h2><p>Requests from the cleaning team show here.</p></div>') +
       (paid.length ? '<div><div class="cap up" style="margin-bottom:6px">Paid in the last 14 days</div><div class="card list">' + paid.map(row).join('') + '</div></div>' : '') + '</div>';
@@ -71,19 +81,33 @@
 
   // ---------------------------------------------------------------- pay one request
   function openPay(id) {
-    var r = (S.list || []).filter(function (x) { return x.id === id; })[0]; if (!r) return;
-    S.req = r; S.view = 'pay'; S.msg = ''; S.copied = ''; S.form = { file: null, amount: String(A.copyAmount(r.total)), reference: '', override: false, uploaded: null }; clearSecrets();
+    var r = (S.list || []).filter(function (x) { return x.id === id; })[0]; if (!r || theirs(r)) return;
+    S.listMsg = ''; S.req = r; S.view = 'pay'; S.msg = ''; S.copied = ''; S.form = { file: null, amount: String(A.copyAmount(r.total)), reference: '', override: false, uploaded: null }; clearSecrets();
     root.innerHTML = shell('Pay ' + r.payee_name, '<div class="skel" style="height:320px;margin-top:16px"></div>', '#back');
-    return sb.rpc('staff_pay_payout_qr_v1', { p_request_id: id }).then(function (res) {
-      var d = res.data;
-      if (res.error || !d || d.ok === false) { S.msg = A.refusal(d || { reason: A.isAbsent(res.error) ? 'unknown' : 'offline' }); S.msgOk = false; return null; }
-      if (d.payout_qrph) { try { S.qr = A.qrs(d.payout_qrph, d.total); S.qr.total = d.total; } catch (e) { S.qr = null; S.noQr = true; S.msg = 'The saved QR could not be read, so use the account you usually pay.'; } }
-      else S.noQr = true;
-      d.payout_qrph = null; // not kept on the response either
-      return d;
-    }).then(function (d) {
-      if (d && S.req.status === 'requested') return sb.rpc('staff_pay_admin_step_v1', { p_request_id: id, p_step: 'pay' }).then(function (s) { if (s.data && s.data.ok) S.req.status = 'paying'; });
-    }).then(function () { renderPay(); }).catch(function () { S.msg = A.refusal({ reason: 'offline' }); renderPay(); });
+    // Claim the payment FIRST. If the server says someone else has it, nothing is drawn: no QR, no Mark as paid.
+    function backToList(res) { S.listMsg = A.refusal(res); S.view = 'list'; clearSecrets(); return loadList().then(render); }
+    return sb.rpc('staff_pay_admin_step_v1', { p_request_id: id, p_step: 'pay' }).then(function (s) {
+      var d = s.data;
+      if (s.error || !d || d.ok === false) return backToList(d || { reason: 'offline' });
+      S.req.status = 'paying'; S.req.paying_by_user_id = d.paying_by_user_id || S.me;
+      return sb.rpc('staff_pay_payout_qr_v1', { p_request_id: id }).then(function (res) {
+        var q = res.data;
+        if (res.error || !q || q.ok === false) return backToList(q || { reason: A.isAbsent(res.error) ? 'unknown' : 'offline' });
+        if (q.payout_qrph) { try { S.qr = A.qrs(q.payout_qrph, q.total); S.qr.total = q.total; } catch (e) { S.qr = null; S.noQr = true; S.msg = 'The saved QR could not be read, so use the account you usually pay.'; } }
+        else S.noQr = true;
+        q.payout_qrph = null; // not kept on the response either
+        renderPay();
+      });
+    }).catch(function () { S.msg = A.refusal({ reason: 'offline' }); renderPay(); });
+  }
+  function takeOver(id) {
+    S.confirmTake = '';
+    return sb.rpc('staff_pay_admin_step_v1', { p_request_id: id, p_step: 'takeover' }).then(function (s) {
+      var d = s.data;
+      if (s.error || !d || d.ok === false) { S.listMsg = A.refusal(d || { reason: 'offline' }); return loadList().then(render); }
+      var r = (S.list || []).filter(function (x) { return x.id === id; })[0]; if (r) { r.paying_by_user_id = S.me; r.status = 'paying'; }
+      S.listMsg = ''; return openPay(id);
+    }).catch(function () { S.listMsg = A.refusal({ reason: 'offline' }); render(); });
   }
   function bankLink() { return BANK_PAGE + '?app=' + encodeURIComponent(FIRST_APP); }
   function renderPay() {
@@ -143,7 +167,7 @@
     return toJpegBlob(file).then(function (blob) {
       return blob.arrayBuffer().then(function (buf) { return A.sha256Hex(buf).then(function (sha) {
         return net(CFG.url + '/functions/v1/upload-photo', { method: 'POST', headers: { Authorization: 'Bearer ' + tok, apikey: CFG.key, 'Content-Type': 'image/jpeg', 'x-cascade-file-name': 'payment-proof.jpg', 'x-cascade-property-id': CFG.propertyId, 'x-cascade-submission-id': key }, body: blob })
-          .then(function (r) { return r.json(); }).then(function (j) { if (!j || !j.ok || !j.path) throw new Error('upload'); S.form.uploaded = { path: j.path, sha256: sha }; return S.form.uploaded; });
+          .then(function (r) { return r.json(); }).then(function (j) { if (!j || !j.ok || !j.path) throw new Error('upload'); S.form.uploaded = { path: j.path, sha256: j.sha256 || sha }; return S.form.uploaded; });
       }); });
     });
   }
@@ -191,7 +215,7 @@
     var id = S.req.id;
     clearSecrets();
     var go = function () { S.view = 'list'; return loadList().then(renderList); };
-    if (S.req.status === 'paying') return sb.rpc('staff_pay_admin_step_v1', { p_request_id: id, p_step: 'not_sent' }).then(go, go);
+    if (S.req.status === 'paying') return sb.rpc('staff_pay_admin_step_v1', { p_request_id: id, p_step: 'not_sent' }).then(function (s) { if (s.data && s.data.ok === false) S.listMsg = A.refusal(s.data); return go(); }, go);
     return go();
   }
 
@@ -207,6 +231,9 @@
     var t = ev.target.closest('[data-act]'); if (!t) return;
     var a = t.getAttribute('data-act');
     if (a === 'pay') openPay(t.getAttribute('data-id'));
+    else if (a === 'takeover-ask') { S.confirmTake = t.getAttribute('data-id'); renderList(); }
+    else if (a === 'takecancel') { S.confirmTake = ''; renderList(); }
+    else if (a === 'takeover') takeOver(t.getAttribute('data-id'));
     else if (a === 'copyamt') copy(A.copyAmount(S.req.total), 'Amount');
     else if (a === 'copyref') copy('CASCADE-' + S.req.ref, 'Reference');
     else if (a === 'saveqr') saveQr();

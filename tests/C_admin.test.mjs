@@ -32,7 +32,7 @@ function boot(handlers = {}) {
     },
     fetch: async (url, init) => { fetches.push({ url, init }); return { json: async () => (handlers.fetch ? handlers.fetch(url, init) : { ok: true, path: `${PROP}/c5100000-0000-4000-8000-0000000000a3/sub/shot.jpg` }) }; },
     supabase: { createClient: () => ({
-      auth: { getSession: async () => ({ data: { session: { access_token: 'tok' } } }) },
+      auth: { getSession: async () => ({ data: { session: { access_token: 'tok', user: { id: 'me-1' } } } }) },
       rpc: async (name, args) => { rpcs.push([name, args]); return (handlers.rpc && handlers.rpc(name, args)) || { data: null, error: { code: 'PGRST202' } }; },
     }) },
   };
@@ -66,7 +66,7 @@ test('list: one list call, the open request with a Pay button, and the signed-in
 test('Pay: reads the QR for that request, marks it paying, draws the amount QR big with Save, Open bank app and the fallback; the payload never reaches the page text or any storage', async () => {
   const b = boot(happy()); await tick();
   await fire(b.root, 'click', { target: target({ 'data-act': 'pay', 'data-id': 'req1' }) }); await tick();
-  assert.deepEqual(plain(b.rpcs.slice(1)), [['staff_pay_payout_qr_v1', { p_request_id: 'req1' }], ['staff_pay_admin_step_v1', { p_request_id: 'req1', p_step: 'pay' }]]);
+  assert.deepEqual(plain(b.rpcs.slice(1)), [['staff_pay_admin_step_v1', { p_request_id: 'req1', p_step: 'pay' }], ['staff_pay_payout_qr_v1', { p_request_id: 'req1' }]], 'the payment is claimed first, then the QR is read');
   const h = b.root.innerHTML;
   assert.match(h, /<svg [^>]*viewBox="0 0 \d+ \d+"/); assert.match(h, /C_qrframe/);
   assert.match(h, /C_amount num">₱500</); assert.match(h, /Save QR to phone/); assert.match(h, /Open bank app/); assert.match(h, /href="bank\.html\?app=bpi"/);
@@ -157,4 +157,84 @@ test('lib: ready needs all three, proof keys, copy amount, sha256, the status wo
   assert.equal(A.copyAmount(1235), '1235'); assert.equal(A.copyAmount(1235.5), '1235.50');
   assert.equal(await A.sha256Hex(new TextEncoder().encode('abc').buffer), 'ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad');
   assert.deepEqual(A.status({ status: 'paying', paying_by_name: 'Marifel' }), { label: 'Being paid by Marifel', tone: 'info', glyph: 'info' });
+});
+
+// ---- H1: two admins must never both pay the same request
+const ROWS = [
+  { ...REQ, id: 'rq', ref: 'REQ00001', payee_name: 'Reqy' },
+  { ...REQ, id: 'own', ref: 'OWN00002', payee_name: 'Owny', status: 'paying', paying_by_name: 'Me', paying_by_user_id: 'me-1' },
+  { ...REQ, id: 'oth', ref: 'OTH00003', payee_name: 'Othy', status: 'paying', paying_by_name: 'Marifel', paying_by_user_id: 'admin-2' },
+  { ...REQ, id: 'tg', ref: 'TGG00004', payee_name: 'Telly', status: 'paying', paying_by_name: 'Lloyd', paying_by_user_id: null },
+];
+const multi = (over = {}) => happy({ staff_pay_admin_list_v1: { data: { ok: true, requests: ROWS.map((r) => ({ ...r })) }, error: null }, ...over });
+
+test('H1 list: Pay only on requested rows and on paying rows this person started; another admin\'s or Telegram\'s payment shows who, with no Pay button', async () => {
+  const b = boot(multi()); await tick();
+  const h = b.root.innerHTML;
+  assert.match(h, /data-act="pay" data-id="rq"/); assert.match(h, /data-act="pay" data-id="own"/);
+  assert.doesNotMatch(h, /data-act="pay" data-id="oth"/); assert.doesNotMatch(h, /data-act="pay" data-id="tg"/);
+  assert.match(h, /Marifel is paying this now\./); assert.match(h, /Lloyd is paying this now\./);
+  assert.equal((h.match(/I am paying it instead/g) || []).length, 2); assert.match(h, /data-act="takeover-ask" data-id="oth"/);
+  // a stale click on their row does nothing
+  await fire(b.root, 'click', { target: target({ 'data-act': 'pay', 'data-id': 'oth' }) }); await tick();
+  assert.equal(b.rpcs.filter((r) => r[0] !== 'staff_pay_admin_list_v1').length, 0, 'no step, no QR for a row somebody else is paying');
+});
+
+test('H1 take-over: asks first with the exact warning; Cancel changes nothing; Yes calls the takeover step, then pays and reads the QR', async () => {
+  const b = boot(multi()); await tick();
+  await fire(b.root, 'click', { target: target({ 'data-act': 'takeover-ask', 'data-id': 'oth' }) });
+  assert.match(b.root.innerHTML, /Check with Marifel first\. Only one person should send the money\./); assert.match(b.root.innerHTML, /Yes, I am paying it/);
+  assert.equal(b.rpcs.filter((r) => r[0] === 'staff_pay_admin_step_v1').length, 0);
+  await fire(b.root, 'click', { target: target({ 'data-act': 'takecancel' }) });
+  assert.doesNotMatch(b.root.innerHTML, /Check with Marifel first/); assert.match(b.root.innerHTML, /I am paying it instead/);
+  await fire(b.root, 'click', { target: target({ 'data-act': 'takeover-ask', 'data-id': 'tg' }) });
+  assert.match(b.root.innerHTML, /Check with Lloyd first/);
+  await fire(b.root, 'click', { target: target({ 'data-act': 'takeover', 'data-id': 'oth' }) });
+  await until(() => /<svg [^>]*role="img"/.test(b.root.innerHTML), 'pay view');
+  assert.deepEqual(plain(b.rpcs.slice(1).map((r) => [r[0], r[1].p_step || null])), [['staff_pay_admin_step_v1', 'takeover'], ['staff_pay_admin_step_v1', 'pay'], ['staff_pay_payout_qr_v1', null]]);
+});
+
+test('H1 refusals never draw the QR: a not_open answer to Pay, a being_paid answer to the QR, a refused take-over', async () => {
+  const a = boot(multi({ staff_pay_admin_step_v1: { data: { ok: false, reason: 'not_open', status: 'paying' }, error: null } })); await tick();
+  await fire(a.root, 'click', { target: target({ 'data-act': 'pay', 'data-id': 'rq' }) }); await until(() => /Someone else is already paying this one\./.test(a.root.innerHTML), 'refusal');
+  assert.doesNotMatch(a.root.innerHTML, /<svg [^>]*role="img"/); assert.doesNotMatch(a.root.innerHTML, /Mark as paid/);
+  assert.ok(!a.rpcs.some((r) => r[0] === 'staff_pay_payout_qr_v1'), 'the QR is not even requested');
+  const b = boot(multi({ staff_pay_payout_qr_v1: { data: { ok: false, reason: 'being_paid', paying_by_name: 'Marifel' }, error: null } })); await tick();
+  await fire(b.root, 'click', { target: target({ 'data-act': 'pay', 'data-id': 'rq' }) }); await until(() => /Marifel is paying this now\./.test(b.root.innerHTML), 'refusal');
+  assert.doesNotMatch(b.root.innerHTML, /<svg [^>]*role="img"/); assert.doesNotMatch(b.root.innerHTML, /Mark as paid/);
+  const c = boot(multi({ staff_pay_admin_step_v1: { data: { ok: false, reason: 'money_may_be_sent' }, error: null } })); await tick();
+  await fire(c.root, 'click', { target: target({ 'data-act': 'takeover', 'data-id': 'oth' }) }); await until(() => /already said the money was sent/.test(c.root.innerHTML), 'refusal');
+  assert.doesNotMatch(c.root.innerHTML, /<svg [^>]*role="img"/);
+});
+
+test('H1: a refusal from the server on my own paying row goes back to the list with the sentence and no QR', async () => {
+  const c = boot(multi({ staff_pay_admin_step_v1: { data: { ok: false, reason: 'not_yours' }, error: null } })); await tick();
+  await fire(c.root, 'click', { target: target({ 'data-act': 'pay', 'data-id': 'own' }) });
+  await until(() => /Only the person who started paying can stop it\./.test(c.root.innerHTML), 'refusal');
+  // opening my own paying row asks the server again; a refusal there goes back to the list with the sentence and no QR
+  assert.doesNotMatch(c.root.innerHTML, /<svg [^>]*role="img"/);
+});
+
+test('M5 lost answer: the first settle fails on the network, the retry answers ok replay, and the screen is Done (never "not being paid")', async () => {
+  let n = 0;
+  const c = boot({ rpc: (name) => { if (name === 'staff_pay_admin_settle_v1') { if (++n === 1) throw new Error('network lost'); return { data: { ok: true, replay: true, status: 'paid', ref: 'ABCD1234' }, error: null }; } return happy().rpc(name); } }); await tick();
+  await fire(c.root, 'click', { target: target({ 'data-act': 'pay', 'data-id': 'req1' }) }); await tick();
+  await fire(c.root, 'change', { target: { id: 'C_file', files: [{ name: 'shot.png' }] } }); await fire(c.root, 'input', { target: { id: 'C_ref', value: 'ref12345' } });
+  await fire(c.root, 'click', { target: target({ 'data-act': 'settle' }) }); await until(() => /nothing was marked paid/.test(c.root.innerHTML), 'first failure');
+  await fire(c.root, 'click', { target: target({ 'data-act': 'settle' }) }); await until(() => /Marked paid/.test(c.root.innerHTML), 'done');
+  assert.doesNotMatch(c.root.innerHTML, /not being paid/);
+  assert.equal(c.fetches.filter((f) => /upload-photo$/.test(f.url)).length, 1, 'the retry reuses the stored screenshot');
+});
+
+test('the upload response sha256 (the server\'s own figure) is what is sent to the settle', async () => {
+  const c = boot({ rpc: happy().rpc, fetch: () => ({ ok: true, path: PROP + '/u/s/x.jpg', sha256: 'f'.repeat(64) }) }); await tick();
+  await fire(c.root, 'click', { target: target({ 'data-act': 'pay', 'data-id': 'req1' }) }); await tick();
+  await fire(c.root, 'change', { target: { id: 'C_file', files: [{ name: 'shot.png' }] } }); await fire(c.root, 'input', { target: { id: 'C_ref', value: 'ref12345' } });
+  await fire(c.root, 'click', { target: target({ 'data-act': 'settle' }) }); await until(() => /Marked paid/.test(c.root.innerHTML), 'done');
+  assert.equal(plain(c.rpcs.find((r) => r[0] === 'staff_pay_admin_settle_v1'))[1].p_proof.sha256, 'f'.repeat(64));
+});
+
+test('refusal sentences for the new reasons are plain', () => {
+  for (const [res, re] of [[{ reason: 'being_paid', paying_by_name: 'Marifel' }, /^Marifel is paying this now\.$/], [{ reason: 'not_open', status: 'paying' }, /Someone else is already paying/], [{ reason: 'not_open', status: 'paid' }, /already closed/],
+    [{ reason: 'not_yours' }, /Only the person who started/], [{ reason: 'not_your_payment' }, /cannot mark it paid/], [{ reason: 'sha_mismatch' }, /changed after it was uploaded/]]) assert.match(A.refusal(res), re);
 });
