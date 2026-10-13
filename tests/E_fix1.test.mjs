@@ -22,7 +22,7 @@ test('E_fix F1: a fast flick commits only past a 48 px floor and only the way th
 test('E_fix F1: in the app a 13 px flick on a task row does nothing, and a 60 px flick still marks it done', async () => {
   const app = await boot({ role: 'admin', hash: '#tasks', handlers: baseHandlers('admin', { tasks_list_v1: tasksOf([T({})], true), task_set_done_v1: () => ({ error: null, data: { ok: true } }) }) });
   const row = () => surf({ getAttribute: (k) => ({ 'data-task': 'follow_up_tasks:a', 'data-E-swipe': 'task-done', 'data-E-w': '96' })[k] ?? null });
-  drive(app, row(), [[0, 330, 200], [10, 322, 200], [20, 317, 200]], (s, el) => (s === '.taskrow[data-E-swipe]' ? el : null)); await app.flush();
+  drive(app, row(), [[0, 330, 200], [4, 322, 200], [8, 317, 200], [12, 317, 200]], (s, el) => (s === '.taskrow[data-E-swipe]' ? el : null)); await app.flush();
   assert.equal(app.calls.filter((c) => c[0] === 'task_set_done_v1').length, 0, 'a 13 px flick is not a swipe');
   drive(app, row(), [[100, 330, 200], [130, 310, 200], [160, 270, 200], [170, 270, 200]], (s, el) => (s === '.taskrow[data-E-swipe]' ? el : null)); await app.flush();
   assert.equal(app.calls.filter((c) => c[0] === 'task_set_done_v1').length, 1);
