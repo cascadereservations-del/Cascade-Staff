@@ -37,7 +37,7 @@ function load({ storage, onLine = true } = {}) {
   const store = {};
   const ls = { getItem: (k) => { touched.push(k); return k in store ? store[k] : null; }, setItem: (k, v) => { touched.push(k); store[k] = String(v); } };
   const win = {};
-  const ctx = { window: win, localStorage: storage === null ? undefined : ls, navigator: { onLine }, Intl, Date, Promise, JSON, Math, console, setTimeout, Uint8Array,
+  const ctx = { window: win, localStorage: storage === null ? undefined : ls, navigator: { onLine }, Intl, Date, Promise, JSON, Math, console, setTimeout, clearTimeout, Uint8Array,
     document: { visibilityState: 'visible', listeners: {}, addEventListener(t, f) { (this.listeners[t] ||= []).push(f); }, removeEventListener(t, f) { this.listeners[t] = (this.listeners[t] || []).filter((x) => x !== f); } },
     history: { replaceState() {} } };
   vm.createContext(ctx);
@@ -111,7 +111,7 @@ test('N guard: no duplicate top-level function or var names, and nothing leaks t
   assert.equal(new Set(names).size, names.length, 'duplicate function: ' + names.filter((n, i) => names.indexOf(n) !== i));
   assert.equal(new Set(vars).size, vars.length, 'duplicate var: ' + vars.filter((n, i) => vars.indexOf(n) !== i));
   const { ctx } = load();
-  const leaked = Object.keys(ctx).filter((k) => !['window', 'localStorage', 'navigator', 'Intl', 'Date', 'Promise', 'JSON', 'Math', 'console', 'setTimeout', 'Uint8Array', 'document', 'history'].includes(k));
+  const leaked = Object.keys(ctx).filter((k) => !['window', 'localStorage', 'navigator', 'Intl', 'Date', 'Promise', 'JSON', 'Math', 'console', 'setTimeout', 'clearTimeout', 'Uint8Array', 'document', 'history'].includes(k));
   assert.deepEqual(leaked, []);
   assert.deepEqual(Object.keys(ctx.window), ['N_Manage']);
   assert.ok(!/\bapp\.js\b|sw\.js/.test(CSS));
@@ -522,4 +522,16 @@ test('N review wording: each review step says what happens next, as the SQL does
   const d = await boot({}); await declineReviewed(d);
   assert.match(d.text(), /The booking and its calendar entry are cancelled, and its income row is voided\. The guest is not messaged from here\./);
   const e = await boot({}); await openExpense(e); await e.type('amount', '5'); await e.type('notes', 'x'); await e.click('ex-review'); assert.match(e.text(), /It is counted in the books at once\./);
+});
+
+test('N timeout: a hung write settles as a dropped connection after the limit, keeps the key, frees the sheet; a late answer is ignored', async () => {
+  let late; const hang = new Promise((r) => { late = r; });
+  const t = await boot({ handlers: { staff_confirm_direct_booking_v1: () => hang } });
+  t.M._setRpcTimeout(25);
+  await reviewed(t); await t.click('cf-send'); assert.match(t.html(), /data-n="cf-send"[^>]*disabled/);
+  await new Promise((r) => setTimeout(r, 80)); await tick();
+  assert.match(t.text(), /dropped before an answer came\. Tap again; a repeat is safe/); assert.ok(!/data-n="cf-send"[^>]*disabled/.test(t.html()));
+  late(REPLY.confirmed); await tick(); assert.equal(t.toasts.length, 0, 'a late answer after the timeout changes nothing');
+  await t.click('cf-send'); const ks = t.sent('staff_confirm_direct_booking_v1').map((c) => c[1].p_idempotency_key); assert.equal(ks.length, 2); assert.equal(ks[0], ks[1], 'same key on the repeat');
+  t.M._setRpcTimeout(30000);
 });

@@ -256,9 +256,17 @@
   function online() { try { return !(typeof navigator !== 'undefined' && navigator.onLine === false); } catch (e) { return true; } }
 
   // one RPC call with the exact name and argument keys; resolves {data,error} and never throws
+  var RPC_TIMEOUT_MS = 30000;
+  // A hung request must not keep a sheet busy for ever: after 30 s it settles as a dropped connection (a late answer is ignored).
   function callRpc(name, args) {
-    try { return Promise.resolve(S.client.rpc(name, args)).then(function (r) { return r || { data: null, error: null }; }, function (e) { return { data: null, error: e || { message: 'failed to fetch' } }; }); }
-    catch (e) { return Promise.resolve({ data: null, error: e }); }
+    var st = S;
+    return new Promise(function (resolve) {
+      var done = false, t = setTimeout(function () { fin({ data: null, error: { message: 'timeout' } }); }, RPC_TIMEOUT_MS);
+      st.timers = st.timers || []; st.timers.push(t);
+      function fin(r) { if (done) return; done = true; clearTimeout(t); resolve(r); }
+      try { Promise.resolve(st.client.rpc(name, args)).then(function (r) { fin(r || { data: null, error: null }); }, function (e) { fin({ data: null, error: e || { message: 'failed to fetch' } }); }); }
+      catch (e) { fin({ data: null, error: e }); }
+    });
   }
 
   function setTab(t, replace) {
@@ -625,11 +633,13 @@
     if (!S) return;
     try { S.el.removeEventListener && S.el.removeEventListener('click', S.onClick); S.el.removeEventListener && S.el.removeEventListener('input', S.onInput); S.el.removeEventListener && S.el.removeEventListener('change', S.onInput); } catch (e) { /* ok */ }
     try { if (typeof document !== 'undefined' && document.removeEventListener) document.removeEventListener('visibilitychange', S.onVis); } catch (e) { /* ok */ }
+    (S.timers || []).forEach(function (t) { clearTimeout(t); });
     N_gen++; S = null; // a late reply finds no state and is dropped
   }
 
   var api = {
     mount: mount, unmount: unmount,
+    _setRpcTimeout: function (ms) { RPC_TIMEOUT_MS = ms; },
     _setClock: function (fn) { clock = fn || function () { return Date.now(); }; },
     lib: { canManage: canManage, manilaToday: manilaToday, addDays: addDays, nightsBetween: nightsBetween, fmtDate: fmtDate, fmtDateTime: fmtDateTime, toCentavos: toCentavos, fromCentavos: fromCentavos, formatPHP: formatPHP, formatPercent: formatPercent, formatNumber: formatNumber,
       formatMetricValue: formatMetricValue, parseAmount: parseAmount, periodPreset: periodPreset, comparablePeriod: comparablePeriod, compareMode: compareMode, pctDelta: pctDelta, fmtDeltaPct: fmtDeltaPct, deltaLine: deltaLine,
