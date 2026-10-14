@@ -373,6 +373,7 @@
     if (a.kind === 'create') return renderCreate(a);
     var it = itemOf(a); if (!it) return null;
     var v = a.vals || {}, m = M.role, h;
+    if (a.kind === 'low') return head('Tell the owner ' + it.name + ' is running low?') + '<form data-i-form><p class="I_conf">It goes on the shopping list for ' + esc(fmt(lowQty(it)) + ' ' + (it.purchaseUnit || unitOf(it))) + '.</p>' + actions(a, 'Yes, tell them') + '</form>';
     if (a.kind === 'link') return head('Link code ' + shortCode(a.code) + ' to ' + it.name + '?') + '<form data-i-form><p class="I_conf">Scanning this code will open ' + esc(it.name) + '.</p>' + actions(a, 'Yes, link it') + '</form>';
     if (a.kind === 'menu') {
       var info = M.itemInfo[it.id], shopN = (K.shop || []).filter(function (r) { return r.itemId === it.id; }).length, cover = it.cover != null ? fmt(it.cover) + ' days' : it.coverEst != null ? 'about ' + fmt(it.coverEst) + ' days (an estimate)' : '';
@@ -482,7 +483,8 @@
   // The action buttons of the item card. A scanned card puts the most useful action for the role first (owner/admin count, finance price, cleaner shopping list).
   function menuButtons(it, a) {
     var m = M.role, b = function (kind, text, primary, act) { return '<button class="btn ' + (primary ? 'btn-primary' : 'btn-secondary') + ' btn-block" type="button" data-act="' + (act || 'begin') + '" data-kind="' + kind + '">' + text + '</button>'; };
-    var list = [];
+    var list = [], listed = (K.shop || []).some(function (r) { return r.itemId === it.id; });
+    if (allowed('low')) list.push(listed ? ['lowdone', 0, ''] : ['low', canManage(m) ? 0 : 1, 'Running low']);
     if (allowed('count')) list.push(['count', 1, 'Count it']);
     if (allowed('used')) list.push(['used', 1, 'Used some']);
     if (allowed('price')) list.push(['price', 0, 'Change price']);
@@ -491,8 +493,14 @@
     if (allowed('levels')) list.push(['levels', 0, 'Edit levels']);
     if (allowed('link')) list.push(['link', 0, 'Link a barcode']);
     if (allowed('shop')) list.push(['shop', 0, 'Add to shopping list']);
-    if (a && a.scanned) { var want = canManage(m) ? 'count' : canPrice(m) ? 'price' : 'shop', at = -1; list.forEach(function (x, i) { if (x[0] === want) at = i; }); if (at >= 0) { list.unshift(list.splice(at, 1)[0]); list.forEach(function (y, i) { y[1] = i === 0 ? 1 : 0; }); } }
-    return list.map(function (x) { return x[0] === 'admin' ? x[2] : x[0] === 'link' ? b('link', x[2], 0, 'begin-link') : b(x[0], x[2], x[1]); }).join('');
+    if (a && a.scanned) { var want = canManage(m) ? 'count' : canPrice(m) ? 'price' : 'low', at = -1; list.forEach(function (x, i) { if (x[0] === want) at = i; }); if (at >= 0) { list.unshift(list.splice(at, 1)[0]); list.forEach(function (y, i) { y[1] = i === 0 ? 1 : 0; }); } }
+    return list.map(function (x) { return x[0] === 'lowdone' ? '<button class="btn btn-secondary btn-block" type="button" disabled><span aria-hidden="true">✓</span> On the shopping list</button>' : x[0] === 'admin' ? x[2] : x[0] === 'link' ? b('link', x[2], 0, 'begin-link') : b(x[0], x[2], x[1]); }).join('');
+  }
+  // Running low (s84 1b): the amount to buy back to par (or 2 x reorder level), in packs; 1 when it cannot be worked out.
+  function lowQty(it) {
+    var target = it.par != null ? it.par : it.reorder != null ? it.reorder * 2 : null;
+    if (target == null || it.qty == null) return 1;
+    return Math.max(1, Math.ceil(Math.max(target - it.qty, 0) / (it.perPack || 1)));
   }
   function renderShopSheet(a) {
     var r = (K.shop || []).filter(function (x) { return x.id === a.shopId; })[0]; if (!r) return null;
@@ -531,7 +539,7 @@
     if (act === 'pick') { if (a.phase !== 'pick' || !allowed('link')) return; M.act = { kind: 'link', step: 'confirm', pickId: attr(t, 'data-id'), code: a.code, format: a.format, mode: a.mode, fromPick: true }; drawLayer(); return; }
     if (act === 'rep-kind') { a.vals.rkind = attr(t, 'data-k'); a.bad = false; drawLayer(); return; }
     if (act === 'rep-to') { a.vals.to = attr(t, 'data-to') === 'finance' && canPrice(M.role) && !K.noFinance ? 'finance' : 'ops'; a.bad = false; drawLayer(); return; }
-    if (act === 'back') { if (/^(scan|link|create|report|undo)$/.test(a.kind)) return flowBack(a); if (a.kind === 'shopset') { a.kind = 'menu'; a.step = null; a.err = null; drawLayer(); } else if (a.fromShop && a.step !== 'confirm') { M.act = null; drawLayer(); } else if (a.step === 'confirm') { a.step = 'form'; a.err = null; drawLayer(); } else if (a.shopId) { a.kind = 'menu'; a.err = null; drawLayer(); } else { a.kind = 'menu'; a.vals = null; a.step = null; a.err = null; a.bad = false; drawLayer(); } return; }
+    if (act === 'back') { if (/^(scan|link|create|report|undo)$/.test(a.kind)) return flowBack(a); if (a.kind === 'shopset') { a.kind = 'menu'; a.step = null; a.err = null; drawLayer(); } else if (a.fromShop && a.step !== 'confirm') { M.act = null; drawLayer(); } else if (a.step === 'confirm' && a.kind !== 'low') { a.step = 'form'; a.err = null; drawLayer(); } else if (a.shopId) { a.kind = 'menu'; a.err = null; drawLayer(); } else { a.kind = 'menu'; a.vals = null; a.step = null; a.err = null; a.bad = false; drawLayer(); } return; }
     if (act === 'step') { a.vals = a.vals || {}; var f = attr(t, 'data-f'); a.vals[f] = stepQty(a.vals[f], +attr(t, 'data-d'), attr(t, 'data-z') === '1'); a.err = null; drawLayer(); var nb = q('[data-act="step"][data-f="' + f + '"][data-d="' + attr(t, 'data-d') + '"]'); if (nb && nb.focus) nb.focus(); return; }
     if (act === 'shop-bought') { var r = (K.shop || []).filter(function (x) { return x.id === a.shopId; })[0]; if (!r || !r.itemId || !allowed('recv', itemById(r.itemId))) return; M.act = { kind: 'recv', itemId: r.itemId, step: 'form', vals: { packs: fmt(r.qty || 1), supplier: '', cost: '', shopId: r.id }, fromShop: true }; drawLayer(); return; }
     if (act === 'shop-do') { var rr = (K.shop || []).filter(function (x) { return x.id === a.shopId; })[0]; if (!rr) return; a.kind = 'shopset'; a.status = attr(t, 'data-do'); a.step = 'confirm'; a.rowName = rr.name; drawLayer(); return; }
@@ -555,6 +563,7 @@
     if (kind === 'used') return I_FLAGS.usage && canUse(m) && !M.denied.used;
     if (kind === 'recv') return canManage(m) && !M.denied.recv && !(it && it.controlled);
     if (kind === 'shop') return !M.denied.shop;
+    if (kind === 'low') return !M.denied.low && !M.denied.shop && !(it && (K.shop || []).some(function (r) { return r.itemId === it.id; }));
     if (kind === 'price') return K.v84 && canPrice(m) && !M.denied.price;
     if (kind === 'levels') return K.v84 && canManage(m) && !M.denied.levels;
     if (kind === 'link') return K.v84 && canManage(m) && !M.denied.link;
@@ -565,8 +574,8 @@
   function begin(kind) {
     if (!allowed(kind, itemById(M.act.itemId))) return;
     var a = M.act, it = itemById(a.itemId), defaults = { count: { qty: it && it.qty != null ? fmt(it.qty) : '0', note: '' }, used: { qty: '1' }, recv: { packs: '1', supplier: '', cost: '' }, shop: { qty: '1', note: '' },
-      price: { cost: it && it.cost != null ? fmt(it.cost) : '' }, levels: { reorder: it && it.reorder != null ? fmt(it.reorder) : '', par: it && it.par != null ? fmt(it.par) : '' } };
-    a.kind = kind; a.step = 'form'; a.vals = defaults[kind]; a.err = null; a.bad = false; a.key = null; a.sig = null; a.focused = false; drawLayer();
+      low: {}, price: { cost: it && it.cost != null ? fmt(it.cost) : '' }, levels: { reorder: it && it.reorder != null ? fmt(it.reorder) : '', par: it && it.par != null ? fmt(it.par) : '' } };
+    a.kind = kind; a.step = kind === 'low' ? 'confirm' : 'form'; a.vals = defaults[kind]; a.err = null; a.bad = false; a.key = null; a.sig = null; a.focused = false; drawLayer();
   }
   function onInput(ev) {
     if (!M) return;
@@ -607,6 +616,7 @@
     if (a.kind === 'used') return usageCall(M.pid, it, a.vals, a.key, today);
     if (a.kind === 'recv') return receiptCall(it, a.vals, a.key, today);
     if (a.kind === 'shop') return shopAddCall(M.pid, it, a.vals, a.key);
+    if (a.kind === 'low') return shopAddCall(M.pid, it, { qty: fmt(lowQty(it)), note: 'Running low (from the staff app)' }, a.key);
     if (a.kind === 'undo') return a.entry.call;
     if (a.kind === 'link') return attachCall(M.pid, it, a.code, a.format);
     if (a.kind === 'price') return priceCall(it, a.vals);
@@ -617,10 +627,10 @@
     return shopSetCall(M.pid, r, a.status, a.key);
   }
   var DONE = { count: function (it) { return 'Counted. ' + it.name + ' is saved.'; }, used: function () { return 'Logged. Thank you.'; }, recv: function (it) { return 'Stock received for ' + it.name + '.'; }, shop: function () { return 'Added to the shopping list.'; }, shopset: function (it, a) { return a.status === 'approved' ? 'Approved.' : 'Removed from the list.'; },
-    undo: function () { return 'Undone.'; }, link: function (it) { return 'Linked. Scanning it now opens ' + it.name + '.'; }, price: function (it) { return 'Price saved for ' + it.name + '.'; }, levels: function (it) { return 'Levels saved for ' + it.name + '.'; },
+    undo: function () { return 'Undone.'; }, low: function () { return 'Passed on. Thank you.'; }, link: function (it) { return 'Linked. Scanning it now opens ' + it.name + '.'; }, price: function (it) { return 'Price saved for ' + it.name + '.'; }, levels: function (it) { return 'Levels saved for ' + it.name + '.'; },
     create: function (it, a) { return 'Added ' + String(a.vals.name).trim() + '.'; }, report: function (it, a) { return 'Sent to the ' + (a.vals.to === 'finance' ? 'Finance' : 'OPS') + ' group.'; } };
   function bodyOf(e) { try { return e && e.context && typeof e.context.json === 'function' ? Promise.resolve(e.context.json()).catch(function () { return null; }) : null; } catch (x) { return null; } }
-  var NEWK = { link: 1, price: 1, levels: 1, create: 1, report: 1, undo: 1 }; // actions that hide for the visit when the server says "not here"
+  var NEWK = { low: 1, link: 1, price: 1, levels: 1, create: 1, report: 1, undo: 1 }; // actions that hide for the visit when the server says "not here"
   function commit(a) {
     var me = M, it = itemOf(a) || { name: a.rowName || (a.entry && a.entry.name) || '' }, call = build(a), rep = a.kind === 'report', snap = it && { qty: it.qty, cost: it.cost, reorder: it.reorder, par: it.par };
     if (me.demo) { toast(rep ? 'Demo only, nothing was sent.' : DEMO_NOTE); finish(); return; }

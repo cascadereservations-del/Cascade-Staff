@@ -36,8 +36,8 @@ test('I_scan a typed code that is linked opens that item card (route and sheet)'
   assert.match(e.sheet(), /Toilet paper/); assert.match(e.sheet(), /data-kind="count"/);
 });
 
-test('I_scan after a scan the right action comes first: owner Count it, finance Change price, cleaner Add to shopping list', async () => {
-  const order = { owner: 'count', admin: 'count', finance: 'price', cleaner: 'shop' };
+test('I_scan after a scan the right action comes first: owner Count it, finance Change price, cleaner Running low', async () => {
+  const order = { owner: 'count', admin: 'count', finance: 'price', cleaner: 'low' };
   for (const role of Object.keys(order)) {
     const e = await make(role);
     await e.mount(''); await e.act('scan'); await typeCode(e, CODE);
