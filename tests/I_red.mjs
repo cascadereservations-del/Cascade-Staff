@@ -82,7 +82,6 @@ const M = [
   ['bought key regenerated on retry', [["a.keys[r.id], manilaToday(nowMs()))", "newKey('recv'), manilaToday(nowMs()))"]]],
   ['bought for finance', [["if (kind === 'bought') return canManage(m) && !M.denied.bought", "if (kind === 'bought') return canPrice(m) && !M.denied.bought"]]],
   ['walk writes on Same as before', [["a.same[a.ids[a.i]] = 1; walkNext(a);", "a.same[a.ids[a.i]] = 1; a.vals.qty = a.vals.qty; walkSubmit(a);"]]],
-  ['walk key per call', [["a.keys[it.id] = a.keys[it.id] || newKey('count');", "a.keys[it.id] = newKey('count');"]]],
   ['needs a count ignores the clock', [["nowMs() - Date.parse(it.counted) > 30 * 86400000", "false"]]],
   ['walk for a cleaner', [["if (kind === 'count') return I_FLAGS.count && canManage(m) && !M.denied.count;", "if (kind === 'count') return I_FLAGS.count && !M.denied.count;"]]],
   ['history shows price to a cleaner', [["canPrice(M.role) && lb.unit_cost != null", "lb.unit_cost != null"]]],
@@ -99,12 +98,17 @@ const M = [
   ['close after too late re-sends', [["if (a.kind === 'undo' && a.err === 'tooLate') return closeSheet();", ""]]],
   ['first count undo wording', [["(snap && snap.controlled === false ? ' It stays counted in the app.' : '')", "''"]]],
   ['bought recon says try again', [["a.err === 'recon' || a.err === 'short' ? ERR[a.err] : 'Try again.'", "'Try again.'"]]],
-  ['history server words', [["counted: 'Counted', received:", "xcounted: 'Counted', xreceived:"]]],
+  ['history server words', [["counted: 'Counted', received:", "counted: 'Count', received:"]]],
   ['last bought without unit', [["esc(fmt(lb.qty) + ' ' + unitOf(it))", "esc(fmt(lb.qty))"]]],
   ['bought list not re-read', [["drawLayer(); loadShop(); return; } // the list is re-read first", "drawLayer(); return; } // the list is re-read first"]]],
   ['already received unmapped', [["body.reason === 'already_received'", "body.reason === 'never'"]]],
   ['count group only under headers', [["(allowed('count') ? '<button class=\"btn btn-secondary I_gcount\"", "(header && allowed('count') ? '<button class=\"btn btn-secondary I_gcount\""]]],
-  ['stepper allows zero use', [["return fmt(Math.max(allowZero ? 0 : 1, n));", "return fmt(Math.max(0, n));"]]]
+  ['stepper allows zero use', [["return fmt(Math.max(allowZero ? 0 : 1, n));", "return fmt(Math.max(0, n));"]]],
+  ['bought done screen loses its rows', [["if (a.step !== 'pick' && a.rows) return a.rows; return", "return"]]],
+  ['first count undo wording in the walk', [["{ qty: it.qty, controlled: it.controlled });", "{ qty: it.qty });"]]],
+  ['toast over the undo bar', [["if (a.kind === 'undo' || K.undos[0] === u0) toast(msg);", "toast(msg);"]]],
+  ['undo all depends on the 20 entry list', [["return e && !e.undone; })", "return e && K.undos.indexOf(e) >= 0; })"]]],
+  ['not_open reads as try again', [[" || body.reason === 'not_open')", ")"]]]
 ];
 const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'I_red-'));
 let bad = 0;
