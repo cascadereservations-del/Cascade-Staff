@@ -30,7 +30,7 @@ const subCalls = (app) => app.calls.filter((c) => c[0] === 'staff_push_subscribe
 test('3.2 alerts card: every role sees the one-time card on Home when permission is "default" and push works; copy and buttons', async () => {
   for (const role of ['cleaner', 'finance', 'owner', 'admin']) {
     const p = phone(); const app = await boot(p.opts(role)); const c = card(app);
-    assert.ok(c, role + ': the card is there'); assert.match(c, /<h2 class="hd">Turn on alerts<\/h2>/); assert.match(c, /Brownouts, water interruptions and rain during a brownout\./);
+    assert.ok(c, role + ': the card is there'); assert.match(c, /<h2 class="hd">Turn on alerts<\/h2>/); assert.match(c, /Brownouts, water interruptions and rain on the way./);
     assert.match(c, /data-act="alerts-on"[^>]*>Turn on<\/button>/); assert.match(c, /data-act="alerts-later"[^>]*>Not now<\/button>/); assert.doesNotMatch(c, /!/, 'no exclamation marks');
     const h = app.els['v-home'].innerHTML; assert.ok(h.indexOf('class="card glass A_card H_alerts"') < h.indexOf('aria-label="Notices"'), 'above Notices, drawn in the first Home paint, not inserted later');
     assert.equal(p.ctl.asked, 0, 'nothing is asked until the person taps');

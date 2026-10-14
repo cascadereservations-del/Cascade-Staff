@@ -1415,7 +1415,7 @@
   function H_alCardOn() { return !!state.access && H_alSupport() === 'ready' && window.Notification && window.Notification.permission === 'default' && !H_alLater(); }
   function H_alertsCard() {
     if (!H_alCardOn()) return '';
-    return '<section class="card glass A_card H_alerts" id="H_alerts" aria-label="Turn on alerts"><h2 class="hd">Turn on alerts</h2><p class="sub" style="margin:0">Brownouts, water interruptions and rain during a brownout.</p>' +
+    return '<section class="card glass A_card H_alerts" id="H_alerts" aria-label="Turn on alerts"><h2 class="hd">Turn on alerts</h2><p class="sub" style="margin:0">Brownouts, water interruptions and rain on the way.</p>' +
       (H_al.msg ? '<p class="help" role="status" style="margin:0">' + esc(H_al.msg) + '</p>' : '') +
       '<div class="row-wrap H_alrow"><button class="btn btn-primary" type="button" data-act="alerts-on"' + (H_al.busy ? ' disabled' : '') + '>' + (H_al.busy ? 'Turning on…' : 'Turn on') + '</button><button class="btn btn-ghost" type="button" data-act="alerts-later"' + (H_al.busy ? ' disabled' : '') + '>Not now</button></div></section>';
   }
@@ -1426,7 +1426,7 @@
     var words = sp === 'needs_install' || sp === 'blocked' ? window.C_Push.words(sp) : '', on = H_al.on === true;
     if (words) return '<section class="card glass H_alsw" aria-label="Alerts on this phone"><span class="t"><b>Alerts on this phone</b></span><p class="help" style="margin:4px 0 0">' + esc(words) + '</p></section>';
     return '<section class="card glass H_alsw" aria-label="Alerts on this phone"><div class="A_switch"><span id="al-label"><b>Alerts on this phone</b></span><button class="sw" type="button" role="switch" data-act="alerts-switch" aria-checked="' + on + '" aria-labelledby="al-label"' + (H_al.on === null || H_al.busy ? ' disabled' : '') + '><i></i></button></div>' +
-      '<p class="help" style="margin:4px 0 0" role="status">' + esc(H_al.msg || (H_al.on === null ? 'Checking…' : on ? 'You will be told about brownouts, water and rain on this phone.' : 'Brownouts, water interruptions and rain during a brownout.')) + '</p></section>';
+      '<p class="help" style="margin:4px 0 0" role="status">' + esc(H_al.msg || (H_al.on === null ? 'Checking…' : on ? 'You will be told about brownouts, water and rain on the way on this phone.' : 'Brownouts, water interruptions and rain on the way.')) + '</p></section>';
   }
   function H_alStatus() { // is this phone subscribed? asked once per visit to More; a failure leaves the switch off
     if (H_alSupport() !== 'ready' || H_al.loading || H_al.on !== null) return;
