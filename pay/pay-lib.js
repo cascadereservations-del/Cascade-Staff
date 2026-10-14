@@ -153,22 +153,6 @@
     return { w: Math.round(w * k), h: Math.round(h * k) };
   }
 
-  // ---- bank.html (SPEC-37 7.B, 7.C): only apps whose ids are verified are listed. None is verified yet, so none is offered.
-  // Lane C (s81): BPI is first (the key order is the order bank.html lists apps). com.bpi.ng.app is the current BPI package (an older
-  // BPI package id is not). Every entry stays verified:false until Lloyd's phone test flips it.
-  var BANK_APPS = {
-    bpi: { name: 'BPI', pkg: 'com.bpi.ng.app', ios: null, store: 'https://apps.apple.com/ph/app/bpi/id6443950982', verified: false },
-    gcash: { name: 'GCash', pkg: 'com.globe.gcash.android', ios: 'gcash://', store: 'https://apps.apple.com/ph/app/gcash/id520020791', verified: false },
-    ownbank: { name: 'OwnBank', pkg: null, ios: null, store: null, verified: false }
-  };
-  function listedBankApps(table) { table = table || BANK_APPS; return Object.keys(table).filter(function (k) { return table[k].verified && table[k].pkg; }); }
-  function playUrl(pkg) { return 'https://play.google.com/store/apps/details?id=' + pkg; }
-  // Android intent link with the Play page as the fallback; null for an app that is not verified.
-  function bankIntentUrl(key, table) {
-    var a = (table || BANK_APPS)[key]; if (!a || !a.verified || !a.pkg) return null;
-    return 'intent:#Intent;action=android.intent.action.MAIN;category=android.intent.category.LAUNCHER;package=' + a.pkg + ';S.browser_fallback_url=' + encodeURIComponent(playUrl(a.pkg)) + ';end';
-  }
-
   // ---- P_ (s82 lane P): the shared chrome of both pay pages, so they look like the rest of the app (F7). Strings only; the caller passes ICON and esc.
   // Badge counts and "I came from the app" travel in the URL hash the shell links with: pay/#tasks=2&cal=2 (a hash with either key means the link was the shell's).
   function P_hashCounts(hash) {
@@ -214,7 +198,7 @@
     P_hashCounts: P_hashCounts, P_fromShell: P_fromShell, P_backIsHistory: P_backIsHistory, P_tabs: P_tabs, P_shell: P_shell, P_wireBack: P_wireBack, P_param: P_param, P_hash: P_hash, P_plural: P_plural,
     peso: peso, plain: plain, dateLabel: dateLabel, shortDate: shortDate, typeLabel: typeLabel, parseExtra: parseExtra, sessionAmount: sessionAmount,
     chosen: chosen, computeTotal: computeTotal, lineCount: lineCount, buildPayload: buildPayload, reviewBlock: reviewBlock, newKey: newKey, keyKeeper: keyKeeper,
-    resultMessage: resultMessage, requestStatus: requestStatus, fitSize: fitSize, BANK_APPS: BANK_APPS, listedBankApps: listedBankApps,
-    bankIntentUrl: bankIntentUrl, MAX_EXTRA: MAX_EXTRA, MAX_LINES: MAX_LINES
+    resultMessage: resultMessage, requestStatus: requestStatus, fitSize: fitSize,
+    MAX_EXTRA: MAX_EXTRA, MAX_LINES: MAX_LINES
   };
 });

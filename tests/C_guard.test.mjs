@@ -59,21 +59,11 @@ test('css: every colour is a v5 token; the white QR quiet zone is the shared --v
   for (const m of c.matchAll(/font(?:-size)?:\s*[^;]*?\b(\d+)px/g)) assert.ok(+m[1] >= 12 || /line|\//.test(m[0]), 'text under 12px: ' + m[0]);
 });
 
-test('BANK_APPS: BPI first with the current package and App Store page, GCash second, everything unverified, the old package nowhere', () => {
+test('P_ (s83): no bank-app table, deep link or bank.html is left in the pay folder, and no pay file links to one', () => {
   const P = req('../pay/pay-lib.js');
-  assert.deepEqual(Object.keys(P.BANK_APPS).slice(0, 2), ['bpi', 'gcash']);
-  assert.deepEqual(JSON.parse(JSON.stringify(P.BANK_APPS.bpi)), { name: 'BPI', pkg: 'com.bpi.ng.app', ios: null, store: 'https://apps.apple.com/ph/app/bpi/id6443950982', verified: false });
-  assert.equal(P.BANK_APPS.gcash.pkg, 'com.globe.gcash.android'); assert.equal(P.BANK_APPS.gcash.verified, false);
-  for (const a of Object.values(P.BANK_APPS)) assert.equal(a.verified, false);
-  for (const f of payFiles) assert.doesNotMatch(read('pay/' + f), /com\.bpi\.ng\.mobilebanking/, f);
-  // once Lloyd flips it, BPI is listed first, opens by package with the Play page as the fallback, and an iPhone goes to the App Store page
-  const flipped = { ...JSON.parse(JSON.stringify(P.BANK_APPS)), bpi: { ...P.BANK_APPS.bpi, verified: true } };
-  assert.deepEqual(P.listedBankApps(flipped), ['bpi']);
-  const u = P.bankIntentUrl('bpi', flipped);
-  assert.ok(u.includes('package=com.bpi.ng.app;')); assert.ok(u.includes('S.browser_fallback_url=' + encodeURIComponent('https://play.google.com/store/apps/details?id=com.bpi.ng.app')));
-  assert.match(read('pay/bank.html'), /ios \? \(a\.ios \|\| a\.store\)/);
-  // the page URL carries only ?app=<key>: no amount, no account
-  assert.doesNotMatch(read('pay/C_admin.js'), /bank\.html\?app=[^'"]*(?:amount|account|total)/i);
+  for (const k of ['BANK_APPS', 'listedBankApps', 'bankIntentUrl']) assert.equal(P[k], undefined, k);
+  assert.equal(fs.existsSync(path.join(root, 'pay', 'bank.html')), false);
+  for (const f of js.concat(html)) assert.doesNotMatch(read('pay/' + f), /BANK_APPS|bankIntentUrl|listedBankApps|bank\.html|com\.bpi\.ng|intent:#Intent/, f);
 });
 
 test('payout QR hygiene: no real QR Ph string in the lane\'s files, and no storage, cache, console or address-bar use where the payload is handled', () => {
@@ -102,4 +92,8 @@ test('pay pages: no Google Fonts, tokens.css before styles.css, the v5 theme-col
   assert.doesNotMatch(read('pay/pay.js'), /data-rmx[^>]*height:28px/);
   assert.match(read('pay/C_pay.css'), /\.btn-sm\s*\{[^}]*min-height:\s*var\(--v5-touch\)/);
   for (const f of js) assert.doesNotMatch(read('pay/' + f), /(?:11:00|3:00) ?(?:am|pm)|11 ?am|3 ?pm/i, f);
+});
+
+test('P_ no broken end tag (the s84 F1 typo) in any pay script', () => {
+  for (const f of js) assert.doesNotMatch(read('pay/' + f), /<\/\w+<\//, f);
 });

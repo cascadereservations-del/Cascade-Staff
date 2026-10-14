@@ -27,6 +27,7 @@
       case 'not_yours': return 'Only the person who started paying can stop it.';
       case 'not_your_payment': return 'Someone else is paying this one now, so you cannot mark it paid.';
       case 'money_may_be_sent': return 'They have already said the money was sent, so it cannot be taken over. Check with them.';
+      case 'proof_already_sent': return 'A screenshot is already on this request, so it stays with you. Add the screenshot and mark it paid.';
       case 'sha_mismatch': return 'The screenshot changed after it was uploaded, so nothing was marked paid. Add it again.';
       case 'not_found': return 'That request no longer exists.';
       case 'bad_proof': return 'The screenshot, the amount or the reference is missing or not valid. Check all three and try again.';
