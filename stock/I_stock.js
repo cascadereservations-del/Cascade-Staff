@@ -688,8 +688,9 @@
       a.sending = false; delete K.keys[a.sig];
       if (rep) K.cool[a.vals.rkind + '|' + a.vals.to] = nowMs();
       var msg = DONE[a.kind](it, a);
-      if (a.kind === 'undo') K.undos = K.undos.filter(function (u) { return u !== a.entry; }); else pushUndo(a, it, r && r.data || {}, snap);
-      toast(msg); if (me.opts.haptic) { try { me.opts.haptic('success'); } catch (e) { /* no haptics */ } }
+      var u0 = K.undos[0]; if (a.kind === 'undo') K.undos = K.undos.filter(function (u) { return u !== a.entry; }); else pushUndo(a, it, r && r.data || {}, snap);
+      if (a.kind === 'undo' || K.undos[0] === u0) toast(msg); // the Undo bar says the same, so no toast over it
+      if (me.opts.haptic) { try { me.opts.haptic('success'); } catch (e) { /* no haptics */ } }
       finish(); if (!rep) load();
     }).catch(function (e) {
       if (me.dead) return;
@@ -786,7 +787,7 @@
       if (r && r.error) throw r.error;
       if (r && r.data && r.data.ok === false) throw { message: 'failed' };
       a.sending = false; delete a.keys[kk]; K.at = 0;
-      var e = undoFor({ kind: 'count', vals: a.vals }, it, r && r.data || {}, { qty: it.qty }); if (e) pushUndoEntry(e);
+      var e = undoFor({ kind: 'count', vals: a.vals }, it, r && r.data || {}, { qty: it.qty, controlled: it.controlled }); if (e) pushUndoEntry(e);
       a.saved[it.id] = { before: it.qty, after: n, undo: e };
       walkNext(a, '✓ Saved');
     }).catch(function (e) {
@@ -817,7 +818,7 @@
   /* ---- Bought some of these (s84 1b, Q5): tick, check once, then one receipt per line, one at a time */
   function shopRowBy(id) { return (K.shop || []).filter(function (x) { return x.id === id; })[0] || null; }
   function boughtRows() { return (K.shop || []).filter(function (r) { return r.itemId && itemById(r.itemId); }); }
-  function boughtPicked(a) { return boughtRows().filter(function (r) { return a.sel[r.id]; }); }
+  function boughtPicked(a) { if (a.step !== 'pick' && a.rows) return a.rows; return boughtRows().filter(function (r) { return a.sel[r.id]; }); }
   function boughtValid(a) {
     var rows = boughtPicked(a); if (!rows.length) return false;
     return rows.every(function (r) { return parseQty(a.vals['packs_' + r.id]) != null && (!canPrice(M.role) || String(a.vals['cost_' + r.id] || '').trim() === '' || parseQty(a.vals['cost_' + r.id]) != null); });
@@ -845,7 +846,7 @@
   }
   function boughtSubmit(a) {
     if (a.sending) return;
-    if (a.step === 'pick') { if (a.err === 'already') a.err = null; if (!boughtValid(a)) { a.bad = true; drawLayer(); return; } a.bad = false; boughtPicked(a).forEach(function (r) { a.keys[r.id] = a.keys[r.id] || newKey('recv'); a.keys[r.id + 'a'] = a.keys[r.id + 'a'] || newKey('appr'); }); a.step = 'confirm'; a.err = null; drawLayer(); return; }
+    if (a.step === 'pick') { if (a.err === 'already') a.err = null; if (!boughtValid(a)) { a.bad = true; drawLayer(); return; } a.bad = false; a.rows = boughtPicked(a); a.rows.forEach(function (r) { a.keys[r.id] = a.keys[r.id] || newKey('recv'); a.keys[r.id + 'a'] = a.keys[r.id + 'a'] || newKey('appr'); }); a.step = 'confirm'; a.err = null; drawLayer(); return; }
     if (a.step === 'done') return closeSheet();
     var me = M, rows = boughtPicked(a);
     if (me.demo) { toast(DEMO_NOTE); closeSheet(); return; }
@@ -855,9 +856,9 @@
     var chk = function (r) { if (r && r.error) throw r.error; if (r && r.data && (r.data.ok === false || r.data.error)) throw { message: 'failed', data: r.data }; return r; };
     var chain = Promise.resolve();
     if (a.step === 'undoconfirm') {
-      var es = rows.map(function (r) { return a.done[r.id] && a.done[r.id].undo; }).filter(function (e) { return e && K.undos.indexOf(e) >= 0; }).reverse(), n = 0; // an entry already undone is not asked again
+      var es = rows.map(function (r) { return a.done[r.id] && a.done[r.id].undo; }).filter(function (e) { return e && !e.undone; }).reverse(), n = 0; // an entry already undone is not asked again
       es.forEach(function (e) { chain = chain.then(function () { a.cur = e; return me.client.rpc(e.call.fn, e.call.args); })
-.then(function (r) { return r && r.data && r.data.reason === 'not_found' ? r : chk(r); }).then(function () { n++; K.undos = K.undos.filter(function (u) { return u !== e; }); }); });
+.then(function (r) { return r && r.data && r.data.reason === 'not_found' ? r : chk(r); }).then(function () { n++; e.undone = true; K.undos = K.undos.filter(function (u) { return u !== e; }); }); });
       chain.then(function () { if (me.dead) return; a.sending = false; toast('Undone.'); closeSheet(); load(); }).catch(function (e) {
         if (me.dead) return; a.sending = false; Promise.resolve(e && e.data ? e.data : bodyOf(e)).then(function (body) {
           var why = body && (body.reason || body.error); a.err = why === 'too_late' || why === 'not_yours' || why === 'stock_moved' ? 'tooLate' : errKind(e, online());
@@ -885,7 +886,7 @@
       if (me.dead) return; a.sending = false; a.failId = a.cur;
       Promise.resolve(e && e.data ? e.data : bodyOf(e)).then(function (body) {
         if (me.dead) return;
-        if (body && body.reason === 'already_received') { a.err = 'already'; a.step = 'pick'; a.failId = null; loadShop(); drawLayer(); return; }
+        if (body && (body.reason === 'already_received' || body.reason === 'not_open')) { a.err = 'already'; a.step = 'pick'; a.rows = null; a.failId = null; loadShop(); drawLayer(); return; }
         a.err = errKind(e, online());
         if (a.err === 'refused' || a.err === 'missing') { K.denied.bought = true; var m = ERR[a.err]; me.act = null; toast(m); load(); draw(); return; }
         if (a.err === 'offline' || a.err === 'other') { me.loading = false; load(); }
@@ -1024,7 +1025,7 @@
   }
   function flowBack(a) {
     if (a.kind === 'unlink' || a.kind === 'history') { M.act = newMenu(a.itemId); drawLayer(); return; }
-    if (a.kind === 'bought') { if (a.step === 'confirm') { a.step = 'pick'; a.err = null; drawLayer(); return; } if (a.step === 'undoconfirm') { a.step = 'done'; a.err = null; drawLayer(); return; } return closeSheet(); }
+    if (a.kind === 'bought') { if (a.step === 'confirm') { a.step = 'pick'; a.rows = null; a.err = null; drawLayer(); return; } if (a.step === 'undoconfirm') { a.step = 'done'; a.err = null; drawLayer(); return; } return closeSheet(); }
     if (a.kind === 'undo') { M.act = route().itemId ? newMenu(route().itemId) : null; drawLayer(); return; }
     if (a.kind === 'report') { if (a.step === 'confirm') { a.step = 'form'; a.err = null; drawLayer(); return; } return closeSheet(); }
     if (a.kind === 'create') { if (a.step === 'confirm') { a.step = 'form'; a.err = null; a.takenId = null; drawLayer(); return; } a.kind = 'scan'; a.phase = 'unknown'; a.err = null; a.sg = null; drawLayer(); return; }
