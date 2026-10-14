@@ -261,6 +261,7 @@
   // ------------------------------------------------------------------------------------------------ mounted module
   var S = null, X_gen = 0; // state of the mounted instance; null when not mounted
   var drafts = {};         // QoL: unsent reply text per conversation, in memory only, so a draft survives a trip to the list and back (a reload or a refusal clears it)
+  var NO_SW = {};          // marker: swReg() gave no registration
   var pushKnown = null;    // the push card's state after the first probe (F11); cleared by reset()
   var keep = null;         //the last list read, kept in memory for two minutes so a list -> thread -> list trip paints at once (cleared on a role refusal and by reset() at sign-out)
 
@@ -645,8 +646,9 @@
       if (!S || S.gen !== gen) return;
       if (res.error && (isMissing(res.error) || isDenied(res.error))) { pushKnown = 'hidden'; return; } // old server: no card, whatever the phone says
       if (sup === 'needs_install' || sup === 'blocked') { setPush(sup); drawPush(); return; } // only a server that has the feature may show these
-      return Promise.resolve(S.opts.swReg()).then(function (reg) { return reg && reg.pushManager ? reg.pushManager.getSubscription() : null; }).then(function (sub) {
+      return Promise.resolve(S.opts.swReg()).then(function (reg) { return reg && reg.pushManager ? reg.pushManager.getSubscription() : NO_SW; }).then(function (sub) {
         if (!S || S.gen !== gen) return;
+        if (sub === NO_SW) { S.push.state = 'hidden'; drawPush(); return; } // no service worker ready on this phone: no card
         if (!sub) { setPush('off'); drawPush(); return; }
         return Promise.resolve(S.client.from('staff_push_subscriptions').select('topics').eq('endpoint', sub.endpoint).limit(1)).then(function (r) {
           if (!S || S.gen !== gen) return;
@@ -662,14 +664,14 @@
     var fail = function (reason) { if (!S || S.gen !== gen) return; S.push.busy = false; if (reason === 'absent') S.push.state = 'hidden'; else S.push.msg = reason === 'blocked' ? PUSH_WORDS.blocked : reason === 'not_configured' ? PUSH_WORDS.not_configured : PUSH_WORDS.failed; if (reason === 'blocked') S.push.state = 'blocked'; drawPush(); };
     var nav = typeof navigator !== 'undefined' ? navigator : {};
     if (p.state === 'on') { // off: remove the inbox topic only; a paid-notice subscription on the same phone stays
-      Promise.resolve(S.opts.swReg()).then(function (reg) { return reg.pushManager.getSubscription(); }).then(function (sub) {
+      Promise.resolve(S.opts.swReg()).then(function (reg) { if (!reg || !reg.pushManager) return Promise.reject('absent'); return reg.pushManager.getSubscription(); }).then(function (sub) {
         if (!sub) return { data: { ok: true } };
         return callRpc('staff_push_unsubscribe_topic_v1', { p_endpoint: sub.endpoint, p_topic: 'inbox' });
       }).then(function (res) {
         if (!S || S.gen !== gen) return;
         if (res.error || (res.data && res.data.ok === false)) { fail('failed'); return; }
         S.push.busy = false; setPush('off'); drawPush(); say('Messages from the inbox are off on this phone');
-      }).catch(function () { fail('failed'); });
+      }).catch(function (e) { fail(e === 'absent' ? 'absent' : 'failed'); });
       return;
     }
     var sup = pushSupport(); if (sup !== 'ready') { S.push.busy = false; S.push.state = sup; drawPush(); return; }
@@ -679,7 +681,7 @@
       if (perm !== 'granted') return Promise.reject('blocked');
       return Promise.resolve(S && S.opts.pushKey()).then(function (key) {
         if (!key) return Promise.reject('not_configured');
-        return Promise.resolve(S.opts.swReg()).then(function (reg) { return reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: keyBytes(key) }); });
+        return Promise.resolve(S.opts.swReg()).then(function (reg) { if (!reg || !reg.pushManager) return Promise.reject('absent'); return reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: keyBytes(key) }); });
       });
     }).then(function (sub) {
       if (!S || S.gen !== gen) return;
@@ -689,7 +691,7 @@
         if (res.data && res.data.ok === false) return fail('failed');
         S.push.busy = false; setPush('on'); buzz('success'); drawPush(); say('You will be told on this phone when a guest writes');
       });
-    }).catch(function (e) { fail(e === 'blocked' || e === 'not_configured' ? e : 'failed'); });
+    }).catch(function (e) { fail(e === 'blocked' || e === 'not_configured' || e === 'absent' ? e : 'failed'); });
   }
 
   // ------------------------------------------------------------------------------------------------ events

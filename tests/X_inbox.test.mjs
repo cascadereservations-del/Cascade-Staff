@@ -258,6 +258,12 @@ test('X8 push: subscribe passes p_topics [inbox] plus the four C_push keys; turn
   assert.equal(p.log.indexOf('UNSUBSCRIBE'), -1, 'the paid-notice subscription on the same phone is left alone'); p.env.X.unmount();
 });
 
+test('X8 push: swReg() resolving null (no service worker ready) hides the card calmly at the probe', async () => {
+  const p = pushEnv({ sub: null }); const c = mkClient({ rpc: Object.assign(baseRpc(), { staff_push_unsubscribe_topic_v1: () => ({ data: { ok: true }, error: null }) }) });
+  const m = await mountIt(p.env, c, { swReg: () => Promise.resolve(null), pushKey: () => 'AQID' });
+  assert.equal(m.el.html('push'), '', 'no card, no error box'); assert.doesNotMatch(m.el.all(), /role="alert"/); p.env.X.unmount();
+});
+
 // ---------------------------------------------------------------------------------------------- 9. XSS
 test('X9 server strings appear only escaped; a psid that fails the pattern is dropped from the list', async () => {
   const env = load(); const bad = thread({ guest_name: EVIL, psid_short: EVIL, history: [g(iso(10), EVIL, { re: EVIL }), b(iso(9), EVIL)], handoffs: [openHandoff({ risk: EVIL }), openHandoff({ id: 'h-2', status: 'sent', resolved_by: EVIL, resolved_at: iso(5), created_at: iso(20) }), openHandoff({ id: 'h-3', status: EVIL, created_at: iso(25) })] });
