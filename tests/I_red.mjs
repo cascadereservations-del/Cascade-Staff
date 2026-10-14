@@ -49,7 +49,7 @@ const M = [
   ['report body renamed', [["body: { kind: v.rkind, to: v.to }", "body: { type: v.rkind, to: v.to }"]]],
   ['report function renamed', [["invoke: 'inventory-report'", "invoke: 'inventory_report'"]]],
   ['report hold ignored', [["if (rep) K.cool[a.vals.rkind + '|' + a.vals.to] = nowMs();", ""]]],
-  ['missing function not hidden', [["var NEWK = { link: 1, price: 1, levels: 1, create: 1, report: 1 };", "var NEWK = {};"]]],
+  ['missing function not hidden', [["var NEWK = { unlink: 1, low: 1, link: 1, price: 1, levels: 1, create: 1, report: 1, undo: 1 };", "var NEWK = {};"]]],
   ['hidden actions return on re-mount', [["denied: K.denied,", "denied: {},"]]],
   ['camera left on at close', [["stopCam(); K.scanned = null;", "K.scanned = null;"], ["if (!a) { stopCam(); box.innerHTML", "if (!a) { box.innerHTML"]]],
   ['camera left on at unmount', [["stopCam(); if (root.document && root.document.removeEventListener", "if (root.document && root.document.removeEventListener"]]],
@@ -62,7 +62,7 @@ const M = [
   ['last typed code forgotten', [["K.lastCode = code; // a typo", "K.lastCode = ''; // a typo"]]],
   ['taken code not explained', [["if (why === 'code_taken')", "if (false)"]]],
   ['Low first groups unsorted', [["gs.sort(function (a, b) { return worst(a) - worst(b) || (b.out + b.low) - (a.out + a.low) || a.cat.localeCompare(b.cat); });", "gs.sort(function (a, b) { return a.cat.localeCompare(b.cat); });"]]],
-  ['group header drops the low count', [["var hot = g.low + g.out,", "var hot = 0,"]]],
+  ['group header drops the low count', [[`(g.low ? '<span aria-hidden="true">▲</span> ' + g.low + ' low' : '')`, "''"]]],
   ['category chip draws a header', [["K.chip.indexOf('c:') !== 0); })", "true); })"]]],
   ['Scan button on an old catalogue', [[`(K.v84 ? '<button class="btn btn-secondary I_scanbtn"`, `(true ? '<button class="btn btn-secondary I_scanbtn"`]]],
   ['header counts the Out items twice', [["(g.low ? '<span aria-hidden=\"true\">▲</span> ' + g.low + ' low' : '')", "(g.low ? '<span aria-hidden=\"true\">▲</span> ' + (g.low + g.out) + ' low' : '')"]]],
@@ -71,7 +71,7 @@ const M = [
   ['no supported formats reads as a failure', [["if (!f.length) { me.cam = null; cam.on = false; a.camState = 'none'; typingRedraw(); return null; }", ""]]],
   ['typing focus lost when the camera goes live', [["if (typing) refocus('I_f_code');", ""]]],
   ['cleaner can unlink', [["if (kind === 'unlink') return K.v84 && canManage(m) && !M.denied.unlink;", "if (kind === 'unlink') return K.v84 && !M.denied.unlink;"]]],
-  ['unlink key renamed', [["args: { p_property_id: M.pid, p_code: a.code } };\n", "args: { p_property_id: M.pid, p_barcode: a.code } };\n"]]],
+  ['unlink key renamed', [["p_code: a.code } }", "p_barcode: a.code } }"]]],
   ['undo bar never expires', [["(nowMs() - u.at < UNDO_BAR_MS || (M.undoHold === u.id))", "true"]]],
   ['undo line never expires', [["nowMs() - u.at < UNDO_LINE_MS &&", ""]]],
   ['undo count wrong RPC', [["{ fn: 'inventory_undo_v1', args: { p_movement_id: d.movementId, p_purchase_id: null } }", "{ fn: 'inventory_undo', args: { p_movement_id: d.movementId, p_purchase_id: null } }"]]],
@@ -79,7 +79,7 @@ const M = [
   ['running low shown when already listed', [["&& !(it && (K.shop || []).some(function (r) { return r.itemId === it.id; }));", ";"]]],
   ['running low quantity always one', [["return Math.max(1, Math.ceil(Math.max(target - it.qty, 0) / (it.perPack || 1)));", "return 1;"]]],
   ['bought re-sends finished lines', [["if (d.received) return null; a.cur = r.id;", "a.cur = r.id;"]]],
-  ['bought key regenerated on retry', [["a.keys[r.id] = a.keys[r.id] || newKey('recv');", "a.keys[r.id] = newKey('recv');"]]],
+  ['bought key regenerated on retry', [["a.keys[r.id], manilaToday(nowMs()))", "newKey('recv'), manilaToday(nowMs()))"]]],
   ['bought for finance', [["if (kind === 'bought') return canManage(m) && !M.denied.bought", "if (kind === 'bought') return canPrice(m) && !M.denied.bought"]]],
   ['walk writes on Same as before', [["a.same[a.ids[a.i]] = 1; walkNext(a);", "a.same[a.ids[a.i]] = 1; a.vals.qty = a.vals.qty; walkSubmit(a);"]]],
   ['walk key per call', [["a.keys[it.id] = a.keys[it.id] || newKey('count');", "a.keys[it.id] = newKey('count');"]]],
@@ -89,20 +89,22 @@ const M = [
   ['history wrong RPC key', [["{ p_item_id: id }); }).then(function (r) {", "{ p_id: id }); }).then(function (r) {"]]],
   ['suggestion without the 1.5', [["* 1.5 * 100) / 100", "* 1 * 100) / 100"]]],
   ['suggestion with too few cleans', [["!(u.cleans_30d >= 5) || !(num(u.per_clean) > 0)", "!(num(u.per_clean) > 0)"]]],
-  ['recent list never capped', [["ids: [String(id)].concat(recentRead().filter(function (x) { return x !== String(id); })).slice(0, 5) }", "ids: [String(id)].concat(recentRead().filter(function (x) { return x !== String(id); })) }"]]],
+  ['recent list never capped', [["ids: [String(id)].concat(recentRead().filter(function (x) { return x !== String(id); })).slice(0, 5) }", "ids: [String(id)].concat(recentRead().filter(function (x) { return x !== String(id); })) }"], ["o.ids.map(String).slice(0, 5) : []", "o.ids.map(String) : []"]]],
   ['recent kept across roles', [["o.role === K.role &&", "true &&"]]],
   ['recent not cleared on role change', [["if (prevRole !== null) recentClear(); }", "}"]]],
   ['stepper allows zero use', [["return fmt(Math.max(allowZero ? 0 : 1, n));", "return fmt(Math.max(0, n));"]]]
 ];
 const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'I_red-'));
 let bad = 0;
+const only = process.argv[2]; // optional: run only the mutations whose name contains this text
 for (const [name, edits] of M) {
+  if (only && !name.includes(only)) continue;
   let s = src;
   for (const [a, b] of edits) { if (!s.includes(a)) { console.log('SKIP (pattern not found): ' + name + ' :: ' + a.slice(0, 50)); bad++; s = null; break; } s = s.replace(a, b); }
   if (s == null) continue;
   const f = path.join(dir, 'I_stock.mut.js'); fs.writeFileSync(f, s);
   const r = spawnSync(process.execPath, ['--test', path.join(here, 'I_rpc.test.mjs'), path.join(here, 'I_roles.test.mjs'), path.join(here, 'I_flow.test.mjs'), path.join(here, 'I_guard.test.mjs'), path.join(here, 'I_fix.test.mjs'), path.join(here, 'I_group.test.mjs'), path.join(here, 'I_scan.test.mjs'), path.join(here, 'I_card.test.mjs'), path.join(here, 'I_report.test.mjs'), path.join(here, 'I_undo.test.mjs'), path.join(here, 'I_running-low.test.mjs'), path.join(here, 'I_bought.test.mjs'), path.join(here, 'I_count-walk.test.mjs'), path.join(here, 'I_history.test.mjs'), path.join(here, 'I_recent.test.mjs')], { env: Object.assign({}, process.env, { I_STOCK_SRC: f }), encoding: 'utf8', timeout: 60000 });
-  const red = [...(r.stdout || '').matchAll(/^\s*✖ (I_\w+ [^\n(]+?) \(/gm)].map((m) => m[1].trim()).filter((v, i, a) => a.indexOf(v) === i);
+  const red = [...(r.stdout || '').matchAll(/^\s*✖ (I_[-\w]+ .+?) \(\d+(?:\.?\d+)?ms\)/gm)].map((m) => m[1].trim()).filter((v, i, a) => a.indexOf(v) === i);
   const hung = !!(r.error && r.error.code === 'ETIMEDOUT');
   const ok = hung || (r.status !== 0 && red.length > 0);
   if (!ok) bad++;
