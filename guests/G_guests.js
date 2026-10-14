@@ -19,6 +19,7 @@
   var G_MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
   var G_NO_CONN = 'No connection, so nothing was sent. Check your signal and tap again.';
   var G_SEL = 'id,name,phone,email,tier,total_stays,last_stay_date,guest_profile_details(id_on_file,birthday,contact_number,vip)';
+  var G_COMP_COLS = 'id,name,id_type,id_photo_path'; // never id_number, notes or contact_number
   var G_PROFILE_COLS = 'guest_id,preferred_channel,language,stay_preferences,tags,vip,vip_reason,version,contact_number,birthday,id_on_file,id_type'; // never id_number
 
   var G_clock = function () { return Date.now(); };
@@ -67,14 +68,14 @@
   }
   function G_sameList(a, b) { a = a || []; b = b || []; return a.length === b.length && a.every(function (x, i) { return x === b[i]; }); }
   /** Checks the form the same way the dashboard does (validateProfilePatch) before anything is sent. Returns a sentence or ''. */
-  function G_check(form, reason, today) {
+  function G_check(form, reason, today, tagMax) {
     var r = String(reason == null ? '' : reason).trim();
     if (r.length < 3 || r.length > 500) return 'Add a reason of 3 to 500 characters.';
     if (form.birthday) {
       var v = String(form.birthday), d = new Date(v + 'T00:00:00Z');
       if (!/^\d{4}-\d{2}-\d{2}$/.test(v) || !isFinite(d.getTime()) || G_iso(d.getTime()) !== v || v > today) return 'Enter a birthday that is a real date and not in the future.';
     }
-    if (form.tags && (form.tags.length > 20 || form.tags.some(function (t) { return t.length > 50; }))) return 'Use up to 20 tags, each at most 50 characters.';
+    if (form.tags && (form.tags.length > 20 || form.tags.some(function (t) { return t.length > (tagMax || 50); }))) return 'Use up to 20 tags, each at most ' + (tagMax || 50) + ' characters.';
     if (form.stay_preferences && form.stay_preferences.length > 4000) return 'Keep the preferences within 4,000 characters.';
     if (form.vip_reason && form.vip_reason.length > 4000) return 'Keep the VIP note within 4,000 characters.';
     if (form.contact_number && form.contact_number.length > 40) return 'That phone number is too long.';
@@ -165,8 +166,8 @@
   function G_focus(id) { var e = S && S.el && S.el.querySelector && S.el.querySelector('#' + id); if (e && e.focus) e.focus(); }
   function G_busyOn() { return !!(S && (S.busy || (S.add && S.add.step === 'reading') || (S.add && S.add.step === 'saving'))); }
   /** An rpc call that never throws: { data, error }. */
-  function G_rpc(name, args) {
-    try { return Promise.resolve(S.client.rpc(name, args)).then(function (r) { return r || { data: null, error: { message: 'no answer' } }; }, function (e) { return { data: null, error: { message: String(e && e.message || e), network: true } }; }); }
+  function G_rpc(name, args, cols) {
+    try { var q = S.client.rpc(name, args); if (cols && q && typeof q.select === 'function') q = q.select(cols); return Promise.resolve(q).then(function (r) { return r || { data: null, error: { message: 'no answer' } }; }, function (e) { return { data: null, error: { message: String(e && e.message || e), network: true } }; }); }
     catch (e) { return Promise.resolve({ data: null, error: { message: 'no client', network: true } }); }
   }
   /** The staff-guest-details function: { status, j }. Status 0 is no connection. 207 comes back as success with ok:false inside. */
@@ -286,6 +287,7 @@
   function G_companionsHtml() {
     var D = S.d;
     if (D.compAbsent) return '';
+    if (D.cErr) return '<div class="card glass G_card"><div class="card-head"><h3>People and ID photos</h3></div>' + G_err('No connection, so the people and ID photos could not load.', 'G_cerr') + '<button class="btn btn-secondary" type="button" data-act="detail-retry">Try again</button></div>';
     var list = D.companions || [], g = D.guest;
     var rows = list.map(function (c) {
       var own = G_exact(c.name, g.name), url = D.urls[c.id], conf = S.confirm && S.confirm.id === c.id ? S.confirm.kind : '';
@@ -296,7 +298,7 @@
       };
       var actions = conf === 'remove-photo' ? G_confirm('Remove this ID photo? The file is deleted by the clean-up job later.', 'remove-photo-yes', c.id, 'Remove photo') :
         conf === 'remove-comp' ? G_confirm('Remove ' + c.name + ' from this record, with the ID photo?', 'remove-comp-yes', c.id, 'Remove person') :
-        '<div class="G_btns">' + pick(c.id_photo_path ? 'Replace photo' : 'Add ID photo', 'replace') + (c.id_photo_path && D.feat && D.feat.remove_id ? '<button class="btn btn-ghost btn-sm" type="button" data-act="remove-photo" data-id="' + G_esc(c.id) + '">Remove photo</button>' : '') +
+        '<div class="G_btns">' + (D.feat && D.feat.replace_id ? pick(c.id_photo_path ? 'Replace photo' : 'Add ID photo', 'replace') : '') + (c.id_photo_path && D.feat && D.feat.remove_id ? '<button class="btn btn-ghost btn-sm" type="button" data-act="remove-photo" data-id="' + G_esc(c.id) + '">Remove photo</button>' : '') +
         (!own ? '<button class="btn btn-ghost btn-sm" type="button" data-act="remove-comp" data-id="' + G_esc(c.id) + '">Remove person</button>' : '') + '</div>';
       return '<div class="G_comp"><div class="G_namerow"><strong class="G_cname">' + G_esc(c.name) + '</strong>' + (own ? '<span class="pill p-neutral">Guest’s own ID</span>' : '') + (c.id_type ? '<span class="G_none">' + G_esc(G_typeName(c.id_type)) + '</span>' : '') + '</div>' + photo +
         (S.cbusy === c.id ? '<p class="help" role="status">Working…</p>' : actions) + '</div>';
@@ -456,7 +458,7 @@
     return Promise.all([
       one(S.client.from('guests').select('id,name,phone,email,tier,total_stays,last_stay_date,property_id').eq('id', id).maybeSingle()),
       one(S.client.from('guest_profile_details').select(G_PROFILE_COLS).eq('guest_id', id).maybeSingle()),
-      G_rpc('list_guest_companions_v1', { p_guest_id: id }),
+      G_rpc('list_guest_companions_v1', { p_guest_id: id }, G_COMP_COLS),
       G_call({ action: 'context', guest_id: id })
     ]).then(function (rs) {
       if (!G_live(tok) || S.d !== D) return;
@@ -536,7 +538,7 @@
     var A = S.add, tok = S.token; if (!A || A.step === 'saving') return;
     G_syncSheet();
     var out = G_addBody(S.gid, A.sheet, A.images, S.d.guest.name, S.d.details ? S.d.details.version : null);
-    var bad = out.error || (out.body && G_check({ birthday: out.body.birthday, tags: out.body.tags, stay_preferences: out.body.stay_preferences }, out.body.reason, G_today()));
+    var bad = out.error || (out.body && G_check({ birthday: out.body.birthday, tags: out.body.tags, stay_preferences: out.body.stay_preferences }, out.body.reason, G_today(), 30));
     if (bad) { A.err = bad; G_paint(); G_focus('G_aerr'); return; }
     A.step = 'saving'; A.err = ''; G_paint();
     G_call(out.body).then(function (o) {
@@ -585,9 +587,9 @@
   }
   function G_refreshCompanions() {
     var tok = S.token, D = S.d;
-    return G_rpc('list_guest_companions_v1', { p_guest_id: S.gid }).then(function (c) {
+    return G_rpc('list_guest_companions_v1', { p_guest_id: S.gid }, G_COMP_COLS).then(function (c) {
       if (!G_live(tok) || S.d !== D) return;
-      if (!c.error) D.companions = (c.data || []).map(function (x) { return { id: x.id, name: x.name, id_type: x.id_type || null, id_photo_path: x.id_photo_path || null }; });
+      if (!c.error) { D.cErr = false; D.companions = (c.data || []).map(function (x) { return { id: x.id, name: x.name, id_type: x.id_type || null, id_photo_path: x.id_photo_path || null }; }); } else if (!G_absent(c.error)) D.cErr = true;
       G_paint(); G_focus('G_msg');
     });
   }

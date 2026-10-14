@@ -43,13 +43,15 @@ function load() {
 
 // One fake client. `tables` maps a table name to a result (or a function returning one); `rpcs` maps an rpc name to a handler; `fn` is the function handler.
 function client({ tables = {}, rpcs = {}, fn = null, sign = null } = {}) {
-  const calls = [], chains = [], fcalls = [], signed = [];
+  const calls = [], chains = [], fcalls = [], signed = [], selects = [];
   return {
-    calls, chains, fcalls, signed,
+    calls, chains, fcalls, signed, selects,
     rpc(name, args) {
       calls.push([name, plain(args || {})]);
       const h = rpcs[name]; if (!h) return Promise.resolve({ data: null, error: { code: 'PGRST202', message: 'Could not find the function public.' + name } });
-      const r = h(args); return Promise.resolve(r && r.then ? r : r && ('data' in r || 'error' in r) ? r : { data: r, error: null });
+      const r = h(args); const pr = Promise.resolve(r && r.then ? r : r && ('data' in r || 'error' in r) ? r : { data: r, error: null });
+      pr.select = (cols) => { selects.push([name, cols]); return pr; };
+      return pr;
     },
     from(table) {
       const rec = [['from', table]]; chains.push(rec);
@@ -229,6 +231,7 @@ test('G: an older staff-guest-details (answers 400) hides Add, Replace and Remov
   const { el } = await mount(cl, GID);
   assert.match(el.html, /Ana Maria Reyes/);
   assert.doesNotMatch(el.html, /Add from text/); assert.doesNotMatch(el.html, /Remove photo/);
+  assert.doesNotMatch(el.html, /Replace photo|Add ID photo/);
   assert.doesNotMatch(el.html, /People and ID photos/); assert.doesNotMatch(el.html, /class="errbox/);
   assert.match(el.html, /class="G_slot"/); // the slot is kept either way, so nothing jumps
 });
@@ -393,4 +396,30 @@ test('G: copy has no exclamation marks and no console output', () => {
   const strings = [...SRC.matchAll(/'([^'\n]{12,})'/g)].map((m) => m[1]).filter((s) => /[a-z]{3} [a-z]{3}/.test(s));
   assert.deepEqual(strings.filter((s) => /!/.test(s) && !/!==|!=|!\w/.test(s)), []);
   assert.equal(/console\./.test(SRC), false);
+});
+
+test('G: the companions read asks only for id, name, id_type and id_photo_path; id_number is never requested', async () => {
+  const cl = detailClient();
+  await mount(cl, GID);
+  assert.deepEqual(cl.selects, [['list_guest_companions_v1', 'id,name,id_type,id_photo_path']]);
+  assert.equal(cl.selects.some((x) => /id_number|notes|contact_number/.test(x[1])), false);
+});
+
+test('G: a failed companions read shows an error and Try again, not an empty list with a live Add box', async () => {
+  const cl = detailClient({ rpcs: { list_guest_companions_v1: () => ({ data: null, error: { code: '08006', message: 'network' } }) } });
+  const { el } = await mount(cl, GID);
+  assert.match(el.html, /could not load/); assert.match(el.html, /data-act="detail-retry"/);
+  assert.doesNotMatch(el.html, /G_newc|No companions or ID photos yet/);
+});
+
+test('G: Add from text refuses a tag over 30 characters, the server limit, with a plain sentence', async () => {
+  const proposal = { phone: null, email: null, guests: null, nationality: null, stay_preferences: 'Quiet', birthday: null, tags: [], companions: [], ids: [], images: [] };
+  const cl = detailClient({ fn: (b) => (b.action === 'context' ? { status: 200, j: { ok: true, features: FEAT } } : { status: 200, j: { ok: true, proposal } }) });
+  const { el } = await mount(cl, GID);
+  await clickA(el, 'add-open'); setNodes(el, { G_text: 'Quiet please' });
+  await clickA(el, 'read'); await tick();
+  setNodes(el, { G_r_phone: '', G_r_email: '', G_r_pref: 'Quiet', G_r_bday: '', G_r_tags: 'a'.repeat(31), G_r_reason: 'From the chat' });
+  await clickA(el, 'save-add'); await tick();
+  assert.match(el.html, /each at most 30 characters/);
+  assert.equal(cl.fcalls.filter((c) => c[1].action === 'save').length, 0);
 });
