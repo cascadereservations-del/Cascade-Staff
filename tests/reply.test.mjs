@@ -136,7 +136,7 @@ test('render: Write the reply is disabled while the screenshot shrinks; a 401 of
 
 test('wiring: sign-out clears the drawn view, #reply survives a reload, transparent PNGs are filled white, the live region is persistent', () => {
   const app = read('app.js'), html = read('index.html');
-  assert.match(app, /\/\^#\(home\|calendar\|tasks\|payrates\|reply\|more\|hub\|weather\|stock\|manage\|search\)\//);
+  assert.match(app, /\/\^#\(home\|calendar\|tasks\|payrates\|reply\|more\|hub\|weather\|stock\|manage\|guests\|inbox\|search\)\//);
   assert.match(app, /state\.reply = null; var rb = \$\('rp-body'\); if \(rb\) rb\.innerHTML = ''/);
   assert.match(app, /fillStyle = '#FFFFFF'; cx\.fillRect\([^)]*\); cx\.drawImage/);
   assert.match(html, /id="v-reply"><div class="sr" id="rp-live" role="status" aria-live="polite"><\/div><div id="rp-body">/);

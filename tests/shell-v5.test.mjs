@@ -204,7 +204,7 @@ test('A_ live mock: the admin home has the one pill (no status strip), the notic
   assert.doesNotMatch(h, /Money and stock|Team and help|Admin hub/, 'E_: one Admin group; help and the hub live on More');
   assert.match(h, /id="slot-inbox"[^>]*>/); assert.doesNotMatch(h, /id="slot-inbox" hidden/); assert.match(h, /Inbox/); assert.match(h, /3 open/);
   assert.match((await boot({ role: 'admin', hash: '#more', handlers: base('admin') })).els['v-more'].innerHTML, /href="#hub"/);
-  assert.match(h, /href="\.\/admin\/#\/guests\/conversations"|href="https:\/\/[^"]*#\/guests\/conversations"|#door\/dashboard\/guests\/conversations/, 'the Inbox opens guests/conversations through the dashboard door');
+  assert.match(h, /id="slot-inbox"[^>]*><a class="rowi" href="#inbox"/, '3.2: the Inbox opens the shell\'s own #inbox');
   const noInbox = await boot({ role: 'admin', hash: '#home', handlers: base('admin', { notices_v1: () => NOTICES('admin', { inbox_open: null }) }) });
   assert.match(noInbox.els['v-home'].innerHTML, /id="slot-inbox" hidden>/, 'hidden when inbox_open is null');
 });
