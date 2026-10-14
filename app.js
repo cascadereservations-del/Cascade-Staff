@@ -66,7 +66,7 @@
     notices: null, noticesAbsent: false, noticesLoading: false, noticeFilter: 'all', nadd: null, fbOpen: false, ratesMore: false, calTab: 'calendar', legendOpen: false, H_peekedCal: false, H_peekedTask: false, progress: null, progressAbsent: false, taskFilter: 'all', hubRoute: '', tasks: null, tasksErr: '', tasksLoading: false, showDone: false, lastDone: null, add: null, assignees: null, rates: null, ratesErr: '', rateForm: null, rateSaving: false, reply: null, bookings: null, bookingsDone: false, noticesDone: false, tasksDenied: false, noticesFailed: false, bookingsFailed: false, errorKind: '' };
   var $ = function (id) { return document.getElementById(id); };
   try { var lsLegend = store('localStorage'); state.legendOpen = !!lsLegend && lsLegend.getItem('cs_legend_open') === '1'; } catch (e) {} // F2: the legend's More stays as it was left
-  var VIEWS = ['signin', 'home', 'calendar', 'tasks', 'payrates', 'more', 'door', 'reply', 'hub', 'weather', 'stock', 'manage', 'search'];
+  var VIEWS = ['signin', 'home', 'calendar', 'tasks', 'payrates', 'more', 'door', 'reply', 'hub', 'weather', 'stock', 'manage', 'guests', 'inbox', 'search'];
   function pid() { return (state.access && state.access.property_ids && state.access.property_ids[0]) || CFG.propertyId; }
   function canReply() { return CS.canDraftReply(state.access && state.access.role); } // s82 decision 5: every signed-in staff role
   function canAddDetails() { return CS.canAddGuestDetails(state.access && state.access.role); } // the guest-details uploader stays owner and admin
@@ -265,13 +265,15 @@
           (canReply() ? row({ icon: 'sparkles', title: 'Cassy reply', sub: 'Draft a warm reply to a guest message', href: '#reply' }) : '') +
           row({ icon: 'help', title: 'Quick guide', sub: 'Two minutes on telling Cassy what happened', href: LINKS.quick })) + footerLine() + '</div>';
     } else {
-      var bk = CS.bookingsToConfirmRow(role(), state.bookings, A_hubLink('bookings/inquiries')), conv = A_hubLink('guests/conversations'), inbox = v ? v.inbox : null;
+      var bk = CS.bookingsToConfirmRow(role(), state.bookings, A_hubLink('bookings/inquiries')), inbox = v ? v.inbox : null;
       // only owner and admin have an inbox; the reserve is kept while notices load, and dropped on failure, when absent, and for finance
-      var inboxShown = !!conv && CS.canSeeGuestContact(role()) && !state.noticesAbsent && (v ? inbox != null : state.noticesLoading);
+      // 3.2: the row opens the shell's own #inbox (which falls back to the dashboard's conversations page when the module is not shipped)
+      var inboxShown = CS.canSeeGuestContact(role()) && !state.noticesAbsent && (v ? inbox != null : state.noticesLoading);
       body = '<div class="A_body">' + errBanner() + todayCard() + A_turnoverCard(false) + H_cleanDoneCard() + A_noticesCard() +
         A_navCard('Guests and bookings', (bk ? row({ icon: 'clip', title: 'Bookings to confirm', sub: 'Open the pending bookings', href: bk.href, external: bk.external, count: bk.count, countLabel: bk.n === 1 ? ' booking to confirm' : ' bookings to confirm' }) : '') +
           row({ icon: 'calendar', title: 'Calendar', sub: 'Stays, blocked nights, notices', href: '#calendar', count: n || '' }) +
-          '<div id="slot-inbox"' + (inboxShown ? '' : ' hidden') + (inboxShown && !v ? ' style="min-height:64px"' : '') + '>' + (inboxShown && v ? row({ icon: 'chat', title: 'Inbox', sub: inbox ? inbox + ' open' : 'No open messages', href: conv.href, external: conv.external, count: inbox || '', countLabel: ' open messages' }) : '') + '</div>' +
+          '<div id="slot-inbox"' + (inboxShown ? '' : ' hidden') + (inboxShown && !v ? ' style="min-height:64px"' : '') + '>' + (inboxShown && v ? row({ icon: 'chat', title: 'Inbox', sub: inbox ? inbox + ' open' : 'No open messages', href: '#inbox', count: inbox || '', countLabel: ' open messages' }) : '') + '</div>' +
+          (CS.canSeeGuestContact(role()) ? row({ icon: 'user', title: 'Guests', sub: 'Guest records, ID photos and notes', href: '#guests' }) : '') +
           (canReply() ? row({ icon: 'sparkles', title: 'Cassy reply', sub: 'Draft a warm reply to a guest message', href: '#reply' }) : '')) +
         A_navCard('Admin', row({ icon: 'dash', title: 'Admin dashboard', sub: 'Today, bookings, money, operations', door: 'dashboard' }) +
           (trustOn ? '' : '<div class="help doornote">Sign-in is kept only on trusted devices</div>') +
@@ -298,7 +300,8 @@
       '<h3 class="ttl" style="margin-top:8px">' + esc(g.guest_name || 'Guest') + '</h3>' + (withLine ? '<p class="sub" style="margin:2px 0 0">' + esc(withLine) + '</p>' : '') +
       '<div class="row-wrap" style="margin-top:6px">' + (ret ? pill('brand', 'repeat', ret) : '') + (src ? '<span class="pill p-neutral">' + esc(src) + '</span>' : '') + '</div>' +
       '<p class="sub num" style="margin:8px 0 0">' + esc(datesLine(g)) + '</p>' + (earlier ? '<p class="help num" style="margin:2px 0 0">' + esc(earlier) + '</p>' : '') + contactBlock(g) +
-      H_readyBlock(g.arrival_ready, g, true) + (canAddDetails() && g.uid ? '<a class="btn btn-secondary btn-sm" href="./guest/#' + encodeURIComponent(g.uid) + '" style="margin-top:12px">' + ICON('idcard', 's16') + 'Add guest details</a>' : '') + '</div>';
+      H_readyBlock(g.arrival_ready, g, true) + (canAddDetails() && g.uid ? '<a class="btn btn-secondary btn-sm" href="./guest/#' + encodeURIComponent(g.uid) + '" style="margin-top:12px">' + ICON('idcard', 's16') + 'Add guest details</a>' : '') +
+      (CS.canSeeGuestContact(role()) && /^[\w-]{1,64}$/.test(String(g.guest_id || '')) ? '<a class="btn btn-ghost btn-sm" href="#guests/' + encodeURIComponent(g.guest_id) + '" style="margin-top:12px">' + ICON('user', 's16') + 'Open guest</a>' : '') + '</div>'; // 3.2: when the payload carries the guest id
     var groups = CS.parseNotes(g.notes), notes = '';
     if (groups.length) {
       notes = '<div class="card glass"><h3 class="hd">Notes from earlier stays</h3><div style="margin-top:10px">' + groups.map(function (gr) {
@@ -791,7 +794,7 @@
     if (go.kind === 'tasks') return { tag: 'a', attrs: ' href="#tasks" data-act="attn-tasks" data-filter="' + esc(go.filter) + '"', ext: false };
     if (go.kind === 'day') return { tag: 'button', attrs: ' type="button" data-act="notice-cal" data-date="' + esc(go.date) + '"', ext: false };
     if (go.kind === 'bookings') { l = A_hubLink('bookings/inquiries') || { href: CS.INQUIRIES_URL, external: true }; }
-    else if (go.kind === 'inbox') { l = A_hubLink('guests/conversations'); }
+    else if (go.kind === 'inbox') { l = { href: '#inbox', external: false }; } // 3.2: the shell's own Inbox
     else if (go.kind === 'inventory') { l = state.layout === 'admin' ? A_hubLink('inventory') : null; l = l || { href: '#calendar/warnings', external: false }; }
     else if (go.kind === 'warn') return { tag: 'button', attrs: ' type="button" data-warn="' + esc(go.key) + '"', ext: false };
     else l = { href: '#calendar/notices', external: false };
@@ -1280,7 +1283,9 @@
   var H_MODULES = {
     weather: { src: 'weather/W_weather.js', css: 'weather/W_weather.css', global: 'W_Weather', title: 'Weather', roles: null },
     stock:   { src: 'stock/I_stock.js',     css: 'stock/I_stock.css',     global: 'I_Stock',   title: 'Inventory', roles: ['owner', 'admin', 'cleaner', 'finance'] },
-    manage:  { src: 'manage/N_manage.js',   css: 'manage/N_manage.css',   global: 'N_Manage',  title: 'Manage', roles: ['owner', 'admin'] }
+    manage:  { src: 'manage/N_manage.js',   css: 'manage/N_manage.css',   global: 'N_Manage',  title: 'Manage', roles: ['owner', 'admin'] },
+    guests:  { src: 'guests/G_guests.js',   css: 'guests/G_guests.css',   global: 'G_Guests',  title: 'Guests', roles: ['owner', 'admin'] },
+    inbox:   { src: 'inbox/X_inbox.js',     css: 'inbox/X_inbox.css',     global: 'X_Inbox',   title: 'Inbox', roles: ['owner', 'admin'] }
   };
   var H_mod = { mounted: '', sub: '', n: 0, p: {} }, H_sub = '';
   function H_domLoad(m) { // a stylesheet (never waited for) and a script; a 404 on the script rejects
@@ -1303,10 +1308,21 @@
     var g = k && window[H_MODULES[k].global]; try { if (g && typeof g.unmount === 'function') g.unmount(); } catch (e) { /* never block navigation or sign-out */ }
   }
   // The folder is not shipped yet: weather goes to the Notices tab (which has the weather card), stock to the inventory door, manage to the admin hub.
+  // 3.2: guests and inbox fall back to the same pages of the admin dashboard door (route() sends a role or setting that cannot open the door to #home).
   function H_fallback(key) {
-    var fb = key === 'weather' ? '#calendar/notices' : key === 'stock' ? (doorDef('inventory') && CS.doorAllowed('inventory', role()) ? '#door/inventory' : '#home') : (state.layout === 'admin' ? '#hub' : '#home');
+    var fb = key === 'weather' ? '#calendar/notices' : key === 'stock' ? (doorDef('inventory') && CS.doorAllowed('inventory', role()) ? '#door/inventory' : '#home') : key === 'guests' ? '#door/dashboard/guests' : key === 'inbox' ? '#door/dashboard/guests/conversations' : (state.layout === 'admin' ? '#hub' : '#home');
     history.replaceState(null, '', fb); route();
   }
+  // 3.2: what a module needs to subscribe to a push topic without touching pay/. The key comes from the server when asked (as pay/ does); the registration is the shell's own worker.
+  function H_pushKey() {
+    if (DEMO) return Promise.resolve(null);
+    return sb.auth.getSession().then(function (s) {
+      var tok = s.data && s.data.session && s.data.session.access_token; if (!tok) return null;
+      return net(CFG.url + '/functions/v1/notify-cleaner-payment', { method: 'POST', headers: { Authorization: 'Bearer ' + tok, apikey: CFG.key, 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'vapid_key' }) })
+        .then(function (r) { return r.json(); }).then(function (j) { return j && j.ok && j.key ? j.key : null; });
+    }).catch(function () { return null; });
+  }
+  function H_swReg() { return !DEMO && navigator.serviceWorker && navigator.serviceWorker.ready ? Promise.resolve(navigator.serviceWorker.ready).catch(function () { return null; }) : Promise.resolve(null); }
   function renderModule(key) {
     var m = H_MODULES[key], el = $('v-' + key), sub = H_sub;
     if (H_mod.mounted === key && H_mod.sub === sub) return; // a redraw of the same screen must not remount it
@@ -1318,7 +1334,7 @@
       var box = $('H_mod-' + key); if (!box) return; box.innerHTML = '';
       H_mod.mounted = key; H_mod.sub = sub;
       var bad = function () { if (H_mod.mounted === key) { H_mod.mounted = ''; H_mod.sub = ''; H_mod.n++; } if (current === key) H_fallback(key); };
-      try { var mr = window[m.global].mount(box, { client: DEMO ? null : sb, demo: DEMO, role: role(), sub: sub, propertyId: pid(), houseTimes: A_houseT(), navigate: function (h) { location.hash = String(h).charAt(0) === '#' ? h : '#' + h; }, toast: toast, haptic: E_vibe }); if (mr && typeof mr.then === 'function') mr.then(null, bad); } catch (e) { bad(); } // a module that throws leaves a screen that works, not a blank one
+      try { var mr = window[m.global].mount(box, { client: DEMO ? null : sb, demo: DEMO, role: role(), sub: sub, propertyId: pid(), houseTimes: A_houseT(), pushKey: H_pushKey, swReg: H_swReg, navigate: function (h) { location.hash = String(h).charAt(0) === '#' ? h : '#' + h; }, toast: toast, haptic: E_vibe }); if (mr && typeof mr.then === 'function') mr.then(null, bad); } catch (e) { bad(); } // a module that throws leaves a screen that works, not a blank one
     }, function () { if (current === key && token === H_mod.n) H_fallback(key); });
   }
 
@@ -1488,7 +1504,7 @@
     if (H_mod.mounted && H_mod.mounted !== v) H_unmount();
     setView(v);
     if (v === 'door') { renderDoor(); return; }
-    renderTabs(v === 'hub' || v === 'search' ? 'more' : v === 'weather' ? 'calendar' : v === 'stock' || v === 'manage' ? 'home' : v);
+    renderTabs(v === 'hub' || v === 'search' ? 'more' : v === 'weather' ? 'calendar' : v === 'stock' || v === 'manage' || v === 'guests' || v === 'inbox' ? 'home' : v);
     if (H_MODULES[v]) renderModule(v); else if (v === 'search') renderSearch(); else if (v === 'hub') renderHub(); else if (v === 'home') renderHome(); else if (v === 'calendar') renderCalendar(); else if (v === 'tasks') renderTasks(); else if (v === 'payrates') { renderPayRates(); if (!state.rates) loadRates(); } else if (v === 'reply') renderReply(); else if (v === 'more') renderMore();
     var typing = document.activeElement && /^(df-(label|kind)|t-(title|due|who|note)|n-(type|title|date|start|hours|detail))$/.test(document.activeElement.id || '');
     if (state.sheet) { if (v !== state.sheet.view) closeSheet(); else if (!typing) drawSheet(); }
@@ -1515,7 +1531,7 @@
   function enter() {
     state.layout = CS.layoutForRole(state.access.role);
     state.name = CS.deriveDisplayName(state.user);
-    if (!/^#(home|calendar|tasks|payrates|reply|more|hub|weather|stock|manage|search)/.test(location.hash)) history.replaceState(null, '', '#home');
+    if (!/^#(home|calendar|tasks|payrates|reply|more|hub|weather|stock|manage|guests|inbox|search)/.test(location.hash)) history.replaceState(null, '', '#home');
     route(); loadHome(); loadTasks(); maybeIosHint(); H_tourMaybe();
   }
   function boot() {
