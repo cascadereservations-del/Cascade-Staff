@@ -10,10 +10,10 @@ export const NOW = '2026-10-15T04:30:00Z'; // 12:30 Manila, 2026-10-15
 const clone = (x) => (x === undefined ? undefined : JSON.parse(JSON.stringify(x)));
 export const flush = async () => { for (let i = 0; i < 12; i++) await new Promise((r) => setImmediate(r)); };
 
-class Kid { constructor() { this.innerHTML = ''; this.textContent = ''; this.attrs = {}; } setAttribute(k, v) { this.attrs[k] = v; } removeAttribute(k) { delete this.attrs[k]; } }
+class Kid { constructor() { this.innerHTML = ''; this.textContent = ''; this.attrs = {}; this.srcObject = null; this.played = 0; } play() { this.played++; return Promise.resolve(); } setAttribute(k, v) { this.attrs[k] = v; } removeAttribute(k) { delete this.attrs[k]; } }
 class Root {
   constructor() { this.l = {}; this._h = ''; this.kids = null; }
-  set innerHTML(v) { this._h = v; this.kids = { top: new Kid(), list: new Kid(), layer: new Kid(), live: new Kid() }; }
+  set innerHTML(v) { this._h = v; this.kids = { top: new Kid(), list: new Kid(), layer: new Kid(), live: new Kid(), video: this.video || (this.video = new Kid()) }; }
   get innerHTML() { return this._h; }
   addEventListener(t, f) { (this.l[t] ||= []).push(f); }
   removeEventListener(t, f) { this.l[t] = (this.l[t] || []).filter((x) => x !== f); }
@@ -50,14 +50,22 @@ export function mockClient(o = {}) {
         then(res, rej) { const r = o.from ? o.from(table) : { data: table === 'inventory_shopping_list' ? (o.shop || []) : (o.moves || []), error: null }; return Promise.resolve(r).then(res, rej); } };
       return q;
     },
+    functions: {
+      invoke(name, opts) {
+        calls.push(['fn', name, clone(opts && opts.body)]);
+        const h = (o.fn || {})[name];
+        return Promise.resolve(h ? h(opts && opts.body) : { data: { ok: true }, error: null });
+      }
+    },
     auth: { getSession: () => Promise.resolve({ data: { session: { user: { id: o.uid || 'me-1' } } } }) }
   };
+  client.fnCalls = (name) => calls.filter((c) => c[0] === 'fn' && (!name || c[1] === name));
   client.rpcCalls = (name) => calls.filter((c) => c[0] === 'rpc' && (!name || c[1] === name));
   return client;
 }
 
 export function item(id, name, qty, reorder, extra) {
-  return Object.assign({ id, name, category: 'Bathroom', unit: 'rolls', qty, reorderBelow: reorder, consumable: true, active: true, status: 'good', unitCost: 7391.55, purchaseUnit: 'pack', unitsPerPurchase: 12, photo: null, movementControlled: false, baselineNote: null, usage30d: 0, usageDays: 0, avgDaily: null, coverageDays: null, attention: false, estDailyUsage: null, estCoverageDays: null }, extra || {});
+  return Object.assign({ par: null, codes: [], id, name, category: 'Bathroom', unit: 'rolls', qty, reorderBelow: reorder, consumable: true, active: true, status: 'good', unitCost: 7391.55, purchaseUnit: 'pack', unitsPerPurchase: 12, photo: null, movementControlled: false, baselineNote: null, usage30d: 0, usageDays: 0, avgDaily: null, coverageDays: null, attention: false, estDailyUsage: null, estCoverageDays: null }, extra || {});
 }
 export const CATALOGUE = { items: [item('i1', 'Toilet paper', 4, 12), item('i2', 'Hand soap', 0, 3, { category: 'Kitchen', unit: 'bottles', purchaseUnit: null, unitsPerPurchase: 1 }), item('i3', 'Bath towels', 14, 10, { category: 'Linen', consumable: false, unit: 'pieces' }), item('i4', 'Old lamp', 1, 5, { active: false })], sourceAsOf: NOW, forecastNote: 'x' };
 
@@ -75,8 +83,17 @@ export async function setup(o = {}) {
   const root = new Root();
   const opts = { client, demo: !!o.demo, role, sub: o.sub || '', navigate: (h) => { navs.push(h); if (o.remount !== false) { const m = /^#stock\/?(.*)$/.exec(h); if (m) { const sub = m[1]; Promise.resolve().then(() => { opts.sub = sub; win.I_Stock.mount(root, opts); }); } } }, /* the shell re-mounts on a sub-route change */ toast: (m) => toasts.push(m), haptic: (k) => hapts.push(k) };
   if (o.propertyId) opts.propertyId = o.propertyId;
+  // timers and camera: a stub the tests drive by hand (the module reads window.setInterval, BarcodeDetector and navigator.mediaDevices)
+  const timers = [], cam = { opened: 0, stopped: 0, found: [], denied: o.camDenied || null, constraints: null, detectCalls: 0 };
+  win.setInterval = (fn) => { timers.push({ fn, on: true }); return timers.length; };
+  win.clearInterval = (id) => { if (timers[id - 1]) timers[id - 1].on = false; };
+  if (o.camera) {
+    win.BarcodeDetector = class { static async getSupportedFormats() { return ['ean_13', 'qr_code', 'pdf417']; } constructor(opt) { cam.formats = opt && opt.formats; } async detect() { cam.detectCalls++; return cam.found.length ? [cam.found.shift()] : []; } };
+    nav.mediaDevices = { getUserMedia: async (c) => { cam.constraints = c; if (cam.denied) { const e = new Error('denied'); e.name = cam.denied; throw e; } cam.opened++; return { getTracks: () => [{ stop() { cam.stopped++; } }] }; } };
+  }
   const fire = async (type, ev) => { for (const f of root.l[type] || []) await f(ev); await flush(); };
   const env = {
+    timers, cam, tick: async () => { for (const t of timers.filter((x) => x.on)) t.fn(); await flush(); },
     advance: (ms) => { when = new Date(when.getTime() + ms); }, role, client, nav, toasts, navs, hapts, root, win, ctx, lib: win.I_Stock.lib,
     mount: async (sub) => { if (sub !== undefined) opts.sub = sub; win.I_Stock.mount(root, opts); await flush(); },
     unmount: () => win.I_Stock.unmount(),

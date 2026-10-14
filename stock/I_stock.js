@@ -250,7 +250,7 @@
 
   /* ---- drawing */
   function itemById(id) { return (K.items || []).filter(function (i) { return i.id === id; })[0] || null; }
-  function newMenu(id) { var scanned = K.scanned === id; if (scanned) K.scanned = null; return { kind: 'menu', itemId: id, scanned: scanned }; } // scanned: the right action first
+  function newMenu(id) { var scanned = K.scanned === id; return { kind: 'menu', itemId: id, scanned: scanned }; } // scanned: the right action first
   function route() {
     var m = /^item\/(.+)$/.exec(M.sub);
     return { shopping: M.sub === 'shopping', itemId: m ? m[1] : null };
@@ -487,7 +487,7 @@
     if (allowed('levels')) list.push(['levels', 0, 'Edit levels']);
     if (allowed('link')) list.push(['link', 0, 'Link a barcode']);
     if (allowed('shop')) list.push(['shop', 0, 'Add to shopping list']);
-    if (a && a.scanned) { var want = canManage(m) ? 'count' : canPrice(m) ? 'price' : 'shop', at = -1; list.forEach(function (x, i) { if (x[0] === want) at = i; }); if (at > 0) { list.unshift(list.splice(at, 1)[0]); list.forEach(function (y, i) { y[1] = i === 0 ? 1 : 0; }); } }
+    if (a && a.scanned) { var want = canManage(m) ? 'count' : canPrice(m) ? 'price' : 'shop', at = -1; list.forEach(function (x, i) { if (x[0] === want) at = i; }); if (at >= 0) { list.unshift(list.splice(at, 1)[0]); list.forEach(function (y, i) { y[1] = i === 0 ? 1 : 0; }); } }
     return list.map(function (x) { return x[0] === 'admin' ? x[2] : x[0] === 'link' ? b('link', x[2], 0, 'begin-link') : b(x[0], x[2], x[1]); }).join('');
   }
   function renderShopSheet(a) {
