@@ -57,3 +57,10 @@ div.I_row { cursor: default; }
 .I_pickrows { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0; }
 .I_choice { min-height: 44px; }
 .I_sheet select { width: 100%; min-height: 44px; font: inherit; color: inherit; background: transparent; border: 0; }
+/* s84 1b: undo */
+.I_undoslot { min-height: 0; }
+.I_undo { position: sticky; bottom: 8px; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 8px 8px 14px; border-radius: var(--r-md, 12px); background: var(--v5-sunk); border: 1px solid var(--v5-sep); }
+.I_undot { min-width: 0; overflow-wrap: anywhere; font-size: var(--v5-t-2); color: var(--fg); }
+.I_undob { flex: none; min-height: 48px; }
+.I_last { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; }
+.I_undobtn { min-height: 44px; }
