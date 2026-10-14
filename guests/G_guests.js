@@ -580,7 +580,9 @@
     G_call({ action: 'remove_id', guest_id: S.gid, companion_id: id, reason: G_REASON_PHOTO }).then(function (o) {
       if (!G_live(tok)) return;
       S.cbusy = '';
-      if ((o.status === 200 || o.status === 207) && o.j.saved) { S.msg = G_saveLines(o.j.saved); delete D.urls[id]; if (o.j.ok) { G_refreshCompanions(); return; } }
+      if ((o.status === 200 || o.status === 207) && o.j.saved) { S.msg = G_saveLines(o.j.saved); delete D.urls[id];
+        if (o.j.saved.some(function (x) { return x.what === 'profile'; })) { var m = S.msg; G_loadDetail(); S.msg = m; return; } // the ID flag changed too: reload so "ID: On file" is current
+        if (o.j.ok) { G_refreshCompanions(); return; } }
       else S.cerr = G_errText(o.status, o.j.error);
       G_paint();
     });

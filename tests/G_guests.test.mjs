@@ -430,3 +430,14 @@ test('G: with companions shown and an older function, Replace photo and Add ID p
   assert.match(el.html, /People and ID photos/); assert.match(el.html, /Ben Cruz/);
   assert.doesNotMatch(el.html, /Replace photo|Add ID photo|Remove photo/);
 });
+
+test('G: after remove_id also clears the ID flag, the record reloads so ID reads Not on file at once', async () => {
+  let flag = true;
+  const cl = detailClient({ tables: { guests: { data: GUEST, error: null }, guest_profile_details: () => ({ data: { ...PROFILE, id_on_file: flag }, error: null }) },
+    fn: (b) => { if (b.action === 'context') return { status: 200, j: { ok: true, features: FEAT } }; flag = false; return { status: 200, j: { ok: true, saved: [{ what: 'id_photo_removed', ok: true }, { what: 'profile', ok: true }] } }; } });
+  const { el } = await mount(cl, GID);
+  assert.match(el.html, /On file/);
+  await clickA(el, 'remove-photo', { id: CID }); await clickA(el, 'remove-photo-yes', { id: CID }); await tick();
+  assert.equal(cl.chains.filter((c) => c[0][1] === 'guest_profile_details').length, 2);
+  assert.match(el.html, /ID photo removed/); assert.match(el.html, /<dt>ID<\/dt><dd><span class="G_none">Not on file/);
+});
