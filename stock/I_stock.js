@@ -319,6 +319,7 @@
     if (M.shopErr && !K.shop) return '<div class="empty" role="alert"><p class="hd">The shopping list is not available right now</p><button class="btn btn-primary" type="button" data-act="retry">Try again</button></div>';
     if (!K.shop) return '<p class="help I_load" role="status">Loading the shopping list…</p>';
     if (!K.shop.length) return '<div class="empty"><p>Nothing is on the shopping list.</p><p class="help">Open an item and choose Add to shopping list.</p></div>';
+    if (allowed('bought')) h += '<button class="btn btn-primary btn-block I_boughtbtn" type="button" data-act="bought-open">Bought some of these</button>';
     h += '<div class="card list I_list">' + K.shop.map(function (r) {
       var who = r.mine ? 'You asked' : 'Asked by staff', when = dateLabel(r.at);
       var tag = canManage(M.role) ? 'button' : 'div';
@@ -368,6 +369,7 @@
       return head((a.status === 'approved' ? 'Approve ' : 'Remove ') + a.rowName + (a.status === 'approved' ? '?' : ' from the list?')) + '<form data-i-form>' + actions(a, a.status === 'approved' ? 'Yes, approve it' : 'Yes, remove it') + '</form>';
     }
     if (a.kind === 'undo') return head(a.entry.confirm) + '<form data-i-form>' + (a.err === 'tooLate' ? errBox(a) : '') + (a.err === 'tooLate' ? '' : errBox(a)) + actions(a, a.err === 'tooLate' ? 'Close' : 'Yes, undo it') + '</form>';
+    if (a.kind === 'bought') return renderBought(a);
     if (a.kind === 'scan') return renderScan(a);
     if (a.kind === 'report') return renderReport(a);
     if (a.kind === 'create') return renderCreate(a);
@@ -489,7 +491,6 @@
     if (allowed('used')) list.push(['used', 1, 'Used some']);
     if (allowed('price')) list.push(['price', 0, 'Change price']);
     if (allowed('recv', it)) list.push(['recv', 0, 'Stock received']);
-    else if (canManage(m) && it.controlled) list.push(['admin', 0, '<p class="help I_more"><a href="#door/inventory" data-act="admin">Receive this one in the admin dashboard</a></p>']);
     if (allowed('levels')) list.push(['levels', 0, 'Edit levels']);
     if (allowed('link')) list.push(['link', 0, 'Link a barcode']);
     if (allowed('shop')) list.push(['shop', 0, 'Add to shopping list']);
@@ -506,7 +507,7 @@
     var r = (K.shop || []).filter(function (x) { return x.id === a.shopId; })[0]; if (!r) return null;
     return head(r.name, (r.qty != null ? fmt(r.qty) + ' ' + (r.unit || '') : '') + ' · ' + (r.status === 'approved' ? 'Approved' : 'Asked')) + (r.note ? '<p>' + esc(r.note) + '</p>' : '') + (a.note ? '<div class="okbox" role="status"><span>' + esc(a.note) + '</span></div>' : '') + errBox(a) +
       '<div class="I_btns">' + (r.status === 'proposed' && !M.denied.shopset ? '<button class="btn btn-primary btn-block" type="button" data-act="shop-do" data-do="approved">Approve</button>' : '') +
-      (r.status === 'approved' && r.itemId && allowed('recv', itemById(r.itemId)) ? '<button class="btn btn-primary btn-block" type="button" data-act="shop-bought">Mark bought</button>' : r.status === 'approved' && r.itemId && itemById(r.itemId) && itemById(r.itemId).controlled ? '<p class="help I_more"><a href="#door/inventory" data-act="admin">Receive this one in the admin dashboard</a></p>' : '') +
+      (r.status === 'approved' && r.itemId && allowed('recv', itemById(r.itemId)) ? '<button class="btn btn-primary btn-block" type="button" data-act="shop-bought">Mark bought</button>' : '') +
       (M.denied.shopset ? '' : '<button class="btn btn-secondary btn-block" type="button" data-act="shop-do" data-do="rejected">Remove from the list</button>') + '<button class="btn btn-ghost btn-block" type="button" data-act="close">Close</button></div>';
   }
 
@@ -520,6 +521,7 @@
     if (act === 'tab') return go(attr(t, 'data-to') ? '#stock/' + attr(t, 'data-to') : '#stock', attr(t, 'data-to') || '');
     if (act === 'chip') { K.chip = attr(t, 'data-k'); draw(); return; }
     if (act === 'showall') { K.chip = 'all'; K.q = ''; draw(); return; }
+    if (act === 'bought-open') { if (!allowed('bought') || (M.act && M.act.sending)) return; M.act = { kind: 'bought', step: 'pick', sel: {}, vals: {}, keys: {}, done: {} }; drawLayer(); return; }
     if (act === 'scan') { if (M.act && M.act.sending) return; return openScan(null); }
     if (act === 'report') { if (!allowed('report') || (M.act && M.act.sending)) return; M.act = { kind: 'report', step: 'form', vals: { rkind: 'order', to: 'ops' } }; drawLayer(); return; }
     if (act === 'retry') { M.loadErr = null; M.shopErr = null; M.loading = false; if (!K.items) draw(); load(); return; }
@@ -531,6 +533,8 @@
     if (!a) return;
     if (a.sending) return; // nothing, not even Close, while a write is in flight
     if (act === 'begin') return begin(attr(t, 'data-kind'));
+    if (act === 'b-tick') { var bid = attr(t, 'data-id'); if (a.kind !== 'bought' || a.step !== 'pick') return; if (a.sel[bid]) delete a.sel[bid]; else { var br = shopRowBy(bid); a.sel[bid] = 1; if (a.vals['packs_' + bid] == null) a.vals['packs_' + bid] = fmt(br && br.qty || 1); } a.bad = false; drawLayer(); return; }
+    if (act === 'b-undoall') { if (a.kind === 'bought' && a.step === 'done') { a.step = 'undoconfirm'; a.err = null; drawLayer(); } return; }
     if (act === 'begin-link') { if (allowed('link') && a.itemId) openScan(a.itemId); return; }
     if (act === 'cam-start') { startCam(); return; }
     if (act === 'open-taken') { var tid = attr(t, 'data-id'); stopCam(); K.scanned = tid; return go('#stock/item/' + tid, 'item/' + tid, tid); }
@@ -539,7 +543,7 @@
     if (act === 'pick') { if (a.phase !== 'pick' || !allowed('link')) return; M.act = { kind: 'link', step: 'confirm', pickId: attr(t, 'data-id'), code: a.code, format: a.format, mode: a.mode, fromPick: true }; drawLayer(); return; }
     if (act === 'rep-kind') { a.vals.rkind = attr(t, 'data-k'); a.bad = false; drawLayer(); return; }
     if (act === 'rep-to') { a.vals.to = attr(t, 'data-to') === 'finance' && canPrice(M.role) && !K.noFinance ? 'finance' : 'ops'; a.bad = false; drawLayer(); return; }
-    if (act === 'back') { if (/^(scan|link|create|report|undo)$/.test(a.kind)) return flowBack(a); if (a.kind === 'shopset') { a.kind = 'menu'; a.step = null; a.err = null; drawLayer(); } else if (a.fromShop && a.step !== 'confirm') { M.act = null; drawLayer(); } else if (a.step === 'confirm' && a.kind !== 'low') { a.step = 'form'; a.err = null; drawLayer(); } else if (a.shopId) { a.kind = 'menu'; a.err = null; drawLayer(); } else { a.kind = 'menu'; a.vals = null; a.step = null; a.err = null; a.bad = false; drawLayer(); } return; }
+    if (act === 'back') { if (/^(scan|link|create|report|undo|bought)$/.test(a.kind)) return flowBack(a); if (a.kind === 'shopset') { a.kind = 'menu'; a.step = null; a.err = null; drawLayer(); } else if (a.fromShop && a.step !== 'confirm') { M.act = null; drawLayer(); } else if (a.step === 'confirm' && a.kind !== 'low') { a.step = 'form'; a.err = null; drawLayer(); } else if (a.shopId) { a.kind = 'menu'; a.err = null; drawLayer(); } else { a.kind = 'menu'; a.vals = null; a.step = null; a.err = null; a.bad = false; drawLayer(); } return; }
     if (act === 'step') { a.vals = a.vals || {}; var f = attr(t, 'data-f'); a.vals[f] = stepQty(a.vals[f], +attr(t, 'data-d'), attr(t, 'data-z') === '1'); a.err = null; drawLayer(); var nb = q('[data-act="step"][data-f="' + f + '"][data-d="' + attr(t, 'data-d') + '"]'); if (nb && nb.focus) nb.focus(); return; }
     if (act === 'shop-bought') { var r = (K.shop || []).filter(function (x) { return x.id === a.shopId; })[0]; if (!r || !r.itemId || !allowed('recv', itemById(r.itemId))) return; M.act = { kind: 'recv', itemId: r.itemId, step: 'form', vals: { packs: fmt(r.qty || 1), supplier: '', cost: '', shopId: r.id }, fromShop: true }; drawLayer(); return; }
     if (act === 'shop-do') { var rr = (K.shop || []).filter(function (x) { return x.id === a.shopId; })[0]; if (!rr) return; a.kind = 'shopset'; a.status = attr(t, 'data-do'); a.step = 'confirm'; a.rowName = rr.name; drawLayer(); return; }
@@ -561,7 +565,8 @@
     var m = M.role;
     if (kind === 'count') return I_FLAGS.count && canManage(m) && !M.denied.count;
     if (kind === 'used') return I_FLAGS.usage && canUse(m) && !M.denied.used;
-    if (kind === 'recv') return canManage(m) && !M.denied.recv && !(it && it.controlled);
+    if (kind === 'recv') return canManage(m) && !M.denied.recv; // controlled items too since 1b: record_inventory_receipt_v1 writes their movement
+    if (kind === 'bought') return canManage(m) && !M.denied.bought && K.shop && K.shop.length > 0;
     if (kind === 'shop') return !M.denied.shop;
     if (kind === 'low') return !M.denied.low && !M.denied.shop && !(it && (K.shop || []).some(function (r) { return r.itemId === it.id; }));
     if (kind === 'price') return K.v84 && canPrice(m) && !M.denied.price;
@@ -601,6 +606,7 @@
   function onSubmit(ev) {
     if (ev && ev.preventDefault) ev.preventDefault();
     var a = M && M.act; if (!a || a.sending || a.kind === 'menu') return;
+    if (a.kind === 'bought') return boughtSubmit(a);
     if (a.kind === 'scan') { if (a.phase === 'look') handleCode((a.vals || {}).code, null); return; }
     if (a.step !== 'confirm') { if (!valid(a)) { a.bad = a.kind === 'levels' && optQty(a.vals.reorder) && optQty(a.vals.par) ? 'levels' : true; drawLayer(); return; } a.bad = false; a.step = 'confirm'; a.err = null; a.focused = false; drawLayer(); return; }
     commit(a);
@@ -676,6 +682,83 @@
       if (rep) drawList();
     }
     drawLayer();
+  }
+
+  /* ---- Bought some of these (s84 1b, Q5): tick, check once, then one receipt per line, one at a time */
+  function shopRowBy(id) { return (K.shop || []).filter(function (x) { return x.id === id; })[0] || null; }
+  function boughtRows() { return (K.shop || []).filter(function (r) { return r.itemId && itemById(r.itemId); }); }
+  function boughtPicked(a) { return boughtRows().filter(function (r) { return a.sel[r.id]; }); }
+  function boughtValid(a) {
+    var rows = boughtPicked(a); if (!rows.length) return false;
+    return rows.every(function (r) { return parseQty(a.vals['packs_' + r.id]) != null && (!canPrice(M.role) || String(a.vals['cost_' + r.id] || '').trim() === '' || parseQty(a.vals['cost_' + r.id]) != null); });
+  }
+  function boughtLine(r, a) {
+    var it = itemById(r.itemId), pk = parseQty(a.vals['packs_' + r.id]), add = Math.round(pk * it.perPack * 100) / 100, pu = it.purchaseUnit || it.unit || 'pack';
+    return '<li><strong>' + esc(it.name) + '</strong>: ' + esc(fmt(pk) + ' ' + pu + (it.perPack !== 1 ? ' = ' + fmt(add) + ' ' + unitOf(it) : '')) + ', on hand ' + esc(it.qty == null ? 'not counted' : fmt(it.qty)) + ' → ' + esc(fmt((it.qty || 0) + add)) + (r.status === 'proposed' ? ' <span class="help">(approved first)</span>' : '') + '</li>';
+  }
+  function renderBought(a) {
+    var rows = boughtRows(), picked = boughtPicked(a), nDone = picked.filter(function (r) { return a.done[r.id] && a.done[r.id].received; }).length;
+    if (a.step === 'done') return head(nDone + (nDone === 1 ? ' item added' : ' items added'), 'Stock is up to date.') + '<ul class="I_blines">' + picked.map(function (r) { return boughtLine(r, a); }).join('') + '</ul>' + errBox(a) +
+      '<div class="I_btns">' + (picked.some(function (r) { return a.done[r.id] && a.done[r.id].undo && !K.denied.inventory_undo_v1; }) ? '<button class="btn btn-secondary btn-block" type="button" data-act="b-undoall"><span aria-hidden="true">↶</span> Undo all</button>' : '') + '<button class="btn btn-primary btn-block" type="button" data-act="close">Close</button></div>';
+    if (a.step === 'undoconfirm') return head('Undo all ' + nDone + ' receipts?', 'Each one is taken back out, newest first.') + '<form data-i-form>' + actions(a, 'Yes, undo them all') + '</form>';
+    if (a.step === 'confirm') {
+      var failed = a.failId && shopRowBy(a.failId), left = picked.length - nDone;
+      return head('Add these to the stock?') + '<form data-i-form><ul class="I_blines">' + picked.map(function (r) { return boughtLine(r, a); }).join('') + '</ul>' +
+        (a.err && failed ? '<div class="errbox" role="alert"><span aria-hidden="true">▲</span><span>' + esc(nDone + ' of ' + picked.length + ' added. ' + failed.name + ' did not go through. ' + (a.err === 'offline' ? ERR.offline : 'Try again.')) + '</span></div>' : errBox(a)) +
+        actions(a, a.err && nDone ? 'Try again' : 'Yes, add them') + '</form>';
+    }
+    return head('Bought some of these', 'Tick what you bought.') + '<form data-i-form>' + (rows.length ? '' : '<p class="help">Nothing on the list can be added yet.</p>') + rows.map(function (r) {
+      var on = !!a.sel[r.id], it = itemById(r.itemId), pu = it.purchaseUnit || it.unit || 'pack';
+      return '<div class="I_brow"><button class="btn btn-secondary btn-block I_tick" type="button" data-act="b-tick" data-id="' + esc(r.id) + '" aria-pressed="' + on + '"><span aria-hidden="true">' + (on ? '✓' : '○') + '</span> ' + esc(r.name) + (r.status === 'proposed' ? ' <span class="help">Waiting for approval</span>' : '') + '</button>' +
+        (on ? stepper('packs_' + r.id, 'How many (' + esc(pu) + ')', a.vals['packs_' + r.id], false) + (canPrice(M.role) ? textField('cost_' + r.id, 'Price per ' + esc(pu) + ' in PHP (optional)', a.vals['cost_' + r.id] || '', 'inputmode="decimal"') : '') : '') + '</div>';
+    }).join('') + (a.bad ? '<div class="field"><span class="err">▲ Tick at least one, and enter numbers such as 2 or 150.50.</span></div>' : '') + actions(a, 'Check them', 'Cancel') + '</form>';
+  }
+  function boughtSubmit(a) {
+    if (a.sending) return;
+    if (a.step === 'pick') { if (!boughtValid(a)) { a.bad = true; drawLayer(); return; } a.bad = false; boughtPicked(a).forEach(function (r) { a.keys[r.id] = a.keys[r.id] || newKey('recv'); a.keys[r.id + 'a'] = a.keys[r.id + 'a'] || newKey('appr'); }); a.step = 'confirm'; a.err = null; drawLayer(); return; }
+    if (a.step === 'done') return closeSheet();
+    var me = M, rows = boughtPicked(a);
+    if (me.demo) { toast(DEMO_NOTE); closeSheet(); return; }
+    if (!online()) { a.err = 'offline'; a.failId = null; drawLayer(); return; }
+    if (!me.client) { a.err = 'missing'; drawLayer(); return; }
+    K.at = 0; a.sending = true; a.err = null; a.failId = null; drawLayer();
+    var chk = function (r) { if (r && r.error) throw r.error; if (r && r.data && (r.data.ok === false || r.data.error)) throw { message: 'failed', data: r.data }; return r; };
+    var chain = Promise.resolve();
+    if (a.step === 'undoconfirm') {
+      var es = rows.map(function (r) { return a.done[r.id] && a.done[r.id].undo; }).filter(Boolean).reverse(), n = 0;
+      es.forEach(function (e) { chain = chain.then(function () { a.cur = e; return me.client.rpc(e.call.fn, e.call.args); }).then(chk).then(function () { n++; K.undos = K.undos.filter(function (u) { return u !== e; }); }); });
+      chain.then(function () { if (me.dead) return; a.sending = false; toast('Undone.'); closeSheet(); load(); }).catch(function (e) {
+        if (me.dead) return; a.sending = false; Promise.resolve(e && e.data ? e.data : bodyOf(e)).then(function (body) {
+          var why = body && (body.reason || body.error); a.err = why === 'too_late' || why === 'not_yours' || why === 'stock_moved' ? 'tooLate' : errKind(e, online());
+          if (a.err === 'refused' || a.err === 'missing') { K.denied.inventory_undo_v1 = true; a.step = 'done'; }
+          load(); drawLayer();
+        });
+      });
+      return;
+    }
+    rows.forEach(function (r) {
+      chain = chain.then(function () {
+        var d = a.done[r.id] = a.done[r.id] || {}; if (d.received) return null; a.cur = r.id;
+        var it = itemById(r.itemId), p = Promise.resolve();
+        if (r.status === 'proposed' && !d.approved) p = p.then(function () { var c = shopSetCall(me.pid, r, 'approved', a.keys[r.id + 'a']); return me.client.rpc(c.fn, c.args); }).then(chk).then(function () { d.approved = true; });
+        return p.then(function () {
+          var c = receiptCall(it, { packs: a.vals['packs_' + r.id], cost: canPrice(me.role) ? a.vals['cost_' + r.id] : '', supplier: '', shopId: r.id }, a.keys[r.id], manilaToday(nowMs()));
+          return me.client.rpc(c.fn, c.args);
+        }).then(chk).then(function (res) {
+          var dd = res.data || {}; d.received = dd;
+          if (dd.movementId || dd.purchaseId) { var e = { id: 'u' + (++K.uidn), itemId: it.id, name: it.name, at: nowMs(), kind: 'recv', say: 'Received ' + it.name, line: 'received stock', confirm: 'Take the stock you just added to ' + it.name + ' back out?', call: { fn: 'inventory_undo_v1', args: { p_movement_id: dd.movementId || null, p_purchase_id: dd.purchaseId || null } } }; d.undo = e; pushUndoEntry(e); }
+        });
+      });
+    });
+    chain.then(function () { if (me.dead) return; a.sending = false; a.step = 'done'; a.err = null; toast('Stock added.'); if (me.opts.haptic) { try { me.opts.haptic('success'); } catch (x) { /* no haptics */ } } load(); drawLayer(); }).catch(function (e) {
+      if (me.dead) return; a.sending = false; a.failId = a.cur;
+      Promise.resolve(e && e.data ? e.data : bodyOf(e)).then(function (body) {
+        if (me.dead) return; a.err = errKind(e, online());
+        if (a.err === 'refused' || a.err === 'missing') { K.denied.bought = true; var m = ERR[a.err]; me.act = null; toast(m); load(); draw(); return; }
+        if (a.err === 'offline' || a.err === 'other') { me.loading = false; load(); }
+        drawLayer();
+      });
+    });
   }
 
   /* ---- undo (s84 1b): every successful write leaves a bar for 10 s and a line on the card for 15 min, for the person who made it */
@@ -800,6 +883,7 @@
     a.phase = 'unknown'; a.camState = undefined; a.focused = false; drawLayer();
   }
   function flowBack(a) {
+    if (a.kind === 'bought') { if (a.step === 'confirm') { a.step = 'pick'; a.err = null; drawLayer(); return; } if (a.step === 'undoconfirm') { a.step = 'done'; a.err = null; drawLayer(); return; } return closeSheet(); }
     if (a.kind === 'undo') { M.act = route().itemId ? newMenu(route().itemId) : null; drawLayer(); return; }
     if (a.kind === 'report') { if (a.step === 'confirm') { a.step = 'form'; a.err = null; drawLayer(); return; } return closeSheet(); }
     if (a.kind === 'create') { if (a.step === 'confirm') { a.step = 'form'; a.err = null; a.takenId = null; drawLayer(); return; } a.kind = 'scan'; a.phase = 'unknown'; a.err = null; a.sg = null; drawLayer(); return; }

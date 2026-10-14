@@ -64,3 +64,8 @@ div.I_row { cursor: default; }
 .I_undob { flex: none; min-height: 48px; }
 .I_last { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; }
 .I_undobtn { min-height: 44px; }
+/* s84 1b: bought in one go */
+.I_boughtbtn { margin-bottom: 8px; }
+.I_blines { margin: 12px 0; padding: 0 0 0 18px; display: grid; gap: 8px; font-size: var(--v5-t-body); overflow-wrap: anywhere; }
+.I_brow { display: grid; gap: 8px; margin-bottom: 8px; }
+.I_tick { justify-content: flex-start; text-align: left; min-height: 48px; }
