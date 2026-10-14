@@ -81,7 +81,7 @@ test('3.2 sign-out: G_Guests.reset and X_Inbox.reset run, and a reset that throw
   const app = await boot({ role: 'admin', hash: '#home', winInit: (w) => { w.G_Guests = { mount() {}, reset: () => { resets.push('G'); throw new Error('boom'); } }; w.X_Inbox = { mount() {}, reset: () => resets.push('X') }; }, handlers: baseHandlers('admin') });
   resets.length = 0; await app.click({ 'data-act': 'signout' });
   assert.deepEqual(resets, ['G', 'X'], 'both reset, in order, even when the first throws'); assert.match(app.els['si-err'].innerHTML + app.location.hash, /signin/, 'the sign-in screen is reached');
-  const src = read('app.js'); assert.match(src, /function enter\(\) \{\s+H_histGen\+\+; H_calReset\(\); H_resetModules\(\)/, 'a new sign-in starts every module empty');
+  const src = read('app.js'); assert.match(src, /function enter\(\) \{\s+H_histGen\+\+; H_calReset\(\); H_alReset\(\); H_resetModules\(\)/, 'a new sign-in starts every module empty');
 });
 
 // ------------------------------------------------------------------------------------------------ 3. service worker and push

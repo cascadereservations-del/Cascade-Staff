@@ -21,7 +21,7 @@
   }
   function C_target(d) {
     // Only a path inside this app: never an address from the payload.
-    var u = String(d && d.url || './#home');
+    var u = String(d && d.url || (d && d.tag === 'notices' ? './#calendar/notices' : './#home')); // a notices alert opens the Notices tab even when the payload carries no url
     return /^(?:\.\/|\/)[^:]*$/.test(u) && u.indexOf('//') < 0 ? u : './#home';
   }
 

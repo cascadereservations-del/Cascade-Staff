@@ -263,7 +263,7 @@
     var body;
     if (staff) {
       // Today, Turnover, the paid notice (under Turnover: Turnover and Slide to start never move when it lands), Notices, then the doors
-      body = '<div class="A_body">' + errBanner() + todayCard() + A_turnoverCard(true) + H_cleanDoneCard() + '<div id="slot-paid-notice" class="A_slot" hidden></div>' + A_noticesCard() +
+      body = '<div class="A_body">' + errBanner() + todayCard() + A_turnoverCard(true) + H_cleanDoneCard() + '<div id="slot-paid-notice" class="A_slot" hidden></div>' + H_alertsCard() + A_noticesCard() +
         A_navCard('Work', row({ icon: 'cloud', title: 'Weather', sub: 'Today and the next few hours', href: '#weather' }) + doorRow('checklist', 'clip', 'Start or continue today’s turnover') +
           (LINKS.pay ? row({ icon: 'cash', title: 'Cleaning fee', sub: state.payHint || 'Ask for payment for your cleans and expenses', href: H_payUrl(), subId: 'pay-sub' }) : '') +
           row({ icon: 'calendar', title: 'Calendar', sub: 'Who is staying, who is next', href: '#calendar', count: n || '' }) +
@@ -277,7 +277,7 @@
       // only owner and admin have an inbox; the reserve is kept while notices load, and dropped on failure, when absent, and for finance
       // 3.2: the row opens the shell's own #inbox (which falls back to the dashboard's conversations page when the module is not shipped)
       var inboxShown = CS.canSeeGuestContact(role()) && !state.noticesAbsent && (v ? inbox != null : state.noticesLoading);
-      body = '<div class="A_body">' + errBanner() + todayCard() + A_turnoverCard(false) + H_cleanDoneCard() + A_noticesCard() +
+      body = '<div class="A_body">' + errBanner() + todayCard() + A_turnoverCard(false) + H_cleanDoneCard() + H_alertsCard() + A_noticesCard() +
         A_navCard('Guests and bookings', (bk ? row({ icon: 'clip', title: 'Bookings to confirm', sub: 'Open the pending bookings', href: bk.href, external: bk.external, count: bk.count, countLabel: bk.n === 1 ? ' booking to confirm' : ' bookings to confirm' }) : '') +
           row({ icon: 'calendar', title: 'Calendar', sub: 'Stays, blocked nights, notices', href: '#calendar', count: n || '' }) +
           '<div id="slot-inbox"' + (inboxShown ? '' : ' hidden') + (inboxShown && !v ? ' style="min-height:64px"' : '') + '>' + (inboxShown && v ? row({ icon: 'chat', title: 'Inbox', sub: inbox ? inbox + ' open' : 'No open messages', href: '#inbox', count: inbox || '', countLabel: ' open messages' }) : '') + '</div>' +
@@ -1271,7 +1271,7 @@
         '<p class="help" style="margin:4px 0 0">A short buzz when something is saved or finished. Off saves nothing but the buzz.</p>' : '') + '</section></div>' });
     g.push({ w: 3, id: 'help', html: '<div class="F_group"><div class="A_label">Help</div><nav class="card glass list" aria-label="Help"><button class="rowi" type="button" data-act="whatsnew"><span class="lead">' + ICON('sparkles') + '</span><span class="mid"><span class="t">What’s new</span><span class="s">What changed in this version</span></span><span class="chev">' + ICON('chev') + '</span></button>' +
       '<button class="rowi" type="button" data-act="tour-open"><span class="lead">' + ICON('help') + '</span><span class="mid"><span class="t">Show the tour</span><span class="s">Three short cards on how the app works</span></span><span class="chev">' + ICON('chev') + '</span></button></nav></div>' });
-    g.push({ w: 3, id: 'phone', html: '<div class="F_group"><div class="A_label">This phone</div><section class="card glass" id="install-card" hidden aria-label="Install the app"><h2 class="hd">Install the app</h2><p class="sub" style="margin-top:6px">Put Cascade Staff on your Home Screen.</p><button class="btn btn-secondary" id="install-btn" type="button" style="margin-top:10px">' + ICON('plus', 's16') + 'Install</button>' +
+    g.push({ w: 3, id: 'phone', html: '<div class="F_group"><div class="A_label">This phone</div>' + H_alertsSwitch() + '<section class="card glass" id="install-card" hidden aria-label="Install the app"><h2 class="hd">Install the app</h2><p class="sub" style="margin-top:6px">Put Cascade Staff on your Home Screen.</p><button class="btn btn-secondary" id="install-btn" type="button" style="margin-top:10px">' + ICON('plus', 's16') + 'Install</button>' +
       '<a class="btn btn-secondary" id="install-link" href="./install/" style="margin-top:10px" hidden>' + ICON('plus', 's16') + 'How to install</a></section></div>' });
     return g;
   }
@@ -1300,6 +1300,7 @@
   }
   window.addEventListener('resize', function () { if (current === 'more' && state.layout && !state.sheet) renderMore(); });
   function renderMore() {
+    H_alStatus();
     var nm = state.name || 'You', roleName = state.access ? state.access.role : '', g = H_moreGroups(), k = H_moreSplit(g), col = function (a) { return '<div class="H_col">' + a.map(function (x) { return '<div class="H_g" data-g="' + x.id + '">' + x.html + '</div>'; }).join('') + '</div>'; };
     $('v-more').innerHTML = appbar({ title: 'More' }) + '<div class="screen"><div class="stack H_more">' +
       '<div class="H_cols">' + col(g.slice(0, k)) + col(g.slice(k)) + '</div>' +
@@ -1402,6 +1403,74 @@
     }, function () { if (current === key && token === H_mod.n) H_fallback(key); });
   }
 
+  // ---------------------------------------------------------------- Alerts on this phone (3.2, every role)
+  // Brownouts, water interruptions and rain during a brownout reach a phone only after one permission tap. The card on Home asks once, calmly; Not now keeps it away for 7 days
+  // (a time stamp in localStorage, nothing else). Turn on asks the browser, subscribes through the pay/ push code (C_Push) and sends the topics with staff_push_subscribe_v1.
+  // Before the server knows the topic 'notices' the call is retried without topics, so nothing breaks. More > This phone shows the same state as a switch.
+  var H_al = { busy: false, msg: '', on: null, loading: false }, H_ALERT_KEY = 'cs_alerts_later', H_ALERT_DAYS = 7;
+  function H_alEnv() { return { navigator: navigator, window: window }; }
+  function H_alSupport() { return DEMO || !window.C_Push ? 'unsupported' : window.C_Push.support(H_alEnv()); }
+  function H_alLater() { var ls = store('localStorage'), t = 0; try { t = ls ? Number(ls.getItem(H_ALERT_KEY)) || 0 : 0; } catch (e) { t = 0; } return t > 0 && Date.now() - t < H_ALERT_DAYS * 86400000; }
+  function H_alertTopics() { return CS.canSeeGuestContact(role()) ? ['paid', 'inbox', 'notices'] : ['paid', 'notices']; }
+  function H_alCardOn() { return !!state.access && H_alSupport() === 'ready' && window.Notification && window.Notification.permission === 'default' && !H_alLater(); }
+  function H_alertsCard() {
+    if (!H_alCardOn()) return '';
+    return '<section class="card glass A_card H_alerts" id="H_alerts" aria-label="Turn on alerts"><h2 class="hd">Turn on alerts</h2><p class="sub" style="margin:0">Brownouts, water interruptions and rain during a brownout.</p>' +
+      (H_al.msg ? '<p class="help" role="status" style="margin:0">' + esc(H_al.msg) + '</p>' : '') +
+      '<div class="row-wrap H_alrow"><button class="btn btn-primary" type="button" data-act="alerts-on"' + (H_al.busy ? ' disabled' : '') + '>' + (H_al.busy ? 'Turning on…' : 'Turn on') + '</button><button class="btn btn-ghost" type="button" data-act="alerts-later"' + (H_al.busy ? ' disabled' : '') + '>Not now</button></div></section>';
+  }
+  function H_alertsLater() { var ls = store('localStorage'); try { if (ls) ls.setItem(H_ALERT_KEY, String(Date.now())); } catch (e) { /* the card may come back sooner; nothing breaks */ } render(); }
+  // The switch on More > This phone: hidden where alerts cannot work, a plain sentence where they are blocked, a switch where they can be turned on or off.
+  function H_alertsSwitch() {
+    var sp = H_alSupport(); if (sp === 'unsupported') return '';
+    var words = sp === 'needs_install' || sp === 'blocked' ? window.C_Push.words(sp) : '', on = H_al.on === true;
+    if (words) return '<section class="card glass H_alsw" aria-label="Alerts on this phone"><span class="t"><b>Alerts on this phone</b></span><p class="help" style="margin:4px 0 0">' + esc(words) + '</p></section>';
+    return '<section class="card glass H_alsw" aria-label="Alerts on this phone"><div class="A_switch"><span id="al-label"><b>Alerts on this phone</b></span><button class="sw" type="button" role="switch" data-act="alerts-switch" aria-checked="' + on + '" aria-labelledby="al-label"' + (H_al.on === null || H_al.busy ? ' disabled' : '') + '><i></i></button></div>' +
+      '<p class="help" style="margin:4px 0 0" role="status">' + esc(H_al.msg || (H_al.on === null ? 'Checking…' : on ? 'You will be told about brownouts, water and rain on this phone.' : 'Brownouts, water interruptions and rain during a brownout.')) + '</p></section>';
+  }
+  function H_alStatus() { // is this phone subscribed? asked once per visit to More; a failure leaves the switch off
+    if (H_alSupport() !== 'ready' || H_al.loading || H_al.on !== null) return;
+    H_al.loading = true;
+    window.C_Push.status({ client: sb, env: H_alEnv() }).then(function (st) { H_al.on = !!st && st.state === 'on'; }).catch(function () { H_al.on = false; }).then(function () { H_al.loading = false; if (current === 'more') renderMore(); });
+  }
+  function H_alAbsent(e) { return !!e && (e.code === 'PGRST202' || e.status === 404 || /not.?found|PGRST202/i.test(String(e.message || ''))); }
+  function H_alTopicRefused(e) { return !!e && (e.code === '22023' || /topic/i.test(String(e.message || ''))); }
+  function H_alertsEnable() {
+    if (H_al.busy || H_alSupport() !== 'ready') return Promise.resolve();
+    H_al.busy = true; H_al.msg = ''; render(); if (current === 'more') renderMore();
+    var P = window.C_Push, fail = function (sub, reason) { return Promise.resolve(sub && sub.unsubscribe ? sub.unsubscribe() : null).catch(function () {}).then(function () { return { ok: false, reason: reason }; }); };
+    return Promise.resolve(window.Notification.requestPermission()).then(function (perm) {
+      if (perm !== 'granted') return { ok: false, reason: perm === 'denied' ? 'blocked' : 'later' };
+      return H_pushKey().then(function (key) {
+        if (!key) return { ok: false, reason: 'not_configured' };
+        return H_swReg().then(function (reg) {
+          if (!reg || !reg.pushManager) return { ok: false, reason: 'failed' };
+          return reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: P.keyBytes(key) }).then(function (sub) {
+            var a = P.args(sub, navigator.userAgent), full = Object.assign({}, a, { p_topics: H_alertTopics() });
+            var done = function (res) { return res && !res.error && !(res.data && res.data.ok === false) ? { ok: true } : null; };
+            return Promise.resolve(sb.rpc('staff_push_subscribe_v1', full)).then(function (res) {
+              if (done(res)) return { ok: true };
+              if (res && res.error && !H_alTopicRefused(res.error) && !H_alAbsent(res.error)) return fail(sub, 'failed');
+              // the server does not know the topic (or the argument) yet: the same call without topics, the paid notice still works
+              return Promise.resolve(sb.rpc('staff_push_subscribe_v1', a)).then(function (r2) { return done(r2) ? { ok: true } : fail(sub, r2 && r2.error && H_alAbsent(r2.error) ? 'not_configured' : 'failed'); });
+            });
+          });
+        });
+      });
+    }).catch(function () { return { ok: false, reason: 'failed' }; }).then(function (out) {
+      H_al.busy = false;
+      if (out.ok) { H_al.on = true; H_al.msg = ''; toast('Alerts are on'); E_vibe('tap'); }
+      else if (out.reason === 'blocked') { H_al.on = false; H_al.msg = ''; toast('Alerts stay off. You can turn them on in your phone settings.'); }
+      else if (out.reason !== 'later') { H_al.on = false; H_al.msg = P.words(out.reason) || P.words('failed'); }
+      render(); if (current === 'more') renderMore();
+    });
+  }
+  function H_alertsDisable() {
+    if (H_al.busy || H_alSupport() !== 'ready') return Promise.resolve();
+    H_al.busy = true; H_al.msg = ''; renderMore();
+    return window.C_Push.disable({ client: sb, env: H_alEnv() }).then(function (r) { if (r && r.ok) { H_al.on = false; toast('Alerts are off on this phone'); } else H_al.msg = window.C_Push.words('failed'); }).catch(function () { H_al.msg = window.C_Push.words('failed'); }).then(function () { H_al.busy = false; renderMore(); });
+  }
+  function H_alReset() { H_al = { busy: false, msg: '', on: null, loading: false }; }
   // ---------------------------------------------------------------- Admin hub (owner, admin, finance): every dashboard page, in the groups of the admin home
   function renderHub() {
     var groups = CS.A_hubGroups(role());
@@ -1474,7 +1543,7 @@
     });
   }
   function signOutTo(msg) {
-    clearTimeout(H_rpT); state.H_q = ''; state.H_offKey = ''; H_unmount(); H_resetModules(); H_histGen++; H_calReset(); closeSheet(); dropPhotos(); state.replyRecent = []; state.cleanDone = null; state.progress = null; state.progressAbsent = false; H_idClose(); state.reply = null; var rb = $('rp-body'); if (rb) rb.innerHTML = ''; rpLive(''); state.payload = null; state.bookings = null; state.bookingsDone = false; state.noticesDone = false; state.notices = null; state.noticesAbsent = false; state.nadd = null; state.fbOpen = false; state.tasks = null; state.access = null; state.layout = null; state.month = null; state.error = '';
+    clearTimeout(H_rpT); state.H_q = ''; state.H_offKey = ''; H_unmount(); H_resetModules(); H_histGen++; H_calReset(); H_alReset(); closeSheet(); dropPhotos(); state.replyRecent = []; state.cleanDone = null; state.progress = null; state.progressAbsent = false; H_idClose(); state.reply = null; var rb = $('rp-body'); if (rb) rb.innerHTML = ''; rpLive(''); state.payload = null; state.bookings = null; state.bookingsDone = false; state.noticesDone = false; state.notices = null; state.noticesAbsent = false; state.nadd = null; state.fbOpen = false; state.tasks = null; state.access = null; state.layout = null; state.month = null; state.error = '';
     return sb.auth.signOut().catch(function () {}).then(function () { showSignin(msg); });
   }
   function showSignin(msg) {
@@ -1557,6 +1626,7 @@
   function route() {
     var h = (location.hash || '').replace(/^#/, ''), parts = h.split('/'), v = parts[0] || 'home';
     if (!state.layout) return;
+    if (v === 'notices') { history.replaceState(null, '', '#calendar/notices'); parts = ['calendar', 'notices']; v = 'calendar'; } // 3.2: the alerts open the Notices tab; #notices is its short name
     if (VIEWS.indexOf(v) < 0 || v === 'signin') v = 'home';
     if (v === 'door' && !(doorDef(parts[1]) && CS.doorFramed(parts[1], state.layout, trustOn) && CS.doorAllowed(parts[1], state.access && state.access.role))) v = 'home'; // role decides; the server stays the real gate
     if (v === 'payrates' && !CS.canEditRates(state.access && state.access.role)) v = 'home';
@@ -1603,10 +1673,10 @@
   // location.replace on the frame's window: opening or closing a door adds no history entry (so Back is one press, not two).
   function setFrame(f, url) { try { f.contentWindow.location.replace(url); } catch (e) { f.src = url; } }
   function enter() {
-    H_histGen++; H_calReset(); H_resetModules(); // a new sign-in starts every module empty, whoever was here before
+    H_histGen++; H_calReset(); H_alReset(); H_resetModules(); // a new sign-in starts every module empty, whoever was here before
     state.layout = CS.layoutForRole(state.access.role);
     state.name = CS.deriveDisplayName(state.user);
-    if (!/^#(home|calendar|tasks|payrates|reply|more|hub|weather|stock|manage|guests|inbox|search)/.test(location.hash)) history.replaceState(null, '', '#home');
+    if (!/^#(home|calendar|tasks|payrates|reply|more|hub|weather|stock|manage|guests|inbox|notices|search)/.test(location.hash)) history.replaceState(null, '', '#home');
     route(); loadHome(); loadTasks(); maybeIosHint(); H_tourMaybe();
   }
   function boot() {
@@ -1755,6 +1825,9 @@
     else if (a === 'reply-cancel') { var RC = state.reply; if (RC) { try { if (RC.ctl) RC.ctl.abort(); } catch (e) {} RC.busy = false; RC.reqId = ++H_rpSeq; clearTimeout(H_rpT); rpLive('Cancelled'); renderReply(RC.mode === 'text' ? '' : 'heading'); if (RC.mode === 'text') rpFocus('rp-text'); } }
     else if (a === 'nkind') { if (state.nadd) { state.nadd.type = t.getAttribute('data-kind') === 'power' ? 'power' : 'water'; state.nadd.err = ''; A_noticeAddDraw(); } }
     else if (a === 'reply-reset') { state.reply = newReply(); renderReply('heading'); rpLive(''); window.scrollTo(0, 0); }
+    else if (a === 'alerts-on') H_alertsEnable();
+    else if (a === 'alerts-later') H_alertsLater();
+    else if (a === 'alerts-switch') { if (H_al.on) H_alertsDisable(); else H_alertsEnable(); }
     else if (a === 'signout') { signOutTo(''); }
     else if (a === 'sheet-close') closeSheet();
     else if (a === 'copy') copyText(t.getAttribute('data-copy') || '').then(function () { toast('Copied'); }, function () { toast('Copy did not work on this phone. Press and hold the text to copy it.'); });
