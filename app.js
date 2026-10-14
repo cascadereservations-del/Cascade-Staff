@@ -408,8 +408,52 @@
   var BLOCK_ICON = { brownout: 'zapoff', maintenance: 'wrench', deep_clean: 'sparkles', owner: 'house', direct: 'calendar' };
   // The merged stays (same guest on two rows = one stay, D-320), worked out once per payload.
   var staysMemo = { p: null, list: [] };
-  function staysOf() { var p = state.payload; if (staysMemo.p !== p) staysMemo = { p: p, list: CS.mergeStays(p.calendar || []) }; return staysMemo.list; }
-  function dayStatusOf(iso) { var p = state.payload; return CS.dayStatus(iso, p.calendar || [], p.day_flags, p.warnings, staysOf()); }
+  function staysOf() { var p = state.payload; if (staysMemo.p !== p || staysMemo.v !== H_histV) staysMemo = { p: p, v: H_histV, list: CS.mergeStays(H_allCal()) }; return staysMemo.list; }
+  function dayStatusOf(iso) { var p = state.payload; return CS.dayStatus(iso, H_allCal(), p.day_flags, p.warnings, staysOf()); }
+  // 3.2 round 2 (owner and admin): the months before today-7 come from staff_calendar_history_v1, one call per month shown, kept in memory for the session only and dropped on sign-out.
+  // Rows carry a first name and dates, nothing else. A missing RPC or a refusal turns the feature off for the session and the grid keeps the dashed "in the admin dashboard" behaviour.
+  var H_hist = {}, H_histV = 0, H_histOff = false, H_occ = {}, H_occOff = false, H_calMemo = { p: null, v: -1, list: [] };
+  function H_calReset() { H_hist = {}; H_histV++; H_histOff = false; H_occ = {}; H_occOff = false; H_calMemo = { p: null, v: -1, list: [] }; }
+  function H_allCal() {
+    var p = state.payload; if (H_calMemo.p === p && H_calMemo.v === H_histV) return H_calMemo.list;
+    var from = CS.H_dataFrom(p.today), seen = {}, extra = [];
+    Object.keys(H_hist).forEach(function (k) { var e = H_hist[k]; if (e.st === 'ok') e.rows.forEach(function (r) { if (r.checkout_date < from && !seen[r.uid]) { seen[r.uid] = 1; extra.push(r); } }); }); // a stay seen from two months is one stay; nothing the home read already holds
+    H_calMemo = { p: p, v: H_histV, list: (p.calendar || []).concat(extra) }; return H_calMemo.list;
+  }
+  function H_ymKey(m) { return m.y + '-' + (m.m < 10 ? '0' : '') + m.m; }
+  function H_monthEdges(m) { var ny = m.m === 12 ? m.y + 1 : m.y, nm = m.m === 12 ? 1 : m.m + 1; return { start: H_ymKey(m) + '-01', next: H_ymKey({ y: ny, m: nm }) + '-01' }; }
+  function H_histOk(iso) { var e = H_hist[iso.slice(0, 7)]; return !!e && e.st === 'ok'; }
+  function H_histRow(s) { var id = String(s.source || '') + '-' + String(s.id || ''); return { uid: 'h-' + id, guest_name: String(s.first_name || ''), checkin_date: s.checkin, checkout_date: s.checkout, nights: s.nights, status: 'confirmed', source: s.source === 'direct' ? 'direct' : 'airbnb' }; }
+  function H_calLoads(m) { // called after the calendar is drawn: at most one history call and one metrics call per month, never repeated for the session
+    if (!CS.canSeeGuestContact(role()) || DEMO || !sb || !state.payload) return;
+    var key = H_ymKey(m), e = H_monthEdges(m), gen = H_histGen;
+    if (!H_histOff && e.start < CS.H_dataFrom(state.payload.today) && !H_hist[key]) {
+      H_hist[key] = { st: 'loading', rows: [] };
+      sb.rpc('staff_calendar_history_v1', { p_from: e.start, p_to: e.next }).then(function (r) {
+        if (gen !== H_histGen) return;
+        if (r.error) { if (CS.rpcMissing(r.error) || r.error.code === '42501' || /not_authorized/.test(r.error.message || '')) H_histOff = true; H_hist[key] = { st: 'fail', rows: [] }; }
+        else if (!r.data || !Array.isArray(r.data.stays)) { H_histOff = true; H_hist[key] = { st: 'fail', rows: [] }; } // an answer without a stays list is not a history: keep the dashed behaviour
+        else H_hist[key] = { st: 'ok', rows: r.data.stays.filter(function (s) { return s && s.checkin && s.checkout; }).map(H_histRow) };
+      }).catch(function () { if (gen === H_histGen) H_hist[key] = { st: 'fail', rows: [] }; }).then(function () { if (gen !== H_histGen) return; H_histV++; if (state.layout && current === 'calendar') render('calendar'); });
+    }
+    if (!H_occOff && !H_occ[key]) {
+      H_occ[key] = { st: 'loading', pct: null };
+      sb.rpc('get_hospitality_metrics_v1', { p_property_id: pid(), p_start: e.start, p_end_exclusive: e.next }).then(function (r) {
+        if (gen !== H_histGen) return;
+        if (r.error) { if (CS.rpcMissing(r.error) || r.error.code === '42501') H_occOff = true; H_occ[key] = { st: 'fail', pct: null }; return; }
+        var o = r.data && r.data.metrics && r.data.metrics.occupancy, v = o && o.value !== null && o.value !== undefined && isFinite(Number(o.value)) ? Math.round(Number(o.value)) : null;
+        H_occ[key] = { st: v === null ? 'fail' : 'ok', pct: v };
+      }).catch(function () { if (gen === H_histGen) H_occ[key] = { st: 'fail', pct: null }; }).then(function () { if (gen === H_histGen && state.layout && current === 'calendar') render('calendar'); });
+    }
+  }
+  var H_histGen = 0;
+  // The slot is drawn for owner and admin only, always the same height; the sentence appears when the figure is there and stays out when it is not.
+  function H_bookedSlot(m) {
+    if (!CS.canSeeGuestContact(role()) || DEMO) return '';
+    var e = H_occ[H_ymKey(m)];
+    return '<p class="help H_booked" data-booked="' + (e && e.st === 'ok' ? '1' : '0') + '">' + (e && e.st === 'ok' ? esc('Booked ' + e.pct + '% of nights') : '') + '</p>';
+  }
+
   // The arrival / checkout halves (hotel-calendar style): the arriving stay fills the lower-right triangle, the stay checking out the upper-left one.
   // Each stay keeps one shade of the blue family (--v5-g1..g6) for its whole length, so a turnover day is two halves in two shades.
   function A_shadeOf(st) { return st ? CS.A_stayShade(staysOf().indexOf(st)) : ''; }
@@ -432,7 +476,7 @@
     var info = cells.map(function (c) { return c.iso ? dayStatusOf(c.iso) : null; });
     var body = cells.map(function (c, i) {
       if (!c.iso) return '<div class="d off" aria-hidden="true"></div>';
-      var ds = info[i], booked = ds.primary === 'booked', blk = ds.primary === 'blocked', col = i % 7, nodata = c.iso < CS.H_dataFrom(p.today) && ds.primary === 'free' && !ds.out;
+      var ds = info[i], booked = ds.primary === 'booked', blk = ds.primary === 'blocked', col = i % 7, nodata = c.iso < CS.H_dataFrom(p.today) && ds.primary === 'free' && !ds.out && !H_histOk(c.iso);
       if (ds.turnover) monthHas.turn = true; if (ds.clash.length) monthHas.clash = true;
       var cls = 'd s-' + ds.primary + (nodata ? ' nodata' : '') + (c.iso < p.today ? ' past' : '') + (c.iso === p.today ? ' today' : '') + (booked ? ' stay' : '') + (booked && ds.cont ? ' cont' : '') + (blk ? ' blk' : '') +
         (ds.arrive ? ' arr' : '') + (ds.out ? ' dep' : '') + (ds.turnover ? ' turn' : '') + (ds.clash.length ? ' clash' : '');
@@ -521,7 +565,7 @@
     var same = function (st, g) { return !!g && st.guest_name === g.guest_name && st.checkin_date === g.checkin_date; };
     var rows = CS.H_agenda(staysOf(), p.today, 14, function (st) { return same(st, ng) || same(st, cg); });
     var html = '<div class="calhdr"><button class="iconbtn" type="button" data-act="prev" aria-label="Previous month"' + (prevOk ? '' : ' disabled style="opacity:.35"') + '>' + ICON('back', 's24') + '</button><h2 class="dlg" aria-live="polite">' + esc(CS.monthTitle(m.y, m.m)) + '</h2><button class="iconbtn" type="button" data-act="next" aria-label="Next month"' + (nextOk ? '' : ' disabled style="opacity:.35"') + '>' + ICON('chev', 's24') + '</button></div>' +
-      legend() + grid + '<p class="help H_help" style="text-align:center;margin:8px 0 0">Tap a day for who is staying. Swipe for the next month.</p>' + H_olderLine(m, p.today);
+      H_bookedSlot(m) + legend() + grid + '<p class="help H_help" style="text-align:center;margin:8px 0 0">Tap a day for who is staying. Swipe for the next month.</p>' + H_olderLine(m, p.today);
     html = '<div class="H_calleft">' + html + '</div><div class="H_calright">';
     html += '<div class="sect" id="agenda"><h2 class="hd H_agendahd">Next 14 days</h2>';
     if (ng) html += '<div class="stack">' + guestBlock(ng, 'next') + '</div>'; else if (!cg && !rows.length) html += '<p class="sub" style="margin:0">Nothing is booked to arrive or leave in the next 14 days.</p>';
@@ -540,7 +584,7 @@
   }
   // The server sends stays from a week back. An earlier month shows what exists and says where the rest is; the days it cannot know are dashed, never "free".
   function H_olderLine(m, today) {
-    var from = CS.H_dataFrom(today); if (m.y + '-' + (m.m < 10 ? '0' : '') + m.m + '-01' >= from) return '';
+    var from = CS.H_dataFrom(today); if (m.y + '-' + (m.m < 10 ? '0' : '') + m.m + '-01' >= from) return ''; var he = H_hist[H_ymKey(m)]; if (he && he.st === 'ok') return ''; // the months before today-7 are loaded for owner and admin
     var l = CS.canSeeGuestContact(role()) ? A_hubLink('bookings/calendar') : null;
     return '<p class="help H_older" style="text-align:center;margin:6px 0 0">' + esc('Stays before ' + CS.dayLabel(from) + ' are ' + (l ? 'in the admin dashboard.' : 'not shown here.')) + '</p>' +
       (l ? '<div style="text-align:center">' + (l.external ? ext(l.href, 'Open the booking calendar' + ICON('ext', 's16'), 'btn btn-ghost btn-sm') : '<a class="btn btn-ghost btn-sm" href="' + esc(l.href) + '">Open the booking calendar</a>') + '</div>' : '');
@@ -628,6 +672,7 @@
     if (E_tabFocus) { E_tabFocus = false; var ct = el.querySelector && el.querySelector('.A_tabs a[aria-current="page"]'); if (ct && ct.focus) ct.focus(); } // an arrow key moved the view: focus follows it
     if (keepFb) { var fresh = el.querySelector('#A_fbbox'); if (fresh && fresh.parentNode) fresh.parentNode.replaceChild(keepFb, fresh); }
     loadIdPhotos(el); H_calHints(el);
+    if (tab === 'calendar') H_calLoads(monthState());
   }
 
   // ---------------------------------------------------------------- day and warning sheets (s77): the .sheet/.scrim pattern of the iOS hint.
@@ -672,7 +717,7 @@
   function role() { return state.access && state.access.role; }
   function daySheet(S) {
     var p = state.payload, ds = dayStatusOf(S.key), canFlag = CS.canFlagDays(role());
-    var old = S.key < CS.H_dataFrom(p.today) && ds.primary === 'free' && !ds.out && !ds.arrive, prim = ds.primary === 'booked' ? pill('brand', 'house', 'Booked') : ds.primary === 'blocked' ? pill('neutral', 'lock', 'Blocked') : old ? pill('neutral', 'info', 'Not shown here') : pill('ok', 'check', 'Free');
+    var old = S.key < CS.H_dataFrom(p.today) && ds.primary === 'free' && !ds.out && !ds.arrive && !H_histOk(S.key), prim = ds.primary === 'booked' ? pill('brand', 'house', 'Booked') : ds.primary === 'blocked' ? pill('neutral', 'lock', 'Blocked') : old ? pill('neutral', 'info', 'Not shown here') : pill('ok', 'check', 'Free');
     var html = '<h2 class="ttl" id="cs-h" tabindex="-1">' + esc(CS.dayLong(S.key)) + '</h2><div class="row-wrap" style="margin-top:8px">' + prim +
       (ds.turnover ? pill('info', 'repeat', 'Turnover') : '') + (ds.clash.length ? pill('danger', 'alert', 'Clash') : '') + '<span class="sub">' + esc(ds.why) + '</span></div>';
     var all = staysOf();
@@ -1422,7 +1467,7 @@
     });
   }
   function signOutTo(msg) {
-    clearTimeout(H_rpT); state.H_q = ''; state.H_offKey = ''; H_unmount(); H_resetModules(); closeSheet(); dropPhotos(); state.replyRecent = []; state.cleanDone = null; state.progress = null; state.progressAbsent = false; H_idClose(); state.reply = null; var rb = $('rp-body'); if (rb) rb.innerHTML = ''; rpLive(''); state.payload = null; state.bookings = null; state.bookingsDone = false; state.noticesDone = false; state.notices = null; state.noticesAbsent = false; state.nadd = null; state.fbOpen = false; state.tasks = null; state.access = null; state.layout = null; state.month = null; state.error = '';
+    clearTimeout(H_rpT); state.H_q = ''; state.H_offKey = ''; H_unmount(); H_resetModules(); H_histGen++; H_calReset(); closeSheet(); dropPhotos(); state.replyRecent = []; state.cleanDone = null; state.progress = null; state.progressAbsent = false; H_idClose(); state.reply = null; var rb = $('rp-body'); if (rb) rb.innerHTML = ''; rpLive(''); state.payload = null; state.bookings = null; state.bookingsDone = false; state.noticesDone = false; state.notices = null; state.noticesAbsent = false; state.nadd = null; state.fbOpen = false; state.tasks = null; state.access = null; state.layout = null; state.month = null; state.error = '';
     return sb.auth.signOut().catch(function () {}).then(function () { showSignin(msg); });
   }
   function showSignin(msg) {
@@ -1551,7 +1596,7 @@
   // location.replace on the frame's window: opening or closing a door adds no history entry (so Back is one press, not two).
   function setFrame(f, url) { try { f.contentWindow.location.replace(url); } catch (e) { f.src = url; } }
   function enter() {
-    H_resetModules(); // a new sign-in starts every module empty, whoever was here before
+    H_histGen++; H_calReset(); H_resetModules(); // a new sign-in starts every module empty, whoever was here before
     state.layout = CS.layoutForRole(state.access.role);
     state.name = CS.deriveDisplayName(state.user);
     if (!/^#(home|calendar|tasks|payrates|reply|more|hub|weather|stock|manage|guests|inbox|search)/.test(location.hash)) history.replaceState(null, '', '#home');
