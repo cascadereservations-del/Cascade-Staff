@@ -423,3 +423,10 @@ test('G: Add from text refuses a tag over 30 characters, the server limit, with 
   assert.match(el.html, /each at most 30 characters/);
   assert.equal(cl.fcalls.filter((c) => c[1].action === 'save').length, 0);
 });
+
+test('G: with companions shown and an older function, Replace photo and Add ID photo stay hidden', async () => {
+  const cl = detailClient({ fn: () => ({ status: 400, j: { error: 'bad_stay' } }) });
+  const { el } = await mount(cl, GID);
+  assert.match(el.html, /People and ID photos/); assert.match(el.html, /Ben Cruz/);
+  assert.doesNotMatch(el.html, /Replace photo|Add ID photo|Remove photo/);
+});
