@@ -44,3 +44,16 @@ div.I_row { cursor: default; }
 .I_sheet .field .err { font-size: var(--v5-t-2); }
 .I_wrap .input input, .I_sheet .input input { min-height: 44px; }
 .I_wrap .field label, .I_wrap .help, .I_wrap .field .lbl { font-size: max(0.8125rem, var(--v5-t-label)); }
+/* s84: grouped list, scan, report */
+.I_grp { display: grid; gap: 6px; min-width: 0; margin-bottom: 8px; }
+.I_gh { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 2px 12px; margin: 8px 4px 0; font: 600 var(--v5-t-body)/1.3 var(--font-display, var(--font-ui)); color: var(--fg); overflow-wrap: anywhere; }
+.I_ghn { font: 600 var(--v5-t-2)/1.3 var(--font-ui); color: var(--v5-warn-t); white-space: nowrap; }
+.I_srow { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; align-items: end; }
+.I_scanbtn { min-height: 48px; margin-bottom: 0; white-space: nowrap; }
+.I_repbtn { margin-top: 8px; }
+.I_cam { overflow: hidden; border-radius: var(--r-md, 12px); background: var(--v5-sunk); aspect-ratio: 4 / 3; max-height: 40vh; }
+.I_video { display: block; width: 100%; height: 100%; object-fit: cover; }
+.I_code { font-weight: 600; letter-spacing: .04em; overflow-wrap: anywhere; }
+.I_pickrows { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0; }
+.I_choice { min-height: 44px; }
+.I_sheet select { width: 100%; min-height: 44px; font: inherit; color: inherit; background: transparent; border: 0; }
