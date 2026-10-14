@@ -47,7 +47,7 @@ test('I_card Change price flow: field, confirm in plain words, then inventory_it
   assert.equal(c.length, 1);
   assert.deepEqual(Object.keys(c[0][2]).sort(), ['p_item_id', 'p_unit_cost']);
   assert.deepEqual({ ...c[0][2] }, { p_item_id: 'i2', p_unit_cost: 1250.5 });
-  assert.match(e.toasts[e.toasts.length - 1], /Price saved for Hand soap/);
+  assert.match(e.undo(), /Price saved for Hand soap/);
 });
 
 test('I_card Change price: an empty box clears the price after a confirm; zero and a million are refused before sending', async () => {

@@ -30,7 +30,7 @@ test('I_running-low one confirm, then save_shopping_item_v1 with the packs to pa
   assert.deepEqual(Object.keys(c[0][2]).sort(), ['p_idempotency_key', 'p_item', 'p_property_id']);
   assert.equal(c[0][2].p_property_id, PID); assert.ok(c[0][2].p_idempotency_key.length >= 16);
   assert.deepEqual({ ...c[0][2].p_item }, { item_id: 'i1', item_name: 'Toilet paper', quantity: 3, purchase_unit: 'pack', reason: 'Running low (from the staff app)' });
-  assert.match(e.toasts[e.toasts.length - 1], /Passed on/);
+  assert.match(e.undo(), /Toilet paper flagged as running low/);
 });
 
 test('I_running-low the default quantity: 2 x reorder level when there is no par, one when unknown', async () => {

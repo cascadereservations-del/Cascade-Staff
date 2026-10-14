@@ -131,3 +131,49 @@ test('I_round2 R2-12: Count this group is offered under a category chip too', as
   const e = await make(); await e.mount(''); await e.act('chip', { 'data-k': 'c:Bathroom' });
   assert.match(e.html(), /data-act="walk" data-cat="Bathroom"/);
 });
+
+// ---- round 3 (session 85)
+const upd = (e) => e.client.rpcCalls('inventory_undo_v1').map((c) => c[2].p_purchase_id);
+
+test('I_round2 r3 F1: the Bought done screen keeps its rows and Undo all after the list reloads without them', async () => {
+  let received = false;
+  const e = await make('owner', { record_inventory_receipt_v1: () => { received = true; return recv(); } }, { shop: SHOP, from: (t) => ({ data: t === 'inventory_shopping_list' ? (received ? [] : SHOP) : [], error: null }) });
+  await e.mount('shopping'); await e.act('bought-open');
+  for (const id of ['s1', 's2']) await e.act('b-tick', { 'data-id': id });
+  await press(e, 2);
+  assert.match(e.sheet(), /2 items added/); assert.match(e.sheet(), /Toilet paper/); assert.match(e.sheet(), /Undo all/);
+});
+
+test('I_round2 r3 F2: undoing a first count in the group walk says the item stays counted in the app', async () => {
+  const cat = { items: [item('b3', 'Hand soap', 2, 3, { category: 'Bath', countedAt: null })] };
+  const e = await make('owner', {}, { cat });
+  await e.mount(''); await e.act('walk', { 'data-cat': 'Bath' }); await e.input('I_f_qty', '9'); await press(e);
+  await e.act('undo', { 'data-id': /data-act="undo" data-id="(u\d+)"/.exec(e.sheet())[1] });
+  assert.match(e.sheet(), /It stays counted in the app\./);
+});
+
+test('I_round2 r3 F3: a write that shows an Undo bar adds no shell toast; the Undo itself still toasts', async () => {
+  const e = await make();
+  await e.mount(''); await e.open('i1'); await e.begin('count'); await e.input('I_f_qty', '12'); await press(e, 2);
+  assert.equal(e.toasts.length, 0); assert.match(e.undo(), /Counted Toilet paper/);
+  await e.act('undo', { 'data-id': uid(e) }); await press(e);
+  assert.deepEqual(e.toasts, ['Undone.']);
+});
+
+test('I_round2 r3 F4: Undo all reaches every line of a trip longer than the 20-entry undo list', async () => {
+  const many = Array.from({ length: 25 }, (_, i) => item('x' + i, 'Item ' + i, 1, 5, { codes: [] }));
+  const rows = many.map((it, i) => ({ id: 'r' + i, item_id: it.id, item_name: it.name, quantity: 1, purchase_unit: null, reason: null, status: 'approved', proposed_by: 'x', proposed_at: '2026-10-12T02:00:00Z' }));
+  const e = await make('owner', { record_inventory_receipt_v1: recv }, { cat: { items: many }, shop: rows });
+  await e.mount('shopping'); await e.act('bought-open');
+  for (const r of rows) await e.act('b-tick', { 'data-id': r.id });
+  await press(e, 2);
+  assert.match(e.sheet(), /25 items added/);
+  await e.act('b-undoall'); await press(e);
+  assert.equal(upd(e).length, 25);
+});
+
+test('I_round2 r3 F5: not_open from a receipt (row cancelled meanwhile) drops back to the pick screen like already_received', async () => {
+  const e = await make('owner', { record_inventory_receipt_v1: () => ({ data: { ok: false, reason: 'not_open' }, error: null }) }, { shop: SHOP });
+  await e.mount('shopping'); await e.act('bought-open'); await e.act('b-tick', { 'data-id': 's1' }); await press(e, 2);
+  assert.match(e.sheet(), /Tick what you bought/); assert.doesNotMatch(e.sheet(), /Try again/);
+});

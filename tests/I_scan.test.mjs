@@ -96,7 +96,7 @@ test('I_scan link to an existing item: search, tap, confirm, then inventory_code
   assert.equal(c.length, 1);
   assert.deepEqual(keys(c[0][2]), ['p_code', 'p_format', 'p_item_id', 'p_property_id']);
   assert.deepEqual({ ...c[0][2] }, { p_property_id: PID, p_code: '999000111', p_format: null, p_item_id: 'i2' });
-  assert.match(e.toasts[e.toasts.length - 1], /Linked/);
+  assert.match(e.undo(), /Linked a barcode/);
   assert.equal(e.client.rpcCalls('get_inventory_catalogue_v1').length, 2); // reloaded: the new code works at once
 });
 
@@ -338,7 +338,7 @@ test('I_scan fix L5: owner and admin can Unlink a code from the card, with a con
     const c = e.client.rpcCalls('inventory_code_detach_v1');
     assert.equal(c.length, 1); assert.deepEqual(Object.keys(c[0][2]).sort(), ['p_code', 'p_property_id']);
     assert.deepEqual({ ...c[0][2] }, { p_property_id: PID, p_code: CODE });
-    assert.match(e.toasts[e.toasts.length - 1], /Unlinked/);
+    assert.match(e.undo(), /Unlinked a barcode/);
     await e.act('undo', { 'data-id': /data-id="(u\d+)"/.exec(e.undo())[1] }); await e.submit();
     assert.deepEqual({ ...e.client.rpcCalls('inventory_code_attach_v1').pop()[2] }, { p_property_id: PID, p_code: CODE, p_format: null, p_item_id: 'i1' });
   }
