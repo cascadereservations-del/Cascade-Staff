@@ -370,3 +370,24 @@ test('P_ source guard: markSent has exactly one caller, the sent-yes handler; th
   assert.doesNotMatch(src, /data-act="bank"|a === 'bank'|bankLink|Open bank app/);
   assert.equal(fs.existsSync(path.join(root, 'pay', 'bank.html')), false);
 });
+
+test('P_ admin cancel: ask, confirm text, Keep it sends nothing, Yes calls staff_pay_admin_step_v1 {p_request_id, p_step:cancel}, list reloads with the note', async () => {
+  const b = boot(happy()); await openOwn(b);
+  await fire(b.root, 'click', { target: target({ 'data-act': 'cancel-ask' }) }); await tick();
+  assert.match(b.root.innerHTML, /Cancel request ABCD1234\? The cleans and claims go back to unpaid work\./);
+  await fire(b.root, 'click', { target: target({ 'data-act': 'cancel-no' }) }); await tick();
+  assert.doesNotMatch(b.root.innerHTML, /go back to unpaid work/); assert.deepEqual(stepsOf(b), ['pay']);
+  const before = b.rpcs.filter((r) => r[0] === 'staff_pay_admin_list_v1').length;
+  await fire(b.root, 'click', { target: target({ 'data-act': 'cancel-ask' }) }); await fire(b.root, 'click', { target: target({ 'data-act': 'cancel-yes' }) });
+  await until(() => /is cancelled\. Its cleans and claims are back under Not yet requested/.test(b.root.innerHTML), 'cancelled');
+  assert.deepEqual(plain(b.rpcs.filter((r) => r[1] && r[1].p_step === 'cancel')), [['staff_pay_admin_step_v1', { p_request_id: 'req1', p_step: 'cancel' }]]);
+  assert.equal(b.rpcs.filter((r) => r[0] === 'staff_pay_admin_list_v1').length, before + 1, 'the list reloads');
+});
+
+test('P_ admin cancel: no cancel button once sent is marked; a server refusal money_may_be_sent shows the sentence and points to I have not sent it', async () => {
+  const b = boot(happy()); await openOwn(b); await sayYes(b.root); await until(() => /I have not sent it/.test(b.root.innerHTML), 'marked');
+  assert.doesNotMatch(b.root.innerHTML, /data-act="cancel-ask"/); assert.match(b.root.innerHTML, /cancel the request after that/);
+  const r = boot({ rpc: (n, a) => (a && a.p_step === 'cancel' ? { data: { ok: false, reason: 'money_may_be_sent' }, error: null } : happy().rpc(n, a)) }); await openOwn(r);
+  await fire(r.root, 'click', { target: target({ 'data-act': 'cancel-ask' }) }); await fire(r.root, 'click', { target: target({ 'data-act': 'cancel-yes' }) });
+  await until(() => /Tap I have not sent it first, then cancel\./.test(r.root.innerHTML), 'refused'); assert.match(r.root.innerHTML, /already said the money was sent/);
+});

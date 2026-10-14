@@ -154,7 +154,7 @@
   // ---------------------------------------------------------------- pay one request
   function openPay(id) {
     var r = (S.list || []).filter(function (x) { return x.id === id; })[0]; if (!r || theirs(r)) return;
-    S.listMsg = ''; S.listNote = ''; S.req = r; S.view = 'pay'; S.msg = ''; S.copied = ''; S.confirmSent = false; S.form = { file: null, amount: String(A.copyAmount(r.total)), reference: '', override: false, uploaded: null }; clearSecrets();
+    S.listMsg = ''; S.listNote = ''; S.req = r; S.view = 'pay'; S.msg = ''; S.copied = ''; S.confirmSent = false; S.confirmCancel = false; S.form = { file: null, amount: String(A.copyAmount(r.total)), reference: '', override: false, uploaded: null }; clearSecrets();
     var tok = payTok, live = function () { return tok === payTok; }; // taken after clearSecrets, which advances the token
     root.innerHTML = shell('Pay ' + r.payee_name, '<div class="skel" style="height:320px;margin-top:16px"></div>', '#back');
     // Claim the payment FIRST. If the server says someone else has it, nothing is drawn: no QR, no Mark as paid.
@@ -233,8 +233,11 @@
       (S.msg ? '<div class="' + (S.msgOk ? 'okbox' : 'errbox') + '" role="alert">' + ICON(S.msgOk ? 'checks' : 'alert') + '<span>' + esc(S.msg) + '</span></div>' : '') + '</div>';
     var inner = '<div class="stack">' + amountBlock + qrBlock + proof + '</div>' +
       '<div class="sticky"><button class="btn btn-primary btn-block" type="button" id="C_done" data-act="settle"' + (A.ready(f) && !S.busy ? '' : ' disabled') + '>' + ICON('checks') + (S.busy ? 'Saving…' : 'Mark as paid') + '</button>' +
-      (S.sentMarked ? '<p class="help" id="C_sentnote" role="status">Marked as sent, so nobody else can take this over. If you have not sent it, tap I have not sent it.</p>' : '') +
-      '<button class="btn btn-ghost" type="button" data-act="unpay" style="width:100%"' + (S.busy ? ' disabled' : '') + '>' + (S.sentMarked ? 'I have not sent it' : 'I am not paying this now') + '</button></div>' +
+      (S.sentMarked ? '<p class="help" id="C_sentnote" role="status">Marked as sent, so nobody else can take this over. If you have not sent it, tap I have not sent it. You can cancel the request after that.</p>' : '') +
+      '<button class="btn btn-ghost" type="button" data-act="unpay" style="width:100%"' + (S.busy ? ' disabled' : '') + '>' + (S.sentMarked ? 'I have not sent it' : 'I am not paying this now') + '</button</button>' +
+      (S.sentMarked ? '' : S.confirmCancel
+        ? '<div class="infobox" role="alert">' + ICON('info') + '<span>Cancel request ' + esc(r.ref) + '? The cleans and claims go back to unpaid work.</span></div><div class="row-wrap"><button class="btn btn-secondary" type="button" data-act="cancel-yes"' + (S.busy ? ' disabled' : '') + '>Yes, cancel the request</button><button class="btn btn-ghost" type="button" data-act="cancel-no">Keep it</button></div>'
+        : '<button class="btn btn-ghost" type="button" data-act="cancel-ask" style="width:100%"' + (S.busy ? ' disabled' : '') + '>Cancel this request</button>') + '</div>' +
       '<input type="file" id="C_file" accept="image/*" hidden>';
     root.innerHTML = shell('Pay ' + r.payee_name, inner, '#back');
   }
@@ -318,6 +321,16 @@
       setTimeout(function () { URL.revokeObjectURL(u); }, 10000); say('QR saved. Look in Photos or Downloads.');
     }, 'image/png');
   }
+  // Admin cancel: only before the payer said "sent" (the server refuses with money_may_be_sent otherwise; then "I have not sent it" comes first).
+  function cancelReq() {
+    var r = S.req; if (!r || S.busy) return; S.confirmCancel = false; S.busy = true; renderPay();
+    return sb.rpc('staff_pay_admin_step_v1', { p_request_id: r.id, p_step: 'cancel' }).then(function (s) {
+      var d = s.data; S.busy = false;
+      if (s.error || !d || d.ok === false) { S.msg = (d && d.reason === 'money_may_be_sent') ? A.refusal(d) + ' Tap I have not sent it first, then cancel.' : A.refusal(d || { reason: 'offline' }); S.msgOk = false; return renderPay(); }
+      clearSecrets(); redrawCard(r.id); S.view = 'list'; S.listMsg = ''; S.listNote = 'Request ' + r.ref + ' is cancelled. Its cleans and claims are back under Not yet requested.';
+      return loadList().then(renderList);
+    }, function () { S.busy = false; S.msg = A.refusal({ reason: 'offline' }); S.msgOk = false; renderPay(); });
+  }
   function unpay() {
     var id = S.req.id;
     clearSecrets();
@@ -347,6 +360,9 @@
     else if (a === 'takecancel') { S.confirmTake = ''; renderList(); }
     else if (a === 'takeover') takeOver(t.getAttribute('data-id'));
     else if (a === 'copyamt') { copy(A.copyAmount(S.req.total), 'Amount'); }
+    else if (a === 'cancel-ask') { S.confirmCancel = true; renderPay(); }
+    else if (a === 'cancel-no') { S.confirmCancel = false; renderPay(); }
+    else if (a === 'cancel-yes') cancelReq();
     else if (a === 'sent') { S.confirmSent = true; renderPay(); }
     else if (a === 'sent-no') { S.confirmSent = false; renderPay(); }
     else if (a === 'sent-yes') { S.confirmSent = false; markSent(); }

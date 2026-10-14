@@ -153,6 +153,10 @@
     return { w: Math.round(w * k), h: Math.round(h * k) };
   }
 
+  // ---- P_ (s84): the pay-rates form has unsaved edits when any typed field is filled. The date and the error line are not edits.
+  // app.js (not this lane) asks once before leaving the screen or closing the confirm sheet while this is true; Cancel keeps the edits.
+  function P_rateDirty(f) { return !!(f && (f.regular || f.general || f.transport || f.note)); }
+
   // ---- P_ (s82 lane P): the shared chrome of both pay pages, so they look like the rest of the app (F7). Strings only; the caller passes ICON and esc.
   // Badge counts and "I came from the app" travel in the URL hash the shell links with: pay/#tasks=2&cal=2 (a hash with either key means the link was the shell's).
   function P_hashCounts(hash) {
@@ -195,7 +199,7 @@
   function P_plural(n, one, many) { return n + ' ' + (n === 1 ? one : many || one + 's'); }
 
   return {
-    P_hashCounts: P_hashCounts, P_fromShell: P_fromShell, P_backIsHistory: P_backIsHistory, P_tabs: P_tabs, P_shell: P_shell, P_wireBack: P_wireBack, P_param: P_param, P_hash: P_hash, P_plural: P_plural,
+    P_rateDirty: P_rateDirty, P_hashCounts: P_hashCounts, P_fromShell: P_fromShell, P_backIsHistory: P_backIsHistory, P_tabs: P_tabs, P_shell: P_shell, P_wireBack: P_wireBack, P_param: P_param, P_hash: P_hash, P_plural: P_plural,
     peso: peso, plain: plain, dateLabel: dateLabel, shortDate: shortDate, typeLabel: typeLabel, parseExtra: parseExtra, sessionAmount: sessionAmount,
     chosen: chosen, computeTotal: computeTotal, lineCount: lineCount, buildPayload: buildPayload, reviewBlock: reviewBlock, newKey: newKey, keyKeeper: keyKeeper,
     resultMessage: resultMessage, requestStatus: requestStatus, fitSize: fitSize,
