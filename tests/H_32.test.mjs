@@ -105,9 +105,9 @@ function pushSw() {
 test('3.2 push: a generic {title, body, url, tag} payload is shown as sent and opens ./#inbox; the paid payload and the amount-free lock screen are unchanged', async () => {
   const s = pushSw();
   await s.push({ title: 'Cascade Staff', body: 'A guest wrote on Messenger', url: './#inbox', tag: 'inbox' });
-  assert.deepEqual(JSON.parse(JSON.stringify(s.shown[0])), ['Cascade Staff', { body: 'A guest wrote on Messenger', tag: 'inbox', icon: 'icons/icon-192.png', badge: 'icons/icon-192.png', data: { url: './#inbox' } }]);
-  await s.push({ title: 'Cascade Staff', body: 'Cassy needs you on a guest chat', url: './#inbox', tag: 'handover' }); assert.equal(s.shown[1][1].body, 'Cassy needs you on a guest chat');
-  await s.push({ title: 'You were paid', body: 'PHP 1,235 sent to you' }); assert.equal(s.shown[2][1].body, 'Open Cascade Staff for the details.', 'an amount never reaches the lock screen'); assert.equal(s.shown[2][1].tag, 'cascade-paid'); assert.equal(s.shown[2][1].data.url, './#home');
+  assert.deepEqual(JSON.parse(JSON.stringify(s.shown[0])), ['Cascade Staff', { body: 'A guest wrote on Messenger', tag: 'inbox', icon: 'icons/icon-192.png', badge: 'icons/icon-192.png', data: { url: './#inbox' }, renotify: true }]);
+  await s.push({ title: 'Cascade Staff', body: 'Cassy needs you on a guest chat', url: './#inbox', tag: 'handover' }); assert.equal(s.shown[1][1].body, 'Cassy needs you on a guest chat'); assert.ok(!('renotify' in s.shown[1][1]), 'only the inbox tag renotifies');
+  await s.push({ title: 'You were paid', body: 'PHP 1,235 sent to you' }); assert.equal(s.shown[2][1].body, 'Open Cascade Staff for the details.', 'an amount never reaches the lock screen'); assert.equal(s.shown[2][1].tag, 'cascade-paid'); assert.ok(!('renotify' in s.shown[2][1]), 'the paid notice is unchanged'); assert.equal(s.shown[2][1].data.url, './#home');
   await s.push({ title: 'x', url: 'https://evil.example/', body: 'b' }); assert.equal(s.shown[3][1].data.url, './#home', 'only a path inside this app');
   await s.click({ url: './#inbox' }, []); assert.deepEqual(s.opened, ['./#inbox']);
   const navs = []; await s.click({ url: './#inbox' }, [{ focus: () => Promise.resolve(), navigate: (u) => navs.push(u) }]); assert.deepEqual(navs, ['./#inbox'], 'an open window is sent to the inbox and focused');

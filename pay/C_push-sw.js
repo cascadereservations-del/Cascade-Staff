@@ -27,13 +27,15 @@
 
   self.addEventListener('push', function (event) {
     var d = C_parse(event);
-    event.waitUntil(self.registration.showNotification(C_safeTitle(d.title), {
+    var opts = {
       body: C_safeBody(d.body),
       tag: String(d.tag || 'cascade-paid').slice(0, 40),
       icon: 'icons/icon-192.png',
       badge: 'icons/icon-192.png',
       data: { url: C_target(d) }
-    }));
+    };
+    if (d.tag === 'inbox') opts.renotify = true; // a second guest message under the same tag must buzz again; the paid notice is untouched
+    event.waitUntil(self.registration.showNotification(C_safeTitle(d.title), opts));
   });
 
   self.addEventListener('notificationclick', function (event) {
