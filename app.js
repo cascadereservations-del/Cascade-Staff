@@ -1410,7 +1410,8 @@
   var H_al = { busy: false, msg: '', on: null, loading: false }, H_ALERT_KEY = 'cs_h_alerts_later', H_ALERT_OLD = 'cs_alerts_later', H_ALERT_DAYS = 7;
   function H_alEnv() { return { navigator: navigator, window: window }; }
   function H_alSupport() { return DEMO || !window.C_Push ? 'unsupported' : window.C_Push.support(H_alEnv()); }
-  function H_alLater() { var ls = store('localStorage'), t = 0; try { t = ls ? Number(ls.getItem(H_ALERT_KEY)) || 0 : 0; if (ls && !t) { t = Number(ls.getItem(H_ALERT_OLD)) || 0; if (t) { ls.setItem(H_ALERT_KEY, String(t)); ls.removeItem(H_ALERT_OLD); } } } catch (e) { t = 0; } // the first key name is read once and moved return t > 0 && Date.now() - t < H_ALERT_DAYS * 86400000; }
+  // the first key name (cs_alerts_later) is read once and moved to the new one
+  function H_alLater() { var ls = store('localStorage'), t = 0; try { t = ls ? Number(ls.getItem(H_ALERT_KEY)) || 0 : 0; if (ls && !t) { t = Number(ls.getItem(H_ALERT_OLD)) || 0; if (t) { ls.setItem(H_ALERT_KEY, String(t)); ls.removeItem(H_ALERT_OLD); } } } catch (e) { t = 0; } return t > 0 && Date.now() - t < H_ALERT_DAYS * 86400000; }
   function H_alertTopics() { return CS.canSeeGuestContact(role()) ? ['paid', 'inbox', 'notices'] : ['paid', 'notices']; }
   function H_alCardOn() { return !!state.access && H_alSupport() === 'ready' && window.Notification && window.Notification.permission === 'default' && !H_alLater(); }
   function H_alertsCard() {
