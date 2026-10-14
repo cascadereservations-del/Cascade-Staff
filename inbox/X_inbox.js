@@ -166,7 +166,7 @@
   };
   // A result {status, code, net}: what to tell the host and whether the reply might have reached the guest.
   function sendOutcome(r) {
-    if (r.net) return { maybe: true, text: DROPPED + ' ' + CHECK_FIRST };
+    if (r.net) return { maybe: true, text: 'The connection dropped before an answer came, so the reply may have been sent. ' + CHECK_FIRST };
     if (r.code && SEND_NOTHING[r.code]) return { maybe: false, text: SEND_NOTHING[r.code], refresh: r.code === 'handoff_not_open' || r.code === 'duplicate_reply' || r.code === 'reply_window_closed' || r.code === 'thread_not_found' || r.code === 'handoff_not_found' };
     if (r.status >= 500) return { maybe: true, text: 'The server did not answer properly, so the reply may have been sent. ' + CHECK_FIRST };
     if (r.status === 401 || r.status === 403) return { maybe: false, text: 'Your session expired or this account may not reply. Sign in again, then send. Nothing was sent.' };
@@ -500,6 +500,7 @@
       if (!S || S.gen !== gen) return;
       L.busy = false; L.loading = false;
       if (rows) { L.rows = rows; L.at = nowMs(); L.stale = false; L.denied = L.absent = L.offline = false; keep = { rows: rows, at: L.at, role: st.role }; }
+      else if (err && isDenied(err)) { L.rows = null; L.denied = true; L.absent = L.offline = false; drafts = {}; keep = null; } // a refusal drops everything read before it
       else if (L.rows) { L.stale = true; }
       else { L.denied = !!(err && isDenied(err)); if (L.denied) { drafts = {}; keep = null; } L.absent = !!(err && isMissing(err)); L.offline = !!(err && isOffline(err)) || !online(); }
       drawList();
@@ -636,7 +637,7 @@
   function setPush(st) { S.push.state = st; pushKnown = st; }
   function pushProbe() {
     if (S.demo || !S.client || !S.opts.swReg || !S.opts.pushKey) return;
-    if (pushKnown !== null) { S.push.state = pushKnown; return; } // read once per session: a trip list -> thread -> list does not repeat the probe
+    if (pushKnown !== null) { S.push.state = pushKnown; drawPush(); return; } // read once per session: a trip list -> thread -> list does not repeat the probe
     var sup = pushSupport(), gen = S.gen;
     if (sup === 'unsupported') return;
     // The server must know staff_push_unsubscribe_topic_v1 (release s82_inbox_push): a harmless call for an endpoint that does not exist. Missing function = old server = no card.
