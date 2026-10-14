@@ -92,7 +92,7 @@ const M = [
   ['recent kept across roles', [["o.role === K.role &&", "true &&"]]],
   ['recent not cleared on role change', [["if (prevRole !== null) recentClear(); }", "}"]]],
   ['new item undo leaves its code stuck', [["if (a.code) { e.confirm = 'Remove ' + cnm + ' and free code '", "if (false) { e.confirm = 'Remove ' + cnm + ' and free code '"]]],
-  ['undo all re-asks finished lines', [["filter(function (e) { return e && K.undos.indexOf(e) >= 0; })", "filter(Boolean)"]]],
+  ['undo all re-asks finished lines', [["filter(function (e) { return e && !e.undone; })", "filter(Boolean)"]]],
   ['undo not_found is an error', [[" && !(a.kind === 'undo' && r.data.reason === 'not_found')", ""]]],
   ['walk key per item only', [["var kk = it.id + '|' + n;", "var kk = it.id;"]]],
   ['close after too late re-sends', [["if (a.kind === 'undo' && a.err === 'tooLate') return closeSheet();", ""]]],

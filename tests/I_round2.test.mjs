@@ -10,7 +10,7 @@ const okd = (d) => () => ({ data: { ok: true, ...d }, error: null });
 const css = fs.readFileSync(path.join(here, '..', 'stock', 'I_stock.css'), 'utf8');
 const raw = () => ({ items: [item('i1', 'Toilet paper', 4, 12, { par: 36, codes: [] }), item('i2', 'Hand soap', 0, 3, { category: 'Kitchen', unitsPerPurchase: 1, purchaseUnit: null, codes: [] }), item('i3', 'Bath towels', 14, 10, { category: 'Linen', consumable: false, movementControlled: true, unit: 'pieces', purchaseUnit: null, unitsPerPurchase: 1, codes: [] })] });
 const RPC = { reconcile_inventory_baseline_v1: (a) => ({ data: { ok: true, movementId: 'mv-' + a.p_item_id }, error: null }), record_inventory_receipt_v1: okd({ purchaseId: 'p1', movementId: 'm1' }), inventory_item_create_v1: okd({ item_id: 'new-1' }), inventory_undo_v1: okd({ item_id: 'i1' }), inventory_code_detach_v1: okd({}), inventory_item_update_v1: okd({}) };
-const make = (role = 'owner', rpc = {}, o = {}) => setup({ role, client: mockClient({ catalogue: o.cat || raw(), shop: o.shop, rpc: { ...RPC, ...rpc }, fn: o.fn }) });
+const make = (role = 'owner', rpc = {}, o = {}) => setup({ role, client: mockClient({ catalogue: o.cat || raw(), shop: o.shop, rpc: { ...RPC, ...rpc }, fn: o.fn, from: o.from }) });
 const press = async (e, n = 1) => { for (let i = 0; i < n; i++) await e.submit(); };
 const uid = (e) => /data-id="(u\d+)"/.exec(e.undo())[1];
 
