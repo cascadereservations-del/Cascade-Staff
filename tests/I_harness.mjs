@@ -17,7 +17,7 @@ class Root {
   get innerHTML() { return this._h; }
   addEventListener(t, f) { (this.l[t] ||= []).push(f); }
   removeEventListener(t, f) { this.l[t] = (this.l[t] || []).filter((x) => x !== f); }
-  querySelector(sel) { const m = /^\[data-i-(\w+)\]$/.exec(sel); return m && this.kids ? this.kids[m[1]] : null; }
+  querySelector(sel) { const m = /^\[data-i-(\w+)\]$/.exec(sel); if (m) return this.kids ? this.kids[m[1]] : null; const h = /^#([\w-]+)$/.exec(sel); if (h) { this.byId ||= {}; const k = this.byId[h[1]] ||= Object.assign(new Kid(), { focused: 0, value: '', focus() { this.focused++; } }); return k; } return null; }
   html() { const k = this.kids; return k ? k.top.innerHTML + k.list.innerHTML + k.layer.innerHTML : ''; }
   sheet() { return this.kids ? this.kids.layer.innerHTML : ''; }
 }

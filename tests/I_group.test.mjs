@@ -54,6 +54,12 @@ test('I_group All and Consumables: groups by category name, rows by name', async
   eq(cons.map((x) => x.cat), ['Bath', 'Kitchen', 'Zed']); // Linen is not consumable
 });
 
+test('I_group Consumables: rows by name inside each group, not by level (SPEC 5.1)', async () => {
+  const L = await lib();
+  const g = L.groupsFor(norm(L), 'cons', '');
+  eq(g[0].rows.map((r) => r.name), ['Hand soap', 'Shampoo', 'Toilet paper']); // Out, OK, Low by level would be Hand soap, Toilet paper, Shampoo
+});
+
 test('I_group a category chip is one group', async () => {
   const L = await lib();
   const g = L.groupsFor(norm(L), 'c:Linen', '');
@@ -66,8 +72,10 @@ test('I_group the list draws one header per non-empty category with the count in
   const h = e.html();
   const heads = [...h.matchAll(/class="I_gh"/g)].length;
   assert.equal(heads, 4);
-  assert.match(h, /Bath<\/span><span class="I_ghn"><span aria-hidden="true">▲<\/span> 2 low, 1 out</);
+  // each level is counted once, in glyph and word: one Out and one Low is "1 out, 1 low", never "2 low, 1 out"
+  assert.match(h, /Bath<\/span><span class="I_ghn"><span aria-hidden="true">✕<\/span> 1 out, <span aria-hidden="true">▲<\/span> 1 low</);
   assert.match(h, /Linen<\/span><span class="I_ghn"><span aria-hidden="true">▲<\/span> 2 low</);
+  assert.doesNotMatch(h, /2 low, 1 out/);
   assert.ok(h.indexOf('<span>Bath</span>') < h.indexOf('<span>Linen</span>') && h.indexOf('<span>Linen</span>') < h.indexOf('<span>Kitchen</span>'));
   assert.doesNotMatch(h.slice(h.indexOf('<span>Zed</span>'), h.indexOf('<span>Zed</span>') + 40), /I_ghn/); // an all-OK group has no note
   await e.act('chip', { 'data-k': 'c:Linen' });

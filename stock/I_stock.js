@@ -70,6 +70,7 @@
     var worst = function (g) { return g.out ? 0 : g.low ? 1 : 2; };
     if (chip === 'low') gs.sort(function (a, b) { return worst(a) - worst(b) || (b.out + b.low) - (a.out + a.low) || a.cat.localeCompare(b.cat); });
     else gs.sort(function (a, b) { return a.cat.localeCompare(b.cat); });
+    if (chip === 'cons') gs.forEach(function (g) { g.rows.sort(byName); });
     return gs;
   }
   // Barcodes (s84): printable ASCII, no spaces, 1 to 128 characters (the server check). Spaces typed inside a code are dropped.
@@ -117,7 +118,7 @@
     nocam: 'The camera is off for this app. You can type the code instead.',
     camfail: 'The camera did not start. You can type the code instead.',
     exists: 'An item with that name already exists.',
-    financeOnly: 'Prices go to the Finance group only. Choose the OPS group instead.',
+    financeOnly: 'Finance lists are not open to you right now. The OPS list has no prices.',
     levels: 'Buy up to should be the same as or more than the reorder level.',
     tooLate: 'This can no longer be undone here. Count the item to correct it.'
   };
@@ -300,7 +301,7 @@
     box.innerHTML = h;
   }
   function renderGroup(g, n, header) {
-    var hot = g.low + g.out, note = hot ? '<span class="I_ghn"><span aria-hidden="true">▲</span> ' + hot + ' low' + (g.out ? ', ' + g.out + ' out' : '') + '</span>' : '';
+    var note = g.out || g.low ? '<span class="I_ghn">' + (g.out ? '<span aria-hidden="true">✕</span> ' + g.out + ' out' : '') + (g.out && g.low ? ', ' : '') + (g.low ? '<span aria-hidden="true">▲</span> ' + g.low + ' low' : '') + '</span>' : '';
     return '<section class="I_grp"' + (header ? ' aria-labelledby="I_gh_' + n + '"' : '') + '>' + (header ? '<h3 class="I_gh" id="I_gh_' + n + '"><span>' + esc(g.cat) + '</span>' + note + '</h3>' : '') + '<div class="card list I_list">' + g.rows.map(renderRow).join('') + '</div></section>';
   }
   function renderFail(kind) {
@@ -375,6 +376,7 @@
     if (a.kind === 'create') return renderCreate(a);
     var it = itemOf(a); if (!it) return null;
     var v = a.vals || {}, m = M.role, h;
+    if (a.kind === 'unlink') return head('Unlink code ' + shortCode(a.code) + ' from ' + it.name + '?') + '<form data-i-form><p class="I_conf">Scanning this code will no longer open ' + esc(it.name) + '.</p>' + actions(a, 'Yes, unlink it') + '</form>';
     if (a.kind === 'low') return head('Tell the owner ' + it.name + ' is running low?') + '<form data-i-form><p class="I_conf">It goes on the shopping list for ' + esc(fmt(lowQty(it)) + ' ' + (it.purchaseUnit || unitOf(it))) + '.</p>' + actions(a, 'Yes, tell them') + '</form>';
     if (a.kind === 'link') return head('Link code ' + shortCode(a.code) + ' to ' + it.name + '?') + '<form data-i-form><p class="I_conf">Scanning this code will open ' + esc(it.name) + '.</p>' + actions(a, 'Yes, link it') + '</form>';
     if (a.kind === 'menu') {
@@ -382,7 +384,7 @@
       h = head(it.name, it.category + (it.consumable ? ' · consumable' : '')) + '<p class="I_lvline">' + levelBadge(it) + '</p><dl class="I_dl">' +
         row('On hand', it.qty == null ? 'Not counted' : esc(fmt(it.qty) + ' ' + it.unit)) + row('Reorder at', it.reorder == null ? 'Not set' : esc(fmt(it.reorder) + ' ' + it.unit)) +
         (K.v84 && (it.consumable || it.par != null) ? row('Buy up to', it.par != null ? esc(fmt(it.par) + ' ' + it.unit) : it.reorder != null ? esc('2 x reorder level (' + fmt(it.reorder * 2) + ')') : 'Not set') : '') +
-        (K.v84 && canManage(m) ? row('Barcodes', it.codes.length ? it.codes.length + ' linked' : 'None linked') : '') +
+        (K.v84 && canManage(m) ? row('Barcodes', it.codes.length ? it.codes.length + ' linked' : 'None linked') + (allowed('unlink') ? it.codes.map(function (c) { return row('Code', esc(c) + ' <button class="btn btn-ghost I_undobtn" type="button" data-act="unlink" data-code="' + esc(c) + '" aria-label="Unlink code ' + esc(c) + '">Unlink</button>'); }).join('') : '') : '') +
         (canManage(m) && info && info.done ? row('Last counted', info.lastCounted ? esc(dateLabel(info.lastCounted)) : 'Not counted in the app yet') : '') +
         (cover ? row('Lasts', esc(cover)) : '') + (canPrice(m) && it.cost != null ? row('Unit cost', esc(peso(it.cost))) : '') + '</dl>' +
         lastChange(it) + (M.denied.shop ? '' : shopN ? '<p class="help">Already on the shopping list.</p>' : '') + (a.note ? '<div class="okbox" role="status"><span>' + esc(a.note) + '</span></div>' : '') + errBox(a) +
@@ -455,7 +457,7 @@
     else if (cs === 'denied') cam = '<div class="note soon" role="status"><span>' + esc(ERR.nocam) + '</span></div>';
     else if (cs === 'failed') cam = '<div class="note soon" role="status"><span>' + esc(ERR.camfail) + '</span></div>';
     else if (cs === 'paused') cam = '<p class="help" role="status">The camera is paused.</p><button class="btn btn-secondary btn-block" type="button" data-act="cam-start">Start the camera</button>';
-    else if (cs === 'none') cam = '<p class="help" role="status">This phone cannot read a barcode here. Type the code under it.</p>';
+    else if (cs === 'none') cam = '<p class="help" role="status">This phone cannot read barcodes. You can type the code instead.</p>';
     return head(link && it ? 'Link a barcode to ' + it.name : 'Scan a barcode', link ? 'Scan or type the code on the pack.' : 'Scan it to open the item.') + cam + (a.note ? '<div class="okbox" role="status"><span>' + esc(a.note) + '</span></div>' : '') +
       '<form data-i-form>' + textField('code', 'Type the code under the barcode', (a.vals || {}).code || '', 'autocapitalize="off" spellcheck="false" autocorrect="off"') + errBox(a) +
       '<div class="I_btns"><button class="btn btn-primary btn-block" type="submit">Look it up</button><button class="btn btn-secondary btn-block" type="button" data-act="back">Close</button></div></form>';
@@ -535,6 +537,7 @@
     if (act === 'begin') return begin(attr(t, 'data-kind'));
     if (act === 'b-tick') { var bid = attr(t, 'data-id'); if (a.kind !== 'bought' || a.step !== 'pick') return; if (a.sel[bid]) delete a.sel[bid]; else { var br = shopRowBy(bid); a.sel[bid] = 1; if (a.vals['packs_' + bid] == null) a.vals['packs_' + bid] = fmt(br && br.qty || 1); } a.bad = false; drawLayer(); return; }
     if (act === 'b-undoall') { if (a.kind === 'bought' && a.step === 'done') { a.step = 'undoconfirm'; a.err = null; drawLayer(); } return; }
+    if (act === 'unlink') { var uc = attr(t, 'data-code'); if (!allowed('unlink') || !a.itemId || !uc) return; M.act = { kind: 'unlink', itemId: a.itemId, code: uc, step: 'confirm' }; drawLayer(); return; }
     if (act === 'begin-link') { if (allowed('link') && a.itemId) openScan(a.itemId); return; }
     if (act === 'cam-start') { startCam(); return; }
     if (act === 'open-taken') { var tid = attr(t, 'data-id'); stopCam(); K.scanned = tid; return go('#stock/item/' + tid, 'item/' + tid, tid); }
@@ -543,7 +546,7 @@
     if (act === 'pick') { if (a.phase !== 'pick' || !allowed('link')) return; M.act = { kind: 'link', step: 'confirm', pickId: attr(t, 'data-id'), code: a.code, format: a.format, mode: a.mode, fromPick: true }; drawLayer(); return; }
     if (act === 'rep-kind') { a.vals.rkind = attr(t, 'data-k'); a.bad = false; drawLayer(); return; }
     if (act === 'rep-to') { a.vals.to = attr(t, 'data-to') === 'finance' && canPrice(M.role) && !K.noFinance ? 'finance' : 'ops'; a.bad = false; drawLayer(); return; }
-    if (act === 'back') { if (/^(scan|link|create|report|undo|bought)$/.test(a.kind)) return flowBack(a); if (a.kind === 'shopset') { a.kind = 'menu'; a.step = null; a.err = null; drawLayer(); } else if (a.fromShop && a.step !== 'confirm') { M.act = null; drawLayer(); } else if (a.step === 'confirm' && a.kind !== 'low') { a.step = 'form'; a.err = null; drawLayer(); } else if (a.shopId) { a.kind = 'menu'; a.err = null; drawLayer(); } else { a.kind = 'menu'; a.vals = null; a.step = null; a.err = null; a.bad = false; drawLayer(); } return; }
+    if (act === 'back') { if (/^(scan|link|create|report|undo|bought|unlink)$/.test(a.kind)) return flowBack(a); if (a.kind === 'shopset') { a.kind = 'menu'; a.step = null; a.err = null; drawLayer(); } else if (a.fromShop && a.step !== 'confirm') { M.act = null; drawLayer(); } else if (a.step === 'confirm' && a.kind !== 'low') { a.step = 'form'; a.err = null; drawLayer(); } else if (a.shopId) { a.kind = 'menu'; a.err = null; drawLayer(); } else { a.kind = 'menu'; a.vals = null; a.step = null; a.err = null; a.bad = false; drawLayer(); } return; }
     if (act === 'step') { a.vals = a.vals || {}; var f = attr(t, 'data-f'); a.vals[f] = stepQty(a.vals[f], +attr(t, 'data-d'), attr(t, 'data-z') === '1'); a.err = null; drawLayer(); var nb = q('[data-act="step"][data-f="' + f + '"][data-d="' + attr(t, 'data-d') + '"]'); if (nb && nb.focus) nb.focus(); return; }
     if (act === 'shop-bought') { var r = (K.shop || []).filter(function (x) { return x.id === a.shopId; })[0]; if (!r || !r.itemId || !allowed('recv', itemById(r.itemId))) return; M.act = { kind: 'recv', itemId: r.itemId, step: 'form', vals: { packs: fmt(r.qty || 1), supplier: '', cost: '', shopId: r.id }, fromShop: true }; drawLayer(); return; }
     if (act === 'shop-do') { var rr = (K.shop || []).filter(function (x) { return x.id === a.shopId; })[0]; if (!rr) return; a.kind = 'shopset'; a.status = attr(t, 'data-do'); a.step = 'confirm'; a.rowName = rr.name; drawLayer(); return; }
@@ -572,6 +575,7 @@
     if (kind === 'price') return K.v84 && canPrice(m) && !M.denied.price;
     if (kind === 'levels') return K.v84 && canManage(m) && !M.denied.levels;
     if (kind === 'link') return K.v84 && canManage(m) && !M.denied.link;
+    if (kind === 'unlink') return K.v84 && canManage(m) && !M.denied.unlink;
     if (kind === 'create') return K.v84 && canManage(m) && !M.denied.create;
     if (kind === 'report') return !M.denied.report;
     return false;
@@ -624,6 +628,7 @@
     if (a.kind === 'shop') return shopAddCall(M.pid, it, a.vals, a.key);
     if (a.kind === 'low') return shopAddCall(M.pid, it, { qty: fmt(lowQty(it)), note: 'Running low (from the staff app)' }, a.key);
     if (a.kind === 'undo') return a.entry.call;
+    if (a.kind === 'unlink') return { fn: 'inventory_code_detach_v1', args: { p_property_id: M.pid, p_code: a.code } };
     if (a.kind === 'link') return attachCall(M.pid, it, a.code, a.format);
     if (a.kind === 'price') return priceCall(it, a.vals);
     if (a.kind === 'levels') return levelsCall(it, a.vals);
@@ -633,10 +638,10 @@
     return shopSetCall(M.pid, r, a.status, a.key);
   }
   var DONE = { count: function (it) { return 'Counted. ' + it.name + ' is saved.'; }, used: function () { return 'Logged. Thank you.'; }, recv: function (it) { return 'Stock received for ' + it.name + '.'; }, shop: function () { return 'Added to the shopping list.'; }, shopset: function (it, a) { return a.status === 'approved' ? 'Approved.' : 'Removed from the list.'; },
-    undo: function () { return 'Undone.'; }, low: function () { return 'Passed on. Thank you.'; }, link: function (it) { return 'Linked. Scanning it now opens ' + it.name + '.'; }, price: function (it) { return 'Price saved for ' + it.name + '.'; }, levels: function (it) { return 'Levels saved for ' + it.name + '.'; },
+    undo: function () { return 'Undone.'; }, unlink: function () { return 'Unlinked.'; }, low: function () { return 'Passed on. Thank you.'; }, link: function (it) { return 'Linked. Scanning it now opens ' + it.name + '.'; }, price: function (it) { return 'Price saved for ' + it.name + '.'; }, levels: function (it) { return 'Levels saved for ' + it.name + '.'; },
     create: function (it, a) { return 'Added ' + String(a.vals.name).trim() + '.'; }, report: function (it, a) { return 'Sent to the ' + (a.vals.to === 'finance' ? 'Finance' : 'OPS') + ' group.'; } };
   function bodyOf(e) { try { return e && e.context && typeof e.context.json === 'function' ? Promise.resolve(e.context.json()).catch(function () { return null; }) : null; } catch (x) { return null; } }
-  var NEWK = { low: 1, link: 1, price: 1, levels: 1, create: 1, report: 1, undo: 1 }; // actions that hide for the visit when the server says "not here"
+  var NEWK = { unlink: 1, low: 1, link: 1, price: 1, levels: 1, create: 1, report: 1, undo: 1 }; // actions that hide for the visit when the server says "not here"
   function commit(a) {
     var me = M, it = itemOf(a) || { name: a.rowName || (a.entry && a.entry.name) || '' }, call = build(a), rep = a.kind === 'report', snap = it && { qty: it.qty, cost: it.cost, reorder: it.reorder, par: it.par };
     if (me.demo) { toast(rep ? 'Demo only, nothing was sent.' : DEMO_NOTE); finish(); return; }
@@ -778,6 +783,8 @@
       e.call = { fn: 'inventory_item_price_set_v1', args: { p_item_id: it.id, p_unit_cost: b } };
     } else if (a.kind === 'link' && a.code) {
       e.say = 'Linked a barcode to ' + n; e.line = 'linked a barcode'; e.confirm = 'Unlink code ' + shortCode(a.code) + ' from ' + n + '?'; e.call = { fn: 'inventory_code_detach_v1', args: { p_property_id: M.pid, p_code: a.code } };
+    } else if (a.kind === 'unlink' && a.code) {
+      e.say = 'Unlinked a barcode from ' + n; e.line = 'unlinked a barcode'; e.confirm = 'Link code ' + shortCode(a.code) + ' to ' + n + ' again?'; e.call = attachCall(M.pid, it, a.code, null);
     } else if (a.kind === 'create' && d.item_id) {
       var cnm = String(v.name || '').trim(); e.itemId = d.item_id; e.name = cnm; e.say = 'Added ' + cnm; e.line = 'added this item'; e.confirm = 'Remove ' + cnm + ' again?'; e.call = { fn: 'inventory_item_update_v1', args: { p_item_id: d.item_id, p_patch: { active: false } } };
     } else if ((a.kind === 'shop' || a.kind === 'low') && d.id) {
@@ -834,20 +841,24 @@
     var cam = me.cam = { on: true, stream: null, timer: null, busy: false, det: null };
     a.camState = 'starting'; drawLayer();
     Promise.resolve().then(function () { return root.BarcodeDetector.getSupportedFormats ? root.BarcodeDetector.getSupportedFormats() : WANT; }).then(function (sup) {
+      if (!cam.on || me.dead) return null; // closed while the formats were being read: no camera request at all
       var f = WANT.filter(function (x) { return (sup || WANT).indexOf(x) >= 0; });
+      if (!f.length) { me.cam = null; cam.on = false; a.camState = 'none'; typingRedraw(); return null; }
       cam.det = new root.BarcodeDetector(f.length ? { formats: f } : undefined);
       return navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
     }).then(function (stream) {
       if (!cam.on || me.dead) { stopTracks(stream); return; }
       cam.stream = stream; a.camState = 'live';
       cam.timer = root.setInterval(function () { tickCam(cam); }, 250); // not every frame
-      drawLayer();
+      typingRedraw();
     }, function (e) {
       if (!cam.on || me.dead) return;
       me.cam = null; cam.on = false;
-      a.camState = e && /NotAllowed|Security|Permission/i.test(String(e.name || e.message)) ? 'denied' : 'failed'; drawLayer();
+      a.camState = e && /NotAllowed|Security|Permission/i.test(String(e.name || e.message)) ? 'denied' : 'failed'; typingRedraw();
     });
   }
+  // A redraw while the person is typing the code must not drop the keyboard (L3).
+  function typingRedraw() { var d = root.document, typing = !!(d && d.activeElement && d.activeElement.id === 'I_f_code'); drawLayer(); if (typing) refocus('I_f_code'); }
   function tickCam(cam) {
     if (!cam.on || cam.busy || !M || M.cam !== cam) return;
     var v = q('[data-i-video]'); if (!v) return;
@@ -883,6 +894,7 @@
     a.phase = 'unknown'; a.camState = undefined; a.focused = false; drawLayer();
   }
   function flowBack(a) {
+    if (a.kind === 'unlink') { M.act = newMenu(a.itemId); drawLayer(); return; }
     if (a.kind === 'bought') { if (a.step === 'confirm') { a.step = 'pick'; a.err = null; drawLayer(); return; } if (a.step === 'undoconfirm') { a.step = 'done'; a.err = null; drawLayer(); return; } return closeSheet(); }
     if (a.kind === 'undo') { M.act = route().itemId ? newMenu(route().itemId) : null; drawLayer(); return; }
     if (a.kind === 'report') { if (a.step === 'confirm') { a.step = 'form'; a.err = null; drawLayer(); return; } return closeSheet(); }

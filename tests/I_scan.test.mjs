@@ -186,7 +186,7 @@ test('I_scan a blank or unreadable code shows the calm line and stays put', asyn
 test('I_scan camera: no BarcodeDetector means the typed field only, no camera request', async () => {
   const e = await make('owner', { camera: false });
   await e.mount(''); await e.act('scan');
-  assert.match(e.sheet(), /cannot read a barcode here/); assert.doesNotMatch(e.sheet(), /<video/);
+  assert.match(e.sheet(), /cannot read barcodes\. You can type the code instead/); assert.doesNotMatch(e.sheet(), /<video/);
   assert.equal(e.cam.opened, 0);
 });
 
@@ -301,4 +301,59 @@ test('I_scan demo: scanning the sample code opens the card; a link writes nothin
   await e.act('close'); await e.act('scan'); await typeCode(e, '123');
   await e.act('scan-pick'); await e.act('pick', { 'data-id': 'd2' }); await e.submit();
   assert.match(e.toasts[e.toasts.length - 1], /Demo only/);
+});
+
+test('I_scan fix L1: a sheet closed before the formats were read never asks for the camera', async () => {
+  const e = await make('owner', { camera: true });
+  let release; e.win.BarcodeDetector.getSupportedFormats = () => new Promise((r) => { release = () => r(['ean_13']); });
+  await e.mount(''); await e.act('scan'); await e.act('close'); release(); await flush();
+  assert.equal(e.cam.constraints, null); assert.equal(e.cam.opened, 0);
+});
+
+test('I_scan fix L2: a phone that supports none of our formats says so and shows the typed field, not "camera did not start"', async () => {
+  const e = await make('owner', { camera: true });
+  e.win.BarcodeDetector.getSupportedFormats = async () => [];
+  await e.mount(''); await e.act('scan'); await flush();
+  assert.match(e.sheet(), /This phone cannot read barcodes\. You can type the code instead\./);
+  assert.doesNotMatch(e.sheet(), /did not start/); assert.match(e.sheet(), /id="I_f_code"/);
+  assert.equal(e.cam.opened, 0);
+});
+
+test('I_scan fix L3: typing in the code box while the camera warms up keeps the focus when it goes live', async () => {
+  const e = await make('owner', { camera: true });
+  e.win.document = { hidden: false, activeElement: { id: 'I_f_code' }, addEventListener() {}, removeEventListener() {} };
+  await e.mount(''); await e.act('scan'); await flush();
+  assert.ok(e.root.byId.I_f_code.focused >= 1);
+});
+
+test('I_scan fix L5: owner and admin can Unlink a code from the card, with a confirm and the exact detach keys; Undo links it again', async () => {
+  for (const role of ['owner', 'admin']) {
+    const e = await make(role);
+    await e.mount(''); await e.open('i1');
+    assert.match(e.sheet(), /data-act="unlink" data-code="4800000000011"/);
+    await e.act('unlink', { 'data-code': CODE });
+    assert.match(e.sheet(), /Unlink code 4800000000011 from Toilet paper\?/);
+    assert.equal(e.client.rpcCalls('inventory_code_detach_v1').length, 0);
+    await e.submit();
+    const c = e.client.rpcCalls('inventory_code_detach_v1');
+    assert.equal(c.length, 1); assert.deepEqual(Object.keys(c[0][2]).sort(), ['p_code', 'p_property_id']);
+    assert.deepEqual({ ...c[0][2] }, { p_property_id: PID, p_code: CODE });
+    assert.match(e.toasts[e.toasts.length - 1], /Unlinked/);
+    await e.act('undo', { 'data-id': /data-id="(u\d+)"/.exec(e.undo())[1] }); await e.submit();
+    assert.deepEqual({ ...e.client.rpcCalls('inventory_code_attach_v1').pop()[2] }, { p_property_id: PID, p_code: CODE, p_format: null, p_item_id: 'i1' });
+  }
+});
+
+test('I_scan fix L5: a cleaner and finance see no Unlink, and a hand-made click does nothing; a missing RPC hides it', async () => {
+  for (const role of ['cleaner', 'finance']) {
+    const e = await make(role); await e.mount(''); await e.open('i1');
+    assert.doesNotMatch(e.sheet(), /unlink/i);
+    await e.act('unlink', { 'data-code': CODE }); assert.doesNotMatch(e.sheet(), /Unlink code/);
+    assert.equal(e.client.rpcCalls('inventory_code_detach_v1').length, 0);
+  }
+  const miss = { data: null, error: { code: 'PGRST202', message: 'Could not find the function' } };
+  const o = await make('owner', { mock: { rpc: { inventory_code_detach_v1: () => miss } } });
+  await o.mount(''); await o.open('i1'); await o.act('unlink', { 'data-code': CODE }); await o.submit();
+  assert.match(o.toasts[o.toasts.length - 1], /not available right now/);
+  await o.open('i1'); assert.doesNotMatch(o.sheet(), /data-act="unlink"/);
 });

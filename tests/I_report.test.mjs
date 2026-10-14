@@ -84,7 +84,7 @@ test('I_report probe-and-hide: a 404 from the function removes the button for th
 test('I_report finance_only (403) takes the Finance choice away and keeps the report available', async () => {
   const e = await make('owner', { fn: { 'inventory-report': (b) => (b.to === 'finance' ? httpErr(403, { ok: false, error: 'finance_only' }) : { data: { ok: true }, error: null }) } });
   await e.mount(''); await e.act('report'); await pick(e, 'order', 'finance'); await e.submit(); await e.submit();
-  assert.match(e.sheet(), /Prices go to the Finance group only/);
+  assert.match(e.sheet(), /Finance lists are not open to you right now\. The OPS list has no prices/);
   assert.doesNotMatch(e.sheet(), /Finance group \(with prices\)/);
   assert.match(e.html(), /data-act="report"/);
   await e.submit(); await e.submit();
