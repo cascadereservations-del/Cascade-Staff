@@ -31,7 +31,8 @@
     quick: './quick/',
     tgOps: CS.tgLink('3798341977'), // {app: tg://..., web: https://t.me/c/...}; tgA() opens the app, the web page is the fallback
     tgFinance: CS.tgLink('3819352746'),
-    pay: './pay/'
+    pay: './pay/',
+    cassyGpt: 'https://chatgpt.com/g/g-68ea0f232b248191b03136c9ff7122d9-cascade-hideaway-concierge'
   };
   // Doors (D-304.3): a door on this origin opens inside the app in a full-screen frame (one storage partition on iPhone Home Screen and
   // Android alike); a door on another origin would open externally. The frame is addressed by key, never by a URL in the hash.
@@ -100,6 +101,8 @@
     if (CS.doorFramed('dashboard', state.layout, trustOn) && CS.doorTarget(d.url, location.origin) === 'frame') return { href: '#door/dashboard/' + route, external: false };
     return { href: CS.A_hubDoorUrl(d.url, route), external: true };
   }
+  // ChatGPT refuses to be framed, so this is a plain link that opens in a new tab. Same roles as the Telegram Cassy rows beside it.
+  function H_cassyGpt() { return row({ icon: 'sparkles', title: 'Open Cassy on ChatGPT', sub: 'Do not paste guest phone numbers or ID photos', href: LINKS.cassyGpt, external: true }); }
   function pill(tone, icon, text) { return '<span class="pill p-' + tone + '">' + ICON(icon, 's16') + esc(text) + '</span>'; }
   function toneIcon(t) { return t === 'ok' ? 'check' : t === 'info' ? 'info' : 'clock'; }
   function appbar(o) {
@@ -179,13 +182,18 @@
     return '<button class="A_chipglass E_pill" type="button" data-act="attn-open" aria-haspopup="dialog" aria-label="' + esc(P.aria) + '"><i class="E_dot E_' + P.dot + '"></i>' + ICON(P.glyph, 's16') +
       '<span class="E_lbl">' + esc(P.text) + '</span><span class="E_cnt">' + esc(P.short) + '</span></button>';
   }
+  // Two fixed lines under the greeting (temperature and condition; rain chance or how old the reading is). The slot is always drawn, with the same height, so nothing jumps when the reading lands.
+  function H_wxStrip(p) {
+    var w = p && p.weather, c = w && w.current, ok = !!c && c.temp != null, rl = ok ? CS.rainLine(w) : null, l2 = 'Open the forecast';
+    if (ok) l2 = [rl ? rl.head + (rl.rest ? ' · ' + rl.rest : '') : '', w.fetched_at && CS.weatherStale(w) ? 'as of ' + CS.clockLabel(w.fetched_at) : ''].filter(Boolean).join(' · ');
+    return '<a class="H_wxstrip" href="#weather" aria-label="Weather, open the forecast"><span class="l1">' + ICON('cloud', 's16') + '<span>' + esc(ok ? CS.H_weatherShort(c.temp, c.description, (window.innerWidth || 360) < 340) : 'Weather') + '</span></span><span class="l2">' + esc(l2 || 'Tap for the forecast') + '</span></a>';
+  }
   // The photo header: wordmark, the pill, refresh, greeting, date and weather (as of HH:MM when the weather is old). Drawn before the first answer too.
   function A_hero() {
-    var p = state.payload, c = p && p.weather && p.weather.current, nm = CS.greetingName(state.user), stale = p && p.weather && p.weather.fetched_at && CS.weatherStale(p.weather) ? ' · as of ' + CS.clockLabel(p.weather.fetched_at) : '';
-    var wx = c && c.temp != null ? '<a class="H_wxa" href="#weather" aria-label="Weather, open the forecast">' + ICON('cloud', 's16') + esc(CS.H_weatherShort(c.temp, c.description, (window.innerWidth || 360) < 340) + stale) + '</a>' : '';
+    var p = state.payload, nm = CS.greetingName(state.user);
     return '<div class="A_hero"><img src="img/house-hero.webp" alt="" width="720" height="480" fetchpriority="high"><div class="A_herobar"><span class="brand">Cascade</span><div class="A_herorow">' + E_pill(E_att()) +
       '<button class="A_chipglass" type="button" data-act="refresh" aria-label="Refresh">' + ICON('refresh', 's24') + '</button></div></div>' +
-      '<div class="A_greet"><h1>' + esc(CS.greeting() + (nm ? ', ' + nm : '')) + '</h1><div class="cap">' + esc(CS.dayLong(p ? p.today : CS.manilaToday())) + (wx ? '<span aria-hidden="true">·</span>' + wx : '') + '</div></div></div>';
+      '<div class="A_greet"><h1>' + esc(CS.greeting() + (nm ? ', ' + nm : '')) + '</h1><div class="cap">' + esc(CS.dayLong(p ? p.today : CS.manilaToday())) + '</div>' + H_wxStrip(p) + '</div></div>';
   }
   // Sign out lives on More only (a wet-hand mis-tap away from the tab bar); the footer says how fresh the screen is.
   function footerLine() { return '<div class="help F_span" style="text-align:center;margin-top:16px">Updated ' + esc(state.loadedAt ? CS.agoLabel(new Date(state.loadedAt).toISOString()) : 'just now') + ' · v' + CFG.version + '</div>'; }
@@ -256,12 +264,12 @@
     if (staff) {
       // Today, Turnover, the paid notice (under Turnover: Turnover and Slide to start never move when it lands), Notices, then the doors
       body = '<div class="A_body">' + errBanner() + todayCard() + A_turnoverCard(true) + H_cleanDoneCard() + '<div id="slot-paid-notice" class="A_slot" hidden></div>' + A_noticesCard() +
-        A_navCard('Work', doorRow('checklist', 'clip', 'Start or continue today’s turnover') +
+        A_navCard('Work', row({ icon: 'cloud', title: 'Weather', sub: 'Today and the next few hours', href: '#weather' }) + doorRow('checklist', 'clip', 'Start or continue today’s turnover') +
           (LINKS.pay ? row({ icon: 'cash', title: 'Cleaning fee', sub: state.payHint || 'Ask for payment for your cleans and expenses', href: H_payUrl(), subId: 'pay-sub' }) : '') +
           row({ icon: 'calendar', title: 'Calendar', sub: 'Who is staying, who is next', href: '#calendar', count: n || '' }) +
           row({ icon: 'box', title: 'Inventory', sub: 'Stock levels and what to buy', href: '#stock' }) +
           (doorDef('manual') && CS.doorAllowed('manual', role()) ? row({ icon: 'book', title: 'House manual', sub: 'How we do things · when something breaks', door: 'manual' }) : '')) +
-        A_navCard('Ask Cassy', row({ icon: 'chat', title: 'Cassy · OPS', sub: 'Report, ask, log an expense', tg: LINKS.tgOps, external: true }) +
+        A_navCard('Ask Cassy', row({ icon: 'chat', title: 'Cassy · OPS', sub: 'Report, ask, log an expense', tg: LINKS.tgOps, external: true }) + H_cassyGpt() +
           (canReply() ? row({ icon: 'sparkles', title: 'Cassy reply', sub: 'Draft a warm reply to a guest message', href: '#reply' }) : '') +
           row({ icon: 'help', title: 'Quick guide', sub: 'Two minutes on telling Cassy what happened', href: LINKS.quick })) + footerLine() + '</div>';
     } else {
@@ -569,6 +577,12 @@
     else { var url = CS.A_fbPluginUrl(page, Math.min(500, (window.innerWidth || 360) - 32)); if (url) body = '<div class="A_fbbox" id="A_fbbox">' + (carried ? '' : '<iframe title="Latest GSCWD posts" loading="lazy" referrerpolicy="no-referrer" sandbox="allow-scripts allow-same-origin allow-popups" src="' + esc(url) + '"></iframe>') + '</div>'; }
     return '<div class="card glass A_card" aria-label="Latest GSCWD posts">' + body + '<p class="help" style="margin:0">' + esc(cap) + '</p><button class="btn btn-secondary" type="button" data-act="fb-hide">Hide</button></div>';
   }
+  // The Notices weather card when notices_v1 has no weather: the Home reading (current conditions and its age only, never hourly bars or a rain watch), else a plain line. Both open the forecast.
+  function H_wxCard() {
+    var w = state.payload && state.payload.weather, c = w && w.current, chev = '<span class="chev">' + ICON('chev') + '</span>';
+    if (c && c.temp != null) return '<section class="card glass A_card" aria-label="Weather"><a class="row-wrap H_wxlink" href="#weather" style="gap:14px" aria-label="Open the forecast"><span class="A_temp">' + Math.round(+c.temp) + '°</span><span class="mid"><span class="t">' + esc(c.description || 'Weather') + '</span><span class="s">' + (w.fetched_at ? 'as of ' + esc(CS.clockLabel(w.fetched_at)) + ' · ' : '') + 'tap for the forecast</span></span>' + chev + '</a></section>';
+    return '<section class="card glass A_card" aria-label="Weather"><a class="row-wrap H_wxlink" href="#weather" style="gap:14px" aria-label="Open the forecast"><span class="mid"><span class="t">The forecast is not available right now</span><span class="s">It comes back by itself. Tap to open the forecast.</span></span>' + chev + '</a></section>';
+  }
   function calNotices() {
     var v = A_notices();
     if (state.noticesAbsent) return '<div class="card glass"><p class="sub">Notices are not set up yet. Brownouts and the weather still show under Stays, in Warnings.</p><a class="btn btn-secondary btn-sm" href="#calendar/warnings" style="margin-top:10px">See warnings</a></div>';
@@ -583,7 +597,7 @@
         (W.hours.length ? '<div class="A_hours" aria-label="Chance of rain by hour">' + W.hours.map(function (h) { return '<div><span>' + h.pct + '%</span><i style="height:' + Math.max(4, Math.round(h.pct * 0.6)) + 'px"></i><span>' + esc(h.label) + '</span></div>'; }).join('') + '</div>' : '') +
         (W.watch ? '<p class="sub" style="margin:0">Close the windows and bring in the laundry before the rain.</p>' : '') +
         '<p class="help" style="margin:0">' + esc(W.source ? W.source + ' forecast' : 'Forecast') + (W.fetched_at ? ' · as of ' + esc(CS.clockLabel(W.fetched_at)) : '') + '</p></section>';
-    } else if ((f === 'all' || f === 'weather') && !W) html += '<div class="A_label">Weather</div><div class="card glass"><p class="sub">The forecast is not available right now. It comes back by itself.</p></div>';
+    } else if ((f === 'all' || f === 'weather') && !W) html += '<div class="A_label">Weather</div>' + H_wxCard();
     [['power', 'Power'], ['water', 'Water']].forEach(function (g) {
       var rows = v.list.filter(function (n) { return n.group === g[0]; }), link = v.sources[g[0]];
       if ((f === 'all' || f === g[0]) && (rows.length || link)) html += '<div class="A_label">' + g[1] + '</div>' + rows.map(A_noticeRow).join('') + (link ? A_sourceRow(g[0], link) : '') + (g[0] === 'water' && link ? A_fbPanel(link) : '');
@@ -1203,7 +1217,7 @@
     g.push({ w: 2, id: 'search', html: A_navCard('Search', row({ icon: 'search', title: 'Search', sub: CS.canSeeGuestContact(role()) ? 'Tasks, guests and the manual' : 'Tasks and the manual', href: '#search' })) });
     g.push({ w: 5, id: 'how', html: A_navCard('How we do things', row({ icon: 'book', title: 'Cascade Manual', sub: 'How we do things', door: 'manual' }) + doorRow('guide', 'book', 'How the staff app and the house work') + row({ icon: 'help', title: 'Quick guide', sub: 'How to use Cassy in Telegram', href: LINKS.quick }) + doorRow('adminguide', 'lock', 'Owner and admin chapters')) });
     g.push({ w: 4, id: 'cassy', html: A_navCard('Cassy', (canReply() ? row({ icon: 'sparkles', title: 'Cassy reply', sub: 'Draft a warm reply to a guest message', href: '#reply' }) : '') +
-      row({ icon: 'chat', title: 'Cassy · Telegram OPS', sub: 'Open in Telegram', tg: LINKS.tgOps, external: true }) + (admin ? row({ icon: 'wallet', title: 'Cassy · Telegram Finance', sub: 'Open in Telegram', tg: LINKS.tgFinance, external: true }) : '')) });
+      row({ icon: 'chat', title: 'Cassy · Telegram OPS', sub: 'Open in Telegram', tg: LINKS.tgOps, external: true }) + H_cassyGpt() + (admin ? row({ icon: 'wallet', title: 'Cassy · Telegram Finance', sub: 'Open in Telegram', tg: LINKS.tgFinance, external: true }) : '')) });
     if (admin) g.push({ w: 4, id: 'admin', html: A_navCard('Admin', row({ icon: 'dash', title: 'Admin hub', sub: 'Every dashboard page, in one list', href: '#hub' }) + (CS.canEditRates(role()) ? row({ icon: 'cash', title: 'Pay rates', sub: 'What a clean and its transport pay', href: '#payrates' }) : '') + row({ icon: 'box', title: 'Inventory', sub: 'Stock levels and usage', href: '#stock' })) });
     g.push({ w: 6, id: 'appearance', html: '<div class="F_group"><div class="A_label">Appearance</div><section class="card glass" aria-label="Appearance"><div class="row-wrap" role="radiogroup" aria-label="Theme">' + chip('auto', 'Automatic') + chip('light', 'Light') + chip('dark', 'Dark') + '</div>' +
       '<div class="A_switch" style="margin-top:10px"><span id="plain-label"><b>Plain bars</b> (no glass)</span><button class="sw" type="button" role="switch" data-act="plain" aria-checked="' + plain + '" aria-labelledby="plain-label"><i></i></button></div>' +
@@ -1303,6 +1317,8 @@
     pr.catch(function () { if (H_mod.p[key] === pr) delete H_mod.p[key]; }); // a failed load (offline, a 404) is never remembered: the next open retries
     return pr;
   }
+  // 3.2: a module that keeps a list or a draft in memory (guests, inbox) drops it on sign-out and on an account switch; a throwing reset never blocks sign-out.
+  function H_resetModules() { ['G_Guests', 'X_Inbox'].forEach(function (n) { try { var g = window[n]; if (g && typeof g.reset === 'function') g.reset(); } catch (e) { /* never block sign-out */ } }); }
   function H_unmount() {
     var k = H_mod.mounted; H_mod.mounted = ''; H_mod.sub = ''; H_mod.n++;
     var g = k && window[H_MODULES[k].global]; try { if (g && typeof g.unmount === 'function') g.unmount(); } catch (e) { /* never block navigation or sign-out */ }
@@ -1360,7 +1376,8 @@
       state.notices = v; state.noticesAbsent = false; state.noticesFailed = false;
     }).catch(function (e) {
       if (CS.rpcMissing(e)) { state.noticesAbsent = true; state.notices = null; state.noticesFailed = false; } else state.noticesFailed = true; // a missing feature is not a failure; a failed read is
-    }).then(function () { state.noticesLoading = false; state.noticesDone = true; if (state.layout && (current === 'home' || current === 'calendar')) render(current); });
+    }).then(function () { state.noticesLoading = false; state.noticesDone = true; if (state.layout && (current === 'home' || current === 'calendar')) render(current);
+      if (state.notices && !state.notices.weather && !H_wxP && state.payload) H_wxFetch(); }); // self-heal: the server cache is over 60 minutes old, so ask for a fresh one once; the answer re-reads this card
   }
   var NADD_TYPES = [['water', 'Water interruption'], ['maintenance', 'Maintenance'], ['deep_clean', 'Deep cleaning'], ['note', 'Note']]; // a brownout is refused by the server
   function A_noticeAddForm() {
@@ -1405,7 +1422,7 @@
     });
   }
   function signOutTo(msg) {
-    clearTimeout(H_rpT); state.H_q = ''; state.H_offKey = ''; H_unmount(); closeSheet(); dropPhotos(); state.replyRecent = []; state.cleanDone = null; state.progress = null; state.progressAbsent = false; H_idClose(); state.reply = null; var rb = $('rp-body'); if (rb) rb.innerHTML = ''; rpLive(''); state.payload = null; state.bookings = null; state.bookingsDone = false; state.noticesDone = false; state.notices = null; state.noticesAbsent = false; state.nadd = null; state.fbOpen = false; state.tasks = null; state.access = null; state.layout = null; state.month = null; state.error = '';
+    clearTimeout(H_rpT); state.H_q = ''; state.H_offKey = ''; H_unmount(); H_resetModules(); closeSheet(); dropPhotos(); state.replyRecent = []; state.cleanDone = null; state.progress = null; state.progressAbsent = false; H_idClose(); state.reply = null; var rb = $('rp-body'); if (rb) rb.innerHTML = ''; rpLive(''); state.payload = null; state.bookings = null; state.bookingsDone = false; state.noticesDone = false; state.notices = null; state.noticesAbsent = false; state.nadd = null; state.fbOpen = false; state.tasks = null; state.access = null; state.layout = null; state.month = null; state.error = '';
     return sb.auth.signOut().catch(function () {}).then(function () { showSignin(msg); });
   }
   function showSignin(msg) {
@@ -1427,7 +1444,7 @@
       try { CS.assertNoMoney(r.data, { allowContact: CS.canSeeGuestContact(state.access && state.access.role) }); } catch (e) { state.payload = null; state.errorKind = 'blocked'; state.error = 'This page was blocked because the data carried an amount or a contact detail. Tell Lloyd.'; return; }
       if (!CS.canSeeGuestContact(state.access && state.access.role)) r.data.warnings = (r.data.warnings || []).filter(function (w) { return w.kind !== 'verifier'; });
       state.payload = r.data; state.loadedAt = Date.now(); state.error = ''; state.errorKind = '';
-      refreshWeather(); loadPayHint(); loadBookingsToConfirm(); A_loadNotices(); H_loadProgress();
+      H_wxP = null; refreshWeather(); loadPayHint(); loadBookingsToConfirm(); A_loadNotices(); H_loadProgress();
     }).catch(function (e) {
       state.errorKind = E_netErr(e) ? 'network' : 'server'; // "No connection" only when the network is the problem
       state.error = state.errorKind === 'network' ? (state.payload ? 'Live information needs a connection. Showing the last update.' : 'Live information needs a connection.') : (state.payload ? 'Could not update. Showing the last update.' : 'Could not update.');
@@ -1441,22 +1458,27 @@
       state.progress = CS.H_progress(r.data, role());
     }).catch(function () { state.progress = null; }).then(function () { if (current === 'home' && state.layout) renderHome(); });
   }
-  // weather-proxy refreshes its own cache; if it rejects the user's token, the line simply says "as of HH:MM".
-  function refreshWeather() {
-    var w = state.payload && state.payload.weather;
-    if (!CS.weatherStale(w)) return;
-    sb.auth.getSession().then(function (s) {
-      var tok = s.data && s.data.session && s.data.session.access_token; if (!tok) return;
+  // weather-proxy refreshes its own cache. ONE request per loadHome, shared by the Home line and the Notices self-heal (a second caller gets the same promise).
+  // When it answers, the Home reading and the Notices card are both redrawn from it. A refusal or a timeout leaves the reading as it was, and nothing retries.
+  var H_wxP = null;
+  function H_wxFetch() {
+    if (H_wxP) return H_wxP;
+    H_wxP = sb.auth.getSession().then(function (s) {
+      var tok = s.data && s.data.session && s.data.session.access_token; if (!tok) return null;
       return net(CFG.url + '/functions/v1/weather-proxy', { headers: { Authorization: 'Bearer ' + tok, apikey: CFG.key }, cache: 'no-store' })
         .then(function (res) { return res.ok ? res.json() : null; }).then(function (j) {
-          if (j && j.current && j.current.temp != null && state.payload) {
+          if (!(j && j.current && j.current.temp != null)) return null;
+          if (state.payload) {
             var c = j.current;
             state.payload.weather = { source: j.source || null, fetched_at: j.fetched_at || new Date().toISOString(), current: { temp: c.temp, emoji: c.emoji, description: c.description, rain_prob: c.rain_prob, today_high: c.today_high, today_low: c.today_low, humidity: c.humidity, uv_label: c.uv_label } };
             render();
           }
+          return j;
         });
-    }).catch(function () {});
+    }).catch(function () { return null; }).then(function (j) { if (j) A_loadNotices(); return j; });
+    return H_wxP;
   }
+  function refreshWeather() { if (CS.weatherStale(state.payload && state.payload.weather)) H_wxFetch(); }
   // Payment Request sub-line: how many cleans are ready. SPEC-37's RPC; silent while it is not deployed.
   function loadPayHint() {
     if (state.layout !== 'staff' || !LINKS.pay) return;
@@ -1529,6 +1551,7 @@
   // location.replace on the frame's window: opening or closing a door adds no history entry (so Back is one press, not two).
   function setFrame(f, url) { try { f.contentWindow.location.replace(url); } catch (e) { f.src = url; } }
   function enter() {
+    H_resetModules(); // a new sign-in starts every module empty, whoever was here before
     state.layout = CS.layoutForRole(state.access.role);
     state.name = CS.deriveDisplayName(state.user);
     if (!/^#(home|calendar|tasks|payrates|reply|more|hub|weather|stock|manage|guests|inbox|search)/.test(location.hash)) history.replaceState(null, '', '#home');

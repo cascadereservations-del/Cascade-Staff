@@ -80,7 +80,7 @@ test('3.1.1 hero weather: a failed refresh (refused, offline, or an empty answer
   for (const how of ['reject', 'refused', 'empty']) {
     const fetcher = (u) => (/weather-proxy/.test(String(u)) ? (how === 'reject' ? Promise.reject(new TypeError('Failed to fetch')) : how === 'refused' ? Promise.resolve({ ok: false, status: 403 }) : Promise.resolve({ ok: true, json: () => Promise.resolve({}) })) : Promise.resolve({ ok: false }));
     const app = await boot({ role: 'cleaner', hash: '#home', foldFetch: fetcher, handlers: baseHandlers('cleaner', { staff_home_v1: () => HOMEWITH([], { weather: wx }) }) });
-    assert.match(app.els['v-home'].innerHTML, /class="H_wxa"[^>]*>[^]*29° partly cloudy/, how + ': the line is still there');
+    assert.match(app.els['v-home'].innerHTML, /class="H_wxstrip"[^>]*>[^]*29° partly cloudy/, how + ': the line is still there');
   }
 });
 

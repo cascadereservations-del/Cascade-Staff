@@ -14,7 +14,7 @@ test('E_ cleaner home order: Today, Turnover, the paid-notice slot, Notices, Wor
   const order = ['aria-label="Today in the house"', 'aria-label="Turnover today"', 'id="slot-paid-notice"', 'aria-label="Notices"', 'aria-label="Work"', 'aria-label="Ask Cassy"', 'Updated '].map((s) => idx(h, s));
   assert.deepEqual(order, [...order].sort((a, b) => a - b), 'the order is fixed');
   const cassy = h.slice(idx(h, 'aria-label="Ask Cassy"'), idx(h, 'Updated '));
-  assert.equal((cassy.match(/class="rowi"|class="rowi" /g) || []).length, 3, 'three rows: Cassy OPS, Cassy reply (every role) and Quick guide'); assert.match(cassy, /Cassy · OPS/); assert.match(cassy, /Quick guide/);
+  assert.equal((cassy.match(/class="rowi"|class="rowi" /g) || []).length, 4, 'four rows: Cassy OPS, Open Cassy on ChatGPT (3.2), Cassy reply (every role) and Quick guide'); assert.match(cassy, /Cassy · OPS/); assert.match(cassy, /Open Cassy on ChatGPT/); assert.match(cassy, /Quick guide/);
   assert.match(h, /House manual/, 'F6: the manual is on the staff home'); assert.doesNotMatch(h, /System Guide|Sign out|data-act="signout"/);
   assert.match(h, /Cleaning fee/); assert.match(h, /Ask for payment for your cleans and expenses/); assert.match(h, /<span class="t">Calendar<\/span><span class="s">Who is staying, who is next/); assert.doesNotMatch(h, /Payment Request|Guest Calendar Info/);
   // the slot is empty and reserved, so Turnover and Slide to start never move when the notice lands
