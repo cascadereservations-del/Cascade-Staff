@@ -188,7 +188,7 @@
     if (K.role !== opts.role) { K.role = opts.role; K.items = null; K.shop = null; K.q = ''; K.chip = 'low'; K.at = 0; K.keys = {}; K.v84 = false; K.lastCode = ''; K.cool = {}; K.scanned = null; K.denied = {}; K.noFinance = false; K.undos = []; K.hasCounted = false; } // a cached list is never shown to another role
     M = {
       el: el, opts: opts, role: opts.role, demo: !!opts.demo, client: opts.client || null, pid: opts.propertyId || PROPERTY_ID,
-      sub: String(opts.sub || ''), act: null, denied: K.denied, uid: null, loadErr: null, shopErr: null, loading: false, offlineStale: false, itemInfo: {}, listeners: []
+      sub: String(opts.sub || ''), act: null, hist: {}, denied: K.denied, uid: null, loadErr: null, shopErr: null, loading: false, offlineStale: false, itemInfo: {}, listeners: []
     };
     el.innerHTML = '<div class="I_wrap"><div data-i-top></div><div data-i-list></div><div data-i-undo class="I_undoslot"></div><div data-i-layer></div><div class="I_live sr" role="status" aria-live="polite" data-i-live></div></div>';
     var on = function (type, fn) { el.addEventListener(type, fn); M.listeners.push([type, fn]); };
@@ -380,6 +380,7 @@
     if (a.kind === 'create') return renderCreate(a);
     var it = itemOf(a); if (!it) return null;
     var v = a.vals || {}, m = M.role, h;
+    if (a.kind === 'history') return renderHistory(a, it);
     if (a.kind === 'unlink') return head('Unlink code ' + shortCode(a.code) + ' from ' + it.name + '?') + '<form data-i-form><p class="I_conf">Scanning this code will no longer open ' + esc(it.name) + '.</p>' + actions(a, 'Yes, unlink it') + '</form>';
     if (a.kind === 'low') return head('Tell the owner ' + it.name + ' is running low?') + '<form data-i-form><p class="I_conf">It goes on the shopping list for ' + esc(fmt(lowQty(it)) + ' ' + (it.purchaseUnit || unitOf(it))) + '.</p>' + actions(a, 'Yes, tell them') + '</form>';
     if (a.kind === 'link') return head('Link code ' + shortCode(a.code) + ' to ' + it.name + '?') + '<form data-i-form><p class="I_conf">Scanning this code will open ' + esc(it.name) + '.</p>' + actions(a, 'Yes, link it') + '</form>';
@@ -433,7 +434,7 @@
     if (a.kind === 'levels') {
       return head(c ? 'Save the levels for ' + it.name + '?' : 'Edit levels: ' + it.name, c ? null : 'Leave a box empty to clear it.') + '<form data-i-form>' +
         (c ? '<p class="I_conf">Reorder at ' + esc(String(v.reorder || '').trim() === '' ? 'not set' : v.reorder) + '. Buy up to ' + esc(String(v.par || '').trim() === '' ? 'not set' : v.par) + '.</p>'
-          : textField('reorder', 'Reorder at (' + esc(unitOf(it)) + ')', v.reorder || '', 'inputmode="decimal"') + textField('par', 'Buy up to (' + esc(unitOf(it)) + ')', v.par || '', 'inputmode="decimal"') + (a.bad ? '<div class="field"><span class="err">▲ ' + esc(a.bad === 'levels' ? ERR.levels : 'Enter numbers such as 12 or 2.5.') + '</span></div>' : '')) +
+          : levelsSuggest(a, it) + textField('reorder', 'Reorder at (' + esc(unitOf(it)) + ')', v.reorder || '', 'inputmode="decimal"') + textField('par', 'Buy up to (' + esc(unitOf(it)) + ')', v.par || '', 'inputmode="decimal"') + (a.bad ? '<div class="field"><span class="err">▲ ' + esc(a.bad === 'levels' ? ERR.levels : 'Enter numbers such as 12 or 2.5.') + '</span></div>' : '')) +
         actions(a, c ? 'Yes, save them' : 'Continue') + '</form>';
     }
     return null;
@@ -500,8 +501,9 @@
     if (allowed('levels')) list.push(['levels', 0, 'Edit levels']);
     if (allowed('link')) list.push(['link', 0, 'Link a barcode']);
     if (allowed('shop')) list.push(['shop', 0, 'Add to shopping list']);
+    if (allowed('history')) list.push(['history', 0, 'History']);
     if (a && a.scanned) { var want = canManage(m) ? 'count' : canPrice(m) ? 'price' : 'low', at = -1; list.forEach(function (x, i) { if (x[0] === want) at = i; }); if (at >= 0) { list.unshift(list.splice(at, 1)[0]); list.forEach(function (y, i) { y[1] = i === 0 ? 1 : 0; }); } }
-    return list.map(function (x) { return x[0] === 'lowdone' ? '<button class="btn btn-secondary btn-block" type="button" disabled><span aria-hidden="true">✓</span> On the shopping list</button>' : x[0] === 'admin' ? x[2] : x[0] === 'link' ? b('link', x[2], 0, 'begin-link') : b(x[0], x[2], x[1]); }).join('');
+    return list.map(function (x) { return x[0] === 'lowdone' ? '<button class="btn btn-secondary btn-block" type="button" disabled><span aria-hidden="true">✓</span> On the shopping list</button>' : x[0] === 'admin' ? x[2] : x[0] === 'link' ? b('link', x[2], 0, 'begin-link') : x[0] === 'history' ? b('history', x[2], 0, 'history-open') : b(x[0], x[2], x[1]); }).join('');
   }
   // Running low (s84 1b): the amount to buy back to par (or 2 x reorder level), in packs; 1 when it cannot be worked out.
   function lowQty(it) {
@@ -545,6 +547,8 @@
     if (act === 'b-tick') { var bid = attr(t, 'data-id'); if (a.kind !== 'bought' || a.step !== 'pick') return; if (a.sel[bid]) delete a.sel[bid]; else { var br = shopRowBy(bid); a.sel[bid] = 1; if (a.vals['packs_' + bid] == null) a.vals['packs_' + bid] = fmt(br && br.qty || 1); } a.bad = false; drawLayer(); return; }
     if (act === 'b-undoall') { if (a.kind === 'bought' && a.step === 'done') { a.step = 'undoconfirm'; a.err = null; drawLayer(); } return; }
     if (act === 'unlink') { var uc = attr(t, 'data-code'); if (!allowed('unlink') || !a.itemId || !uc) return; M.act = { kind: 'unlink', itemId: a.itemId, code: uc, step: 'confirm' }; drawLayer(); return; }
+    if (act === 'history-open') { if (a.kind !== 'menu' || !a.itemId || !allowed('history')) return; var ha = M.act = { kind: 'history', itemId: a.itemId, state: 'loading' }; drawLayer(); fetchHistory(a.itemId, function (d) { if (!M || M.act !== ha) return; if (d) { ha.state = 'ok'; ha.data = d; } else if (K.denied.inventory_item_history_v1) { M.act = newMenu(ha.itemId); toast(ERR.missing); } else ha.state = 'err'; drawLayer(); }); return; }
+    if (act === 'use-sugg') { if (a.kind === 'levels' && a.sugg) { a.vals.par = String(a.sugg); a.err = null; a.bad = false; a.focused = false; drawLayer(); } return; }
     if (act === 'begin-link') { if (allowed('link') && a.itemId) openScan(a.itemId); return; }
     if (act === 'cam-start') { startCam(); return; }
     if (act === 'open-taken') { var tid = attr(t, 'data-id'); stopCam(); K.scanned = tid; return go('#stock/item/' + tid, 'item/' + tid, tid); }
@@ -553,7 +557,7 @@
     if (act === 'pick') { if (a.phase !== 'pick' || !allowed('link')) return; M.act = { kind: 'link', step: 'confirm', pickId: attr(t, 'data-id'), code: a.code, format: a.format, mode: a.mode, fromPick: true }; drawLayer(); return; }
     if (act === 'rep-kind') { a.vals.rkind = attr(t, 'data-k'); a.bad = false; drawLayer(); return; }
     if (act === 'rep-to') { a.vals.to = attr(t, 'data-to') === 'finance' && canPrice(M.role) && !K.noFinance ? 'finance' : 'ops'; a.bad = false; drawLayer(); return; }
-    if (act === 'back') { if (/^(scan|link|create|report|undo|bought|unlink)$/.test(a.kind)) return flowBack(a); if (a.kind === 'shopset') { a.kind = 'menu'; a.step = null; a.err = null; drawLayer(); } else if (a.fromShop && a.step !== 'confirm') { M.act = null; drawLayer(); } else if (a.step === 'confirm' && a.kind !== 'low') { a.step = 'form'; a.err = null; drawLayer(); } else if (a.shopId) { a.kind = 'menu'; a.err = null; drawLayer(); } else { a.kind = 'menu'; a.vals = null; a.step = null; a.err = null; a.bad = false; drawLayer(); } return; }
+    if (act === 'back') { if (/^(scan|link|create|report|undo|bought|unlink|history)$/.test(a.kind)) return flowBack(a); if (a.kind === 'shopset') { a.kind = 'menu'; a.step = null; a.err = null; drawLayer(); } else if (a.fromShop && a.step !== 'confirm') { M.act = null; drawLayer(); } else if (a.step === 'confirm' && a.kind !== 'low') { a.step = 'form'; a.err = null; drawLayer(); } else if (a.shopId) { a.kind = 'menu'; a.err = null; drawLayer(); } else { a.kind = 'menu'; a.vals = null; a.step = null; a.err = null; a.bad = false; drawLayer(); } return; }
     if (act === 'step') { a.vals = a.vals || {}; var f = attr(t, 'data-f'); a.vals[f] = stepQty(a.vals[f], +attr(t, 'data-d'), attr(t, 'data-z') === '1'); a.err = null; drawLayer(); var nb = q('[data-act="step"][data-f="' + f + '"][data-d="' + attr(t, 'data-d') + '"]'); if (nb && nb.focus) nb.focus(); return; }
     if (act === 'shop-bought') { var r = (K.shop || []).filter(function (x) { return x.id === a.shopId; })[0]; if (!r || !r.itemId || !allowed('recv', itemById(r.itemId))) return; M.act = { kind: 'recv', itemId: r.itemId, step: 'form', vals: { packs: fmt(r.qty || 1), supplier: '', cost: '', shopId: r.id }, fromShop: true }; drawLayer(); return; }
     if (act === 'shop-do') { var rr = (K.shop || []).filter(function (x) { return x.id === a.shopId; })[0]; if (!rr) return; a.kind = 'shopset'; a.status = attr(t, 'data-do'); a.step = 'confirm'; a.rowName = rr.name; drawLayer(); return; }
@@ -583,6 +587,7 @@
     if (kind === 'price') return K.v84 && canPrice(m) && !M.denied.price;
     if (kind === 'levels') return K.v84 && canManage(m) && !M.denied.levels;
     if (kind === 'link') return K.v84 && canManage(m) && !M.denied.link;
+    if (kind === 'history') return K.v84 && !M.demo && !K.denied.inventory_item_history_v1;
     if (kind === 'unlink') return K.v84 && canManage(m) && !M.denied.unlink;
     if (kind === 'create') return K.v84 && canManage(m) && !M.denied.create;
     if (kind === 'report') return !M.denied.report;
@@ -593,6 +598,7 @@
     var a = M.act, it = itemById(a.itemId), defaults = { count: { qty: it && it.qty != null ? fmt(it.qty) : '0', note: '' }, used: { qty: '1' }, recv: { packs: '1', supplier: '', cost: '' }, shop: { qty: '1', note: '' },
       low: {}, price: { cost: it && it.cost != null ? fmt(it.cost) : '' }, levels: { reorder: it && it.reorder != null ? fmt(it.reorder) : '', par: it && it.par != null ? fmt(it.par) : '' } };
     a.kind = kind; a.step = kind === 'low' ? 'confirm' : 'form'; a.vals = defaults[kind]; a.err = null; a.bad = false; a.key = null; a.sig = null; a.focused = false; drawLayer();
+    if (kind === 'levels' && allowed('history')) fetchHistory(a.itemId, function (d) { if (M && M.act === a && a.kind === 'levels') { a.sugg = d ? suggestBuyUp(itemById(a.itemId), d) : null; drawLayer(); } });
   }
   function onInput(ev) {
     if (!M) return;
@@ -696,6 +702,45 @@
       if (rep) drawList();
     }
     drawLayer();
+  }
+
+  /* ---- Item history and a suggested Buy up to (s84 1b, Q3) */
+  function fetchHistory(id, cb) {
+    var me = M; if (!me || me.demo || !me.client) return cb(null);
+    if (me.hist[id]) return cb(me.hist[id]);
+    Promise.resolve().then(function () { return me.client.rpc('inventory_item_history_v1', { p_item_id: id }); }).then(function (r) {
+      if (me.dead) return;
+      if (r && r.error) throw r.error;
+      if (!r || !r.data || r.data.ok === false) throw { message: 'failed' };
+      me.hist[id] = r.data; cb(r.data);
+    }).catch(function (e) { if (me.dead) return; if (errKind(e, online()) === 'missing') K.denied.inventory_item_history_v1 = true; cb(null); });
+  }
+  // Average use per clean x cleans in the last 14 days x 1.5, rounded up to a whole pack. Only with 5 or more cleans of evidence.
+  function suggestBuyUp(it, h) {
+    var u = h && h.usage; if (!it || !u || !(u.cleans_30d >= 5) || !(num(u.per_clean) > 0) || !(num(u.cleans_14d) > 0)) return null;
+    var packs = Math.ceil(Math.round(num(u.per_clean) * num(u.cleans_14d) * 1.5 * 100) / 100 / (it.perPack || 1));
+    return Math.round(packs * (it.perPack || 1) * 100) / 100;
+  }
+  function levelsSuggest(a, it) {
+    return a.sugg ? '<p class="help I_sugg">Suggested: buy up to ' + esc(fmt(a.sugg)) + ' <button class="btn btn-secondary I_undobtn" type="button" data-act="use-sugg">Use ' + esc(fmt(a.sugg)) + '</button></p>' : '';
+  }
+  var CHANGE_WORD = { reconcile: 'Counted', receipt: 'Received', adjustment: 'Adjusted', usage: 'Used', undo: 'Undo', telegram_count: 'Telegram count' };
+  function renderHistory(a, it) {
+    var h = head(it.name + ': history', it.category);
+    if (a.state === 'loading') return h + '<p class="help I_load" role="status">Loading…</p><div class="I_btns"><button class="btn btn-secondary btn-block" type="button" data-act="back">Back</button></div>';
+    if (a.state !== 'ok') return h + '<div class="errbox" role="alert"><span aria-hidden="true">▲</span><span>' + esc(ERR.other) + '</span></div><div class="I_btns"><button class="btn btn-secondary btn-block" type="button" data-act="back">Back</button></div>';
+    var d = a.data, u = d.usage || {}, pc = num(u.per_clean), body = '<h3 class="I_hh">Use per clean</h3>';
+    if (!(u.cleans_30d >= 5) || !(pc > 0)) body += '<p class="help">Not enough cleans yet to tell.</p>';
+    else {
+      body += '<p class="I_conf">About ' + esc(fmt(pc)) + ' ' + esc(unitOf(it)) + ' per clean, over ' + esc(String(u.cleans_30d)) + ' cleans in the last 30 days.</p>';
+      if (it.qty > 0) body += '<p class="help">About ' + esc(String(Math.max(1, Math.round(it.qty / (pc * u.cleans_30d / 30))))) + ' days left at the current booking pace (an estimate).</p>';
+    }
+    body += '<h3 class="I_hh">Last changes</h3>';
+    var ch = Array.isArray(d.changes) ? d.changes.slice(0, 10) : [];
+    body += ch.length ? '<ul class="I_blines">' + ch.map(function (c) { var w = CHANGE_WORD[c.kind] || String(c.kind || 'Change').replace(/^./, function (x) { return x.toUpperCase(); }); return '<li>' + esc(dateLabel(c.at)) + ' · ' + esc(w) + ' ' + esc(c.before == null ? '' : fmt(c.before)) + ' → ' + esc(c.after == null ? '' : fmt(c.after)) + (c.who ? ' · ' + esc(String(c.who).split(' ')[0]) : '') + '</li>'; }).join('') + '</ul>' : '<p class="help">No changes recorded yet.</p>';
+    var lb = d.last_bought;
+    body += '<h3 class="I_hh">Last bought</h3>' + (lb && lb.at ? '<p class="I_conf">' + esc(dateLabel(lb.at)) + (lb.qty != null ? ', ' + esc(fmt(lb.qty)) : '') + (canPrice(M.role) && lb.unit_cost != null ? ', PHP ' + esc(pesoNum(lb.unit_cost)) + ' each' : '') + '</p>' : '<p class="help">No purchase recorded yet.</p>');
+    return h + body + '<div class="I_btns"><button class="btn btn-secondary btn-block" type="button" data-act="back">Back</button></div>';
   }
 
   /* ---- Count a group (s84 1b, Q2): one item per screen, nothing is written without a tap on Next */
@@ -959,7 +1004,7 @@
     a.phase = 'unknown'; a.camState = undefined; a.focused = false; drawLayer();
   }
   function flowBack(a) {
-    if (a.kind === 'unlink') { M.act = newMenu(a.itemId); drawLayer(); return; }
+    if (a.kind === 'unlink' || a.kind === 'history') { M.act = newMenu(a.itemId); drawLayer(); return; }
     if (a.kind === 'bought') { if (a.step === 'confirm') { a.step = 'pick'; a.err = null; drawLayer(); return; } if (a.step === 'undoconfirm') { a.step = 'done'; a.err = null; drawLayer(); return; } return closeSheet(); }
     if (a.kind === 'undo') { M.act = route().itemId ? newMenu(route().itemId) : null; drawLayer(); return; }
     if (a.kind === 'report') { if (a.step === 'confirm') { a.step = 'form'; a.err = null; drawLayer(); return; } return closeSheet(); }

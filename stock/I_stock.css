@@ -73,3 +73,6 @@ div.I_row { cursor: default; }
 .I_gcount { min-height: 48px; }
 .I_needbtn { min-height: 44px; margin-left: auto; color: var(--v5-warn-t); }
 .I_wname { margin: 8px 0 0; font: 600 var(--v5-t-section)/1.25 var(--font-display, var(--font-ui)); overflow-wrap: anywhere; }
+/* s84 1b: history */
+.I_hh { margin: 16px 0 4px; font: 600 var(--v5-t-body)/1.3 var(--font-display, var(--font-ui)); }
+.I_sugg { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; }
