@@ -15,10 +15,10 @@ const calls = (app, n) => app.calls.filter((c) => c[0] === n);
 
 test('3.2 r2 history: one call per month shown with the exact name and argument keys, cached for the session', async () => {
   const app = await boot({ role: 'admin', hash: '#calendar', handlers: mk('admin', { [HIST]: () => hist([S()]), [MET]: () => occ('61.9') }) }); await app.flush();
-  assert.deepEqual(calls(app, HIST).map((c) => c[1]), [{ p_from: '2026-10-01', p_to: '2026-11-01' }], 'this month starts before today-7, so it is asked for too');
+  assert.deepEqual(calls(app, HIST).map((c) => c[1]), [{ p_from: '2026-10-01', p_to: '2026-10-31' }], 'this month starts before today-7, so it is asked for too');
   assert.deepEqual(calls(app, MET).map((c) => c[1]), [{ p_property_id: 'prop-1', p_start: '2026-10-01', p_end_exclusive: '2026-11-01' }]);
   await prev(app);
-  assert.deepEqual(calls(app, HIST).map((c) => c[1]).pop(), { p_from: '2026-09-01', p_to: '2026-10-01' }); assert.deepEqual(Object.keys(calls(app, HIST)[1][1]), ['p_from', 'p_to']);
+  assert.deepEqual(calls(app, HIST).map((c) => c[1]).pop(), { p_from: '2026-09-01', p_to: '2026-09-30' }); assert.deepEqual(Object.keys(calls(app, HIST)[1][1]), ['p_from', 'p_to']);
   assert.deepEqual(Object.keys(calls(app, MET)[1][1]), ['p_property_id', 'p_start', 'p_end_exclusive']); assert.deepEqual(calls(app, MET)[1][1], { p_property_id: 'prop-1', p_start: '2026-09-01', p_end_exclusive: '2026-10-01' });
   await app.click({ 'data-act': 'next' }); await app.flush(); await prev(app); await app.click({ 'data-act': 'next' }); await app.flush();
   assert.equal(calls(app, HIST).length, 2, 'going back and forth asks for no month twice'); assert.equal(calls(app, MET).length, 2);

@@ -118,7 +118,7 @@ test('3.2 Ask Cassy: a link row to the ChatGPT concierge in a new tab with rel n
   const URL_ = 'https://chatgpt.com/g/g-68ea0f232b248191b03136c9ff7122d9-cascade-hideaway-concierge';
   for (const [role, hash, view] of [['cleaner', '#home', 'v-home'], ['owner', '#more', 'v-more'], ['admin', '#more', 'v-more'], ['finance', '#more', 'v-more'], ['cleaner', '#more', 'v-more']]) {
     const h = (await boot({ role, hash, handlers: baseHandlers(role) })).els[view].innerHTML;
-    assert.match(h, new RegExp('<a class="rowi" href="' + URL_.replace(/[.]/g, '\\.') + '" target="_blank" rel="noopener">'), role + ' ' + hash); assert.match(h, /Open Cassy on ChatGPT/); assert.match(h, /Do not paste guest phone numbers or ID photos/);
+    assert.match(h, new RegExp('<a class="rowi" href="' + URL_.replace(/[.]/g, '\\.') + '" target="_blank" rel="noopener">'), role + ' ' + hash); assert.match(h, /Open Cassy on ChatGPT/); assert.match(h, /Keep guest phone numbers and ID photos out of this chat/);
   }
   assert.doesNotMatch(read('app.js') + read('index.html'), /<iframe[^>]*chatgpt|chatgpt[^>]*<iframe/i, 'ChatGPT refuses framing: never an iframe');
 });
@@ -211,4 +211,22 @@ test('3.2 guard: no top-level function or var name is declared twice in app.js, 
   for (const m of src.matchAll(/^  (?:function (\w+)\(|var (\w+)\s*=)/gm)) { const n = m[1] || m[2]; seen.set(n, (seen.get(n) || 0) + 1); }
   const dup = [...seen].filter(([, c]) => c > 1).map(([n]) => n); assert.deepEqual(dup, [], 'duplicates: ' + dup.join(', '));
   for (const n of ['H_wxFetch', 'H_wxCard', 'H_wxStrip', 'H_cassyGpt', 'H_resetModules', 'H_pushKey', 'H_swReg']) assert.equal(seen.get(n), 1, n);
+});
+
+// ------------------------------------------------------------------------------------------------ review fixes (REVIEW-H F1, F2)
+test('3.2 review F1: a notices read that lands last never puts the null-weather card back over the fresh one', async () => {
+  const proxy = []; let n = 0, release; const held = new Promise((res) => { release = () => res({ error: null, data: JSON.parse(JSON.stringify(NOTICES_RAW({ weather: null }))) }); });
+  const hourly = [{ time: '2026-10-15T05:00:00Z', rain_chance_pct: 70, mm: 1, code: 61 }];
+  const app = await boot({ role: 'admin', hash: '#calendar/notices', foldFetch: proxyOk(proxy), handlers: baseHandlers('admin', { staff_home_v1: () => HOMEWITH([], { weather: WX_HOME(130) }), notices_v1: () => (++n === 1 ? held : { error: null, data: NOTICES_RAW({ weather: wxRaw(hourly) }) }) }) });
+  await app.flush(); assert.match(weatherBlock(NOTICES_PAGE(app)), /A_hours/, 'the fresh read is drawn'); release(); await app.flush();
+  assert.match(weatherBlock(NOTICES_PAGE(app)), /A_hours/, 'the older read that landed last was dropped'); assert.equal(proxy.length, 1);
+});
+
+test('3.2 review F2: swReg() gives up with null after 4 seconds when the service worker never becomes ready', async () => {
+  let opts = null; const never = new Promise(() => {});
+  await boot({ role: 'owner', hash: '#inbox', serviceWorker: false, nav: { serviceWorker: { ready: never, register: () => Promise.resolve() } }, winInit: (w) => { w.X_Inbox = { mount: (b, o) => { opts = o; } }; }, handlers: baseHandlers('owner') });
+  const t0 = Date.now(); assert.equal(await opts.swReg(), null); const dt = Date.now() - t0; assert.ok(dt >= 3900 && dt < 6000, 'about 4 s, was ' + dt);
+  let o2 = null; const reg = { pushManager: {} };
+  await boot({ role: 'owner', hash: '#inbox', serviceWorker: false, nav: { serviceWorker: { ready: Promise.resolve(reg), register: () => Promise.resolve() } }, winInit: (w) => { w.X_Inbox = { mount: (b, o) => { o2 = o; } }; }, handlers: baseHandlers('owner') });
+  assert.equal(await o2.swReg(), reg, 'a ready worker is returned at once');
 });

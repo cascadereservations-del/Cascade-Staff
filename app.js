@@ -102,7 +102,7 @@
     return { href: CS.A_hubDoorUrl(d.url, route), external: true };
   }
   // ChatGPT refuses to be framed, so this is a plain link that opens in a new tab. Same roles as the Telegram Cassy rows beside it.
-  function H_cassyGpt() { return row({ icon: 'sparkles', title: 'Open Cassy on ChatGPT', sub: 'Do not paste guest phone numbers or ID photos', href: LINKS.cassyGpt, external: true }); }
+  function H_cassyGpt() { return row({ icon: 'sparkles', title: 'Open Cassy on ChatGPT', sub: 'Keep guest phone numbers and ID photos out of this chat', href: LINKS.cassyGpt, external: true }); }
   function pill(tone, icon, text) { return '<span class="pill p-' + tone + '">' + ICON(icon, 's16') + esc(text) + '</span>'; }
   function toneIcon(t) { return t === 'ok' ? 'check' : t === 'info' ? 'info' : 'clock'; }
   function appbar(o) {
@@ -421,7 +421,7 @@
     H_calMemo = { p: p, v: H_histV, list: (p.calendar || []).concat(extra) }; return H_calMemo.list;
   }
   function H_ymKey(m) { return m.y + '-' + (m.m < 10 ? '0' : '') + m.m; }
-  function H_monthEdges(m) { var ny = m.m === 12 ? m.y + 1 : m.y, nm = m.m === 12 ? 1 : m.m + 1; return { start: H_ymKey(m) + '-01', next: H_ymKey({ y: ny, m: nm }) + '-01' }; }
+  function H_monthEdges(m) { var ny = m.m === 12 ? m.y + 1 : m.y, nm = m.m === 12 ? 1 : m.m + 1; return { start: H_ymKey(m) + '-01', next: H_ymKey({ y: ny, m: nm }) + '-01', last: H_ymKey(m) + '-' + String(new Date(Date.UTC(m.y, m.m, 0)).getUTCDate()).padStart(2, '0') }; } // the history call is inclusive at both ends (last day); the metrics call is half-open (next)
   function H_histOk(iso) { var e = H_hist[iso.slice(0, 7)]; return !!e && e.st === 'ok'; }
   function H_histRow(s) { var id = String(s.source || '') + '-' + String(s.id || ''); return { uid: 'h-' + id, guest_name: String(s.first_name || ''), checkin_date: s.checkin, checkout_date: s.checkout, nights: s.nights, status: 'confirmed', source: s.source === 'direct' ? 'direct' : 'airbnb' }; }
   function H_calLoads(m) { // called after the calendar is drawn: at most one history call and one metrics call per month, never repeated for the session
@@ -429,7 +429,7 @@
     var key = H_ymKey(m), e = H_monthEdges(m), gen = H_histGen;
     if (!H_histOff && e.start < CS.H_dataFrom(state.payload.today) && !H_hist[key]) {
       H_hist[key] = { st: 'loading', rows: [] };
-      sb.rpc('staff_calendar_history_v1', { p_from: e.start, p_to: e.next }).then(function (r) {
+      sb.rpc('staff_calendar_history_v1', { p_from: e.start, p_to: e.last }).then(function (r) {
         if (gen !== H_histGen) return;
         if (r.error) { if (CS.rpcMissing(r.error) || r.error.code === '42501' || /not_authorized/.test(r.error.message || '')) H_histOff = true; H_hist[key] = { st: 'fail', rows: [] }; }
         else if (!r.data || !Array.isArray(r.data.stays)) { H_histOff = true; H_hist[key] = { st: 'fail', rows: [] }; } // an answer without a stays list is not a history: keep the dashed behaviour
@@ -1383,7 +1383,10 @@
         .then(function (r) { return r.json(); }).then(function (j) { return j && j.ok && j.key ? j.key : null; });
     }).catch(function () { return null; });
   }
-  function H_swReg() { return !DEMO && navigator.serviceWorker && navigator.serviceWorker.ready ? Promise.resolve(navigator.serviceWorker.ready).catch(function () { return null; }) : Promise.resolve(null); }
+  function H_swReg() { // ready never settles when no worker registered (a blocked sw.js, a private window): give up after 4 seconds with null
+    if (DEMO || !navigator.serviceWorker || !navigator.serviceWorker.ready) return Promise.resolve(null);
+    return Promise.race([Promise.resolve(navigator.serviceWorker.ready), new Promise(function (r) { setTimeout(function () { r(null); }, 4000); })]).catch(function () { return null; });
+  }
   function renderModule(key) {
     var m = H_MODULES[key], el = $('v-' + key), sub = H_sub;
     if (H_mod.mounted === key && H_mod.sub === sub) return; // a redraw of the same screen must not remount it
@@ -1410,18 +1413,22 @@
       }).join('') + '</div></div>';
   }
   // A_loadNotices: notices_v1, probed. A missing RPC hides the card and the tab content (not an error); a failed read keeps what we had.
+  var H_nSeq = 0; // only the newest read counts: an older one that lands last must not put the null-weather card back
   function A_loadNotices() {
     if (!state.access) return Promise.resolve();
     state.noticesLoading = !state.notices && !state.noticesAbsent;
+    var my = ++H_nSeq;
     return sb.rpc('notices_v1', { p_property_id: pid() }).then(function (r) {
+      if (my !== H_nSeq) return;
       if (r.error) throw r.error;
       CS.assertNoMoney(r.data);
       var v = CS.A_noticesView(r.data, role(), state.payload ? state.payload.today : CS.manilaToday());
       if (!v) throw new Error('shape');
       state.notices = v; state.noticesAbsent = false; state.noticesFailed = false;
     }).catch(function (e) {
+      if (my !== H_nSeq) return;
       if (CS.rpcMissing(e)) { state.noticesAbsent = true; state.notices = null; state.noticesFailed = false; } else state.noticesFailed = true; // a missing feature is not a failure; a failed read is
-    }).then(function () { state.noticesLoading = false; state.noticesDone = true; if (state.layout && (current === 'home' || current === 'calendar')) render(current);
+    }).then(function () { if (my !== H_nSeq) return; state.noticesLoading = false; state.noticesDone = true; if (state.layout && (current === 'home' || current === 'calendar')) render(current);
       if (state.notices && !state.notices.weather && !H_wxP && state.payload) H_wxFetch(); }); // self-heal: the server cache is over 60 minutes old, so ask for a fresh one once; the answer re-reads this card
   }
   var NADD_TYPES = [['water', 'Water interruption'], ['maintenance', 'Maintenance'], ['deep_clean', 'Deep cleaning'], ['note', 'Note']]; // a brownout is refused by the server
