@@ -118,7 +118,8 @@
     camfail: 'The camera did not start. You can type the code instead.',
     exists: 'An item with that name already exists.',
     financeOnly: 'Prices go to the Finance group only. Choose the OPS group instead.',
-    levels: 'Buy up to should be the same as or more than the reorder level.'
+    levels: 'Buy up to should be the same as or more than the reorder level.',
+    tooLate: 'This can no longer be undone here. Count the item to correct it.'
   };
   var REPORTS = [{ k: 'order', t: 'Order list', s: 'the order list' }, { k: 'all', t: 'All items', s: 'the full item list' }, { k: 'consumables', t: 'Consumables', s: 'the consumables list' }, { k: 'low', t: 'Low stock', s: 'the low-stock list' }, { k: 'misc', t: 'Miscellaneous', s: 'the miscellaneous list' }];
   var COOL_MS = 30000; // a sent report cannot be sent again to the same group for 30 seconds
@@ -174,20 +175,20 @@
   function demoShop() { return [{ id: 's1', item_id: 'd3', item_name: 'Hand soap', quantity: 6, purchase_unit: 'bottles', reason: 'Last one used today', status: 'proposed', proposed_at: '2026-10-12T02:00:00Z', proposed_by: 'someone' }, { id: 's2', item_id: 'd1', item_name: 'Toilet paper', quantity: 2, purchase_unit: 'pack', reason: '', status: 'approved', proposed_at: '2026-10-11T02:00:00Z', proposed_by: 'someone' }]; }
 
   /* ------------------------------------------------------------------ screen */
-  var K = { items: null, shop: null, q: '', chip: 'low', role: null, at: 0, keys: {}, v84: false, lastCode: '', cool: {}, scanned: null, denied: {}, noFinance: false }; // denied: actions the server refused or lacks, hidden for the whole visit (a re-mount keeps them) // survives unmount: the list shows at once while it refreshes
+  var K = { items: null, shop: null, q: '', chip: 'low', role: null, at: 0, keys: {}, v84: false, lastCode: '', cool: {}, scanned: null, denied: {}, noFinance: false, undos: [], uidn: 0 }; // denied: actions the server refused or lacks, hidden for the whole visit (a re-mount keeps them) // survives unmount: the list shows at once while it refreshes
   var M = null; // the live mount
 
   function mount(el, opts) {
     unmount();
     opts = opts || {};
-    if (K.role !== opts.role) { K.role = opts.role; K.items = null; K.shop = null; K.q = ''; K.chip = 'low'; K.at = 0; K.keys = {}; K.v84 = false; K.lastCode = ''; K.cool = {}; K.scanned = null; K.denied = {}; K.noFinance = false; } // a cached list is never shown to another role
+    if (K.role !== opts.role) { K.role = opts.role; K.items = null; K.shop = null; K.q = ''; K.chip = 'low'; K.at = 0; K.keys = {}; K.v84 = false; K.lastCode = ''; K.cool = {}; K.scanned = null; K.denied = {}; K.noFinance = false; K.undos = []; } // a cached list is never shown to another role
     M = {
       el: el, opts: opts, role: opts.role, demo: !!opts.demo, client: opts.client || null, pid: opts.propertyId || PROPERTY_ID,
       sub: String(opts.sub || ''), act: null, denied: K.denied, uid: null, loadErr: null, shopErr: null, loading: false, offlineStale: false, itemInfo: {}, listeners: []
     };
-    el.innerHTML = '<div class="I_wrap"><div data-i-top></div><div data-i-list></div><div data-i-layer></div><div class="I_live sr" role="status" aria-live="polite" data-i-live></div></div>';
+    el.innerHTML = '<div class="I_wrap"><div data-i-top></div><div data-i-list></div><div data-i-undo class="I_undoslot"></div><div data-i-layer></div><div class="I_live sr" role="status" aria-live="polite" data-i-live></div></div>';
     var on = function (type, fn) { el.addEventListener(type, fn); M.listeners.push([type, fn]); };
-    on('click', onClick); on('input', onInput); on('submit', onSubmit); on('keydown', onKey);
+    on('click', onClick); on('input', onInput); on('submit', onSubmit); on('keydown', onKey); on('focusin', onFocus); on('focusout', onBlur);
     M.vis = function () { if (M && root.document && root.document.hidden && M.cam) pauseCam(); };
     if (root.document && root.document.addEventListener) root.document.addEventListener('visibilitychange', M.vis);
     if (M.demo) { K.items = demoItems().map(function (r) { return normalize(r, M.role); }); K.shop = normalizeShop(demoShop(), null); K.v84 = true; }
@@ -200,6 +201,7 @@
   function unmount() {
     if (!M) return;
     M.listeners.forEach(function (l) { M.el.removeEventListener && M.el.removeEventListener(l[0], l[1]); });
+    if (M.undoT && root.clearTimeout) root.clearTimeout(M.undoT);
     stopCam(); if (root.document && root.document.removeEventListener && M.vis) root.document.removeEventListener('visibilitychange', M.vis);
     M.dead = true; M = null;
   }
@@ -262,9 +264,9 @@
     top.innerHTML = renderTop(rt);
     drawList();
     // an item route opens its sheet once the catalogue is here
-    if (rt.itemId && K.items && (!M.act || M.act.itemId !== rt.itemId)) { var it = itemById(rt.itemId); if (it) { M.act = newMenu(rt.itemId); loadLastCount(rt.itemId); } }
+    if (rt.itemId && K.items && (!M.act || (M.act.itemId !== rt.itemId && M.act.kind !== 'undo'))) { var it = itemById(rt.itemId); if (it) { M.act = newMenu(rt.itemId); loadLastCount(rt.itemId); } }
     if (!rt.itemId && M.act && M.act.itemId) M.act = null;
-    drawLayer();
+    drawLayer(); drawUndo();
   }
   function renderTop(rt) {
     var h = '', n = K.shop ? K.shop.length : 0;
@@ -327,7 +329,8 @@
   }
 
   /* ---- the sheet */
-  function drawLayer() {
+  function drawLayer() { drawLayer0(); drawUndo(); }
+  function drawLayer0() {
     var box = q('[data-i-layer]'), main1 = q('[data-i-top]'), main2 = q('[data-i-list]'); if (!box) return;
     var a = M.act;
     if (!a) { stopCam(); box.innerHTML = ''; [main1, main2].forEach(function (n) { n && n.removeAttribute && n.removeAttribute('inert'); }); return; }
@@ -364,6 +367,7 @@
     if (a.kind === 'shopset') {
       return head((a.status === 'approved' ? 'Approve ' : 'Remove ') + a.rowName + (a.status === 'approved' ? '?' : ' from the list?')) + '<form data-i-form>' + actions(a, a.status === 'approved' ? 'Yes, approve it' : 'Yes, remove it') + '</form>';
     }
+    if (a.kind === 'undo') return head(a.entry.confirm) + '<form data-i-form>' + (a.err === 'tooLate' ? errBox(a) : '') + (a.err === 'tooLate' ? '' : errBox(a)) + actions(a, a.err === 'tooLate' ? 'Close' : 'Yes, undo it') + '</form>';
     if (a.kind === 'scan') return renderScan(a);
     if (a.kind === 'report') return renderReport(a);
     if (a.kind === 'create') return renderCreate(a);
@@ -378,7 +382,7 @@
         (K.v84 && canManage(m) ? row('Barcodes', it.codes.length ? it.codes.length + ' linked' : 'None linked') : '') +
         (canManage(m) && info && info.done ? row('Last counted', info.lastCounted ? esc(dateLabel(info.lastCounted)) : 'Not counted in the app yet') : '') +
         (cover ? row('Lasts', esc(cover)) : '') + (canPrice(m) && it.cost != null ? row('Unit cost', esc(peso(it.cost))) : '') + '</dl>' +
-        (M.denied.shop ? '' : shopN ? '<p class="help">Already on the shopping list.</p>' : '') + (a.note ? '<div class="okbox" role="status"><span>' + esc(a.note) + '</span></div>' : '') + errBox(a) +
+        lastChange(it) + (M.denied.shop ? '' : shopN ? '<p class="help">Already on the shopping list.</p>' : '') + (a.note ? '<div class="okbox" role="status"><span>' + esc(a.note) + '</span></div>' : '') + errBox(a) +
         '<div class="I_btns">' + menuButtons(it, a) +
         '<button class="btn btn-ghost btn-block" type="button" data-act="close">Close</button></div>' +
         (canManage(m) ? '<p class="help I_more"><a href="#door/inventory" data-act="admin">Full inventory in the admin dashboard</a></p>' : '');
@@ -515,6 +519,7 @@
     if (act === 'shop-open') { if (!canManage(M.role)) return; M.act = { kind: 'menu', shopId: attr(t, 'data-id') }; drawLayer(); return; }
     var a = M.act;
     if (act === 'close') return closeSheet();
+    if (act === 'undo') { var ue = undoById(attr(t, 'data-id')); if (!ue || (a && a.sending) || K.denied[ue.call.fn]) return; M.act = { kind: 'undo', entry: ue, step: 'confirm' }; drawLayer(); return; }
     if (!a) return;
     if (a.sending) return; // nothing, not even Close, while a write is in flight
     if (act === 'begin') return begin(attr(t, 'data-kind'));
@@ -526,7 +531,7 @@
     if (act === 'pick') { if (a.phase !== 'pick' || !allowed('link')) return; M.act = { kind: 'link', step: 'confirm', pickId: attr(t, 'data-id'), code: a.code, format: a.format, mode: a.mode, fromPick: true }; drawLayer(); return; }
     if (act === 'rep-kind') { a.vals.rkind = attr(t, 'data-k'); a.bad = false; drawLayer(); return; }
     if (act === 'rep-to') { a.vals.to = attr(t, 'data-to') === 'finance' && canPrice(M.role) && !K.noFinance ? 'finance' : 'ops'; a.bad = false; drawLayer(); return; }
-    if (act === 'back') { if (/^(scan|link|create|report)$/.test(a.kind)) return flowBack(a); if (a.kind === 'shopset') { a.kind = 'menu'; a.step = null; a.err = null; drawLayer(); } else if (a.fromShop && a.step !== 'confirm') { M.act = null; drawLayer(); } else if (a.step === 'confirm') { a.step = 'form'; a.err = null; drawLayer(); } else if (a.shopId) { a.kind = 'menu'; a.err = null; drawLayer(); } else { a.kind = 'menu'; a.vals = null; a.step = null; a.err = null; a.bad = false; drawLayer(); } return; }
+    if (act === 'back') { if (/^(scan|link|create|report|undo)$/.test(a.kind)) return flowBack(a); if (a.kind === 'shopset') { a.kind = 'menu'; a.step = null; a.err = null; drawLayer(); } else if (a.fromShop && a.step !== 'confirm') { M.act = null; drawLayer(); } else if (a.step === 'confirm') { a.step = 'form'; a.err = null; drawLayer(); } else if (a.shopId) { a.kind = 'menu'; a.err = null; drawLayer(); } else { a.kind = 'menu'; a.vals = null; a.step = null; a.err = null; a.bad = false; drawLayer(); } return; }
     if (act === 'step') { a.vals = a.vals || {}; var f = attr(t, 'data-f'); a.vals[f] = stepQty(a.vals[f], +attr(t, 'data-d'), attr(t, 'data-z') === '1'); a.err = null; drawLayer(); var nb = q('[data-act="step"][data-f="' + f + '"][data-d="' + attr(t, 'data-d') + '"]'); if (nb && nb.focus) nb.focus(); return; }
     if (act === 'shop-bought') { var r = (K.shop || []).filter(function (x) { return x.id === a.shopId; })[0]; if (!r || !r.itemId || !allowed('recv', itemById(r.itemId))) return; M.act = { kind: 'recv', itemId: r.itemId, step: 'form', vals: { packs: fmt(r.qty || 1), supplier: '', cost: '', shopId: r.id }, fromShop: true }; drawLayer(); return; }
     if (act === 'shop-do') { var rr = (K.shop || []).filter(function (x) { return x.id === a.shopId; })[0]; if (!rr) return; a.kind = 'shopset'; a.status = attr(t, 'data-do'); a.step = 'confirm'; a.rowName = rr.name; drawLayer(); return; }
@@ -594,7 +599,7 @@
 
   /* ---- the write */
   function build(a) {
-    var it = itemOf(a), today = manilaToday(nowMs()), sig = JSON.stringify([a.kind, a.itemId || a.pickId || a.shopId, a.vals, a.status, a.code]);
+    var it = itemOf(a), today = manilaToday(nowMs()), sig = JSON.stringify([a.kind, a.itemId || a.pickId || a.shopId, a.vals, a.status, a.code, a.entry && a.entry.id]);
     var ke = K.keys[sig]; // one key per set of values, kept even if the sheet is reopened; dropped on success; forgotten after 10 minutes (a write that landed unseen must not replay a later identical one)
     if (!ke || nowMs() - ke.at > 600000) ke = K.keys[sig] = { key: newKey(a.kind), at: nowMs() };
     a.sig = sig; a.key = ke.key;
@@ -602,6 +607,7 @@
     if (a.kind === 'used') return usageCall(M.pid, it, a.vals, a.key, today);
     if (a.kind === 'recv') return receiptCall(it, a.vals, a.key, today);
     if (a.kind === 'shop') return shopAddCall(M.pid, it, a.vals, a.key);
+    if (a.kind === 'undo') return a.entry.call;
     if (a.kind === 'link') return attachCall(M.pid, it, a.code, a.format);
     if (a.kind === 'price') return priceCall(it, a.vals);
     if (a.kind === 'levels') return levelsCall(it, a.vals);
@@ -611,12 +617,12 @@
     return shopSetCall(M.pid, r, a.status, a.key);
   }
   var DONE = { count: function (it) { return 'Counted. ' + it.name + ' is saved.'; }, used: function () { return 'Logged. Thank you.'; }, recv: function (it) { return 'Stock received for ' + it.name + '.'; }, shop: function () { return 'Added to the shopping list.'; }, shopset: function (it, a) { return a.status === 'approved' ? 'Approved.' : 'Removed from the list.'; },
-    link: function (it) { return 'Linked. Scanning it now opens ' + it.name + '.'; }, price: function (it) { return 'Price saved for ' + it.name + '.'; }, levels: function (it) { return 'Levels saved for ' + it.name + '.'; },
+    undo: function () { return 'Undone.'; }, link: function (it) { return 'Linked. Scanning it now opens ' + it.name + '.'; }, price: function (it) { return 'Price saved for ' + it.name + '.'; }, levels: function (it) { return 'Levels saved for ' + it.name + '.'; },
     create: function (it, a) { return 'Added ' + String(a.vals.name).trim() + '.'; }, report: function (it, a) { return 'Sent to the ' + (a.vals.to === 'finance' ? 'Finance' : 'OPS') + ' group.'; } };
   function bodyOf(e) { try { return e && e.context && typeof e.context.json === 'function' ? Promise.resolve(e.context.json()).catch(function () { return null; }) : null; } catch (x) { return null; } }
-  var NEWK = { link: 1, price: 1, levels: 1, create: 1, report: 1 }; // actions that hide for the visit when the server says "not here"
+  var NEWK = { link: 1, price: 1, levels: 1, create: 1, report: 1, undo: 1 }; // actions that hide for the visit when the server says "not here"
   function commit(a) {
-    var me = M, it = itemOf(a) || { name: a.rowName || '' }, call = build(a), rep = a.kind === 'report';
+    var me = M, it = itemOf(a) || { name: a.rowName || (a.entry && a.entry.name) || '' }, call = build(a), rep = a.kind === 'report', snap = it && { qty: it.qty, cost: it.cost, reorder: it.reorder, par: it.par };
     if (me.demo) { toast(rep ? 'Demo only, nothing was sent.' : DEMO_NOTE); finish(); return; }
     if (!online()) { a.err = 'offline'; drawLayer(); return; }
     if (!me.client) { a.err = 'missing'; drawLayer(); return; }
@@ -632,6 +638,7 @@
       a.sending = false; delete K.keys[a.sig];
       if (rep) K.cool[a.vals.rkind + '|' + a.vals.to] = nowMs();
       var msg = DONE[a.kind](it, a);
+      if (a.kind === 'undo') K.undos = K.undos.filter(function (u) { return u !== a.entry; }); else pushUndo(a, it, r && r.data || {}, snap);
       toast(msg); if (me.opts.haptic) { try { me.opts.haptic('success'); } catch (e) { /* no haptics */ } }
       finish(); if (!rep) load();
     }).catch(function (e) {
@@ -645,12 +652,14 @@
     if (why === 'code_taken') { a.err = 'taken'; a.takenId = body.item_id || null; a.takenName = body.item_name || (itemById(body.item_id) || {}).name || ''; return drawLayer(); }
     if (why === 'name_exists') { a.err = 'exists'; a.takenId = body.item_id || null; a.takenName = (itemById(body.item_id) || {}).name || ''; return drawLayer(); }
     if (why === 'bad_code') { a.err = 'badcode'; return drawLayer(); }
+    if (a.kind === 'undo' && (why === 'too_late' || why === 'not_yours' || why === 'stock_moved')) { a.err = 'tooLate'; K.undos = K.undos.filter(function (u) { return u !== a.entry; }); return drawLayer(); }
     if (why === 'finance_only') { K.noFinance = true; a.vals.to = 'ops'; a.step = 'form'; a.err = 'financeOnly'; return drawLayer(); }
     a.err = errKind(e, online());
-    if (a.err === 'missing' && NEWK[a.kind]) { me.denied[a.kind] = true; if (a.itemId && !rep && a.kind !== 'create') { a.kind = 'menu'; a.vals = null; a.step = null; } else me.act = null; a.err = null; toast(ERR.missing); if (rep) drawList(); return drawLayer(); } // not here yet: hide it, no error box
+    var dk = a.kind === 'undo' ? a.entry.call.fn : a.kind;
+    if (a.err === 'missing' && NEWK[a.kind]) { me.denied[dk] = true; if (a.itemId && !rep && a.kind !== 'create') { a.kind = 'menu'; a.vals = null; a.step = null; } else me.act = null; a.err = null; toast(ERR.missing); if (rep) drawList(); return drawLayer(); } // not here yet: hide it, no error box
     if (!rep && (a.err === 'offline' || a.err === 'other')) { me.loading = false; load(); } // the write may have landed: look again
     if (a.err === 'refused') { // the server decides: calm line, and the action goes away
-      me.denied[a.kind] = true;
+      me.denied[dk] = true;
       if (a.kind === 'shopset') { a.kind = 'menu'; }
       else if (a.itemId && !rep && a.kind !== 'create') { a.kind = 'menu'; a.vals = null; a.step = null; }
       else { var m = ERR[a.err]; me.act = null; toast(m); }
@@ -658,6 +667,56 @@
     }
     drawLayer();
   }
+
+  /* ---- undo (s84 1b): every successful write leaves a bar for 10 s and a line on the card for 15 min, for the person who made it */
+  var UNDO_BAR_MS = 10000, UNDO_LINE_MS = 900000;
+  function undoById(id) { return K.undos.filter(function (u) { return u.id === id; })[0] || null; }
+  function undoFor(a, it, d, snap) {
+    var id = 'u' + (++K.uidn), n = it.name, e = { id: id, itemId: it.id || null, name: n, at: nowMs(), kind: a.kind }, v = a.vals || {};
+    if (a.kind === 'count' && d.movementId) {
+      var cn = parseQty(v.qty, true); e.say = 'Counted ' + n + ': ' + fmt(cn); e.line = 'counted ' + fmt(cn);
+      e.confirm = 'Put ' + n + ' back to ' + (snap && snap.qty != null ? fmt(snap.qty) : 'its old amount') + '?'; e.call = { fn: 'inventory_undo_v1', args: { p_movement_id: d.movementId, p_purchase_id: null } };
+    } else if (a.kind === 'recv' && (d.movementId || d.purchaseId)) {
+      e.say = 'Received ' + n; e.line = 'received stock'; e.confirm = 'Take the stock you just added to ' + n + ' back out?';
+      e.call = { fn: 'inventory_undo_v1', args: { p_movement_id: d.movementId || null, p_purchase_id: d.purchaseId || null } };
+    } else if (a.kind === 'price') {
+      var b = 'before' in d ? num(d.before) : snap && snap.cost != null ? snap.cost : null;
+      e.say = 'Price saved for ' + n; e.line = 'changed the price'; e.confirm = b == null ? 'Clear the price of ' + n + ' again?' : 'Put the price of ' + n + ' back to PHP ' + pesoNum(b) + '?';
+      e.call = { fn: 'inventory_item_price_set_v1', args: { p_item_id: it.id, p_unit_cost: b } };
+    } else if (a.kind === 'link' && a.code) {
+      e.say = 'Linked a barcode to ' + n; e.line = 'linked a barcode'; e.confirm = 'Unlink code ' + shortCode(a.code) + ' from ' + n + '?'; e.call = { fn: 'inventory_code_detach_v1', args: { p_property_id: M.pid, p_code: a.code } };
+    } else if (a.kind === 'create' && d.item_id) {
+      var cnm = String(v.name || '').trim(); e.itemId = d.item_id; e.name = cnm; e.say = 'Added ' + cnm; e.line = 'added this item'; e.confirm = 'Remove ' + cnm + ' again?'; e.call = { fn: 'inventory_item_update_v1', args: { p_item_id: d.item_id, p_patch: { active: false } } };
+    } else if ((a.kind === 'shop' || a.kind === 'low') && d.id) {
+      e.say = a.kind === 'low' ? n + ' flagged as running low' : 'Added ' + n + ' to the shopping list'; e.line = a.kind === 'low' ? 'said it is running low' : 'added it to the shopping list'; e.confirm = 'Take ' + n + ' off the shopping list?';
+      e.call = { fn: 'save_shopping_item_v1', args: { p_property_id: M.pid, p_item: { id: d.id, status: 'cancelled' }, p_idempotency_key: newKey('undo') } };
+    } else if (a.kind === 'levels' && snap) {
+      e.say = 'Levels saved for ' + n; e.line = 'changed the levels'; e.confirm = 'Put the levels of ' + n + ' back as they were?';
+      e.call = { fn: 'inventory_item_update_v1', args: { p_item_id: it.id, p_patch: { reorder_below: snap.reorder == null ? null : snap.reorder, par_qty: snap.par == null ? null : snap.par } } };
+    } else return null;
+    return e;
+  }
+  function pushUndo(a, it, d, snap) {
+    var e = undoFor(a, it, d, snap); if (!e) return;
+    K.undos.unshift(e); if (K.undos.length > 20) K.undos.length = 20;
+    drawUndo();
+  }
+  function pushUndoEntry(e) { K.undos.unshift(e); if (K.undos.length > 20) K.undos.length = 20; }
+  function ago(ms) { var m = Math.floor(ms / 60000); return m < 1 ? 'just now' : m + ' min ago'; }
+  function lastChange(it) {
+    var e = K.undos.filter(function (u) { return u.itemId === it.id && nowMs() - u.at < UNDO_LINE_MS && !K.denied[u.call.fn]; })[0];
+    return e ? '<p class="help I_last">Last change: ' + esc(e.line) + ' by you, ' + ago(nowMs() - e.at) + '. <button class="btn btn-ghost I_undobtn" type="button" data-act="undo" data-id="' + e.id + '"><span aria-hidden="true">↶</span> Undo</button></p>' : '';
+  }
+  function drawUndo() {
+    var box = q('[data-i-undo]'); if (!box) return;
+    var e = K.undos.filter(function (u) { return !K.denied[u.call.fn] && (nowMs() - u.at < UNDO_BAR_MS || (M.undoHold === u.id)); })[0];
+    if (!e || M.act) { box.innerHTML = ''; return; } // a sheet is open: the card shows the Last change line instead
+    box.innerHTML = '<div class="I_undo" role="status"><span class="I_undot">' + esc(e.say) + '</span><button class="btn btn-secondary I_undob" type="button" data-act="undo" data-id="' + e.id + '"><span aria-hidden="true">↶</span> Undo</button></div>';
+    if (M.undoT && root.clearTimeout) root.clearTimeout(M.undoT);
+    if (root.setTimeout && M.undoHold !== e.id) { var me = M; M.undoT = root.setTimeout(function () { if (M === me) drawUndo(); }, Math.max(0, UNDO_BAR_MS - (nowMs() - e.at)) + 1); }
+  }
+  function onFocus(ev) { var t = ev.target; if (M && t && attr(t, 'data-act') === 'undo') { var e = undoById(attr(t, 'data-id')); if (e) M.undoHold = e.id; } }
+  function onBlur(ev) { var t = ev.target; if (M && M.undoHold && t && attr(t, 'data-act') === 'undo') { var e = undoById(M.undoHold); M.undoHold = null; if (e) e.at = nowMs() - UNDO_BAR_MS + 3000; drawUndo(); } } // leaving the button gives it 3 more seconds
 
   /* ---- scan (s84): BarcodeDetector where the phone has it, always a typed code */
   var WANT = ['ean_13', 'ean_8', 'upc_a', 'upc_e', 'code_128', 'code_39', 'itf', 'qr_code'];
@@ -731,6 +790,7 @@
     a.phase = 'unknown'; a.camState = undefined; a.focused = false; drawLayer();
   }
   function flowBack(a) {
+    if (a.kind === 'undo') { M.act = route().itemId ? newMenu(route().itemId) : null; drawLayer(); return; }
     if (a.kind === 'report') { if (a.step === 'confirm') { a.step = 'form'; a.err = null; drawLayer(); return; } return closeSheet(); }
     if (a.kind === 'create') { if (a.step === 'confirm') { a.step = 'form'; a.err = null; a.takenId = null; drawLayer(); return; } a.kind = 'scan'; a.phase = 'unknown'; a.err = null; a.sg = null; drawLayer(); return; }
     if (a.kind === 'link') { a.kind = 'scan'; a.err = null; a.takenId = null; if (a.fromPick) { a.phase = 'pick'; a.vals = { find: '' }; drawLayer(); return; } return enterLook(a); }

@@ -13,7 +13,7 @@ export const flush = async () => { for (let i = 0; i < 12; i++) await new Promis
 class Kid { constructor() { this.innerHTML = ''; this.textContent = ''; this.attrs = {}; this.srcObject = null; this.played = 0; } play() { this.played++; return Promise.resolve(); } setAttribute(k, v) { this.attrs[k] = v; } removeAttribute(k) { delete this.attrs[k]; } }
 class Root {
   constructor() { this.l = {}; this._h = ''; this.kids = null; }
-  set innerHTML(v) { this._h = v; this.kids = { top: new Kid(), list: new Kid(), layer: new Kid(), live: new Kid(), video: this.video || (this.video = new Kid()) }; }
+  set innerHTML(v) { this._h = v; this.kids = { top: new Kid(), list: new Kid(), layer: new Kid(), live: new Kid(), undo: new Kid(), video: this.video || (this.video = new Kid()) }; }
   get innerHTML() { return this._h; }
   addEventListener(t, f) { (this.l[t] ||= []).push(f); }
   removeEventListener(t, f) { this.l[t] = (this.l[t] || []).filter((x) => x !== f); }
@@ -87,12 +87,16 @@ export async function setup(o = {}) {
   const timers = [], cam = { opened: 0, stopped: 0, found: [], denied: o.camDenied || null, constraints: null, detectCalls: 0 };
   win.setInterval = (fn, ms) => { timers.push({ fn, ms, on: true }); return timers.length; };
   win.clearInterval = (id) => { if (timers[id - 1]) timers[id - 1].on = false; };
+  const timeouts = [];
+  win.setTimeout = (fn, ms) => { timeouts.push({ fn, ms, on: true }); return timeouts.length; };
+  win.clearTimeout = (id) => { if (timeouts[id - 1]) timeouts[id - 1].on = false; };
   if (o.camera) {
     win.BarcodeDetector = class { static async getSupportedFormats() { return ['ean_13', 'qr_code', 'pdf417']; } constructor(opt) { cam.formats = opt && opt.formats; } async detect() { cam.detectCalls++; return cam.found.length ? [cam.found.shift()] : []; } };
     nav.mediaDevices = { getUserMedia: async (c) => { cam.constraints = c; if (cam.denied) { const e = new Error('denied'); e.name = cam.denied; throw e; } cam.opened++; return { getTracks: () => [{ stop() { cam.stopped++; } }] }; } };
   }
   const fire = async (type, ev) => { for (const f of root.l[type] || []) await f(ev); await flush(); };
   const env = {
+    timeouts, fireTimeouts: async () => { for (const t of timeouts.filter((x) => x.on)) { t.on = false; t.fn(); } await flush(); }, undo: () => root.kids.undo.innerHTML,
     timers, cam, tick: async () => { for (const t of timers.filter((x) => x.on)) t.fn(); await flush(); },
     advance: (ms) => { when = new Date(when.getTime() + ms); }, role, client, nav, toasts, navs, hapts, root, win, ctx, lib: win.I_Stock.lib,
     mount: async (sub) => { if (sub !== undefined) opts.sub = sub; win.I_Stock.mount(root, opts); await flush(); },
