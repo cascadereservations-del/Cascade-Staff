@@ -116,14 +116,14 @@
     return w.open && w.msLeft < DAY ? { k: 'wclose', glyph: '◔', word: 'Reply window closes in ' + windowLeft(w.msLeft) } : null;
   }
   // QoL: quick replies. They only fill the box. House times come from the shell's setting; the fallback is defined here once (12:00 noon out, 2:00 pm in).
-  var HOUSE_FALLBACK = { check_out: '12:00', check_in: '14:00' };
+  var HOUSE_FALLBACK = (typeof window !== 'undefined' && window.CS && window.CS.A_HOUSE_FALLBACK) || { check_out: '12:00', check_in: '14:00' }; // the literal exists only for node tests; the shell's lib.js defines it once
   function clock12(hhmm) { var m = /^(\d{1,2}):(\d{2})$/.exec(String(hhmm || '')); if (!m || +m[1] > 23 || +m[2] > 59) return null; var h = +m[1]; if (h === 12 && m[2] === '00') return '12:00 noon'; return (h % 12 || 12) + ':' + m[2] + ' ' + (h >= 12 ? 'pm' : 'am'); }
   function quickReplies(ht) {
     var out = clock12(ht && ht.check_out) || clock12(HOUSE_FALLBACK.check_out), inn = clock12(ht && ht.check_in) || clock12(HOUSE_FALLBACK.check_in);
     return [
       { label: 'Checking now', text: 'Thank you for your message. We are checking and will reply shortly.' },
-      { label: 'Check-in time', text: 'Check-in starts at ' + inn + '. We will tell you if the room is ready earlier.' },
-      { label: 'Check-out time', text: 'Check-out is at ' + out + '. If you need a little more time, tell us and we will see what we can do.' }
+      { label: 'Check-in time', text: 'Check-in starts at ' + inn + '. If you would like to arrive earlier, we will check and come back to you.' },
+      { label: 'Check-out time', text: 'Check-out is at ' + out + '. If you would like a later time, we will check and come back to you.' }
     ];
   }
 
@@ -141,7 +141,7 @@
     var want = String(text || '').trim(), list = isArr(history) ? history : [];
     for (var i = list.length - 1; i >= 0; i--) {
       var t = list[i]; if (!t || t.role !== 'bot') continue;
-      var ms = Date.parse(t.at); if (isFinite(ms) && ms >= sinceMs - 1000 && speakerOf(t) === 'host' && String(t.text).indexOf(want) === 0) return true;
+      var ms = Date.parse(t.at); if (isFinite(ms) && ms >= sinceMs - 10 * 60000 && speakerOf(t) === 'host' && String(t.text).indexOf(want) === 0) return true;
     }
     return false;
   }
@@ -261,7 +261,8 @@
   // ------------------------------------------------------------------------------------------------ mounted module
   var S = null, X_gen = 0; // state of the mounted instance; null when not mounted
   var drafts = {};         // QoL: unsent reply text per conversation, in memory only, so a draft survives a trip to the list and back (a reload or a refusal clears it)
-  var keep = null;         //the last list read, kept in memory for two minutes so a list -> thread -> list trip paints at once (cleared on a role refusal)
+  var pushKnown = null;    // the push card's state after the first probe (F11); cleared by reset()
+  var keep = null;         //the last list read, kept in memory for two minutes so a list -> thread -> list trip paints at once (cleared on a role refusal and by reset() at sign-out)
 
   function ls(op, k, v) { try { var s = (typeof localStorage !== 'undefined') ? localStorage : null; if (!s) return null; return op === 'get' ? s.getItem(k) : s.setItem(k, v); } catch (e) { return null; } }
   function online() { try { return !(typeof navigator !== 'undefined' && navigator.onLine === false); } catch (e) { return true; } }
@@ -281,7 +282,7 @@
     return new Promise(function (resolve) {
       var done = false, t = setTimeout(function () { fin({ timeout: true }); }, RPC_TIMEOUT_MS);
       st.timers.push(t);
-      function fin(r) { if (done) return; done = true; clearTimeout(t); resolve(r); }
+      function fin(r) { if (done) return; done = true; clearTimeout(t); var i = st.timers.indexOf(t); if (i >= 0) st.timers.splice(i, 1); resolve(r); }
       try { start(fin); } catch (e) { fin({ thrown: e }); }
     });
   }
@@ -306,7 +307,7 @@
 
   // ---- drawing: a skeleton once, then named regions (so a poll never touches the box you are typing in) ----
   var SKELETON = '<div class="X_root" data-xr="root" data-x-view="list">' +
-    '<section class="X_listpane" aria-label="Conversations"><div data-xr="push"></div><div data-xr="list"></div></section>' +
+    '<section class="X_listpane" aria-label="Conversations"><div data-xr="list"></div><div data-xr="push"></div></section>' +
     '<section class="X_threadpane" aria-label="Conversation"><div data-xr="thead"></div><div data-xr="msgs"></div>' +
     '<div class="X_comp" data-xr="compwrap" hidden><div data-xr="cwin"></div><div data-xr="ctext"></div><div data-xr="cquick"></div><div data-xr="cmsg"></div><div data-xr="cdraft"></div><div data-xr="cfoot"></div></div></section>' +
     '<div data-xr="sheet"></div><div class="X_sr" data-xr="live" role="status" aria-live="polite"></div></div>';
@@ -330,9 +331,9 @@
     var L = S.list, now = nowMs(), rows = L.rows, needN = rows ? rows.filter(function (r) { return r.open_handoffs > 0; }).length : 0, h = '';
     h += '<div class="X_bar"><h1 class="X_h" tabindex="-1" data-xfocus>Inbox</h1><div class="X_barr">' + (L.at ? '<span class="X_sub">Updated ' + esc(fmtTime(L.at)) + '</span>' : '') + btn('refresh', 'Refresh', 'btn-ghost', S.busy ? ' disabled' : '') + '</div></div>';
     if (rows) {
-      h += '<div class="X_seg" role="radiogroup" aria-label="Show">' +
-        '<button type="button" role="radio" class="X_tab" aria-checked="' + (S.filter === 'needs') + '" data-xa="filter" data-v="needs">Needs you (' + needN + ')</button>' +
-        '<button type="button" role="radio" class="X_tab" aria-checked="' + (S.filter === 'all') + '" data-xa="filter" data-v="all">All (' + rows.length + ')</button></div>';
+      h += '<div class="X_seg" role="group" aria-label="Show">' +
+        '<button type="button" class="X_tab" aria-pressed="' + (S.filter === 'needs') + '" data-xa="filter" data-v="needs">Needs you (' + needN + ')</button>' +
+        '<button type="button" class="X_tab" aria-pressed="' + (S.filter === 'all') + '" data-xa="filter" data-v="all">All (' + rows.length + ')</button></div>';
     }
     if (L.stale && rows) h += note('warn', 'Could not refresh just now. Showing what was read at ' + (L.at ? fmtTime(L.at) : 'the last read') + '.');
     if (!rows) {
@@ -379,12 +380,11 @@
     put('thead', h);
   }
   function handoffCard(hf) {
-    var open = hf.status === 'open', opts = isArr(hf.options) ? hf.options.map(function (o) { return typeof o === 'string' ? o : o && o.text; }).filter(Boolean).slice(0, 3) : [];
+    var open = hf.status === 'open';
     var h = '<li class="X_hand X_hand_' + esc(hf.status) + '"><div class="X_handtop"><span class="X_chip ' + (open ? 'X_needs' : 'X_cassy') + '"><span aria-hidden="true">' + (open ? '●' : '○') + '</span> ' + (open ? 'Needs you' : 'Handoff ' + esc(hf.status)) + '</span>' +
       '<span class="X_sub">' + esc(fmtStamp(hf.created_at)) + '</span></div>';
     if (open) h += '<p class="X_p">Cassy handed this chat to you.' + (hf.risk ? ' Reason: ' + esc(hf.risk) + '.' : '') + '</p>';
     else if (hf.status === 'sent' && hf.resolved_by) h += '<p class="X_p">Answered by ' + esc(hf.resolved_by) + (hf.resolved_at ? ', ' + esc(fmtStamp(hf.resolved_at)) : '') + '.</p>';
-    if (open && opts.length) h += '<p class="X_sub">Cassy suggests:</p>' + opts.map(function (t, i) { return '<div class="X_opt"><p class="X_p X_pre">' + esc(t) + '</p>' + btn('pickh', 'Use this', 'btn-secondary', ' data-v="' + i + '"') + '</div>'; }).join('');
     return h + '</li>';
   }
   function drawMsgs() {
@@ -416,7 +416,7 @@
   }
   function drawCompQuick() {
     var show = S.thread.data && winOf().open, h = '';
-    if (show) h = '<div class="X_quick" role="group" aria-label="Quick replies. They only fill the box.">' + quickReplies(S.opts.houseTimes).map(function (q, i) { return btn('quick', esc(q.label), 'btn-ghost', ' data-v="' + i + '"' + (S.busy ? ' disabled' : '')); }).join('') + '</div>';
+    if (show) h = '<div class="X_quick" role="group" aria-label="Quick replies. They only fill the box.">' + quickReplies(S.opts.houseTimes).map(function (q, i) { return btn('quick', esc(q.label), 'btn-ghost', ' data-v="' + i + '"' + (S.busy || S.c.pending ? ' disabled' : '')); }).join('') + '</div>';
     put('cquick', h);
   }
   function drawCompMsg() {
@@ -436,13 +436,13 @@
     put('cdraft', h);
   }
   function syncComp() { drawCompWin(); drawCompFoot(); if (S.thread.data && winOf().open !== S.winOpen) { drawCompText(); drawCompQuick(); } }
-  function canCompose() { var d = S.thread.data; return !!d && winOf().open; }
+  function canCompose() { var d = S.thread.data; return !!d && winOf().open && !S.c.pending; }
   function drawCompFoot() {
     var d = S.thread.data; if (!d) { put('cfoot', ''); return; }
     var c = S.c, len = c.text.length, w = winOf(), open = newestOpenHandoff(d.handoffs), hasGuest = !!lastGuestText(d.history), h = '';
     if (open) h += '<label class="X_chk"><input type="checkbox" data-xf="mark"' + (c.mark ? ' checked' : '') + (S.busy ? ' disabled' : '') + '> This answers the open handoff (' + esc(fmtStamp(open.created_at)) + ')</label>';
     h += '<div class="X_foot2">' + (len >= NEAR_LIMIT ? '<span class="X_count' + (len >= MAX_TEXT - 50 ? ' X_warnt' : '') + '" aria-live="polite">' + len + ' of ' + MAX_TEXT + ' characters</span>' : '<span></span>');
-    h += '<span class="X_btns">' + btn('draft', 'Cassy draft', 'btn-secondary', !w.open || !hasGuest || c.drafting || S.busy ? ' disabled' : '') + btn('review', 'Review and send', 'btn-primary', !w.open || !c.text.trim() || len > MAX_TEXT || S.busy ? ' disabled' : '') + '</span></div>';
+    h += '<span class="X_btns">' + btn('draft', 'Cassy draft', 'btn-secondary', !w.open || !hasGuest || c.drafting || S.busy || c.pending ? ' disabled' : '') + btn('review', 'Review and send', 'btn-primary', !w.open || !c.text.trim() || len > MAX_TEXT || S.busy || c.pending ? ' disabled' : '') + '</span></div>';
     put('cfoot', h);
   }
   function drawComposer() {
@@ -501,7 +501,7 @@
       L.busy = false; L.loading = false;
       if (rows) { L.rows = rows; L.at = nowMs(); L.stale = false; L.denied = L.absent = L.offline = false; keep = { rows: rows, at: L.at, role: st.role }; }
       else if (L.rows) { L.stale = true; }
-      else { L.denied = !!(err && isDenied(err)); if (L.denied) drafts = {}; L.absent = !!(err && isMissing(err)); L.offline = !!(err && isOffline(err)) || !online(); }
+      else { L.denied = !!(err && isDenied(err)); if (L.denied) { drafts = {}; keep = null; } L.absent = !!(err && isMissing(err)); L.offline = !!(err && isOffline(err)) || !online(); }
       drawList();
     };
     if (S.demo) return Promise.resolve().then(function () { done(S.demoThreads.map(rowOf)); });
@@ -526,10 +526,14 @@
         if (changed || first) { drawThreadHead(); drawMsgs(); drawCompWin(); drawCompFoot(); if (first) { drawComposer(); scrollEnd(); } }
         else drawThreadHead();
         syncComp(); // the box is rebuilt only when it must change (the window opened or closed): never under your fingers
-        if (S.c.pending && repliedAlready(data.history, S.c.pending.text, S.c.pending.since)) { setText(''); S.c.msg = 'Your reply is in the conversation, so it was sent.'; S.c.msgKind = 'ok'; S.c.msgLinks = false; S.c.pending = null; S.c.options = null; drawCompText(); drawCompMsg(); drawCompDraft(); drawCompFoot(); }
+        if (S.c.pending) { // an uncertain send: this read settles it. Sending stays off until then.
+          if (repliedAlready(data.history, S.c.pending.text, S.c.pending.since)) { setText(''); S.c.msg = 'Your reply is in the conversation, so it was sent.'; S.c.msgKind = 'ok'; S.c.msgLinks = false; S.c.options = null; S.c.pending = null; drawCompText(); drawCompMsg(); drawCompDraft(); }
+          else S.c.pending = null; // not on record: the message above stays, sending is allowed again
+          drawCompQuick(); drawCompFoot();
+        }
       } else if (missing) { T.data = null; T.notFound = true; drawThreadHead(); drawMsgs(); drawComposer(); }
       else if (T.data) { T.stale = true; drawThreadHead(); }
-      else { T.denied = !!(err && isDenied(err)); drawThreadHead(); }
+      else { T.denied = !!(err && isDenied(err)); if (T.denied) { drafts = {}; keep = null; } drawThreadHead(); }
     };
     if (S.demo) return Promise.resolve().then(function () { var t = S.demoThreads.filter(function (x) { return x.psid === psid; })[0]; if (t) done(normThread(JSON.parse(JSON.stringify(t)))); else done(null, null, true); });
     if (!S.client || !online()) { done(null, { message: 'offline' }); return Promise.resolve(); }
@@ -578,7 +582,7 @@
         if (body.handoff_id) d.handoffs = d.handoffs.map(function (h) { return h.id === body.handoff_id ? Object.assign({}, h, { status: 'sent' }) : h; });
         setText(''); c.options = null; c.draftErr = ''; c.pending = null; c.msg = recorded ? '' : 'The reply was sent, but it could not be saved in the conversation history. It is in Messenger.'; c.msgKind = recorded ? '' : 'warn'; c.msgLinks = !recorded;
         S.sheet = null; S.busy = false; buzz('success'); tell('Reply sent. Cassy stays quiet in this chat for ' + HOST_HOLD_DAYS + ' days.'); say('Reply sent');
-        drawAll(); scrollEnd();
+        drawAll(); scrollEnd(); focusSel('#X_text');
         if (S.demo) { var t = S.demoThreads.filter(function (x) { return x.psid === d.psid; })[0]; if (t) { t.history = d.history.slice(); t.human_until = d.human_until; t.handoffs = d.handoffs.map(function (h) { return Object.assign({}, h); }); t.updated_at = new Date(nowMs()).toISOString(); } }
         S.thread.sig = null; loadList(true); loadThread(true); return;
       }
@@ -592,7 +596,7 @@
   }
 
   function doDraft() {
-    var c = S.c, d = S.thread.data; if (S.busy || c.drafting || !d || !winOf().open) return;
+    var c = S.c, d = S.thread.data; if (S.busy || c.drafting || c.pending || !d || !winOf().open) return;
     var text = lastGuestText(d.history); if (!text) return;
     if (!S.demo && !online()) { c.draftErr = 'You are offline. Nothing was sent. Try again when you are back online.'; drawCompDraft(); return; }
     var gen = S.gen, psid = S.psid, body = { text: text, platform: 'messenger' };
@@ -619,7 +623,7 @@
       if (o.ok) {
         S.sheet = null; d.human_until = null; buzz('success'); tell('Cassy will answer this guest again from their next message.'); say('Cassy will answer again');
         if (S.demo) { var t = S.demoThreads.filter(function (x) { return x.psid === psid; })[0]; if (t) t.human_until = null; }
-        S.thread.sig = null; drawAll(); loadThread(true); loadList(true); return;
+        S.thread.sig = null; drawAll(); focusSel('[data-xfocus]'); loadThread(true); loadList(true); return;
       }
       sh.msg = o.text; buzz('error'); drawSheet(); drawThreadHead(); drawList();
     };
@@ -629,21 +633,23 @@
 
   // ---- push: probe, enable, disable ----
   var DUMMY_ENDPOINT = 'https://probe.invalid/x';
+  function setPush(st) { S.push.state = st; pushKnown = st; }
   function pushProbe() {
     if (S.demo || !S.client || !S.opts.swReg || !S.opts.pushKey) return;
+    if (pushKnown !== null) { S.push.state = pushKnown; return; } // read once per session: a trip list -> thread -> list does not repeat the probe
     var sup = pushSupport(), gen = S.gen;
     if (sup === 'unsupported') return;
-    if (sup === 'needs_install' || sup === 'blocked') { S.push.state = sup; drawPush(); return; }
     // The server must know staff_push_unsubscribe_topic_v1 (release s82_inbox_push): a harmless call for an endpoint that does not exist. Missing function = old server = no card.
     callRpc('staff_push_unsubscribe_topic_v1', { p_endpoint: DUMMY_ENDPOINT, p_topic: 'inbox' }).then(function (res) {
       if (!S || S.gen !== gen) return;
-      if (res.error && (isMissing(res.error) || isDenied(res.error))) return; // hidden
+      if (res.error && (isMissing(res.error) || isDenied(res.error))) { pushKnown = 'hidden'; return; } // old server: no card, whatever the phone says
+      if (sup === 'needs_install' || sup === 'blocked') { setPush(sup); drawPush(); return; } // only a server that has the feature may show these
       return Promise.resolve(S.opts.swReg()).then(function (reg) { return reg && reg.pushManager ? reg.pushManager.getSubscription() : null; }).then(function (sub) {
         if (!S || S.gen !== gen) return;
-        if (!sub) { S.push.state = 'off'; drawPush(); return; }
+        if (!sub) { setPush('off'); drawPush(); return; }
         return Promise.resolve(S.client.from('staff_push_subscriptions').select('topics').eq('endpoint', sub.endpoint).limit(1)).then(function (r) {
           if (!S || S.gen !== gen) return;
-          var row = r && r.data && r.data[0]; S.push.state = row && isArr(row.topics) && row.topics.indexOf('inbox') >= 0 ? 'on' : 'off'; drawPush();
+          var row = r && r.data && r.data[0]; setPush(row && isArr(row.topics) && row.topics.indexOf('inbox') >= 0 ? 'on' : 'off'); drawPush();
         });
       });
     }).catch(function () { if (S && S.gen === gen) { S.push.state = 'hidden'; drawPush(); } });
@@ -661,7 +667,7 @@
       }).then(function (res) {
         if (!S || S.gen !== gen) return;
         if (res.error || (res.data && res.data.ok === false)) { fail('failed'); return; }
-        S.push.busy = false; S.push.state = 'off'; drawPush(); say('Messages from the inbox are off on this phone');
+        S.push.busy = false; setPush('off'); drawPush(); say('Messages from the inbox are off on this phone');
       }).catch(function () { fail('failed'); });
       return;
     }
@@ -680,7 +686,7 @@
         if (!S || S.gen !== gen) return;
         if (res.error) return fail(isMissing(res.error) ? 'absent' : 'failed'); // PGRST202 also covers "no such argument p_topics": an old server hides the card
         if (res.data && res.data.ok === false) return fail('failed');
-        S.push.busy = false; S.push.state = 'on'; buzz('success'); drawPush(); say('You will be told on this phone when a guest writes');
+        S.push.busy = false; setPush('on'); buzz('success'); drawPush(); say('You will be told on this phone when a guest writes');
       });
     }).catch(function (e) { fail(e === 'blocked' || e === 'not_configured' ? e : 'failed'); });
   }
@@ -693,7 +699,7 @@
     if (!S) return; var t = ev.target && ev.target.closest ? ev.target.closest('[data-xa]') : null; if (!t) return;
     var a = t.getAttribute('data-xa'), v = t.getAttribute('data-v');
     if (t.disabled || t.getAttribute('aria-busy') === 'true') return;
-    if (S.busy && (a === 'open' || a === 'back' || a === 'refresh' || a === 'filter' || a === 'dash' || a === 'sheet-x' || a === 'edit' || a === 'push' || a === 'resume' || a === 'review' || a === 'draft' || a === 'quick')) return; // a write is in flight: nothing may orphan it
+    if (S.busy && (a === 'open' || a === 'back' || a === 'refresh' || a === 'filter' || a === 'dash' || a === 'sheet-x' || a === 'edit' || a === 'push' || a === 'resume' || a === 'review' || a === 'draft' || a === 'quick' || a === 'pick')) return; // a write is in flight: nothing may orphan it
     if (a === 'open') { if (ev.preventDefault) ev.preventDefault(); if (PSID_RE.test(v || '')) go('#inbox/' + encodeURIComponent(v)); return; }
     if (a === 'back') { go('#inbox'); return; }
     if (a === 'dash') { go('#door/dashboard/guests/conversations'); return; }
@@ -715,9 +721,8 @@
       S.c.msg = ''; drawCompText(); drawCompMsg(); drawCompFoot(); focusSel('#X_text'); return;
     }
     if (a === 'draft-close') { S.c.options = null; S.c.draftErr = ''; drawCompDraft(); return; }
-    if (a === 'pick' || a === 'pickh') {
-      var d = S.thread.data, src = a === 'pick' ? S.c.options : (function () { var h = d && newestOpenHandoff(d.handoffs); return h && isArr(h.options) ? h.options.map(function (o) { return { text: typeof o === 'string' ? o : o && o.text }; }) : []; })();
-      var o = src && src[+v]; if (!o || !o.text) return;
+    if (a === 'pick') {
+      var src = S.c.options, o = src && src[+v]; if (!o || !o.text || S.c.pending) return;
       setText(String(o.text).slice(0, MAX_TEXT)); S.c.msg = ''; S.c.options = null; S.c.draftErr = '';
       drawCompText(); drawCompMsg(); drawCompDraft(); drawCompFoot(); focusSel('#X_text'); return;
     }
@@ -750,11 +755,11 @@
       list: { rows: null, at: 0, busy: false, loading: false, stale: false }, thread: { data: null, at: 0, busy: false, loading: false, sig: null }, push: { state: 'hidden', busy: false, msg: '' }, c: null };
     resetCompose();
     if (S.demo) S.demoThreads = demoData(now).threads;
-    if (!S.demo && keep && keep.role === opts.role && now - keep.at < 120000) { S.list.rows = keep.rows; S.list.at = keep.at; S.list.stale = true; }
+    if (!S.demo && keep && keep.role === opts.role && now - keep.at < 120000) { S.list.rows = keep.rows; S.list.at = keep.at; } // not stale: stale only comes from a failed read
     S.onClick = onClick; S.onInput = onInput; S.onKey = onKey; S.onVis = onVis;
     el.innerHTML = SKELETON;
     el.addEventListener('click', S.onClick); el.addEventListener('input', S.onInput); el.addEventListener('change', S.onInput); el.addEventListener('keydown', S.onKey);
-    el.addEventListener('submit', function (e) { if (e && e.preventDefault) e.preventDefault(); });
+    S.onSubmit = function (e) { if (e && e.preventDefault) e.preventDefault(); }; el.addEventListener('submit', S.onSubmit);
     try { if (typeof document !== 'undefined' && document.addEventListener) document.addEventListener('visibilitychange', S.onVis); } catch (e) { /* ok */ }
     drawAll();
     if (S.demo || S.client) { loadList(false); if (S.psid) loadThread(false); pushProbe(); } else { S.list.loading = false; drawList(); if (S.psid) drawThreadHead(); }
@@ -762,7 +767,7 @@
   }
   function unmount() {
     if (!S) return;
-    try { S.el.removeEventListener && ['click', 'input', 'change', 'keydown'].forEach(function (t, i) { S.el.removeEventListener(t, [S.onClick, S.onInput, S.onInput, S.onKey][i]); }); } catch (e) { /* ok */ }
+    try { S.el.removeEventListener && ['click', 'input', 'change', 'keydown', 'submit'].forEach(function (t, i) { S.el.removeEventListener(t, [S.onClick, S.onInput, S.onInput, S.onKey, S.onSubmit][i]); }); } catch (e) { /* ok */ }
     try { if (typeof document !== 'undefined' && document.removeEventListener) document.removeEventListener('visibilitychange', S.onVis); } catch (e) { /* ok */ }
     if (S.tick) clearTimeout(S.tick);
     S.timers.forEach(function (t) { clearTimeout(t); });
@@ -773,6 +778,7 @@
     mount: mount, unmount: unmount,
     _setClock: function (fn) { clock = fn || function () { return Date.now(); }; },
     _setRpcTimeout: function (ms) { RPC_TIMEOUT_MS = ms; },
+    reset: function () { keep = null; drafts = {}; pushKnown = null; }, // the shell calls this on sign-out
     _clearKeep: function () { keep = null; }, _clearDrafts: function () { drafts = {}; },
     lib: { replyWindow: replyWindow, windowLeft: windowLeft, windowSentence: windowSentence, windowLastHour: windowLastHour, speakerOf: speakerOf, turnRisk: turnRisk, buildTimeline: buildTimeline, newestOpenHandoff: newestOpenHandoff,
       stateChips: stateChips, sortRows: sortRows, rowWindowChip: rowWindowChip, quickReplies: quickReplies, clock12: clock12, daysLeftWords: daysLeftWords, lastGuestText: lastGuestText, repliedAlready: repliedAlready, sendOutcome: sendOutcome, draftError: draftError, draftOptions: draftOptions, resumeOutcome: resumeOutcome,

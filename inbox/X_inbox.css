@@ -30,7 +30,7 @@
 
 .X_seg { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px; padding: 4px; background: var(--muted); border-radius: var(--r-md); }
 .X_tab { min-height: 44px; padding: 0 6px; border: 0; border-radius: calc(var(--r-md) - 4px); background: transparent; color: var(--fg-2); font: 600 max(0.8125rem, var(--v5-t-2))/1.2 var(--font-ui); cursor: pointer; }
-.X_tab[aria-checked="true"] { background: var(--card); color: var(--primary); box-shadow: 0 1px 3px var(--v5-card-shadow); }
+.X_tab[aria-pressed="true"] { background: var(--card); color: var(--primary); box-shadow: 0 1px 3px var(--v5-card-shadow); }
 
 .X_rows { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
 .X_row { display: grid; gap: 4px; width: 100%; min-height: 44px; padding: 12px 14px; text-align: left; font: inherit; color: inherit; cursor: pointer; background: var(--v5-card-glass); border: 1px solid var(--v5-card-edge); border-radius: var(--r-lg); }
@@ -63,6 +63,7 @@
 .X_bub { max-width: 88%; padding: 8px 12px; border-radius: var(--r-lg); background: var(--muted); }
 .X_cassy .X_bub { background: var(--card); border: 1px solid var(--border); }
 .X_host .X_bub { background: var(--primary); color: var(--primary-fg); }
+.X_host .X_who { opacity: 1; }
 .X_who { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; font-size: max(0.8125rem, var(--v5-t-label)); opacity: .85; margin-bottom: 2px; font-weight: 600; }
 .X_txt { margin: 0; overflow-wrap: anywhere; line-height: 1.45; }
 .X_hand { list-style: none; display: grid; gap: 6px; padding: 12px; border: 1px dashed var(--border); border-radius: var(--r-lg); background: var(--v5-warn-glass); }
@@ -72,7 +73,7 @@
 .X_optl { font-size: max(0.8125rem, var(--v5-t-label)); }
 
 /* the composer sits in the page flow after the last message, and sticks above the tab bar, so it never covers the last message */
-.X_comp { position: sticky; bottom: calc(var(--tabbar-h, 0px) + env(safe-area-inset-bottom, 0px)); z-index: 2; display: grid; gap: 8px; padding: 10px 0 8px; background: linear-gradient(to top, var(--bg) 88%, transparent); }
+.X_comp { max-height: 60vh; max-height: 60dvh; overflow-y: auto; position: sticky; bottom: calc(var(--tabbar-h, 0px) + env(safe-area-inset-bottom, 0px)); z-index: 2; display: grid; gap: 8px; padding: 10px 0 8px; background: linear-gradient(to top, var(--bg) 88%, transparent); }
 .X_comp[hidden] { display: none; }
 .X_win { margin: 0; display: flex; gap: 6px; align-items: center; color: var(--fg-2); font-size: max(0.8125rem, var(--v5-t-2)); min-height: 24px; }
 .X_warnt { color: var(--warn); font-weight: 700; }
