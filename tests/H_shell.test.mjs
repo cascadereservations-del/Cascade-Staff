@@ -271,7 +271,7 @@ test('H_ guard: no duplicate top-level H_ names in app.js or lib.js, the files p
   }
   const html = read('index.html'); for (const id of ['v-search', 'v-weather', 'v-stock', 'v-manage', 'H_offline', 'door-done']) assert.ok(html.includes('id="' + id + '"'), id);
   assert.match(html, /Your name, as Lloyd wrote it/); assert.match(html, /placeholder="Honey"/);
-  assert.equal(JSON.parse(read('package.json')).version, '3.1.1'); assert.match(read('sw.js'), /CACHE_NAME = 'cs-shell-v19'/);
+  assert.equal(JSON.parse(read('package.json')).version, '3.2.0'); assert.match(read('sw.js'), /CACHE_NAME = 'cs-shell-v20'/);
 });
 
 // the bodies of the three theme rules: :root, :root:not([data-theme="light"]) inside the dark media query, :root[data-theme="dark"]
@@ -335,6 +335,6 @@ test('H_ fix: the tour waits while the Add to Home Screen hint is showing; sign-
 test('H_ fix: the three module folders are precached best effort, apart from the required shell list', () => {
   const sw = read('sw.js'), ctx = vm.createContext({ self: { addEventListener() {}, location: { href: 'https://x/' } }, URL, Request: class {}, Promise });
   vm.runInContext(sw.replace(/^const /gm, 'var ').replace(/^if \(typeof module[^\n]*$/m, ''), ctx); const opt = vm.runInContext('OPTIONAL_URLS', ctx), req = vm.runInContext('SHELL_URLS', ctx);
-  assert.deepEqual([...opt], ['./weather/W_weather.js', './weather/W_weather.css', './stock/I_stock.js', './stock/I_stock.css', './manage/N_manage.js', './manage/N_manage.css']); for (const u of opt) assert.ok(!req.includes(u), u + ' is not in the required list');
+  assert.deepEqual([...opt], ['./weather/W_weather.js', './weather/W_weather.css', './stock/I_stock.js', './stock/I_stock.css', './manage/N_manage.js', './manage/N_manage.css', './guests/G_guests.js', './guests/G_guests.css', './inbox/X_inbox.js', './inbox/X_inbox.css']); for (const u of opt) assert.ok(!req.includes(u), u + ' is not in the required list');
   assert.match(sw, /SHELL_URLS\.concat\(OPTIONAL_URLS\)\.map\(\(u\) => cache\.add\(new Request\(u, \{ cache: 'reload' \}\)\)\.catch\(\(\) => \{\}\)\)/, 'a missing file is swallowed one by one');
 });

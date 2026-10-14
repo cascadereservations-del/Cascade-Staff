@@ -6,7 +6,7 @@
 //   Same-origin shell files                                          -> network-first, cache fallback.
 // Nothing personal is ever stored here: the cache holds the shell (HTML, CSS, JS, fonts, icons) and nothing else.
 // A shell that loads offline says "Live information needs a connection"; guest names exist only in JS memory.
-const CACHE_NAME = 'cs-shell-v19';
+const CACHE_NAME = 'cs-shell-v20';
 const NAV_TIMEOUT_MS = 3000;
 // Web Push handlers for the "You were paid" notice live with the pay screens (pay/C_push-sw.js). Absent in the unit-test sandbox.
 if (typeof importScripts === 'function') { try { importScripts('pay/C_push-sw.js'); } catch (e) { /* a missing push file must never stop the new worker installing */ } }
@@ -19,15 +19,15 @@ const ICON_FILES = ['icon-192.png', 'icon-512.png', 'icon-512-maskable.png', 'ap
 const SHELL_URLS = [
   './', './index.html', './tokens.css', './styles.css', './app.js', './lib.js', './icons.js', './theme.js', './demo.js', './manifest.webmanifest',
   './install/', './install/index.html', './install/install.js',
-  './quick/', './quick/index.html', './pay/', './pay/index.html', './pay/pay.js', './pay/pay-lib.js', './pay/bank.html', './pay/admin.html', './pay/C_pay.css', './pay/C_notice.css',
+  './quick/', './quick/index.html', './pay/', './pay/index.html', './pay/pay.js', './pay/pay-lib.js', './pay/admin.html', './pay/C_pay.css', './pay/C_notice.css',
   './pay/C_qrph.js', './pay/C_qr.js', './pay/C_admin-lib.js', './pay/C_admin.js', './pay/C_paid-text.js', './pay/C_paid-notice.js', './pay/C_push.js',
   './guest/', './guest/index.html', './guest/guest.js', './guest/guest-lib.js',
   ...SHELL_ASSETS,
   ...SELF_FONTS.map((f) => './fonts/' + f),
   ...ICON_FILES.map((f) => './icons/' + f)
 ];
-// The module folders (weather, stock, manage) are built by their own lanes: precached best effort, so a missing file never touches the install or the required list above.
-const OPTIONAL_URLS = ['./weather/W_weather.js', './weather/W_weather.css', './stock/I_stock.js', './stock/I_stock.css', './manage/N_manage.js', './manage/N_manage.css'];
+// The module folders (weather, stock, manage, guests, inbox) are built by their own lanes: precached best effort, so a missing file never touches the install or the required list above.
+const OPTIONAL_URLS = ['./weather/W_weather.js', './weather/W_weather.css', './stock/I_stock.js', './stock/I_stock.css', './manage/N_manage.js', './manage/N_manage.css', './guests/G_guests.js', './guests/G_guests.css', './inbox/X_inbox.js', './inbox/X_inbox.css'];
 const NETWORK_ONLY_HOSTS = ['supabase.co', 'supabase.in', 'api.telegram.org', 't.me'];
 const FONT_HOSTS = ['cdn.jsdelivr.net']; // public files only: the pinned supabase-js build
 const NEVER_PATHS = ['/rest/v1/', '/functions/v1/', '/auth/v1/', '/storage/v1/'];
