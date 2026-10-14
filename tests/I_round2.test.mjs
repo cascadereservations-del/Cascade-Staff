@@ -177,3 +177,23 @@ test('I_round2 r3 F5: not_open from a receipt (row cancelled meanwhile) drops ba
   await e.mount('shopping'); await e.act('bought-open'); await e.act('b-tick', { 'data-id': 's1' }); await press(e, 2);
   assert.match(e.sheet(), /Tick what you bought/); assert.doesNotMatch(e.sheet(), /Try again/);
 });
+
+test('I_round2 r4 G1: once Undo is missing this visit, a later count still shows a toast (no bar, no silent write)', async () => {
+  const e = await make('owner', { inventory_undo_v1: () => ({ data: null, error: { code: 'PGRST202', message: 'not found' } }) });
+  await e.mount(''); await e.open('i1'); await e.begin('count'); await e.input('I_f_qty', '12'); await press(e, 2);
+  await e.act('undo', { 'data-id': uid(e) }); await press(e);
+  const before = e.toasts.length;
+  await e.open('i1'); await e.begin('count'); await e.input('I_f_qty', '13'); await press(e, 2);
+  assert.equal(e.toasts.length, before + 1);
+});
+
+test('I_round2 r4 G2: the Bought done screen does not show on-hand numbers read after the reload', async () => {
+  let received = false;
+  const e = await make('owner', { record_inventory_receipt_v1: () => { received = true; return recv(); } }, { shop: SHOP, from: (t) => ({ data: t === 'inventory_shopping_list' ? (received ? [] : SHOP) : [], error: null }) });
+  await e.mount('shopping'); await e.act('bought-open');
+  for (const id of ['s1', 's2']) await e.act('b-tick', { 'data-id': id });
+  await press(e);
+  assert.match(e.sheet(), /on hand/);
+  await press(e);
+  assert.match(e.sheet(), /2 items added/); assert.doesNotMatch(e.sheet(), /on hand/);
+});

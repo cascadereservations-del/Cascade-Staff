@@ -689,7 +689,7 @@
       if (rep) K.cool[a.vals.rkind + '|' + a.vals.to] = nowMs();
       var msg = DONE[a.kind](it, a);
       var u0 = K.undos[0]; if (a.kind === 'undo') K.undos = K.undos.filter(function (u) { return u !== a.entry; }); else pushUndo(a, it, r && r.data || {}, snap);
-      if (a.kind === 'undo' || K.undos[0] === u0) toast(msg); // the Undo bar says the same, so no toast over it
+      if (a.kind === 'undo' || K.undos[0] === u0 || (K.undos[0] && K.undos[0].call && K.denied[K.undos[0].call.fn])) toast(msg); // the Undo bar says the same, so no toast over it; no bar (Undo refused this visit) = toast
       if (me.opts.haptic) { try { me.opts.haptic('success'); } catch (e) { /* no haptics */ } }
       finish(); if (!rep) load();
     }).catch(function (e) {
@@ -825,7 +825,7 @@
   }
   function boughtLine(r, a) {
     var it = itemById(r.itemId), pk = parseQty(a.vals['packs_' + r.id]), add = Math.round(pk * it.perPack * 100) / 100, pu = it.purchaseUnit || it.unit || 'pack';
-    return '<li><strong>' + esc(it.name) + '</strong>: ' + esc(fmt(pk) + ' ' + pu + (it.perPack !== 1 ? ' = ' + fmt(add) + ' ' + unitOf(it) : '')) + ', on hand ' + esc(it.qty == null ? 'not counted' : fmt(it.qty)) + ' → ' + esc(fmt((it.qty || 0) + add)) + (r.status === 'proposed' ? ' <span class="help">(approved first)</span>' : '') + '</li>';
+    return '<li><strong>' + esc(it.name) + '</strong>: ' + esc(fmt(pk) + ' ' + pu + (it.perPack !== 1 ? ' = ' + fmt(add) + ' ' + unitOf(it) : '')) + (a.step === 'done' || a.step === 'undoconfirm' ? '' : ', on hand ' + esc(it.qty == null ? 'not counted' : fmt(it.qty)) + ' → ' + esc(fmt((it.qty || 0) + add))) + (r.status === 'proposed' ? ' <span class="help">(approved first)</span>' : '') + '</li>';
   }
   function renderBought(a) {
     var rows = boughtRows(), picked = boughtPicked(a), nDone = picked.filter(function (r) { return a.done[r.id] && a.done[r.id].received; }).length;
