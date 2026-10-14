@@ -10,7 +10,7 @@ const SHOP = [
 ];
 const COST_WORDS = /7391|8888|unitCost|unit_cost|estimated_cost|Unit cost|₱|Secret Supplier|supplier|price|total/i;
 
-for (const role of ['cleaner', 'finance']) {
+for (const role of ['cleaner']) {
   test('I_roles ' + role + ': no cost anywhere, even when the payload carries unitCost, estimated_cost and a supplier', async () => {
     const e = await setup({ role, client: mockClient({ catalogue: CATALOGUE, shop: SHOP }) });
     await e.mount('');
@@ -19,7 +19,7 @@ for (const role of ['cleaner', 'finance']) {
     await e.open('i1');
     assert.match(e.sheet(), /Toilet paper/);
     assert.doesNotMatch(e.sheet(), COST_WORDS);
-    for (const k of ['shop', ...(role === 'cleaner' ? ['used'] : [])]) { await e.begin(k); assert.doesNotMatch(e.sheet(), COST_WORDS); await e.submit(); assert.doesNotMatch(e.sheet(), COST_WORDS); await e.act('back'); await e.act('back'); }
+    for (const k of ['shop', 'used']) { await e.begin(k); assert.doesNotMatch(e.sheet(), COST_WORDS); await e.submit(); assert.doesNotMatch(e.sheet(), COST_WORDS); await e.act('back'); await e.act('back'); }
     await e.act('tab', { 'data-to': 'shopping' });
     assert.match(e.html(), /Hand soap/);
     assert.doesNotMatch(e.html(), COST_WORDS);
@@ -48,6 +48,18 @@ test('I_roles an item with no unit cost shows no cost row for the owner', async 
 });
 
 const MATRIX = { owner: { count: 1, used: 0, recv: 1, shop: 1, link: 1 }, admin: { count: 1, used: 0, recv: 1, shop: 1, link: 1 }, cleaner: { count: 0, used: 1, recv: 0, shop: 1, link: 0 }, finance: { count: 0, used: 0, recv: 0, shop: 1, link: 0 } };
+
+test('I_roles finance: the unit cost shows on the item sheet only, never in the list, the shopping list or a sheet it cannot use', async () => {
+  const e = await setup({ role: 'finance', client: mockClient({ catalogue: CATALOGUE, shop: SHOP }) });
+  await e.mount('');
+  assert.doesNotMatch(e.html(), COST_WORDS);
+  await e.open('i1');
+  assert.match(e.sheet(), /Unit cost/); assert.match(e.sheet(), /₱7,391\.55/);
+  await e.act('close');
+  await e.act('tab', { 'data-to': 'shopping' });
+  assert.doesNotMatch(e.html(), COST_WORDS);
+  assert.doesNotMatch(JSON.stringify(e.lib.normalizeShop(SHOP, 'me-1')), /8888|Secret/);
+});
 for (const role of Object.keys(MATRIX)) {
   test('I_roles action visibility for ' + role, async () => {
     const e = await setup({ role });

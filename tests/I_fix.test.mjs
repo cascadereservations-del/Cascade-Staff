@@ -25,25 +25,21 @@ for (const role of ['owner', 'admin', 'cleaner', 'finance']) {
   });
 }
 
-test('I_fix a controlled item offers no Stock received: a link to the dashboard instead, and a hand-typed click does nothing', async () => {
+test('I_fix (1b) a controlled item can be received in the app: record_inventory_receipt_v1 writes its movement, so no dashboard detour', async () => {
   const e = await setup({ role: 'owner', client: cl() });
   await e.mount(''); await e.open('c1');
-  assert.doesNotMatch(e.sheet(), /data-kind="recv"/);
-  assert.match(e.sheet(), /Receive this one in the admin dashboard/); assert.match(e.sheet(), /#door\/inventory/);
+  assert.match(e.sheet(), /data-kind="recv"/);
+  assert.doesNotMatch(e.sheet(), /Receive this one in the admin dashboard/);
   await e.begin('recv'); await e.submit(); await e.submit();
-  assert.equal(e.client.rpcCalls('record_inventory_receipt_v1').length, 0);
-  await e.act('close'); await e.open('i1');
-  assert.match(e.sheet(), /data-kind="recv"/); // an ordinary item keeps it
+  assert.equal(e.client.rpcCalls('record_inventory_receipt_v1').length, 1);
 });
 
-test('I_fix Mark bought is checked the same way', async () => {
+test('I_fix (1b) Mark bought works for a controlled item too', async () => {
   const e = await setup({ role: 'owner', client: cl() });
   await e.mount('shopping');
   await e.act('shop-open', { 'data-id': 's3' });
-  assert.doesNotMatch(e.sheet(), /shop-bought/); assert.match(e.sheet(), /Receive this one in the admin dashboard/);
-  await e.act('shop-bought'); assert.doesNotMatch(e.sheet(), /Stock received:/);
-  await e.act('close'); await e.act('shop-open', { 'data-id': 's2' });
-  assert.match(e.sheet(), /shop-bought/);
+  assert.match(e.sheet(), /shop-bought/); assert.doesNotMatch(e.sheet(), /Receive this one in the admin dashboard/);
+  await e.act('shop-bought'); assert.match(e.sheet(), /Stock received:/);
 });
 
 test('I_fix Close, the scrim and Escape do nothing while a write is sending; the result then lands with its toast', async () => {

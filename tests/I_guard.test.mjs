@@ -24,7 +24,7 @@ test('I_guard no top-level name is declared twice inside the module', () => {
 
 test('I_guard the only global the module adds is I_Stock (mount, unmount, lib)', async () => {
   const e = await setup({ role: 'cleaner' });
-  assert.deepEqual(Object.keys(e.win).filter((k) => k !== 'crypto' && k !== 'I_STOCK_FLAGS'), ['I_Stock']);
+  assert.deepEqual(Object.keys(e.win).filter((k) => !['crypto', 'I_STOCK_FLAGS', 'setInterval', 'clearInterval', 'setTimeout', 'clearTimeout'].includes(k)), ['I_Stock']);
   assert.deepEqual(Object.keys(e.win.I_Stock).sort(), ['lib', 'mount', 'unmount']);
 });
 
@@ -41,7 +41,8 @@ test('I_guard css uses tokens only: no hex colour and no px font size under 13',
 });
 
 test('I_guard the script reads no localStorage and holds no secret-looking value', () => {
-  assert.doesNotMatch(js, /localStorage|sessionStorage|indexedDB/);
+  assert.doesNotMatch(js, /sessionStorage|indexedDB/);
+  for (const line of js.split(/\r?\n/).filter((l) => /localStorage/.test(l))) assert.match(line, /cs_I_recent/, 'localStorage is only for the recent-items key: ' + line.trim().slice(0, 60));
   assert.doesNotMatch(js, /payout_qrph|service_role|eyJ[A-Za-z0-9_-]{20,}/);
 });
 
