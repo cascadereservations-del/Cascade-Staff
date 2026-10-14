@@ -59,7 +59,7 @@ div.I_row { cursor: default; }
 .I_sheet select { width: 100%; min-height: 44px; font: inherit; color: inherit; background: transparent; border: 0; }
 /* s84 1b: undo */
 .I_undoslot { min-height: 0; }
-.I_undo { position: sticky; bottom: 8px; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 8px 8px 14px; border-radius: var(--r-md, 12px); background: var(--v5-sunk); border: 1px solid var(--v5-sep); }
+.I_undo { position: fixed; left: var(--gutter, 16px); right: var(--gutter, 16px); bottom: calc(var(--tabbar-h, 0px) + env(safe-area-inset-bottom, 0px) + 68px); z-index: 7; max-width: 456px; margin: 0 auto; box-shadow: var(--shadow-md); display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 8px 8px 14px; border-radius: var(--r-md, 12px); background: var(--v5-sunk); border: 1px solid var(--v5-sep); }
 .I_undot { min-width: 0; overflow-wrap: anywhere; font-size: var(--v5-t-2); color: var(--fg); }
 .I_undob { flex: none; min-height: 48px; }
 .I_last { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; }

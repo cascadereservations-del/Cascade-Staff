@@ -124,11 +124,12 @@ test('I_count-walk probe-and-hide: a catalogue without countedAt has no chip and
   assert.doesNotMatch(e.html(), /Needs a count/); assert.match(e.html(), /Count this group/);
 });
 
-test('I_count-walk the button is on a group header, not on a category chip view', async () => {
+test('I_count-walk the button is on every group, and also under a category chip (a shelf count starts there)', async () => {
   const e = await make(); await e.mount('');
   assert.equal([...e.html().matchAll(/data-act="walk"/g)].length, 3);
   await e.act('chip', { 'data-k': 'c:Bath' });
-  assert.doesNotMatch(e.html(), /data-act="walk"/);
+  assert.equal([...e.html().matchAll(/data-act="walk"/g)].length, 1);
+  await e.act('walk', { 'data-cat': 'Bath' }); assert.match(e.sheet(), /Item 1 of 3/);
 });
 
 test('I_count-walk a refusal ends the walk with a calm line and hides the button for the visit', async () => {

@@ -123,7 +123,8 @@
     exists: 'An item with that name already exists.',
     financeOnly: 'Finance lists are not open to you right now. The OPS list has no prices.',
     levels: 'Buy up to should be the same as or more than the reorder level.',
-    tooLate: 'This can no longer be undone here. Count the item to correct it.'
+    tooLate: 'This can no longer be undone here. Count the item to correct it.',
+    already: 'Someone already marked this as bought. The list is refreshed.'
   };
   var REPORTS = [{ k: 'order', t: 'Order list', s: 'the order list' }, { k: 'all', t: 'All items', s: 'the full item list' }, { k: 'consumables', t: 'Consumables', s: 'the consumables list' }, { k: 'low', t: 'Low stock', s: 'the low-stock list' }, { k: 'misc', t: 'Miscellaneous', s: 'the miscellaneous list' }];
   var COOL_MS = 30000; // a sent report cannot be sent again to the same group for 30 seconds
@@ -317,7 +318,7 @@
   }
   function renderGroup(g, n, header) {
     var note = g.out || g.low ? '<span class="I_ghn">' + (g.out ? '<span aria-hidden="true">✕</span> ' + g.out + ' out' : '') + (g.out && g.low ? ', ' : '') + (g.low ? '<span aria-hidden="true">▲</span> ' + g.low + ' low' : '') + '</span>' : '';
-    return '<section class="I_grp"' + (header ? ' aria-labelledby="I_gh_' + n + '"' : '') + '>' + (header ? '<h3 class="I_gh" id="I_gh_' + n + '"><span>' + esc(g.cat) + '</span>' + note + '</h3>' : '') + '<div class="card list I_list">' + g.rows.map(renderRow).join('') + '</div>' + (header && allowed('count') ? '<button class="btn btn-secondary I_gcount" type="button" data-act="walk" data-cat="' + esc(g.cat) + '" aria-label="Count this group, ' + esc(g.cat) + '">Count this group</button>' : '') + '</section>';
+    return '<section class="I_grp"' + (header ? ' aria-labelledby="I_gh_' + n + '"' : '') + '>' + (header ? '<h3 class="I_gh" id="I_gh_' + n + '"><span>' + esc(g.cat) + '</span>' + note + '</h3>' : '') + '<div class="card list I_list">' + g.rows.map(renderRow).join('') + '</div>' + (allowed('count') ? '<button class="btn btn-secondary I_gcount" type="button" data-act="walk" data-cat="' + esc(g.cat) + '" aria-label="Count this group, ' + esc(g.cat) + '">Count this group</button>' : '') + '</section>';
   }
   function renderFail(kind) {
     return '<div class="empty I_fail" role="alert"><p class="hd">' + (kind === 'offline' ? 'No connection' : 'Inventory is not available right now') + '</p>' +
@@ -541,7 +542,7 @@
     if (act === 'tab') return go(attr(t, 'data-to') ? '#stock/' + attr(t, 'data-to') : '#stock', attr(t, 'data-to') || '');
     if (act === 'chip') { K.chip = attr(t, 'data-k'); draw(); return; }
     if (act === 'showall') { K.chip = 'all'; K.q = ''; draw(); return; }
-    if (act === 'bought-open') { if (!allowed('bought') || (M.act && M.act.sending)) return; M.act = { kind: 'bought', step: 'pick', sel: {}, vals: {}, keys: {}, done: {} }; drawLayer(); return; }
+    if (act === 'bought-open') { if (!allowed('bought') || (M.act && M.act.sending)) return; M.act = { kind: 'bought', step: 'pick', sel: {}, vals: {}, keys: {}, done: {} }; drawLayer(); loadShop(); return; } // the list is re-read first: a row someone else bought drops out
     if (act === 'walk') { if (a0 && a0.sending) return; return walkStart(attr(t, 'data-cat')); }
     if (act === 'scan') { if (M.act && M.act.sending) return; return openScan(null); }
     if (act === 'report') { if (!allowed('report') || (M.act && M.act.sending)) return; M.act = { kind: 'report', step: 'form', vals: { rkind: 'order', to: 'ops' } }; drawLayer(); return; }
@@ -636,6 +637,7 @@
   function onSubmit(ev) {
     if (ev && ev.preventDefault) ev.preventDefault();
     var a = M && M.act; if (!a || a.sending || a.kind === 'menu') return;
+    if (a.kind === 'undo' && a.err === 'tooLate') return closeSheet();
     if (a.kind === 'walk') return walkSubmit(a);
     if (a.kind === 'bought') return boughtSubmit(a);
     if (a.kind === 'scan') { if (a.phase === 'look') handleCode((a.vals || {}).code, null); return; }
@@ -670,7 +672,7 @@
   function bodyOf(e) { try { return e && e.context && typeof e.context.json === 'function' ? Promise.resolve(e.context.json()).catch(function () { return null; }) : null; } catch (x) { return null; } }
   var NEWK = { unlink: 1, low: 1, link: 1, price: 1, levels: 1, create: 1, report: 1, undo: 1 }; // actions that hide for the visit when the server says "not here"
   function commit(a) {
-    var me = M, it = itemOf(a) || { name: a.rowName || (a.entry && a.entry.name) || '' }, call = build(a), rep = a.kind === 'report', snap = it && { qty: it.qty, cost: it.cost, reorder: it.reorder, par: it.par };
+    var me = M, it = itemOf(a) || { name: a.rowName || (a.entry && a.entry.name) || '' }, call = build(a), rep = a.kind === 'report', snap = it && { qty: it.qty, cost: it.cost, reorder: it.reorder, par: it.par, controlled: it.controlled };
     if (me.demo) { toast(rep ? 'Demo only, nothing was sent.' : DEMO_NOTE); finish(); return; }
     if (!online()) { a.err = 'offline'; drawLayer(); return; }
     if (!me.client) { a.err = 'missing'; drawLayer(); return; }
@@ -679,10 +681,10 @@
     var run = call.invoke
       ? function () { return me.client.functions && me.client.functions.invoke ? me.client.functions.invoke(call.invoke, { body: call.body }) : Promise.reject({ status: 404 }); }
       : function () { return me.client.rpc(call.fn, call.args); };
-    Promise.resolve().then(run).then(function (r) {
+    Promise.resolve().then(a.kind === 'undo' && a.entry.next ? function () { return run().then(function (r1) { if (r1 && r1.error) throw r1.error; if (r1 && r1.data && r1.data.ok === false) throw { message: 'failed', data: r1.data }; return me.client.rpc(a.entry.next.fn, a.entry.next.args); }); } : run).then(function (r) {
       if (me.dead) return;
       if (r && r.error) throw r.error;
-      if (r && r.data && (r.data.ok === false || r.data.error)) throw { message: 'failed', data: r.data };
+      if (r && r.data && (r.data.ok === false || r.data.error) && !(a.kind === 'undo' && r.data.reason === 'not_found')) throw { message: 'failed', data: r.data };
       a.sending = false; delete K.keys[a.sig];
       if (rep) K.cool[a.vals.rkind + '|' + a.vals.to] = nowMs();
       var msg = DONE[a.kind](it, a);
@@ -736,7 +738,7 @@
   function levelsSuggest(a, it) {
     return a.sugg ? '<p class="help I_sugg">Suggested: buy up to ' + esc(fmt(a.sugg)) + ' <button class="btn btn-secondary I_undobtn" type="button" data-act="use-sugg">Use ' + esc(fmt(a.sugg)) + '</button></p>' : '';
   }
-  var CHANGE_WORD = { reconcile: 'Counted', receipt: 'Received', adjustment: 'Adjusted', usage: 'Used', undo: 'Undo', telegram_count: 'Telegram count' };
+  var CHANGE_WORD = { counted: 'Counted', received: 'Received', used: 'Used', adjusted: 'Adjusted', reconcile: 'Counted', receipt: 'Received', adjustment: 'Adjusted', usage: 'Used', undo: 'Undo', telegram_count: 'Telegram count' };
   function renderHistory(a, it) {
     var h = head(it.name + ': history', it.category);
     if (a.state === 'loading') return h + '<p class="help I_load" role="status">Loading…</p><div class="I_btns"><button class="btn btn-secondary btn-block" type="button" data-act="back">Back</button></div>';
@@ -751,7 +753,7 @@
     var ch = Array.isArray(d.changes) ? d.changes.slice(0, 10) : [];
     body += ch.length ? '<ul class="I_blines">' + ch.map(function (c) { var w = CHANGE_WORD[c.kind] || String(c.kind || 'Change').replace(/^./, function (x) { return x.toUpperCase(); }); return '<li>' + esc(dateLabel(c.at)) + ' · ' + esc(w) + ' ' + esc(c.before == null ? '' : fmt(c.before)) + ' → ' + esc(c.after == null ? '' : fmt(c.after)) + (c.who ? ' · ' + esc(String(c.who).split(' ')[0]) : '') + '</li>'; }).join('') + '</ul>' : '<p class="help">No changes recorded yet.</p>';
     var lb = d.last_bought;
-    body += '<h3 class="I_hh">Last bought</h3>' + (lb && lb.at ? '<p class="I_conf">' + esc(dateLabel(lb.at)) + (lb.qty != null ? ', ' + esc(fmt(lb.qty)) : '') + (canPrice(M.role) && lb.unit_cost != null ? ', PHP ' + esc(pesoNum(lb.unit_cost)) + ' each' : '') + '</p>' : '<p class="help">No purchase recorded yet.</p>');
+    body += '<h3 class="I_hh">Last bought</h3>' + (lb && lb.at ? '<p class="I_conf">' + esc(dateLabel(lb.at)) + (lb.qty != null ? ', ' + esc(fmt(lb.qty) + ' ' + unitOf(it)) : '') + (canPrice(M.role) && lb.unit_cost != null ? ', PHP ' + esc(pesoNum(lb.unit_cost)) + ' each' : '') + '</p>' : '<p class="help">No purchase recorded yet.</p>');
     return h + body + '<div class="I_btns"><button class="btn btn-secondary btn-block" type="button" data-act="back">Back</button></div>';
   }
 
@@ -776,14 +778,14 @@
     if (me.demo) { a.saved[it.id] = { before: it.qty, after: n }; toast(DEMO_NOTE); walkNext(a, '✓ Saved'); return; }
     if (!online()) { a.err = 'offline'; drawLayer(); return; }
     if (!me.client) { a.err = 'missing'; drawLayer(); return; }
-    a.keys[it.id] = a.keys[it.id] || newKey('count');
-    var c = countCall(it, { qty: a.vals.qty, note: 'Group count in the staff app' }, a.keys[it.id]);
+    var kk = it.id + '|' + n; a.keys[kk] = a.keys[kk] || newKey('count'); // one key per item and value: a changed value after an unseen landed write is a new count
+    var c = countCall(it, { qty: a.vals.qty, note: 'Group count in the staff app' }, a.keys[kk]);
     a.sending = true; a.err = null; drawLayer();
     Promise.resolve().then(function () { return me.client.rpc(c.fn, c.args); }).then(function (r) {
       if (me.dead) return;
       if (r && r.error) throw r.error;
       if (r && r.data && r.data.ok === false) throw { message: 'failed' };
-      a.sending = false; delete a.keys[it.id]; K.at = 0;
+      a.sending = false; delete a.keys[kk]; K.at = 0;
       var e = undoFor({ kind: 'count', vals: a.vals }, it, r && r.data || {}, { qty: it.qty }); if (e) pushUndoEntry(e);
       a.saved[it.id] = { before: it.qty, after: n, undo: e };
       walkNext(a, '✓ Saved');
@@ -791,6 +793,7 @@
       if (me.dead) return;
       a.sending = false; a.err = errKind(e, online());
       if (a.err === 'refused') { K.denied.count = true; var m = ERR.refused; me.act = null; toast(m); draw(); return; }
+      if (a.err === 'offline' || a.err === 'other') { me.loading = false; load(); } // the count may have landed: look again
       drawLayer();
     });
   }
@@ -831,10 +834,10 @@
     if (a.step === 'confirm') {
       var failed = a.failId && shopRowBy(a.failId), left = picked.length - nDone;
       return head('Add these to the stock?') + '<form data-i-form><ul class="I_blines">' + picked.map(function (r) { return boughtLine(r, a); }).join('') + '</ul>' +
-        (a.err && failed ? '<div class="errbox" role="alert"><span aria-hidden="true">▲</span><span>' + esc(nDone + ' of ' + picked.length + ' added. ' + failed.name + ' did not go through. ' + (a.err === 'offline' ? ERR.offline : 'Try again.')) + '</span></div>' : errBox(a)) +
+        (a.err && failed ? '<div class="errbox" role="alert"><span aria-hidden="true">▲</span><span>' + esc(nDone + ' of ' + picked.length + ' added. ' + failed.name + ' did not go through. ' + (a.err === 'offline' ? ERR.offline : a.err === 'recon' || a.err === 'short' ? ERR[a.err] : 'Try again.')) + '</span></div>' : errBox(a)) +
         actions(a, a.err && nDone ? 'Try again' : 'Yes, add them') + '</form>';
     }
-    return head('Bought some of these', 'Tick what you bought.') + '<form data-i-form>' + (rows.length ? '' : '<p class="help">Nothing on the list can be added yet.</p>') + rows.map(function (r) {
+    return head('Bought some of these', 'Tick what you bought.') + '<form data-i-form>' + errBoxIf(a, a.err === 'already') + (rows.length ? '' : '<p class="help">Nothing on the list can be added yet.</p>') + rows.map(function (r) {
       var on = !!a.sel[r.id], it = itemById(r.itemId), pu = it.purchaseUnit || it.unit || 'pack';
       return '<div class="I_brow"><button class="btn btn-secondary btn-block I_tick" type="button" data-act="b-tick" data-id="' + esc(r.id) + '" aria-pressed="' + on + '"><span aria-hidden="true">' + (on ? '✓' : '○') + '</span> ' + esc(r.name) + (r.status === 'proposed' ? ' <span class="help">Waiting for approval</span>' : '') + '</button>' +
         (on ? stepper('packs_' + r.id, 'How many (' + esc(pu) + ')', a.vals['packs_' + r.id], false) + (canPrice(M.role) ? textField('cost_' + r.id, 'Price per ' + esc(pu) + ' in PHP (optional)', a.vals['cost_' + r.id] || '', 'inputmode="decimal"') : '') : '') + '</div>';
@@ -842,7 +845,7 @@
   }
   function boughtSubmit(a) {
     if (a.sending) return;
-    if (a.step === 'pick') { if (!boughtValid(a)) { a.bad = true; drawLayer(); return; } a.bad = false; boughtPicked(a).forEach(function (r) { a.keys[r.id] = a.keys[r.id] || newKey('recv'); a.keys[r.id + 'a'] = a.keys[r.id + 'a'] || newKey('appr'); }); a.step = 'confirm'; a.err = null; drawLayer(); return; }
+    if (a.step === 'pick') { if (a.err === 'already') a.err = null; if (!boughtValid(a)) { a.bad = true; drawLayer(); return; } a.bad = false; boughtPicked(a).forEach(function (r) { a.keys[r.id] = a.keys[r.id] || newKey('recv'); a.keys[r.id + 'a'] = a.keys[r.id + 'a'] || newKey('appr'); }); a.step = 'confirm'; a.err = null; drawLayer(); return; }
     if (a.step === 'done') return closeSheet();
     var me = M, rows = boughtPicked(a);
     if (me.demo) { toast(DEMO_NOTE); closeSheet(); return; }
@@ -852,8 +855,9 @@
     var chk = function (r) { if (r && r.error) throw r.error; if (r && r.data && (r.data.ok === false || r.data.error)) throw { message: 'failed', data: r.data }; return r; };
     var chain = Promise.resolve();
     if (a.step === 'undoconfirm') {
-      var es = rows.map(function (r) { return a.done[r.id] && a.done[r.id].undo; }).filter(Boolean).reverse(), n = 0;
-      es.forEach(function (e) { chain = chain.then(function () { a.cur = e; return me.client.rpc(e.call.fn, e.call.args); }).then(chk).then(function () { n++; K.undos = K.undos.filter(function (u) { return u !== e; }); }); });
+      var es = rows.map(function (r) { return a.done[r.id] && a.done[r.id].undo; }).filter(function (e) { return e && K.undos.indexOf(e) >= 0; }).reverse(), n = 0; // an entry already undone is not asked again
+      es.forEach(function (e) { chain = chain.then(function () { a.cur = e; return me.client.rpc(e.call.fn, e.call.args); })
+.then(function (r) { return r && r.data && r.data.reason === 'not_found' ? r : chk(r); }).then(function () { n++; K.undos = K.undos.filter(function (u) { return u !== e; }); }); });
       chain.then(function () { if (me.dead) return; a.sending = false; toast('Undone.'); closeSheet(); load(); }).catch(function (e) {
         if (me.dead) return; a.sending = false; Promise.resolve(e && e.data ? e.data : bodyOf(e)).then(function (body) {
           var why = body && (body.reason || body.error); a.err = why === 'too_late' || why === 'not_yours' || why === 'stock_moved' ? 'tooLate' : errKind(e, online());
@@ -880,7 +884,9 @@
     chain.then(function () { if (me.dead) return; a.sending = false; a.step = 'done'; a.err = null; toast('Stock added.'); if (me.opts.haptic) { try { me.opts.haptic('success'); } catch (x) { /* no haptics */ } } load(); drawLayer(); }).catch(function (e) {
       if (me.dead) return; a.sending = false; a.failId = a.cur;
       Promise.resolve(e && e.data ? e.data : bodyOf(e)).then(function (body) {
-        if (me.dead) return; a.err = errKind(e, online());
+        if (me.dead) return;
+        if (body && body.reason === 'already_received') { a.err = 'already'; a.step = 'pick'; a.failId = null; loadShop(); drawLayer(); return; }
+        a.err = errKind(e, online());
         if (a.err === 'refused' || a.err === 'missing') { K.denied.bought = true; var m = ERR[a.err]; me.act = null; toast(m); load(); draw(); return; }
         if (a.err === 'offline' || a.err === 'other') { me.loading = false; load(); }
         drawLayer();
@@ -895,7 +901,7 @@
     var id = 'u' + (++K.uidn), n = it.name, e = { id: id, itemId: it.id || null, name: n, at: nowMs(), kind: a.kind }, v = a.vals || {};
     if (a.kind === 'count' && d.movementId) {
       var cn = parseQty(v.qty, true); e.say = 'Counted ' + n + ': ' + fmt(cn); e.line = 'counted ' + fmt(cn);
-      e.confirm = 'Put ' + n + ' back to ' + (snap && snap.qty != null ? fmt(snap.qty) : 'its old amount') + '?'; e.call = { fn: 'inventory_undo_v1', args: { p_movement_id: d.movementId, p_purchase_id: null } };
+      e.confirm = 'Put ' + n + ' back to ' + (snap && snap.qty != null ? fmt(snap.qty) : 'its old amount') + '?' + (snap && snap.controlled === false ? ' It stays counted in the app.' : ''); e.call = { fn: 'inventory_undo_v1', args: { p_movement_id: d.movementId, p_purchase_id: null } };
     } else if (a.kind === 'recv' && (d.movementId || d.purchaseId)) {
       e.say = 'Received ' + n; e.line = 'received stock'; e.confirm = 'Take the stock you just added to ' + n + ' back out?';
       e.call = { fn: 'inventory_undo_v1', args: { p_movement_id: d.movementId || null, p_purchase_id: d.purchaseId || null } };
@@ -909,6 +915,7 @@
       e.say = 'Unlinked a barcode from ' + n; e.line = 'unlinked a barcode'; e.confirm = 'Link code ' + shortCode(a.code) + ' to ' + n + ' again?'; e.call = attachCall(M.pid, it, a.code, null);
     } else if (a.kind === 'create' && d.item_id) {
       var cnm = String(v.name || '').trim(); e.itemId = d.item_id; e.name = cnm; e.say = 'Added ' + cnm; e.line = 'added this item'; e.confirm = 'Remove ' + cnm + ' again?'; e.call = { fn: 'inventory_item_update_v1', args: { p_item_id: d.item_id, p_patch: { active: false } } };
+      if (a.code) { e.confirm = 'Remove ' + cnm + ' and free code ' + shortCode(a.code) + '?'; e.next = e.call; e.call = { fn: 'inventory_code_detach_v1', args: { p_property_id: M.pid, p_code: a.code } }; } // the code goes first, so it is free to use again
     } else if ((a.kind === 'shop' || a.kind === 'low') && d.id) {
       e.say = a.kind === 'low' ? n + ' flagged as running low' : 'Added ' + n + ' to the shopping list'; e.line = a.kind === 'low' ? 'said it is running low' : 'added it to the shopping list'; e.confirm = 'Take ' + n + ' off the shopping list?';
       e.call = { fn: 'save_shopping_item_v1', args: { p_property_id: M.pid, p_item: { id: d.id, status: 'cancelled' }, p_idempotency_key: newKey('undo') } };
