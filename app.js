@@ -1407,10 +1407,10 @@
   // Brownouts, water interruptions and rain during a brownout reach a phone only after one permission tap. The card on Home asks once, calmly; Not now keeps it away for 7 days
   // (a time stamp in localStorage, nothing else). Turn on asks the browser, subscribes through the pay/ push code (C_Push) and sends the topics with staff_push_subscribe_v1.
   // Before the server knows the topic 'notices' the call is retried without topics, so nothing breaks. More > This phone shows the same state as a switch.
-  var H_al = { busy: false, msg: '', on: null, loading: false }, H_ALERT_KEY = 'cs_alerts_later', H_ALERT_DAYS = 7;
+  var H_al = { busy: false, msg: '', on: null, loading: false }, H_ALERT_KEY = 'cs_h_alerts_later', H_ALERT_OLD = 'cs_alerts_later', H_ALERT_DAYS = 7;
   function H_alEnv() { return { navigator: navigator, window: window }; }
   function H_alSupport() { return DEMO || !window.C_Push ? 'unsupported' : window.C_Push.support(H_alEnv()); }
-  function H_alLater() { var ls = store('localStorage'), t = 0; try { t = ls ? Number(ls.getItem(H_ALERT_KEY)) || 0 : 0; } catch (e) { t = 0; } return t > 0 && Date.now() - t < H_ALERT_DAYS * 86400000; }
+  function H_alLater() { var ls = store('localStorage'), t = 0; try { t = ls ? Number(ls.getItem(H_ALERT_KEY)) || 0 : 0; if (ls && !t) { t = Number(ls.getItem(H_ALERT_OLD)) || 0; if (t) { ls.setItem(H_ALERT_KEY, String(t)); ls.removeItem(H_ALERT_OLD); } } } catch (e) { t = 0; } // the first key name is read once and moved return t > 0 && Date.now() - t < H_ALERT_DAYS * 86400000; }
   function H_alertTopics() { return CS.canSeeGuestContact(role()) ? ['paid', 'inbox', 'notices'] : ['paid', 'notices']; }
   function H_alCardOn() { return !!state.access && H_alSupport() === 'ready' && window.Notification && window.Notification.permission === 'default' && !H_alLater(); }
   function H_alertsCard() {
@@ -1426,7 +1426,7 @@
     var words = sp === 'needs_install' || sp === 'blocked' ? window.C_Push.words(sp) : '', on = H_al.on === true;
     if (words) return '<section class="card glass H_alsw" aria-label="Alerts on this phone"><span class="t"><b>Alerts on this phone</b></span><p class="help" style="margin:4px 0 0">' + esc(words) + '</p></section>';
     return '<section class="card glass H_alsw" aria-label="Alerts on this phone"><div class="A_switch"><span id="al-label"><b>Alerts on this phone</b></span><button class="sw" type="button" role="switch" data-act="alerts-switch" aria-checked="' + on + '" aria-labelledby="al-label"' + (H_al.on === null || H_al.busy ? ' disabled' : '') + '><i></i></button></div>' +
-      '<p class="help" style="margin:4px 0 0" role="status">' + esc(H_al.msg || (H_al.on === null ? 'Checking…' : on ? 'You will be told about brownouts, water and rain on the way on this phone.' : 'Brownouts, water interruptions and rain on the way.')) + '</p></section>';
+      '<p class="help" style="margin:4px 0 0" role="status">' + esc(H_al.msg || (H_al.on === null ? 'Checking…' : on ? 'You will be told about pay notices, brownouts, water interruptions and rain on the way on this phone.' : 'Pay notices, brownouts, water interruptions and rain on the way.')) + '</p></section>';
   }
   function H_alStatus() { // is this phone subscribed? asked once per visit to More; a failure leaves the switch off
     if (H_alSupport() !== 'ready' || H_al.loading || H_al.on !== null) return;

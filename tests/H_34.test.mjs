@@ -15,7 +15,7 @@ const STUB = { key: 'AQIDBA' };
 // a phone: permission state, answers to requestPermission, a push manager that subscribes, and the server's answers to staff_push_subscribe_v1
 function phone({ permission = 'default', answer = 'granted', ua = 'Android', subscribeRpc, flag } = {}) {
   const ctl = { permission, asked: 0, subscribed: [], unsub: 0, vapid: [], store: {} };
-  if (flag !== undefined) ctl.store.cs_alerts_later = String(flag);
+  if (flag !== undefined) ctl.store.cs_h_alerts_later = String(flag);
   const sub = { endpoint: 'https://push.example/e1', toJSON: () => ({ keys: { p256dh: 'P256', auth: 'AUTH' } }), unsubscribe: () => { ctl.unsub++; return Promise.resolve(true); } };
   const reg = { pushManager: { subscribe: (o) => { ctl.subscribed.push(o); return Promise.resolve(sub); }, getSubscription: () => Promise.resolve(null) } };
   const N = { get permission() { return ctl.permission; }, requestPermission: () => { ctl.asked++; ctl.permission = answer; return Promise.resolve(answer); } };
@@ -48,7 +48,7 @@ test('3.2 alerts card: no card when the permission is already answered, push is 
 
 test('3.2 alerts card: Not now stores one time stamp, hides the card, asks nothing', async () => {
   const p = phone(); const app = await boot(p.opts('owner')); await app.click({ 'data-act': 'alerts-later' });
-  assert.equal(card(app), null); assert.deepEqual(p.ctl.store, { cs_alerts_later: String(NOW.getTime()) }, 'one key, a time stamp, nothing else'); assert.equal(p.ctl.asked, 0); assert.equal(subCalls(app).length, 0);
+  assert.equal(card(app), null); assert.deepEqual(p.ctl.store, { cs_h_alerts_later: String(NOW.getTime()) }, 'one key, a time stamp, nothing else'); assert.equal(p.ctl.asked, 0); assert.equal(subCalls(app).length, 0);
 });
 
 test('3.2 alerts card: Turn on asks the browser, gets the key from the server, subscribes, and sends the topics: owner and admin paid + inbox + notices, others paid + notices', async () => {
@@ -106,4 +106,11 @@ test('3.2 alerts push: a notices alert opens the Notices tab (the real route), w
 test('3.2 alerts: signing out clears the alerts state and the shell loads pay/C_push.js', () => {
   assert.match(read('app.js'), /H_resetModules\(\); H_histGen\+\+; H_calReset\(\); H_alReset\(\);/); assert.match(read('index.html'), /<script src="pay\/C_push\.js"><\/script>/);
   assert.match(read('styles.css'), /\.H_alrow \.btn \{ flex: 1 1 8rem; \}/, 'the buttons wrap instead of clipping');
+});
+
+test('3.2 alerts: the old Not now key is read once and moved to cs_h_alerts_later; the More switch lines mention pay notices', async () => {
+  const p = phone(); p.ctl.store.cs_alerts_later = String(NOW.getTime() - 2 * DAY); const app = await boot(p.opts('cleaner'));
+  assert.equal(card(app), null, 'an old Not now still counts'); assert.deepEqual(p.ctl.store, { cs_h_alerts_later: String(NOW.getTime() - 2 * DAY) }, 'moved, the old key is gone');
+  const m = await boot(Object.assign(phone().opts('cleaner'), { hash: '#more' })); await m.flush(); assert.match(m.els['v-more'].innerHTML, /Pay notices, brownouts, water interruptions and rain on the way\./);
+  await m.click({ 'data-act': 'alerts-switch' }); await m.flush(); assert.match(m.els['v-more'].innerHTML, /You will be told about pay notices, brownouts, water interruptions and rain on the way on this phone\./);
 });
