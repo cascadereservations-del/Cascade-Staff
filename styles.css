@@ -980,3 +980,10 @@ button.A_chipglass.E_pill { width: auto; min-width: 124px; max-width: 184px; hei
 .A_noticecard.H_mgr { height: 304px; }
 .H_g { display: block; min-width: 0; } .H_g:has(> .F_group > #install-card[hidden]) { display: none; }
 @media (min-width: 52.5rem) and (min-height: 40rem) { .H_calleft { position: sticky; top: calc(var(--appbar-h) + env(safe-area-inset-top, 0px) + 8px); } } /* the month stays in view while the long list beside it scrolls */
+
+/* s84 H: the weather strip under the greeting. Always drawn (a link to #weather), two fixed lines, so nothing moves when the reading lands. */
+.H_wxstrip { display: flex; flex-direction: column; justify-content: center; gap: 1px; min-width: 0; min-height: var(--touch); margin-top: 2px; color: var(--v5-photo-ink-2); text-decoration: none; text-shadow: 0 1px 8px var(--v5-photo-shadow); }
+.H_wxstrip .l1 { display: flex; align-items: center; gap: 6px; min-width: 0; color: var(--v5-photo-ink); font-size: var(--v5-t-2); font-weight: 600; line-height: 1.25; }
+.H_wxstrip .l1 > span, .H_wxstrip .l2 { min-width: 0; overflow-wrap: anywhere; } /* grows with the text size instead of clipping (F_ 200 percent rule) */
+.H_wxstrip .l2 { font-size: 0.8125rem; line-height: 1.25; }
+.H_wxstrip:focus-visible { outline: 2px solid currentColor; outline-offset: 2px; border-radius: 8px; }

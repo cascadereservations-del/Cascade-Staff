@@ -185,7 +185,7 @@
   // Two fixed lines under the greeting (temperature and condition; rain chance or how old the reading is). The slot is always drawn, with the same height, so nothing jumps when the reading lands.
   function H_wxStrip(p) {
     var w = p && p.weather, c = w && w.current, ok = !!c && c.temp != null, rl = ok ? CS.rainLine(w) : null, l2 = 'Open the forecast';
-    if (ok) l2 = [rl ? rl.head + (rl.rest ? ' · ' + rl.rest : '') : '', w.fetched_at && CS.weatherStale(w) ? 'as of ' + CS.clockLabel(w.fetched_at) : ''].filter(Boolean).join(' · ');
+    if (ok) { var old = w.fetched_at && CS.weatherStale(w); l2 = [rl ? rl.head + (rl.rest && !old ? ' · ' + rl.rest : '') : '', old ? 'as of ' + CS.clockLabel(w.fetched_at) : ''].filter(Boolean).join(' · '); }
     return '<a class="H_wxstrip" href="#weather" aria-label="Weather, open the forecast"><span class="l1">' + ICON('cloud', 's16') + '<span>' + esc(ok ? CS.H_weatherShort(c.temp, c.description, (window.innerWidth || 360) < 340) : 'Weather') + '</span></span><span class="l2">' + esc(l2 || 'Tap for the forecast') + '</span></a>';
   }
   // The photo header: wordmark, the pill, refresh, greeting, date and weather (as of HH:MM when the weather is old). Drawn before the first answer too.
