@@ -1,0 +1,13 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Inbox test page</title>
+<link rel="stylesheet" href="../tokens.css"><link rel="stylesheet" href="../styles.css"><link rel="stylesheet" href="../inbox/X_inbox.css">
+</head><body>
+<main class="screen" id="host"></main>
+<script src="../inbox/X_inbox.js"></script>
+<script>
+var p = new URLSearchParams(location.search);
+if (p.get('theme')) document.documentElement.setAttribute('data-theme', p.get('theme'));
+window.__nav = null;
+window.X_Inbox.mount(document.getElementById('host'), { client: null, demo: true, role: 'owner', sub: p.get('sub') || '', houseTimes: { check_out: '12:00', check_in: '14:00' }, navigate: function (h) { window.__nav = h; }, toast: function () {}, haptic: function () {} });
+</script></body></html>
