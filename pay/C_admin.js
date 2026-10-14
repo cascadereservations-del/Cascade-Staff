@@ -9,7 +9,6 @@
   var $ = function (id) { return document.getElementById(id); };
   var DEMO = !!(window.CSDemo && window.CSDemo.active);
   var root = $('C_pay_admin');
-  var BANK_PAGE = 'bank.html', FIRST_APP = Object.keys(P.BANK_APPS)[0]; // BPI is first in the table; bank.html decides whether it may be offered
 
   // ?demo: synthetic list and a made-up static payload (a ZZ account that is not a payment), no network, no storage.
   var DEMO_STATIC = (function () {
@@ -155,7 +154,7 @@
   // ---------------------------------------------------------------- pay one request
   function openPay(id) {
     var r = (S.list || []).filter(function (x) { return x.id === id; })[0]; if (!r || theirs(r)) return;
-    S.listMsg = ''; S.listNote = ''; S.req = r; S.view = 'pay'; S.msg = ''; S.copied = ''; S.form = { file: null, amount: String(A.copyAmount(r.total)), reference: '', override: false, uploaded: null }; clearSecrets();
+    S.listMsg = ''; S.listNote = ''; S.req = r; S.view = 'pay'; S.msg = ''; S.copied = ''; S.confirmSent = false; S.form = { file: null, amount: String(A.copyAmount(r.total)), reference: '', override: false, uploaded: null }; clearSecrets();
     var tok = payTok, live = function () { return tok === payTok; }; // taken after clearSecrets, which advances the token
     root.innerHTML = shell('Pay ' + r.payee_name, '<div class="skel" style="height:320px;margin-top:16px"></div>', '#back');
     // Claim the payment FIRST. If the server says someone else has it, nothing is drawn: no QR, no Mark as paid.
@@ -178,8 +177,8 @@
       });
     }).catch(function () { if (!live()) return; S.msg = A.refusal({ reason: 'offline' }); renderPay(); });
   }
-  // From the first Save QR, Open bank app, Copy amount or picked screenshot the money may be on its way: say so to the server once, so a take-over or a
-  // Telegram cancel is refused from then on. The payer can still step back with "I have not sent it".
+  // ONLY the payer's own tap on "I have sent it" calls this (P_ s83: Save QR, Copy amount and a picked screenshot no longer say "sent"; there is no bank link).
+  // It tells the server once, so a take-over or a Telegram cancel is refused from then on. The payer can still step back with "I have not sent it".
   function markSent() {
     if (!S.req || S.sentMarked) return;
     S.sentMarked = true;
@@ -203,27 +202,30 @@
       S.listMsg = ''; return openPay(id);
     }).catch(function () { S.listMsg = A.refusal({ reason: 'offline' }); render(); });
   }
-  function bankLink() { return BANK_PAGE + '?app=' + encodeURIComponent(FIRST_APP); }
   function renderPay() {
     var r = S.req, total = Number(r.total);
-    var amountBlock = '<div class="C_amountbox"><div class="cap up">Amount to pay ' + esc(r.payee_name) + '</div><div class="C_amount num">' + esc(P.peso(total)) + '</div>' +
-      '<button class="btn btn-secondary btn-sm" type="button" data-act="copyamt">' + ICON('clip', 's16') + 'Copy amount</button><span class="help" role="status">' + esc(S.copied) + '</span></div>';
+    var amountBlock = '<div class="C_amountbox"><div class="cap up">Amount to pay ' + esc(r.payee_name) + '</div><div class="C_amount num" id="C_amttext">' + esc(P.peso(total)) + '</div>' +
+      '<button class="btn btn-secondary btn-sm" type="button" data-act="copyamt">' + ICON('clip', 's16') + 'Copy amount</button><span class="help C_copied" role="status">' + esc(S.copied) + '</span></div>';
+    var steps = '<p class="help C_steps"><b>In your bank app:</b> open it, choose Pay by QR, pick the saved QR, check the amount, send.</p>';
     var qrBlock = S.qr
-      ? '<div class="C_qrbox"><div class="C_qrframe">' + (S.showStatic ? S.qr.staticSvg : S.qr.dynamicSvg) + '</div><p class="help" style="text-align:center">' +
-        (S.showStatic ? 'This QR has no amount. Type ' + esc(P.peso(total)) + ' in your bank app.' : 'Scan with your bank app. The amount is already set.') + '</p></div>' +
-        '<div class="row-wrap C_actions">' + (S.showStatic ? '' : '<button class="btn btn-secondary" type="button" data-act="saveqr">' + ICON('share', 's16') + 'Save QR to phone</button>') +
-        '<a class="btn btn-secondary" data-act="bank" href="' + esc(bankLink()) + '" target="_blank" rel="noopener">' + ICON('bank', 's16') + 'Open bank app</a></div>' +
-        '<p class="help">Pay in your bank app with the QR saved to your gallery, then delete the QR photo from your phone.</p>' +
+      ? '<div class="C_qrbox"><div class="cap up">' + esc(r.payee_name) + '\'s payout QR</div><div class="C_qrframe">' + (S.showStatic ? S.qr.staticSvg : S.qr.dynamicSvg) + '</div><p class="help" style="text-align:center">' +
+        (S.showStatic ? 'This QR has no amount. Type ' + esc(P.peso(total)) + ' in your bank app.' : 'The amount is already in this QR.') + '</p></div>' +
+        '<div class="row-wrap C_actions">' + (S.showStatic ? '' : '<button class="btn btn-primary" type="button" data-act="saveqr">' + ICON('share', 's16') + 'Save QR to photos</button>') + '</div>' +
+        steps +
+        '<p class="help">Delete the QR photo from your phone once you have paid.</p>' +
         '<details class="C_fallback"><summary>If your bank ignores the amount</summary><div class="stack">' +
         '<p class="help">Some banks scan the QR but leave the amount empty. Use the QR with no amount and type the amount yourself.</p>' +
         '<button class="btn btn-secondary" type="button" data-act="togglestatic">' + (S.showStatic ? 'Show the QR with the amount' : 'Show the QR without an amount') + '</button>' +
         '<div class="C_amountbox"><div class="C_amount num">' + esc(P.peso(total)) + '</div><button class="btn btn-secondary btn-sm" type="button" data-act="copyamt">' + ICON('clip', 's16') + 'Copy amount</button>' +
         '<button class="btn btn-secondary btn-sm" type="button" data-act="copyref">' + ICON('clip', 's16') + 'Copy reference</button></div></div></details>'
       : '<div class="infobox">' + ICON('info') + '<span>' + (S.noQr ? esc(r.payee_name) + '\'s payout QR is not saved yet. Pay her usual account for the amount above, then add the screenshot.' : esc(S.msg || 'The QR could not be loaded. Go back and try again.')) + '</span></div>' +
-        '<div class="row-wrap C_actions"><a class="btn btn-secondary" data-act="bank" href="' + esc(bankLink()) + '" target="_blank" rel="noopener">' + ICON('bank', 's16') + 'Open bank app</a>' +
-        '<button class="btn btn-secondary btn-sm" type="button" data-act="copyref">' + ICON('clip', 's16') + 'Copy reference</button></div>';
+        '<div class="row-wrap C_actions"><button class="btn btn-secondary btn-sm" type="button" data-act="copyref">' + ICON('clip', 's16') + 'Copy reference</button></div>' + steps;
     var f = S.form;
-    var proof = '<div class="card"><div class="cap up">After you have paid</div><p class="help" style="margin:6px 0 10px">Add the payment screenshot. The request is marked paid only with it.</p>' +
+    var proof = '<div class="card"><div class="cap up">After you have paid</div>' +
+      (S.sentMarked ? '' : S.confirmSent
+        ? '<div class="infobox" role="alert">' + ICON('info') + '<span>Has the money left your bank app? Nobody else can take this over once you say yes.</span></div><div class="row-wrap"><button class="btn btn-primary" type="button" data-act="sent-yes">' + ICON('check', 's16') + 'Yes, I sent it</button><button class="btn btn-secondary" type="button" data-act="sent-no">Not yet</button></div>'
+        : '<p class="help" style="margin:6px 0 10px">Tap this once the money has left your bank app. Nothing else on this screen says it was sent.</p><button class="btn btn-secondary btn-block" type="button" data-act="sent">' + ICON('check', 's16') + 'I have sent it</button>') +
+      '<p class="help" style="margin:10px 0">Add the payment screenshot. The request is marked paid only with it.</p>' +
       '<div class="row-wrap"><button class="btn btn-secondary" type="button" data-act="pickfile">' + ICON('camera', 's16') + (f.file ? 'Change screenshot' : 'Add the screenshot') + '</button>' + (f.file ? '<span class="help">' + esc(f.file.name || 'screenshot') + '</span>' : '') + '</div>' +
       '<div class="field"><label for="C_amt">Amount shown in the screenshot</label><div class="input"><span>PHP</span><input id="C_amt" inputmode="decimal" value="' + esc(f.amount) + '"></div></div>' +
       '<div class="field"><label for="C_ref">Reference number from the screenshot</label><div class="input"><input id="C_ref" autocomplete="off" autocapitalize="characters" value="' + esc(f.reference) + '" placeholder="Reference"></div></div>' +
@@ -297,10 +299,13 @@
   }
 
   // ---------------------------------------------------------------- small actions
+  function say(text) { S.copied = text; var h = root.querySelectorAll('.C_copied'); for (var i = 0; i < h.length; i++) h[i].textContent = text; }
+  // "Copied" is shown in words. If the phone refuses the clipboard, the amount on screen is selected so a long press can copy it.
+  function selectShown() { try { var el = $('C_amttext'), sel = window.getSelection && window.getSelection(); if (el && sel && document.createRange) { var rg = document.createRange(); rg.selectNodeContents(el); sel.removeAllRanges(); sel.addRange(rg); } } catch (e) { /* the amount is on screen to type */ } }
   function copy(text, label) {
-    function done() { S.copied = label + ' copied'; var h = root.querySelectorAll('.help[role="status"]'); for (var i = 0; i < h.length; i++) h[i].textContent = S.copied; }
-    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(done, function () { S.copied = 'Copy did not work. Type it in.'; });
-    else { var t = document.createElement('textarea'); t.value = text; document.body.appendChild(t); t.select(); try { document.execCommand('copy'); done(); } catch (e) { /* the amount is on screen to type */ } document.body.removeChild(t); }
+    var fail = function () { say('Copy did not work. The amount is selected: press and hold to copy it.'); selectShown(); };
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(function () { say(label + ' copied'); }, fail);
+    else { var t = document.createElement('textarea'); t.value = text; document.body.appendChild(t); t.select(); try { if (document.execCommand('copy')) say(label + ' copied'); else fail(); } catch (e) { fail(); } document.body.removeChild(t); }
   }
   function saveQr() {
     if (!S.qr) return;
@@ -310,7 +315,7 @@
       var file = new File([blob], 'cascade-pay-' + S.req.ref + '.png', { type: 'image/png' });
       if (navigator.canShare && navigator.canShare({ files: [file] })) { navigator.share({ files: [file] }).catch(function () {}); return; }
       var u = URL.createObjectURL(blob), a = document.createElement('a'); a.href = u; a.download = file.name; document.body.appendChild(a); a.click(); document.body.removeChild(a);
-      setTimeout(function () { URL.revokeObjectURL(u); }, 10000);
+      setTimeout(function () { URL.revokeObjectURL(u); }, 10000); say('QR saved. Look in Photos or Downloads.');
     }, 'image/png');
   }
   function unpay() {
@@ -327,7 +332,7 @@
     var b = $('C_done'); if (b) b.disabled = !(A.ready(S.form) && !S.busy);
   });
   root.addEventListener('change', function (ev) {
-    if (ev.target.id === 'C_file' && ev.target.files && ev.target.files[0]) { S.form.file = ev.target.files[0]; S.form.uploaded = null; markSent(); renderPay(); }
+    if (ev.target.id === 'C_file' && ev.target.files && ev.target.files[0]) { S.form.file = ev.target.files[0]; S.form.uploaded = null; renderPay(); }
   });
   root.addEventListener('click', function (ev) {
     var t = ev.target.closest('[data-act]'); if (!t) return;
@@ -341,10 +346,12 @@
     else if (a === 'takeover-ask') { S.confirmTake = t.getAttribute('data-id'); renderList(); }
     else if (a === 'takecancel') { S.confirmTake = ''; renderList(); }
     else if (a === 'takeover') takeOver(t.getAttribute('data-id'));
-    else if (a === 'copyamt') { markSent(); copy(A.copyAmount(S.req.total), 'Amount'); }
-    else if (a === 'bank') markSent();
+    else if (a === 'copyamt') { copy(A.copyAmount(S.req.total), 'Amount'); }
+    else if (a === 'sent') { S.confirmSent = true; renderPay(); }
+    else if (a === 'sent-no') { S.confirmSent = false; renderPay(); }
+    else if (a === 'sent-yes') { S.confirmSent = false; markSent(); }
     else if (a === 'copyref') copy('CASCADE-' + S.req.ref, 'Reference');
-    else if (a === 'saveqr') { markSent(); saveQr(); }
+    else if (a === 'saveqr') saveQr();
     else if (a === 'togglestatic') { S.showStatic = !S.showStatic; renderPay(); }
     else if (a === 'pickfile') { var f = $('C_file'); if (f) f.click(); }
     else if (a === 'settle') settle();

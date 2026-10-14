@@ -3,6 +3,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
+import fs from 'node:fs'; import path from 'node:path'; import { fileURLToPath } from 'node:url'; const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 import { FakeEl, fire, load, plain, spyStorage, target, tick, until } from './C_dom-harness.mjs';
 const req = createRequire(import.meta.url);
 const QrPh = req('../pay/C_qrph.js');
@@ -63,13 +64,13 @@ test('list: one list call, the open request with a Pay button, and the signed-in
   assert.match(offline.root.innerHTML, /No connection/); assert.match(offline.root.innerHTML, /Try again/);
 });
 
-test('Pay: reads the QR for that request, marks it paying, draws the amount QR big with Save, Open bank app and the fallback; the payload never reaches the page text or any storage', async () => {
+test('Pay: reads the QR for that request, marks it paying, draws the amount QR big with Save QR to photos, Copy amount and the fallback; the payload never reaches the page text or any storage', async () => {
   const b = boot(happy()); await tick();
   await fire(b.root, 'click', { target: target({ 'data-act': 'pay', 'data-id': 'req1' }) }); await tick();
   assert.deepEqual(plain(b.rpcs.slice(1)), [['staff_pay_admin_step_v1', { p_request_id: 'req1', p_step: 'pay' }], ['staff_pay_payout_qr_v1', { p_request_id: 'req1' }]], 'the payment is claimed first, then the QR is read');
   const h = b.root.innerHTML;
   assert.match(h, /<svg [^>]*viewBox="0 0 \d+ \d+"/); assert.match(h, /C_qrframe/);
-  assert.match(h, /C_amount num">₱500</); assert.match(h, /Save QR to phone/); assert.match(h, /Open bank app/); assert.match(h, /href="bank\.html\?app=bpi"/);
+  assert.match(h, /C_amount num"[^>]*>₱500</); assert.match(h, /Save QR to photos/); assert.match(h, /Honey's payout QR/); assert.match(h, /pick the saved QR, check the amount, send/); assert.doesNotMatch(h, /Open bank app|bank\.html|<a [^>]*target="_blank"/);
   assert.match(h, /If your bank ignores the amount/); assert.match(h, /Copy amount/); assert.match(h, /Show the QR without an amount/);
   assert.doesNotMatch(h, /ZZTESTPH|com\.p2pqrpay|000201/, 'the payload is not in the page');
   // the QR that was drawn first is the amount QR: dynamic, tag 54 = 500.00, valid CRC; the second is the static fallback
@@ -79,17 +80,17 @@ test('Pay: reads the QR for that request, marks it paying, draws the amount QR b
   // fallback screen
   await fire(b.root, 'click', { target: target({ 'data-act': 'togglestatic' }) });
   assert.match(b.root.innerHTML, /This QR has no amount\. Type ₱500 in your bank app\./); assert.match(b.root.innerHTML, /Show the QR with the amount/);
-  assert.doesNotMatch(b.root.innerHTML, /Save QR to phone/, 'the saved photo is always the amount QR');
+  assert.doesNotMatch(b.root.innerHTML, /Save QR to photos/, 'the saved photo is always the amount QR');
   await fire(b.root, 'click', { target: target({ 'data-act': 'copyamt' }) }); await fire(b.root, 'click', { target: target({ 'data-act': 'copyref' }) });
   assert.deepEqual(plain(b.copied), ['500', 'CASCADE-ABCD1234']);
   // leaving the page clears the screen
   for (const f of b.pagehide) f(); assert.equal(b.root.innerHTML, '');
 });
 
-test('Pay: a payee with no QR saved gets the plain fallback (amount, copy, open bank app), not an error', async () => {
+test('Pay: a payee with no QR saved gets the plain fallback (amount, copy, the steps), not an error', async () => {
   const b = boot(happy({ staff_pay_payout_qr_v1: { data: { ok: true, id: 'req1', status: 'requested', payee_name: 'Honey', total: 500, payout_qrph: null }, error: null } })); await tick();
   await fire(b.root, 'click', { target: target({ 'data-act': 'pay', 'data-id': 'req1' }) }); await tick();
-  assert.match(b.root.innerHTML, /payout QR is not saved yet/); assert.match(b.root.innerHTML, /Open bank app/); assert.match(b.root.innerHTML, /C_amount num">₱500</);
+  assert.match(b.root.innerHTML, /payout QR is not saved yet/); assert.match(b.root.innerHTML, /Copy reference/); assert.doesNotMatch(b.root.innerHTML, /Open bank app/); assert.match(b.root.innerHTML, /C_amount num"[^>]*>₱500</);
   assert.doesNotMatch(b.root.innerHTML, /<svg [^>]*viewBox="0 0 \d+ \d+"[^>]*role="img"/);
 });
 
@@ -240,37 +241,29 @@ test('refusal sentences for the new reasons are plain', () => {
 });
 
 // ---- M-A: the first sign that money may be on its way tells the server once
+const sayYes = async (root) => { await fire(root, 'click', { target: target({ 'data-act': 'sent' }) }); await fire(root, 'click', { target: target({ 'data-act': 'sent-yes' }) }); };
 const stepsOf = (b) => plain(b.rpcs.filter((r) => r[0] === 'staff_pay_admin_step_v1').map((r) => r[1].p_step));
 async function openOwn(b) { await tick(); await fire(b.root, 'click', { target: target({ 'data-act': 'pay', 'data-id': 'req1' }) }); await tick(); }
 
-test('M-A: each of Save QR, Open bank app, Copy amount and a picked screenshot says "sent" to the server, once, and the screen shows it', async () => {
-  for (const [label, fireIt] of [
-    ['Save QR', (b) => fire(b.root, 'click', { target: target({ 'data-act': 'saveqr' }) })],
-    ['Open bank app', (b) => fire(b.root, 'click', { target: target({ 'data-act': 'bank' }) })],
-    ['Copy amount', (b) => fire(b.root, 'click', { target: target({ 'data-act': 'copyamt' }) })],
-    ['picked screenshot', (b) => fire(b.root, 'change', { target: { id: 'C_file', files: [{ name: 'shot.png' }] } })],
-  ]) {
-    const b = boot(happy()); await openOwn(b);
-    assert.deepEqual(stepsOf(b), ['pay'], label + ': nothing is said before the first trigger');
-    assert.doesNotMatch(b.root.innerHTML, /Marked as sent/);
-    await fireIt(b); await until(() => /Marked as sent, so nobody else can take this over/.test(b.root.innerHTML), label);
-    assert.deepEqual(stepsOf(b), ['pay', 'sent'], label);
-    const sent = plain(b.rpcs.filter((r) => r[1] && r[1].p_step === 'sent')[0]); assert.deepEqual(sent, ['staff_pay_admin_step_v1', { p_request_id: 'req1', p_step: 'sent' }]);
-    await fire(b.root, 'click', { target: target({ 'data-act': 'copyamt' }) }); await fire(b.root, 'click', { target: target({ 'data-act': 'bank' }) }); await tick();
-    assert.deepEqual(stepsOf(b), ['pay', 'sent'], label + ': only once');
-    assert.match(b.root.innerHTML, /I have not sent it/); assert.doesNotMatch(b.root.innerHTML, /I am not paying this now/);
-  }
+test('M-A (P_ s83): only the explicit "I have sent it" says "sent" to the server, once, and the screen shows it', async () => {
+  const b = boot(happy()); await openOwn(b);
+  assert.deepEqual(stepsOf(b), ['pay']); assert.doesNotMatch(b.root.innerHTML, /Marked as sent/); assert.match(b.root.innerHTML, /data-act="sent"/);
+  await sayYes(b.root); await until(() => /Marked as sent, so nobody else can take this over/.test(b.root.innerHTML), 'marked');
+  const sent = plain(b.rpcs.filter((r) => r[1] && r[1].p_step === 'sent')[0]); assert.deepEqual(sent, ['staff_pay_admin_step_v1', { p_request_id: 'req1', p_step: 'sent' }]);
+  await sayYes(b.root); await fire(b.root, 'click', { target: target({ 'data-act': 'copyamt' }) }); await tick();
+  assert.deepEqual(stepsOf(b), ['pay', 'sent'], 'only once');
+  assert.match(b.root.innerHTML, /I have not sent it/); assert.doesNotMatch(b.root.innerHTML, /I am not paying this now/); assert.doesNotMatch(b.root.innerHTML, /data-act="sent"/, 'the button is gone once it is said');
 });
 
 test('M-A: "I have not sent it" steps back with not_sent; a refused sent (somebody took over) shows the sentence and clears the mark; reopening my sent payment starts marked', async () => {
   const b = boot(happy()); await openOwn(b);
-  await fire(b.root, 'click', { target: target({ 'data-act': 'copyamt' }) }); await until(() => /I have not sent it/.test(b.root.innerHTML), 'marked');
+  await sayYes(b.root); await until(() => /I have not sent it/.test(b.root.innerHTML), 'marked');
   await fire(b.root, 'click', { target: target({ 'data-act': 'unpay' }) }); await tick();
   assert.deepEqual(stepsOf(b), ['pay', 'sent', 'not_sent']);
   const r = boot(happy({ staff_pay_admin_step_v1: { data: { ok: false, reason: 'not_yours' }, error: null } })); await tick();
   r.ctx.document.getElementById('C_pay_admin');
   const lost = boot({ rpc: (name, a) => (name === 'staff_pay_admin_step_v1' && a.p_step === 'sent' ? { data: { ok: false, reason: 'not_yours' }, error: null } : happy().rpc(name)) }); await openOwn(lost);
-  await fire(lost.root, 'click', { target: target({ 'data-act': 'copyamt' }) }); await until(() => /Only the person who started paying can stop it/.test(lost.root.innerHTML), 'refusal');
+  await sayYes(lost.root); await until(() => /Only the person who started paying can stop it/.test(lost.root.innerHTML), 'refusal');
   const again = boot(happy({ staff_pay_admin_list_v1: { data: { ok: true, requests: [{ ...REQ, status: 'paying', paying_by_user_id: 'me-1', paying_by_name: 'Me', sent_said_at: '2026-10-13T03:00:00Z' }] }, error: null } })); await openOwn(again);
   assert.match(again.root.innerHTML, /Marked as sent/); assert.match(again.root.innerHTML, /I have not sent it/);
 });
@@ -301,4 +294,79 @@ test('L-A: opening, taking over and stepping back redraw the Finance card throug
   await fire(b.root, 'click', { target: target({ 'data-act': 'unpay' }) }); await until(() => b.fetches.filter((f) => /notify-cleaner-payment$/.test(f.url)).length > before, 'card after step back');
   const down = boot({ rpc: happy().rpc, fetch: () => { throw new Error('offline'); } }); await openOwn(down);
   assert.match(down.root.innerHTML, /Mark as paid/, 'a failed card call never blocks the screen');
+});
+
+// ---- P_ (s83): the dead bank-app control is gone; Save, Copy and the screenshot never say "sent"; honest copy and share paths
+const everyOtherTap = [['saveqr'], ['copyamt'], ['copyref'], ['togglestatic'], ['pickfile'], ['bank'], ['unreq']];
+test('P_ no tap except the explicit confirmation ever calls the sent step or the settle RPC (Save, Copy, bank link, fallback toggle, picked screenshot)', async () => {
+  const b = boot(happy()); await openOwn(b);
+  b.ctx.navigator.canShare = () => true; b.ctx.navigator.share = async () => {};
+  for (const [act] of everyOtherTap) await fire(b.root, 'click', { target: target({ 'data-act': act, 'data-id': 'x' }) });
+  await fire(b.root, 'change', { target: { id: 'C_file', files: [{ name: 'shot.png' }] } }); await tick();
+  assert.deepEqual(stepsOf(b), ['pay'], 'nothing said "sent"');
+  assert.equal(b.rpcs.some((r) => r[0] === 'staff_pay_admin_settle_v1'), false, 'no settle without Mark as paid');
+  assert.doesNotMatch(b.root.innerHTML, /Marked as sent/);
+  // and the one explicit tap does
+  await sayYes(b.root); await until(() => /Marked as sent/.test(b.root.innerHTML), 'marked');
+  assert.deepEqual(stepsOf(b), ['pay', 'sent']);
+});
+
+test('P_ the pay screen carries no link at all and no bank-app words; the steps line and the explicit confirmation are there', async () => {
+  const b = boot(happy()); await openOwn(b);
+  const h = b.root.innerHTML;
+  assert.doesNotMatch(h, /<a [^>]*href="(?!#)[^"]*"[^>]*data-act="bank"|Open bank app|Open BPI|bank\.html|intent:/);
+  assert.match(h, /open it, choose Pay by QR, pick the saved QR, check the amount, send/); assert.match(h, />I have sent it</);
+  assert.ok(h.indexOf('Save QR to photos') < h.indexOf('Pay by QR') && h.indexOf('Pay by QR') < h.indexOf('I have sent it') && h.indexOf('I have sent it') < h.indexOf('Add the screenshot'), 'order: save, steps, confirm, screenshot');
+  const noqr = boot(happy({ staff_pay_payout_qr_v1: { data: { ok: true, id: 'req1', status: 'requested', payee_name: 'Honey', total: 500, payout_qrph: null }, error: null } })); await openOwn(noqr);
+  assert.doesNotMatch(noqr.root.innerHTML, /Open bank app|bank\.html/); assert.match(noqr.root.innerHTML, />I have sent it</);
+});
+
+test('P_ Copy amount shows "Amount copied" on screen; a refused clipboard says so and selects the amount instead of failing silently', async () => {
+  const b = boot(happy()); await openOwn(b);
+  await fire(b.root, 'click', { target: target({ 'data-act': 'copyamt' }) }); await tick();
+  assert.deepEqual(plain(b.copied), ['500']);
+  await fire(b.root, 'click', { target: target({ 'data-act': 'togglestatic' }) });
+  assert.match(b.root.innerHTML, /role="status">Amount copied</);
+  const r = boot(happy()); await openOwn(r);
+  const sel = []; r.ctx.getSelection = () => ({ removeAllRanges() {}, addRange(x) { sel.push(x); } }); r.ctx.document.createRange = () => ({ selectNodeContents(el) { this.el = el; } });
+  r.els.C_amttext = new FakeEl('C_amttext'); r.ctx.navigator.clipboard.writeText = async () => { throw new Error('denied'); };
+  await fire(r.root, 'click', { target: target({ 'data-act': 'copyamt' }) }); await tick();
+  await fire(r.root, 'click', { target: target({ 'data-act': 'togglestatic' }) });
+  assert.match(r.root.innerHTML, /Copy did not work\. The amount is selected/); assert.equal(sel.length, 1, 'the amount text was selected');
+  assert.deepEqual(stepsOf(r), ['pay']);
+});
+
+test('P_ Save QR to photos: shares the PNG file when the phone offers it, else downloads it; neither says "sent"', async () => {
+  const b = boot(happy()); await openOwn(b); const shared = [];
+  b.ctx.navigator.canShare = () => true; b.ctx.navigator.share = async (o) => { shared.push(o); };
+  await fire(b.root, 'click', { target: target({ 'data-act': 'saveqr' }) });
+  assert.equal(shared.length, 1); assert.equal(shared[0].files[0].name, 'cascade-pay-ABCD1234.png');
+  const d = boot(happy()); await openOwn(d); const made = []; const mk = d.ctx.document.createElement;
+  d.ctx.document.createElement = (tag) => (tag === 'a' ? (made.push(tag), { click() { made.push('click'); } }) : mk(tag)); d.ctx.setTimeout = () => {};
+  await fire(d.root, 'click', { target: target({ 'data-act': 'saveqr' }) });
+  assert.deepEqual(made, ['a', 'click']); assert.deepEqual(stepsOf(d), ['pay']);
+  await fire(d.root, 'click', { target: target({ 'data-act': 'togglestatic' }) });
+});
+
+test('P_ Paid recently shows the reference and who paid; the payee is named above the QR', async () => {
+  const b = boot({ rpc: (n) => ({ staff_pay_admin_list_v1: { data: { ok: true, requests: [{ ...REQ, id: 'p1', ref: 'PAID9999', status: 'paid', paid_at: '2026-10-12T04:00:00Z', paid_by_name: 'Marifel' }] }, error: null } }[n]) }); await tick();
+  assert.match(b.root.innerHTML, /Paid recently/); assert.match(b.root.innerHTML, /Ref PAID9999 · by Marifel/);
+});
+
+test('P_ "I have sent it" asks once first: the first tap sends nothing, "Not yet" cancels, only "Yes, I sent it" says sent', async () => {
+  const b = boot(happy()); await openOwn(b);
+  await fire(b.root, 'click', { target: target({ 'data-act': 'sent' }) }); await tick();
+  assert.match(b.root.innerHTML, /Has the money left your bank app\?/); assert.deepEqual(stepsOf(b), ['pay'], 'asking is not saying');
+  await fire(b.root, 'click', { target: target({ 'data-act': 'sent-no' }) }); await tick();
+  assert.doesNotMatch(b.root.innerHTML, /Has the money left/); assert.deepEqual(stepsOf(b), ['pay']);
+  await sayYes(b.root); await until(() => /Marked as sent/.test(b.root.innerHTML), 'marked'); assert.deepEqual(stepsOf(b), ['pay', 'sent']);
+});
+
+test('P_ source guard: markSent has exactly one caller, the sent-yes handler; the bank anchor and its handler are gone', () => {
+  const src = fs.readFileSync(path.join(root, 'pay', 'C_admin.js'), 'utf8');
+  const calls = src.match(/markSent\(\)/g) || [];
+  assert.equal(calls.length, 2, 'the definition and one call');
+  assert.match(src, /a === 'sent-yes'\) \{[^}]*markSent\(\)/);
+  assert.doesNotMatch(src, /data-act="bank"|a === 'bank'|bankLink|Open bank app/);
+  assert.equal(fs.existsSync(path.join(root, 'pay', 'bank.html')), false);
 });

@@ -101,18 +101,6 @@ test('photo size: longest side 1600, never enlarged', () => {
   assert.deepEqual(P.fitSize(800, 600), { w: 800, h: 600 });
 });
 
-test('bank page: no unverified app is listed or linked; a verified one builds the intent with the Play fallback', () => {
-  assert.deepEqual(P.listedBankApps(), []);
-  for (const k of Object.keys(P.BANK_APPS)) assert.equal(P.bankIntentUrl(k), null, k);
-  assert.equal(P.bankIntentUrl('nope'), null);
-  const table = { demo: { name: 'Demo', pkg: 'com.example.demo', verified: true } };
-  assert.deepEqual(P.listedBankApps(table), ['demo']);
-  const u = P.bankIntentUrl('demo', table);
-  assert.ok(u.startsWith('intent:#Intent;action=android.intent.action.MAIN;category=android.intent.category.LAUNCHER;package=com.example.demo;'));
-  assert.ok(u.includes('S.browser_fallback_url=' + encodeURIComponent('https://play.google.com/store/apps/details?id=com.example.demo')));
-  assert.ok(u.endsWith(';end'));
-});
-
 // ---- idempotency key lifecycle (audit item 2): a second request must never replay the first.
 test('key keeper: same key across retries of a failed send, new key after an ok', () => {
   const sel = { sessions: { s1: { on: true, transport: false } }, claims: {}, extras: [] };
