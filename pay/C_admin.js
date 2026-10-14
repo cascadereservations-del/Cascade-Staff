@@ -186,7 +186,7 @@
       var d = s.data;
       if (s.error || !d || d.ok === false) { S.sentMarked = false; if (d && (d.reason === 'not_yours' || d.reason === 'not_paying')) { S.msg = A.refusal(d); S.msgOk = false; renderPay(); } return; }
       S.req.sent_said_at = S.req.sent_said_at || 'now'; renderPay();
-    }, function () { S.sentMarked = false; });
+    }, function () { S.sentMarked = false; S.msg = A.refusal({ reason: 'offline' }); S.msgOk = false; renderPay(); });
   }
   // Keep the Telegram Finance card in step (it names the Staff-app payer and drops the buttons, or gets them back). Best effort, never blocks the screen.
   function redrawCard(id) {
@@ -234,7 +234,7 @@
     var inner = '<div class="stack">' + amountBlock + qrBlock + proof + '</div>' +
       '<div class="sticky"><button class="btn btn-primary btn-block" type="button" id="C_done" data-act="settle"' + (A.ready(f) && !S.busy ? '' : ' disabled') + '>' + ICON('checks') + (S.busy ? 'Saving…' : 'Mark as paid') + '</button>' +
       (S.sentMarked ? '<p class="help" id="C_sentnote" role="status">Marked as sent, so nobody else can take this over. If you have not sent it, tap I have not sent it. You can cancel the request after that.</p>' : '') +
-      '<button class="btn btn-ghost" type="button" data-act="unpay" style="width:100%"' + (S.busy ? ' disabled' : '') + '>' + (S.sentMarked ? 'I have not sent it' : 'I am not paying this now') + '</button</button>' +
+      '<button class="btn btn-ghost" type="button" data-act="unpay" style="width:100%"' + (S.busy ? ' disabled' : '') + '>' + (S.sentMarked ? 'I have not sent it' : 'I am not paying this now') + '</button>' +
       (S.sentMarked ? '' : S.confirmCancel
         ? '<div class="infobox" role="alert">' + ICON('info') + '<span>Cancel request ' + esc(r.ref) + '? The cleans and claims go back to unpaid work.</span></div><div class="row-wrap"><button class="btn btn-secondary" type="button" data-act="cancel-yes"' + (S.busy ? ' disabled' : '') + '>Yes, cancel the request</button><button class="btn btn-ghost" type="button" data-act="cancel-no">Keep it</button></div>'
         : '<button class="btn btn-ghost" type="button" data-act="cancel-ask" style="width:100%"' + (S.busy ? ' disabled' : '') + '>Cancel this request</button>') + '</div>' +
@@ -326,7 +326,8 @@
     var r = S.req; if (!r || S.busy) return; S.confirmCancel = false; S.busy = true; renderPay();
     return sb.rpc('staff_pay_admin_step_v1', { p_request_id: r.id, p_step: 'cancel' }).then(function (s) {
       var d = s.data; S.busy = false;
-      if (s.error || !d || d.ok === false) { S.msg = (d && d.reason === 'money_may_be_sent') ? A.refusal(d) + ' Tap I have not sent it first, then cancel.' : A.refusal(d || { reason: 'offline' }); S.msgOk = false; return renderPay(); }
+      if (d && d.reason === 'money_may_be_sent') { S.view = 'list'; S.listNote = ''; S.listMsg = 'Request ' + r.ref + ' was not cancelled: the money may already be sent. If it is yours, open it and tap I have not sent it first.'; clearSecrets(); return loadList().then(renderList); }
+      if (s.error || !d || d.ok === false) { S.msg = A.refusal(d || { reason: 'offline' }); S.msgOk = false; return renderPay(); }
       clearSecrets(); redrawCard(r.id); S.view = 'list'; S.listMsg = ''; S.listNote = 'Request ' + r.ref + ' is cancelled. Its cleans and claims are back under Not yet requested.';
       return loadList().then(renderList);
     }, function () { S.busy = false; S.msg = A.refusal({ reason: 'offline' }); S.msgOk = false; renderPay(); });

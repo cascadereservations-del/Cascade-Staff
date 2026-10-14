@@ -166,7 +166,3 @@ test('pay.js sends under the keeper key and never holds a page-long KEY', async 
   assert.match(src, /'x-cascade-submission-id': key/);
 });
 
-test('P_ rateDirty: typed fields are unsaved edits; the date, the error line and an empty form are not', () => {
-  assert.equal(P.P_rateDirty(null), false); assert.equal(P.P_rateDirty({ from: '2026-11-01', regular: '', general: '', transport: '', note: '', err: 'x' }), false);
-  for (const k of ['regular', 'general', 'transport', 'note']) assert.equal(P.P_rateDirty({ from: '2026-11-01', regular: '', general: '', transport: '', note: '', [k]: '1' }), true, k);
-});

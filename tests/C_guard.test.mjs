@@ -93,3 +93,7 @@ test('pay pages: no Google Fonts, tokens.css before styles.css, the v5 theme-col
   assert.match(read('pay/C_pay.css'), /\.btn-sm\s*\{[^}]*min-height:\s*var\(--v5-touch\)/);
   for (const f of js) assert.doesNotMatch(read('pay/' + f), /(?:11:00|3:00) ?(?:am|pm)|11 ?am|3 ?pm/i, f);
 });
+
+test('P_ no broken end tag (the s84 F1 typo) in any pay script', () => {
+  for (const f of js) assert.doesNotMatch(read('pay/' + f), /<\/\w+<\//, f);
+});

@@ -389,5 +389,11 @@ test('P_ admin cancel: no cancel button once sent is marked; a server refusal mo
   assert.doesNotMatch(b.root.innerHTML, /data-act="cancel-ask"/); assert.match(b.root.innerHTML, /cancel the request after that/);
   const r = boot({ rpc: (n, a) => (a && a.p_step === 'cancel' ? { data: { ok: false, reason: 'money_may_be_sent' }, error: null } : happy().rpc(n, a)) }); await openOwn(r);
   await fire(r.root, 'click', { target: target({ 'data-act': 'cancel-ask' }) }); await fire(r.root, 'click', { target: target({ 'data-act': 'cancel-yes' }) });
-  await until(() => /Tap I have not sent it first, then cancel\./.test(r.root.innerHTML), 'refused'); assert.match(r.root.innerHTML, /already said the money was sent/);
+  await until(() => /was not cancelled: the money may already be sent/.test(r.root.innerHTML), 'refused'); assert.doesNotMatch(r.root.innerHTML, /taken over/);
+});
+
+test('P_ review fixes: proof_already_sent has a plain sentence; a rejected "sent" call says so instead of staying silent', async () => {
+  const A = req('../pay/C_admin-lib.js'); assert.match(A.refusal({ reason: 'proof_already_sent' }), /screenshot is already on this request/);
+  const b = boot({ rpc: (n, a) => (a && a.p_step === 'sent' ? Promise.reject(new Error('offline')) : happy().rpc(n, a)) }); await openOwn(b);
+  await sayYes(b.root); await until(() => /Live information needs a connection|connection/i.test(b.root.innerHTML) && !/Marked as sent/.test(b.root.innerHTML), 'offline shown');
 });
