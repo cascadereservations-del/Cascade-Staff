@@ -174,16 +174,16 @@
   function demoShop() { return [{ id: 's1', item_id: 'd3', item_name: 'Hand soap', quantity: 6, purchase_unit: 'bottles', reason: 'Last one used today', status: 'proposed', proposed_at: '2026-10-12T02:00:00Z', proposed_by: 'someone' }, { id: 's2', item_id: 'd1', item_name: 'Toilet paper', quantity: 2, purchase_unit: 'pack', reason: '', status: 'approved', proposed_at: '2026-10-11T02:00:00Z', proposed_by: 'someone' }]; }
 
   /* ------------------------------------------------------------------ screen */
-  var K = { items: null, shop: null, q: '', chip: 'low', role: null, at: 0, keys: {}, v84: false, lastCode: '', cool: {}, scanned: null }; // survives unmount: the list shows at once while it refreshes
+  var K = { items: null, shop: null, q: '', chip: 'low', role: null, at: 0, keys: {}, v84: false, lastCode: '', cool: {}, scanned: null, denied: {}, noFinance: false }; // denied: actions the server refused or lacks, hidden for the whole visit (a re-mount keeps them) // survives unmount: the list shows at once while it refreshes
   var M = null; // the live mount
 
   function mount(el, opts) {
     unmount();
     opts = opts || {};
-    if (K.role !== opts.role) { K.role = opts.role; K.items = null; K.shop = null; K.q = ''; K.chip = 'low'; K.at = 0; K.keys = {}; K.v84 = false; K.lastCode = ''; K.cool = {}; K.scanned = null; } // a cached list is never shown to another role
+    if (K.role !== opts.role) { K.role = opts.role; K.items = null; K.shop = null; K.q = ''; K.chip = 'low'; K.at = 0; K.keys = {}; K.v84 = false; K.lastCode = ''; K.cool = {}; K.scanned = null; K.denied = {}; K.noFinance = false; } // a cached list is never shown to another role
     M = {
       el: el, opts: opts, role: opts.role, demo: !!opts.demo, client: opts.client || null, pid: opts.propertyId || PROPERTY_ID,
-      sub: String(opts.sub || ''), act: null, denied: {}, uid: null, loadErr: null, shopErr: null, loading: false, offlineStale: false, itemInfo: {}, listeners: []
+      sub: String(opts.sub || ''), act: null, denied: K.denied, uid: null, loadErr: null, shopErr: null, loading: false, offlineStale: false, itemInfo: {}, listeners: []
     };
     el.innerHTML = '<div class="I_wrap"><div data-i-top></div><div data-i-list></div><div data-i-layer></div><div class="I_live sr" role="status" aria-live="polite" data-i-live></div></div>';
     var on = function (type, fn) { el.addEventListener(type, fn); M.listeners.push([type, fn]); };
@@ -413,7 +413,7 @@
     }
     if (a.kind === 'price') {
       var pc = String(v.cost || '').trim() === '' ? null : parseQty(v.cost);
-      return head(c ? (pc == null ? 'Clear the price of ' + it.name + '?' : 'Set the price of ' + it.name + ' to PHP ' + pesoNum(pc) + '?') : 'Change price: ' + it.name, c ? null : 'The price paid for one ' + unitOf(it) + '.') + '<form data-i-form>' +
+      return head(c ? (pc == null ? 'Clear the price of ' + it.name + '?' : 'Set the price of ' + it.name + ' to PHP ' + pesoNum(pc) + '?') : 'Change price: ' + it.name, c ? null : 'Enter what one costs.') + '<form data-i-form>' +
         (c ? '<p class="I_conf">Only the owner, admin and finance can see prices.</p>' : textField('cost', 'Price per ' + esc(unitOf(it)) + ' in PHP (leave empty to clear)', v.cost || '', 'inputmode="decimal"') + (a.bad ? '<div class="field"><span class="err">▲ Enter a number such as 95 or 95.50.</span></div>' : '')) +
         actions(a, c ? 'Yes, save it' : 'Continue') + '</form>';
     }
@@ -472,7 +472,7 @@
     if (c) return head('Send ' + pick.s + ' to the ' + (fin ? 'Finance' : 'OPS') + ' group?') + '<form data-i-form>' + (money ? '<p class="I_conf">' + (fin ? 'Prices are included.' : 'No prices are shown.') + '</p>' : '') + actions(a, 'Yes, send it') + '</form>';
     return head('Send a report', 'A PDF list goes to Telegram.') + '<form data-i-form><div class="I_pickrows" role="group" aria-label="Which list">' +
       REPORTS.map(function (r) { return '<button class="chip I_choice" type="button" data-act="rep-kind" data-k="' + r.k + '" aria-pressed="' + (v.rkind === r.k) + '">' + (v.rkind === r.k ? '<span aria-hidden="true">✓</span> ' : '') + esc(r.t) + '</button>'; }).join('') + '</div>' +
-      (money && !M.noFinance ? '<div class="I_pickrows" role="group" aria-label="Send to"><button class="chip I_choice" type="button" data-act="rep-to" data-to="finance" aria-pressed="' + fin + '">' + (fin ? '<span aria-hidden="true">✓</span> ' : '') + 'Finance group (with prices)</button><button class="chip I_choice" type="button" data-act="rep-to" data-to="ops" aria-pressed="' + !fin + '">' + (!fin ? '<span aria-hidden="true">✓</span> ' : '') + 'OPS group (no prices)</button></div>' : '<p class="help">It goes to the OPS group.</p>') +
+      (money && !K.noFinance ? '<div class="I_pickrows" role="group" aria-label="Send to"><button class="chip I_choice" type="button" data-act="rep-to" data-to="finance" aria-pressed="' + fin + '">' + (fin ? '<span aria-hidden="true">✓</span> ' : '') + 'Finance group (with prices)</button><button class="chip I_choice" type="button" data-act="rep-to" data-to="ops" aria-pressed="' + !fin + '">' + (!fin ? '<span aria-hidden="true">✓</span> ' : '') + 'OPS group (no prices)</button></div>' : '<p class="help">It goes to the OPS group.</p>') +
       (a.bad ? '<div class="field"><span class="err">▲ That list was just sent. Please wait half a minute.</span></div>' : '') + actions(a, 'Continue') + '</form>';
   }
   // The action buttons of the item card. A scanned card puts the most useful action for the role first (owner/admin count, finance price, cleaner shopping list).
@@ -525,7 +525,7 @@
     if (act === 'scan-new') { if (allowed('create')) { M.act = { kind: 'create', step: 'form', code: a.code, format: a.format, mode: a.mode, vals: { name: '', category: '', unit: 'pc', cons: 'no', qty: '', reorder: '' } }; drawLayer(); } return; }
     if (act === 'pick') { if (a.phase !== 'pick' || !allowed('link')) return; M.act = { kind: 'link', step: 'confirm', pickId: attr(t, 'data-id'), code: a.code, format: a.format, mode: a.mode, fromPick: true }; drawLayer(); return; }
     if (act === 'rep-kind') { a.vals.rkind = attr(t, 'data-k'); a.bad = false; drawLayer(); return; }
-    if (act === 'rep-to') { a.vals.to = attr(t, 'data-to') === 'finance' && !M.noFinance ? 'finance' : 'ops'; a.bad = false; drawLayer(); return; }
+    if (act === 'rep-to') { a.vals.to = attr(t, 'data-to') === 'finance' && canPrice(M.role) && !K.noFinance ? 'finance' : 'ops'; a.bad = false; drawLayer(); return; }
     if (act === 'back') { if (/^(scan|link|create|report)$/.test(a.kind)) return flowBack(a); if (a.kind === 'shopset') { a.kind = 'menu'; a.step = null; a.err = null; drawLayer(); } else if (a.fromShop && a.step !== 'confirm') { M.act = null; drawLayer(); } else if (a.step === 'confirm') { a.step = 'form'; a.err = null; drawLayer(); } else if (a.shopId) { a.kind = 'menu'; a.err = null; drawLayer(); } else { a.kind = 'menu'; a.vals = null; a.step = null; a.err = null; a.bad = false; drawLayer(); } return; }
     if (act === 'step') { a.vals = a.vals || {}; var f = attr(t, 'data-f'); a.vals[f] = stepQty(a.vals[f], +attr(t, 'data-d'), attr(t, 'data-z') === '1'); a.err = null; drawLayer(); var nb = q('[data-act="step"][data-f="' + f + '"][data-d="' + attr(t, 'data-d') + '"]'); if (nb && nb.focus) nb.focus(); return; }
     if (act === 'shop-bought') { var r = (K.shop || []).filter(function (x) { return x.id === a.shopId; })[0]; if (!r || !r.itemId || !allowed('recv', itemById(r.itemId))) return; M.act = { kind: 'recv', itemId: r.itemId, step: 'form', vals: { packs: fmt(r.qty || 1), supplier: '', cost: '', shopId: r.id }, fromShop: true }; drawLayer(); return; }
@@ -645,14 +645,16 @@
     if (why === 'code_taken') { a.err = 'taken'; a.takenId = body.item_id || null; a.takenName = body.item_name || (itemById(body.item_id) || {}).name || ''; return drawLayer(); }
     if (why === 'name_exists') { a.err = 'exists'; a.takenId = body.item_id || null; a.takenName = (itemById(body.item_id) || {}).name || ''; return drawLayer(); }
     if (why === 'bad_code') { a.err = 'badcode'; return drawLayer(); }
-    if (why === 'finance_only') { me.noFinance = true; a.vals.to = 'ops'; a.step = 'form'; a.err = 'financeOnly'; return drawLayer(); }
+    if (why === 'finance_only') { K.noFinance = true; a.vals.to = 'ops'; a.step = 'form'; a.err = 'financeOnly'; return drawLayer(); }
     a.err = errKind(e, online());
+    if (a.err === 'missing' && NEWK[a.kind]) { me.denied[a.kind] = true; if (a.itemId && !rep && a.kind !== 'create') { a.kind = 'menu'; a.vals = null; a.step = null; } else me.act = null; a.err = null; toast(ERR.missing); if (rep) drawList(); return drawLayer(); } // not here yet: hide it, no error box
     if (!rep && (a.err === 'offline' || a.err === 'other')) { me.loading = false; load(); } // the write may have landed: look again
-    if (a.err === 'refused' || (a.err === 'missing' && NEWK[a.kind])) { // the server decides: calm line, and the action goes away
+    if (a.err === 'refused') { // the server decides: calm line, and the action goes away
       me.denied[a.kind] = true;
       if (a.kind === 'shopset') { a.kind = 'menu'; }
       else if (a.itemId && !rep && a.kind !== 'create') { a.kind = 'menu'; a.vals = null; a.step = null; }
       else { var m = ERR[a.err]; me.act = null; toast(m); }
+      if (rep) drawList();
     }
     drawLayer();
   }
