@@ -92,6 +92,18 @@ const M = [
   ['recent list never capped', [["ids: [String(id)].concat(recentRead().filter(function (x) { return x !== String(id); })).slice(0, 5) }", "ids: [String(id)].concat(recentRead().filter(function (x) { return x !== String(id); })) }"], ["o.ids.map(String).slice(0, 5) : []", "o.ids.map(String) : []"]]],
   ['recent kept across roles', [["o.role === K.role &&", "true &&"]]],
   ['recent not cleared on role change', [["if (prevRole !== null) recentClear(); }", "}"]]],
+  ['new item undo leaves its code stuck', [["if (a.code) { e.confirm = 'Remove ' + cnm + ' and free code '", "if (false) { e.confirm = 'Remove ' + cnm + ' and free code '"]]],
+  ['undo all re-asks finished lines', [["filter(function (e) { return e && K.undos.indexOf(e) >= 0; })", "filter(Boolean)"]]],
+  ['undo not_found is an error', [[" && !(a.kind === 'undo' && r.data.reason === 'not_found')", ""]]],
+  ['walk key per item only', [["var kk = it.id + '|' + n;", "var kk = it.id;"]]],
+  ['close after too late re-sends', [["if (a.kind === 'undo' && a.err === 'tooLate') return closeSheet();", ""]]],
+  ['first count undo wording', [["(snap && snap.controlled === false ? ' It stays counted in the app.' : '')", "''"]]],
+  ['bought recon says try again', [["a.err === 'recon' || a.err === 'short' ? ERR[a.err] : 'Try again.'", "'Try again.'"]]],
+  ['history server words', [["counted: 'Counted', received:", "xcounted: 'Counted', xreceived:"]]],
+  ['last bought without unit', [["esc(fmt(lb.qty) + ' ' + unitOf(it))", "esc(fmt(lb.qty))"]]],
+  ['bought list not re-read', [["drawLayer(); loadShop(); return; } // the list is re-read first", "drawLayer(); return; } // the list is re-read first"]]],
+  ['already received unmapped', [["body.reason === 'already_received'", "body.reason === 'never'"]]],
+  ['count group only under headers', [["(allowed('count') ? '<button class=\"btn btn-secondary I_gcount\"", "(header && allowed('count') ? '<button class=\"btn btn-secondary I_gcount\""]]],
   ['stepper allows zero use', [["return fmt(Math.max(allowZero ? 0 : 1, n));", "return fmt(Math.max(0, n));"]]]
 ];
 const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'I_red-'));
@@ -103,7 +115,7 @@ for (const [name, edits] of M) {
   for (const [a, b] of edits) { if (!s.includes(a)) { console.log('SKIP (pattern not found): ' + name + ' :: ' + a.slice(0, 50)); bad++; s = null; break; } s = s.replace(a, b); }
   if (s == null) continue;
   const f = path.join(dir, 'I_stock.mut.js'); fs.writeFileSync(f, s);
-  const r = spawnSync(process.execPath, ['--test', path.join(here, 'I_rpc.test.mjs'), path.join(here, 'I_roles.test.mjs'), path.join(here, 'I_flow.test.mjs'), path.join(here, 'I_guard.test.mjs'), path.join(here, 'I_fix.test.mjs'), path.join(here, 'I_group.test.mjs'), path.join(here, 'I_scan.test.mjs'), path.join(here, 'I_card.test.mjs'), path.join(here, 'I_report.test.mjs'), path.join(here, 'I_undo.test.mjs'), path.join(here, 'I_running-low.test.mjs'), path.join(here, 'I_bought.test.mjs'), path.join(here, 'I_count-walk.test.mjs'), path.join(here, 'I_history.test.mjs'), path.join(here, 'I_recent.test.mjs')], { env: Object.assign({}, process.env, { I_STOCK_SRC: f }), encoding: 'utf8', timeout: 60000 });
+  const r = spawnSync(process.execPath, ['--test', path.join(here, 'I_rpc.test.mjs'), path.join(here, 'I_roles.test.mjs'), path.join(here, 'I_flow.test.mjs'), path.join(here, 'I_guard.test.mjs'), path.join(here, 'I_fix.test.mjs'), path.join(here, 'I_group.test.mjs'), path.join(here, 'I_scan.test.mjs'), path.join(here, 'I_card.test.mjs'), path.join(here, 'I_report.test.mjs'), path.join(here, 'I_undo.test.mjs'), path.join(here, 'I_running-low.test.mjs'), path.join(here, 'I_bought.test.mjs'), path.join(here, 'I_count-walk.test.mjs'), path.join(here, 'I_history.test.mjs'), path.join(here, 'I_recent.test.mjs'), path.join(here, 'I_round2.test.mjs')], { env: Object.assign({}, process.env, { I_STOCK_SRC: f }), encoding: 'utf8', timeout: 60000 });
   const red = [...(r.stdout || '').matchAll(/^\s*✖ (I_[-\w]+ .+?) \(\d+(?:\.?\d+)?ms\)/gm)].map((m) => m[1].trim()).filter((v, i, a) => a.indexOf(v) === i);
   const hung = !!(r.error && r.error.code === 'ETIMEDOUT');
   const ok = hung || (r.status !== 0 && red.length > 0);
