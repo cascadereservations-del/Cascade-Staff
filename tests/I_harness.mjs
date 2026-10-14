@@ -85,7 +85,7 @@ export async function setup(o = {}) {
   if (o.propertyId) opts.propertyId = o.propertyId;
   // timers and camera: a stub the tests drive by hand (the module reads window.setInterval, BarcodeDetector and navigator.mediaDevices)
   const timers = [], cam = { opened: 0, stopped: 0, found: [], denied: o.camDenied || null, constraints: null, detectCalls: 0 };
-  win.setInterval = (fn) => { timers.push({ fn, on: true }); return timers.length; };
+  win.setInterval = (fn, ms) => { timers.push({ fn, ms, on: true }); return timers.length; };
   win.clearInterval = (id) => { if (timers[id - 1]) timers[id - 1].on = false; };
   if (o.camera) {
     win.BarcodeDetector = class { static async getSupportedFormats() { return ['ean_13', 'qr_code', 'pdf417']; } constructor(opt) { cam.formats = opt && opt.formats; } async detect() { cam.detectCalls++; return cam.found.length ? [cam.found.shift()] : []; } };

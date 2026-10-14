@@ -719,7 +719,7 @@
     var code = normCode(raw);
     if (!validCode(code)) { a.err = 'badcode'; drawLayer(); return; }
     K.lastCode = code; // a typo is fixed, not retyped
-    stopCam();
+    stopCam(); // the camera is off before anything else
     var hit = codeIndex(K.items)[code], f = format && /^[a-z0-9_]{2,20}$/.test(format) ? format : null;
     a.code = code; a.format = f; a.err = null; a.takenId = null;
     if (a.mode === 'link') {

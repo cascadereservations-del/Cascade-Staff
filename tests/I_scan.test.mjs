@@ -75,6 +75,8 @@ test('I_scan an unknown code: a cleaner and finance are told to ask the owner an
     assert.match(e.sheet(), /Ask the owner to link it\. The code is 999000111\./, role);
     assert.doesNotMatch(e.sheet(), /scan-pick|scan-new/, role);
     await e.act('scan-pick'); await e.act('scan-new'); await e.act('pick', { 'data-id': 'i2' }); // hand-made clicks
+    assert.doesNotMatch(e.sheet(), /which item|Counted now|Link code/, role);
+    await e.submit();
     assert.equal(e.client.calls.filter((c) => c[0] === 'rpc' && c[1] !== 'get_inventory_catalogue_v1').length, 0, role);
   }
 });
@@ -195,7 +197,7 @@ test('I_scan camera: opens the rear camera, asks only the formats the phone know
   assert.deepEqual([...e.cam.formats], ['ean_13', 'qr_code']); // pdf417 is dropped
   assert.match(e.sheet(), /<video[^>]*data-i-video/);
   assert.equal(e.cam.opened, 1);
-  assert.equal(e.timers.length, 1);
+  assert.equal(e.timers.length, 1); assert.equal(e.timers[0].ms, 250);
   assert.ok(e.root.video.srcObject); assert.ok(e.root.video.played >= 1);
   await e.tick(); assert.equal(e.cam.detectCalls, 1); assert.equal(e.cam.stopped, 0); // nothing seen yet
   e.cam.found.push({ rawValue: CODE, format: 'ean_13' });
@@ -255,6 +257,15 @@ test('I_scan camera: a refusal is a calm line and the typed field still works', 
   const f = await make('owner', { camera: true, camDenied: 'NotReadableError' });
   await f.mount(''); await f.act('scan'); await flush();
   assert.match(f.sheet(), /The camera did not start/);
+});
+
+test('I_scan camera: a match in link mode (no navigation) also stops the camera', async () => {
+  const e = await make('owner', { camera: true });
+  await e.mount(''); await e.open('i2'); await e.act('begin-link'); await flush();
+  e.cam.found.push({ rawValue: CODE, format: 'ean_13' });
+  await e.tick();
+  assert.match(e.sheet(), /already linked to Toilet paper/);
+  assert.equal(e.cam.stopped, 1);
 });
 
 test('I_scan a camera that answers after the sheet was closed is released at once', async () => {
