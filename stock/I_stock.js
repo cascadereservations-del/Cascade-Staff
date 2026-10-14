@@ -185,7 +185,8 @@
   function mount(el, opts) {
     unmount();
     opts = opts || {};
-    if (K.role !== opts.role) { K.role = opts.role; K.items = null; K.shop = null; K.q = ''; K.chip = 'low'; K.at = 0; K.keys = {}; K.v84 = false; K.lastCode = ''; K.cool = {}; K.scanned = null; K.denied = {}; K.noFinance = false; K.undos = []; K.hasCounted = false; } // a cached list is never shown to another role
+    var prevRole = K.role;
+    if (K.role !== opts.role) { K.role = opts.role; K.items = null; K.shop = null; K.q = ''; K.chip = 'low'; K.at = 0; K.keys = {}; K.v84 = false; K.lastCode = ''; K.cool = {}; K.scanned = null; K.denied = {}; K.noFinance = false; K.undos = []; K.hasCounted = false; if (prevRole !== null) recentClear(); } // a cached list is never shown to another role
     M = {
       el: el, opts: opts, role: opts.role, demo: !!opts.demo, client: opts.client || null, pid: opts.propertyId || PROPERTY_ID,
       sub: String(opts.sub || ''), act: null, hist: {}, denied: K.denied, uid: null, loadErr: null, shopErr: null, loading: false, offlineStale: false, itemInfo: {}, listeners: []
@@ -256,7 +257,17 @@
 
   /* ---- drawing */
   function itemById(id) { return (K.items || []).filter(function (i) { return i.id === id; })[0] || null; }
-  function newMenu(id) { var scanned = K.scanned === id; return { kind: 'menu', itemId: id, scanned: scanned }; } // scanned: the right action first
+  function newMenu(id) { recentAdd(id); var scanned = K.scanned === id; return { kind: 'menu', itemId: id, scanned: scanned }; } // scanned: the right action first
+  // Recent items (s84 1b, Q7): the last 5 cards opened, ids only, in localStorage key cs_I_recent. Private mode or a blocked store simply hides it.
+  function recentRead() {
+    try { var ls = root.localStorage; if (!ls) return []; var o = JSON.parse(ls.getItem('cs_I_recent') || 'null'); return o && o.role === K.role && Array.isArray(o.ids) ? o.ids.map(String).slice(0, 5) : []; } catch (e) { return []; }
+  }
+  function recentAdd(id) { try { var ls = root.localStorage; if (ls) ls.setItem('cs_I_recent', JSON.stringify({ role: K.role, ids: [String(id)].concat(recentRead().filter(function (x) { return x !== String(id); })).slice(0, 5) })); } catch (e) { /* no store: no recent list */ } }
+  function recentClear() { try { if (root.localStorage) root.localStorage.removeItem('cs_I_recent'); } catch (e) { /* nothing to clear */ } }
+  function renderRecent() {
+    var items = recentRead().map(itemById).filter(Boolean); // an item that left the catalogue is dropped silently
+    return items.length ? '<div class="I_recent" role="group" aria-label="Recent items"><span class="I_rl">Recent</span>' + items.map(function (i) { var L = LEVELS[level(i)]; return '<button class="chip I_rc" type="button" data-act="open" data-id="' + esc(i.id) + '">' + esc(i.name) + ' <span aria-hidden="true">' + L.glyph + '</span> ' + L.word + '</button>'; }).join('') + '</div>' : '';
+  }
   function route() {
     var m = /^item\/(.+)$/.exec(M.sub);
     return { shopping: M.sub === 'shopping', itemId: m ? m[1] : null };
@@ -282,6 +293,7 @@
       var s = summary(K.items), needN = canManage(M.role) ? K.items.filter(needsCount).length : 0;
       h += '<section class="card glass I_sum ' + (s.low ? 'I_sumlow' : 'I_sumok') + '" aria-label="Stock summary"><span class="I_g" aria-hidden="true">' + (s.low ? LEVELS.low.glyph : LEVELS.ok.glyph) + '</span><div><div class="I_sumt">' +
         (s.low ? s.low + (s.low === 1 ? ' item low' : ' items low') : 'Stock is fine') + '</div>' + (s.out ? '<div class="help">' + s.out + (s.out === 1 ? ' is' : ' are') + ' out</div>' : '') + (needN ? '<button class="btn btn-ghost I_needbtn" type="button" data-act="chip" data-k="need"><span aria-hidden="true">▲</span> ' + needN + ' need a count</button>' : '') + '</div></section>';
+      h += renderRecent();
       h += '<div class="I_srow"><div class="field"><label for="I_q">Search items</label><div class="input"><input id="I_q" type="search" autocomplete="off" enterkeyhint="search" value="' + esc(K.q) + '" placeholder="Toilet paper"></div></div>' +
         (K.v84 ? '<button class="btn btn-secondary I_scanbtn" type="button" data-act="scan"><span aria-hidden="true">▥</span> Scan</button>' : '') + '</div>';
       h += '<div class="row-wrap I_chips" role="group" aria-label="Show">' + (function () { var cs = chipsFor(K.items); if (needN) cs.splice(3, 0, { k: 'need', t: 'Needs a count' }); return cs; })().map(function (c) { return '<button class="chip" type="button" data-act="chip" data-k="' + esc(c.k) + '" aria-pressed="' + (K.chip === c.k) + '">' + esc(c.t) + '</button>'; }).join('') + '</div>';

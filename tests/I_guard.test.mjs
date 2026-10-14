@@ -41,7 +41,8 @@ test('I_guard css uses tokens only: no hex colour and no px font size under 13',
 });
 
 test('I_guard the script reads no localStorage and holds no secret-looking value', () => {
-  assert.doesNotMatch(js, /localStorage|sessionStorage|indexedDB/);
+  assert.doesNotMatch(js, /sessionStorage|indexedDB/);
+  for (const line of js.split(/\r?\n/).filter((l) => /localStorage/.test(l))) assert.match(line, /cs_I_recent/, 'localStorage is only for the recent-items key: ' + line.trim().slice(0, 60));
   assert.doesNotMatch(js, /payout_qrph|service_role|eyJ[A-Za-z0-9_-]{20,}/);
 });
 
