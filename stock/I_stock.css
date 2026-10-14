@@ -69,3 +69,7 @@ div.I_row { cursor: default; }
 .I_blines { margin: 12px 0; padding: 0 0 0 18px; display: grid; gap: 8px; font-size: var(--v5-t-body); overflow-wrap: anywhere; }
 .I_brow { display: grid; gap: 8px; margin-bottom: 8px; }
 .I_tick { justify-content: flex-start; text-align: left; min-height: 48px; }
+/* s84 1b: count a group */
+.I_gcount { min-height: 48px; }
+.I_needbtn { min-height: 44px; margin-left: auto; color: var(--v5-warn-t); }
+.I_wname { margin: 8px 0 0; font: 600 var(--v5-t-section)/1.25 var(--font-display, var(--font-ui)); overflow-wrap: anywhere; }

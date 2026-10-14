@@ -31,7 +31,7 @@
       qty: num(raw.qty), reorder: num(raw.reorderBelow), consumable: !!raw.consumable, active: raw.active !== false,
       purchaseUnit: raw.purchaseUnit ? String(raw.purchaseUnit) : null, perPack: num(raw.unitsPerPurchase) || 1,
       cover: num(raw.coverageDays), coverEst: num(raw.estCoverageDays), controlled: !!raw.movementControlled,
-      par: num(raw.par), codes: Array.isArray(raw.codes) ? raw.codes.map(String) : []
+      counted: raw.countedAt ? String(raw.countedAt) : null, par: num(raw.par), codes: Array.isArray(raw.codes) ? raw.codes.map(String) : []
     };
     if (canPrice(role)) it.cost = num(raw.unitCost);
     return it;
@@ -52,14 +52,17 @@
     Object.keys(cats).sort().forEach(function (c) { list.push({ k: 'c:' + c, t: c }); });
     return list;
   }
+  // Needs a count (s84 1b): a consumable never counted in the app, or not for 30 days. Only meaningful when the catalogue says when (countedAt).
+  function needsCount(it) { return !!(K.hasCounted && it.consumable && (!it.counted || nowMs() - Date.parse(it.counted) > 30 * 86400000)); }
   function visible(items, chip, q) {
     var s = String(q || '').trim().toLowerCase(), out = items.filter(function (i) {
       if (s && i.name.toLowerCase().indexOf(s) < 0) return false;
       if (chip === 'cons') return i.consumable;
+      if (chip === 'need') return needsCount(i);
       if (chip.indexOf('c:') === 0) return i.category === chip.slice(2);
       return true;
     });
-    return chip === 'all' || chip.indexOf('c:') === 0 ? out.sort(byName) : out.sort(function (a, b) { return RANK[level(a)] - RANK[level(b)] || byName(a, b); });
+    return chip === 'all' || chip === 'need' || chip.indexOf('c:') === 0 ? out.sort(byName) : out.sort(function (a, b) { return RANK[level(a)] - RANK[level(b)] || byName(a, b); });
   }
   // Groups for the list (s84). Low first: worst group first (an Out, then a Low, then all OK), then more Out+Low, then name; inside a group Out, Low, OK, name.
   // All / Consumables: groups by category name, rows by name. A category chip is one group (the screen draws no header for it).
@@ -163,7 +166,7 @@
 
   /* ------------------------------------------------------------------ demo sample (no network) */
   function demoItems() {
-    var d = function (id, name, cat, unit, qty, re, cons, cost, pu, pp) { return { id: id, name: name, category: cat, unit: unit, qty: qty, reorderBelow: re, consumable: cons, active: true, unitCost: cost, purchaseUnit: pu || null, unitsPerPurchase: pp || 1, estCoverageDays: re ? Math.round(qty / re * 10) : null, par: re && cons ? re * 2 : null, codes: id === 'd1' ? ['4800000000011'] : id === 'd3' ? ['4800000000028'] : [] }; };
+    var d = function (id, name, cat, unit, qty, re, cons, cost, pu, pp) { return { id: id, name: name, category: cat, unit: unit, qty: qty, reorderBelow: re, consumable: cons, active: true, unitCost: cost, purchaseUnit: pu || null, unitsPerPurchase: pp || 1, estCoverageDays: re ? Math.round(qty / re * 10) : null, par: re && cons ? re * 2 : null, countedAt: id === 'd1' ? '2026-10-02T03:00:00Z' : id === 'd2' || id === 'd4' ? '2026-10-10T03:00:00Z' : id === 'd6' ? '2026-08-01T03:00:00Z' : null, codes: id === 'd1' ? ['4800000000011'] : id === 'd3' ? ['4800000000028'] : [] }; };
     return [
       d('d1', 'Toilet paper', 'Bathroom', 'rolls', 4, 12, true, 18, 'pack', 12), d('d2', 'Bath towels', 'Linen', 'pieces', 14, 10, false, 220),
       d('d3', 'Hand soap', 'Bathroom', 'bottles', 0, 3, true, 95), d('d4', 'Dish soap', 'Kitchen', 'bottles', 5, 2, true, 80),
@@ -176,13 +179,13 @@
   function demoShop() { return [{ id: 's1', item_id: 'd3', item_name: 'Hand soap', quantity: 6, purchase_unit: 'bottles', reason: 'Last one used today', status: 'proposed', proposed_at: '2026-10-12T02:00:00Z', proposed_by: 'someone' }, { id: 's2', item_id: 'd1', item_name: 'Toilet paper', quantity: 2, purchase_unit: 'pack', reason: '', status: 'approved', proposed_at: '2026-10-11T02:00:00Z', proposed_by: 'someone' }]; }
 
   /* ------------------------------------------------------------------ screen */
-  var K = { items: null, shop: null, q: '', chip: 'low', role: null, at: 0, keys: {}, v84: false, lastCode: '', cool: {}, scanned: null, denied: {}, noFinance: false, undos: [], uidn: 0 }; // denied: actions the server refused or lacks, hidden for the whole visit (a re-mount keeps them) // survives unmount: the list shows at once while it refreshes
+  var K = { items: null, shop: null, q: '', chip: 'low', role: null, at: 0, keys: {}, v84: false, lastCode: '', cool: {}, scanned: null, denied: {}, noFinance: false, undos: [], uidn: 0, hasCounted: false }; // denied: actions the server refused or lacks, hidden for the whole visit (a re-mount keeps them) // survives unmount: the list shows at once while it refreshes
   var M = null; // the live mount
 
   function mount(el, opts) {
     unmount();
     opts = opts || {};
-    if (K.role !== opts.role) { K.role = opts.role; K.items = null; K.shop = null; K.q = ''; K.chip = 'low'; K.at = 0; K.keys = {}; K.v84 = false; K.lastCode = ''; K.cool = {}; K.scanned = null; K.denied = {}; K.noFinance = false; K.undos = []; } // a cached list is never shown to another role
+    if (K.role !== opts.role) { K.role = opts.role; K.items = null; K.shop = null; K.q = ''; K.chip = 'low'; K.at = 0; K.keys = {}; K.v84 = false; K.lastCode = ''; K.cool = {}; K.scanned = null; K.denied = {}; K.noFinance = false; K.undos = []; K.hasCounted = false; } // a cached list is never shown to another role
     M = {
       el: el, opts: opts, role: opts.role, demo: !!opts.demo, client: opts.client || null, pid: opts.propertyId || PROPERTY_ID,
       sub: String(opts.sub || ''), act: null, denied: K.denied, uid: null, loadErr: null, shopErr: null, loading: false, offlineStale: false, itemInfo: {}, listeners: []
@@ -192,7 +195,7 @@
     on('click', onClick); on('input', onInput); on('submit', onSubmit); on('keydown', onKey); on('focusin', onFocus); on('focusout', onBlur);
     M.vis = function () { if (M && root.document && root.document.hidden && M.cam) pauseCam(); };
     if (root.document && root.document.addEventListener) root.document.addEventListener('visibilitychange', M.vis);
-    if (M.demo) { K.items = demoItems().map(function (r) { return normalize(r, M.role); }); K.shop = normalizeShop(demoShop(), null); K.v84 = true; }
+    if (M.demo) { K.items = demoItems().map(function (r) { return normalize(r, M.role); }); K.shop = normalizeShop(demoShop(), null); K.v84 = true; K.hasCounted = true; }
     else if (M.client && M.client.auth && M.client.auth.getSession) { try { M.client.auth.getSession().then(function (r) { var s = r && r.data && r.data.session; M.uid = s && s.user ? s.user.id : null; }, function () {}); } catch (e) { /* no uid: rows read "Asked by staff" */ } }
     draw();
     if (!M.demo && !(K.items && K.at && nowMs() - K.at < 60000)) load(); // a fresh list for this role is kept when only the sub-route changed
@@ -222,7 +225,7 @@
     Promise.resolve().then(function () { return me.client.rpc('get_inventory_catalogue_v1', { p_property_id: me.pid }); }).then(function (r) {
       if (me.dead) return;
       var items = r && !r.error ? normalizeCatalogue(r.data, me.role) : null;
-      if (items) { K.items = items; K.v84 = r.data.items.some(function (x) { return x && 'codes' in x; }); K.at = nowMs(); me.loadErr = null; me.offlineStale = false; }
+      if (items) { K.items = items; K.v84 = r.data.items.some(function (x) { return x && 'codes' in x; }); K.hasCounted = r.data.items.some(function (x) { return x && 'countedAt' in x; }); K.at = nowMs(); me.loadErr = null; me.offlineStale = false; }
       else if (K.items) me.offlineStale = true;
       else me.loadErr = errKind(r && r.error, online()) === 'offline' ? 'offline' : 'unavailable';
     }, function (e) {
@@ -276,12 +279,12 @@
       '<button class="btn btn-secondary" type="button" data-act="tab" data-to="shopping" aria-pressed="' + rt.shopping + '">Shopping list' + (n ? ' ' + n : '') + '</button></div>';
     if (rt.shopping) return h;
     if (K.items) {
-      var s = summary(K.items);
+      var s = summary(K.items), needN = canManage(M.role) ? K.items.filter(needsCount).length : 0;
       h += '<section class="card glass I_sum ' + (s.low ? 'I_sumlow' : 'I_sumok') + '" aria-label="Stock summary"><span class="I_g" aria-hidden="true">' + (s.low ? LEVELS.low.glyph : LEVELS.ok.glyph) + '</span><div><div class="I_sumt">' +
-        (s.low ? s.low + (s.low === 1 ? ' item low' : ' items low') : 'Stock is fine') + '</div>' + (s.out ? '<div class="help">' + s.out + (s.out === 1 ? ' is' : ' are') + ' out</div>' : '') + '</div></section>';
+        (s.low ? s.low + (s.low === 1 ? ' item low' : ' items low') : 'Stock is fine') + '</div>' + (s.out ? '<div class="help">' + s.out + (s.out === 1 ? ' is' : ' are') + ' out</div>' : '') + (needN ? '<button class="btn btn-ghost I_needbtn" type="button" data-act="chip" data-k="need"><span aria-hidden="true">▲</span> ' + needN + ' need a count</button>' : '') + '</div></section>';
       h += '<div class="I_srow"><div class="field"><label for="I_q">Search items</label><div class="input"><input id="I_q" type="search" autocomplete="off" enterkeyhint="search" value="' + esc(K.q) + '" placeholder="Toilet paper"></div></div>' +
         (K.v84 ? '<button class="btn btn-secondary I_scanbtn" type="button" data-act="scan"><span aria-hidden="true">▥</span> Scan</button>' : '') + '</div>';
-      h += '<div class="row-wrap I_chips" role="group" aria-label="Show">' + chipsFor(K.items).map(function (c) { return '<button class="chip" type="button" data-act="chip" data-k="' + esc(c.k) + '" aria-pressed="' + (K.chip === c.k) + '">' + esc(c.t) + '</button>'; }).join('') + '</div>';
+      h += '<div class="row-wrap I_chips" role="group" aria-label="Show">' + (function () { var cs = chipsFor(K.items); if (needN) cs.splice(3, 0, { k: 'need', t: 'Needs a count' }); return cs; })().map(function (c) { return '<button class="chip" type="button" data-act="chip" data-k="' + esc(c.k) + '" aria-pressed="' + (K.chip === c.k) + '">' + esc(c.t) + '</button>'; }).join('') + '</div>';
     }
     return h;
   }
@@ -302,7 +305,7 @@
   }
   function renderGroup(g, n, header) {
     var note = g.out || g.low ? '<span class="I_ghn">' + (g.out ? '<span aria-hidden="true">✕</span> ' + g.out + ' out' : '') + (g.out && g.low ? ', ' : '') + (g.low ? '<span aria-hidden="true">▲</span> ' + g.low + ' low' : '') + '</span>' : '';
-    return '<section class="I_grp"' + (header ? ' aria-labelledby="I_gh_' + n + '"' : '') + '>' + (header ? '<h3 class="I_gh" id="I_gh_' + n + '"><span>' + esc(g.cat) + '</span>' + note + '</h3>' : '') + '<div class="card list I_list">' + g.rows.map(renderRow).join('') + '</div></section>';
+    return '<section class="I_grp"' + (header ? ' aria-labelledby="I_gh_' + n + '"' : '') + '>' + (header ? '<h3 class="I_gh" id="I_gh_' + n + '"><span>' + esc(g.cat) + '</span>' + note + '</h3>' : '') + '<div class="card list I_list">' + g.rows.map(renderRow).join('') + '</div>' + (header && allowed('count') ? '<button class="btn btn-secondary I_gcount" type="button" data-act="walk" data-cat="' + esc(g.cat) + '" aria-label="Count this group, ' + esc(g.cat) + '">Count this group</button>' : '') + '</section>';
   }
   function renderFail(kind) {
     return '<div class="empty I_fail" role="alert"><p class="hd">' + (kind === 'offline' ? 'No connection' : 'Inventory is not available right now') + '</p>' +
@@ -370,6 +373,7 @@
       return head((a.status === 'approved' ? 'Approve ' : 'Remove ') + a.rowName + (a.status === 'approved' ? '?' : ' from the list?')) + '<form data-i-form>' + actions(a, a.status === 'approved' ? 'Yes, approve it' : 'Yes, remove it') + '</form>';
     }
     if (a.kind === 'undo') return head(a.entry.confirm) + '<form data-i-form>' + (a.err === 'tooLate' ? errBox(a) : '') + (a.err === 'tooLate' ? '' : errBox(a)) + actions(a, a.err === 'tooLate' ? 'Close' : 'Yes, undo it') + '</form>';
+    if (a.kind === 'walk') return renderWalk(a);
     if (a.kind === 'bought') return renderBought(a);
     if (a.kind === 'scan') return renderScan(a);
     if (a.kind === 'report') return renderReport(a);
@@ -518,12 +522,13 @@
   function onClick(ev) {
     if (!M) return;
     var t = ev.target && ev.target.closest ? ev.target.closest('[data-act]') : null; if (!t) return;
-    var act = attr(t, 'data-act');
+    var act = attr(t, 'data-act'), a0 = M.act;
     if (act === 'admin') { if (ev.preventDefault) ev.preventDefault(); M.opts.navigate && M.opts.navigate('#door/inventory'); return; }
     if (act === 'tab') return go(attr(t, 'data-to') ? '#stock/' + attr(t, 'data-to') : '#stock', attr(t, 'data-to') || '');
     if (act === 'chip') { K.chip = attr(t, 'data-k'); draw(); return; }
     if (act === 'showall') { K.chip = 'all'; K.q = ''; draw(); return; }
     if (act === 'bought-open') { if (!allowed('bought') || (M.act && M.act.sending)) return; M.act = { kind: 'bought', step: 'pick', sel: {}, vals: {}, keys: {}, done: {} }; drawLayer(); return; }
+    if (act === 'walk') { if (a0 && a0.sending) return; return walkStart(attr(t, 'data-cat')); }
     if (act === 'scan') { if (M.act && M.act.sending) return; return openScan(null); }
     if (act === 'report') { if (!allowed('report') || (M.act && M.act.sending)) return; M.act = { kind: 'report', step: 'form', vals: { rkind: 'order', to: 'ops' } }; drawLayer(); return; }
     if (act === 'retry') { M.loadErr = null; M.shopErr = null; M.loading = false; if (!K.items) draw(); load(); return; }
@@ -535,6 +540,8 @@
     if (!a) return;
     if (a.sending) return; // nothing, not even Close, while a write is in flight
     if (act === 'begin') return begin(attr(t, 'data-kind'));
+    if (act === 'w-same') { if (a.kind === 'walk' && a.step === 'item') { a.same[a.ids[a.i]] = 1; walkNext(a); } return; }
+    if (act === 'w-stop') { if (a.kind === 'walk') { a.step = 'summary'; a.err = null; if (Object.keys(a.saved).length) load(); drawLayer(); } return; }
     if (act === 'b-tick') { var bid = attr(t, 'data-id'); if (a.kind !== 'bought' || a.step !== 'pick') return; if (a.sel[bid]) delete a.sel[bid]; else { var br = shopRowBy(bid); a.sel[bid] = 1; if (a.vals['packs_' + bid] == null) a.vals['packs_' + bid] = fmt(br && br.qty || 1); } a.bad = false; drawLayer(); return; }
     if (act === 'b-undoall') { if (a.kind === 'bought' && a.step === 'done') { a.step = 'undoconfirm'; a.err = null; drawLayer(); } return; }
     if (act === 'unlink') { var uc = attr(t, 'data-code'); if (!allowed('unlink') || !a.itemId || !uc) return; M.act = { kind: 'unlink', itemId: a.itemId, code: uc, step: 'confirm' }; drawLayer(); return; }
@@ -559,10 +566,11 @@
   function closeSheet() {
     if (!M || (M.act && M.act.sending)) return;
     stopCam(); K.scanned = null;
-    var id = M.act && M.act.itemId;
+    var id = M.act && M.act.itemId, wsaved = 0;
+    if (M.act && M.act.kind === 'walk' && M.act.step !== 'summary') { wsaved = Object.keys(M.act.saved).length; if (wsaved) toast(wsaved + (wsaved === 1 ? ' item saved' : ' items saved') + '. The rest were not changed.'); }
     M.act = null;
     if (route().itemId) { M.sub = ''; if (M.opts.navigate) M.opts.navigate('#stock'); }
-    if (M) { drawLayer(); if (id) { var b = q('[data-id="' + id + '"]'); if (b && b.focus) b.focus(); } }
+    if (M) { drawLayer(); if (id) { var b = q('[data-id="' + id + '"]'); if (b && b.focus) b.focus(); } if (wsaved) load(); }
   }
   function allowed(kind, it) {
     var m = M.role;
@@ -610,6 +618,7 @@
   function onSubmit(ev) {
     if (ev && ev.preventDefault) ev.preventDefault();
     var a = M && M.act; if (!a || a.sending || a.kind === 'menu') return;
+    if (a.kind === 'walk') return walkSubmit(a);
     if (a.kind === 'bought') return boughtSubmit(a);
     if (a.kind === 'scan') { if (a.phase === 'look') handleCode((a.vals || {}).code, null); return; }
     if (a.step !== 'confirm') { if (!valid(a)) { a.bad = a.kind === 'levels' && optQty(a.vals.reorder) && optQty(a.vals.par) ? 'levels' : true; drawLayer(); return; } a.bad = false; a.step = 'confirm'; a.err = null; a.focused = false; drawLayer(); return; }
@@ -687,6 +696,62 @@
       if (rep) drawList();
     }
     drawLayer();
+  }
+
+  /* ---- Count a group (s84 1b, Q2): one item per screen, nothing is written without a tap on Next */
+  function walkIt(a) { return itemById(a.ids[a.i]); }
+  function walkVals(a) { var it = walkIt(a); a.vals = { qty: it && it.qty != null ? fmt(it.qty) : '0' }; a.err = null; a.bad = false; }
+  function walkStart(cat) {
+    if (!allowed('count') || !K.items) return;
+    var g = groupsFor(K.items, K.chip, K.q).filter(function (x) { return x.cat === cat; })[0]; if (!g || !g.rows.length) return;
+    M.act = { kind: 'walk', cat: cat, ids: g.rows.map(function (r) { return r.id; }), i: 0, step: 'item', saved: {}, same: {}, keys: {} }; walkVals(M.act); drawLayer();
+  }
+  function walkNext(a, flash) {
+    a.i++; a.flash = null;
+    if (a.i >= a.ids.length) { a.step = 'summary'; if (Object.keys(a.saved).length) { K.at = 0; load(); } } else { walkVals(a); a.flash = flash || null; }
+    drawLayer();
+  }
+  function walkSubmit(a) {
+    if (a.sending) return;
+    if (a.step === 'summary') return closeSheet();
+    var me = M, it = walkIt(a), n = parseQty(a.vals.qty, true);
+    if (!it || n == null) { a.bad = true; drawLayer(); return; }
+    if (me.demo) { a.saved[it.id] = { before: it.qty, after: n }; toast(DEMO_NOTE); walkNext(a, '✓ Saved'); return; }
+    if (!online()) { a.err = 'offline'; drawLayer(); return; }
+    if (!me.client) { a.err = 'missing'; drawLayer(); return; }
+    a.keys[it.id] = a.keys[it.id] || newKey('count');
+    var c = countCall(it, { qty: a.vals.qty, note: 'Group count in the staff app' }, a.keys[it.id]);
+    a.sending = true; a.err = null; drawLayer();
+    Promise.resolve().then(function () { return me.client.rpc(c.fn, c.args); }).then(function (r) {
+      if (me.dead) return;
+      if (r && r.error) throw r.error;
+      if (r && r.data && r.data.ok === false) throw { message: 'failed' };
+      a.sending = false; delete a.keys[it.id]; K.at = 0;
+      var e = undoFor({ kind: 'count', vals: a.vals }, it, r && r.data || {}, { qty: it.qty }); if (e) pushUndoEntry(e);
+      a.saved[it.id] = { before: it.qty, after: n, undo: e };
+      walkNext(a, '✓ Saved');
+    }).catch(function (e) {
+      if (me.dead) return;
+      a.sending = false; a.err = errKind(e, online());
+      if (a.err === 'refused') { K.denied.count = true; var m = ERR.refused; me.act = null; toast(m); draw(); return; }
+      drawLayer();
+    });
+  }
+  function renderWalk(a) {
+    if (a.step === 'summary') {
+      var ids = Object.keys(a.saved), same = Object.keys(a.same).length, big = ids.filter(function (id) { var s = a.saved[id]; return s.before > 0 && Math.abs(s.after - s.before) > s.before / 2; });
+      return head(ids.length ? 'Counting done' : 'Nothing was changed', a.cat) + '<p class="I_conf">' + ids.length + ' counted, ' + same + ' the same' + (big.length ? ', ' + big.length + ' changed by more than half' : '') + '.</p>' +
+        (a.i < a.ids.length ? '<p class="help">The rest were not changed.</p>' : '') +
+        (big.length ? '<dl class="I_dl">' + big.map(function (id) { var s = a.saved[id], it = itemById(id); return row('<span aria-hidden="true">▲</span> ' + esc(it ? it.name : ''), esc(fmt(s.before) + ' → ' + fmt(s.after)) + (s.undo && !K.denied[s.undo.call.fn] ? ' <button class="btn btn-ghost I_undobtn" type="button" data-act="undo" data-id="' + s.undo.id + '"><span aria-hidden="true">↶</span> Undo</button>' : '')); }).join('') + '</dl>' : '') +
+        '<div class="I_btns"><button class="btn btn-primary btn-block" type="button" data-act="close">Close</button></div>';
+    }
+    var it = walkIt(a); if (!it) return null;
+    var last = a.i === a.ids.length - 1;
+    return head('Item ' + (a.i + 1) + ' of ' + a.ids.length, a.cat) + '<p class="I_wname">' + esc(it.name) + '</p><p class="help">' + esc(it.unit) + ' · ' + (it.counted ? 'Last counted ' + esc(dateLabel(it.counted)) : 'Not counted in the app yet') + '</p>' +
+      '<form data-i-form>' + stepper('qty', 'Counted (' + esc(unitOf(it)) + ')', a.vals.qty, true) + (a.bad ? '<div class="field"><span class="err">▲ Enter a number such as 12 or 2.5.</span></div>' : '') +
+      (a.flash ? '<div class="okbox" role="status"><span>' + esc(a.flash) + '</span></div>' : '') + (it.controlled ? '' : '<p class="help">The first count here moves this item to counting in the app.</p>') + errBox(a) +
+      '<div class="I_btns"><button class="btn btn-primary btn-block" type="submit"' + (a.sending ? ' disabled' : '') + '>' + (a.sending ? 'Saving…' : last ? 'Finish' : 'Next') + '</button>' +
+      '<button class="btn btn-secondary btn-block" type="button" data-act="w-same"' + (a.sending ? ' disabled' : '') + '>Same as before</button><button class="btn btn-ghost btn-block" type="button" data-act="w-stop"' + (a.sending ? ' disabled' : '') + '>Stop here</button></div></form>';
   }
 
   /* ---- Bought some of these (s84 1b, Q5): tick, check once, then one receipt per line, one at a time */
