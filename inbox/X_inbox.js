@@ -121,9 +121,9 @@
   function quickReplies(ht) {
     var out = clock12(ht && ht.check_out) || clock12(HOUSE_FALLBACK.check_out), inn = clock12(ht && ht.check_in) || clock12(HOUSE_FALLBACK.check_in);
     return [
-      { label: 'Checking now', text: 'Thank you for your message. We are checking and will reply shortly.' },
-      { label: 'Check-in time', text: 'Check-in starts at ' + inn + '. If you would like to arrive earlier, we will check and come back to you.' },
-      { label: 'Check-out time', text: 'Check-out is at ' + out + '. If you would like a later time, we will check and come back to you.' }
+      { label: 'Checking now', text: 'Thank you so much for your message. We are looking into this for you now and will get back to you shortly.' },
+      { label: 'Check-in time', text: 'Check-in begins at ' + inn + ', and we look forward to welcoming you. If an earlier arrival would help, please let us know your time and we will gladly check what is possible.' },
+      { label: 'Check-out time', text: 'Check-out is at ' + out + '. If a later departure would make your day easier, please let us know and we will happily check what is possible for you.' }
     ];
   }
 

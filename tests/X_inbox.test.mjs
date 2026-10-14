@@ -186,8 +186,8 @@ test('X6 Cassy draft: body is exactly {text, platform, guest_name}; the pick fil
 });
 test('X6 quick replies promise nothing about early check-in or late check-out (F9) and read the times from the shell setting', () => {
   const { X } = load(); const q = plain(X.lib.quickReplies({ check_out: '12:00', check_in: '14:00' }));
-  assert.equal(q[1].text, 'Check-in starts at 2:00 pm. If you would like to arrive earlier, we will check and come back to you.');
-  assert.equal(q[2].text, 'Check-out is at 12:00 noon. If you would like a later time, we will check and come back to you.');
+  assert.equal(q[1].text, 'Check-in begins at 2:00 pm, and we look forward to welcoming you. If an earlier arrival would help, please let us know your time and we will gladly check what is possible.');
+  assert.equal(q[2].text, 'Check-out is at 12:00 noon. If a later departure would make your day easier, please let us know and we will happily check what is possible for you.');
   for (const r of q) { assert.doesNotMatch(r.text, /ready|a little more time|see what we can do|!/); }
   assert.match(plain(X.lib.quickReplies({ check_out: '11:00', check_in: '15:00' }))[1].text, /3:00 pm/);
 });
