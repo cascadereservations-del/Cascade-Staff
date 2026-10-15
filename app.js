@@ -1458,7 +1458,7 @@
     if (H_al.busy || H_alSupport() !== 'ready') return Promise.resolve();
     H_al.busy = true; H_al.msg = ''; if (!quiet) { render(); if (current === 'more') renderMore(); }
     var P = window.C_Push, fail = function (sub, reason) { return Promise.resolve(sub && sub.unsubscribe ? sub.unsubscribe() : null).catch(function () {}).then(function () { return { ok: false, reason: reason }; }); };
-    return Promise.resolve(window.Notification.requestPermission()).then(function (perm) {
+    return Promise.resolve(quiet ? 'granted' : window.Notification.requestPermission()).then(function (perm) {
       if (perm !== 'granted') return { ok: false, reason: perm === 'denied' ? 'blocked' : 'later' };
       return H_pushKey().then(function (key) {
         if (!key) return { ok: false, reason: 'not_configured' };
