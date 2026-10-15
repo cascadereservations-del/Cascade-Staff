@@ -15,9 +15,9 @@ test('cleaner on a turnover day: one primary, Start cleaning, the existing check
   assert.match(h, /<a class="A_slide" data-slide href="[^"]+"[^>]*data-primary="start-cleaning"[^>]*>[^]*Start cleaning/);
 });
 
-test('cleaner on a quiet day: one primary, not the checklist', async () => {
+test('cleaner on a quiet day: no primary button, not the checklist', async () => {
   const h = await home('cleaner', quiet);
-  assert.equal(prim(h).length, 1); assert.notEqual(prim(h)[0], 'start-cleaning');
+  assert.equal(prim(h).length, 0, '3.4.1: no turnover, no primary button'); assert.doesNotMatch(h, /data-primary="cleaning-fee"/);
 });
 
 test('owner: one primary on either day type; Pay staff when a request waits, else the attention item or the calendar', async () => {

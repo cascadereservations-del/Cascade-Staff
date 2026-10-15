@@ -20,7 +20,7 @@
     url: 'https://qkgfhsdppslwunarczeq.supabase.co',
     key: 'sb_publishable_JFuRYZ9csmQULcMRmHXDSg_Abo9UeCj',
     propertyId: '6ae230f4-c189-4547-84b1-cb6e0b2cc9bd',
-    version: '3.4.0'
+    version: '3.4.1'
   };
   var LINKS = {
     checklist: 'https://cascadereservations-del.github.io/CH-Cleaners-Checklist/',
@@ -212,7 +212,8 @@
   function A_primary(staff, turn) {
     var cls = 'btn btn-primary btn-block A_primary';
     if (staff) {
-      var go = turn ? A_slideStart() : ''; if (go) return go;
+      if (!turn) return ''; // 3.4.1: no turnover, no primary button; the Cleaning fee row in the Work list already asks for it
+      var go = A_slideStart(); if (go) return go;
       return LINKS.pay ? '<a class="' + cls + '" data-primary="cleaning-fee" href="' + esc(H_payUrl()) + '">Ask for the cleaning fee</a>' : '<a class="' + cls + '" data-primary="calendar" href="#calendar">Open the calendar</a>';
     }
     if (LINKS.pay && state.payWait > 0 && /^(owner|admin|finance)$/.test(role() || '')) return '<a class="' + cls + '" data-primary="pay-staff" href="' + esc(H_payUrl('admin.html')) + '">Pay staff</a>';

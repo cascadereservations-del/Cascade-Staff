@@ -99,7 +99,7 @@ test('3.2.1 blocked card: every role, steps by device, Hide for 7 days', async (
 
 test('3.2.1 version 3.2.1, cache v21, What is new line', async () => {
   const CS = createRequire(import.meta.url)('../lib.js');
-  assert.match(read('sw.js'), /CACHE_NAME = 'cs-shell-v24'/); assert.match(read('app.js'), /version: '3.4.0'/);
+  assert.match(read('sw.js'), /CACHE_NAME = 'cs-shell-v25'/); assert.match(read('app.js'), /version: '3.4.1'/);
   for (const r of ['cleaner', 'owner']) assert.ok(CS.A_whatsNew(r, {}).some((i) => /Alerts now turn on by themselves when this phone allows them\. If they are blocked, Today shows how to allow them\./.test(i.text) && !/!/.test(i.text)));
 });
 
@@ -128,4 +128,14 @@ test('3.4.0 What is new line: suppliers, price history and photos, calm, no excl
   const CS = createRequire(import.meta.url)('../lib.js');
   for (const r of ['cleaner', 'owner']) assert.ok(CS.A_whatsNew(r, {}).some((i) => i.text === 'Suppliers, price history and item photos are in Inventory.'));
   assert.ok(read('sw.js').includes("'./stock/I_suppliers.js'") && read('sw.js').includes("'./stock/I_suppliers.css'"));
+});
+
+test('3.4.1 checklist: the kitchen card requires exactly the two named kitchen photos; the bedroom minimum is unchanged', () => {
+  const h = read('checklist/index.html');
+  const slots = h.match(/const K_PHOTO_SLOTS = \[([^]*?)\n\];/)[1];
+  assert.deepEqual([...slots.matchAll(/id: '([a-z_]+)'/g)].map((m) => m[1]), ['k_utensils', 'k_cookware']);
+  assert.match(h, /const K_KITCHEN_PHOTO_MIN\s*=\s*2;/); assert.match(h, /const SECTION_PHOTO_MIN\s*=\s*3;/);
+  assert.match(h, /label: 'bedroom',\s+photoMin: SECTION_PHOTO_MIN/); assert.match(h, /label: 'kitchen',\s+photoMin: K_KITCHEN_PHOTO_MIN/);
+  assert.match(h, /kitchenPhotos\.length < K_KITCHEN_PHOTO_MIN\) return false/);
+  assert.match(h, /Required &nbsp;·&nbsp; 2 kitchen photos/); assert.doesNotMatch(h, /3 bathroom|b_toilet|six spots/);
 });
