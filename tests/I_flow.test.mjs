@@ -168,11 +168,11 @@ test('I_flow opening an item and a tab go through navigate', async () => {
 test('I_flow header, order, chips and search', async () => {
   const e = await setup({ role: 'owner' });
   await e.mount('');
-  assert.match(e.html(), /2 items low/); assert.match(e.html(), /1 is out/);
+  assert.match(e.html(), /2 low/); assert.match(e.html(), /1 out/);
   assert.match(e.html(), /data-k="low" aria-pressed="true"/); // Low first is the default
   const order = [...e.html().matchAll(/class="t">([^<]+)</g)].map((m) => m[1]);
   assert.deepEqual(order, ['Hand soap', 'Toilet paper', 'Bath towels']); // out, low, ok; the inactive lamp is hidden
-  assert.match(e.html(), /✕<\/span> Out/); assert.match(e.html(), /▲<\/span> Low/); assert.match(e.html(), /✓<\/span> OK/);
+  assert.match(e.html(), /<\/svg> Out/); assert.match(e.html(), /<\/svg> Low/); assert.match(e.html(), /<\/svg> OK/);
   assert.match(e.html(), /data-k="c:Linen"/);
   await e.input('I_q', 'tow'); assert.deepEqual([...e.html().matchAll(/class="t">([^<]+)</g)].map((m) => m[1]), ['Bath towels']);
   await e.input('I_q', 'zzz'); assert.match(e.html(), /Nothing matches that search/);

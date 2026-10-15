@@ -36,7 +36,7 @@ for (const [name, w] of Object.entries(WRITES)) {
     const e = await make(w.who);
     await e.mount('');
     await w.go(e);
-    assert.match(bar(e), w.say); assert.match(bar(e), /↶<\/span> Undo/);
+    assert.match(bar(e), w.say); assert.match(bar(e), /<\/svg> Undo/);
     const before = e.client.calls.filter((c) => c[1] === w.fn).length;
     await e.act('undo', { 'data-id': barId(e) });
     assert.match(e.sheet(), w.confirm);

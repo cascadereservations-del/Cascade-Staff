@@ -77,8 +77,9 @@ export async function setup(o = {}) {
   let n = 0;
   const win = { crypto: { randomUUID: () => 'uuid-' + String(++n).padStart(8, '0') + '-aaaa-bbbb-cccc-dddddddddddd' } };
   if (!('flags' in o)) win.I_STOCK_FLAGS = { count: true, usage: true }; else if (o.flags) win.I_STOCK_FLAGS = o.flags;
-  const ctx = { window: win, navigator: nav, Date: FixedDate, console };
+  const ctx = { window: win, self: win, navigator: nav, Date: FixedDate, console };
   vm.createContext(ctx);
+  vm.runInContext(fs.readFileSync(path.join(here, '..', 'icons.js'), 'utf8'), ctx, { filename: 'icons.js' }); // the shell loads icons.js first; the module calls window.ICON
   vm.runInContext(fs.readFileSync(srcPath, 'utf8'), ctx, { filename: 'I_stock.js' });
   const root = new Root();
   const opts = { client, demo: !!o.demo, role, sub: o.sub || '', navigate: (h) => { navs.push(h); if (o.remount !== false) { const m = /^#stock\/?(.*)$/.exec(h); if (m) { const sub = m[1]; Promise.resolve().then(() => { opts.sub = sub; win.I_Stock.mount(root, opts); }); } } }, /* the shell re-mounts on a sub-route change */ toast: (m) => toasts.push(m), haptic: (k) => hapts.push(k) };

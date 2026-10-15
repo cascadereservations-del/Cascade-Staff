@@ -22,7 +22,7 @@ test('I_recent the last five cards, newest first, capped at five, with level gly
   assert.match(e.html(), /Recent/);
   await e.open('a'); await e.act('close'); // an older one moves to the front
   assert.deepEqual(names(e), ['a', 'g', 'f', 'e', 'd']);
-  assert.match(e.html(), /Item A <span aria-hidden="true">✕<\/span> Out/); assert.match(e.html(), /Item G <span aria-hidden="true">✓<\/span> OK/);
+  assert.match(e.html(), /Item A <svg[^>]*>.*?<\/svg> Out/); assert.match(e.html(), /Item G <svg[^>]*>.*?<\/svg> OK/);
   await e.act('open', { 'data-id': 'e' });
   assert.match(e.sheet(), /Item E/);
   assert.deepEqual(JSON.parse(ls.m.get('cs_I_recent')).ids.length, 5);

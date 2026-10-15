@@ -46,7 +46,7 @@ test('I_running-low the default quantity: 2 x reorder level when there is no par
 test('I_running-low already on the list: a disabled "On the shopping list" and no way to send it twice', async () => {
   const shop = [{ id: 's1', item_id: 'i1', item_name: 'Toilet paper', quantity: 2, purchase_unit: 'pack', reason: null, status: 'proposed', proposed_by: 'x', proposed_at: '2026-10-12T02:00:00Z' }];
   const e = await make('cleaner', { shop }); await e.mount(''); await e.open('i1');
-  assert.match(e.sheet(), /disabled><span aria-hidden="true">✓<\/span> On the shopping list/);
+  assert.match(e.sheet(), /disabled><svg[^>]*>.*?<\/svg> On the shopping list/);
   assert.ok(!kinds(e.sheet()).includes('low'));
   await e.begin('low'); // a hand-made click does nothing
   assert.doesNotMatch(e.sheet(), /Tell the owner/);

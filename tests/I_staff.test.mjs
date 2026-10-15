@@ -29,10 +29,10 @@ test('I_staff the cleaner sees Record use on the card by default (no flag set) a
 test('I_staff Undo of a use sends inventory_undo_v1 with the movement and asks first; no movement in the answer means no Undo bar', async () => {
   const e = await make('cleaner');
   await e.mount(''); await e.open('i1'); await e.begin('used'); await e.submit(); await e.submit();
-  assert.match(e.undo(), /Logged 1 rolls of Toilet paper as used/);
+  assert.match(e.undo(), /Logged 1 roll of Toilet paper as used/);
   const id = /data-id="(u\d+)"/.exec(e.undo())[1];
   await e.act('undo', { 'data-id': id });
-  assert.match(e.sheet(), /Put the 1 rolls of Toilet paper back\?/);
+  assert.match(e.sheet(), /Put the 1 roll of Toilet paper back\?/);
   assert.equal(e.client.rpcCalls('inventory_undo_v1').length, 0);
   await e.submit();
   assert.deepEqual(e.client.rpcCalls('inventory_undo_v1')[0][2], { p_movement_id: 'mov-u1', p_purchase_id: null });
