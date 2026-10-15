@@ -96,3 +96,18 @@ test('I_details the cleaner payload keys are never read: lastPrice and priceUp i
   await c.mount(''); await c.open('i1');
   assert.doesNotMatch(c.sheet(), /last PHP|Price up|12\.5/);
 });
+
+test('I_details r2 F6: the Where to buy button is a block so the price-up mark wraps under the text at 320 px', async () => {
+  const css = (await import('node:fs')).readFileSync(new URL('../stock/I_stock.css', import.meta.url), 'utf8');
+  assert.match(css, /\.I_whereb \{[^}]*display: block;/);
+});
+
+test('I_details r2 F10: with no Undo bar the toast says Details saved, not Levels saved, after a Kept in change', async () => {
+  let n = 0;
+  const e = await make('owner');
+  e.client.rpc = ((orig) => (name, a) => (name === 'inventory_item_update_v1' && ++n === 2 ? Promise.resolve({ data: null, error: { code: '42501', message: 'permission denied' } }) : orig(name, a)))(e.client.rpc.bind(e.client));
+  await e.mount(''); await e.open('i1'); await e.begin('levels'); await e.input('I_f_location', 'Shelf'); await e.submit(); await e.submit();
+  await e.act('undo', { 'data-id': /data-id="(u\d+)"/.exec(e.undo())[1] }); await e.submit(); // Undo refused: hidden for the visit
+  await e.open('i3'); await e.begin('levels'); await e.input('I_f_location', 'Shelf 2'); await e.submit(); await e.submit();
+  assert.match(e.toasts[e.toasts.length - 1], /^Details saved for Bath towels\./);
+});

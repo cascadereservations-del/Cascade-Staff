@@ -261,7 +261,7 @@
     Promise.resolve().then(function () { return me.client.rpc('get_inventory_catalogue_v1', { p_property_id: me.pid }); }).then(function (r) {
       if (me.dead) return;
       var items = r && !r.error ? normalizeCatalogue(r.data, me.role) : null;
-      if (items) { K.items = items; K.v84 = r.data.items.some(function (x) { return x && 'codes' in x; }); K.hasCounted = r.data.items.some(function (x) { return x && 'countedAt' in x; }); K.hasLoc = r.data.items.some(function (x) { return x && 'location' in x; }); K.at = nowMs(); me.loadErr = null; me.offlineStale = false; }
+      if (items) { K.inactiveCat = {}; r.data.items.forEach(function (x) { if (x && x.active === false && x.id) K.inactiveCat[String(x.id)] = String(x.category || ''); }); K.items = items; K.v84 = r.data.items.some(function (x) { return x && 'codes' in x; }); K.hasCounted = r.data.items.some(function (x) { return x && 'countedAt' in x; }); K.hasLoc = r.data.items.some(function (x) { return x && 'location' in x; }); K.at = nowMs(); me.loadErr = null; me.offlineStale = false; }
       else if (K.items) me.offlineStale = true;
       else me.loadErr = errKind(r && r.error, online()) === 'offline' ? 'offline' : 'unavailable';
     }, function (e) {
@@ -292,7 +292,10 @@
 
   /* ---- photos (s86 4.4): the bucket is private; the catalogue holds a storage path, upload-photo signs it for display */
   var SIGN_STALE = 6 * 86400000; // a signed link lasts 7 days
-  function photoUrl(it) { var c = it && it.photo && K.pu[it.photo]; return c && nowMs() - c.at < SIGN_STALE ? c.url : ''; }
+  // Signed links are kept on the phone with their time, so an app launch does not re-sign and re-download every thumbnail.
+  function puLoad() { if (K.puRead) return; K.puRead = true; try { var o = JSON.parse(root.localStorage.getItem('I_pu_v1') || 'null'); if (o) Object.keys(o).forEach(function (p) { if (o[p] && typeof o[p].url === 'string' && nowMs() - o[p].at < SIGN_STALE && !K.pu[p]) K.pu[p] = o[p]; }); } catch (e) { /* no store: sign again */ } }
+  function puSave() { try { var o = {}; Object.keys(K.pu).forEach(function (p) { if (nowMs() - K.pu[p].at < SIGN_STALE) o[p] = K.pu[p]; }); root.localStorage.setItem('I_pu_v1', JSON.stringify(o)); } catch (e) { /* private mode */ } }
+  function photoUrl(it) { puLoad(); var c = it && it.photo && K.pu[it.photo]; return c && nowMs() - c.at < SIGN_STALE ? c.url : ''; }
   function signPhotos() {
     var me = M; if (!me || me.demo || !me.client || !me.client.functions || !me.client.functions.invoke || K.denied.sign || !K.items) return;
     var seen = {}, paths = [];
@@ -302,6 +305,7 @@
         if (r && r.error) throw r.error;
         var urls = r && r.data && r.data.urls; if (!urls) return;
         Object.keys(urls).forEach(function (p) { if (typeof urls[p] === 'string') K.pu[p] = { url: urls[p], at: nowMs() }; });
+        puSave();
         if (!me.dead && M === me) drawList(); // rows only: a card or file picker that is open is left alone
       }).catch(function (e) { var k = errKind(e, online()); if (k === 'missing' || k === 'refused') K.denied.sign = true; /* thumbnails stay as placeholders */ });
     })(paths.slice(n, n + 200));
@@ -344,7 +348,8 @@
     }).then(function (u) {
       if (u && u.error) throw u.error;
       if (!u || !u.data || u.data.ok === false || !u.data.path) throw { message: 'failed', data: u && u.data || {} };
-      if (u.data.signedUrl) K.pu[u.data.path] = { url: u.data.signedUrl, at: nowMs() };
+      if (u.data.signedUrl) { K.pu[u.data.path] = { url: u.data.signedUrl, at: nowMs() }; puSave(); }
+      a.newPath = u.data.path;
       var c = photoSetCall(a.itemId, u.data.path);
       return me.client.rpc(c.fn, c.args);
     });
@@ -380,7 +385,7 @@
     var me = M;
     return { client: me.client, role: me.role, propertyId: me.pid, esc: esc, toast: toast, nowMs: nowMs, haptic: function (k) { if (me.opts.haptic) { try { me.opts.haptic(k); } catch (e) { /* no haptics */ } } },
       confirm: function (text) { return new Promise(function (res) { var prev = M && M.act; if (!M) return res(false); M.act = { kind: 'cconfirm', text: String(text), res: res, prev: prev || null, step: 'confirm' }; drawLayer(); }); },
-      undo: function (label, fn, o) { var e = { id: 'u' + (++K.uidn), itemId: o && o.itemId ? String(o.itemId) : null, name: label, at: nowMs(), kind: 'sup', say: String(label), line: String(label), confirm: 'Undo: ' + label + '?', call: { fn: 'sup_undo', args: {}, exec: fn } }; pushUndoEntry(e); drawUndo(); } };
+      undo: function (label, fn, o) { var e = { id: 'u' + (++K.uidn), itemId: o && o.itemId ? String(o.itemId) : null, name: label, at: nowMs(), kind: 'sup', say: String(label), line: String(label), confirm: 'Undo: ' + label + '?', call: { fn: 'sup_undo', args: {}, exec: fn } }; pushUndoEntry(e); if (M && M.act && M.act.kind === 'menu' && e.itemId && M.act.itemId === e.itemId) drawLayer(); else drawUndo(); } };
   }
   function cconfirmDone(a, yes) { if (M && M.act === a) { M.act = a.prev; drawLayer(); } if (a.res) { var r = a.res; a.res = null; r(!!yes); } }
   // One Supplier field: the picker button when the module is here, the old text box when it is not (or when the picker returned nothing).
@@ -661,7 +666,7 @@
   function hasLabel(i) { return i.codes.some(function (c) { return /^CH-/.test(c); }); }
   function labelPool(a) { return (K.items || []).filter(function (i) { return noCode(i) || (a.withLabel && hasLabel(i)); }).sort(byName); }
   function labelRows(a) { return labelPool(a).filter(function (i) { return !a.cat || i.category === a.cat; }); }
-  function labelIds(a) { return (K.items || []).filter(function (i) { return a.sel && a.sel[i.id]; }).map(function (i) { return i.id; }); }
+  function labelIds(a) { var vis = {}; labelRows(a).forEach(function (i) { vis[i.id] = 1; }); return (K.items || []).filter(function (i) { return a.sel && a.sel[i.id] && vis[i.id]; }).map(function (i) { return i.id; }); } // only what is shown under the filter is sent
   function plural(n, one, many) { return n + ' ' + (n === 1 ? one : many); }
   function renderLabels(a) {
     var ids = labelIds(a), mint = ids.filter(function (id) { return noCode(itemById(id)); }).length;
@@ -716,14 +721,15 @@
     var n = catCounts()[UNCAT] || 0;
     return head('Let Cassy sort ' + plural(n, 'item', 'items') + '?') + '<form data-i-form><p class="I_conf">Cassy moves each one to the closest category you already have. Anything she is not sure about stays in Uncategorised.</p>' + errBox(a) + actions(a, 'Yes, sort them') + '</form>';
   }
-  function catUndo(results) {
+  function catUndo(results, remaining) {
+    var more = remaining > 0 ? '. ' + remaining + ' more are waiting' : '';
     var e = { id: 'u' + (++K.uidn), itemId: null, name: '', at: nowMs(), kind: 'sort' };
     if (results.length === 1) {
-      var r = results[0]; e.say = 'Cassy put ' + r.name + ' in ' + r.after; e.line = 'sorted it into ' + r.after; e.confirm = 'Put ' + r.name + ' back in ' + r.before + '?';
+      var r = results[0]; e.say = 'Cassy put ' + r.name + ' in ' + r.after + more; e.line = 'sorted it into ' + r.after; e.confirm = 'Put ' + r.name + ' back in ' + r.before + '?';
       e.call = { fn: 'inventory_item_update_v1', args: { p_item_id: r.item_id, p_patch: { category: r.before } } }; return e;
     }
     var gr = groupBefore(results.map(function (x) { return { id: x.item_id, before: x.before }; }));
-    e.say = 'Cassy sorted ' + results.length + ' items'; e.line = 'sorted items'; e.confirm = 'Put the ' + results.length + ' items back where they were?';
+    e.say = 'Cassy sorted ' + results.length + ' items' + more; e.line = 'sorted items'; e.confirm = 'Put the ' + results.length + ' items back where they were?';
     e.call = recatCall(M.pid, gr[0].ids, gr[0].before); e.more = gr.slice(1).map(function (g) { return recatCall(M.pid, g.ids, g.before); }); return e;
   }
   // A new item left on "Let Cassy choose": ask inventory-categorise once. Any failure leaves it in Uncategorised; a missing function hides the option for the visit.
@@ -978,14 +984,14 @@
     if (a.kind === 'report') return reportCall(a.vals);
     if (a.kind === 'photo') return { exec: function () { return uploadAndSet(a); } };
     if (a.kind === 'photoremove') return photoSetCall(a.itemId, null);
-    if (a.kind === 'rename') return recatCall(M.pid, (K.items || []).filter(function (i) { return i.category === a.from; }).map(function (i) { return i.id; }), mergeTarget(a.from, a.vals.to) || String(a.vals.to).trim());
+    if (a.kind === 'rename') return recatCall(M.pid, (K.items || []).filter(function (i) { return i.category === a.from; }).map(function (i) { return i.id; }).concat(Object.keys(K.inactiveCat || {}).filter(function (id) { return K.inactiveCat[id] === a.from; })), mergeTarget(a.from, a.vals.to) || String(a.vals.to).trim());
     if (a.kind === 'labels') return { exec: function () { return labelsExec(a); } };
     if (a.kind === 'sort') return { invoke: 'inventory-categorise', body: { all: true } };
     var r = (K.shop || []).filter(function (x) { return x.id === a.shopId; })[0];
     return shopSetCall(M.pid, r, a.status, a.key);
   }
   var DONE = { count: function (it) { return 'Counted. ' + it.name + ' is saved.'; }, used: function () { return 'Logged. Thank you.'; }, recv: function (it) { return 'Stock received for ' + it.name + '.'; }, shop: function () { return 'Added to the shopping list.'; }, shopset: function (it, a) { return a.status === 'approved' ? 'Approved.' : 'Removed from the list.'; },
-    undo: function () { return 'Undone.'; }, unlink: function () { return 'Unlinked.'; }, low: function () { return 'Passed on. Thank you.'; }, link: function (it) { return 'Linked. Scanning it now opens ' + it.name + '.'; }, price: function (it) { return 'Price saved for ' + it.name + '.'; }, levels: function (it) { return 'Levels saved for ' + it.name + '.'; },
+    undo: function () { return 'Undone.'; }, unlink: function () { return 'Unlinked.'; }, low: function () { return 'Passed on. Thank you.'; }, link: function (it) { return 'Linked. Scanning it now opens ' + it.name + '.'; }, price: function (it) { return 'Price saved for ' + it.name + '.'; }, levels: function (it, a) { return (detailsChanges(it, a.vals || {}) ? 'Details' : 'Levels') + ' saved for ' + it.name + '.'; },
     create: function (it, a) { return 'Added ' + String(a.vals.name).trim() + '.'; }, report: function (it, a) { return 'Sent to the ' + (a.vals.to === 'finance' ? 'Finance' : 'OPS') + ' group.'; },
     photo: function (it) { return 'Photo saved for ' + it.name + '.'; }, photoremove: function (it) { return 'Photo removed from ' + it.name + '.'; }, labels: function () { return 'Label sheet sent to the Finance group.'; },
     rename: function (it, a) { var n = (a.res && a.res.moved || []).length; return 'Moved ' + n + (n === 1 ? ' item' : ' items') + ' into ' + (mergeTarget(a.from, a.vals.to) || String(a.vals.to).trim()) + '.'; },
@@ -1027,6 +1033,7 @@
   function fail(me, a, e, body, rep) {
     var why = body && (body.reason || body.error);
     a.sending = false;
+    if (a.kind === 'sort') K.catAt = 0; // a sort that did not happen does not hold the next one
     if (a.mintedDone) { a.err = 'labelsend'; return drawLayer(); } // the codes exist; only the sheet is missing
     if (why === 'item_not_found') { a.err = 'other'; return drawLayer(); }
     if (why === 'code_taken') { a.err = 'taken'; a.takenId = body.item_id || null; a.takenName = body.item_name || (itemById(body.item_id) || {}).name || ''; return drawLayer(); }
@@ -1269,7 +1276,7 @@
       e.confirm = 'Put the ' + d.moved.length + (d.moved.length === 1 ? ' item' : ' items') + ' back in ' + (gr.length === 1 ? gr[0].before : 'their old categories') + '?';
       e.call = recatCall(M.pid, gr[0].ids, gr[0].before); e.more = gr.slice(1).map(function (g) { return recatCall(M.pid, g.ids, g.before); });
     } else if (a.kind === 'sort' && d.results && d.results.length) {
-      return catUndo(d.results);
+      return catUndo(d.results, d.remaining);
     } else return null;
     return e;
   }

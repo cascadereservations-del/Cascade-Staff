@@ -114,8 +114,7 @@ test('I_bought-supplier pick gets preferredId from the item supplier; ctx.undo w
   await e.mount(''); await e.open('i1'); await e.begin('recv'); await e.act('pick-sup');
   assert.equal(j(log[0]), j({ itemId: 'i1', preferredId: 'sup-7', selectedId: null }));
   ctx.undo('Linked KCC', async () => ({ data: { ok: true }, error: null }), { itemId: 'i1' });
-  await e.act('back'); await e.mount('item/i1');
-  assert.match(e.sheet(), /Last change: Linked KCC/);
-  const o = await make({ sup: stub(null) }); await o.mount(''); await o.open('i1'); await o.begin('recv'); await o.act('pick-sup');
-  const none = await make({ sup: stub(null) }); await none.mount(''); await none.open('i2'); await none.begin('recv');
+  await e.act('back'); // the card is open: no remount
+  ctx.undo('Linked again', async () => ({ data: { ok: true }, error: null }), { itemId: 'i1' });
+  assert.match(e.sheet(), /Last change: Linked again/); // the open card is redrawn at once
 });

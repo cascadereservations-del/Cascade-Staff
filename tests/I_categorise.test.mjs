@@ -97,3 +97,26 @@ test('I_categorise nothing moved reads calmly and offers no Undo; Sort is not sh
   assert.match(e.toasts[e.toasts.length - 1], /Nothing was moved/); assert.equal(bar(e), '');
   const c = await make('cleaner'); await c.mount(''); assert.doesNotMatch(c.html(), /Sort uncategorised|Tidy categories/);
 });
+
+test('I_categorise r2 F8: when more items are waiting the Undo bar says so', async () => {
+  const e = await make('owner', { fn: { 'inventory-categorise': () => ({ data: { ok: true, remaining: 7, results: sorted.data.results }, error: null }) } });
+  await e.mount(''); await e.act('tidy'); await e.act('sort'); await e.submit();
+  assert.match(bar(e), /Cassy sorted 2 items/); assert.match(bar(e), /7 more are waiting/);
+});
+
+test('I_categorise r2 F9: a sort that fails does not start the 30 second hold', async () => {
+  let n = 0;
+  const e = await make('owner', { fn: { 'inventory-categorise': () => (++n === 1 ? { data: null, error: { name: 'FunctionsHttpError', context: { status: 500 } } } : sorted) } });
+  await e.mount(''); await e.act('tidy'); await e.act('sort'); await e.submit();
+  assert.doesNotMatch(e.sheet(), /wait half a minute/);
+  await e.submit();
+  assert.equal(e.client.fnCalls('inventory-categorise').length, 2);
+  assert.match(bar(e), /Cassy sorted 2 items/);
+});
+
+test('I_categorise r2 F11: rename also moves inactive items so they do not bring the old name back', async () => {
+  const cat = raw(); cat.items.push(item('i6', 'Old plunger', 1, 0, { category: 'Utility', active: false }));
+  const e = await setup({ role: 'owner', client: mockClient({ catalogue: cat, rpc: { inventory_items_recategorize_v1: (a) => ({ data: { ok: true, moved: a.p_item_ids.map((id) => ({ id, before: 'Utility' })) }, error: null }) } }) });
+  await e.mount(''); await e.act('tidy'); await e.act('rename', { 'data-cat': 'Utility' }); await e.input('I_f_to', 'Bathroom'); await e.submit(); await e.submit();
+  assert.equal(j(e.client.rpcCalls('inventory_items_recategorize_v1')[0][2].p_item_ids), j(['i1', 'i6']));
+});

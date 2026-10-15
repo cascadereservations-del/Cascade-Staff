@@ -70,3 +70,12 @@ test('I_labels probe-and-hide: R9 missing hides the button for the visit with a 
   assert.match(e.toasts[e.toasts.length - 1], /not available right now/);
   assert.doesNotMatch(e.html(), /Print QR labels/); assert.equal(e.client.fnCalls('inventory-report').length, 0);
 });
+
+test('I_labels r2 F7: only the items visible under the active filter are sent', async () => {
+  const e = await make(); await e.mount(''); await e.act('labels');
+  await e.act('lab-cat', { 'data-k': 'Kitchen' }); await e.submit();
+  assert.match(e.sheet(), /Make QR codes for 1 item and/);
+  await e.submit();
+  assert.equal(j(e.client.rpcCalls('inventory_code_mint_v1')[0][2].p_item_ids), j(['i2']));
+  assert.equal(j(e.client.fnCalls('inventory-report')[0][2].item_ids), j(['i2']));
+});

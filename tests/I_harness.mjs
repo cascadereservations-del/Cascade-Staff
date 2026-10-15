@@ -107,6 +107,7 @@ export async function setup(o = {}) {
   const timeouts = [];
   win.setTimeout = (fn, ms) => { timeouts.push({ fn, ms, on: true }); return timeouts.length; };
   win.clearTimeout = (id) => { if (timeouts[id - 1]) timeouts[id - 1].on = false; };
+  if (o.ls) win.localStorage = { getItem: (k) => (k in o.ls ? o.ls[k] : null), setItem: (k, v) => { o.ls[k] = String(v); }, removeItem: (k) => { delete o.ls[k]; } };
   if (o.doc) {
     win.document = fakeDocument(o.doc, win); win.btoa = globalThis.btoa; win.revoked = [];
     win.createImageBitmap = async () => ({ width: o.doc.w || 4000, height: o.doc.h || 3000, close() {} });

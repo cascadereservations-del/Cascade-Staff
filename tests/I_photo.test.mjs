@@ -172,3 +172,26 @@ test('I_photo demo: a photo is resized and previewed but nothing is sent', async
   await e.submit();
   assert.match(e.toasts[e.toasts.length - 1], /Demo only/);
 });
+
+test('I_photo r2 F3: after a save the list and card show the new picture at once, before the reload answers', async () => {
+  let loads = 0;
+  const e = await make('owner', { rpc: { get_inventory_catalogue_v1: () => (++loads === 1 ? { data: raw(), error: null } : new Promise(() => {})) } });
+  await e.mount(''); await choose(e); await e.submit();
+  assert.ok(e.root.kids.list.innerHTML.includes(URLN)); // the row thumbnail
+  await e.open('i2'); assert.ok(e.sheet().includes(URLN));
+});
+
+test('I_photo r2 F5: signed links are kept in localStorage with their time; a new visit does not sign again, and re-signs when under a day is left', async () => {
+  const ls = {};
+  const a = await setup({ role: 'owner', ls, client: mockClient({ catalogue: raw(), fn: { 'upload-photo': upload } }) });
+  await a.mount('');
+  assert.equal(signs(a).length, 1); assert.ok(JSON.parse(ls.I_pu_v1)[P1].url === URL1);
+  const b = await setup({ role: 'owner', ls, client: mockClient({ catalogue: raw(), fn: { 'upload-photo': upload } }) });
+  await b.mount('');
+  assert.equal(JSON.stringify(signs(b).map((c) => c[2].paths)), JSON.stringify([[P2]])); // P1 came from the store
+  assert.ok(b.root.kids.list.innerHTML.includes(URL1));
+  const old = JSON.parse(ls.I_pu_v1); old[P1].at = Date.parse(NOW) - 6.5 * 86400000; ls.I_pu_v1 = JSON.stringify(old);
+  const c = await setup({ role: 'owner', ls, client: mockClient({ catalogue: raw(), fn: { 'upload-photo': upload } }) });
+  await c.mount('');
+  assert.ok(signs(c)[0][2].paths.includes(P1));
+});
