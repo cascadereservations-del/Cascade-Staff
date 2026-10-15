@@ -563,7 +563,7 @@
     if (a.kind === 'history') return renderHistory(a, it);
     if (a.kind === 'photo' || a.kind === 'photoremove') return renderPhoto(a, it);
     if (a.kind === 'unlink') return head('Unlink code ' + shortCode(a.code) + ' from ' + it.name + '?') + '<form data-i-form><p class="I_conf">Scanning this code will no longer open ' + esc(it.name) + '.</p>' + actions(a, 'Yes, unlink it') + '</form>';
-    if (a.kind === 'low') return head('Tell the owner ' + it.name + ' is running low?') + '<form data-i-form><p class="I_conf">It goes on the shopping list for ' + esc(uq(lowQty(it), it.purchaseUnit || unitOf(it))) + '.</p>' + actions(a, 'Yes, tell them') + '</form>';
+    if (a.kind === 'low') return head(canManage(M.role) ? 'Add ' + it.name + ' to the shopping list?' : 'Tell the owner ' + it.name + ' is running low?') + '<form data-i-form><p class="I_conf">It goes on the shopping list for ' + esc(uq(lowQty(it), it.purchaseUnit || unitOf(it))) + '.</p>' + actions(a, canManage(M.role) ? 'Yes, add it' : 'Yes, tell them') + '</form>';
     if (a.kind === 'link') return head('Link code ' + shortCode(a.code) + ' to ' + it.name + '?') + '<form data-i-form><p class="I_conf">Scanning this code will open ' + esc(it.name) + '.</p>' + actions(a, 'Yes, link it') + '</form>';
     if (a.kind === 'menu') {
       var info = M.itemInfo[it.id], shopN = (K.shop || []).filter(function (r) { return r.itemId === it.id; }).length, cover = it.cover != null ? fmt(it.cover) + ' days' : it.coverEst != null ? 'about ' + fmt(it.coverEst) + ' days (an estimate)' : '';
