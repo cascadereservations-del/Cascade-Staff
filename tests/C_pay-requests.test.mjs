@@ -35,7 +35,7 @@ test('Your requests: her own rows from staff_pay_my_requests_v1, each with the t
   const h = b.root.innerHTML;
   assert.equal((h.match(/class="C_step"/g) || []).length, 9, 'three steps for each of the three open or paid requests');
   assert.match(h, /data-state="done"[^>]*>[^<]*<svg[^]*?Requested/); assert.match(h, /Requested/); assert.match(h, /Paying/); assert.match(h, /Paid/);
-  assert.match(h, /Ref AAAA0001 · sent Oct 10 · paid Oct 15 · Bank ref 1234 5678/); assert.match(h, /Ref BBBB0002/);
+  assert.match(h, /Ref AAAA0001 · sent 10 Oct · paid 15 Oct · Bank ref 1234 5678/); assert.match(h, /Ref BBBB0002/);
   assert.match(h, /pill p-neutral[^>]*>[^]*?Cancelled/);
   assert.doesNotMatch(h, /OLD00001/, 'the older list is not used when her own list answered');
   const paid = h.split('Ref AAAA0001')[1].split('Ref BBBB0002')[0]; assert.match(paid, /data-state="now"[^>]*>[^<]*<svg[^]*?Paid/);

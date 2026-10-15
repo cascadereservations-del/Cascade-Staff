@@ -40,9 +40,9 @@ test('P_ list: three groups when the server sends unrequested; each staff card n
   const b = bootAdmin({ rpc: (n) => ({ staff_pay_admin_list_v1: LIST([OPEN, PAID], UNREQ) }[n]) }); await tick();
   const h = b.root.innerHTML;
   assert.ok(h.indexOf('To pay') < h.indexOf('Not yet requested') && h.indexOf('Not yet requested') < h.indexOf('Paid recently'), 'order');
-  assert.match(h, /data-act="pay" data-id="req1"/); assert.match(h, /Pay ›/);
-  assert.match(h, /data-act="unreq" data-id="u-2"/); assert.match(h, /Marites · <span class="num">₱1,340<\/span>/); assert.match(h, /2 cleans · 1 expense · not requested yet/);
-  assert.match(h, /Paid Oct 9 · Ref ZZZZ0001 · by Marifel/); assert.doesNotMatch(h, /data-id="old1"/, 'a paid row is a record, not a button');
+  assert.match(h, /data-act="pay" data-id="req1"/); assert.match(h, /<span class="P_go btn btn-primary">Pay<\/span>/);
+  assert.match(h, /data-act="unreq" data-id="u-2"/); assert.match(h, /<span class="P_amt num">₱1,340<\/span><span class="t">Marites<\/span>/); assert.match(h, /2 cleans · 1 expense · not requested yet/);
+  assert.match(h, /Paid 9 Oct · Ref ZZZZ0001 · by Marifel/); assert.doesNotMatch(h, /data-id="old1"/, 'a paid row is a record, not a button');
   assert.doesNotMatch(h, /Nothing to pay right now/);
 });
 
@@ -151,7 +151,7 @@ test('P_ ?clean=<session_id> ticks that clean only (expenses stay ticked); an un
 
 test('P_ transport toggle is one row, label on the left and the switch on the right, with its own accessible name (H7)', async () => {
   const b = bootPay(); await until(() => /Not yet paid/.test(b.root.innerHTML), 'list');
-  assert.match(b.root.innerHTML, /<button class="sw P_tr" type="button" role="switch" aria-checked="false" aria-label="Add ₱150 transport for Oct 2 Fri" data-sw="s-1"><span>Transport \+₱150<\/span><i aria-hidden="true"><\/i><\/button>/);
+  assert.match(b.root.innerHTML, /<button class="sw P_tr" type="button" role="switch" aria-checked="false" aria-label="Add ₱150 transport for Fri 2 Oct" data-sw="s-1"><span>Transport \+₱150<\/span><i aria-hidden="true"><\/i><\/button>/);
   assert.doesNotMatch(b.root.innerHTML, /added for this clean/);
   // the 44 px height is a layout fact: measured in a real browser (258x44), not asserted from stylesheet text
 });
@@ -166,7 +166,7 @@ test('P_ expectation line sits under the stepper of an open request and not unde
 test('P_ chrome: Today is current, badges come from the hash, Back is the app home unless the link came from the app', async () => {
   const b = bootPay({ hash: '#tasks=2&cal=3' }); await until(() => /Not yet paid/.test(b.root.innerHTML), 'list');
   const h = b.root.innerHTML;
-  assert.match(h, /<a class="tab" href="\.\.\/#home" aria-current="page">/); assert.equal((h.match(/aria-current="page"/g) || []).length, 1);
+  assert.match(h, /<a class="tab" href="\.\.\/#home"><span/); assert.equal((h.match(/aria-current="page"/g) || []).length, 0, 'B3: a pay page marks no tab');
   assert.match(h, /<span class="badge" aria-label="3 warnings">3<\/span>/); assert.match(h, /<span class="badge" aria-label="2 due">2<\/span>/);
   assert.match(h, /<a class="iconbtn" href="\.\.\/#home" aria-label="Back" data-p-back="1">/);
   assert.doesNotMatch(bootPay().root.innerHTML + h.replace(/#tasks=2&cal=3/, ''), /class="badge" aria-label="0/);
@@ -179,7 +179,7 @@ test('P_ chrome: Today is current, badges come from the hash, Back is the app ho
 test('P_ chrome: both pages carry the ambient background and the admin page uses the same bar and tab bar', async () => {
   // the A_bg block is static HTML: proven in a real browser, not here
   const b = bootAdmin({ rpc: (n) => ({ staff_pay_admin_list_v1: LIST([OPEN]) }[n]) }, { location: { hash: '#tasks=1&cal=0', search: '' } }); await tick();
-  assert.match(b.root.innerHTML, /aria-current="page"/); assert.match(b.root.innerHTML, /aria-label="1 due"/); assert.match(b.root.innerHTML, /<nav class="tabbar" aria-label="Primary">/);
+  assert.doesNotMatch(b.root.innerHTML, /aria-current="page"/); assert.match(b.root.innerHTML, /aria-label="1 due"/); assert.match(b.root.innerHTML, /<nav class="tabbar" aria-label="Primary">/);
 });
 
 test('P_ unreachable states stay calm: not authorised and not ready read as sentences, with no staff list', async () => {
@@ -274,4 +274,27 @@ test('P_ self: an entry marked self shows the card with no Pay now and no create
     const c = bootAdmin({ rpc: (n) => ({ staff_pay_admin_list_v1: LIST([], UNREQ), staff_pay_admin_create_v1: { data: { ok: false, reason }, error: null } }[n]) }); await openUn(c);
     await click(c, { 'data-act': 'u-pay' }); await until(() => text.test(c.root.innerHTML), reason);
   }
+});
+
+test('B3: Pay is one filled 44 px button, Review is ghost, the amount sits over the name, dates read 15 Oct, no tab is marked', async () => {
+  const b = bootAdmin({ rpc: (n) => ({ staff_pay_admin_list_v1: LIST([OPEN, { ...OPEN, id: 'req2', ref: 'EFGH5678' }], UNREQ) }[n]) }); await tick();
+  const h = b.root.innerHTML;
+  assert.equal((h.match(/class="P_go btn btn-primary"/g) || []).length, 1, 'one filled button per screen');
+  assert.equal((h.match(/class="P_go btn btn-ghost">Pay</g) || []).length, 1, 'the second Pay is quiet');
+  assert.match(h, /class="P_go btn btn-ghost">Review<\/span>/);
+  assert.match(h, /<span class="P_amt num">₱500<\/span><span class="t">Honey<\/span>/);
+  assert.match(h, /sent 13 Oct/); assert.doesNotMatch(h, /Oct 13/);
+  assert.doesNotMatch(h, /aria-current="page"/);
+  const css = (await import('node:fs')).readFileSync(new URL('../pay/C_pay.css', import.meta.url), 'utf8');
+  assert.match(css, /\.P_amt \{[^}]*font: 650 1\.25rem[^}]*tabular-nums/); assert.match(css, /\.P_go \{[^}]*min-height: var\(--v5-touch\)/);
+});
+
+test('B3 r2: the filled Pay goes to the first row that has a Pay button; admin-lib dates read 15 Oct', async () => {
+  const other = { ...OPEN, id: 'req0', ref: 'OTHR0000', status: 'paying', paying_by_user_id: 'someone-else', paying_by_name: 'Marifel' };
+  const b = bootAdmin({ rpc: (n) => ({ staff_pay_admin_list_v1: LIST([other, OPEN], []) }[n]) }); await tick();
+  const h = b.root.innerHTML;
+  assert.equal((h.match(/P_go btn btn-primary/g) || []).length, 1, 'a filled Pay is on screen');
+  assert.match(h, /data-id="req1"><span class="lead">[\s\S]*?P_go btn btn-primary">Pay/);
+  assert.equal((await import('../pay/C_admin-lib.js')).default.status({ status: 'paid', paid_at: '2026-10-09T04:00:00Z' }).label, 'Paid 9 Oct');
+  assert.equal((await import('../pay/C_admin-lib.js')).default.lineText({ kind: 'clean', date: '2026-10-02', type: 'turnover', amount: 500 }).slice(0, 9), 'Fri 2 Oct');
 });

@@ -37,7 +37,7 @@
 
   var S = { listNote: '', unreq: null, u: null, K: P.keyKeeper(undefined, null), me: null, listMsg: '', confirmTake: '', sentMarked: false, view: 'list', list: null, loadErr: '', req: null, qr: null, noQr: false, showStatic: false, form: { file: null, amount: '', reference: '', override: false, uploaded: null }, busy: false, msg: '', msgOk: false, copied: '' };
 
-  function shell(title, inner, back) { return P.P_shell(title, inner, { back: back, icon: ICON, esc: esc, hash: P.P_hash(window) }); } // F7: the app's own bar and tab bar, badges from the hash
+  function shell(title, inner, back) { return P.P_shell(title, inner, { back: back, icon: ICON, esc: esc, hash: P.P_hash(window) }).replace(' aria-current="page"', ''); } // B3: a pay page is not "Today", so no tab is marked // F7: the app's own bar and tab bar, badges from the hash
   P.P_wireBack(window);
   function net() { return (DEMO ? function () { return Promise.resolve({ json: function () { return Promise.resolve({ ok: true, path: 'demo/path', sha256: new Array(65).join('d') }); } }); } : window.fetch).apply(window, arguments); }
   function token() { return sb.auth.getSession().then(function (s) { var t = s.data && s.data.session && s.data.session.access_token; if (!t) throw new Error('signin'); S.me = (s.data.session.user && s.data.session.user.id) || S.me; return t; }); }
@@ -55,8 +55,11 @@
     }).catch(function (e) { S.loadErr = e && e.message === 'signin' ? 'signin' : 'offline'; });
   }
   // Who may press Pay: a requested row, or a paying row this signed-in person started. Anyone else's (or Telegram's) paying row has no Pay button.
+  function ds(iso) { return CS.dayShort(String(iso).slice(0, 10)); } // "Fri 2 Oct"
+  function dm(iso) { return CS.dayLabel(String(iso).slice(0, 10)); } // B3: "15 Oct", the shell's own style (CS.dayLabel)
   function theirs(r) { return r.status === 'paying' && !(S.me && r.paying_by_user_id === S.me); }
-  function row(r) {
+  function row(r, firstId) {
+    var first = r.id === firstId; // one filled button per screen: the first row that renders a Pay button
     var st = A.status(r), other = theirs(r), who = r.paying_by_name || 'Someone';
     if (other) {
       return '<div class="rowi C_row" style="cursor:default"><span class="lead">' + ICON('cash') + '</span><span class="mid"><span class="t">' + esc(r.payee_name) + ' · <span class="num">' + esc(P.peso(r.total)) + '</span></span>' +
@@ -68,29 +71,30 @@
           : '<div class="row-wrap"><button class="btn btn-secondary btn-sm" type="button" data-act="takeover-ask" data-id="' + esc(r.id) + '">I am paying it instead</button></div>') + '</div>';
     }
     // the whole card is the button (F15); the status pill sits under it
-    return '<button type="button" class="rowi C_row" data-act="pay" data-id="' + esc(r.id) + '"><span class="lead">' + ICON('cash') + '</span><span class="mid"><span class="t">' + esc(r.payee_name) + ' · <span class="num">' + esc(P.peso(r.total)) + '</span></span>' +
-      '<span class="s num">Ref ' + esc(r.ref) + (r.created_at ? ' · sent ' + esc(P.shortDate(r.created_at)) : '') + '</span></span><span class="P_go">Pay ›</span></button>' +
+    return '<button type="button" class="rowi C_row P_row" data-act="pay" data-id="' + esc(r.id) + '"><span class="lead">' + ICON('cash') + '</span><span class="mid"><span class="P_amt num">' + esc(P.peso(r.total)) + '</span><span class="t">' + esc(r.payee_name) + '</span>' +
+      '<span class="s num">Ref ' + esc(r.ref) + (r.created_at ? ' · sent ' + esc(dm(r.created_at)) : '') + '</span></span><span class="P_go btn ' + (first ? 'btn-primary' : 'btn-ghost') + '">Pay</span></button>' +
       '<div class="C_rowstatus"><span class="pill p-' + st.tone + '">' + ICON(st.glyph, 's16') + esc(st.label) + '</span></div>';
   }
   // PAID RECENTLY: date, ref and who paid. Not tappable: it is a record, so "did I already pay her?" has an answer.
   function paidRow(r) {
     var by = r.paid_by_name || r.paying_by_name;
-    return '<div class="rowi C_row" style="cursor:default"><span class="lead">' + ICON('checks') + '</span><span class="mid"><span class="t">' + esc(r.payee_name) + ' · <span class="num">' + esc(P.peso(r.total)) + '</span></span>' +
-      '<span class="s num">' + (r.paid_at ? 'Paid ' + esc(P.shortDate(r.paid_at)) + ' · ' : '') + 'Ref ' + esc(r.ref) + (by ? ' · by ' + esc(by) : '') + '</span></span></div>';
+    return '<div class="rowi C_row P_row" style="cursor:default"><span class="lead">' + ICON('checks') + '</span><span class="mid"><span class="P_amt num">' + esc(P.peso(r.total)) + '</span><span class="t">' + esc(r.payee_name) + '</span>' +
+      '<span class="s num">' + (r.paid_at ? 'Paid ' + esc(dm(r.paid_at)) + ' · ' : '') + 'Ref ' + esc(r.ref) + (by ? ' · by ' + esc(by) : '') + '</span></span></div>';
   }
   function unreqRow(u) {
     var n = (u.sessions || []).length, m = (u.claims || []).length, bits = [];
     if (n) bits.push(P.P_plural(n, 'clean'));
     if (m) bits.push(P.P_plural(m, 'expense'));
-    return '<button type="button" class="rowi C_row" data-act="unreq" data-id="' + esc(u.payee_user_id) + '"><span class="lead">' + ICON('cash') + '</span><span class="mid"><span class="t">' + esc(u.payee_name) + ' · <span class="num">' + esc(P.peso(u.total)) + '</span></span>' +
-      '<span class="s">' + esc(bits.join(' · ')) + ' · not requested yet</span></span><span class="P_go">Review ›</span></button>';
+    return '<button type="button" class="rowi C_row P_row" data-act="unreq" data-id="' + esc(u.payee_user_id) + '"><span class="lead">' + ICON('cash') + '</span><span class="mid"><span class="P_amt num">' + esc(P.peso(u.total)) + '</span><span class="t">' + esc(u.payee_name) + '</span>' +
+      '<span class="s">' + esc(bits.join(' · ')) + ' · not requested yet</span></span><span class="P_go btn btn-ghost">Review</span></button>';
   }
   function group(title, rows) { return '<div class="P_group"><div class="cap up">' + title + '</div><div class="card list">' + rows + '</div></div>'; }
   function renderList() {
     var open = (S.list || []).filter(function (r) { return r.status === 'requested' || r.status === 'paying'; }), paid = (S.list || []).filter(function (r) { return r.status === 'paid'; });
+    var firstPay = open.filter(function (r) { return !theirs(r); })[0];
     var un = (S.unreq || []).filter(function (u) { return (u.sessions || []).length + (u.claims || []).length > 0; });
     var inner = '<div class="stack">' + (S.listMsg ? '<div class="errbox" role="alert">' + ICON('alert') + '<span>' + esc(S.listMsg) + '</span></div>' : '') + (S.listNote ? '<div class="okbox" role="status">' + ICON('checks') + '<span>' + esc(S.listNote) + '</span></div>' : '') +
-      (open.length || un.length || paid.length ? (open.length ? group('To pay', open.map(row).join('')) : '') + (un.length ? group('Not yet requested', un.map(unreqRow).join('')) : '') + (paid.length ? group('Paid recently', paid.map(paidRow).join('')) : '')
+      (open.length || un.length || paid.length ? (open.length ? group('To pay', open.map(function (r) { return row(r, firstPay && firstPay.id); }).join('')) : '') + (un.length ? group('Not yet requested', un.map(unreqRow).join('')) : '') + (paid.length ? group('Paid recently', paid.map(paidRow).join('')) : '')
         : '<div class="card empty"><div class="disc">' + ICON('checks') + '</div><h2 class="hd">Nothing to pay right now</h2><p>Unpaid cleans appear here as soon as a report is sent.</p></div>') + '</div>';
     root.innerHTML = shell('Pay staff', inner);
   }
@@ -108,13 +112,13 @@
     var U = S.u, p = U.p, c = uCands(), total = P.computeTotal(c, U.sel), lines = P.lineCount(c, U.sel), over = lines > P.MAX_LINES;
     var cleans = (p.sessions || []).map(function (s) {
       var st = U.sel.sessions[s.id] || { on: false, transport: false }, amt = P.sessionAmount(s, st.on && st.transport);
-      var opt = s.transport != null ? '<div class="opt"><button class="sw P_tr" type="button" role="switch" aria-checked="' + !!st.transport + '" aria-label="' + esc('Add ' + P.peso(s.transport) + ' transport for ' + P.dateLabel(s.date)) + '" data-act="u-sw" data-id="' + esc(s.id) + '"><span>Transport +' + esc(P.peso(s.transport)) + '</span><i aria-hidden="true"></i></button></div>' : '';
-      return '<div class="payrow"><button class="chk" type="button" role="checkbox" aria-checked="' + !!st.on + '" aria-label="' + esc(P.dateLabel(s.date) + ' clean') + '" data-act="u-ses" data-id="' + esc(s.id) + '">' + ICON('check', 's16') + '</button>' +
-        '<div><div class="t"><span>' + esc(P.dateLabel(s.date) + ' · ' + P.typeLabel(s.type)) + '</span><span class="val">' + esc(P.peso(amt)) + '</span></div><span class="s">Base ' + esc(P.peso(s.base)) + '</span>' + opt + '</div></div>';
+      var opt = s.transport != null ? '<div class="opt"><button class="sw P_tr" type="button" role="switch" aria-checked="' + !!st.transport + '" aria-label="' + esc('Add ' + P.peso(s.transport) + ' transport for ' + ds(s.date)) + '" data-act="u-sw" data-id="' + esc(s.id) + '"><span>Transport +' + esc(P.peso(s.transport)) + '</span><i aria-hidden="true"></i></button></div>' : '';
+      return '<div class="payrow"><button class="chk" type="button" role="checkbox" aria-checked="' + !!st.on + '" aria-label="' + esc(ds(s.date) + ' clean') + '" data-act="u-ses" data-id="' + esc(s.id) + '">' + ICON('check', 's16') + '</button>' +
+        '<div><div class="t"><span>' + esc(ds(s.date) + ' · ' + P.typeLabel(s.type)) + '</span><span class="val">' + esc(P.peso(amt)) + '</span></div><span class="s">Base ' + esc(P.peso(s.base)) + '</span>' + opt + '</div></div>';
     }).join('');
     var claims = (p.claims || []).map(function (x) {
       return '<div class="payrow"><button class="chk" type="button" role="checkbox" aria-checked="' + !!U.sel.claims[x.id] + '" aria-label="' + esc(x.description) + '" data-act="u-clm" data-id="' + esc(x.id) + '">' + ICON('check', 's16') + '</button>' +
-        '<div><div class="t"><span>' + esc(x.description) + '</span><span class="val">' + esc(P.peso(x.amount)) + '</span></div><span class="s">Expense · ' + esc(P.shortDate(x.date)) + (x.receipt ? ' · receipt saved' : '') + '</span></div></div>';
+        '<div><div class="t"><span>' + esc(x.description) + '</span><span class="val">' + esc(P.peso(x.amount)) + '</span></div><span class="s">Expense · ' + esc(dm(x.date)) + (x.receipt ? ' · receipt saved' : '') + '</span></div></div>';
     }).join('');
     var inner = '<div class="stack"><p class="help P_sub">' + esc(p.payee_name) + ' has not asked for this yet. Tick what you want to pay now.</p>' +
       '<div class="P_group"><div class="cap up">Unpaid work</div><div class="card list">' + cleans + claims + '</div></div>' +

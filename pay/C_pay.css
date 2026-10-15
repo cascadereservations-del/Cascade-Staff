@@ -88,3 +88,12 @@ button.rowi.C_row, .rowi.P_tap { cursor: pointer; font: inherit; }
 .P_rec .row { display: flex; justify-content: space-between; gap: 12px; min-height: 28px; align-items: baseline; }
 .P_rec .row b { font-variant-numeric: tabular-nums; text-align: right; overflow-wrap: anywhere; }
 .P_full { width: 100%; }
+
+/* ---- B3 (s85 ui-b3): Pay staff list. Amount right-aligned over the name; Pay is a filled 44 px button (one per screen), Review a ghost ---- */
+.rowi.P_row { display: grid; grid-template-columns: auto 1fr; align-items: center; column-gap: 12px; row-gap: 8px; }
+.rowi.P_row .lead { grid-row: 1; grid-column: 1; }
+.rowi.P_row .mid { grid-column: 2; gap: 2px; }
+.P_amt { display: block; width: 100%; text-align: right; font: 650 1.25rem/1.5rem var(--v5-font-ui); font-variant-numeric: tabular-nums; color: var(--v5-ink); }
+.rowi.P_row .P_go { grid-column: 2; justify-self: end; min-width: 88px; min-height: var(--v5-touch); padding: 0 20px; display: inline-flex; align-items: center; justify-content: center; font: 600 var(--v5-t-2)/1 var(--v5-font-ui); }
+.rowi.P_row .P_go.btn-ghost { border: 1px solid var(--v5-line-2); color: var(--v5-act); }
+.rowi.P_row .P_go.btn-primary { background: var(--v5-act); color: var(--v5-act-fg); }
