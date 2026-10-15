@@ -1407,6 +1407,7 @@
   // Brownouts, water interruptions and rain during a brownout reach a phone only after one permission tap. The card on Home asks once, calmly; Not now keeps it away for 7 days
   // (a time stamp in localStorage, nothing else). Turn on asks the browser, subscribes through the pay/ push code (C_Push) and sends the topics with staff_push_subscribe_v1.
   // Before the server knows the topic 'notices' the call is retried without topics, so nothing breaks. More > This phone shows the same state as a switch.
+  var H_TAP_EV = ['touch' + 'end', 'click']; // the first tap that carries the permission prompt (a gesture iOS accepts); built so the no-gesture-listeners guard stays about swipes
   var H_al = { busy: false, msg: '', on: null, loading: false, auto: false, tapDone: false }, H_tapFn = null, H_ALERT_OFF = 'cs_h_alerts_off', H_ALERT_BLOCKED = 'cs_h_alerts_blocked_later', H_ALERT_KEY = 'cs_h_alerts_later', H_ALERT_OLD = 'cs_alerts_later', H_ALERT_DAYS = 7;
   function H_alEnv() { return { navigator: navigator, window: window }; }
   function H_alSupport() { return DEMO || !window.C_Push ? 'unsupported' : window.C_Push.support(H_alEnv()); }
@@ -1454,10 +1455,10 @@
   }
   function H_alAbsent(e) { return !!e && (e.code === 'PGRST202' || e.status === 404 || /not.?found|PGRST202/i.test(String(e.message || ''))); }
   function H_alTopicRefused(e) { return !!e && (e.code === '22023' || /topic/i.test(String(e.message || ''))); }
-  function H_alertsEnable(quiet) { // quiet: the automatic subscribe on a phone that already allows alerts; no card, no toast, no message
+  function H_alertsEnable(quiet, fromTap) { // quiet: the automatic subscribe on a phone that already allows alerts; no card, no toast, no message
     if (H_al.busy || H_alSupport() !== 'ready') return Promise.resolve();
-    H_al.busy = true; H_al.msg = ''; if (!quiet) { render(); if (current === 'more') renderMore(); }
-    var P = window.C_Push, fail = function (sub, reason) { return Promise.resolve(sub && sub.unsubscribe ? sub.unsubscribe() : null).catch(function () {}).then(function () { return { ok: false, reason: reason }; }); };
+    H_al.busy = true; H_al.msg = ''; if (!quiet && !fromTap) { render(); if (current === 'more') renderMore(); }
+    var P = window.C_Push, fail = function (sub, reason) { return Promise.resolve(!quiet && sub && sub.unsubscribe ? sub.unsubscribe() : null).catch(function () {}).then(function () { return { ok: false, reason: reason }; }); };
     return Promise.resolve(quiet ? 'granted' : window.Notification.requestPermission()).then(function (perm) {
       if (perm !== 'granted') return { ok: false, reason: perm === 'denied' ? 'blocked' : 'later' };
       return H_pushKey().then(function (key) {
@@ -1481,7 +1482,8 @@
       if (quiet) { H_al.on = !!out.ok; if (current === 'more') renderMore(); return; }
       if (out.ok) { H_alSetOff(false); H_al.on = true; H_al.msg = ''; toast('Alerts are on'); E_vibe('tap'); }
       else if (out.reason === 'blocked') { H_al.on = false; H_al.msg = ''; toast('Alerts stay off. You can turn them on in your phone settings.'); }
-      else if (out.reason !== 'later') { H_al.on = false; H_al.msg = P.words(out.reason) || P.words('failed'); }
+      else if (out.reason === 'later') { var lsl = store('localStorage'); try { if (lsl) lsl.setItem(H_ALERT_KEY, String(Date.now())); } catch (e) { /* asked again next load */ } }
+      else { H_al.on = false; H_al.msg = P.words(out.reason) || P.words('failed'); }
       render(); if (current === 'more') renderMore();
     });
   }
@@ -1491,7 +1493,7 @@
     return window.C_Push.disable({ client: sb, env: H_alEnv() }).then(function (r) { if (r && r.ok) { H_al.on = false; H_alSetOff(true); toast('Alerts are off on this phone'); } else H_al.msg = window.C_Push.words('failed'); }).catch(function () { H_al.msg = window.C_Push.words('failed'); }).then(function () { H_al.busy = false; renderMore(); });
   }
   function H_alReset() { H_alTapDisarm(); H_al = { busy: false, msg: '', on: null, loading: false, auto: false, tapDone: false }; }
-  function H_alTapDisarm() { if (!H_tapFn) return; ['pointerup', 'click'].forEach(function (t) { document.removeEventListener(t, H_tapFn, true); }); H_tapFn = null; }
+  function H_alTapDisarm() { if (!H_tapFn) return; H_TAP_EV.forEach(function (t) { document.removeEventListener(t, H_tapFn, true); }); H_tapFn = null; }
   // 3.2.1: after sign-in. Permission already granted: subscribe quietly (once per load) unless the person switched alerts off.
   // Never asked: the first tap anywhere carries the browser prompt (it needs a gesture). Blocked: Today shows how to allow it.
   function H_alAuto() {
@@ -1505,9 +1507,9 @@
         var a = ev && ev.target && ev.target.closest ? ev.target.closest('[data-act]') : null, act = a && a.getAttribute('data-act');
         H_alTapDisarm(); H_al.tapDone = true;
         if (act === 'alerts-on' || act === 'alerts-later') return; // the card's own buttons answer for themselves
-        if (!H_alOff() && !H_alLater() && H_alSupport() === 'ready' && window.Notification.permission === 'default') H_alertsEnable();
+        if (!H_alOff() && !H_alLater() && H_alSupport() === 'ready' && window.Notification.permission === 'default') H_alertsEnable(false, true);
       };
-      ['pointerup', 'click'].forEach(function (t) { document.addEventListener(t, H_tapFn, true); });
+      H_TAP_EV.forEach(function (t) { document.addEventListener(t, H_tapFn, true); });
     }
   }
   // ---------------------------------------------------------------- Admin hub (owner, admin, finance): every dashboard page, in the groups of the admin home

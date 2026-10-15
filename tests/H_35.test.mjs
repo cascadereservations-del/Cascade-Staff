@@ -12,7 +12,7 @@ const CHROME = 'Mozilla/5.0 (Windows NT 10.0) Chrome/120 Safari/537';
 const IPHONE = 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X)';
 const subCalls = (app) => app.calls.filter((c) => c[0] === 'staff_push_subscribe_v1');
 const blocked = (app) => { const m = /<section class="card glass A_card H_alblocked"[^]*?<\/section>/.exec(app.els['v-home'].innerHTML); return m && m[0]; };
-const tap = async (app) => { for (const fn of [...(app.listeners.pointerup || [])]) fn({ target: { closest: () => null } }); await app.flush(); };
+const tap = async (app) => { for (const fn of [...(app.listeners.touchend || [])]) fn({ target: { closest: () => null } }); await app.flush(); };
 const withStore = (p, o) => { Object.assign(p.ctl.store, o); return p; };
 // a phone: permission state, answers to requestPermission, a push manager that subscribes, and the server's answers to staff_push_subscribe_v1
 function phone({ permission = 'default', answer = 'granted', ua = 'Android', subscribeRpc, flag } = {}) {
@@ -55,11 +55,11 @@ test('3.2.1 switch: switching on clears cs_h_alerts_off; switching off sets it',
 });
 
 test('3.2.1 first tap: permission default, one tap anywhere asks exactly once, and the listeners are gone afterwards', async () => {
-  const base = await boot(phone({ permission: 'granted' }).opts('cleaner')); const n0 = (base.listeners.pointerup || []).length, c0 = (base.listeners.click || []).length;
+  const base = await boot(phone({ permission: 'granted' }).opts('cleaner')); const n0 = (base.listeners.touchend || []).length, c0 = (base.listeners.click || []).length;
   const p = phone(); const app = await boot(p.opts('cleaner')); await app.flush();
-  assert.equal(p.ctl.asked, 0, 'nothing before a tap'); assert.equal((app.listeners.pointerup || []).length, n0 + 1); assert.equal((app.listeners.click || []).length, c0 + 1);
+  assert.equal(p.ctl.asked, 0, 'nothing before a tap'); assert.equal((app.listeners.touchend || []).length, n0 + 1); assert.equal((app.listeners.click || []).length, c0 + 1);
   await tap(app); await tap(app); await tap(app);
-  assert.equal(p.ctl.asked, 1, 'asked once'); assert.equal(subCalls(app).length, 1); assert.equal((app.listeners.pointerup || []).length, n0); assert.equal((app.listeners.click || []).length, c0, 'both listeners removed');
+  assert.equal(p.ctl.asked, 1, 'asked once'); assert.equal(subCalls(app).length, 1); assert.equal((app.listeners.touchend || []).length, n0); assert.equal((app.listeners.click || []).length, c0, 'both listeners removed');
 });
 
 test('3.2.1 first tap: a Block answer is not asked again this load', async () => {
@@ -76,9 +76,9 @@ test('3.2.1 first tap: no ask when granted, denied, in the demo, after Not now, 
 });
 
 test('3.2.1 first tap: sign-out removes the listener', async () => {
-  const base = await boot(phone({ permission: 'granted' }).opts('cleaner')); const n0 = (base.listeners.pointerup || []).length;
-  const p = phone(); const app = await boot(p.opts('cleaner')); assert.equal((app.listeners.pointerup || []).length, n0 + 1);
-  await app.click({ 'data-act': 'signout' }); assert.equal((app.listeners.pointerup || []).length, n0); await tap(app); assert.equal(p.ctl.asked, 0);
+  const base = await boot(phone({ permission: 'granted' }).opts('cleaner')); const n0 = (base.listeners.touchend || []).length;
+  const p = phone(); const app = await boot(p.opts('cleaner')); assert.equal((app.listeners.touchend || []).length, n0 + 1);
+  await app.click({ 'data-act': 'signout' }); assert.equal((app.listeners.touchend || []).length, n0); await tap(app); assert.equal(p.ctl.asked, 0);
 });
 
 test('3.2.1 blocked card: every role, steps by device, Hide for 7 days', async () => {
@@ -101,4 +101,25 @@ test('3.2.1 version 3.2.1, cache v21, What is new line', async () => {
   const CS = createRequire(import.meta.url)('../lib.js');
   assert.match(read('sw.js'), /CACHE_NAME = 'cs-shell-v21'/); assert.match(read('app.js'), /version: '3\.2\.1'/);
   for (const r of ['cleaner', 'owner']) assert.ok(CS.A_whatsNew(r, {}).some((i) => /Alerts now turn on by themselves when this phone allows them\. If they are blocked, Today shows how to allow them\./.test(i.text) && !/!/.test(i.text)));
+});
+
+test('3.2.1 r2: the first tap asks with NO render before it, and the tapped control still works', async () => {
+  const p = phone(); const app = await boot(p.opts('cleaner')); await app.flush();
+  const before = app.els['v-home'].innerHTML; let seenAtAsk = null;
+  const N = app.els; void N; // the stub's requestPermission runs inside the handler: record the page at that moment
+  const orig = p.ctl; Object.defineProperty(orig, 'asked', { get() { return this._a || 0; }, set(v) { this._a = v; seenAtAsk = app.els['v-home'].innerHTML; } });
+  for (const fn of [...(app.listeners.touchend || [])]) fn({ target: { closest: () => null } });
+  assert.equal(orig.asked, 1, 'asked synchronously in the tap'); assert.equal(seenAtAsk, before, 'Home was not redrawn before the ask');
+  await app.flush();
+});
+
+test('3.2.1 r2: dismissing the browser prompt stores the 7-day stamp, so the next load does not ask', async () => {
+  const p = phone({ answer: 'default' }); const app = await boot(p.opts('owner')); await tap(app);
+  assert.equal(p.ctl.store.cs_h_alerts_later, String(NOW.getTime()));
+  const q = phone(); Object.assign(q.ctl.store, p.ctl.store); const a2 = await boot(q.opts('owner')); await tap(a2); assert.equal(q.ctl.asked, 0);
+});
+
+test('3.2.1 r2: a failed quiet subscribe never unsubscribes an existing push subscription', async () => {
+  const p = phone({ permission: 'granted', subscribeRpc: () => ({ error: { code: 'XX000', message: 'boom' }, data: null }) }); const app = await boot(p.opts('cleaner')); await app.flush();
+  assert.equal(subCalls(app).length, 1); assert.equal(p.ctl.unsub, 0);
 });
