@@ -77,7 +77,7 @@ test('3.2 alerts card: a "no" from the browser makes no subscription and no serv
   const no = phone({ answer: 'denied' }); const app = await boot(no.opts('owner')); await app.click({ 'data-act': 'alerts-on' }); await app.flush();
   assert.equal(subCalls(app).length, 0); assert.equal(no.ctl.vapid.length, 0, 'the server is not asked for a key'); assert.equal(card(app), null);
   const later = phone({ answer: 'default' }); const a2 = await boot(later.opts('owner')); await a2.click({ 'data-act': 'alerts-on' }); await a2.flush();
-  assert.equal(subCalls(a2).length, 0); assert.ok(card(a2), 'the prompt was closed without an answer: the card stays'); assert.match(card(a2), /data-act="alerts-on"[^>]*>Turn on</);
+  assert.equal(subCalls(a2).length, 0); assert.equal(card(a2), null, 'the prompt was closed without an answer: treated as Not now for 7 days (3.2.1)');
   const nokey = phone(); const o = nokey.opts('owner'); o.foldFetch = () => Promise.resolve({ ok: false }); const a3 = await boot(o); await a3.click({ 'data-act': 'alerts-on' }); await a3.flush();
   assert.equal(subCalls(a3).length, 0); assert.equal(nokey.ctl.subscribed.length, 0, 'no key from the server: no subscription');
 });
