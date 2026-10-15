@@ -20,7 +20,7 @@
     url: 'https://qkgfhsdppslwunarczeq.supabase.co',
     key: 'sb_publishable_JFuRYZ9csmQULcMRmHXDSg_Abo9UeCj',
     propertyId: '6ae230f4-c189-4547-84b1-cb6e0b2cc9bd',
-    version: '3.4.1'
+    version: '3.4.2'
   };
   var LINKS = {
     checklist: 'https://cascadereservations-del.github.io/CH-Cleaners-Checklist/',
@@ -1783,10 +1783,22 @@
     var last = CS.recalledName(store('localStorage'), si.list);
     if (last) { sel.value = last; setEntry(si.list.filter(function (r) { return r.handle === last; })[0]); } else setEntry(null);
   }
+  // 3.4.2: ?team=staff|admin install links. Staff sees only team 'staff' names; admin (and no link at all) sees everyone.
+  var team = CS.resolveTeam(location.search, store('localStorage'));
   function loadSigninList() {
-    return sb.rpc('staff_signin_list_v1').then(function (r) {
+    return sb.rpc('staff_signin_list_v2').then(function (r) {
+      if (r.error && CS.rpcMissing(r.error)) {
+        // v2 not live yet: v1 has no team column, so for the staff link filter best effort (PIN accounts, minus the admin mailbox handle).
+        return sb.rpc('staff_signin_list_v1').then(function (r1) {
+          if (r1.error) return r1;
+          r1.data = (r1.data || []).filter(function (x) { return team !== 'staff' || (x && x.kind === 'pin' && String(x.handle).toLowerCase() !== 'admin@staff.cascade.invalid'); });
+          return r1;
+        });
+      }
+      return r;
+    }).then(function (r) {
       if (r.error) throw r.error;
-      var list = CS.signinList(r.data); if (!list.length) throw new Error('empty');
+      var list = CS.signinForTeam(CS.signinList(r.data), team); if (!list.length) throw new Error('empty');
       si.list = list; si.typed = false;
     }).catch(function () { si.list = []; si.typed = true; si.loaded = false; }).then(fillPicker);
   }

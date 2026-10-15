@@ -54,9 +54,20 @@
       r = r || {};
       var handle = String(r.handle == null ? '' : r.handle).trim().toLowerCase(), label = String(r.label == null ? '' : r.label).trim();
       var kind = r.kind === 'pin' || r.kind === 'password' ? r.kind : signinKind(handle);
-      return { label: label, handle: handle, kind: kind };
+      return { label: label, handle: handle, kind: kind, team: r.team === 'staff' ? 'staff' : 'admin' };
     }).filter(function (r) { return r.label && r.handle.indexOf('@') > 0; });
   }
+  // Install links ?team=staff|admin (3.4.2). A valid param wins and is stored; else the stored value; else 'admin' (everyone, as before).
+  var TEAM_KEY = 'cs-team';
+  function teamValue(v) { return v === 'staff' || v === 'admin' ? v : null; }
+  function resolveTeam(search, storage) {
+    var m = /[?&]team=([^&#]*)/.exec(String(search || '')), t = m ? teamValue(decodeURIComponent(m[1])) : null;
+    if (t) { try { storage.setItem(TEAM_KEY, t); } catch (e) {} return t; }
+    try { t = teamValue(storage.getItem(TEAM_KEY)); } catch (e) {}
+    return t || 'admin';
+  }
+  // The staff link shows only team 'staff' rows; 'admin' or anything else shows everyone.
+  function signinForTeam(list, team) { return team === 'staff' ? (list || []).filter(function (r) { return r.team === 'staff'; }) : (list || []); }
   // Fallback when the list cannot load: a typed name or e-mail still signs in the old way.
   function typedEntry(text) {
     var t = String(text == null ? '' : text).trim();
@@ -938,6 +949,7 @@
     items.push(['Alerts turn on by themselves', 'Alerts now turn on by themselves when this phone allows them. If they are blocked, Today shows how to allow them.']);
     items.push(['Inventory at a glance', 'Each item says what it needs: a count, or a place on the shopping list. One tap records use or a count.']);
     items.push(['Suppliers and photos', 'Suppliers, price history and item photos are in Inventory.']);
+    items.push(['Staff and admin sign-in links', 'Staff now have their own install link that lists only staff names at sign-in. The admin link still lists everyone.']);
     items.push(['Fewer kitchen photos', 'The kitchen photo card now asks for two photos, and Today shows no button on a day without a turnover.']);
     items.push(['A calmer look', 'Solid cards, one clear accent colour and an easier-to-read font. Today, Notices and Pay staff are easier to scan.']);
     if (admin) items.push(['Admin hub', 'More lists every dashboard page in one place.']);
@@ -1263,7 +1275,7 @@
     canDraftReply: canDraftReply, canAddGuestDetails: canAddGuestDetails, shrinkSize: shrinkSize, replyProblem: replyProblem, replyBody: replyBody, replyErrorText: replyErrorText, replyResult: replyResult, clampText: clampText,
     REPLY_MAX_IMAGE_BYTES: REPLY_MAX_IMAGE_BYTES, REPLY_MAX_EDGE: REPLY_MAX_EDGE,
     staffAuthPassword: staffAuthPassword, staffLoginEmail: staffLoginEmail, deriveDisplayName: deriveDisplayName, greetingName: greetingName,
-    signinKind: signinKind, signinList: signinList, typedEntry: typedEntry, keypadPress: keypadPress, signinCredentials: signinCredentials,
+    signinKind: signinKind, signinList: signinList, resolveTeam: resolveTeam, signinForTeam: signinForTeam, typedEntry: typedEntry, keypadPress: keypadPress, signinCredentials: signinCredentials,
     authStorage: authStorage, trustedFromStorage: trustedFromStorage, rememberName: rememberName, recalledName: recalledName, doorTarget: doorTarget, doorLink: doorLink, doorRule: doorRule, doorFramed: doorFramed, doorAllowed: doorAllowed, doorsForRole: doorsForRole, foldedDoorUrls: foldedDoorUrls, framedParentTarget: framedParentTarget, FOLD_DOORS: FOLD_DOORS,
     layoutForRole: layoutForRole, accessVerdict: accessVerdict, assertNoMoney: assertNoMoney, moneyKeys: moneyKeys,
     manilaToday: manilaToday, manilaParts: manilaParts, addDays: addDays, daysBetween: daysBetween, weekdayIndex: weekdayIndex,

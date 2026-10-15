@@ -222,3 +222,42 @@ test('sign-in markup a11y: no aria-label on the name select, live dots, 44 px tr
   assert.match(html, /<form class="signin" id="signin-form" method="post"/);
   assert.match(css, /\.trust \{[^}]*min-height: var\(--touch\)/);
 });
+
+test('3.4.2 team: signinList carries team through (default admin) and signinForTeam filters', () => {
+  const rows = [
+    { label: 'Honey', handle: 'honey@staff.cascade.invalid', kind: 'pin', team: 'staff' },
+    { label: 'Lloyd', handle: 'lloyd@example.com', kind: 'password', team: 'admin' },
+    { label: 'Old', handle: 'old@staff.cascade.invalid', kind: 'pin' },
+  ];
+  const list = CS.signinList(rows);
+  assert.deepEqual(list.map((r) => r.team), ['staff', 'admin', 'admin'], 'a missing or unknown team is admin');
+  assert.deepEqual(CS.signinForTeam(list, 'staff').map((r) => r.label), ['Honey'], 'staff hides admin, owner and untagged rows');
+  assert.equal(CS.signinForTeam(list, 'admin').length, 3);
+  assert.equal(CS.signinForTeam(list, undefined).length, 3);
+  assert.equal(CS.signinForTeam(list, 'weird').length, 3, 'unknown team shows everyone');
+});
+
+test('3.4.2 team: the link param overrides storage and is stored; storage keeps it for the home-screen launch', () => {
+  const st = fakeStorage();
+  assert.equal(CS.resolveTeam('', st), 'admin', 'nothing stored, no param: everyone');
+  assert.equal(CS.resolveTeam('?team=staff', st), 'staff');
+  assert.equal(CS.resolveTeam('?source=pwa', st), 'staff', 'launched from start_url: the stored value holds');
+  assert.equal(CS.resolveTeam('?source=pwa&team=admin', st), 'admin', 'a link always overrides');
+  assert.equal(CS.resolveTeam('', st), 'admin');
+  assert.equal(CS.resolveTeam('?team=bogus', fakeStorage({ 'cs-team': 'staff' })), 'staff', 'an invalid param is ignored');
+  assert.equal(CS.resolveTeam('?team=staff', fakeStorage({}, { throws: true })), 'staff', 'storage that throws still works');
+  assert.equal(CS.resolveTeam('', fakeStorage({}, { throws: true })), 'admin');
+  assert.equal(CS.resolveTeam('?team=staff', null), 'staff', 'no storage at all');
+});
+
+test('3.4.2 team: loadSigninList tries v2, falls back to v1 only when v2 is missing, v1 staff filter is best effort', () => {
+  const app = read('app.js');
+  const f = app.match(/function loadSigninList\(\) \{[^]*?\.then\(fillPicker\);\s*\}/)[0];
+  assert.match(f, /rpc\('staff_signin_list_v2'\)/);
+  assert.match(f, /r\.error && CS\.rpcMissing\(r\.error\)/);
+  assert.match(f, /rpc\('staff_signin_list_v1'\)/);
+  assert.match(f, /x\.kind === 'pin'[^]*admin@staff\.cascade\.invalid/);
+  assert.match(f, /CS\.signinForTeam\(CS\.signinList\(r\.data\), team\)/);
+  assert.match(f, /throw new Error\('empty'\)/, 'an empty list still falls to the typed name');
+  assert.match(app, /CS\.resolveTeam\(location\.search, store\('localStorage'\)\)/);
+});

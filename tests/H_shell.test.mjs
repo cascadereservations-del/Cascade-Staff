@@ -271,7 +271,7 @@ test('H_ guard: no duplicate top-level H_ names in app.js or lib.js, the files p
   }
   const html = read('index.html'); for (const id of ['v-search', 'v-weather', 'v-stock', 'v-manage', 'H_offline', 'door-done']) assert.ok(html.includes('id="' + id + '"'), id);
   assert.match(html, /Your name, as Lloyd wrote it/); assert.match(html, /placeholder="Honey"/);
-  assert.equal(JSON.parse(read('package.json')).version, '3.4.1'); assert.match(read('sw.js'), /CACHE_NAME = 'cs-shell-v25'/);
+  assert.equal(JSON.parse(read('package.json')).version, '3.4.2'); assert.match(read('sw.js'), /CACHE_NAME = 'cs-shell-v26'/);
 });
 
 // the bodies of the three theme rules: :root, :root:not([data-theme="light"]) inside the dark media query, :root[data-theme="dark"]
