@@ -7,7 +7,7 @@
 .C_notice-head { font: 600 var(--v5-t-body)/clamp(1.5rem, 1.4023rem + 0.4337vw, 1.68rem) var(--v5-font-ui); }
 .C_notice-line { font: 400 var(--v5-t-2)/clamp(1.25rem, 1.1686rem + 0.3614vw, 1.4rem) var(--v5-font-ui); font-variant-numeric: tabular-nums; }
 .C_notice-acts { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 8px; }
-.C_notice-acts .btn { flex: 1 1 auto; min-width: 0; padding: 0 6px; font-size: clamp(0.875rem, 0.818rem + 0.253vw, 0.98rem); white-space: nowrap; } /* both fit one row at 320 px, so the card stays under 128 px */
+.C_notice-acts .btn { flex: 1 1 auto; min-width: 0; padding: 0 6px; font-size: var(--v5-t-label); white-space: nowrap; } /* both fit one row at 320 px, so the card stays under 128 px */
 .C_notice-text { grid-column: 1 / -1; margin: 0; font-size: var(--v5-t-2); line-height: clamp(1.375rem, 1.2855rem + 0.3975vw, 1.54rem); color: var(--v5-ink); }
 .C_notice-text[hidden] { display: none; }
 
