@@ -1788,12 +1788,9 @@
   function loadSigninList() {
     return sb.rpc('staff_signin_list_v2').then(function (r) {
       if (r.error && CS.rpcMissing(r.error)) {
-        // v2 not live yet: v1 has no team column, so for the staff link filter best effort (PIN accounts, minus the admin mailbox handle).
-        return sb.rpc('staff_signin_list_v1').then(function (r1) {
-          if (r1.error) return r1;
-          r1.data = (r1.data || []).filter(function (x) { return team !== 'staff' || (x && x.kind === 'pin' && String(x.handle).toLowerCase() !== 'admin@staff.cascade.invalid'); });
-          return r1;
-        });
+        // v2 not live yet: v1 rows carry no team, so signinList tags them admin. The admin link lists everyone; the staff link gets an
+        // empty list and falls to the typed name, so it never shows an owner or admin name (a PIN admin like Marifel looks like staff in v1).
+        return sb.rpc('staff_signin_list_v1');
       }
       return r;
     }).then(function (r) {

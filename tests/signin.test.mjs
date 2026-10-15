@@ -250,13 +250,14 @@ test('3.4.2 team: the link param overrides storage and is stored; storage keeps 
   assert.equal(CS.resolveTeam('?team=staff', null), 'staff', 'no storage at all');
 });
 
-test('3.4.2 team: loadSigninList tries v2, falls back to v1 only when v2 is missing, v1 staff filter is best effort', () => {
+test('3.4.2 team: loadSigninList tries v2, falls back to v1 only when v2 is missing, the staff link shows no v1 names', () => {
   const app = read('app.js');
   const f = app.match(/function loadSigninList\(\) \{[^]*?\.then\(fillPicker\);\s*\}/)[0];
   assert.match(f, /rpc\('staff_signin_list_v2'\)/);
   assert.match(f, /r\.error && CS\.rpcMissing\(r\.error\)/);
   assert.match(f, /rpc\('staff_signin_list_v1'\)/);
-  assert.match(f, /x\.kind === 'pin'[^]*admin@staff\.cascade\.invalid/);
+  assert.doesNotMatch(f, /x\.kind === 'pin'/, 'no v1 heuristic: v1 rows are untagged, so the staff link shows no names and falls to the typed entry');
+  assert.deepEqual(CS.signinForTeam(CS.signinList([{ label: 'Marifel', handle: 'marifel@staff.cascade.invalid', kind: 'pin' }]), 'staff'), [], 'a v1 PIN admin never reaches the staff picker');
   assert.match(f, /CS\.signinForTeam\(CS\.signinList\(r\.data\), team\)/);
   assert.match(f, /throw new Error\('empty'\)/, 'an empty list still falls to the typed name');
   assert.match(app, /CS\.resolveTeam\(location\.search, store\('localStorage'\)\)/);
