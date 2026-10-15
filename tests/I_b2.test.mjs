@@ -82,3 +82,38 @@ test('I_b2 Count this group is a ghost button in the card footer, inside the lis
   }
   const f = await make('finance'); await f.mount(''); assert.doesNotMatch(f.html(), /I_gcount/);
 });
+
+const rowOf = (h, id) => (new RegExp('<div class="I_it">(?:(?!<div class="I_it">)[\s\S])*?data-id="' + id + '"[\s\S]*?</div>').exec(h) || [''])[0];
+const qaOf = (h, id) => (new RegExp('data-act="quick" data-kind="([a-z]+)" data-id="' + id + '"').exec(h) || [])[1];
+
+test('I_b2 each row carries one quick action by role: owner adds low items to the list, counts the rest, the cleaner records use', async () => {
+  const o = await make('owner'); await o.mount('');
+  assert.equal(qaOf(o.html(), 'i3'), 'low'); // out, not on the list: Add to list
+  assert.equal(qaOf(o.html(), 'i1'), 'count'); // low but already on the shopping list: Count
+  assert.match(o.html(), /Add to list/);
+  const c = await make('cleaner'); await c.mount('');
+  assert.equal(qaOf(c.html(), 'i1'), 'used'); assert.equal(qaOf(c.html(), 'i3'), 'used');
+  const f = await make('finance'); await f.mount('');
+  assert.doesNotMatch(f.html(), /data-kind="count"|data-kind="used"/); // finance neither counts nor records use
+  assert.match(o.html(), /<button class="rowi I_row" type="button" data-act="open" data-id="i1"/); // the open hook is unchanged
+});
+
+test('I_b2 the quick action opens the card straight on the form with the current amount filled in; nothing is sent until confirmed', async () => {
+  const o = await make('owner'); await o.mount('');
+  await o.act('quick', { 'data-id': 'i1', 'data-kind': 'count' });
+  assert.match(o.sheet(), /Toilet paper/); assert.match(o.sheet(), /id="I_f_qty"[^>]*value="1"/);
+  assert.equal(o.client.rpcCalls('reconcile_inventory_baseline_v1').length, 0);
+  const c = await make('cleaner'); await c.mount('');
+  await c.act('quick', { 'data-id': 'i1', 'data-kind': 'used' });
+  assert.match(c.sheet(), /Record use: Toilet paper/);
+  const x = await make('cleaner'); await x.mount('');
+  await x.act('quick', { 'data-id': 'i1', 'data-kind': 'price' }); // a hand-made click for something not allowed does nothing
+  assert.doesNotMatch(x.sheet(), /Change price|Price per/);
+});
+
+test('I_b2 rows say what needs action and the summary says it in plain words', async () => {
+  const o = await make('owner'); await o.mount('');
+  assert.match(o.html(), /I_tag I_tagl">On the shopping list/);
+  assert.match(o.html(), /3 low/); assert.match(o.html(), /1 out · 2 on the shopping list/);
+  assert.doesNotMatch(o.html(), /\d items low/);
+});

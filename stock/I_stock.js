@@ -186,7 +186,7 @@
   function demoShop() { return [{ id: 's1', item_id: 'd3', item_name: 'Hand soap', quantity: 6, purchase_unit: 'bottles', reason: 'Last one used today', status: 'proposed', proposed_at: '2026-10-12T02:00:00Z', proposed_by: 'someone' }, { id: 's2', item_id: 'd1', item_name: 'Toilet paper', quantity: 2, purchase_unit: 'pack', reason: '', status: 'approved', proposed_at: '2026-10-11T02:00:00Z', proposed_by: 'someone' }]; }
 
   /* ------------------------------------------------------------------ screen */
-  var K = { items: null, shop: null, q: '', chip: 'low', role: null, at: 0, keys: {}, v84: false, lastCode: '', cool: {}, scanned: null, denied: {}, noFinance: false, undos: [], uidn: 0, hasCounted: false }; // denied: actions the server refused or lacks, hidden for the whole visit (a re-mount keeps them) // survives unmount: the list shows at once while it refreshes
+  var K = { items: null, shop: null, q: '', chip: 'low', role: null, at: 0, keys: {}, v84: false, lastCode: '', cool: {}, scanned: null, denied: {}, noFinance: false, undos: [], uidn: 0, hasCounted: false, quick: null }; // denied: actions the server refused or lacks, hidden for the whole visit (a re-mount keeps them) // survives unmount: the list shows at once while it refreshes
   var M = null; // the live mount
 
   function mount(el, opts) {
@@ -286,7 +286,7 @@
     top.innerHTML = renderTop(rt);
     drawList();
     // an item route opens its sheet once the catalogue is here
-    if (rt.itemId && K.items && (!M.act || (M.act.itemId !== rt.itemId && M.act.kind !== 'undo'))) { var it = itemById(rt.itemId); if (it) { M.act = newMenu(rt.itemId); loadLastCount(rt.itemId); } }
+    if (rt.itemId && K.items && (!M.act || (M.act.itemId !== rt.itemId && M.act.kind !== 'undo'))) { var it = itemById(rt.itemId); if (it) { M.act = newMenu(rt.itemId); loadLastCount(rt.itemId); applyQuick(); } }
     if (!rt.itemId && M.act && M.act.itemId) M.act = null;
     drawLayer(); drawUndo();
   }
@@ -299,7 +299,7 @@
     if (K.items) {
       var s = summary(K.items), needN = allowed('count') ? K.items.filter(needsCount).length : 0;
       h += '<section class="card glass I_sum ' + (s.low ? 'I_sumlow' : 'I_sumok') + '" aria-label="Stock summary"><span class="I_g" aria-hidden="true">' + gi(s.low ? LEVELS.low.glyph : LEVELS.ok.glyph) + '</span><div class="I_sumb"><div class="I_sumt">' +
-        (s.low ? s.low + (s.low === 1 ? ' item low' : ' items low') : 'Stock is fine') + '</div>' + (s.out ? '<div class="help">' + s.out + (s.out === 1 ? ' is' : ' are') + ' out</div>' : '') + '</div>' + (needN ? '<button class="btn btn-ghost I_needbtn" type="button" data-act="chip" data-k="need">' + gi('alert', 's16') + ' ' + needN + ' need a count</button>' : '') + '</section>';
+        (function () { var parts = []; if (s.low) parts.push(s.low + ' low'); if (needN) parts.push(needN + ' need a count'); return parts.length ? parts.join(', ') : 'Stock is fine'; })() + '</div>' + (function () { var bits = []; if (s.out) bits.push(s.out + ' out'); if (K.shop && K.shop.length) bits.push(K.shop.length + ' on the shopping list'); return bits.length ? '<div class="help">' + bits.join(' · ') + '</div>' : ''; })() + '</div>' + (needN ? '<button class="btn btn-ghost I_needbtn" type="button" data-act="chip" data-k="need">' + gi('alert', 's16') + ' Show what to count</button>' : '') + '</section>';
       h += renderRecent();
       h += '<div class="I_srow"><div class="field"><label for="I_q">Search items</label><div class="input"><input id="I_q" type="search" autocomplete="off" enterkeyhint="search" value="' + esc(K.q) + '" placeholder="Toilet paper"></div></div>' +
         (K.v84 ? '<button class="chip I_scanbtn" type="button" data-act="scan">' + gi('camera', 's16') + ' Scan</button>' : '') + '</div>';
@@ -317,7 +317,7 @@
     }
     var gs = groupsFor(K.items, K.chip, K.q), h = '';
     if (M.offlineStale) h += '<div class="note soon" role="status"><span>No connection. This is the last list we have.</span></div>';
-    if (!gs.length) h += '<div class="empty"><p>' + (K.q ? 'Nothing matches that search.' : 'Nothing to show here.') + '</p>' + (K.chip !== 'all' || K.q ? '<button class="btn btn-secondary" type="button" data-act="showall">Show all items</button>' : '') + '</div>';
+    if (!gs.length) h += '<div class="empty"><p class="hd">' + (K.q ? 'Nothing matches that search.' : K.chip === 'low' ? 'Nothing is running low.' : K.chip === 'need' ? 'Everything has been counted lately.' : 'Nothing to show here.') + '</p>' + (K.chip !== 'all' || K.q ? '<button class="btn btn-secondary" type="button" data-act="showall">Show all items</button>' : '') + '</div>';
     else h += gs.map(function (g, n) { return renderGroup(g, n, K.chip.indexOf('c:') !== 0); }).join('');
     if (!M.denied.report) h += '<button class="btn btn-secondary btn-block I_repbtn" type="button" data-act="report">Send a report</button>';
     box.innerHTML = h;
@@ -331,11 +331,24 @@
       '<p class="help">' + (kind === 'offline' ? 'Check your signal, then try again.' : 'Nothing is wrong with your account. Try again in a moment.') + '</p><button class="btn btn-primary" type="button" data-act="retry">Try again</button></div>';
   }
   function levelBadge(it) { var l = level(it), L = LEVELS[l]; return '<span class="I_lv I_' + l + '">' + gi(L.glyph, 's16') + ' ' + L.word + '</span>'; }
+  // The most common action for this row, one tap from the list: the cleaner records use, an owner adds a low item to the shopping list, anyone allowed counts.
+  function quickFor(it) {
+    if (allowed('used')) return { kind: 'used', t: 'Use' };
+    var lv = level(it);
+    if (lv !== 'ok' && canManage(M.role) && allowed('low', it)) return { kind: 'low', t: 'Add to list' };
+    if (allowed('count')) return { kind: 'count', t: 'Count' };
+    if (lv !== 'ok' && allowed('low', it)) return { kind: 'low', t: 'Running low' };
+    return null;
+  }
   function renderRow(it) {
-    var p = barPct(it);
-    return '<button class="rowi I_row" type="button" data-act="open" data-id="' + esc(it.id) + '"><span class="mid"><span class="t">' + esc(it.name) + '</span>' +
+    var p = barPct(it), qa = quickFor(it), listed = (K.shop || []).some(function (r) { return r.itemId === it.id; }), tags = '';
+    if (allowed('count') && needsCount(it)) tags += '<span class="I_tag I_tagc">Needs a count</span>';
+    if (listed) tags += '<span class="I_tag I_tagl">On the shopping list</span>';
+    return '<div class="I_it"><button class="rowi I_row" type="button" data-act="open" data-id="' + esc(it.id) + '"><span class="mid"><span class="t">' + esc(it.name) + '</span>' +
       '<span class="s">' + (it.qty == null ? 'Not counted' : esc(uq(it.qty, it.unit))) + (it.reorder != null ? ' · reorder at ' + fmt(it.reorder) : '') + '</span>' +
-      (p == null ? '' : '<span class="I_bar I_b' + level(it) + '" aria-hidden="true"><i style="width:' + p + '%"></i><b></b></span>') + '</span>' + levelBadge(it) + '</button>';
+      (tags ? '<span class="I_tags">' + tags + '</span>' : '') +
+      (p == null ? '' : '<span class="I_bar I_b' + level(it) + '" aria-hidden="true"><i style="width:' + p + '%"></i><b></b></span>') + '</span>' + levelBadge(it) + '</button>' +
+      (qa ? '<button class="btn btn-ghost I_qa" type="button" data-act="quick" data-kind="' + qa.kind + '" data-id="' + esc(it.id) + '" aria-label="' + esc(qa.t + ', ' + it.name) + '">' + esc(qa.t) + '</button>' : '') + '</div>';
   }
   function renderShop() {
     var h = '';
@@ -553,6 +566,7 @@
     if (act === 'scan') { if (M.act && M.act.sending) return; return openScan(null); }
     if (act === 'report') { if (!allowed('report') || (M.act && M.act.sending)) return; M.act = { kind: 'report', step: 'form', vals: { rkind: 'order', to: 'ops' } }; drawLayer(); return; }
     if (act === 'retry') { M.loadErr = null; M.shopErr = null; M.loading = false; if (!K.items) draw(); load(); return; }
+    if (act === 'quick') { var qid = attr(t, 'data-id'), qk = attr(t, 'data-kind'); if (!itemById(qid) || M.act) return; K.quick = { id: qid, kind: qk, at: nowMs() }; go('#stock/item/' + qid, 'item/' + qid, qid); applyQuick(true); return; } // the card opens straight on the form; Back returns to the card
     if (act === 'open') return go('#stock/item/' + attr(t, 'data-id'), 'item/' + attr(t, 'data-id'), attr(t, 'data-id'));
     if (act === 'shop-open') { if (!canManage(M.role)) return; M.act = { kind: 'menu', shopId: attr(t, 'data-id') }; drawLayer(); return; }
     var a = M.act;
@@ -581,6 +595,11 @@
     if (act === 'shop-bought') { var r = (K.shop || []).filter(function (x) { return x.id === a.shopId; })[0]; if (!r || !r.itemId || !allowed('recv', itemById(r.itemId))) return; M.act = { kind: 'recv', itemId: r.itemId, step: 'form', vals: { packs: fmt(r.qty || 1), supplier: '', cost: '', shopId: r.id }, fromShop: true }; drawLayer(); return; }
     if (act === 'shop-do') { var rr = (K.shop || []).filter(function (x) { return x.id === a.shopId; })[0]; if (!rr) return; a.kind = 'shopset'; a.status = attr(t, 'data-do'); a.step = 'confirm'; a.rowName = rr.name; drawLayer(); return; }
   }
+  function applyQuick(keep) {
+    var p = K.quick; if (!p) return;
+    if (nowMs() - p.at > 3000) { K.quick = null; return; }
+    if (M && M.act && M.act.kind === 'menu' && M.act.itemId === p.id) { if (!keep) K.quick = null; begin(p.kind); }
+  }
   function go(hash, sub, itemId) {
     M.sub = sub; M.act = itemId ? newMenu(itemId) : null;
     if (M.opts.navigate) M.opts.navigate(hash);
@@ -588,7 +607,7 @@
   }
   function closeSheet() {
     if (!M || (M.act && M.act.sending)) return;
-    stopCam(); K.scanned = null;
+    stopCam(); K.scanned = null; K.quick = null;
     var id = M.act && M.act.itemId, wsaved = 0;
     if (M.act && M.act.kind === 'walk' && M.act.step !== 'summary') { wsaved = Object.keys(M.act.saved).length; if (wsaved) toast(wsaved + (wsaved === 1 ? ' item saved' : ' items saved') + '. The rest were not changed.'); }
     M.act = null;

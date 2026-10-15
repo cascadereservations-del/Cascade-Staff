@@ -43,8 +43,8 @@ div.I_row { cursor: default; }
 .I_kv dt { color: var(--fg-2); } .I_kv dd { margin: 0; text-align: right; font-weight: 600; overflow-wrap: anywhere; }
 .I_conf { margin: 12px 0 0; font-size: var(--v5-t-body); overflow-wrap: anywhere; }
 .I_btns { margin-top: 12px; }
-.I_step { display: grid; grid-template-columns: 48px 1fr 48px; gap: 8px; align-items: stretch; }
-.I_step .I_sb { padding: 0; min-width: 48px; min-height: 48px; font-size: var(--v5-t-section); }
+.I_step { display: grid; grid-template-columns: 56px 1fr 56px; gap: 8px; align-items: stretch; }
+.I_step .I_sb { padding: 0; min-width: 56px; min-height: 56px; font-size: var(--v5-t-section); }
 .I_step .input input { text-align: center; font-size: var(--v5-t-section); font-weight: 600; }
 .I_more { margin-top: 12px; text-align: center; }
 .I_more a { display: inline-flex; align-items: center; min-height: var(--touch); color: var(--v5-act); }
@@ -89,3 +89,11 @@ div.I_row { cursor: default; }
 .I_recent { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; }
 .I_rl { font: 600 var(--v5-t-2)/1.3 var(--font-ui); color: var(--fg-2); }
 .I_rc { max-width: 100%; min-height: 44px; overflow-wrap: anywhere; }
+/* s85 ui-b2: a row is its main button plus one quick action; status tags say what needs doing */
+.I_it { display: flex; align-items: center; border-bottom: 1px solid var(--v5-sep); }
+.I_it:last-child { border-bottom: 0; }
+.I_it .I_row { flex: 1 1 auto; min-width: 0; border-bottom: 0; }
+.I_qa { flex: none; min-height: 44px; margin-right: 8px; padding: 0 12px; white-space: nowrap; }
+.I_tags { display: flex; flex-wrap: wrap; gap: 4px 6px; margin-top: 4px; }
+.I_tag { padding: 2px 8px; border-radius: var(--r-full); font: 600 var(--v5-t-2)/1.3 var(--font-ui); background: var(--v5-sunk); color: var(--fg-2); }
+.I_tagc { background: var(--v5-warn-w); color: var(--v5-warn-t); }

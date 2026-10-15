@@ -71,10 +71,10 @@ const M = [
   ['last typed code forgotten', [["K.lastCode = code; // a typo", "K.lastCode = ''; // a typo"]]],
   ['taken code not explained', [["if (why === 'code_taken')", "if (false)"]]],
   ['Low first groups unsorted', [["gs.sort(function (a, b) { return worst(a) - worst(b) || (b.out + b.low) - (a.out + a.low) || a.cat.localeCompare(b.cat); });", "gs.sort(function (a, b) { return a.cat.localeCompare(b.cat); });"]]],
-  ['group header drops the low count', [[`(g.low ? '<span aria-hidden="true">▲</span> ' + g.low + ' low' : '')`, "''"]]],
+  ['group header drops the low count', [[`(g.low ? '' + gi('alert', 's16') + ' ' + g.low + ' low' : '')`, "''"]]],
   ['category chip draws a header', [["K.chip.indexOf('c:') !== 0); })", "true); })"]]],
-  ['Scan button on an old catalogue', [[`(K.v84 ? '<button class="btn btn-secondary I_scanbtn"`, `(true ? '<button class="btn btn-secondary I_scanbtn"`]]],
-  ['header counts the Out items twice', [["(g.low ? '<span aria-hidden=\"true\">▲</span> ' + g.low + ' low' : '')", "(g.low ? '<span aria-hidden=\"true\">▲</span> ' + (g.low + g.out) + ' low' : '')"]]],
+  ['Scan button on an old catalogue', [[`(K.v84 ? '<button class="chip I_scanbtn"`, `(true ? '<button class="chip I_scanbtn"`]]],
+  ['header counts the Out items twice', [["(g.low ? '' + gi('alert', 's16') + ' ' + g.low + ' low' : '')", "(g.low ? '' + gi('alert', 's16') + ' ' + (g.low + g.out) + ' low' : '')"]]],
   ['Consumables rows sorted by level', [["if (chip === 'cons') gs.forEach(function (g) { g.rows.sort(byName); });", ""]]],
   ['camera asked after the sheet closed', [["if (!cam.on || me.dead) return null; // closed while", "// closed while"]]],
   ['no supported formats reads as a failure', [["if (!f.length) { me.cam = null; cam.on = false; a.camState = 'none'; typingRedraw(); return null; }", ""]]],
@@ -108,15 +108,19 @@ const M = [
   ['first count undo wording', [["(snap && snap.controlled === false ? ' It stays counted in the app.' : '')", "''"]]],
   ['bought recon says try again', [["a.err === 'recon' || a.err === 'short' ? ERR[a.err] : 'Try again.'", "'Try again.'"]]],
   ['history server words', [["counted: 'Counted', received:", "counted: 'Count', received:"]]],
-  ['last bought without unit', [["esc(fmt(lb.qty) + ' ' + unitOf(it))", "esc(fmt(lb.qty))"]]],
+  ['last bought without unit', [["esc(uq(lb.qty, unitOf(it)))", "esc(fmt(lb.qty))"]]],
   ['bought list not re-read', [["drawLayer(); loadShop(); return; } // the list is re-read first", "drawLayer(); return; } // the list is re-read first"]]],
   ['already received unmapped', [["body.reason === 'already_received'", "body.reason === 'never'"]]],
-  ['count group only under headers', [["(allowed('count') ? '<button class=\"btn btn-secondary I_gcount\"", "(header && allowed('count') ? '<button class=\"btn btn-secondary I_gcount\""]]],
+  ['count group only under headers', [["(allowed('count') ? '<div class=\"I_foot\"><button class=\"btn btn-ghost I_gcount\"", "(header && allowed('count') ? '<div class=\"I_foot\"><button class=\"btn btn-ghost I_gcount\""]]],
   ['stepper allows zero use', [["return fmt(Math.max(allowZero ? 0 : 1, n));", "return fmt(Math.max(0, n));"]]],
   ['bought done screen loses its rows', [["if (a.step !== 'pick' && a.rows) return a.rows; return", "return"]]],
   ['first count undo wording in the walk', [["{ qty: it.qty, controlled: it.controlled });", "{ qty: it.qty });"]]],
   ['toast over the undo bar', [["if (a.kind === 'undo' || K.undos[0] === u0 || (K.undos[0] && K.undos[0].call && K.denied[K.undos[0].call.fn])) toast(msg);", "toast(msg);"]]],
   ['undo all depends on the 20 entry list', [["return e && !e.undone; })", "return e && K.undos.indexOf(e) >= 0; })"]]],
+  ['unit plural dropped', [["if (Math.abs(n) === 1) return /s$/i.test(w) && !/ss$/i.test(w) ? w.slice(0, -1) : w;", "if (Math.abs(n) === 1) return w;"]]],
+  ['icons back to text glyphs', [["function gi(name, size) { return root.ICON ? root.ICON(name, size) : ''; }", "function gi(name, size) { return '&#9650;'; }"]]],
+  ['count group back to a secondary button under the card', [["<div class=\"I_foot\"><button class=\"btn btn-ghost I_gcount\"", "<div class=\"I_foot\"><button class=\"btn btn-secondary I_gcount\""]]],
+  ['chips wrap again', [['<div class="I_chips" role="group"', '<div class="row-wrap I_chips" role="group"']]],
   ['not_open reads as try again', [[" || body.reason === 'not_open')", ")"]]]
 ];
 const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'I_red-'));
@@ -128,7 +132,7 @@ for (const [name, edits] of M) {
   for (const [a, b] of edits) { if (!s.includes(a)) { console.log('SKIP (pattern not found): ' + name + ' :: ' + a.slice(0, 50)); bad++; s = null; break; } s = s.replace(a, b); }
   if (s == null) continue;
   const f = path.join(dir, 'I_stock.mut.js'); fs.writeFileSync(f, s);
-  const r = spawnSync(process.execPath, ['--test', path.join(here, 'I_rpc.test.mjs'), path.join(here, 'I_roles.test.mjs'), path.join(here, 'I_flow.test.mjs'), path.join(here, 'I_guard.test.mjs'), path.join(here, 'I_fix.test.mjs'), path.join(here, 'I_group.test.mjs'), path.join(here, 'I_scan.test.mjs'), path.join(here, 'I_card.test.mjs'), path.join(here, 'I_report.test.mjs'), path.join(here, 'I_undo.test.mjs'), path.join(here, 'I_running-low.test.mjs'), path.join(here, 'I_bought.test.mjs'), path.join(here, 'I_count-walk.test.mjs'), path.join(here, 'I_history.test.mjs'), path.join(here, 'I_recent.test.mjs'), path.join(here, 'I_round2.test.mjs'), path.join(here, 'I_staff.test.mjs')], { env: Object.assign({}, process.env, { I_STOCK_SRC: f }), encoding: 'utf8', timeout: 60000 });
+  const r = spawnSync(process.execPath, ['--test', path.join(here, 'I_rpc.test.mjs'), path.join(here, 'I_roles.test.mjs'), path.join(here, 'I_flow.test.mjs'), path.join(here, 'I_guard.test.mjs'), path.join(here, 'I_fix.test.mjs'), path.join(here, 'I_group.test.mjs'), path.join(here, 'I_scan.test.mjs'), path.join(here, 'I_card.test.mjs'), path.join(here, 'I_report.test.mjs'), path.join(here, 'I_undo.test.mjs'), path.join(here, 'I_running-low.test.mjs'), path.join(here, 'I_bought.test.mjs'), path.join(here, 'I_count-walk.test.mjs'), path.join(here, 'I_history.test.mjs'), path.join(here, 'I_recent.test.mjs'), path.join(here, 'I_round2.test.mjs'), path.join(here, 'I_staff.test.mjs'), path.join(here, 'I_b2.test.mjs')], { env: Object.assign({}, process.env, { I_STOCK_SRC: f }), encoding: 'utf8', timeout: 60000 });
   const red = [...(r.stdout || '').matchAll(/^\s*✖ (I_[-\w]+ .+?) \(\d+(?:\.?\d+)?ms\)/gm)].map((m) => m[1].trim()).filter((v, i, a) => a.indexOf(v) === i);
   const hung = !!(r.error && r.error.code === 'ETIMEDOUT');
   const ok = hung || (r.status !== 0 && red.length > 0);
