@@ -14,9 +14,14 @@
 
   /* ------------------------------------------------------------------ pure helpers (exported as I_Stock.lib) */
   var MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  function gi(name, size) { return root.ICON ? root.ICON(name, size) : ''; } // the shell's Lucide ICON(), 20 px unless a size class is given
   function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
   function num(v) { var n = typeof v === 'number' ? v : (v == null || v === '' ? NaN : parseFloat(v)); return isFinite(n) ? n : null; }
   function fmt(n) { return String(Math.round(Number(n) * 100) / 100); }
+  // Unit word for a count: 1 roll, 2 rolls. Units are free text and may be stored either way (rolls, pack), so one strips a trailing s and the rest add one.
+  // ponytail: short units (kg, ml, pc, box) are left as typed; irregular plurals are not handled, add when a real unit needs it.
+  function unitWord(n, u) { var w = String(u == null ? '' : u).trim(); if (!/^[A-Za-z]{4,}$/.test(w)) return w; if (Math.abs(n) === 1) return /s$/i.test(w) && !/ss$/i.test(w) ? w.slice(0, -1) : w; return /s$/i.test(w) ? w : w + 's'; }
+  function uq(n, u) { return fmt(n) + ' ' + unitWord(Number(n), u); }
   function canManage(role) { return role === 'owner' || role === 'admin'; }
   function canPrice(role) { return role === 'owner' || role === 'admin' || role === 'finance'; } // the server sends unitCost only to these three
   function canCount(role) { return role === 'owner' || role === 'admin' || role === 'cleaner'; } // s85: the cleaner counts too; the server decides (42501 hides Count for the visit)
@@ -43,7 +48,7 @@
     return list.map(function (r) { return normalize(r, role); }).filter(function (i) { return i.active && i.name; });
   }
   function level(it) { if (it.qty != null && it.qty <= 0) return 'out'; if (it.reorder != null && it.qty != null && it.qty <= it.reorder) return 'low'; return 'ok'; }
-  var LEVELS = { out: { word: 'Out', glyph: '✕' }, low: { word: 'Low', glyph: '▲' }, ok: { word: 'OK', glyph: '✓' } };
+  var LEVELS = { out: { word: 'Out', glyph: 'xcircle' }, low: { word: 'Low', glyph: 'alert' }, ok: { word: 'OK', glyph: 'check' } };
   var RANK = { out: 0, low: 1, ok: 2 };
   function byName(a, b) { return a.name.localeCompare(b.name); }
   function summary(items) { var low = 0, out = 0; items.forEach(function (i) { var l = level(i); if (l === 'out') out++; else if (l === 'low') low++; }); return { low: low + out, out: out }; }
@@ -268,7 +273,7 @@
   function recentClear() { try { if (root.localStorage) root.localStorage.removeItem('cs_I_recent'); } catch (e) { /* nothing to clear */ } }
   function renderRecent() {
     var items = recentRead().map(itemById).filter(Boolean); // an item that left the catalogue is dropped silently
-    return items.length ? '<div class="I_recent" role="group" aria-label="Recent items"><span class="I_rl">Recent</span>' + items.map(function (i) { var L = LEVELS[level(i)]; return '<button class="chip I_rc" type="button" data-act="open" data-id="' + esc(i.id) + '">' + esc(i.name) + ' <span aria-hidden="true">' + L.glyph + '</span> ' + L.word + '</button>'; }).join('') + '</div>' : '';
+    return items.length ? '<div class="I_recent" role="group" aria-label="Recent items"><span class="I_rl">Recent</span>' + items.map(function (i) { var L = LEVELS[level(i)]; return '<button class="chip I_rc" type="button" data-act="open" data-id="' + esc(i.id) + '">' + esc(i.name) + ' ' + gi(L.glyph, 's16') + ' ' + L.word + '</button>'; }).join('') + '</div>' : '';
   }
   function route() {
     var m = /^item\/(.+)$/.exec(M.sub);
@@ -293,12 +298,12 @@
     if (rt.shopping) return h;
     if (K.items) {
       var s = summary(K.items), needN = allowed('count') ? K.items.filter(needsCount).length : 0;
-      h += '<section class="card glass I_sum ' + (s.low ? 'I_sumlow' : 'I_sumok') + '" aria-label="Stock summary"><span class="I_g" aria-hidden="true">' + (s.low ? LEVELS.low.glyph : LEVELS.ok.glyph) + '</span><div><div class="I_sumt">' +
-        (s.low ? s.low + (s.low === 1 ? ' item low' : ' items low') : 'Stock is fine') + '</div>' + (s.out ? '<div class="help">' + s.out + (s.out === 1 ? ' is' : ' are') + ' out</div>' : '') + (needN ? '<button class="btn btn-ghost I_needbtn" type="button" data-act="chip" data-k="need"><span aria-hidden="true">▲</span> ' + needN + ' need a count</button>' : '') + '</div></section>';
+      h += '<section class="card glass I_sum ' + (s.low ? 'I_sumlow' : 'I_sumok') + '" aria-label="Stock summary"><span class="I_g" aria-hidden="true">' + gi(s.low ? LEVELS.low.glyph : LEVELS.ok.glyph) + '</span><div class="I_sumb"><div class="I_sumt">' +
+        (s.low ? s.low + (s.low === 1 ? ' item low' : ' items low') : 'Stock is fine') + '</div>' + (s.out ? '<div class="help">' + s.out + (s.out === 1 ? ' is' : ' are') + ' out</div>' : '') + '</div>' + (needN ? '<button class="btn btn-ghost I_needbtn" type="button" data-act="chip" data-k="need">' + gi('alert', 's16') + ' ' + needN + ' need a count</button>' : '') + '</section>';
       h += renderRecent();
       h += '<div class="I_srow"><div class="field"><label for="I_q">Search items</label><div class="input"><input id="I_q" type="search" autocomplete="off" enterkeyhint="search" value="' + esc(K.q) + '" placeholder="Toilet paper"></div></div>' +
-        (K.v84 ? '<button class="btn btn-secondary I_scanbtn" type="button" data-act="scan"><span aria-hidden="true">▥</span> Scan</button>' : '') + '</div>';
-      h += '<div class="row-wrap I_chips" role="group" aria-label="Show">' + (function () { var cs = chipsFor(K.items); if (needN) cs.splice(3, 0, { k: 'need', t: 'Needs a count' }); return cs; })().map(function (c) { return '<button class="chip" type="button" data-act="chip" data-k="' + esc(c.k) + '" aria-pressed="' + (K.chip === c.k) + '">' + esc(c.t) + '</button>'; }).join('') + '</div>';
+        (K.v84 ? '<button class="chip I_scanbtn" type="button" data-act="scan">' + gi('camera', 's16') + ' Scan</button>' : '') + '</div>';
+      h += '<div class="I_chips" role="group" aria-label="Show">' + (function () { var cs = chipsFor(K.items); if (needN) cs.splice(3, 0, { k: 'need', t: 'Needs a count' }); return cs; })().map(function (c) { return '<button class="chip" type="button" data-act="chip" data-k="' + esc(c.k) + '" aria-pressed="' + (K.chip === c.k) + '">' + esc(c.t) + '</button>'; }).join('') + '</div>';
     }
     return h;
   }
@@ -318,18 +323,18 @@
     box.innerHTML = h;
   }
   function renderGroup(g, n, header) {
-    var note = g.out || g.low ? '<span class="I_ghn">' + (g.out ? '<span aria-hidden="true">✕</span> ' + g.out + ' out' : '') + (g.out && g.low ? ', ' : '') + (g.low ? '<span aria-hidden="true">▲</span> ' + g.low + ' low' : '') + '</span>' : '';
-    return '<section class="I_grp"' + (header ? ' aria-labelledby="I_gh_' + n + '"' : '') + '>' + (header ? '<h3 class="I_gh" id="I_gh_' + n + '"><span>' + esc(g.cat) + '</span>' + note + '</h3>' : '') + '<div class="card list I_list">' + g.rows.map(renderRow).join('') + '</div>' + (allowed('count') ? '<button class="btn btn-secondary I_gcount" type="button" data-act="walk" data-cat="' + esc(g.cat) + '" aria-label="Count this group, ' + esc(g.cat) + '">Count this group</button>' : '') + '</section>';
+    var note = g.out || g.low ? '<span class="I_ghn">' + (g.out ? '' + gi('xcircle', 's16') + ' ' + g.out + ' out' : '') + (g.out && g.low ? ', ' : '') + (g.low ? '' + gi('alert', 's16') + ' ' + g.low + ' low' : '') + '</span>' : '';
+    return '<section class="I_grp"' + (header ? ' aria-labelledby="I_gh_' + n + '"' : '') + '>' + (header ? '<h3 class="I_gh" id="I_gh_' + n + '"><span>' + esc(g.cat) + '</span>' + note + '</h3>' : '') + '<div class="card list I_list">' + g.rows.map(renderRow).join('') + (allowed('count') ? '<div class="I_foot"><button class="btn btn-ghost I_gcount" type="button" data-act="walk" data-cat="' + esc(g.cat) + '" aria-label="Count this group, ' + esc(g.cat) + '">Count this group</button></div>' : '') + '</div></section>';
   }
   function renderFail(kind) {
     return '<div class="empty I_fail" role="alert"><p class="hd">' + (kind === 'offline' ? 'No connection' : 'Inventory is not available right now') + '</p>' +
       '<p class="help">' + (kind === 'offline' ? 'Check your signal, then try again.' : 'Nothing is wrong with your account. Try again in a moment.') + '</p><button class="btn btn-primary" type="button" data-act="retry">Try again</button></div>';
   }
-  function levelBadge(it) { var l = level(it), L = LEVELS[l]; return '<span class="I_lv I_' + l + '"><span aria-hidden="true">' + L.glyph + '</span> ' + L.word + '</span>'; }
+  function levelBadge(it) { var l = level(it), L = LEVELS[l]; return '<span class="I_lv I_' + l + '">' + gi(L.glyph, 's16') + ' ' + L.word + '</span>'; }
   function renderRow(it) {
     var p = barPct(it);
     return '<button class="rowi I_row" type="button" data-act="open" data-id="' + esc(it.id) + '"><span class="mid"><span class="t">' + esc(it.name) + '</span>' +
-      '<span class="s">' + (it.qty == null ? 'Not counted' : fmt(it.qty) + ' ' + esc(it.unit)) + (it.reorder != null ? ' · reorder at ' + fmt(it.reorder) : '') + '</span>' +
+      '<span class="s">' + (it.qty == null ? 'Not counted' : esc(uq(it.qty, it.unit))) + (it.reorder != null ? ' · reorder at ' + fmt(it.reorder) : '') + '</span>' +
       (p == null ? '' : '<span class="I_bar I_b' + level(it) + '" aria-hidden="true"><i style="width:' + p + '%"></i><b></b></span>') + '</span>' + levelBadge(it) + '</button>';
   }
   function renderShop() {
@@ -341,8 +346,8 @@
     h += '<div class="card list I_list">' + K.shop.map(function (r) {
       var who = r.mine ? 'You asked' : 'Asked by staff', when = dateLabel(r.at);
       var tag = canManage(M.role) ? 'button' : 'div';
-      return '<' + tag + ' class="rowi I_row"' + (tag === 'button' ? ' type="button" data-act="shop-open" data-id="' + esc(r.id) + '"' : '') + '><span class="mid"><span class="t">' + esc(r.name) + '</span><span class="s">' + (r.qty != null ? fmt(r.qty) + ' ' + esc(r.unit || '') : '') + ' · ' + who + (when ? ', ' + when : '') + '</span>' +
-        (r.note ? '<span class="s">' + esc(r.note) + '</span>' : '') + '</span><span class="I_lv ' + (r.status === 'approved' ? 'I_ok' : 'I_low') + '"><span aria-hidden="true">' + (r.status === 'approved' ? '✓' : '○') + '</span> ' + (r.status === 'approved' ? 'Approved' : 'Asked') + '</span></' + tag + '>';
+      return '<' + tag + ' class="rowi I_row"' + (tag === 'button' ? ' type="button" data-act="shop-open" data-id="' + esc(r.id) + '"' : '') + '><span class="mid"><span class="t">' + esc(r.name) + '</span><span class="s">' + (r.qty != null ? esc(uq(r.qty, r.unit || '')) : '') + ' · ' + who + (when ? ', ' + when : '') + '</span>' +
+        (r.note ? '<span class="s">' + esc(r.note) + '</span>' : '') + '</span><span class="I_lv ' + (r.status === 'approved' ? 'I_ok' : 'I_low') + '">' + gi(r.status === 'approved' ? 'check' : 'clock', 's16') + ' ' + (r.status === 'approved' ? 'Approved' : 'Asked') + '</span></' + tag + '>';
     }).join('') + '</div>';
     return h;
   }
@@ -367,14 +372,14 @@
   function errBox(a) {
     if (!a.err) return '';
     var t = a.err === 'taken' ? 'That code is already linked to ' + (a.takenName || 'another item') + '.' : ERR[a.err] || ERR.other;
-    return '<div class="errbox" role="alert"><span aria-hidden="true">▲</span><span>' + esc(t) + '</span></div>' +
+    return '<div class="errbox" role="alert">' + gi('alert') + '<span>' + esc(t) + '</span></div>' +
       (a.takenId ? '<button class="btn btn-secondary btn-block" type="button" data-act="open-taken" data-id="' + esc(a.takenId) + '">Open ' + esc(a.takenName || 'it') + '</button>' : '');
   }
   function selectField(id, label, opts, val) { return '<div class="field"><label for="I_f_' + id + '">' + label + '</label><div class="input"><select id="I_f_' + id + '">' + opts.map(function (o) { return '<option value="' + esc(o[0]) + '"' + (o[0] === val ? ' selected' : '') + '>' + esc(o[1]) + '</option>'; }).join('') + '</select></div></div>'; }
   function itemOf(a) { return itemById(a.pickId || a.itemId); }
   function stepper(id, label, val, allowZero) {
-    return '<div class="field"><label for="I_f_' + id + '">' + label + '</label><div class="I_step"><button class="btn btn-secondary I_sb" type="button" data-act="step" data-f="' + id + '" data-d="-1" data-z="' + (allowZero ? 1 : 0) + '" aria-label="One less">−</button>' +
-      '<div class="input"><input id="I_f_' + id + '" inputmode="decimal" autocomplete="off" value="' + esc(val) + '"></div><button class="btn btn-secondary I_sb" type="button" data-act="step" data-f="' + id + '" data-d="1" data-z="' + (allowZero ? 1 : 0) + '" aria-label="One more">+</button></div></div>';
+    return '<div class="field"><label for="I_f_' + id + '">' + label + '</label><div class="I_step"><button class="btn btn-secondary I_sb" type="button" data-act="step" data-f="' + id + '" data-d="-1" data-z="' + (allowZero ? 1 : 0) + '" aria-label="One less">' + gi('minus') + '</button>' +
+      '<div class="input"><input id="I_f_' + id + '" inputmode="decimal" autocomplete="off" value="' + esc(val) + '"></div><button class="btn btn-secondary I_sb" type="button" data-act="step" data-f="' + id + '" data-d="1" data-z="' + (allowZero ? 1 : 0) + '" aria-label="One more">' + gi('plus') + '</button></div></div>';
   }
   function textField(id, label, val, extra) { return '<div class="field"><label for="I_f_' + id + '">' + label + '</label><div class="input"><input id="I_f_' + id + '" autocomplete="off" ' + (extra || '') + ' value="' + esc(val) + '"></div></div>'; }
   function actions(a, yes, extraBack) {
@@ -396,13 +401,13 @@
     var v = a.vals || {}, m = M.role, h;
     if (a.kind === 'history') return renderHistory(a, it);
     if (a.kind === 'unlink') return head('Unlink code ' + shortCode(a.code) + ' from ' + it.name + '?') + '<form data-i-form><p class="I_conf">Scanning this code will no longer open ' + esc(it.name) + '.</p>' + actions(a, 'Yes, unlink it') + '</form>';
-    if (a.kind === 'low') return head('Tell the owner ' + it.name + ' is running low?') + '<form data-i-form><p class="I_conf">It goes on the shopping list for ' + esc(fmt(lowQty(it)) + ' ' + (it.purchaseUnit || unitOf(it))) + '.</p>' + actions(a, 'Yes, tell them') + '</form>';
+    if (a.kind === 'low') return head('Tell the owner ' + it.name + ' is running low?') + '<form data-i-form><p class="I_conf">It goes on the shopping list for ' + esc(uq(lowQty(it), it.purchaseUnit || unitOf(it))) + '.</p>' + actions(a, 'Yes, tell them') + '</form>';
     if (a.kind === 'link') return head('Link code ' + shortCode(a.code) + ' to ' + it.name + '?') + '<form data-i-form><p class="I_conf">Scanning this code will open ' + esc(it.name) + '.</p>' + actions(a, 'Yes, link it') + '</form>';
     if (a.kind === 'menu') {
       var info = M.itemInfo[it.id], shopN = (K.shop || []).filter(function (r) { return r.itemId === it.id; }).length, cover = it.cover != null ? fmt(it.cover) + ' days' : it.coverEst != null ? 'about ' + fmt(it.coverEst) + ' days (an estimate)' : '';
       h = head(it.name, it.category + (it.consumable ? ' · consumable' : '')) + '<p class="I_lvline">' + levelBadge(it) + '</p><dl class="I_dl">' +
-        row('On hand', it.qty == null ? 'Not counted' : esc(fmt(it.qty) + ' ' + it.unit)) + row('Reorder at', it.reorder == null ? 'Not set' : esc(fmt(it.reorder) + ' ' + it.unit)) +
-        (K.v84 && (it.consumable || it.par != null) ? row('Buy up to', it.par != null ? esc(fmt(it.par) + ' ' + it.unit) : it.reorder != null ? esc('2 x reorder level (' + fmt(it.reorder * 2) + ')') : 'Not set') : '') +
+        row('On hand', it.qty == null ? 'Not counted' : esc(uq(it.qty, it.unit))) + row('Reorder at', it.reorder == null ? 'Not set' : esc(uq(it.reorder, it.unit))) +
+        (K.v84 && (it.consumable || it.par != null) ? row('Buy up to', it.par != null ? esc(uq(it.par, it.unit)) : it.reorder != null ? esc('2 x reorder level (' + fmt(it.reorder * 2) + ')') : 'Not set') : '') +
         (K.v84 && canManage(m) ? row('Barcodes', it.codes.length ? it.codes.length + ' linked' : 'None linked') + (allowed('unlink') ? it.codes.map(function (c) { return row('Code', esc(c) + ' <button class="btn btn-ghost I_undobtn" type="button" data-act="unlink" data-code="' + esc(c) + '" aria-label="Unlink code ' + esc(c) + '">Unlink</button>'); }).join('') : '') : '') +
         (canManage(m) && info && info.done ? row('Last counted', info.lastCounted ? esc(dateLabel(info.lastCounted)) : 'Not counted in the app yet') : '') +
         (cover ? row('Lasts', esc(cover)) : '') + (canPrice(m) && it.cost != null ? row('Unit cost', esc(peso(it.cost))) : '') + '</dl>' +
@@ -416,39 +421,39 @@
     if (a.kind === 'count') {
       var n = parseQty(v.qty, true), d = n == null || it.qty == null ? null : Math.round((n - it.qty) * 100) / 100;
       return head(c ? 'Set ' + it.name + ' to ' + fmt(n) + '?' : 'Count ' + it.name, c ? null : 'Count what is in the storeroom.') + '<form data-i-form>' +
-        (c ? '<p class="I_conf">Now ' + (it.qty == null ? 'not counted' : esc(fmt(it.qty) + ' ' + it.unit)) + (d != null ? ', a change of ' + (d > 0 ? '+' : '') + fmt(d) : '') + '.</p>' + (it.controlled ? '' : '<p class="I_conf">After this, ' + esc(it.name) + ' is counted in the app. Telegram /count will skip it.</p>')
-          : stepper('qty', 'Counted (' + esc(unitOf(it)) + ')', v.qty, true) + textField('note', 'Note (optional)', v.note || '', 'maxlength="200" placeholder="Where you counted"') + (a.bad ? '<div class="field"><span class="err">▲ Enter a number such as 12 or 2.5.</span></div>' : '')) +
+        (c ? '<p class="I_conf">Now ' + (it.qty == null ? 'not counted' : esc(uq(it.qty, it.unit))) + (d != null ? ', a change of ' + (d > 0 ? '+' : '') + fmt(d) : '') + '.</p>' + (it.controlled ? '' : '<p class="I_conf">After this, ' + esc(it.name) + ' is counted in the app. Telegram /count will skip it.</p>')
+          : stepper('qty', 'Counted (' + esc(unitOf(it)) + ')', v.qty, true) + textField('note', 'Note (optional)', v.note || '', 'maxlength="200" placeholder="Where you counted"') + (a.bad ? '<div class="field"><span class="err">' + gi('alert', 's16') + ' Enter a number such as 12 or 2.5.</span></div>' : '')) +
         actions(a, c ? 'Yes, set it' : 'Continue') + '</form>';
     }
     if (a.kind === 'used') {
       var u = parseQty(v.qty);
-      return head(c ? 'Log ' + fmt(u) + ' ' + unitOf(it) + ' of ' + it.name + ' as used?' : 'Record use: ' + it.name, c ? null : 'How much did you use?') + '<form data-i-form>' +
-        (c ? '<p class="I_conf">Today’s date will be recorded.</p>' : stepper('qty', 'Used (' + esc(unitOf(it)) + ')', v.qty, false) + (a.bad ? '<div class="field"><span class="err">▲ Enter a number such as 1 or 2.5.</span></div>' : '')) +
+      return head(c ? 'Log ' + uq(u, unitOf(it)) + ' of ' + it.name + ' as used?' : 'Record use: ' + it.name, c ? null : 'How much did you use?') + '<form data-i-form>' +
+        (c ? '<p class="I_conf">Today’s date will be recorded.</p>' : stepper('qty', 'Used (' + esc(unitOf(it)) + ')', v.qty, false) + (a.bad ? '<div class="field"><span class="err">' + gi('alert', 's16') + ' Enter a number such as 1 or 2.5.</span></div>' : '')) +
         actions(a, c ? 'Yes, log it' : 'Continue') + '</form>';
     }
     if (a.kind === 'recv') {
       var pk = parseQty(v.packs), pu = it.purchaseUnit || it.unit || 'pack', add = pk == null ? null : Math.round(pk * it.perPack * 100) / 100;
-      return head(c ? 'Add ' + fmt(add) + ' ' + unitOf(it) + ' of ' + it.name + '?' : 'Stock received: ' + it.name, c ? null : 'Enter what arrived.') + '<form data-i-form>' +
-        (c ? '<p class="I_conf">' + esc(fmt(pk) + ' ' + pu + (it.perPack !== 1 ? ' x ' + fmt(it.perPack) + ' ' + unitOf(it) : '')) + (v.supplier ? ' from ' + esc(v.supplier) : '') + '. On hand goes to ' + esc(it.qty == null ? fmt(add) : fmt(it.qty + add)) + ' ' + esc(unitOf(it)) + '.</p>'
+      return head(c ? 'Add ' + uq(add, unitOf(it)) + ' of ' + it.name + '?' : 'Stock received: ' + it.name, c ? null : 'Enter what arrived.') + '<form data-i-form>' +
+        (c ? '<p class="I_conf">' + esc(uq(pk, pu) + (it.perPack !== 1 ? ' x ' + uq(it.perPack, unitOf(it)) : '')) + (v.supplier ? ' from ' + esc(v.supplier) : '') + '. On hand goes to ' + esc(it.qty == null ? uq(add, unitOf(it)) : uq(it.qty + add, unitOf(it))) + '.</p>'
           : stepper('packs', 'How many (' + esc(pu) + ')', v.packs, false) + textField('supplier', 'Supplier (optional)', v.supplier || '', 'maxlength="80"') + textField('cost', 'Cost per ' + esc(pu) + ' in PHP (optional)', v.cost || '', 'inputmode="decimal"') +
-            (a.bad ? '<div class="field"><span class="err">▲ Enter numbers such as 2 or 150.50.</span></div>' : '')) + actions(a, c ? 'Yes, add it' : 'Continue') + '</form>';
+            (a.bad ? '<div class="field"><span class="err">' + gi('alert', 's16') + ' Enter numbers such as 2 or 150.50.</span></div>' : '')) + actions(a, c ? 'Yes, add it' : 'Continue') + '</form>';
     }
     if (a.kind === 'shop') {
       var sq = parseQty(v.qty);
-      return head(c ? 'Add ' + fmt(sq) + ' ' + (it.purchaseUnit || unitOf(it)) + ' of ' + it.name + ' to the shopping list?' : 'Add to shopping list: ' + it.name, c ? null : 'The owner will see this request.') + '<form data-i-form>' +
-        (c ? (v.note ? '<p class="I_conf">' + esc(v.note) + '</p>' : '') : stepper('qty', 'How many (' + esc(it.purchaseUnit || unitOf(it)) + ')', v.qty, false) + textField('note', 'Note (optional)', v.note || '', 'maxlength="200"') + (a.bad ? '<div class="field"><span class="err">▲ Enter a number such as 1 or 2.</span></div>' : '')) +
+      return head(c ? 'Add ' + uq(sq, it.purchaseUnit || unitOf(it)) + ' of ' + it.name + ' to the shopping list?' : 'Add to shopping list: ' + it.name, c ? null : 'The owner will see this request.') + '<form data-i-form>' +
+        (c ? (v.note ? '<p class="I_conf">' + esc(v.note) + '</p>' : '') : stepper('qty', 'How many (' + esc(it.purchaseUnit || unitOf(it)) + ')', v.qty, false) + textField('note', 'Note (optional)', v.note || '', 'maxlength="200"') + (a.bad ? '<div class="field"><span class="err">' + gi('alert', 's16') + ' Enter a number such as 1 or 2.</span></div>' : '')) +
         actions(a, c ? 'Yes, add it' : 'Continue') + '</form>';
     }
     if (a.kind === 'price') {
       var pc = String(v.cost || '').trim() === '' ? null : parseQty(v.cost);
       return head(c ? (pc == null ? 'Clear the price of ' + it.name + '?' : 'Set the price of ' + it.name + ' to PHP ' + pesoNum(pc) + '?') : 'Change price: ' + it.name, c ? null : 'Enter what one costs.') + '<form data-i-form>' +
-        (c ? '<p class="I_conf">Only the owner, admin and finance can see prices.</p>' : textField('cost', 'Price per ' + esc(unitOf(it)) + ' in PHP (leave empty to clear)', v.cost || '', 'inputmode="decimal"') + (a.bad ? '<div class="field"><span class="err">▲ Enter a number such as 95 or 95.50.</span></div>' : '')) +
+        (c ? '<p class="I_conf">Only the owner, admin and finance can see prices.</p>' : textField('cost', 'Price per ' + esc(unitOf(it)) + ' in PHP (leave empty to clear)', v.cost || '', 'inputmode="decimal"') + (a.bad ? '<div class="field"><span class="err">' + gi('alert', 's16') + ' Enter a number such as 95 or 95.50.</span></div>' : '')) +
         actions(a, c ? 'Yes, save it' : 'Continue') + '</form>';
     }
     if (a.kind === 'levels') {
       return head(c ? 'Save the levels for ' + it.name + '?' : 'Edit levels: ' + it.name, c ? null : 'Leave a box empty to clear it.') + '<form data-i-form>' +
         (c ? '<p class="I_conf">Reorder at ' + esc(String(v.reorder || '').trim() === '' ? 'not set' : v.reorder) + '. Buy up to ' + esc(String(v.par || '').trim() === '' ? 'not set' : v.par) + '.</p>'
-          : levelsSuggest(a, it) + textField('reorder', 'Reorder at (' + esc(unitOf(it)) + ')', v.reorder || '', 'inputmode="decimal"') + textField('par', 'Buy up to (' + esc(unitOf(it)) + ')', v.par || '', 'inputmode="decimal"') + (a.bad ? '<div class="field"><span class="err">▲ ' + esc(a.bad === 'levels' ? ERR.levels : 'Enter numbers such as 12 or 2.5.') + '</span></div>' : '')) +
+          : levelsSuggest(a, it) + textField('reorder', 'Reorder at (' + esc(unitOf(it)) + ')', v.reorder || '', 'inputmode="decimal"') + textField('par', 'Buy up to (' + esc(unitOf(it)) + ')', v.par || '', 'inputmode="decimal"') + (a.bad ? '<div class="field"><span class="err">' + gi('alert', 's16') + ' ' + esc(a.bad === 'levels' ? ERR.levels : 'Enter numbers such as 12 or 2.5.') + '</span></div>' : '')) +
         actions(a, c ? 'Yes, save them' : 'Continue') + '</form>';
     }
     return null;
@@ -490,7 +495,7 @@
         : textField('name', 'Name', v.name || '', 'maxlength="80"') + selectField('category', 'Category', [['', 'Choose one']].concat(cats.map(function (x) { return [x, x]; })), v.category || '') +
           textField('unit', 'Unit', v.unit || '', 'maxlength="20"') + selectField('cons', 'Is it a consumable?', [['no', 'No'], ['yes', 'Yes']], v.cons || 'no') +
           textField('qty', 'Counted now (optional)', v.qty || '', 'inputmode="decimal"') + textField('reorder', 'Reorder at (optional)', v.reorder || '', 'inputmode="decimal"') +
-          (a.bad ? '<div class="field"><span class="err">▲ Give it a name and a category. Numbers such as 12 or 2.5.</span></div>' : '')) +
+          (a.bad ? '<div class="field"><span class="err">' + gi('alert', 's16') + ' Give it a name and a category. Numbers such as 12 or 2.5.</span></div>' : '')) +
       errBoxIf(a, c) + actions(a, c ? 'Yes, add it' : 'Continue') + '</form>';
   }
   function errBoxIf(a, c) { return c ? errBox(a) : ''; }
@@ -499,9 +504,9 @@
     var v = a.vals, c = a.step === 'confirm', pick = REPORTS.filter(function (r) { return r.k === v.rkind; })[0], fin = v.to === 'finance', money = canPrice(M.role);
     if (c) return head('Send ' + pick.s + ' to the ' + (fin ? 'Finance' : 'OPS') + ' group?') + '<form data-i-form>' + (money ? '<p class="I_conf">' + (fin ? 'Prices are included.' : 'No prices are shown.') + '</p>' : '') + actions(a, 'Yes, send it') + '</form>';
     return head('Send a report', 'A PDF list goes to Telegram.') + '<form data-i-form><div class="I_pickrows" role="group" aria-label="Which list">' +
-      REPORTS.map(function (r) { return '<button class="chip I_choice" type="button" data-act="rep-kind" data-k="' + r.k + '" aria-pressed="' + (v.rkind === r.k) + '">' + (v.rkind === r.k ? '<span aria-hidden="true">✓</span> ' : '') + esc(r.t) + '</button>'; }).join('') + '</div>' +
-      (money && !K.noFinance ? '<div class="I_pickrows" role="group" aria-label="Send to"><button class="chip I_choice" type="button" data-act="rep-to" data-to="finance" aria-pressed="' + fin + '">' + (fin ? '<span aria-hidden="true">✓</span> ' : '') + 'Finance group (with prices)</button><button class="chip I_choice" type="button" data-act="rep-to" data-to="ops" aria-pressed="' + !fin + '">' + (!fin ? '<span aria-hidden="true">✓</span> ' : '') + 'OPS group (no prices)</button></div>' : '<p class="help">It goes to the OPS group.</p>') +
-      (a.bad ? '<div class="field"><span class="err">▲ That list was just sent. Please wait half a minute.</span></div>' : '') + actions(a, 'Continue') + '</form>';
+      REPORTS.map(function (r) { return '<button class="chip I_choice" type="button" data-act="rep-kind" data-k="' + r.k + '" aria-pressed="' + (v.rkind === r.k) + '">' + (v.rkind === r.k ? '' + gi('check', 's16') + ' ' : '') + esc(r.t) + '</button>'; }).join('') + '</div>' +
+      (money && !K.noFinance ? '<div class="I_pickrows" role="group" aria-label="Send to"><button class="chip I_choice" type="button" data-act="rep-to" data-to="finance" aria-pressed="' + fin + '">' + (fin ? '' + gi('check', 's16') + ' ' : '') + 'Finance group (with prices)</button><button class="chip I_choice" type="button" data-act="rep-to" data-to="ops" aria-pressed="' + !fin + '">' + (!fin ? '' + gi('check', 's16') + ' ' : '') + 'OPS group (no prices)</button></div>' : '<p class="help">It goes to the OPS group.</p>') +
+      (a.bad ? '<div class="field"><span class="err">' + gi('alert', 's16') + ' That list was just sent. Please wait half a minute.</span></div>' : '') + actions(a, 'Continue') + '</form>';
   }
   // The action buttons of the item card. A scanned card puts the most useful action for the role first (owner/admin count, finance price, cleaner shopping list).
   function menuButtons(it, a) {
@@ -517,7 +522,7 @@
     if (allowed('shop')) list.push(['shop', 0, 'Add to shopping list']);
     if (allowed('history')) list.push(['history', 0, 'History']);
     if (a && a.scanned) { var want = canManage(m) ? 'count' : canPrice(m) ? 'price' : 'low', at = -1; list.forEach(function (x, i) { if (x[0] === want) at = i; }); if (at >= 0) { list.unshift(list.splice(at, 1)[0]); list.forEach(function (y, i) { y[1] = i === 0 ? 1 : 0; }); } }
-    return list.map(function (x) { return x[0] === 'lowdone' ? '<button class="btn btn-secondary btn-block" type="button" disabled><span aria-hidden="true">✓</span> On the shopping list</button>' : x[0] === 'admin' ? x[2] : x[0] === 'link' ? b('link', x[2], 0, 'begin-link') : x[0] === 'history' ? b('history', x[2], 0, 'history-open') : b(x[0], x[2], x[1]); }).join('');
+    return list.map(function (x) { return x[0] === 'lowdone' ? '<button class="btn btn-secondary btn-block" type="button" disabled>' + gi('check', 's16') + ' On the shopping list</button>' : x[0] === 'admin' ? x[2] : x[0] === 'link' ? b('link', x[2], 0, 'begin-link') : x[0] === 'history' ? b('history', x[2], 0, 'history-open') : b(x[0], x[2], x[1]); }).join('');
   }
   // Running low (s84 1b): the amount to buy back to par (or 2 x reorder level), in packs; 1 when it cannot be worked out.
   function lowQty(it) {
@@ -527,7 +532,7 @@
   }
   function renderShopSheet(a) {
     var r = (K.shop || []).filter(function (x) { return x.id === a.shopId; })[0]; if (!r) return null;
-    return head(r.name, (r.qty != null ? fmt(r.qty) + ' ' + (r.unit || '') : '') + ' · ' + (r.status === 'approved' ? 'Approved' : 'Asked')) + (r.note ? '<p>' + esc(r.note) + '</p>' : '') + (a.note ? '<div class="okbox" role="status"><span>' + esc(a.note) + '</span></div>' : '') + errBox(a) +
+    return head(r.name, (r.qty != null ? uq(r.qty, r.unit || '') : '') + ' · ' + (r.status === 'approved' ? 'Approved' : 'Asked')) + (r.note ? '<p>' + esc(r.note) + '</p>' : '') + (a.note ? '<div class="okbox" role="status"><span>' + esc(a.note) + '</span></div>' : '') + errBox(a) +
       '<div class="I_btns">' + (r.status === 'proposed' && !M.denied.shopset ? '<button class="btn btn-primary btn-block" type="button" data-act="shop-do" data-do="approved">Approve</button>' : '') +
       (r.status === 'approved' && r.itemId && allowed('recv', itemById(r.itemId)) ? '<button class="btn btn-primary btn-block" type="button" data-act="shop-bought">Mark bought</button>' : '') +
       (M.denied.shopset ? '' : '<button class="btn btn-secondary btn-block" type="button" data-act="shop-do" data-do="rejected">Remove from the list</button>') + '<button class="btn btn-ghost btn-block" type="button" data-act="close">Close</button></div>';
@@ -745,18 +750,18 @@
   function renderHistory(a, it) {
     var h = head(it.name + ': history', it.category);
     if (a.state === 'loading') return h + '<p class="help I_load" role="status">Loading…</p><div class="I_btns"><button class="btn btn-secondary btn-block" type="button" data-act="back">Back</button></div>';
-    if (a.state !== 'ok') return h + '<div class="errbox" role="alert"><span aria-hidden="true">▲</span><span>' + esc(ERR.other) + '</span></div><div class="I_btns"><button class="btn btn-secondary btn-block" type="button" data-act="back">Back</button></div>';
+    if (a.state !== 'ok') return h + '<div class="errbox" role="alert">' + gi('alert') + '<span>' + esc(ERR.other) + '</span></div><div class="I_btns"><button class="btn btn-secondary btn-block" type="button" data-act="back">Back</button></div>';
     var d = a.data, u = d.usage || {}, pc = num(u.per_clean), body = '<h3 class="I_hh">Use per clean</h3>';
     if (!(u.cleans_30d >= 5) || !(pc > 0)) body += '<p class="help">Not enough cleans yet to tell.</p>';
     else {
-      body += '<p class="I_conf">About ' + esc(fmt(pc)) + ' ' + esc(unitOf(it)) + ' per clean, over ' + esc(String(u.cleans_30d)) + ' cleans in the last 30 days.</p>';
+      body += '<p class="I_conf">About ' + esc(uq(pc, unitOf(it))) + ' per clean, over ' + esc(String(u.cleans_30d)) + ' cleans in the last 30 days.</p>';
       if (it.qty > 0) body += '<p class="help">About ' + esc(String(Math.max(1, Math.round(it.qty / (pc * u.cleans_30d / 30))))) + ' days left at the current booking pace (an estimate).</p>';
     }
     body += '<h3 class="I_hh">Last changes</h3>';
     var ch = Array.isArray(d.changes) ? d.changes.slice(0, 10) : [];
     body += ch.length ? '<ul class="I_blines">' + ch.map(function (c) { var w = CHANGE_WORD[c.kind] || String(c.kind || 'Change').replace(/^./, function (x) { return x.toUpperCase(); }); return '<li>' + esc(dateLabel(c.at)) + ' · ' + esc(w) + ' ' + esc(c.before == null ? '' : fmt(c.before)) + ' → ' + esc(c.after == null ? '' : fmt(c.after)) + (c.who ? ' · ' + esc(String(c.who).split(' ')[0]) : '') + '</li>'; }).join('') + '</ul>' : '<p class="help">No changes recorded yet.</p>';
     var lb = d.last_bought;
-    body += '<h3 class="I_hh">Last bought</h3>' + (lb && lb.at ? '<p class="I_conf">' + esc(dateLabel(lb.at)) + (lb.qty != null ? ', ' + esc(fmt(lb.qty) + ' ' + unitOf(it)) : '') + (canPrice(M.role) && lb.unit_cost != null ? ', PHP ' + esc(pesoNum(lb.unit_cost)) + ' each' : '') + '</p>' : '<p class="help">No purchase recorded yet.</p>');
+    body += '<h3 class="I_hh">Last bought</h3>' + (lb && lb.at ? '<p class="I_conf">' + esc(dateLabel(lb.at)) + (lb.qty != null ? ', ' + esc(uq(lb.qty, unitOf(it))) : '') + (canPrice(M.role) && lb.unit_cost != null ? ', PHP ' + esc(pesoNum(lb.unit_cost)) + ' each' : '') + '</p>' : '<p class="help">No purchase recorded yet.</p>');
     return h + body + '<div class="I_btns"><button class="btn btn-secondary btn-block" type="button" data-act="back">Back</button></div>';
   }
 
@@ -778,7 +783,7 @@
     if (a.step === 'summary') return closeSheet();
     var me = M, it = walkIt(a), n = parseQty(a.vals.qty, true);
     if (!it || n == null) { a.bad = true; drawLayer(); return; }
-    if (me.demo) { a.saved[it.id] = { before: it.qty, after: n }; toast(DEMO_NOTE); walkNext(a, '✓ Saved'); return; }
+    if (me.demo) { a.saved[it.id] = { before: it.qty, after: n }; toast(DEMO_NOTE); walkNext(a, 'Saved'); return; }
     if (!online()) { a.err = 'offline'; drawLayer(); return; }
     if (!me.client) { a.err = 'missing'; drawLayer(); return; }
     var kk = it.id + '|' + n; a.keys[kk] = a.keys[kk] || newKey('count'); // one key per item and value: a changed value after an unseen landed write is a new count
@@ -791,7 +796,7 @@
       a.sending = false; delete a.keys[kk]; K.at = 0;
       var e = undoFor({ kind: 'count', vals: a.vals }, it, r && r.data || {}, { qty: it.qty, controlled: it.controlled }); if (e) pushUndoEntry(e);
       a.saved[it.id] = { before: it.qty, after: n, undo: e };
-      walkNext(a, '✓ Saved');
+      walkNext(a, 'Saved');
     }).catch(function (e) {
       if (me.dead) return;
       a.sending = false; a.err = errKind(e, online());
@@ -805,14 +810,14 @@
       var ids = Object.keys(a.saved), same = Object.keys(a.same).length, big = ids.filter(function (id) { var s = a.saved[id]; return s.before > 0 && Math.abs(s.after - s.before) > s.before / 2; });
       return head(ids.length ? 'Counting done' : 'Nothing was changed', a.cat) + '<p class="I_conf">' + ids.length + ' counted, ' + same + ' the same' + (big.length ? ', ' + big.length + ' changed by more than half' : '') + '.</p>' +
         (a.i < a.ids.length ? '<p class="help">The rest were not changed.</p>' : '') +
-        (big.length ? '<dl class="I_dl">' + big.map(function (id) { var s = a.saved[id], it = itemById(id); return row('<span aria-hidden="true">▲</span> ' + esc(it ? it.name : ''), esc(fmt(s.before) + ' → ' + fmt(s.after)) + (s.undo && !K.denied[s.undo.call.fn] ? ' <button class="btn btn-ghost I_undobtn" type="button" data-act="undo" data-id="' + s.undo.id + '"><span aria-hidden="true">↶</span> Undo</button>' : '')); }).join('') + '</dl>' : '') +
+        (big.length ? '<dl class="I_dl">' + big.map(function (id) { var s = a.saved[id], it = itemById(id); return row('' + gi('alert', 's16') + ' ' + esc(it ? it.name : ''), esc(fmt(s.before) + ' → ' + fmt(s.after)) + (s.undo && !K.denied[s.undo.call.fn] ? ' <button class="btn btn-ghost I_undobtn" type="button" data-act="undo" data-id="' + s.undo.id + '">' + gi('refresh', 's16') + ' Undo</button>' : '')); }).join('') + '</dl>' : '') +
         '<div class="I_btns"><button class="btn btn-primary btn-block" type="button" data-act="close">Close</button></div>';
     }
     var it = walkIt(a); if (!it) return null;
     var last = a.i === a.ids.length - 1;
     return head('Item ' + (a.i + 1) + ' of ' + a.ids.length, a.cat) + '<p class="I_wname">' + esc(it.name) + '</p><p class="help">' + esc(it.unit) + ' · ' + (it.counted ? 'Last counted ' + esc(dateLabel(it.counted)) : 'Not counted in the app yet') + '</p>' +
-      '<form data-i-form>' + stepper('qty', 'Counted (' + esc(unitOf(it)) + ')', a.vals.qty, true) + (a.bad ? '<div class="field"><span class="err">▲ Enter a number such as 12 or 2.5.</span></div>' : '') +
-      (a.flash ? '<div class="okbox" role="status"><span>' + esc(a.flash) + '</span></div>' : '') + (it.controlled ? '' : '<p class="help">The first count here moves this item to counting in the app.</p>') + errBox(a) +
+      '<form data-i-form>' + stepper('qty', 'Counted (' + esc(unitOf(it)) + ')', a.vals.qty, true) + (a.bad ? '<div class="field"><span class="err">' + gi('alert', 's16') + ' Enter a number such as 12 or 2.5.</span></div>' : '') +
+      (a.flash ? '<div class="okbox" role="status">' + gi('check') + '<span>' + esc(a.flash) + '</span></div>' : '') + (it.controlled ? '' : '<p class="help">The first count here moves this item to counting in the app.</p>') + errBox(a) +
       '<div class="I_btns"><button class="btn btn-primary btn-block" type="submit"' + (a.sending ? ' disabled' : '') + '>' + (a.sending ? 'Saving…' : last ? 'Finish' : 'Next') + '</button>' +
       '<button class="btn btn-secondary btn-block" type="button" data-act="w-same"' + (a.sending ? ' disabled' : '') + '>Same as before</button><button class="btn btn-ghost btn-block" type="button" data-act="w-stop"' + (a.sending ? ' disabled' : '') + '>Stop here</button></div></form>';
   }
@@ -827,24 +832,24 @@
   }
   function boughtLine(r, a) {
     var it = itemById(r.itemId), pk = parseQty(a.vals['packs_' + r.id]), add = Math.round(pk * it.perPack * 100) / 100, pu = it.purchaseUnit || it.unit || 'pack';
-    return '<li><strong>' + esc(it.name) + '</strong>: ' + esc(fmt(pk) + ' ' + pu + (it.perPack !== 1 ? ' = ' + fmt(add) + ' ' + unitOf(it) : '')) + (a.step === 'done' || a.step === 'undoconfirm' ? '' : ', on hand ' + esc(it.qty == null ? 'not counted' : fmt(it.qty)) + ' → ' + esc(fmt((it.qty || 0) + add))) + (r.status === 'proposed' ? ' <span class="help">(approved first)</span>' : '') + '</li>';
+    return '<li><strong>' + esc(it.name) + '</strong>: ' + esc(uq(pk, pu) + (it.perPack !== 1 ? ' = ' + uq(add, unitOf(it)) : '')) + (a.step === 'done' || a.step === 'undoconfirm' ? '' : ', on hand ' + esc(it.qty == null ? 'not counted' : fmt(it.qty)) + ' → ' + esc(fmt((it.qty || 0) + add))) + (r.status === 'proposed' ? ' <span class="help">(approved first)</span>' : '') + '</li>';
   }
   function renderBought(a) {
     var rows = boughtRows(), picked = boughtPicked(a), nDone = picked.filter(function (r) { return a.done[r.id] && a.done[r.id].received; }).length;
     if (a.step === 'done') return head(nDone + (nDone === 1 ? ' item added' : ' items added'), 'Stock is up to date.') + '<ul class="I_blines">' + picked.map(function (r) { return boughtLine(r, a); }).join('') + '</ul>' + errBox(a) +
-      '<div class="I_btns">' + (picked.some(function (r) { return a.done[r.id] && a.done[r.id].undo && !K.denied.inventory_undo_v1; }) ? '<button class="btn btn-secondary btn-block" type="button" data-act="b-undoall"><span aria-hidden="true">↶</span> Undo all</button>' : '') + '<button class="btn btn-primary btn-block" type="button" data-act="close">Close</button></div>';
+      '<div class="I_btns">' + (picked.some(function (r) { return a.done[r.id] && a.done[r.id].undo && !K.denied.inventory_undo_v1; }) ? '<button class="btn btn-secondary btn-block" type="button" data-act="b-undoall">' + gi('refresh', 's16') + ' Undo all</button>' : '') + '<button class="btn btn-primary btn-block" type="button" data-act="close">Close</button></div>';
     if (a.step === 'undoconfirm') return head('Undo all ' + nDone + ' receipts?', 'Each one is taken back out, newest first.') + '<form data-i-form>' + actions(a, 'Yes, undo them all') + '</form>';
     if (a.step === 'confirm') {
       var failed = a.failId && shopRowBy(a.failId), left = picked.length - nDone;
       return head('Add these to the stock?') + '<form data-i-form><ul class="I_blines">' + picked.map(function (r) { return boughtLine(r, a); }).join('') + '</ul>' +
-        (a.err && failed ? '<div class="errbox" role="alert"><span aria-hidden="true">▲</span><span>' + esc(nDone + ' of ' + picked.length + ' added. ' + failed.name + ' did not go through. ' + (a.err === 'offline' ? ERR.offline : a.err === 'recon' || a.err === 'short' ? ERR[a.err] : 'Try again.')) + '</span></div>' : errBox(a)) +
+        (a.err && failed ? '<div class="errbox" role="alert">' + gi('alert') + '<span>' + esc(nDone + ' of ' + picked.length + ' added. ' + failed.name + ' did not go through. ' + (a.err === 'offline' ? ERR.offline : a.err === 'recon' || a.err === 'short' ? ERR[a.err] : 'Try again.')) + '</span></div>' : errBox(a)) +
         actions(a, a.err && nDone ? 'Try again' : 'Yes, add them') + '</form>';
     }
     return head('Bought some of these', 'Tick what you bought.') + '<form data-i-form>' + errBoxIf(a, a.err === 'already') + (rows.length ? '' : '<p class="help">Nothing on the list can be added yet.</p>') + rows.map(function (r) {
       var on = !!a.sel[r.id], it = itemById(r.itemId), pu = it.purchaseUnit || it.unit || 'pack';
-      return '<div class="I_brow"><button class="btn btn-secondary btn-block I_tick" type="button" data-act="b-tick" data-id="' + esc(r.id) + '" aria-pressed="' + on + '"><span aria-hidden="true">' + (on ? '✓' : '○') + '</span> ' + esc(r.name) + (r.status === 'proposed' ? ' <span class="help">Waiting for approval</span>' : '') + '</button>' +
+      return '<div class="I_brow"><button class="btn btn-secondary btn-block I_tick" type="button" data-act="b-tick" data-id="' + esc(r.id) + '" aria-pressed="' + on + '">' + gi(on ? 'check' : 'plus', 's16') + ' ' + esc(r.name) + (r.status === 'proposed' ? ' <span class="help">Waiting for approval</span>' : '') + '</button>' +
         (on ? stepper('packs_' + r.id, 'How many (' + esc(pu) + ')', a.vals['packs_' + r.id], false) + (canPrice(M.role) ? textField('cost_' + r.id, 'Price per ' + esc(pu) + ' in PHP (optional)', a.vals['cost_' + r.id] || '', 'inputmode="decimal"') : '') : '') + '</div>';
-    }).join('') + (a.bad ? '<div class="field"><span class="err">▲ Tick at least one, and enter numbers such as 2 or 150.50.</span></div>' : '') + actions(a, 'Check them', 'Cancel') + '</form>';
+    }).join('') + (a.bad ? '<div class="field"><span class="err">' + gi('alert', 's16') + ' Tick at least one, and enter numbers such as 2 or 150.50.</span></div>' : '') + actions(a, 'Check them', 'Cancel') + '</form>';
   }
   function boughtSubmit(a) {
     if (a.sending) return;
@@ -906,7 +911,7 @@
       var cn = parseQty(v.qty, true); e.say = 'Counted ' + n + ': ' + fmt(cn); e.line = 'counted ' + fmt(cn);
       e.confirm = 'Put ' + n + ' back to ' + (snap && snap.qty != null ? fmt(snap.qty) : 'its old amount') + '?' + (snap && snap.controlled === false ? ' It stays counted in the app.' : ''); e.call = { fn: 'inventory_undo_v1', args: { p_movement_id: d.movementId, p_purchase_id: null } };
     } else if (a.kind === 'used' && usedMovement(d)) {
-      var un = parseQty(v.qty); e.say = 'Logged ' + fmt(un) + ' ' + unitOf(it) + ' of ' + n + ' as used'; e.line = 'logged ' + fmt(un) + ' as used'; e.confirm = 'Put the ' + fmt(un) + ' ' + unitOf(it) + ' of ' + n + ' back?';
+      var un = parseQty(v.qty); e.say = 'Logged ' + uq(un, unitOf(it)) + ' of ' + n + ' as used'; e.line = 'logged ' + fmt(un) + ' as used'; e.confirm = 'Put the ' + uq(un, unitOf(it)) + ' of ' + n + ' back?';
       e.call = { fn: 'inventory_undo_v1', args: { p_movement_id: usedMovement(d), p_purchase_id: null } };
     } else if (a.kind === 'recv' && (d.movementId || d.purchaseId)) {
       e.say = 'Received ' + n; e.line = 'received stock'; e.confirm = 'Take the stock you just added to ' + n + ' back out?';
@@ -941,13 +946,13 @@
   function ago(ms) { var m = Math.floor(ms / 60000); return m < 1 ? 'just now' : m + ' min ago'; }
   function lastChange(it) {
     var e = K.undos.filter(function (u) { return u.itemId === it.id && nowMs() - u.at < UNDO_LINE_MS && !K.denied[u.call.fn]; })[0];
-    return e ? '<p class="help I_last">Last change: ' + esc(e.line) + ' by you, ' + ago(nowMs() - e.at) + '. <button class="btn btn-ghost I_undobtn" type="button" data-act="undo" data-id="' + e.id + '"><span aria-hidden="true">↶</span> Undo</button></p>' : '';
+    return e ? '<p class="help I_last">Last change: ' + esc(e.line) + ' by you, ' + ago(nowMs() - e.at) + '. <button class="btn btn-ghost I_undobtn" type="button" data-act="undo" data-id="' + e.id + '">' + gi('refresh', 's16') + ' Undo</button></p>' : '';
   }
   function drawUndo() {
     var box = q('[data-i-undo]'); if (!box) return;
     var e = K.undos.filter(function (u) { return !K.denied[u.call.fn] && (nowMs() - u.at < UNDO_BAR_MS || (M.undoHold === u.id)); })[0];
     if (!e || M.act) { box.innerHTML = ''; return; } // a sheet is open: the card shows the Last change line instead
-    box.innerHTML = '<div class="I_undo" role="status"><span class="I_undot">' + esc(e.say) + '</span><button class="btn btn-secondary I_undob" type="button" data-act="undo" data-id="' + e.id + '"><span aria-hidden="true">↶</span> Undo</button></div>';
+    box.innerHTML = '<div class="I_undo" role="status"><span class="I_undot">' + esc(e.say) + '</span><button class="btn btn-secondary I_undob" type="button" data-act="undo" data-id="' + e.id + '">' + gi('refresh', 's16') + ' Undo</button></div>';
     if (M.undoT && root.clearTimeout) root.clearTimeout(M.undoT);
     if (root.setTimeout && M.undoHold !== e.id) { var me = M; M.undoT = root.setTimeout(function () { if (M === me) drawUndo(); }, Math.max(0, UNDO_BAR_MS - (nowMs() - e.at)) + 1); }
   }

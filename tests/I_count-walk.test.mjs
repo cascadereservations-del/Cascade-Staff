@@ -40,7 +40,7 @@ test('I_count-walk Next saves that item at once: one reconcile with the exact ke
   assert.equal(c.length, 1);
   assert.deepEqual(Object.keys(c[0][2]).sort(), ['p_counted_qty', 'p_idempotency_key', 'p_item_id', 'p_note']);
   assert.deepEqual({ p_item_id: c[0][2].p_item_id, p_counted_qty: c[0][2].p_counted_qty, p_note: c[0][2].p_note }, { p_item_id: 'b3', p_counted_qty: 6, p_note: 'Group count in the staff app' });
-  assert.match(e.sheet(), /Item 2 of 3/); assert.match(e.sheet(), /✓ Saved/);
+  assert.match(e.sheet(), /Item 2 of 3/); assert.match(e.sheet(), /<\/svg><span>Saved</);
   await e.submit(); await e.submit();
   const k = rc(e).map((x) => x[2].p_idempotency_key);
   assert.equal(new Set(k).size, 3);
@@ -74,7 +74,7 @@ test('I_count-walk a change of more than half is marked and can be undone from t
   await e.input('I_f_qty', '40'); await e.submit(); // Toilet paper 4 -> 40
   await e.act('w-same');
   assert.match(e.sheet(), /1 counted, 2 the same, 1 changed by more than half/);
-  assert.match(e.sheet(), /<span aria-hidden="true">▲<\/span> Toilet paper/); assert.match(e.sheet(), /4 → 40/);
+  assert.match(e.sheet(), /<\/svg> Toilet paper/); assert.match(e.sheet(), /4 → 40/);
   const id = /data-act="undo" data-id="(u\d+)"/.exec(e.sheet())[1];
   await e.act('undo', { 'data-id': id });
   assert.match(e.sheet(), /Put Toilet paper back to 4\?/);

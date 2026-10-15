@@ -73,8 +73,8 @@ test('I_group the list draws one header per non-empty category with the count in
   const heads = [...h.matchAll(/class="I_gh"/g)].length;
   assert.equal(heads, 4);
   // each level is counted once, in glyph and word: one Out and one Low is "1 out, 1 low", never "2 low, 1 out"
-  assert.match(h, /Bath<\/span><span class="I_ghn"><span aria-hidden="true">✕<\/span> 1 out, <span aria-hidden="true">▲<\/span> 1 low</);
-  assert.match(h, /Linen<\/span><span class="I_ghn"><span aria-hidden="true">▲<\/span> 2 low</);
+  assert.match(h, /Bath<\/span><span class="I_ghn"><svg[^>]*>.*?<\/svg> 1 out, <svg[^>]*>.*?<\/svg> 1 low</);
+  assert.match(h, /Linen<\/span><span class="I_ghn"><svg[^>]*>.*?<\/svg> 2 low</);
   assert.doesNotMatch(h, /2 low, 1 out/);
   assert.ok(h.indexOf('<span>Bath</span>') < h.indexOf('<span>Linen</span>') && h.indexOf('<span>Linen</span>') < h.indexOf('<span>Kitchen</span>'));
   assert.doesNotMatch(h.slice(h.indexOf('<span>Zed</span>'), h.indexOf('<span>Zed</span>') + 40), /I_ghn/); // an all-OK group has no note

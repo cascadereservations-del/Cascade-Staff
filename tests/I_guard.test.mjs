@@ -24,7 +24,7 @@ test('I_guard no top-level name is declared twice inside the module', () => {
 
 test('I_guard the only global the module adds is I_Stock (mount, unmount, lib)', async () => {
   const e = await setup({ role: 'cleaner' });
-  assert.deepEqual(Object.keys(e.win).filter((k) => !['crypto', 'I_STOCK_FLAGS', 'setInterval', 'clearInterval', 'setTimeout', 'clearTimeout'].includes(k)), ['I_Stock']);
+  assert.deepEqual(Object.keys(e.win).filter((k) => !['crypto', 'ICON', 'I_STOCK_FLAGS', 'setInterval', 'clearInterval', 'setTimeout', 'clearTimeout'].includes(k)), ['I_Stock']);
   assert.deepEqual(Object.keys(e.win.I_Stock).sort(), ['lib', 'mount', 'unmount']);
 });
 

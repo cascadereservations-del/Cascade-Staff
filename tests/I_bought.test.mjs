@@ -41,8 +41,8 @@ test('I_bought approved and waiting rows are listed; ticking shows a stepper pre
 test('I_bought the review shows before and after with the pack conversion, and nothing is sent yet', async () => {
   const e = await make(); await open(e); await tick(e, 's1', 's3');
   await e.input('I_f_packs_s1', '2'); await e.submit();
-  assert.match(e.sheet(), /Toilet paper<\/strong>: 2 pack = 24 rolls, on hand 4 → 28/);
-  assert.match(e.sheet(), /Bath towels<\/strong>: 1 pack = 1 pieces, on hand 14 → 15|Bath towels<\/strong>: 1 pieces, on hand 14 → 15/);
+  assert.match(e.sheet(), /Toilet paper<\/strong>: 2 packs = 24 rolls, on hand 4 → 28/);
+  assert.match(e.sheet(), /Bath towels<\/strong>: 1 pack = 1 piece, on hand 14 → 15|Bath towels<\/strong>: 1 pieces, on hand 14 → 15/);
   assert.equal(rcpts(e).length, 0);
 });
 
