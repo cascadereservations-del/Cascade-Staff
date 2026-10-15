@@ -97,3 +97,5 @@ button.rowi.C_row, .rowi.P_tap { cursor: pointer; font: inherit; }
 .P_amt { display: block; width: 100%; text-align: right; font: 650 1.25rem/1.5rem var(--v5-font-ui); font-variant-numeric: tabular-nums; color: var(--v5-ink); }
 .rowi.P_row .P_go { grid-column: 2; justify-self: end; min-width: 88px; min-height: var(--v5-touch); padding: 0 20px; display: inline-flex; align-items: center; justify-content: center; font: 600 var(--v5-t-2)/1 var(--v5-font-ui); }
 .rowi.P_row .P_go.btn-ghost { border: 1px solid var(--v5-line-2); }
+.rowi.P_row .P_go.btn-primary { background: var(--v5-act); color: var(--v5-act-fg); }
+.rowi.P_row .P_go.btn-ghost { color: var(--v5-act); }

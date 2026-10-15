@@ -78,7 +78,7 @@
   // PAID RECENTLY: date, ref and who paid. Not tappable: it is a record, so "did I already pay her?" has an answer.
   function paidRow(r) {
     var by = r.paid_by_name || r.paying_by_name;
-    return '<div class="rowi C_row" style="cursor:default"><span class="lead">' + ICON('checks') + '</span><span class="mid"><span class="t">' + esc(r.payee_name) + ' · <span class="num">' + esc(P.peso(r.total)) + '</span></span>' +
+    return '<div class="rowi C_row P_row" style="cursor:default"><span class="lead">' + ICON('checks') + '</span><span class="mid"><span class="P_amt num">' + esc(P.peso(r.total)) + '</span><span class="t">' + esc(r.payee_name) + '</span>' +
       '<span class="s num">' + (r.paid_at ? 'Paid ' + esc(dm(r.paid_at)) + ' · ' : '') + 'Ref ' + esc(r.ref) + (by ? ' · by ' + esc(by) : '') + '</span></span></div>';
   }
   function unreqRow(u) {
