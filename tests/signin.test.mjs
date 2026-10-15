@@ -176,7 +176,7 @@ test('Theme v5: old variable names map onto the v5 tokens, system UI font, DM Se
     const h = read(f);
     assert.doesNotMatch(h, /fonts\.googleapis|fonts\.gstatic|Raleway|Cormorant|Style\+Script/, f);
     assert.match(h, /<link rel="stylesheet" href="(\.\.\/)?tokens\.css">\s*<link rel="stylesheet" href="(\.\.\/)?styles\.css">/, f + ': tokens.css before styles.css');
-    assert.match(h, /theme-color" content="#EEF1F4"/); assert.match(h, /theme-color" content="#0B1420"/);
+    assert.match(h, /theme-color" content="#F6F3EE"/); assert.match(h, /theme-color" content="#0E1621"/);
   }
   // pay/ is Lane C's: only what Lane A controls is checked here (it links the shared sheet, which pulls in the tokens). Its own head wiring is listed under Wiring needed.
   assert.match(read('pay/index.html'), /<link rel="stylesheet" href="\.\.\/styles\.css">/); assert.match(css, /@import url\("tokens\.css"\);/);

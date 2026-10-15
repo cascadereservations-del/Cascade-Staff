@@ -295,7 +295,7 @@ test('A_ service worker and manifest: new cache name, tokens + house photos prec
   for (const u of ['./tokens.css', './img/house-hero.webp', './img/house-blur.webp', './fonts/dm-serif-display-400.woff2']) assert.ok(sw.includes("'" + u + "'") || sw.includes(u.replace('./', '').replace('fonts/', '')) , u);
   for (const f of ['img/house-hero.webp', 'img/house-blur.webp']) assert.ok(fs.statSync(path.join(root, f)).size <= 60 * 1024, f + ' is 60 KB or less');
   const man = JSON.parse(read('manifest.webmanifest')); assert.equal(man.theme_color, '#EEF1F4'); assert.equal(man.background_color, '#EEF1F4');
-  assert.match(read('index.html'), /theme-color" content="#EEF1F4"[^>]*light/);
+  assert.match(read('index.html'), /theme-color" content="#F6F3EE"[^>]*light/);
 });
 test('A_ demo fixtures: house times 12:00 noon / 2:00 pm everywhere, notices for every role, the cleaner demo carries a house list the client must still hide', () => {
   const X = D.build('owner', NOW), C = D.build('cleaner', NOW);

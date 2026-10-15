@@ -567,7 +567,7 @@ button.A_chipglass { width: var(--touch); padding: 0; justify-content: center; c
 .A_steps .done .dot { background: var(--v5-ok-t); border-color: var(--v5-ok-t); color: var(--v5-act-fg); }
 .A_steps .now .dot { border-color: var(--v5-act); background: var(--v5-fill); color: var(--v5-act); }
 .A_slide { position: relative; display: flex; align-items: center; min-height: 56px; border-radius: var(--r-full); background: var(--v5-panel); color: var(--v5-panel-fg); text-decoration: none; padding: 4px; touch-action: pan-y pinch-zoom; user-select: none; -webkit-user-select: none; overflow: hidden; }
-.A_slide .knob { width: 48px; height: 48px; border-radius: 50%; background: var(--v5-gold); color: var(--v5-gold-fg); display: inline-flex; align-items: center; justify-content: center; flex: none; position: relative; z-index: 1; }
+.A_slide .knob { width: 48px; height: 48px; border-radius: 50%; background: var(--v5-act); color: var(--v5-act-fg); display: inline-flex; align-items: center; justify-content: center; flex: none; position: relative; z-index: 1; }
 .A_slide .txt { position: absolute; left: 0; right: 0; text-align: center; font: 600 var(--v5-t-body)/clamp(1.375rem, 1.2855rem + 0.3975vw, 1.54rem) var(--font-ui); padding-left: 40px; }
 .A_head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .A_head h2 { font: 650 var(--v5-t-num)/clamp(1.75rem, 1.6361rem + 0.506vw, 1.96rem) var(--v5-font-ui); margin: 0; }
@@ -931,7 +931,7 @@ button.A_chipglass.E_pill { width: auto; min-width: 124px; max-width: 184px; hei
 @media (min-width: 52.5rem) {
   .A_hero { max-width: 60rem; margin-left: auto; margin-right: auto; border-radius: 0 0 var(--v5-r-sheet) var(--v5-r-sheet); }
   .H_railhead { display: grid; justify-items: center; gap: 2px; padding: 0 0 .75rem; color: var(--v5-ink); }
-  .H_railhead b { font: 650 1.5rem/1 var(--v5-font-ui); }
+  .H_railhead b { font: 650 var(--v5-t-section)/1 var(--v5-font-ui); }
   .H_railhead span { font: 600 var(--v5-t-label)/1.2 var(--font-ui); color: var(--v5-ink-2); max-width: 4.5rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 }
 /* the calendar screen is tight on a 320 x 640 phone: the sub-tabs, header, legend and help line sit close so the whole month grid and its help line clear the tab bar */
@@ -971,7 +971,7 @@ button.A_chipglass.E_pill { width: auto; min-width: 124px; max-width: 184px; hei
 /* Cassy reply: the wait */
 .H_wait { gap: 6px; }
 .H_bar { height: 6px; border-radius: 3px; background: var(--v5-sunk); overflow: hidden; margin-top: 10px; }
-.H_bar i { display: block; height: 100%; width: 40%; border-radius: 3px; background: var(--v5-gold); animation: H_slide 1.4s ease-in-out infinite; }
+.H_bar i { display: block; height: 100%; width: 40%; border-radius: 3px; background: var(--v5-act); animation: H_slide 1.4s ease-in-out infinite; }
 @keyframes H_slide { 0% { transform: translateX(-100%); } 100% { transform: translateX(250%); } }
 @media (prefers-reduced-motion: reduce) { .H_bar i { animation: none; width: 100%; opacity: .6; } }
 .H_thumb { display: block; max-width: 100%; max-height: 120px; margin-top: 8px; border-radius: var(--v5-r-field); object-fit: contain; }
@@ -1017,7 +1017,7 @@ body { font-family: var(--v5-font-ui); }
 .card-head h3, .ttl, .dlg, .qg h2 { font-family: var(--v5-font-ui); font-weight: 650; letter-spacing: 0; }
 .qg h2 { color: var(--v5-ink); }
 .dlg::after, .qg h2::after { display: none; }
-.A_card .A_name, .A_greet h1 { font-size: 1.75rem; } /* guest name and greeting stay in the display serif: both are 28 px and up */
+.A_card .A_name, .A_greet h1 { font-size: clamp(1.75rem, 1.6361rem + 0.506vw, 1.96rem); } /* guest name and greeting stay in the display serif: both are 28 px and up */
 .lead { border-radius: var(--v5-r-md); }
 .A_body { border-radius: var(--v5-r-sheet) var(--v5-r-sheet) 0 0; }
 .btn, .chip, .cal .d, .H_chk, .A_steps b, .count, .toast, .pill, time, .amt, .num, [data-amount], [data-date] { font-variant-numeric: tabular-nums; }

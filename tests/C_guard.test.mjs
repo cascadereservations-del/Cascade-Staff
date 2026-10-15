@@ -86,7 +86,7 @@ test('pay pages: no Google Fonts, tokens.css before styles.css, the v5 theme-col
     const src = read('pay/' + f);
     assert.doesNotMatch(src, /fonts\.googleapis|fonts\.gstatic/, f);
     assert.ok(src.indexOf('../tokens.css') > 0 && src.indexOf('../tokens.css') < src.indexOf('../styles.css'), f + ': tokens.css first');
-    assert.match(src, /name="theme-color" content="#EEF1F4" media="\(prefers-color-scheme: light\)"/, f); assert.match(src, /name="theme-color" content="#0B1420" media="\(prefers-color-scheme: dark\)"/, f);
+    assert.match(src, /name="theme-color" content="#F6F3EE" media="\(prefers-color-scheme: light\)"/, f); assert.match(src, /name="theme-color" content="#0E1621" media="\(prefers-color-scheme: dark\)"/, f);
   }
   for (const f of js) for (const m of read('pay/' + f).matchAll(/style="[^"]*height:\s*(\d+)px/g)) assert.ok(+m[1] >= 44 || /skel|disc/.test(m[0]) || +m[1] > 60, `${f}: inline height ${m[1]}px`);
   assert.doesNotMatch(read('pay/pay.js'), /data-rmx[^>]*height:28px/);

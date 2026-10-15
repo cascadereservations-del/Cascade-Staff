@@ -15,8 +15,7 @@ body { background: var(--v5-ambient), var(--v5-bg); color: var(--v5-ink); font: 
 .appbar { background: var(--v5-bg); border-bottom: 1px solid var(--v5-line); }
 .appbar .ttl { font: 650 var(--v5-t-section)/clamp(1.875rem, 1.7529rem + 0.5421vw, 2.1rem) var(--v5-font-ui); letter-spacing: 0; }
 .iconbtn { min-width: var(--v5-touch); min-height: var(--v5-touch); }
-.card { background: var(--v5-surf); border: 0; box-shadow: var(--v5-shadow-card); border-radius: var(--v5-r-card);
-  box-shadow: inset 0 1px 0 var(--v5-card-hi), 0 8px 24px var(--v5-card-shadow); }
+.card { background: var(--v5-surf); border: 0; box-shadow: var(--v5-shadow-card); border-radius: var(--v5-r-card); }
 .cap.up { font: 700 var(--v5-t-label)/clamp(1.125rem, 1.0518rem + 0.3253vw, 1.26rem) var(--v5-font-ui); letter-spacing: .08em; color: var(--v5-ink-2); }
 .help, .payrow .s, .mid .s { font-size: var(--v5-t-2); line-height: clamp(1.25rem, 1.1686rem + 0.3614vw, 1.4rem); color: var(--v5-ink-2); }
 .payrow .t, .mid .t { font-size: var(--v5-t-body); line-height: clamp(1.5rem, 1.4023rem + 0.4337vw, 1.68rem); }
