@@ -108,8 +108,8 @@ test('I_count-walk the Needs a count chip lists consumables never counted or old
   assert.match(e.html().slice(e.html().indexOf('I_list')), /Shampoo/);
 });
 
-test('I_count-walk a cleaner and finance never see the button, the chip or the summary line; a hand-made click does nothing', async () => {
-  for (const role of ['cleaner', 'finance']) {
+test('I_count-walk finance never sees the button, the chip or the summary line; a hand-made click does nothing (the cleaner may count since s85)', async () => {
+  for (const role of ['finance']) {
     const e = await make(role); await e.mount('');
     assert.doesNotMatch(e.html(), /Count this group|Needs a count|need a count/, role);
     await e.act('walk', { 'data-cat': 'Bath' }); assert.equal(e.sheet(), '', role);

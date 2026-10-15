@@ -100,12 +100,12 @@ test('I_fix a refused approve hides Approve and Remove, not Stock received', asy
   assert.match(e.sheet(), /data-kind="recv"/);
 });
 
-test('I_fix defaults: Count it is ON for owner and admin only, Used some is OFF for every role', async () => {
-  for (const [role, count] of [['owner', true], ['admin', true], ['cleaner', false], ['finance', false]]) {
+test('I_fix defaults: Count it is ON for owner, admin and cleaner (s85), Record use for the cleaner only', async () => {
+  for (const [role, count, used] of [['owner', true, false], ['admin', true, false], ['cleaner', true, true], ['finance', false, false]]) {
     const e = await setup({ role, flags: null, client: cl() });
     await e.mount('item/i1');
     assert.equal(/data-kind="count"/.test(e.sheet()), count, role + ' count');
-    assert.doesNotMatch(e.sheet(), /data-kind="used"/);
+    assert.equal(/data-kind="used"/.test(e.sheet()), used, role + ' used');
   }
 });
 

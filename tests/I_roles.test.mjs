@@ -47,7 +47,7 @@ test('I_roles an item with no unit cost shows no cost row for the owner', async 
   assert.doesNotMatch(e.sheet(), /Unit cost/);
 });
 
-const MATRIX = { owner: { count: 1, used: 0, recv: 1, shop: 1, link: 1 }, admin: { count: 1, used: 0, recv: 1, shop: 1, link: 1 }, cleaner: { count: 0, used: 1, recv: 0, shop: 1, link: 0 }, finance: { count: 0, used: 0, recv: 0, shop: 1, link: 0 } };
+const MATRIX = { owner: { count: 1, used: 0, recv: 1, shop: 1, link: 1 }, admin: { count: 1, used: 0, recv: 1, shop: 1, link: 1 }, cleaner: { count: 1, used: 1, recv: 0, shop: 1, link: 0 }, finance: { count: 0, used: 0, recv: 0, shop: 1, link: 0 } };
 
 test('I_roles finance: the unit cost shows on the item sheet only, never in the list, the shopping list or a sheet it cannot use', async () => {
   const e = await setup({ role: 'finance', client: mockClient({ catalogue: CATALOGUE, shop: SHOP }) });

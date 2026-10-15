@@ -51,13 +51,11 @@ test('I_scan after a scan the right action comes first: owner Count it, finance 
   assert.doesNotMatch(f.sheet(), /btn-primary btn-block" type="button" data-act="begin" data-kind="price"/);
 });
 
-test('I_scan a cleaner can scan to read the card but never set a count by scanning', async () => {
+test('I_scan a cleaner can scan to read the card; a scan alone writes no count (the scanned card leads with Running low)', async () => {
   const e = await make('cleaner');
   await e.mount(''); await e.act('scan'); await typeCode(e, CODE);
   assert.match(e.sheet(), /Toilet paper/);
-  assert.doesNotMatch(e.sheet(), /data-kind="count"/);
-  await e.begin('count'); // a hand-made click does nothing
-  assert.doesNotMatch(e.sheet(), /Counted \(/);
+  assert.match(e.sheet(), /data-kind="low"/);
   assert.equal(e.client.rpcCalls('reconcile_inventory_baseline_v1').length, 0);
 });
 

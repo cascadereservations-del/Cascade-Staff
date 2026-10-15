@@ -19,7 +19,7 @@ const M = [
   ['offline guard removed', [["if (!online()) { a.err = 'offline'; drawLayer(); return; }", ""]]],
   ['refused keeps the action', [["if (a.err === 'refused') {", "if (false) {"]]],
   ['demo calls the network', [["if (me.demo) { toast(rep ? 'Demo only, nothing was sent.' : DEMO_NOTE); finish(); return; }", ""], ["if (!M.demo && !(K.items", "if (true || !(K.items"]]],
-  ['cleaner sees Count it', [["if (kind === 'count') return I_FLAGS.count && canManage(m) && !M.denied.count;", "if (kind === 'count') return !M.denied.count;"]]],
+  ['finance sees Count it', [["if (kind === 'count') return I_FLAGS.count && canCount(m) && !M.denied.count;", "if (kind === 'count') return I_FLAGS.count && m !== 'owner' && m !== 'admin' && m !== 'cleaner' || !M.denied.count;"]]],
   ['failed probe shows sample rows', [["else me.loadErr = errKind(r && r.error, online()) === 'offline' ? 'offline' : 'unavailable';", "else { K.items = demoItems().map(function (x) { return normalize(x, me.role); }); }"]]],
   ['shopping read selects a cost column', [["reason,status,proposed_by,proposed_at'", "reason,status,proposed_by,proposed_at,estimated_cost'"]]],
   ['duplicate declaration', [["  function fmt(n)", "  function esc(s) { return s; }\n  function fmt(n)"]]],
@@ -27,6 +27,15 @@ const M = [
   ['short note sent as typed', [["return t.length >= 3 ? t : 'Counted in the staff app';", "return t || 'Counted in the staff app';"]]],
   ['controlled item refused again', [["if (kind === 'recv') return canManage(m) && !M.denied.recv;", "if (kind === 'recv') return canManage(m) && !M.denied.recv && !(it && it.controlled);"]]],
   ['no reload after failure', [["{ me.loading = false; load(); } // the write may have landed", "{ } // the write may have landed"]]],
+  ['usage default off', [["var I_FLAGS = { count: true, usage: true };", "var I_FLAGS = { count: true, usage: false };"]]],
+  ['finance can count', [["function canCount(role) { return role === 'owner' || role === 'admin' || role === 'cleaner'; }", "function canCount(role) { return true; }"]]],
+  ['cleaner cannot count', [["function canCount(role) { return role === 'owner' || role === 'admin' || role === 'cleaner'; }", "function canCount(role) { return role === 'owner' || role === 'admin'; }"]]],
+  ['owner can record use', [["function canUse(role) { return role === 'cleaner'; }", "function canUse(role) { return role !== 'finance'; }"]]],
+  ['cleaner count refusal shows an error box', [["if (a.err === 'refused' && a.kind === 'count' && !canManage(me.role)) {", "if (false) {"]]],
+  ['cleaner walk refusal says ask the owner', [["var m = canManage(me.role) ? ERR.refused : ERR.missing;", "var m = ERR.refused;"]]],
+  ['use undo reads the wrong id', [["p_movement_id: usedMovement(d), p_purchase_id: null", "p_movement_id: null, p_purchase_id: null"]]],
+  ['use undo offered without a movement', [["a.kind === 'used' && usedMovement(d)", "a.kind === 'used'"]]],
+  ['record use button renamed', [["['used', 1, 'Record use']", "['used', 1, 'Used some']"]]],
   ['count default off', [["var I_FLAGS = { count: true, usage: false };", "var I_FLAGS = { count: false, usage: false };"]]],
   ['one-way warning dropped', [["After this, ' + esc(it.name)", "Done, ' + esc(it.name)"]]],
   ['write does not stale the list', [["K.at = 0; // any write", "// any write"]]],
@@ -83,7 +92,7 @@ const M = [
   ['bought for finance', [["if (kind === 'bought') return canManage(m) && !M.denied.bought", "if (kind === 'bought') return canPrice(m) && !M.denied.bought"]]],
   ['walk writes on Same as before', [["a.same[a.ids[a.i]] = 1; walkNext(a);", "a.same[a.ids[a.i]] = 1; a.vals.qty = a.vals.qty; walkSubmit(a);"]]],
   ['needs a count ignores the clock', [["nowMs() - Date.parse(it.counted) > 30 * 86400000", "false"]]],
-  ['walk for a cleaner', [["if (kind === 'count') return I_FLAGS.count && canManage(m) && !M.denied.count;", "if (kind === 'count') return I_FLAGS.count && !M.denied.count;"]]],
+  ['walk for a cleaner', [["if (kind === 'count') return I_FLAGS.count && canCount(m) && !M.denied.count;", "if (kind === 'count') return I_FLAGS.count && !M.denied.count;"]]],
   ['history shows price to a cleaner', [["canPrice(M.role) && lb.unit_cost != null", "lb.unit_cost != null"]]],
   ['history wrong RPC key', [["{ p_item_id: id }); }).then(function (r) {", "{ p_id: id }); }).then(function (r) {"]]],
   ['suggestion without the 1.5', [["* 1.5 * 100) / 100", "* 1 * 100) / 100"]]],
@@ -119,7 +128,7 @@ for (const [name, edits] of M) {
   for (const [a, b] of edits) { if (!s.includes(a)) { console.log('SKIP (pattern not found): ' + name + ' :: ' + a.slice(0, 50)); bad++; s = null; break; } s = s.replace(a, b); }
   if (s == null) continue;
   const f = path.join(dir, 'I_stock.mut.js'); fs.writeFileSync(f, s);
-  const r = spawnSync(process.execPath, ['--test', path.join(here, 'I_rpc.test.mjs'), path.join(here, 'I_roles.test.mjs'), path.join(here, 'I_flow.test.mjs'), path.join(here, 'I_guard.test.mjs'), path.join(here, 'I_fix.test.mjs'), path.join(here, 'I_group.test.mjs'), path.join(here, 'I_scan.test.mjs'), path.join(here, 'I_card.test.mjs'), path.join(here, 'I_report.test.mjs'), path.join(here, 'I_undo.test.mjs'), path.join(here, 'I_running-low.test.mjs'), path.join(here, 'I_bought.test.mjs'), path.join(here, 'I_count-walk.test.mjs'), path.join(here, 'I_history.test.mjs'), path.join(here, 'I_recent.test.mjs'), path.join(here, 'I_round2.test.mjs')], { env: Object.assign({}, process.env, { I_STOCK_SRC: f }), encoding: 'utf8', timeout: 60000 });
+  const r = spawnSync(process.execPath, ['--test', path.join(here, 'I_rpc.test.mjs'), path.join(here, 'I_roles.test.mjs'), path.join(here, 'I_flow.test.mjs'), path.join(here, 'I_guard.test.mjs'), path.join(here, 'I_fix.test.mjs'), path.join(here, 'I_group.test.mjs'), path.join(here, 'I_scan.test.mjs'), path.join(here, 'I_card.test.mjs'), path.join(here, 'I_report.test.mjs'), path.join(here, 'I_undo.test.mjs'), path.join(here, 'I_running-low.test.mjs'), path.join(here, 'I_bought.test.mjs'), path.join(here, 'I_count-walk.test.mjs'), path.join(here, 'I_history.test.mjs'), path.join(here, 'I_recent.test.mjs'), path.join(here, 'I_round2.test.mjs'), path.join(here, 'I_staff.test.mjs')], { env: Object.assign({}, process.env, { I_STOCK_SRC: f }), encoding: 'utf8', timeout: 60000 });
   const red = [...(r.stdout || '').matchAll(/^\s*✖ (I_[-\w]+ .+?) \(\d+(?:\.?\d+)?ms\)/gm)].map((m) => m[1].trim()).filter((v, i, a) => a.indexOf(v) === i);
   const hung = !!(r.error && r.error.code === 'ETIMEDOUT');
   const ok = hung || (r.status !== 0 && red.length > 0);

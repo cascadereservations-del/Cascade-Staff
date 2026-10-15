@@ -8,8 +8,8 @@
 
   var PROPERTY_ID = '6ae230f4-c189-4547-84b1-cb6e0b2cc9bd'; // same constant as the shell's CFG.propertyId; opts.propertyId wins
   var DEMO_NOTE = 'Demo only, nothing was saved.';
-  // Owner decision 2026-10-13: counts move to the app (a first count is one-way); Used some stays off (it would double the checklist supply log). Read once; the test hook is window.I_STOCK_FLAGS.
-  var I_FLAGS = { count: true, usage: false };
+  // Owner decision 2026-10-13: counts move to the app (a first count is one-way). s85: Used some is on for the cleaner (Lloyd: staff had no way to update the amount or record use). Read once; the test hook is window.I_STOCK_FLAGS.
+  var I_FLAGS = { count: true, usage: true };
   if (root.I_STOCK_FLAGS) { I_FLAGS.count = !!root.I_STOCK_FLAGS.count; I_FLAGS.usage = !!root.I_STOCK_FLAGS.usage; }
 
   /* ------------------------------------------------------------------ pure helpers (exported as I_Stock.lib) */
@@ -19,6 +19,7 @@
   function fmt(n) { return String(Math.round(Number(n) * 100) / 100); }
   function canManage(role) { return role === 'owner' || role === 'admin'; }
   function canPrice(role) { return role === 'owner' || role === 'admin' || role === 'finance'; } // the server sends unitCost only to these three
+  function canCount(role) { return role === 'owner' || role === 'admin' || role === 'cleaner'; } // s85: the cleaner counts too; the server decides (42501 hides Count for the visit)
   function canUse(role) { return role === 'cleaner'; } // record_inventory_usage needs submit_cleaning
   function manilaToday(ms) { return new Date(ms + 8 * 3600000).toISOString().slice(0, 10); }
   function dateLabel(iso) { var a = String(iso || '').slice(0, 10).split('-'); return a.length === 3 && +a[1] ? MONTHS[+a[1] - 1] + ' ' + +a[2] : ''; }
@@ -291,7 +292,7 @@
       '<button class="btn btn-secondary" type="button" data-act="tab" data-to="shopping" aria-pressed="' + rt.shopping + '">Shopping list' + (n ? ' ' + n : '') + '</button></div>';
     if (rt.shopping) return h;
     if (K.items) {
-      var s = summary(K.items), needN = canManage(M.role) ? K.items.filter(needsCount).length : 0;
+      var s = summary(K.items), needN = allowed('count') ? K.items.filter(needsCount).length : 0;
       h += '<section class="card glass I_sum ' + (s.low ? 'I_sumlow' : 'I_sumok') + '" aria-label="Stock summary"><span class="I_g" aria-hidden="true">' + (s.low ? LEVELS.low.glyph : LEVELS.ok.glyph) + '</span><div><div class="I_sumt">' +
         (s.low ? s.low + (s.low === 1 ? ' item low' : ' items low') : 'Stock is fine') + '</div>' + (s.out ? '<div class="help">' + s.out + (s.out === 1 ? ' is' : ' are') + ' out</div>' : '') + (needN ? '<button class="btn btn-ghost I_needbtn" type="button" data-act="chip" data-k="need"><span aria-hidden="true">▲</span> ' + needN + ' need a count</button>' : '') + '</div></section>';
       h += renderRecent();
@@ -508,7 +509,7 @@
     var list = [], listed = (K.shop || []).some(function (r) { return r.itemId === it.id; });
     if (allowed('low')) list.push(listed ? ['lowdone', 0, ''] : ['low', canManage(m) ? 0 : 1, 'Running low']);
     if (allowed('count')) list.push(['count', 1, 'Count it']);
-    if (allowed('used')) list.push(['used', 1, 'Used some']);
+    if (allowed('used')) list.push(['used', 1, 'Record use']);
     if (allowed('price')) list.push(['price', 0, 'Change price']);
     if (allowed('recv', it)) list.push(['recv', 0, 'Stock received']);
     if (allowed('levels')) list.push(['levels', 0, 'Edit levels']);
@@ -591,7 +592,7 @@
   }
   function allowed(kind, it) {
     var m = M.role;
-    if (kind === 'count') return I_FLAGS.count && canManage(m) && !M.denied.count;
+    if (kind === 'count') return I_FLAGS.count && canCount(m) && !M.denied.count;
     if (kind === 'used') return I_FLAGS.usage && canUse(m) && !M.denied.used;
     if (kind === 'recv') return canManage(m) && !M.denied.recv; // controlled items too since 1b: record_inventory_receipt_v1 writes their movement
     if (kind === 'bought') return canManage(m) && !M.denied.bought && K.shop && K.shop.length > 0;
@@ -670,7 +671,7 @@
     undo: function () { return 'Undone.'; }, unlink: function () { return 'Unlinked.'; }, low: function () { return 'Passed on. Thank you.'; }, link: function (it) { return 'Linked. Scanning it now opens ' + it.name + '.'; }, price: function (it) { return 'Price saved for ' + it.name + '.'; }, levels: function (it) { return 'Levels saved for ' + it.name + '.'; },
     create: function (it, a) { return 'Added ' + String(a.vals.name).trim() + '.'; }, report: function (it, a) { return 'Sent to the ' + (a.vals.to === 'finance' ? 'Finance' : 'OPS') + ' group.'; } };
   function bodyOf(e) { try { return e && e.context && typeof e.context.json === 'function' ? Promise.resolve(e.context.json()).catch(function () { return null; }) : null; } catch (x) { return null; } }
-  var NEWK = { unlink: 1, low: 1, link: 1, price: 1, levels: 1, create: 1, report: 1, undo: 1 }; // actions that hide for the visit when the server says "not here"
+  var NEWK = { used: 1, unlink: 1, low: 1, link: 1, price: 1, levels: 1, create: 1, report: 1, undo: 1 }; // actions that hide for the visit when the server says "not here"
   function commit(a) {
     var me = M, it = itemOf(a) || { name: a.rowName || (a.entry && a.entry.name) || '' }, call = build(a), rep = a.kind === 'report', snap = it && { qty: it.qty, cost: it.cost, reorder: it.reorder, par: it.par, controlled: it.controlled };
     if (me.demo) { toast(rep ? 'Demo only, nothing was sent.' : DEMO_NOTE); finish(); return; }
@@ -709,6 +710,7 @@
     var dk = a.kind === 'undo' ? a.entry.call.fn : a.kind;
     if (a.err === 'missing' && NEWK[a.kind]) { me.denied[dk] = true; if (a.itemId && !rep && a.kind !== 'create') { a.kind = 'menu'; a.vals = null; a.step = null; } else me.act = null; a.err = null; toast(ERR.missing); if (rep) drawList(); return drawLayer(); } // not here yet: hide it, no error box
     if (!rep && (a.err === 'offline' || a.err === 'other')) { me.loading = false; load(); } // the write may have landed: look again
+    if (a.err === 'refused' && a.kind === 'count' && !canManage(me.role)) { me.denied.count = true; a.kind = 'menu'; a.vals = null; a.step = null; a.err = null; toast(ERR.missing); return drawLayer(); } // s85: the count release is not applied yet for staff: hide Count for the visit, no error box
     if (a.err === 'refused') { // the server decides: calm line, and the action goes away
       me.denied[dk] = true;
       if (a.kind === 'shopset') { a.kind = 'menu'; }
@@ -793,7 +795,7 @@
     }).catch(function (e) {
       if (me.dead) return;
       a.sending = false; a.err = errKind(e, online());
-      if (a.err === 'refused') { K.denied.count = true; var m = ERR.refused; me.act = null; toast(m); draw(); return; }
+      if (a.err === 'refused') { K.denied.count = true; var m = canManage(me.role) ? ERR.refused : ERR.missing; me.act = null; toast(m); draw(); return; }
       if (a.err === 'offline' || a.err === 'other') { me.loading = false; load(); } // the count may have landed: look again
       drawLayer();
     });
@@ -903,6 +905,9 @@
     if (a.kind === 'count' && d.movementId) {
       var cn = parseQty(v.qty, true); e.say = 'Counted ' + n + ': ' + fmt(cn); e.line = 'counted ' + fmt(cn);
       e.confirm = 'Put ' + n + ' back to ' + (snap && snap.qty != null ? fmt(snap.qty) : 'its old amount') + '?' + (snap && snap.controlled === false ? ' It stays counted in the app.' : ''); e.call = { fn: 'inventory_undo_v1', args: { p_movement_id: d.movementId, p_purchase_id: null } };
+    } else if (a.kind === 'used' && usedMovement(d)) {
+      var un = parseQty(v.qty); e.say = 'Logged ' + fmt(un) + ' ' + unitOf(it) + ' of ' + n + ' as used'; e.line = 'logged ' + fmt(un) + ' as used'; e.confirm = 'Put the ' + fmt(un) + ' ' + unitOf(it) + ' of ' + n + ' back?';
+      e.call = { fn: 'inventory_undo_v1', args: { p_movement_id: usedMovement(d), p_purchase_id: null } };
     } else if (a.kind === 'recv' && (d.movementId || d.purchaseId)) {
       e.say = 'Received ' + n; e.line = 'received stock'; e.confirm = 'Take the stock you just added to ' + n + ' back out?';
       e.call = { fn: 'inventory_undo_v1', args: { p_movement_id: d.movementId || null, p_purchase_id: d.purchaseId || null } };
@@ -926,6 +931,7 @@
     } else return null;
     return e;
   }
+  function usedMovement(d) { var m = d.movementId || (d.movementIds && d.movementIds[0]) || (d.movements && d.movements[0] && (d.movements[0].movementId || d.movements[0].id)); return m || null; } // record_inventory_usage writes through the ledger; no id in the answer = no Undo
   function pushUndo(a, it, d, snap) {
     var e = undoFor(a, it, d, snap); if (!e) return;
     K.undos.unshift(e); if (K.undos.length > 20) K.undos.length = 20;
