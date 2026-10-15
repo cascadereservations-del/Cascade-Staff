@@ -9,11 +9,11 @@
       "time": "2026-10-15T02:23:12.508Z"
     },
     "checklist": {
-      "source": "s82-checklist-C",
-      "head": "236fac5",
+      "source": "s87-checklist",
+      "head": "a00ac7c",
       "files": 8,
-      "bytes": 1048594,
-      "time": "2026-10-13T23:39:13.789Z"
+      "bytes": 1048460,
+      "time": "2026-10-15T15:21:08.748Z"
     },
     "manual": {
       "source": "s80-manual",
