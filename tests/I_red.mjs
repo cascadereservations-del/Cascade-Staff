@@ -36,7 +36,7 @@ const M = [
   ['use undo reads the wrong id', [["p_movement_id: usedMovement(d), p_purchase_id: null", "p_movement_id: null, p_purchase_id: null"]]],
   ['use undo offered without a movement', [["a.kind === 'used' && usedMovement(d)", "a.kind === 'used'"]]],
   ['record use button renamed', [["['used', 1, 'Record use']", "['used', 1, 'Used some']"]]],
-  ['count default off', [["var I_FLAGS = { count: true, usage: false };", "var I_FLAGS = { count: false, usage: false };"]]],
+  ['count default off', [["var I_FLAGS = { count: true, usage: true };", "var I_FLAGS = { count: false, usage: true };"]]],
   ['one-way warning dropped', [["After this, ' + esc(it.name)", "Done, ' + esc(it.name)"]]],
   ['write does not stale the list', [["K.at = 0; // any write", "// any write"]]],
   ['key never expires', [[" || nowMs() - ke.at > 600000", ""]]],
@@ -58,7 +58,7 @@ const M = [
   ['report body renamed', [["body: { kind: v.rkind, to: v.to }", "body: { type: v.rkind, to: v.to }"]]],
   ['report function renamed', [["invoke: 'inventory-report'", "invoke: 'inventory_report'"]]],
   ['report hold ignored', [["if (rep) K.cool[a.vals.rkind + '|' + a.vals.to] = nowMs();", ""]]],
-  ['missing function not hidden', [["var NEWK = { unlink: 1, low: 1, link: 1, price: 1, levels: 1, create: 1, report: 1, undo: 1 };", "var NEWK = {};"]]],
+  ['missing function not hidden', [["var NEWK = { used: 1, unlink: 1, low: 1, link: 1, price: 1, levels: 1, create: 1, report: 1, undo: 1 };", "var NEWK = {};"]]],
   ['hidden actions return on re-mount', [["denied: K.denied,", "denied: {},"]]],
   ['camera left on at close', [["stopCam(); K.scanned = null;", "K.scanned = null;"], ["if (!a) { stopCam(); box.innerHTML", "if (!a) { box.innerHTML"]]],
   ['camera left on at unmount', [["stopCam(); if (root.document && root.document.removeEventListener", "if (root.document && root.document.removeEventListener"]]],
@@ -115,7 +115,7 @@ const M = [
   ['stepper allows zero use', [["return fmt(Math.max(allowZero ? 0 : 1, n));", "return fmt(Math.max(0, n));"]]],
   ['bought done screen loses its rows', [["if (a.step !== 'pick' && a.rows) return a.rows; return", "return"]]],
   ['first count undo wording in the walk', [["{ qty: it.qty, controlled: it.controlled });", "{ qty: it.qty });"]]],
-  ['toast over the undo bar', [["if (a.kind === 'undo' || K.undos[0] === u0) toast(msg);", "toast(msg);"]]],
+  ['toast over the undo bar', [["if (a.kind === 'undo' || K.undos[0] === u0 || (K.undos[0] && K.undos[0].call && K.denied[K.undos[0].call.fn])) toast(msg);", "toast(msg);"]]],
   ['undo all depends on the 20 entry list', [["return e && !e.undone; })", "return e && K.undos.indexOf(e) >= 0; })"]]],
   ['not_open reads as try again', [[" || body.reason === 'not_open')", ")"]]]
 ];
