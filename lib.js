@@ -937,6 +937,7 @@
     if (mgr) items.push(['Add a notice from Today', 'The Notices card has an Add a notice button. Water and Power are the first two choices.']);
     items.push(['Alerts turn on by themselves', 'Alerts now turn on by themselves when this phone allows them. If they are blocked, Today shows how to allow them.']);
     items.push(['Inventory at a glance', 'Each item says what it needs: a count, or a place on the shopping list. One tap records use or a count.']);
+    items.push(['Suppliers and photos', 'Suppliers, price history and item photos are in Inventory.']);
     items.push(['A calmer look', 'Solid cards, one clear accent colour and an easier-to-read font. Today, Notices and Pay staff are easier to scan.']);
     if (admin) items.push(['Admin hub', 'More lists every dashboard page in one place.']);
     if (mgr) items.push(['Arrival checks', 'Each arriving guest shows whether the ID, the balance and the door code are in place.']);

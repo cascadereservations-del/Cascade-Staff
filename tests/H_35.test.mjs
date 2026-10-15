@@ -99,7 +99,7 @@ test('3.2.1 blocked card: every role, steps by device, Hide for 7 days', async (
 
 test('3.2.1 version 3.2.1, cache v21, What is new line', async () => {
   const CS = createRequire(import.meta.url)('../lib.js');
-  assert.match(read('sw.js'), /CACHE_NAME = 'cs-shell-v23'/); assert.match(read('app.js'), /version: '3.3.0'/);
+  assert.match(read('sw.js'), /CACHE_NAME = 'cs-shell-v24'/); assert.match(read('app.js'), /version: '3.4.0'/);
   for (const r of ['cleaner', 'owner']) assert.ok(CS.A_whatsNew(r, {}).some((i) => /Alerts now turn on by themselves when this phone allows them\. If they are blocked, Today shows how to allow them\./.test(i.text) && !/!/.test(i.text)));
 });
 
@@ -122,4 +122,10 @@ test('3.2.1 r2: dismissing the browser prompt stores the 7-day stamp, so the nex
 test('3.2.1 r2: a failed quiet subscribe never unsubscribes an existing push subscription', async () => {
   const p = phone({ permission: 'granted', subscribeRpc: () => ({ error: { code: 'XX000', message: 'boom' }, data: null }) }); const app = await boot(p.opts('cleaner')); await app.flush();
   assert.equal(subCalls(app).length, 1); assert.equal(p.ctl.unsub, 0);
+});
+
+test('3.4.0 What is new line: suppliers, price history and photos, calm, no exclamation mark', () => {
+  const CS = createRequire(import.meta.url)('../lib.js');
+  for (const r of ['cleaner', 'owner']) assert.ok(CS.A_whatsNew(r, {}).some((i) => i.text === 'Suppliers, price history and item photos are in Inventory.'));
+  assert.ok(read('sw.js').includes("'./stock/I_suppliers.js'") && read('sw.js').includes("'./stock/I_suppliers.css'"));
 });
