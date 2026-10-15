@@ -112,7 +112,7 @@ test('A_fix M3 (E_: now through E_drag): slide-to-start swallows only the click 
 
 // ---------------------------------------------------------------- M4 M5
 test('A_fix M4: the deep-clean tile has a colour (the class the app writes is the class the stylesheet styles)', () => {
-  assert.match(css, /\.lead\.A_t-deep_clean \{ background: var\(--v5-deep\)/); assert.doesNotMatch(css, /\.A_t-deep\b(?!_)/);
+  assert.match(css, /\.lead\.A_t-deep_clean \{ color: var\(--v5-ok-t\)/); assert.match(css, /\.lead\.A_t-power, [^{]*\{ background: var\(--v5-sunk\)/); assert.doesNotMatch(css, /\.A_t-deep\b(?!_)/);
   assert.ok(CS.A_noticesView({ notices: [{ id: 'd', type: 'deep_clean', title: 'Deep clean', date: '2026-10-20' }] }, 'cleaner', TODAY).list[0].type === 'deep_clean');
 });
 test('A_fix M5: EVERY rule ending in an interactive class sets a height of at least 44 px (px >= 44 or the touch token), and the house row keeps its buttons on their own line', async () => {
@@ -186,7 +186,7 @@ test('A_fix LOW: no raw colour in styles.css, tokens added for both themes, no G
   const raw = css.split('\n').filter((l) => /#[0-9a-fA-F]{3,8}\b|rgba?\(/.test(l)); assert.deepEqual(raw, []);
   const tk = read('tokens.css'); for (const t of ['--v5-photo-ink', '--v5-photo-fade', '--v5-live-ok', '--v5-bar-on', '--v5-scrim']) assert.ok(tk.includes(t + ':'), t);
   const sw = read('sw.js'); assert.doesNotMatch(sw, /fonts\.googleapis|fonts\.gstatic/); assert.doesNotMatch(sw, /facebook/, 'a cross-origin frame never reaches our worker');
-  const pre = [...read('index.html').matchAll(/rel="preload" href="([^"]+)"/g)].map((m) => m[1]); assert.deepEqual(pre, ['fonts/dm-serif-display-400.woff2']); for (const p of pre) assert.ok(fs.existsSync(path.join(root, p)), p);
+  const pre = [...read('index.html').matchAll(/rel="preload" href="([^"]+)"/g)].map((m) => m[1]); assert.deepEqual(pre, ['fonts/inter-var.woff2', 'fonts/dm-serif-display-400.woff2']); for (const p of pre) assert.ok(fs.existsSync(path.join(root, p)), p);
 });
 test('A_fix LOW: one time format ("2:00 pm", "12:00 noon"); the demo registers no service worker, a live page does', async () => {
   assert.deepEqual([CS.fmtTime('14:00:00'), CS.fmtTime('12:00:00'), CS.fmtTime('09:05:00'), CS.fmtTime('00:30:00')], ['2:00 pm', '12:00 noon', '9:05 am', '12:30 am']);

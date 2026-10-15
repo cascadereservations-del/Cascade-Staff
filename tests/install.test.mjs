@@ -84,9 +84,9 @@ test('the install page, the manifest and the service worker agree', () => {
   assert.deepEqual(m.related_applications, [{ platform: 'webapp', url: 'https://cascadereservations-del.github.io/Cascade-Staff/manifest.webmanifest' }]);
   assert.equal(m.scope, '/Cascade-Staff/');
   const sw = read('sw.js');
-  assert.match(sw, /CACHE_NAME = 'cs-shell-v22'/);
+  assert.match(sw, /CACHE_NAME = 'cs-shell-v23'/);
   for (const f of ['./install/', './install/index.html', './install/install.js', './demo.js']) assert.ok(sw.includes("'" + f + "'"), f + ' is precached');
-  assert.match(read('app.js'), /version: '3.2.2'/);
+  assert.match(read('app.js'), /version: '3.3.0'/);
 });
 
 test('the in-app install card links to the install page when there is no prompt and no iPhone', () => {

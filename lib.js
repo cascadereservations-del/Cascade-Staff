@@ -937,6 +937,7 @@
     if (mgr) items.push(['Add a notice from Today', 'The Notices card has an Add a notice button. Water and Power are the first two choices.']);
     items.push(['Alerts turn on by themselves', 'Alerts now turn on by themselves when this phone allows them. If they are blocked, Today shows how to allow them.']);
     items.push(['Stock from the item card', 'Staff can now update how much is left and record what was used, from the item card.']);
+    items.push(['A calmer look', 'A calmer look: solid cards, one clear accent colour and an easier-to-read font.']);
     if (admin) items.push(['Admin hub', 'More lists every dashboard page in one place.']);
     if (mgr) items.push(['Arrival checks', 'Each arriving guest shows whether the ID, the balance and the door code are in place.']);
     if (flags.notices && mgr) items.push(['Tell the guest', 'On a notice, copy a ready message to send to the guest yourself.']);

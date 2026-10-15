@@ -34,8 +34,8 @@ test('F_ spacing and radius tokens follow the same method: 16 / 14 / 16 / 24 at 
   const at = (n, w) => evalClamp(tok(n), w);
   assert.equal(Math.round(at('gutter', 360) * 10) / 10, 16); assert.equal(Math.round(at('gutter', 1024)), 32); assert.equal(at('gutter', 320), 16, 'fixed minimum: 16 px, no shrink under 360');
   assert.equal(Math.round(at('gap', 360)), 14); assert.equal(Math.round(at('gap', 1024)), 20); assert.equal(Math.round(at('pad', 360)), 16); assert.equal(Math.round(at('pad', 1024)), 20);
-  assert.equal(Math.round(at('r-card', 360)), 24); assert.ok(at('r-card', 1280) <= 28 + 0.1); assert.ok(at('r-card', 320) >= 20);
-  assert.match(tokens, /--v5-r-sheet: 32px;/); assert.match(tokens, /--v5-touch: 44px;/); assert.match(tokens, /--v5-press-ms: 160ms;/);
+  assert.match(tokens, /--v5-r-sm: 8px; --v5-r-md: 12px; --v5-r-card: 16px;/); /* s85: the radius scale is fixed 8 / 12 / 16 / 999, 24 on sheets */
+  assert.match(tokens, /--v5-r-sheet: 24px;/); assert.match(tokens, /--v5-touch: 44px;/); assert.match(tokens, /--v5-press-ms: 160ms;/);
   for (const n of ['gutter', 'gap', 'pad']) { let last = 0; for (const w of WIDTHS) { const x = at(n, w); assert.ok(x >= last - 1e-9, n); last = x; } }
 });
 
