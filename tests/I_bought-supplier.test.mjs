@@ -23,7 +23,7 @@ test('I_bought-supplier Stock received: a Supplier button first; the pick sends 
   assert.match(e.sheet(), /data-act="pick-sup"/); assert.doesNotMatch(e.sheet(), /id="I_f_supplier"/);
   assert.ok(e.sheet().indexOf('pick-sup') < e.sheet().indexOf('I_f_packs'));
   await e.act('pick-sup');
-  assert.equal(j(log[0][1]), j({ itemId: 'i1', selectedId: null }));
+  assert.equal(j(log[0][1]), j({ itemId: 'i1', preferredId: null, selectedId: null }));
   assert.match(e.sheet(), /SM Savemore/);
   await e.submit(); assert.match(e.sheet(), /from SM Savemore/); await e.submit();
   const a = rcpts(e)[0][2];
@@ -105,4 +105,17 @@ test('I_bought-supplier ctx.confirm asks inside this screen and ctx.undo puts an
   assert.match(e.undo(), /Supplier added/);
   await e.act('undo', { 'data-id': /data-id="(u\d+)"/.exec(e.undo())[1] }); await e.submit();
   assert.equal(ran.length, 1);
+});
+
+test('I_bought-supplier pick gets preferredId from the item supplier; ctx.undo with {itemId} lands on that item (card line and bar)', async () => {
+  const log = []; let ctx;
+  const cat = raw(); cat.items[0].supplier = { id: 'sup-7', name: 'KCC', location: '' };
+  const e = await setup({ role: 'owner', suppliers: { pick: async (c, o) => { ctx = c; log.push(o); return null; }, mountList() {} }, client: mockClient({ catalogue: cat, shop: SHOP, rpc: { record_inventory_receipt_v1: recv } }) });
+  await e.mount(''); await e.open('i1'); await e.begin('recv'); await e.act('pick-sup');
+  assert.equal(j(log[0]), j({ itemId: 'i1', preferredId: 'sup-7', selectedId: null }));
+  ctx.undo('Linked KCC', async () => ({ data: { ok: true }, error: null }), { itemId: 'i1' });
+  await e.act('back'); await e.mount('item/i1');
+  assert.match(e.sheet(), /Last change: Linked KCC/);
+  const o = await make({ sup: stub(null) }); await o.mount(''); await o.open('i1'); await o.begin('recv'); await o.act('pick-sup');
+  const none = await make({ sup: stub(null) }); await none.mount(''); await none.open('i2'); await none.begin('recv');
 });

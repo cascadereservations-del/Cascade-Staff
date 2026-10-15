@@ -58,7 +58,7 @@ const M = [
   ['report body renamed', [["body: { kind: v.rkind, to: v.to }", "body: { type: v.rkind, to: v.to }"]]],
   ['report function renamed', [["invoke: 'inventory-report'", "invoke: 'inventory_report'"]]],
   ['report hold ignored', [["if (rep) K.cool[a.vals.rkind + '|' + a.vals.to] = nowMs();", ""]]],
-  ['missing function not hidden', [["var NEWK = { used: 1, unlink: 1, low: 1, link: 1, price: 1, levels: 1, create: 1, report: 1, undo: 1 };", "var NEWK = {};"]]],
+  ['missing function not hidden', [["var NEWK = { used: 1, unlink: 1, low: 1, link: 1, price: 1, levels: 1, create: 1, report: 1, undo: 1, photo: 1, photoremove: 1, labels: 1, rename: 1, sort: 1 };", "var NEWK = {};"]]],
   ['hidden actions return on re-mount', [["denied: K.denied,", "denied: {},"]]],
   ['camera left on at close', [["stopCam(); K.scanned = null;", "K.scanned = null;"], ["if (!a) { stopCam(); box.innerHTML", "if (!a) { box.innerHTML"]]],
   ['camera left on at unmount', [["stopCam(); if (root.document && root.document.removeEventListener", "if (root.document && root.document.removeEventListener"]]],

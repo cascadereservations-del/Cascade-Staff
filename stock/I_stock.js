@@ -380,7 +380,7 @@
     var me = M;
     return { client: me.client, role: me.role, propertyId: me.pid, esc: esc, toast: toast, nowMs: nowMs, haptic: function (k) { if (me.opts.haptic) { try { me.opts.haptic(k); } catch (e) { /* no haptics */ } } },
       confirm: function (text) { return new Promise(function (res) { var prev = M && M.act; if (!M) return res(false); M.act = { kind: 'cconfirm', text: String(text), res: res, prev: prev || null, step: 'confirm' }; drawLayer(); }); },
-      undo: function (label, fn) { var e = { id: 'u' + (++K.uidn), itemId: null, name: label, at: nowMs(), kind: 'sup', say: String(label), line: String(label), confirm: 'Undo: ' + label + '?', call: { fn: 'sup_undo', args: {}, exec: fn } }; pushUndoEntry(e); drawUndo(); } };
+      undo: function (label, fn, o) { var e = { id: 'u' + (++K.uidn), itemId: o && o.itemId ? String(o.itemId) : null, name: label, at: nowMs(), kind: 'sup', say: String(label), line: String(label), confirm: 'Undo: ' + label + '?', call: { fn: 'sup_undo', args: {}, exec: fn } }; pushUndoEntry(e); drawUndo(); } };
   }
   function cconfirmDone(a, yes) { if (M && M.act === a) { M.act = a.prev; drawLayer(); } if (a.res) { var r = a.res; a.res = null; r(!!yes); } }
   // One Supplier field: the picker button when the module is here, the old text box when it is not (or when the picker returned nothing).
@@ -392,7 +392,8 @@
   function pickSupplier(a) {
     var sup = root.I_Suppliers; if (!supOK() || a.picking) { if (!a.picking) { a.textSup = true; drawLayer(); } return; }
     a.picking = true;
-    Promise.resolve().then(function () { return sup.pick(supCtx(), { itemId: a.itemId || null, selectedId: (a.vals || {}).supplierId || (K.sup && K.sup.id) || null }); }).then(function (r) {
+    var pid = a.itemId || (a.rows && a.rows[0] && a.rows[0].itemId) || null, pit = pid ? itemById(pid) : null;
+    Promise.resolve().then(function () { return sup.pick(supCtx(), { itemId: pid, preferredId: pit && pit.supplier && pit.supplier.id || null, selectedId: (a.vals || {}).supplierId || (K.sup && K.sup.id) || null }); }).then(function (r) {
       a.picking = false; if (!M || M.act !== a) return;
       if (r && r.id) { a.vals.supplierId = r.id; a.vals.supplier = r.name; if (r.created) a.supCreated = r.id; K.sup = { id: r.id, name: r.name }; } else a.textSup = true;
       a.focused = true; drawLayer();
