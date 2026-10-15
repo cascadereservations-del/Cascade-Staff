@@ -94,7 +94,7 @@ test('I_staff owner and admin are unchanged: Count it, no Record use, prices sti
     const e = await make(role, {}, { flags: null });
     await e.mount(''); await e.open('i1');
     assert.match(e.sheet(), /data-kind="count"/); assert.doesNotMatch(e.sheet(), /data-kind="used"/); assert.match(e.sheet(), /Unit cost/);
-    await e.begin('used'); assert.doesNotMatch(e.sheet(), /Used some|How much did you use/); // a hand-made click does nothing
+    await e.begin('used'); assert.doesNotMatch(e.sheet(), /Used some|Record use:|How much did you use/); // a hand-made click does nothing
   }
 });
 

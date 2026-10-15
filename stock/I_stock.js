@@ -422,7 +422,7 @@
     }
     if (a.kind === 'used') {
       var u = parseQty(v.qty);
-      return head(c ? 'Log ' + fmt(u) + ' ' + unitOf(it) + ' of ' + it.name + ' as used?' : 'Used some ' + it.name, c ? null : 'How much did you use?') + '<form data-i-form>' +
+      return head(c ? 'Log ' + fmt(u) + ' ' + unitOf(it) + ' of ' + it.name + ' as used?' : 'Record use: ' + it.name, c ? null : 'How much did you use?') + '<form data-i-form>' +
         (c ? '<p class="I_conf">Today’s date will be recorded.</p>' : stepper('qty', 'Used (' + esc(unitOf(it)) + ')', v.qty, false) + (a.bad ? '<div class="field"><span class="err">▲ Enter a number such as 1 or 2.5.</span></div>' : '')) +
         actions(a, c ? 'Yes, log it' : 'Continue') + '</form>';
     }
