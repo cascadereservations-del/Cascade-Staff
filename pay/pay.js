@@ -16,7 +16,9 @@
   var K = DEMO ? P.keyKeeper(undefined, null) : P.keyKeeper(); // demo: the in-flight key is kept in memory only
   var S = { step: 'pick', cands: null, sel: null, err: '', note: '', sending: false, draftOpen: false, askedOnce: false, askOpen: false, draft: { description: '', amount: '', file: null }, result: null, loadErr: '', mine: null, clean: P.P_param(typeof location !== 'undefined' ? location.search : '', 'clean'), pushState: null, pushMsg: '' };
 
-  function shell(title, inner, back) { return P.P_shell(title, inner, { back: back, icon: ICON, esc: esc, hash: P.P_hash(window) }); } // F7: the app's own bar and tab bar, badges from the hash
+  function shell(title, inner, back) { return P.P_shell(title, inner, { back: back, icon: ICON, esc: esc, hash: P.P_hash(window) }).replace(' aria-current="page"', ''); } // B3: a pay page is not "Today", so no tab is marked
+  function dm(iso) { return CS.dayLabel(String(iso).slice(0, 10)); } // B3: "15 Oct", the shell's own style
+  function ds(iso) { return CS.dayShort(String(iso).slice(0, 10)); } // "Fri 2 Oct" // F7: the app's own bar and tab bar, badges from the hash
   P.P_wireBack(window);
 
   function freshSel(c) {
@@ -44,17 +46,17 @@
   function missingBlock() {
     var m = (S.cands.missing_reports || []);
     if (!m.length) return '';
-    return '<div class="infobox">' + ICON('clip') + '<span><b>' + esc(m.map(P.shortDate).join(', ')) + ' ' + (m.length === 1 ? 'check-out has' : 'check-outs have') + ' no report yet.</b> Submit the cleaning checklist first to request pay for ' + (m.length === 1 ? 'it' : 'them') + '.</span></div>';
+    return '<div class="infobox">' + ICON('clip') + '<span><b>' + esc(m.map(dm).join(', ')) + ' ' + (m.length === 1 ? 'check-out has' : 'check-outs have') + ' no report yet.</b> Submit the cleaning checklist first to request pay for ' + (m.length === 1 ? 'it' : 'them') + '.</span></div>';
   }
   function cleanRow(s) {
     var st = S.sel.sessions[s.id] || { on: false, transport: false }, amt = P.sessionAmount(s, st.on && st.transport);
-    var opt = s.transport != null ? '<div class="opt"><button class="sw P_tr" type="button" role="switch" aria-checked="' + !!st.transport + '" aria-label="' + esc('Add ' + P.peso(s.transport) + ' transport for ' + P.dateLabel(s.date)) + '" data-sw="' + esc(s.id) + '"><span>Transport +' + esc(P.peso(s.transport)) + '</span><i aria-hidden="true"></i></button></div>' : '';
-    return '<div class="payrow"><button class="chk" type="button" role="checkbox" aria-checked="' + !!st.on + '" aria-label="' + esc(P.dateLabel(s.date) + ' clean') + '" data-ses="' + esc(s.id) + '">' + ICON('check', 's16') + '</button>' +
-      '<div><div class="t"><span>' + esc(P.dateLabel(s.date) + ' · ' + P.typeLabel(s.type)) + '</span><span class="val">' + esc(P.peso(amt)) + '</span></div><span class="s">Base ' + esc(P.peso(s.base)) + (s.guest ? ' · ' + esc(s.guest) + ' checked out' : '') + '</span>' + opt + '</div></div>';
+    var opt = s.transport != null ? '<div class="opt"><button class="sw P_tr" type="button" role="switch" aria-checked="' + !!st.transport + '" aria-label="' + esc('Add ' + P.peso(s.transport) + ' transport for ' + ds(s.date)) + '" data-sw="' + esc(s.id) + '"><span>Transport +' + esc(P.peso(s.transport)) + '</span><i aria-hidden="true"></i></button></div>' : '';
+    return '<div class="payrow"><button class="chk" type="button" role="checkbox" aria-checked="' + !!st.on + '" aria-label="' + esc(ds(s.date) + ' clean') + '" data-ses="' + esc(s.id) + '">' + ICON('check', 's16') + '</button>' +
+      '<div><div class="t"><span>' + esc(ds(s.date) + ' · ' + P.typeLabel(s.type)) + '</span><span class="val">' + esc(P.peso(amt)) + '</span></div><span class="s">Base ' + esc(P.peso(s.base)) + (s.guest ? ' · ' + esc(s.guest) + ' checked out' : '') + '</span>' + opt + '</div></div>';
   }
   function claimRow(c) {
     return '<div class="payrow"><button class="chk" type="button" role="checkbox" aria-checked="' + !!S.sel.claims[c.id] + '" aria-label="' + esc(c.description) + '" data-clm="' + esc(c.id) + '">' + ICON('check', 's16') + '</button>' +
-      '<div><div class="t"><span>' + esc(c.description) + '</span><span class="val">' + esc(P.peso(c.amount)) + '</span></div><span class="s">Expense · ' + esc(P.shortDate(c.date)) + '</span></div></div>';
+      '<div><div class="t"><span>' + esc(c.description) + '</span><span class="val">' + esc(P.peso(c.amount)) + '</span></div><span class="s">Expense · ' + esc(dm(c.date)) + '</span></div></div>';
   }
   function extraRow(e, i) {
     var x = P.parseExtra(e);
@@ -86,7 +88,7 @@
     if (!rs.length) return slot;
     return '<div><div class="cap up" style="margin-bottom:6px">Your requests</div><div class="card list">' + rs.map(function (r) {
       var bank = r.status === 'paid' && r.bank_reference ? ' · Bank ref ' + esc(window.C_PaidText.reference({ bank_reference: r.bank_reference })) : '';
-      return '<div class="rowi" style="cursor:default"><span class="lead">' + ICON('cash') + '</span><span class="mid"><span class="t num">' + esc(P.peso(r.total)) + '</span><span class="s num C_ref">Ref ' + esc(String(r.ref || '').replace(/^CASCADE-/, '')) + (r.created_at ? ' · sent ' + esc(P.shortDate(r.created_at)) : '') + (r.status === 'paid' && r.paid_at ? ' · paid ' + esc(P.shortDate(r.paid_at)) : '') + bank + '</span>' + C_stepper(r.status) + (r.status === 'requested' || r.status === 'paying' ? '<span class="help P_expect">Usually paid the same day. You will see "You were paid" here.</span>' : '') + '</span></div>';
+      return '<div class="rowi" style="cursor:default"><span class="lead">' + ICON('cash') + '</span><span class="mid"><span class="t num">' + esc(P.peso(r.total)) + '</span><span class="s num C_ref">Ref ' + esc(String(r.ref || '').replace(/^CASCADE-/, '')) + (r.created_at ? ' · sent ' + esc(dm(r.created_at)) : '') + (r.status === 'paid' && r.paid_at ? ' · paid ' + esc(dm(r.paid_at)) : '') + bank + '</span>' + C_stepper(r.status) + (r.status === 'requested' || r.status === 'paying' ? '<span class="help P_expect">Usually paid the same day. You will see "You were paid" here.</span>' : '') + '</span></div>';
     }).join('') + '</div></div>' + slot;
   }
   function renderPick() {
