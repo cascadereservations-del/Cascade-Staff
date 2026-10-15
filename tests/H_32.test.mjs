@@ -1,4 +1,4 @@
-// Lane H, release 3.2.0 (s84): Guests and Inbox wiring, the weather strip and the Notices weather self-heal, Ask Cassy on ChatGPT, sign-out reset, the generic push payload,
+// Lane H, release 3.2.1 (s84): Guests and Inbox wiring, the weather strip and the Notices weather self-heal, Ask Cassy on ChatGPT, sign-out reset, the generic push payload,
 // the pay-rates confirm sheet. The clock is frozen by the harness (2026-10-15 12:30 Manila); every server and network call is a mock.
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -85,8 +85,8 @@ test('3.2 sign-out: G_Guests.reset and X_Inbox.reset run, and a reset that throw
 });
 
 // ------------------------------------------------------------------------------------------------ 3. service worker and push
-test('3.2 sw: version 3.2.0, cs-shell-v20, the four new files are precached best effort only, pay/bank.html is gone from the precache', () => {
-  const sw = read('sw.js'); assert.match(sw, /CACHE_NAME = 'cs-shell-v20'/); assert.equal(JSON.parse(read('package.json')).version, '3.2.0'); assert.match(read('app.js'), /version: '3\.2\.0'/);
+test('3.2 sw: version 3.2.1, cs-shell-v21, the four new files are precached best effort only, pay/bank.html is gone from the precache', () => {
+  const sw = read('sw.js'); assert.match(sw, /CACHE_NAME = 'cs-shell-v21'/); assert.equal(JSON.parse(read('package.json')).version, '3.2.1'); assert.match(read('app.js'), /version: '3\.2\.0'/);
   const ctx = vm.createContext({ self: { addEventListener() {}, location: { href: 'https://x/' } }, URL, Request: class {}, Promise });
   vm.runInContext(sw.replace(/^const /gm, 'var ').replace(/^if \(typeof module[^\n]*$/m, ''), ctx);
   const opt = [...vm.runInContext('OPTIONAL_URLS', ctx)], req = [...vm.runInContext('SHELL_URLS', ctx)];

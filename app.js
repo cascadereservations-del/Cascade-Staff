@@ -20,7 +20,7 @@
     url: 'https://qkgfhsdppslwunarczeq.supabase.co',
     key: 'sb_publishable_JFuRYZ9csmQULcMRmHXDSg_Abo9UeCj',
     propertyId: '6ae230f4-c189-4547-84b1-cb6e0b2cc9bd',
-    version: '3.2.0'
+    version: '3.2.1'
   };
   var LINKS = {
     checklist: 'https://cascadereservations-del.github.io/CH-Cleaners-Checklist/',
@@ -1407,20 +1407,38 @@
   // Brownouts, water interruptions and rain during a brownout reach a phone only after one permission tap. The card on Home asks once, calmly; Not now keeps it away for 7 days
   // (a time stamp in localStorage, nothing else). Turn on asks the browser, subscribes through the pay/ push code (C_Push) and sends the topics with staff_push_subscribe_v1.
   // Before the server knows the topic 'notices' the call is retried without topics, so nothing breaks. More > This phone shows the same state as a switch.
-  var H_al = { busy: false, msg: '', on: null, loading: false }, H_ALERT_KEY = 'cs_h_alerts_later', H_ALERT_OLD = 'cs_alerts_later', H_ALERT_DAYS = 7;
+  var H_al = { busy: false, msg: '', on: null, loading: false, auto: false, tapDone: false }, H_tapFn = null, H_ALERT_OFF = 'cs_h_alerts_off', H_ALERT_BLOCKED = 'cs_h_alerts_blocked_later', H_ALERT_KEY = 'cs_h_alerts_later', H_ALERT_OLD = 'cs_alerts_later', H_ALERT_DAYS = 7;
   function H_alEnv() { return { navigator: navigator, window: window }; }
   function H_alSupport() { return DEMO || !window.C_Push ? 'unsupported' : window.C_Push.support(H_alEnv()); }
   // the first key name (cs_alerts_later) is read once and moved to the new one
   function H_alLater() { var ls = store('localStorage'), t = 0; try { t = ls ? Number(ls.getItem(H_ALERT_KEY)) || 0 : 0; if (ls && !t) { t = Number(ls.getItem(H_ALERT_OLD)) || 0; if (t) { ls.setItem(H_ALERT_KEY, String(t)); ls.removeItem(H_ALERT_OLD); } } } catch (e) { t = 0; } return t > 0 && Date.now() - t < H_ALERT_DAYS * 86400000; }
   function H_alertTopics() { return CS.canSeeGuestContact(role()) ? ['paid', 'inbox', 'notices'] : ['paid', 'notices']; }
   function H_alCardOn() { return !!state.access && H_alSupport() === 'ready' && window.Notification && window.Notification.permission === 'default' && !H_alLater(); }
+  // 3.2.1: a person who switched alerts off on More is never auto-subscribed; the key is set by switching off, cleared by switching on
+  function H_alOff() { var ls = store('localStorage'); try { return !!ls && ls.getItem(H_ALERT_OFF) === '1'; } catch (e) { return false; } }
+  function H_alSetOff(v) { var ls = store('localStorage'); try { if (ls) { if (v) ls.setItem(H_ALERT_OFF, '1'); else ls.removeItem(H_ALERT_OFF); } } catch (e) { /* the choice is kept for this visit only */ } }
+  function H_alBlockedLater() { var ls = store('localStorage'), t = 0; try { t = ls ? Number(ls.getItem(H_ALERT_BLOCKED)) || 0 : 0; } catch (e) { t = 0; } return t > 0 && Date.now() - t < H_ALERT_DAYS * 86400000; }
+  // the steps to allow notifications again, by device: a denied permission can only be reset in the phone or browser settings
+  function H_alBlockedSteps(ua) {
+    ua = String(ua || '');
+    if (/iphone|ipad|ipod/i.test(ua)) return 'Open Settings, then Notifications, then Cascade Staff, then turn on Allow Notifications.';
+    if (/android/i.test(ua)) return 'Tap the icon left of the web address, then Permissions, then Notifications, then Allow. Then reload.';
+    if (/chrome|edg\//i.test(ua)) return 'Click the icon left of the web address, then Site settings, then Notifications, then Allow. Then reload.';
+    return 'Allow notifications for this site in your browser settings, then reload.';
+  }
+  function H_alBlockedCard() {
+    return '<section class="card glass A_card H_alblocked" id="H_alblocked" aria-label="Alerts are off"><h2 class="hd">Alerts are off on this phone</h2><p class="sub" style="margin:0">This phone has blocked notifications, so pay notices, brownouts and rain will not reach you.</p><p class="help" style="margin:0">' + esc(H_alBlockedSteps(navigator.userAgent)) + '</p>' +
+      '<div class="row-wrap H_alrow"><button class="btn btn-ghost" type="button" data-act="alerts-blocked-later">Hide for 7 days</button></div></section>';
+  }
   function H_alertsCard() {
+    if (state.access && H_alSupport() === 'blocked' && !H_alBlockedLater()) return H_alBlockedCard();
     if (!H_alCardOn()) return '';
     return '<section class="card glass A_card H_alerts" id="H_alerts" aria-label="Turn on alerts"><h2 class="hd">Turn on alerts</h2><p class="sub" style="margin:0">Brownouts, water interruptions and rain on the way.</p>' +
       (H_al.msg ? '<p class="help" role="status" style="margin:0">' + esc(H_al.msg) + '</p>' : '') +
       '<div class="row-wrap H_alrow"><button class="btn btn-primary" type="button" data-act="alerts-on"' + (H_al.busy ? ' disabled' : '') + '>' + (H_al.busy ? 'Turning on…' : 'Turn on') + '</button><button class="btn btn-ghost" type="button" data-act="alerts-later"' + (H_al.busy ? ' disabled' : '') + '>Not now</button></div></section>';
   }
-  function H_alertsLater() { var ls = store('localStorage'); try { if (ls) ls.setItem(H_ALERT_KEY, String(Date.now())); } catch (e) { /* the card may come back sooner; nothing breaks */ } render(); }
+  function H_alertsBlockedLater() { var ls = store('localStorage'); try { if (ls) ls.setItem(H_ALERT_BLOCKED, String(Date.now())); } catch (e) { /* it may come back sooner */ } render(); }
+  function H_alertsLater() { H_alTapDisarm(); var ls = store('localStorage'); try { if (ls) ls.setItem(H_ALERT_KEY, String(Date.now())); } catch (e) { /* the card may come back sooner; nothing breaks */ } render(); }
   // The switch on More > This phone: hidden where alerts cannot work, a plain sentence where they are blocked, a switch where they can be turned on or off.
   function H_alertsSwitch() {
     var sp = H_alSupport(); if (sp === 'unsupported') return '';
@@ -1436,9 +1454,9 @@
   }
   function H_alAbsent(e) { return !!e && (e.code === 'PGRST202' || e.status === 404 || /not.?found|PGRST202/i.test(String(e.message || ''))); }
   function H_alTopicRefused(e) { return !!e && (e.code === '22023' || /topic/i.test(String(e.message || ''))); }
-  function H_alertsEnable() {
+  function H_alertsEnable(quiet) { // quiet: the automatic subscribe on a phone that already allows alerts; no card, no toast, no message
     if (H_al.busy || H_alSupport() !== 'ready') return Promise.resolve();
-    H_al.busy = true; H_al.msg = ''; render(); if (current === 'more') renderMore();
+    H_al.busy = true; H_al.msg = ''; if (!quiet) { render(); if (current === 'more') renderMore(); }
     var P = window.C_Push, fail = function (sub, reason) { return Promise.resolve(sub && sub.unsubscribe ? sub.unsubscribe() : null).catch(function () {}).then(function () { return { ok: false, reason: reason }; }); };
     return Promise.resolve(window.Notification.requestPermission()).then(function (perm) {
       if (perm !== 'granted') return { ok: false, reason: perm === 'denied' ? 'blocked' : 'later' };
@@ -1460,7 +1478,8 @@
       });
     }).catch(function () { return { ok: false, reason: 'failed' }; }).then(function (out) {
       H_al.busy = false;
-      if (out.ok) { H_al.on = true; H_al.msg = ''; toast('Alerts are on'); E_vibe('tap'); }
+      if (quiet) { H_al.on = !!out.ok; if (current === 'more') renderMore(); return; }
+      if (out.ok) { H_alSetOff(false); H_al.on = true; H_al.msg = ''; toast('Alerts are on'); E_vibe('tap'); }
       else if (out.reason === 'blocked') { H_al.on = false; H_al.msg = ''; toast('Alerts stay off. You can turn them on in your phone settings.'); }
       else if (out.reason !== 'later') { H_al.on = false; H_al.msg = P.words(out.reason) || P.words('failed'); }
       render(); if (current === 'more') renderMore();
@@ -1469,9 +1488,28 @@
   function H_alertsDisable() {
     if (H_al.busy || H_alSupport() !== 'ready') return Promise.resolve();
     H_al.busy = true; H_al.msg = ''; renderMore();
-    return window.C_Push.disable({ client: sb, env: H_alEnv() }).then(function (r) { if (r && r.ok) { H_al.on = false; toast('Alerts are off on this phone'); } else H_al.msg = window.C_Push.words('failed'); }).catch(function () { H_al.msg = window.C_Push.words('failed'); }).then(function () { H_al.busy = false; renderMore(); });
+    return window.C_Push.disable({ client: sb, env: H_alEnv() }).then(function (r) { if (r && r.ok) { H_al.on = false; H_alSetOff(true); toast('Alerts are off on this phone'); } else H_al.msg = window.C_Push.words('failed'); }).catch(function () { H_al.msg = window.C_Push.words('failed'); }).then(function () { H_al.busy = false; renderMore(); });
   }
-  function H_alReset() { H_al = { busy: false, msg: '', on: null, loading: false }; }
+  function H_alReset() { H_alTapDisarm(); H_al = { busy: false, msg: '', on: null, loading: false, auto: false, tapDone: false }; }
+  function H_alTapDisarm() { if (!H_tapFn) return; ['pointerup', 'click'].forEach(function (t) { document.removeEventListener(t, H_tapFn, true); }); H_tapFn = null; }
+  // 3.2.1: after sign-in. Permission already granted: subscribe quietly (once per load) unless the person switched alerts off.
+  // Never asked: the first tap anywhere carries the browser prompt (it needs a gesture). Blocked: Today shows how to allow it.
+  function H_alAuto() {
+    if (DEMO || !state.access || H_al.auto || H_alSupport() !== 'ready' || H_alOff() || !window.Notification) return;
+    var perm = window.Notification.permission;
+    if (perm === 'granted') {
+      H_al.auto = true;
+      window.C_Push.status({ client: sb, env: H_alEnv() }).then(function (st) { if (st && st.state === 'on') { H_al.on = true; return; } if (st && st.state === 'off') return H_alertsEnable(true); }).catch(function () {});
+    } else if (perm === 'default' && !H_alLater() && !H_tapFn && !H_al.tapDone) {
+      H_tapFn = function (ev) {
+        var a = ev && ev.target && ev.target.closest ? ev.target.closest('[data-act]') : null, act = a && a.getAttribute('data-act');
+        H_alTapDisarm(); H_al.tapDone = true;
+        if (act === 'alerts-on' || act === 'alerts-later') return; // the card's own buttons answer for themselves
+        if (!H_alOff() && !H_alLater() && H_alSupport() === 'ready' && window.Notification.permission === 'default') H_alertsEnable();
+      };
+      ['pointerup', 'click'].forEach(function (t) { document.addEventListener(t, H_tapFn, true); });
+    }
+  }
   // ---------------------------------------------------------------- Admin hub (owner, admin, finance): every dashboard page, in the groups of the admin home
   function renderHub() {
     var groups = CS.A_hubGroups(role());
@@ -1678,7 +1716,7 @@
     state.layout = CS.layoutForRole(state.access.role);
     state.name = CS.deriveDisplayName(state.user);
     if (!/^#(home|calendar|tasks|payrates|reply|more|hub|weather|stock|manage|guests|inbox|notices|search)/.test(location.hash)) history.replaceState(null, '', '#home');
-    route(); loadHome(); loadTasks(); maybeIosHint(); H_tourMaybe();
+    route(); loadHome(); loadTasks(); maybeIosHint(); H_tourMaybe(); H_alAuto();
   }
   function boot() {
     sb.auth.getSession().then(function (s) {
@@ -1828,6 +1866,7 @@
     else if (a === 'reply-reset') { state.reply = newReply(); renderReply('heading'); rpLive(''); window.scrollTo(0, 0); }
     else if (a === 'alerts-on') H_alertsEnable();
     else if (a === 'alerts-later') H_alertsLater();
+    else if (a === 'alerts-blocked-later') H_alertsBlockedLater();
     else if (a === 'alerts-switch') { if (H_al.on) H_alertsDisable(); else H_alertsEnable(); }
     else if (a === 'signout') { signOutTo(''); }
     else if (a === 'sheet-close') closeSheet();
