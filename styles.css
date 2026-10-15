@@ -1037,3 +1037,30 @@ body { font-family: var(--v5-font-ui); }
 .lead { border-radius: var(--v5-r-md); }
 .A_body { border-radius: var(--v5-r-sheet) var(--v5-r-sheet) 0 0; }
 .btn, .chip, .cal .d, .H_chk, .A_steps b, .count, .toast, .pill, time, .amt, .num, [data-amount], [data-date] { font-variant-numeric: tabular-nums; }
+
+/* B4 notices (s85): one rhythm on the 4/8/12/16/24 scale, text on the type tokens (fluid clamp), hourly bars that always fit and stay labelled. Only the Notices tab and its sheet. */
+.E_tabbody[data-F-tab="notices"] { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; align-content: start; } /* cards 12 apart; the label sits 8 above its card, 24 below the previous group */
+.E_tabbody[data-F-tab="notices"] > .A_label { margin: 12px 4px -4px; font-size: var(--v5-t-label); }
+.E_tabbody[data-F-tab="notices"] > .A_filters, .E_tabbody[data-F-tab="notices"] > .btn, .E_tabbody[data-F-tab="notices"] > .A_card, .E_tabbody[data-F-tab="notices"] > .A_nrow { margin: 0; }
+.A_nrow { gap: 12px; padding: var(--v5-pad); }
+.A_nrow .top { gap: 12px; align-items: center; }
+.A_nrow .mid { gap: 4px; }
+.A_nrow .mid .t { font-size: var(--v5-t-body); }
+.A_nrow .mid .s { font-size: var(--v5-t-label); color: var(--v5-ink-2); }
+.A_nrow .A_det { font-size: var(--v5-t-2); color: var(--v5-ink); display: block; }
+.A_nrow .acts { gap: 8px; }
+.A_card .sub, .A_card .help { margin: 0; }
+.A_card .sub { font-size: var(--v5-t-2); }
+.H_wxlink { gap: 12px !important; } /* beats the inline gap of 14 */
+.H_wxlink .mid { gap: 4px; }
+.H_wxlink .mid .t { font-size: var(--v5-t-body); } .H_wxlink .mid .s { font-size: var(--v5-t-2); }
+.A_temp { font-size: var(--v5-t-display); line-height: 1.1; flex: none; }
+/* hourly bars: every column is at least 2.75 rem wide so "10 am" never wraps; when there are more hours than fit, the row scrolls sideways and the percent and the hour stay together */
+.A_hours { grid-auto-columns: minmax(2.75rem, 1fr); gap: 8px; min-height: 6.5rem; overflow-x: auto; padding-bottom: 4px; scrollbar-width: none; scroll-snap-type: x proximity; }
+.A_hours div { gap: 4px; font-size: var(--v5-t-label); white-space: nowrap; scroll-snap-align: start; }
+.A_hours div span:first-child { font-variant-numeric: tabular-nums; color: var(--v5-ink); }
+.A_hours i { max-width: 1.75rem; }
+.A_filters { padding: 0; gap: 8px; }
+.A_filters .chip { font-size: var(--v5-t-2); }
+.E_tabbody[data-F-tab="notices"] .card.list .rowi { padding: 12px var(--v5-pad); }
+.E_tabbody[data-F-tab="notices"] .A_card h2.hd { margin: 0; }
