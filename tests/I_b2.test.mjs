@@ -113,7 +113,7 @@ test('I_b2 the quick action opens the card straight on the form with the current
 
 test('I_b2 rows say what needs action and the summary says it in plain words', async () => {
   const o = await make('owner'); await o.mount('');
-  assert.match(o.html(), /I_tag I_tagl">On the shopping list/);
+  assert.match(o.html(), /I_tag I_tagl">On the list/);
   assert.match(o.html(), /3 low/); assert.match(o.html(), /1 out · 2 on the shopping list/);
   assert.doesNotMatch(o.html(), /\d items low/);
 });

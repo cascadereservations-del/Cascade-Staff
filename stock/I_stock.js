@@ -343,12 +343,11 @@
   function renderRow(it) {
     var p = barPct(it), qa = quickFor(it), listed = (K.shop || []).some(function (r) { return r.itemId === it.id; }), tags = '';
     if (allowed('count') && needsCount(it)) tags += '<span class="I_tag I_tagc">Needs a count</span>';
-    if (listed) tags += '<span class="I_tag I_tagl">On the shopping list</span>';
+    if (listed) tags += '<span class="I_tag I_tagl">On the list</span>';
     return '<div class="I_it"><button class="rowi I_row" type="button" data-act="open" data-id="' + esc(it.id) + '"><span class="mid"><span class="t">' + esc(it.name) + '</span>' +
       '<span class="s">' + (it.qty == null ? 'Not counted' : esc(uq(it.qty, it.unit))) + (it.reorder != null ? ' · reorder at ' + fmt(it.reorder) : '') + '</span>' +
-      (tags ? '<span class="I_tags">' + tags + '</span>' : '') +
-      (p == null ? '' : '<span class="I_bar I_b' + level(it) + '" aria-hidden="true"><i style="width:' + p + '%"></i><b></b></span>') + '</span>' + levelBadge(it) + '</button>' +
-      (qa ? '<button class="btn btn-ghost I_qa" type="button" data-act="quick" data-kind="' + qa.kind + '" data-id="' + esc(it.id) + '" aria-label="' + esc(qa.t + ', ' + it.name) + '">' + esc(qa.t) + '</button>' : '') + '</div>';
+      (p == null ? '' : '<span class="I_bar I_b' + level(it) + '" aria-hidden="true"><i style="width:' + p + '%"></i><b></b></span>') + '</span>' + levelBadge(it) + '</button>' + (tags || qa ? '<div class="I_foot2"><span class="I_tags">' + tags + '</span>' : '') +
+      (qa ? '<button class="btn btn-ghost I_qa" type="button" data-act="quick" data-kind="' + qa.kind + '" data-id="' + esc(it.id) + '" aria-label="' + esc(qa.t + ', ' + it.name) + '">' + esc(qa.t) + '</button>' : '') + (tags || qa ? '</div>' : '') + '</div>';
   }
   function renderShop() {
     var h = '';
