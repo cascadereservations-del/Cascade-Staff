@@ -76,7 +76,7 @@ test('I_photo a failed upload writes nothing: R7 is never called and a calm line
 });
 
 test('I_photo Undo calls R7 with the before path and asks first', async () => {
-  const e = await make('owner', { rpc: { inventory_item_photo_set_v1: () => ({ data: { ok: true, before: P2 }, error: null }) } });
+  const e = await make('owner', { rpc: { inventory_item_photo_set_v1: () => ({ data: { ok: true, before: P1 }, error: null }) } });
   await e.mount(''); await choose(e, 'i3'); await e.submit();
   assert.match(e.undo(), /Photo saved for Bath towels/);
   const id = /data-id="(u\d+)"/.exec(e.undo())[1];
@@ -85,7 +85,7 @@ test('I_photo Undo calls R7 with the before path and asks first', async () => {
   assert.equal(photoCalls(e).length, 1);
   await e.submit();
   assert.equal(photoCalls(e).length, 2);
-  assert.deepEqual(photoCalls(e)[1][2], { p_item_id: 'i3', p_path: P2 });
+  assert.deepEqual(photoCalls(e)[1][2], { p_item_id: 'i3', p_path: P1 });
 });
 
 test('I_photo Undo of a first photo removes it again (before is null)', async () => {

@@ -7,9 +7,9 @@ import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { here } from './I_harness.mjs';
 
-const src = fs.readFileSync(path.join(here, '..', 'stock', 'I_stock.js'), 'utf8');
+const src = fs.readFileSync(path.join(here, '..', 'stock', 'I_stock.js'), 'utf8').split(String.fromCharCode(13, 10)).join(String.fromCharCode(10)); // a Windows checkout may hold CRLF
 const M = [
-  ['cleaner keeps and shows cost', [["if (canPrice(role)) it.cost = num(raw.unitCost);", "it.cost = num(raw.unitCost);"], ["(canPrice(m) && it.cost != null ?", "(it.cost != null ?"]]],
+  ['cleaner keeps and shows cost', [["if (canPrice(role)) { it.cost = num(raw.unitCost);", "{ it.cost = num(raw.unitCost);"], ["(canPrice(m) && it.cost != null ?", "(it.cost != null ?"]]],
   ['count sent without a confirm step', [["if (a.step !== 'confirm') { if (!valid(a))", "if (false) { if (!valid(a))"]]],
   ['count arg renamed', [["p_counted_qty: parseQty", "p_count_qty: parseQty"]]],
   ['usage_key renamed', [["usage_key: key }]", "usage_id: key }]"]]],
@@ -56,7 +56,7 @@ const M = [
   ['price key renamed', [["p_unit_cost: c } }", "p_cost: c } }"]]],
   ['create key renamed', [["p_format: format || null, p_idempotency_key: key", "p_format: format || null, p_key: key"]]],
   ['report body renamed', [["body: { kind: v.rkind, to: v.to }", "body: { type: v.rkind, to: v.to }"]]],
-  ['report function renamed', [["invoke: 'inventory-report'", "invoke: 'inventory_report'"]]],
+  ['report function renamed', [["invoke: 'inventory-report', body: { kind: v.rkind", "invoke: 'inventory_report', body: { kind: v.rkind"]]],
   ['report hold ignored', [["if (rep) K.cool[a.vals.rkind + '|' + a.vals.to] = nowMs();", ""]]],
   ['missing function not hidden', [["var NEWK = { used: 1, unlink: 1, low: 1, link: 1, price: 1, levels: 1, create: 1, report: 1, undo: 1, photo: 1, photoremove: 1, labels: 1, rename: 1, sort: 1 };", "var NEWK = {};"]]],
   ['hidden actions return on re-mount', [["denied: K.denied,", "denied: {},"]]],
@@ -121,7 +121,28 @@ const M = [
   ['icons back to text glyphs', [["function gi(name, size) { return root.ICON ? root.ICON(name, size) : ''; }", "function gi(name, size) { return '&#9650;'; }"]]],
   ['count group back to a secondary button under the card', [["<div class=\"I_foot\"><button class=\"btn btn-ghost I_gcount\"", "<div class=\"I_foot\"><button class=\"btn btn-secondary I_gcount\""]]],
   ['chips wrap again', [['<div class="I_chips" role="group"', '<div class="row-wrap I_chips" role="group"']]],
-  ['not_open reads as try again', [[" || body.reason === 'not_open')", ")"]]]
+  ['not_open reads as try again', [[" || body.reason === 'not_open')", ")"]]],
+  // s86 D-client-stock
+  ['cleaner sees last price', [["if (money && it.lastPrice != null)", "if (it.lastPrice != null)"], ["if (canPrice(role)) { it.cost = num(raw.unitCost); it.lastPrice = num(raw.lastPrice);", "{ it.cost = num(raw.unitCost); it.lastPrice = num(raw.lastPrice);"]]],
+  ['cleaner reads lastPrice and priceUp', [["if (canPrice(role)) { it.cost = num(raw.unitCost); it.lastPrice = num(raw.lastPrice); it.priceUp = num(raw.priceUp); }", "{ it.cost = num(raw.unitCost); it.lastPrice = num(raw.lastPrice); it.priceUp = num(raw.priceUp); }"]]],
+  ['photo sent before the person confirms', [["createObjectURL(b) : null; a.focused = false; drawLayer();", "createObjectURL(b) : null; a.focused = false; drawLayer(); commit(a);"]]],
+  ['upload failure still sets the photo', [["if (u && u.error) throw u.error;\n      if (!u || !u.data || u.data.ok === false || !u.data.path) throw { message: 'failed', data: u && u.data || {} };", "if (!u || !u.data || !u.data.path) u = { data: { path: 'items/x/y.webp' } };"]]],
+  ['photo undo ignores before', [["var pb = 'before' in d ?", "var pb = false ?"]]],
+  ['photo path not remembered', [["a.newPath = u.data.path;", ""]]],
+  ['signed links not kept', [["        puSave();\n", ""], ["{ K.pu[u.data.path] = { url: u.data.signedUrl, at: nowMs() }; puSave(); }", "{ K.pu[u.data.path] = { url: u.data.signedUrl, at: nowMs() }; }"]]],
+  ['mint undo dropped', [["if (mu) pushUndoEntry(mu);", ""]]],
+  ['labels send hidden items', [["return a.sel && a.sel[i.id] && vis[i.id]; })", "return a.sel && a.sel[i.id]; })"]]],
+  ['supplier id not passed', [["if (v.supplierId) args.p_supplier_id", "if (false) args.p_supplier_id"]]],
+  ['pick without preferredId', [["preferredId: pit && pit.supplier && pit.supplier.id || null, ", ""]]],
+  ['ctx undo ignores the item', [["itemId: o && o.itemId ? String(o.itemId) : null,", "itemId: null,"]]],
+  ['ctx undo leaves the open card stale', [["if (M && M.act && M.act.kind === 'menu' && e.itemId && M.act.itemId === e.itemId) drawLayer(); else drawUndo();", "drawUndo();"]]],
+  ['Cassy hold removed', [["nowMs() - K.catAt < 30000", "nowMs() - K.catAt < 0"]]],
+  ['failed sort holds the next', [["if (a.kind === 'sort') K.catAt = 0; //", "//"]]],
+  ['remaining waiting hidden', [["var more = remaining > 0 ? '. ' + remaining + ' more are waiting' : '';", "var more = '';"]]],
+  ['rename skips inactive items', [[".concat(Object.keys(K.inactiveCat || {}).filter(function (id) { return K.inactiveCat[id] === a.from; }))", ""]]],
+  ['details toast says levels', [["(detailsChanges(it, a.vals || {}) ? 'Details' : 'Levels')", "'Levels'"]]],
+  ['location patch always sent', [["if ('location' in v && String(v.location || '').trim() !== String(it.location || ''))", "if ('location' in v)"]]],
+  ['search ignores location', [["&& String(i.location || '').toLowerCase().indexOf(s) < 0) return false;", ") return false;"]]]
 ];
 const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'I_red-'));
 let bad = 0;
@@ -136,7 +157,7 @@ for (const [mi, [name, edits]] of M.entries()) {
   for (const [a, b] of edits) { if (!s.includes(a)) { console.log('SKIP (pattern not found): ' + name + ' :: ' + a.slice(0, 50)); bad++; s = null; break; } s = s.replace(a, b); }
   if (s == null) continue;
   const f = path.join(dir, 'I_stock.mut.js'); fs.writeFileSync(f, s);
-  const r = spawnSync(process.execPath, ['--test', path.join(here, 'I_rpc.test.mjs'), path.join(here, 'I_roles.test.mjs'), path.join(here, 'I_flow.test.mjs'), path.join(here, 'I_guard.test.mjs'), path.join(here, 'I_fix.test.mjs'), path.join(here, 'I_group.test.mjs'), path.join(here, 'I_scan.test.mjs'), path.join(here, 'I_card.test.mjs'), path.join(here, 'I_report.test.mjs'), path.join(here, 'I_undo.test.mjs'), path.join(here, 'I_running-low.test.mjs'), path.join(here, 'I_bought.test.mjs'), path.join(here, 'I_count-walk.test.mjs'), path.join(here, 'I_history.test.mjs'), path.join(here, 'I_recent.test.mjs'), path.join(here, 'I_round2.test.mjs'), path.join(here, 'I_staff.test.mjs'), path.join(here, 'I_b2.test.mjs')], { env: Object.assign({}, process.env, { I_STOCK_SRC: f }), encoding: 'utf8', timeout: 60000 });
+  const r = spawnSync(process.execPath, ['--test', path.join(here, 'I_rpc.test.mjs'), path.join(here, 'I_roles.test.mjs'), path.join(here, 'I_flow.test.mjs'), path.join(here, 'I_guard.test.mjs'), path.join(here, 'I_photo.test.mjs'), path.join(here, 'I_labels.test.mjs'), path.join(here, 'I_details.test.mjs'), path.join(here, 'I_bought-supplier.test.mjs'), path.join(here, 'I_categorise.test.mjs'), path.join(here, 'I_fix.test.mjs'), path.join(here, 'I_group.test.mjs'), path.join(here, 'I_scan.test.mjs'), path.join(here, 'I_card.test.mjs'), path.join(here, 'I_report.test.mjs'), path.join(here, 'I_undo.test.mjs'), path.join(here, 'I_running-low.test.mjs'), path.join(here, 'I_bought.test.mjs'), path.join(here, 'I_count-walk.test.mjs'), path.join(here, 'I_history.test.mjs'), path.join(here, 'I_recent.test.mjs'), path.join(here, 'I_round2.test.mjs'), path.join(here, 'I_staff.test.mjs'), path.join(here, 'I_b2.test.mjs')], { env: Object.assign({}, process.env, { I_STOCK_SRC: f }), encoding: 'utf8', timeout: 60000 });
   const red = [...(r.stdout || '').matchAll(/^\s*✖ (I_[-\w]+ .+?) \(\d+(?:\.?\d+)?ms\)/gm)].map((m) => m[1].trim()).filter((v, i, a) => a.indexOf(v) === i);
   const hung = !!(r.error && r.error.code === 'ETIMEDOUT');
   const ok = hung || (r.status !== 0 && red.length > 0);
