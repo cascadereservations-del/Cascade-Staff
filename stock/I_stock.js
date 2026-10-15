@@ -931,7 +931,7 @@
     } else return null;
     return e;
   }
-  function usedMovement(d) { var m = d.movementId || (d.movementIds && d.movementIds[0]) || (d.movements && d.movements[0] && (d.movements[0].movementId || d.movements[0].id)); return m || null; } // record_inventory_usage writes through the ledger; no id in the answer = no Undo
+  function usedMovement(d) { var m = d.movementId || (d.movementIds && d.movementIds[0]) || (d.movements && d.movements[0] && (typeof d.movements[0] === 'string' ? d.movements[0] : d.movements[0].movementId || d.movements[0].id)); return m || null; } // record_inventory_usage writes through the ledger; no id in the answer = no Undo
   function pushUndo(a, it, d, snap) {
     var e = undoFor(a, it, d, snap); if (!e) return;
     K.undos.unshift(e); if (K.undos.length > 20) K.undos.length = 20;

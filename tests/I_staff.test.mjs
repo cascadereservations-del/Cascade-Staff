@@ -7,7 +7,7 @@ const PID = '6ae230f4-c189-4547-84b1-cb6e0b2cc9bd';
 const raw = () => ({ items: [item('i1', 'Toilet paper', 4, 12, { unitCost: 7391.55, countedAt: null }), item('i2', 'Hand soap', 0, 3, { category: 'Kitchen', unitCost: 95, countedAt: null })] });
 const okd = (d) => () => ({ data: { ok: true, ...d }, error: null });
 const denied = () => ({ data: null, error: { code: '42501', message: 'permission denied for function' } });
-const make = (role = 'cleaner', rpc = {}, o = {}) => setup({ role, ...o, client: mockClient({ catalogue: raw(), rpc: { record_inventory_usage: okd({ rows: 1, movementId: 'mov-u1' }), reconcile_inventory_baseline_v1: okd({ movementId: 'mov-c1', before: 4, after: 9 }), ...rpc } }) });
+const make = (role = 'cleaner', rpc = {}, o = {}) => setup({ role, ...o, client: mockClient({ catalogue: raw(), rpc: { record_inventory_usage: okd({ rows: 1, movements: ['mov-u1'] }), reconcile_inventory_baseline_v1: okd({ movementId: 'mov-c1', before: 4, after: 9 }), ...rpc } }) });
 
 test('I_staff the cleaner sees Record use on the card by default (no flag set) and it sends record_inventory_usage with the right rows', async () => {
   const e = await make('cleaner', {}, { flags: null });
