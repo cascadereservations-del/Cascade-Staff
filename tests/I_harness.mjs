@@ -13,7 +13,7 @@ export const flush = async () => { for (let i = 0; i < 12; i++) await new Promis
 class Kid { constructor() { this.innerHTML = ''; this.textContent = ''; this.attrs = {}; this.srcObject = null; this.played = 0; } play() { this.played++; return Promise.resolve(); } setAttribute(k, v) { this.attrs[k] = v; } removeAttribute(k) { delete this.attrs[k]; } }
 class Root {
   constructor() { this.l = {}; this._h = ''; this.kids = null; }
-  set innerHTML(v) { this._h = v; this.kids = { top: new Kid(), list: new Kid(), layer: new Kid(), live: new Kid(), undo: new Kid(), video: this.video || (this.video = new Kid()) }; }
+  set innerHTML(v) { this._h = v; this.kids = { top: new Kid(), list: new Kid(), layer: new Kid(), live: new Kid(), undo: new Kid(), video: this.video || (this.video = new Kid()), suphost: new Kid() }; }
   get innerHTML() { return this._h; }
   addEventListener(t, f) { (this.l[t] ||= []).push(f); }
   removeEventListener(t, f) { this.l[t] = (this.l[t] || []).filter((x) => x !== f); }
@@ -64,6 +64,22 @@ export function mockClient(o = {}) {
   return client;
 }
 
+// s86 D-client-stock: a blob that knows its type and size, a fake document with a canvas that records toBlob calls, and a script loader
+// that answers 'ok' (installs the suppliers stub) or 'error' (a 404). Only installed when a test asks for it (setup option doc).
+export class FakeBlob { constructor(type, size) { this.type = type; this.size = size; } async arrayBuffer() { return new Uint8Array(this.size).fill(65).buffer; } }
+export function fakeDocument(o, win) {
+  const d = { hidden: false, activeElement: null, addEventListener() {}, removeEventListener() {}, appended: [], canvases: [] };
+  d.createElement = (tag) => {
+    if (tag === 'canvas') {
+      const c = { tag, width: 0, height: 0, draws: [], blobCalls: [], getContext: () => ({ drawImage: (...a) => c.draws.push(a) }),
+        toBlob(cb, type, q) { c.blobCalls.push([type, q]); const spec = (o.encode || ((t) => ({ type: t, size: 90000 })))(type, q, c.blobCalls.length); cb(spec ? new FakeBlob(spec.type, spec.size) : null); } };
+      d.canvases.push(c); return c;
+    }
+    return { tag, rel: '', href: '', src: '' };
+  };
+  d.head = { appendChild(n) { d.appended.push(n); if (n.tag === 'script') queueMicrotask(() => { if (o.script === 'ok') { win.I_Suppliers = o.suppliers; n.onload && n.onload(); } else n.onerror && n.onerror(); }); } };
+  return d;
+}
 export function item(id, name, qty, reorder, extra) {
   return Object.assign({ par: null, codes: [], id, name, category: 'Bathroom', unit: 'rolls', qty, reorderBelow: reorder, consumable: true, active: true, status: 'good', unitCost: 7391.55, purchaseUnit: 'pack', unitsPerPurchase: 12, photo: null, movementControlled: false, baselineNote: null, usage30d: 0, usageDays: 0, avgDaily: null, coverageDays: null, attention: false, estDailyUsage: null, estCoverageDays: null }, extra || {});
 }
@@ -91,6 +107,13 @@ export async function setup(o = {}) {
   const timeouts = [];
   win.setTimeout = (fn, ms) => { timeouts.push({ fn, ms, on: true }); return timeouts.length; };
   win.clearTimeout = (id) => { if (timeouts[id - 1]) timeouts[id - 1].on = false; };
+  if (o.ls) win.localStorage = { getItem: (k) => (k in o.ls ? o.ls[k] : null), setItem: (k, v) => { o.ls[k] = String(v); }, removeItem: (k) => { delete o.ls[k]; } };
+  if (o.doc) {
+    win.document = fakeDocument(o.doc, win); win.btoa = globalThis.btoa; win.revoked = [];
+    win.createImageBitmap = async () => ({ width: o.doc.w || 4000, height: o.doc.h || 3000, close() {} });
+    win.URL = { createObjectURL: () => 'blob:fake-' + (++n), revokeObjectURL: (u) => win.revoked.push(u) };
+    if (o.suppliers && !o.doc.script) win.I_Suppliers = o.suppliers;
+  } else if (o.suppliers) win.I_Suppliers = o.suppliers;
   if (o.camera) {
     win.BarcodeDetector = class { static async getSupportedFormats() { return ['ean_13', 'qr_code', 'pdf417']; } constructor(opt) { cam.formats = opt && opt.formats; } async detect() { cam.detectCalls++; return cam.found.length ? [cam.found.shift()] : []; } };
     nav.mediaDevices = { getUserMedia: async (c) => { cam.constraints = c; if (cam.denied) { const e = new Error('denied'); e.name = cam.denied; throw e; } cam.opened++; return { getTracks: () => [{ stop() { cam.stopped++; } }] }; } };
@@ -104,7 +127,7 @@ export async function setup(o = {}) {
     unmount: () => win.I_Stock.unmount(),
     act: async (act, extra) => { const attrs = Object.assign({ 'data-act': act }, extra || {}); const t = { getAttribute: (k) => (k in attrs ? attrs[k] : null), closest: (s) => (s === '[data-act]' ? t : null) }; await fire('click', { target: t, preventDefault() {} }); },
     open: (id) => env.act('open', { 'data-id': id }), begin: (kind) => env.act('begin', { 'data-kind': kind }),
-    input: (id, value) => fire('input', { target: { id, value } }), submit: () => fire('submit', { preventDefault() {} }), key: (k) => fire('keydown', { key: k }),
+    change: (id, files) => fire('change', { target: { id, files, value: 'x' } }), input: (id, value) => fire('input', { target: { id, value } }), submit: () => fire('submit', { preventDefault() {} }), key: (k) => fire('keydown', { key: k }),
     html: () => root.html(), sheet: () => root.sheet(), set opened(v) {}
   };
   return env;
