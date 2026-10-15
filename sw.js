@@ -6,7 +6,7 @@
 //   Same-origin shell files                                          -> network-first, cache fallback.
 // Nothing personal is ever stored here: the cache holds the shell (HTML, CSS, JS, fonts, icons) and nothing else.
 // A shell that loads offline says "Live information needs a connection"; guest names exist only in JS memory.
-const CACHE_NAME = 'cs-shell-v26';
+const CACHE_NAME = 'cs-shell-v27';
 const NAV_TIMEOUT_MS = 3000;
 // Web Push handlers for the "You were paid" notice live with the pay screens (pay/C_push-sw.js). Absent in the unit-test sandbox.
 if (typeof importScripts === 'function') { try { importScripts('pay/C_push-sw.js'); } catch (e) { /* a missing push file must never stop the new worker installing */ } }
@@ -17,7 +17,7 @@ const SHELL_ASSETS = ['./img/house-hero.webp', './img/house-blur.webp'];
 // Every icon the manifest and the pages name (the maskable one is what an Android home screen draws).
 const ICON_FILES = ['icon-192.png', 'icon-512.png', 'icon-512-maskable.png', 'apple-touch-icon-180.png'];
 const SHELL_URLS = [
-  './', './index.html', './tokens.css', './styles.css', './app.js', './lib.js', './icons.js', './theme.js', './demo.js', './manifest.webmanifest',
+  './', './index.html', './tokens.css', './styles.css', './app.js', './lib.js', './icons.js', './theme.js', './demo.js', './manifest.webmanifest', './manifest-staff.webmanifest', './manifest-admin.webmanifest',
   './install/', './install/index.html', './install/install.js',
   './quick/', './quick/index.html', './pay/', './pay/index.html', './pay/pay.js', './pay/pay-lib.js', './pay/admin.html', './pay/C_pay.css', './pay/C_notice.css',
   './pay/C_qrph.js', './pay/C_qr.js', './pay/C_admin-lib.js', './pay/C_admin.js', './pay/C_paid-text.js', './pay/C_paid-notice.js', './pay/C_push.js',

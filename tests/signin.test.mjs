@@ -262,3 +262,15 @@ test('3.4.2 team: loadSigninList tries v2, falls back to v1 only when v2 is miss
   assert.match(f, /throw new Error\('empty'\)/, 'an empty list still falls to the typed name');
   assert.match(app, /CS\.resolveTeam\(location\.search, store\('localStorage'\)\)/);
 });
+
+test('3.4.2 install: team manifests share id/scope with the base and carry the team in start_url; index.html swaps the link; sw precaches both', () => {
+  const base = JSON.parse(read('manifest.webmanifest'));
+  for (const t of ['staff', 'admin']) {
+    const m = JSON.parse(read(`manifest-${t}.webmanifest`));
+    assert.equal(m.start_url, base.start_url + `&team=${t}`);
+    assert.equal(m.id, base.id); assert.equal(m.scope, base.scope);
+    assert.match(read('sw.js'), new RegExp(`'\./manifest-${t}\.webmanifest'`));
+  }
+  const h = read('index.html');
+  assert.match(h, /<link rel="manifest" href="manifest\.webmanifest">\s*<script>[^]*team=\(staff\|admin\)[^]*cs-team[^]*"manifest-"\+t\+"\.webmanifest"/);
+});
