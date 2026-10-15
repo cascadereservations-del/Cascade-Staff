@@ -566,8 +566,8 @@ button.A_chipglass { width: var(--touch); padding: 0; justify-content: center; c
 .A_steps .dot { width: 28px; height: 28px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; background: var(--v5-sunk); color: var(--v5-ink-2); border: 2px solid var(--v5-line-2); }
 .A_steps .done .dot { background: var(--v5-ok-t); border-color: var(--v5-ok-t); color: var(--v5-act-fg); }
 .A_steps .now .dot { border-color: var(--v5-act); background: var(--v5-fill); color: var(--v5-act); }
-.A_slide { position: relative; display: flex; align-items: center; min-height: 56px; border-radius: var(--r-full); background: var(--v5-panel); color: var(--v5-panel-fg); text-decoration: none; padding: 4px; touch-action: pan-y pinch-zoom; user-select: none; -webkit-user-select: none; overflow: hidden; }
-.A_slide .knob { width: 48px; height: 48px; border-radius: 50%; background: var(--v5-gold); color: var(--v5-gold-fg); display: inline-flex; align-items: center; justify-content: center; flex: none; position: relative; z-index: 1; }
+.A_slide { position: relative; display: flex; align-items: center; min-height: 56px; border-radius: var(--r-full); background: var(--v5-act); color: var(--v5-act-fg); text-decoration: none; padding: 4px; touch-action: pan-y pinch-zoom; user-select: none; -webkit-user-select: none; overflow: hidden; }
+.A_slide .knob { width: 48px; height: 48px; border-radius: 50%; background: var(--v5-act-fg); color: var(--v5-act); display: inline-flex; align-items: center; justify-content: center; flex: none; position: relative; z-index: 1; }
 .A_slide .txt { position: absolute; left: 0; right: 0; text-align: center; font: 600 var(--v5-t-body)/clamp(1.375rem, 1.2855rem + 0.3975vw, 1.54rem) var(--font-ui); padding-left: 40px; }
 .A_head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .A_head h2 { font: 650 var(--v5-t-num)/clamp(1.75rem, 1.6361rem + 0.506vw, 1.96rem) var(--v5-font-ui); margin: 0; }
@@ -576,6 +576,22 @@ button.A_chipglass { width: var(--touch); padding: 0; justify-content: center; c
 .A_nlist .rowi { padding: 10px 12px; min-height: 64px; }
 .A_slot[hidden] { display: none; }
 .A_skel { min-height: 96px; }
+
+/* B1 (s85): Today. Shorter photo header, one 56 px primary button, owner tiles from 768 px. #v-home beats the later width rules without touching them. */
+#v-home .A_hero { min-height: 9.5rem; aspect-ratio: auto; max-height: none; }
+#v-home .A_herobar { padding-top: calc(8px + env(safe-area-inset-top)); }
+#v-home .A_greet { padding-bottom: 14px; }
+#v-home .A_greet h1 { font-size: clamp(1.625rem, 1.5rem + 0.5vw, 1.875rem); line-height: 1.15; }
+#v-home .A_greet .cap { margin-top: 2px; }
+#v-home .H_wxstrip { min-height: 0; margin-top: 4px; flex-direction: row; align-items: center; flex-wrap: wrap; column-gap: 8px; }
+.A_primary, .A_card .A_primary { min-height: 56px; font-size: var(--v5-t-body); }
+.A_slide { margin-top: 4px; }
+@media (min-width: 48rem) {
+  .A_body > .F_group.A_tiles { column-span: all; }
+  .A_tiles > nav.card { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--v5-gap); background: transparent; border: 0; box-shadow: none; overflow: visible; }
+  .A_tiles > nav.card .rowi { background: var(--v5-surf); border: 1px solid var(--v5-line); border-radius: var(--v5-r-card); min-width: 0; }
+  .A_tiles > nav.card > .doornote { grid-column: 1 / -1; }
+}
 
 /* calendar: sub tabs, legend above the grid, one 44 px target per day, stay shades, notice glyph squares */
 .A_tabs { display: grid; grid-template-columns: repeat(2, 1fr); gap: 4px; padding: 4px; border-radius: var(--r-full); margin: 4px 0 8px; }

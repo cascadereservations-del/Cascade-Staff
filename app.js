@@ -202,17 +202,30 @@
   function A_slideStart() {
     var d = doorDef('checklist'); if (!d || !CS.doorAllowed('checklist', role())) return '';
     var dl = CS.doorLink('checklist', d.url, location.origin, trustOn);
-    return '<a class="A_slide" data-slide href="' + esc(dl.href) + '"' + (dl.external ? ' target="_blank" rel="noopener"' : '') + ' aria-label="Start cleaning"><span class="knob">' + ICON('slide', 's24') + '</span><span class="txt">Slide to start cleaning</span></a>';
+    return '<a class="A_slide" data-slide href="' + esc(dl.href) + '"' + (dl.external ? ' target="_blank" rel="noopener"' : '') + ' data-primary="start-cleaning" aria-label="Start cleaning"><span class="knob">' + ICON('slide', 's24') + '</span><span class="txt">Start cleaning</span></a>';
   }
   function H_check(tone, word, text) {
     return '<div class="H_check H_t-' + tone + '"><span class="dot">' + ICON(tone === 'ok' ? 'check' : tone === 'warn' ? 'alert' : 'clock', 's16') + '</span><span class="k">' + esc(word) + '</span><b>' + esc(text) + '</b></div>';
+  }
+  // B1: the one primary button on Today, 56 px, per role. Cleaner on a turnover day: Start cleaning (the checklist door). Otherwise the most useful existing action.
+  // Owner: Pay staff when a pay request is waiting, else the top attention item (opens the same "To look at" sheet as the pill).
+  function A_primary(staff, turn) {
+    var cls = 'btn btn-primary btn-block A_primary';
+    if (staff) {
+      var go = turn ? A_slideStart() : ''; if (go) return go;
+      return LINKS.pay ? '<a class="' + cls + '" data-primary="cleaning-fee" href="' + esc(H_payUrl()) + '">Ask for the cleaning fee</a>' : '<a class="' + cls + '" data-primary="calendar" href="#calendar">Open the calendar</a>';
+    }
+    if (LINKS.pay && state.payWait > 0 && /^(owner|admin|finance)$/.test(role() || '')) return '<a class="' + cls + '" data-primary="pay-staff" href="' + esc(H_payUrl('admin.html')) + '">Pay staff</a>';
+    var att = E_att();
+    if (att.phase === 'items' && att.top) return '<button class="' + cls + '" type="button" data-primary="attention" data-act="attn-open" aria-haspopup="dialog">Review ' + esc(att.top.toLowerCase()) + '</button>';
+    return '<a class="' + cls + '" data-primary="calendar" href="#calendar">Open the calendar</a>';
   }
   function A_turnoverCard(staff) {
     var p = state.payload, T = A_houseT(), clock = CS.A_turnoverClock(new Date(), T), ds = dayStatusOf(p.today), outToday = !!ds.out, inToday = !!ds.arrive;
     if (!outToday && !inToday) {
       var nx = staysOf().filter(function (st) { return st.checkout_date > p.today; })[0];
       var nextOut = nx ? 'Next guest out ' + CS.dayLabel(nx.checkout_date) + ', ' + T.outLabel + '.' : 'Nothing is booked to leave soon.';
-      return '<section class="card glass A_card" aria-label="Turnover today"><span class="cap up">Turnover today</span><p class="sub" style="margin:0">No turnover today. ' + esc(nextOut) + '</p></section>';
+      return '<section class="card glass A_card" aria-label="Turnover today"><span class="cap up">Turnover today</span><p class="sub" style="margin:0">No turnover today. ' + esc(nextOut) + '</p>' + A_primary(staff, false) + '</section>';
     }
     var win = clock.phase === 'window', closed = clock.phase === 'after';
     if (!staff) { // F4: the verdict. Three check rows with a glyph and a word; a row whose data is absent is not drawn.
@@ -221,7 +234,7 @@
       if (rd) rows += H_check(CS.H_readyOk(rd) ? 'ok' : 'warn', 'Arrival', CS.H_readyLine(rd));
       if (hl) rows += H_check(hl.tone, 'House', hl.text);
       return '<section class="card glass A_card" aria-label="Turnover today"><div class="row-between"><span class="cap up">Turnover today</span></div><p class="strong H_tline" style="margin:0">' + esc('Today · out ' + T.outLabel + ' · in ' + T.inLabel) + '</p>' +
-        (rows ? '<div class="H_checks">' + rows + '</div>' : '') + (rd && !CS.H_readyOk(rd) ? H_readyBlock(raw, ds.stay, true) : '') + '</section>';
+        (rows ? '<div class="H_checks">' + rows + '</div>' : '') + (rd && !CS.H_readyOk(rd) ? H_readyBlock(raw, ds.stay, true) : '') + A_primary(false, true) + '</section>';
     }
     var steps = '<div class="A_steps">' +
       '<div><span class="dot">' + ICON('logout', 's16') + '</span><span>Guest out</span><b>' + esc(outToday ? T.outLabel : 'None today') + '</b></div>' +
@@ -229,7 +242,7 @@
       '<div><span class="dot">' + ICON('user', 's16') + '</span><span>Guest in</span><b>' + esc(inToday ? T.inLabel : 'None today') + '</b></div></div>';
     var title = [outToday ? 'Guest out ' + T.outLabel : '', inToday ? (ds.stay.guest_name || 'Guest') + ' in ' + T.inLabel : ''].filter(Boolean).join(' · ');
     return '<section class="card glass A_card" aria-label="Turnover today"><div class="row-between"><span class="cap up">Turnover today</span></div><p class="strong H_tline" style="margin:0">' + esc(title) + '</p>' +
-      steps + '<p class="num H_until" style="margin:0">' + esc(CS.H_untilLine(clock, inToday)) + '</p>' + A_slideStart() + '</section>';
+      steps + '<p class="num H_until" style="margin:0">' + esc(CS.H_untilLine(clock, inToday)) + '</p>' + A_primary(true, true) + '</section>';
   }
   // MF1: the clean-done card (the checklist posts cs-clean-done). Primary leads straight into the pay request for that clean.
   function H_cleanDoneCard() {
@@ -255,7 +268,7 @@
   }
   function A_noticeIcon(type) { return type === 'house' ? 'house' : (CS.A_NOTICE_TYPES[type] || CS.A_NOTICE_TYPES.note).icon; }
   // F_: a label and its card travel as one grid item (F_group), so a two-column grid never splits them
-  function A_navCard(label, rows) { return rows ? '<div class="F_group"><div class="A_label">' + esc(label) + '</div><nav class="card glass list" aria-label="' + esc(label) + '">' + rows + '</nav></div>' : ''; }
+  function A_navCard(label, rows, tiles) { return rows ? '<div class="F_group' + (tiles ? ' A_tiles' : '') + '"><div class="A_label">' + esc(label) + '</div><nav class="card glass list" aria-label="' + esc(label) + '">' + rows + '</nav></div>' : ''; }
   function renderHome() {
     var el = $('v-home');
     if (!state.payload) { el.innerHTML = A_hero() + '<div class="screen" style="min-height:0;padding-top:0"><div class="A_body">' + (state.error ? errBanner() : loadingBlock()) + '</div></div>'; return; }
@@ -282,13 +295,13 @@
           row({ icon: 'calendar', title: 'Calendar', sub: 'Stays, blocked nights, notices', href: '#calendar', count: n || '' }) +
           '<div id="slot-inbox"' + (inboxShown ? '' : ' hidden') + (inboxShown && !v ? ' style="min-height:64px"' : '') + '>' + (inboxShown && v ? row({ icon: 'chat', title: 'Inbox', sub: inbox ? inbox + ' open' : 'No open messages', href: '#inbox', count: inbox || '', countLabel: ' open messages' }) : '') + '</div>' +
           (CS.canSeeGuestContact(role()) ? row({ icon: 'user', title: 'Guests', sub: 'Guest records, ID photos and notes', href: '#guests' }) : '') +
-          (canReply() ? row({ icon: 'sparkles', title: 'Cassy reply', sub: 'Draft a warm reply to a guest message', href: '#reply' }) : '')) +
+          (canReply() ? row({ icon: 'sparkles', title: 'Cassy reply', sub: 'Draft a warm reply to a guest message', href: '#reply' }) : ''), true) +
         A_navCard('Admin', row({ icon: 'dash', title: 'Admin dashboard', sub: 'Today, bookings, money, operations', door: 'dashboard' }) +
           (trustOn ? '' : '<div class="help doornote">Sign-in is kept only on trusted devices</div>') +
           (/^(owner|admin|finance)$/.test(role() || '') ? row({ icon: 'wallet', title: 'Pay staff', sub: 'Pay a request by QR, then add the proof', href: H_payUrl('admin.html') }) : '') +
           (CS.canEditRates(role()) ? row({ icon: 'cash', title: 'Pay rates', sub: 'What a clean and its transport pay', href: '#payrates' }) : '') +
           (CS.canEditRates(role()) ? row({ icon: 'dash', title: 'Manage', sub: 'Inquiries, expenses and key figures', href: '#manage' }) + row({ icon: 'star', title: 'Key figures', sub: 'How the house is doing', href: '#manage/kpis' }) : '') +
-          row({ icon: 'box', title: 'Inventory', sub: 'Stock levels and usage', href: '#stock' })) + footerLine() + '</div>';
+          row({ icon: 'box', title: 'Inventory', sub: 'Stock levels and usage', href: '#stock' }), true) + footerLine() + '</div>';
     }
     var keep = el.querySelector && el.querySelector('#slot-paid-notice'); if (keep && keep.parentNode) keep.parentNode.removeChild(keep);
     el.innerHTML = A_hero() + '<div class="screen" style="min-height:0;padding-top:0">' + body + '</div>';
@@ -1643,6 +1656,10 @@
   function refreshWeather() { if (CS.weatherStale(state.payload && state.payload.weather)) H_wxFetch(); }
   // Payment Request sub-line: how many cleans are ready. SPEC-37's RPC; silent while it is not deployed.
   function loadPayHint() {
+    if (state.layout === 'admin' && LINKS.pay && /^(owner|admin|finance)$/.test(role() || '')) { // B1: how many pay requests wait for the owner (the primary button on Today)
+      sb.rpc('staff_pay_admin_list_v1').then(function (r) { var d = r.data; if (r.error || !d || d.ok === false) return; state.payWait = (d.requests || []).filter(function (q) { return q.status === 'requested'; }).length; if (current === 'home' && state.layout) renderHome(); }).catch(function () {});
+      return;
+    }
     if (state.layout !== 'staff' || !LINKS.pay) return;
     sb.rpc('staff_pay_candidates_v1').then(function (r) {
       var d = r.data; if (r.error || !d || d.ok === false) return;
@@ -1689,7 +1706,7 @@
     if (H_mod.mounted && H_mod.mounted !== v) H_unmount();
     setView(v);
     if (v === 'door') { renderDoor(); return; }
-    renderTabs(v === 'hub' || v === 'search' ? 'more' : v === 'weather' ? 'calendar' : v === 'stock' || v === 'manage' || v === 'guests' || v === 'inbox' ? 'home' : v);
+    renderTabs(v === 'hub' || v === 'search' ? 'more' : v === 'weather' ? 'calendar' : v === 'stock' || v === 'manage' || v === 'guests' || v === 'inbox' ? '' : v); // B1: a sub-page marks no tab, never Today
     if (H_MODULES[v]) renderModule(v); else if (v === 'search') renderSearch(); else if (v === 'hub') renderHub(); else if (v === 'home') renderHome(); else if (v === 'calendar') renderCalendar(); else if (v === 'tasks') renderTasks(); else if (v === 'payrates') { renderPayRates(); if (!state.rates) loadRates(); } else if (v === 'reply') renderReply(); else if (v === 'more') renderMore();
     var typing = document.activeElement && /^(df-(label|kind)|t-(title|due|who|note)|n-(type|title|date|start|hours|detail))$/.test(document.activeElement.id || '');
     if (state.sheet) { if (v !== state.sheet.view) closeSheet(); else if (!typing) drawSheet(); }
