@@ -5,19 +5,19 @@
   --bg: var(--v5-bg); --card: var(--v5-surf); --muted: var(--v5-sunk); --border: var(--v5-line);
   --fg: var(--v5-ink); --fg-2: var(--v5-ink-2); --fg-3: var(--v5-ink-3);
   --primary: var(--v5-act); --primary-fg: var(--v5-act-fg); --primary-soft: var(--v5-fill); --ring: var(--v5-act);
-  --accent: var(--v5-gold); --accent-text: var(--v5-gold-text); --accent-soft: var(--v5-gold-soft);
+  --accent: var(--v5-gold); --accent-text: var(--v5-act); --accent-soft: var(--v5-gold-soft);
   --ok: var(--v5-ok-t); --ok-soft: var(--v5-ok-w); --warn: var(--v5-warn-t); --warn-soft: var(--v5-warn-w);
   --danger: var(--v5-danger-t); --danger-soft: var(--v5-danger-w); --info: var(--v5-info-t); --info-soft: var(--v5-info-w);
   --font-ui: var(--v5-font-ui); --font-display: var(--v5-font-display); --hairline: var(--v5-sep);
   --r-lg: var(--v5-r-card); --r-md: var(--v5-r-field); --touch: var(--v5-touch);
 }
 body { background: var(--v5-ambient), var(--v5-bg); color: var(--v5-ink); font: 400 var(--v5-t-body)/clamp(1.5rem, 1.4023rem + 0.4337vw, 1.68rem) var(--v5-font-ui); letter-spacing: -.01em; }
-.appbar { background: var(--v5-glass); -webkit-backdrop-filter: var(--v5-blur); backdrop-filter: var(--v5-blur); border-bottom: 1px solid var(--v5-card-edge); }
-.appbar .ttl { font: 400 var(--v5-t-section)/clamp(1.875rem, 1.7529rem + 0.5421vw, 2.1rem) var(--v5-font-display); letter-spacing: 0; }
+.appbar { background: var(--v5-bg); border-bottom: 1px solid var(--v5-line); }
+.appbar .ttl { font: 650 var(--v5-t-section)/clamp(1.875rem, 1.7529rem + 0.5421vw, 2.1rem) var(--v5-font-ui); letter-spacing: 0; }
 .iconbtn { min-width: var(--v5-touch); min-height: var(--v5-touch); }
-.card { background: var(--v5-card-glass); -webkit-backdrop-filter: var(--v5-blur); backdrop-filter: var(--v5-blur); border: 1px solid var(--v5-card-edge); border-radius: var(--v5-r-card);
+.card { background: var(--v5-surf); border: 0; box-shadow: var(--v5-shadow-card); border-radius: var(--v5-r-card);
   box-shadow: inset 0 1px 0 var(--v5-card-hi), 0 8px 24px var(--v5-card-shadow); }
-.cap.up { font: 700 var(--v5-t-label)/clamp(1.125rem, 1.0518rem + 0.3253vw, 1.26rem) var(--v5-font-ui); letter-spacing: .08em; color: var(--v5-gold-text); }
+.cap.up { font: 700 var(--v5-t-label)/clamp(1.125rem, 1.0518rem + 0.3253vw, 1.26rem) var(--v5-font-ui); letter-spacing: .08em; color: var(--v5-ink-2); }
 .help, .payrow .s, .mid .s { font-size: var(--v5-t-2); line-height: clamp(1.25rem, 1.1686rem + 0.3614vw, 1.4rem); color: var(--v5-ink-2); }
 .payrow .t, .mid .t { font-size: var(--v5-t-body); line-height: clamp(1.5rem, 1.4023rem + 0.4337vw, 1.68rem); }
 .payrow .t .val, .payrow .t.val { font-weight: 700; font-variant-numeric: tabular-nums; }
@@ -83,7 +83,7 @@ body { background: var(--v5-ambient), var(--v5-bg); color: var(--v5-ink); font: 
 .payrow .opt .P_tr { display: flex; width: 100%; justify-content: space-between; align-items: center; gap: 12px; min-height: var(--v5-touch); }
 .payrow .opt .P_tr span { font-size: var(--v5-t-2); color: var(--v5-ink); }
 button.rowi.C_row, .rowi.P_tap { cursor: pointer; font: inherit; }
-.P_go { margin-left: auto; flex: none; font: 600 var(--v5-t-2)/1 var(--v5-font-ui); color: var(--v5-gold-text); white-space: nowrap; }
+.P_go { margin-left: auto; flex: none; font: 600 var(--v5-t-2)/1 var(--v5-font-ui); color: var(--v5-act); white-space: nowrap; font-variant-numeric: tabular-nums; }
 .P_group { display: grid; gap: 6px; }
 .P_rec { display: grid; gap: 4px; padding: 14px 16px; }
 .P_rec .row { display: flex; justify-content: space-between; gap: 12px; min-height: 28px; align-items: baseline; }

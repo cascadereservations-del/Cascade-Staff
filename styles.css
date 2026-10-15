@@ -520,9 +520,10 @@ html[data-plain="1"] .tabbar { background: var(--v5-panel); } html[data-plain="1
 .card { border-radius: var(--r-lg); border-color: var(--v5-line); box-shadow: 0 1px 2px var(--v5-card-shadow); }
 .rowi { min-height: 64px; border-bottom-color: var(--v5-sep); }
 .lead { width: 44px; height: 44px; border-radius: 14px; background: var(--v5-fill); color: var(--v5-act); box-shadow: none; }
-.lead.A_t-power { background: var(--v5-power); color: var(--v5-notice-fg); } .lead.A_t-water { background: var(--v5-water); color: var(--v5-notice-fg); }
-.lead.A_t-rain { background: var(--v5-rain); color: var(--v5-notice-fg); } .lead.A_t-deep_clean { background: var(--v5-deep); color: var(--v5-notice-fg); }
-.lead.A_t-house, .lead.A_t-blocked, .lead.A_t-note { background: var(--v5-house-tile); color: var(--v5-notice-fg); }
+.lead.A_t-power, .lead.A_t-water, .lead.A_t-rain, .lead.A_t-deep_clean, .lead.A_t-house, .lead.A_t-blocked, .lead.A_t-note { background: var(--v5-sunk); } /* notice tiles: neutral tile, coloured glyph (s85) */
+.lead.A_t-power { color: var(--v5-warn-t); } .lead.A_t-water { color: var(--v5-info-t); }
+.lead.A_t-rain { color: var(--v5-info-t); } .lead.A_t-deep_clean { color: var(--v5-ok-t); }
+.lead.A_t-house, .lead.A_t-blocked, .lead.A_t-note { color: var(--v5-ink-2); }
 .count { background: var(--v5-act); color: var(--v5-act-fg); min-width: 24px; height: 24px; line-height: 24px; font-size: var(--v5-t-label); } /* a plain count is not an alarm: red only where something is late (.bad) */
 .count.bad { background: var(--v5-danger); }
 .chev { color: var(--v5-ink-3); }
@@ -601,7 +602,7 @@ button.A_chipglass { width: var(--touch); padding: 0; justify-content: center; c
 .cal .d .A_marks { position: absolute; top: 3px; right: 3px; display: flex; gap: 2px; z-index: 2; }
 .cal .d .A_mk { width: 16px; height: 16px; border-radius: 5px; display: inline-flex; align-items: center; justify-content: center; color: var(--v5-notice-fg); background: var(--v5-house-tile); }
 .cal .d .A_mk svg.i { width: 11px; height: 11px; stroke-width: 2.2; }
-.A_mk.power { background: var(--v5-power); } .A_mk.water { background: var(--v5-water); } .A_mk.rain { background: var(--v5-rain); } .A_mk.deep_clean { background: var(--v5-deep); }
+.A_mk.power { background: var(--v5-power-solid); } .A_mk.water { background: var(--v5-water-solid); } .A_mk.rain { background: var(--v5-rain-solid); } .A_mk.deep_clean { background: var(--v5-deep-solid); }
 .cal .d .cx { left: auto; right: 3px; bottom: 3px; color: var(--v5-cal-clash-ring); }
 .A_dot { display: inline-block; width: 12px; height: 12px; border-radius: 50%; flex: none; }
 

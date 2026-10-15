@@ -10,7 +10,7 @@
 
 .X_bar { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
 .X_barr { display: flex; align-items: center; gap: 8px; }
-.X_h { font: 400 var(--v5-t-section)/1.2 var(--font-display); margin: 0; overflow-wrap: anywhere; }
+.X_h { font: 650 var(--v5-t-section)/1.2 var(--font-ui); margin: 0; overflow-wrap: anywhere; }
 .X_h:focus, .X_h3:focus { outline: none; }
 .X_h3 { font: 600 max(0.9375rem, var(--v5-t-body))/1.3 var(--font-ui); margin: 0; overflow-wrap: anywhere; }
 .X_sub, .X_p { margin: 0; color: var(--fg-2); font-size: max(0.8125rem, var(--v5-t-2)); line-height: 1.45; overflow-wrap: anywhere; }
@@ -20,7 +20,7 @@
 .X_foot { text-align: center; }
 .X_link { color: var(--primary); text-decoration: underline; display: inline-flex; align-items: center; min-height: 44px; }
 
-.X_card { display: grid; gap: 8px; width: 100%; background: var(--v5-card-glass); border: 1px solid var(--v5-card-edge); border-radius: var(--r-lg); padding: 16px; box-shadow: inset 0 1px 0 var(--v5-card-hi), 0 8px 24px var(--v5-card-shadow); }
+.X_card { display: grid; gap: 8px; width: 100%; background: var(--v5-surf); border: 0; border-radius: var(--r-lg); padding: 16px; box-shadow: var(--v5-shadow-card); }
 .X_pushtop { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
 .X_pushtop > div { flex: 1 1 14rem; display: grid; gap: 4px; }
 .X_btn { white-space: normal; text-align: center; }
@@ -33,7 +33,7 @@
 .X_tab[aria-pressed="true"] { background: var(--card); color: var(--primary); box-shadow: 0 1px 3px var(--v5-card-shadow); }
 
 .X_rows { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
-.X_row { display: grid; gap: 4px; width: 100%; min-height: 44px; padding: 12px 14px; text-align: left; font: inherit; color: inherit; cursor: pointer; background: var(--v5-card-glass); border: 1px solid var(--v5-card-edge); border-radius: var(--r-lg); }
+.X_row { display: grid; gap: 4px; width: 100%; min-height: 44px; padding: 12px 14px; text-align: left; font: inherit; color: inherit; cursor: pointer; background: var(--v5-surf); border: 0; border-radius: var(--r-lg); box-shadow: var(--v5-shadow-card); }
 .X_row.X_cur { border-color: var(--primary); }
 .X_row:active { transform: scale(var(--v5-press-scale, .98)); }
 .X_rowtop { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; }
