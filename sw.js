@@ -11,7 +11,7 @@ const NAV_TIMEOUT_MS = 3000;
 // Web Push handlers for the "You were paid" notice live with the pay screens (pay/C_push-sw.js). Absent in the unit-test sandbox.
 if (typeof importScripts === 'function') { try { importScripts('pay/C_push-sw.js'); } catch (e) { /* a missing push file must never stop the new worker installing */ } }
 // The self-hosted font files styles.css @font-face points at (v5: DM Serif Display for titles and names, nothing else). Edit this one list (and styles.css), nothing else here.
-const SELF_FONTS = ['dm-serif-display-400.woff2'];
+const SELF_FONTS = ['dm-serif-display-400.woff2', 'inter-var.woff2'];
 // Public pictures of the house (each 60 KB or less). Nothing personal is ever cached.
 const SHELL_ASSETS = ['./img/house-hero.webp', './img/house-blur.webp'];
 // Every icon the manifest and the pages name (the maskable one is what an Android home screen draws).

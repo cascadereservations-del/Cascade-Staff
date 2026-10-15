@@ -4,25 +4,25 @@
    Surfaces map their own variable names onto these; never copy a hex out of this file. */
 :root {
   /* surfaces */
-  --v5-bg: #EEF1F4; --v5-ambient: linear-gradient(180deg, #EEF1F4 0%, #E3E9EF 100%); --v5-ambient-opacity: 0.20;
-  --v5-surf: #FFFFFF; --v5-surf-2: #F7F9FB; --v5-sunk: #E8ECF1;
-  --v5-line: #D9DFE6; --v5-line-2: #A9B4C0; --v5-sep: rgba(16, 28, 44, 0.08);
+  --v5-bg: #F6F3EE; --v5-ambient: linear-gradient(180deg, #F6F3EE 0%, #F6F3EE 100%); --v5-ambient-opacity: 0;
+  --v5-surf: #FFFFFF; --v5-surf-2: #FBF9F6; --v5-sunk: #EEE9E1;
+  --v5-line: #E2DBD0; --v5-line-2: #B9AFA1; --v5-sep: rgba(40, 30, 20, 0.08);
   /* text */
-  --v5-ink: #0F1B2A; --v5-ink-2: #4A5869; --v5-ink-3: #5E6B7A;
+  --v5-ink: #14202E; --v5-ink-2: #4A5563; --v5-ink-3: #626C78;
   /* action and panels */
-  --v5-act: #17324D; --v5-act-fg: #FFFFFF; --v5-fill: rgba(16, 40, 70, 0.07);
+  --v5-act: #17324D; --v5-act-fg: #FFFFFF; --v5-fill: #E6ECF2;
   --v5-panel: #16283C; --v5-panel-fg: #F2F5F8; --v5-panel-fg-2: #B9C6D3;
   /* champagne gold: the one complementary accent */
-  --v5-gold: #E0B872; --v5-gold-fg: #0F1B2A; --v5-gold-text: #7A4E0E; --v5-gold-soft: rgba(224, 184, 114, 0.24);
+  --v5-gold: #C9A063; --v5-gold-fg: #0F1B2A; --v5-gold-text: #7A4E0E; --v5-gold-soft: rgba(224, 184, 114, 0.24);
   /* floating tab bar and glass */
   --v5-bar: rgba(15, 27, 42, 0.84); --v5-bar-fg: #C9D3DE;
-  --v5-glass: rgba(255, 255, 255, 0.66); --v5-glass-edge: rgba(255, 255, 255, 0.7); --v5-glass-dark: rgba(10, 20, 32, 0.42);
-  --v5-card-glass: rgba(255, 255, 255, 0.60); --v5-card-edge: rgba(255, 255, 255, 0.65); --v5-card-hi: rgba(255, 255, 255, 0.75);
-  --v5-card-shadow: rgba(20, 40, 70, 0.10); --v5-shadow: rgba(15, 27, 42, 0.18); --v5-warn-glass: rgba(255, 238, 214, 0.70);
-  --v5-blur: blur(18px) saturate(140%);
+  --v5-glass: var(--v5-surf); --v5-glass-edge: rgba(255, 255, 255, 0.7); --v5-glass-dark: rgba(10, 20, 32, 0.42);
+  --v5-card-glass: var(--v5-surf); --v5-card-edge: rgba(255, 255, 255, 0.65); --v5-card-hi: rgba(255, 255, 255, 0.75);
+  --v5-card-shadow: rgba(40, 30, 20, 0.06); --v5-shadow: rgba(15, 27, 42, 0.18); --v5-warn-glass: rgba(255, 238, 214, 0.70);
+  --v5-blur: none;
   /* status: always glyph + word */
-  --v5-ok-t: #1B5E3F; --v5-ok-w: rgba(222, 243, 232, 0.92); --v5-warn-t: #7A4304; --v5-warn-w: #FFEED6;
-  --v5-danger: #D23B4B; --v5-danger-t: #8E1F2A; --v5-danger-w: #FBE4E6; --v5-info-t: #1F4C8F; --v5-info-w: #E3ECFA;
+  --v5-ok-t: #1B6B45; --v5-ok-w: #E3F2EA; --v5-warn-t: #8A4B06; --v5-warn-w: #FCEFD9;
+  --v5-danger: #D23B4B; --v5-danger-t: #B42332; --v5-danger-w: #FBE6E8; --v5-info-t: #1F4C8F; --v5-info-w: #E5EDF9;
   /* bookings: one blue family, a shade per guest */
   --v5-g1: #1F3A68; --v5-g1-fg: #FFFFFF; --v5-g2: #3563A8; --v5-g2-fg: #FFFFFF; --v5-g3: #5B8BD0; --v5-g3-fg: #0F1B2A;
   --v5-g4: #8DB2E3; --v5-g4-fg: #0F1B2A; --v5-g6: #27508A; --v5-g6-fg: #FFFFFF;
@@ -39,7 +39,7 @@
   /* white in both themes on purpose: a QR needs a light quiet zone to scan */
   --v5-qr-paper: #FFFFFF;
   /* type: the phone's own font for everything; DM Serif Display (one self-hosted woff2) for titles and names only */
-  --v5-font-ui: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, "Noto Sans", sans-serif;
+  --v5-font-ui: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   --v5-font-display: "DM Serif Display", Georgia, "Times New Roman", serif;
   /* F_ fluid type: rem + vw clamp(). Each equals today's px at 360 px wide (16 px root), grows gently to its max by about 1024 px, never under 12 px,
      and follows the user's own text size (rem). Sizes between the seven steps use the same curve inline: clamp(N/16 rem, N*0.9349/16 rem + N*0.01807 vw, N*1.12/16 rem). */
@@ -57,7 +57,8 @@
   --v5-live-ok: #7FD3A0; --v5-live-warn: #F0B866; --v5-live-bad: #F0646F; --v5-live-idle: #AEBCCB;
   --v5-bar-on: #FFFFFF; --v5-bar-on-bg: rgba(255, 255, 255, 0.16);
   /* shape */
-  --v5-r-card: clamp(1.25rem, 1.364rem + 0.602vw, 1.75rem); --v5-r-panel: clamp(1.5rem, 1.569rem + 0.602vw, 2rem); --v5-r-sheet: 32px; --v5-r-field: 14px; --v5-r-full: 999px; --v5-touch: 44px;
+  --v5-r-sm: 8px; --v5-r-md: 12px; --v5-r-card: 16px; --v5-r-panel: 16px; --v5-r-sheet: 24px; --v5-r-field: 12px; --v5-r-full: 999px; --v5-touch: 44px;
+  --v5-shadow-card: 0 1px 2px rgba(40, 30, 20, 0.06), 0 0 0 1px var(--v5-line); --v5-space: 4px; --v5-target-glove: 56px;
   /* motion: press 0.97 at 160 ms ease-out; sheets 300 ms; nothing animates on things used many times a day */
   --v5-press-scale: 0.97; --v5-press-ms: 160ms; --v5-sheet-ms: 300ms; --v5-sheet-ease: cubic-bezier(0.32, 0.72, 0, 1);
   color-scheme: light;
@@ -66,18 +67,18 @@
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    --v5-bg: #0B1420; --v5-ambient: linear-gradient(180deg, #0F1A28 0%, #0B1420 100%); --v5-ambient-opacity: 0.28;
-    --v5-surf: #132132; --v5-surf-2: #1A2B3F; --v5-sunk: #1C2C40;
-    --v5-line: #24364B; --v5-line-2: #4A5C70; --v5-sep: rgba(200, 220, 240, 0.10);
-    --v5-ink: #EEF3F8; --v5-ink-2: #AEBCCB; --v5-ink-3: #8C9BAB;
-    --v5-act: #EEF3F8; --v5-act-fg: #0F1B2A; --v5-fill: rgba(200, 220, 240, 0.09);
+    --v5-bg: #0E1621; --v5-ambient: linear-gradient(180deg, #0E1621 0%, #0E1621 100%); --v5-ambient-opacity: 0;
+    --v5-surf: #16212E; --v5-surf-2: #1D2A39; --v5-sunk: #0A111A;
+    --v5-line: #2A3747; --v5-line-2: #4A5C70; --v5-sep: rgba(200, 220, 240, 0.10);
+    --v5-ink: #EEF2F6; --v5-ink-2: #B3BFCC; --v5-ink-3: #9AA6B3;
+    --v5-act: #8FB4E0; --v5-act-fg: #0E1621; --v5-fill: rgba(143, 180, 224, 0.14);
     --v5-panel: #1A2B3F; --v5-panel-fg: #F2F5F8; --v5-panel-fg-2: #B9C6D3;
     --v5-gold-text: #E0B872; --v5-gold-soft: rgba(224, 184, 114, 0.16);
     --v5-bar: rgba(22, 38, 58, 0.84);
-    --v5-glass: rgba(19, 33, 50, 0.66); --v5-glass-edge: rgba(255, 255, 255, 0.10); --v5-glass-dark: rgba(8, 14, 22, 0.45);
-    --v5-card-glass: rgba(20, 34, 52, 0.55); --v5-card-edge: rgba(255, 255, 255, 0.10); --v5-card-hi: rgba(255, 255, 255, 0.08);
-    --v5-card-shadow: rgba(0, 0, 0, 0.45); --v5-shadow: rgba(0, 0, 0, 0.5); --v5-warn-glass: rgba(58, 42, 18, 0.62);
-    --v5-ok-t: #7FD3A0; --v5-ok-w: rgba(22, 54, 40, 0.9); --v5-warn-t: #F0B866; --v5-warn-w: #3A2A12;
+    --v5-glass: var(--v5-surf); --v5-glass-edge: rgba(255, 255, 255, 0.10); --v5-glass-dark: rgba(8, 14, 22, 0.45);
+    --v5-card-glass: var(--v5-surf); --v5-card-edge: rgba(255, 255, 255, 0.10); --v5-card-hi: rgba(255, 255, 255, 0.08);
+    --v5-card-shadow: transparent; --v5-shadow: rgba(0, 0, 0, 0.5); --v5-warn-glass: rgba(58, 42, 18, 0.62);
+    --v5-ok-t: #7FD3A0; --v5-ok-w: #16352A; --v5-warn-t: #F0B866; --v5-warn-w: #3A2A12;
     --v5-danger: #F0646F; --v5-danger-t: #F4A3AA; --v5-danger-w: #3B1A1E; --v5-info-t: #A9C4F5; --v5-info-w: #17284A;
     --v5-g1: #8DB2E3; --v5-g1-fg: #0F1B2A; --v5-g2: #5B8BD0; --v5-g2-fg: #0F1B2A; --v5-g3: #3563A8; --v5-g3-fg: #FFFFFF;
     --v5-g4: #C3D6F0; --v5-g4-fg: #0F1B2A; --v5-g6: #A9C4F5; --v5-g6-fg: #0F1B2A;
@@ -93,18 +94,18 @@
 }
 
 :root[data-theme="dark"] {
-  --v5-bg: #0B1420; --v5-ambient: linear-gradient(180deg, #0F1A28 0%, #0B1420 100%); --v5-ambient-opacity: 0.28;
-  --v5-surf: #132132; --v5-surf-2: #1A2B3F; --v5-sunk: #1C2C40;
-  --v5-line: #24364B; --v5-line-2: #4A5C70; --v5-sep: rgba(200, 220, 240, 0.10);
-  --v5-ink: #EEF3F8; --v5-ink-2: #AEBCCB; --v5-ink-3: #8C9BAB;
-  --v5-act: #EEF3F8; --v5-act-fg: #0F1B2A; --v5-fill: rgba(200, 220, 240, 0.09);
+  --v5-bg: #0E1621; --v5-ambient: linear-gradient(180deg, #0E1621 0%, #0E1621 100%); --v5-ambient-opacity: 0;
+  --v5-surf: #16212E; --v5-surf-2: #1D2A39; --v5-sunk: #0A111A;
+  --v5-line: #2A3747; --v5-line-2: #4A5C70; --v5-sep: rgba(200, 220, 240, 0.10);
+  --v5-ink: #EEF2F6; --v5-ink-2: #B3BFCC; --v5-ink-3: #9AA6B3;
+  --v5-act: #8FB4E0; --v5-act-fg: #0E1621; --v5-fill: rgba(143, 180, 224, 0.14);
   --v5-panel: #1A2B3F; --v5-panel-fg: #F2F5F8; --v5-panel-fg-2: #B9C6D3;
   --v5-gold-text: #E0B872; --v5-gold-soft: rgba(224, 184, 114, 0.16);
   --v5-bar: rgba(22, 38, 58, 0.84);
-  --v5-glass: rgba(19, 33, 50, 0.66); --v5-glass-edge: rgba(255, 255, 255, 0.10); --v5-glass-dark: rgba(8, 14, 22, 0.45);
-  --v5-card-glass: rgba(20, 34, 52, 0.55); --v5-card-edge: rgba(255, 255, 255, 0.10); --v5-card-hi: rgba(255, 255, 255, 0.08);
-  --v5-card-shadow: rgba(0, 0, 0, 0.45); --v5-shadow: rgba(0, 0, 0, 0.5); --v5-warn-glass: rgba(58, 42, 18, 0.62);
-  --v5-ok-t: #7FD3A0; --v5-ok-w: rgba(22, 54, 40, 0.9); --v5-warn-t: #F0B866; --v5-warn-w: #3A2A12;
+  --v5-glass: var(--v5-surf); --v5-glass-edge: rgba(255, 255, 255, 0.10); --v5-glass-dark: rgba(8, 14, 22, 0.45);
+  --v5-card-glass: var(--v5-surf); --v5-card-edge: rgba(255, 255, 255, 0.10); --v5-card-hi: rgba(255, 255, 255, 0.08);
+  --v5-card-shadow: transparent; --v5-shadow: rgba(0, 0, 0, 0.5); --v5-warn-glass: rgba(58, 42, 18, 0.62);
+  --v5-ok-t: #7FD3A0; --v5-ok-w: #16352A; --v5-warn-t: #F0B866; --v5-warn-w: #3A2A12;
   --v5-danger: #F0646F; --v5-danger-t: #F4A3AA; --v5-danger-w: #3B1A1E; --v5-info-t: #A9C4F5; --v5-info-w: #17284A;
   --v5-g1: #8DB2E3; --v5-g1-fg: #0F1B2A; --v5-g2: #5B8BD0; --v5-g2-fg: #0F1B2A; --v5-g3: #3563A8; --v5-g3-fg: #FFFFFF;
   --v5-g4: #C3D6F0; --v5-g4-fg: #0F1B2A; --v5-g6: #A9C4F5; --v5-g6-fg: #0F1B2A;

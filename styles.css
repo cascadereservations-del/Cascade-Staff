@@ -2,6 +2,7 @@
    variable names mapped onto them, so every older rule re-skins without a rewrite, light and dark (tokens.css switches the --v5-* values).
    System UI font for everything; DM Serif Display (one self-hosted woff2) for titles and names only. Shared by index.html, quick/, pay/, guest/, install/. */
 @import url("tokens.css"); /* a page that forgets the <link> still gets the tokens (the browser fetches the sheet once) */
+@font-face { font-family: "Inter"; font-weight: 100 900; font-style: normal; font-display: swap; src: url("fonts/inter-var.woff2") format("woff2"); }
 @font-face { font-family: "DM Serif Display"; font-weight: 400; font-style: normal; font-display: swap; src: url("fonts/dm-serif-display-400.woff2") format("woff2"); }
 
 :root {
