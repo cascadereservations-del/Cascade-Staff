@@ -233,7 +233,7 @@
     if (root.document && root.document.addEventListener) root.document.addEventListener('visibilitychange', M.vis);
     if (M.demo) { K.items = demoItems().map(function (r) { return normalize(r, M.role); }); K.shop = normalizeShop(demoShop(), null); K.v84 = true; K.hasCounted = true; }
     else if (M.client && M.client.auth && M.client.auth.getSession) { try { M.client.auth.getSession().then(function (r) { var s = r && r.data && r.data.session; M.uid = s && s.user ? s.user.id : null; }, function () {}); } catch (e) { /* no uid: rows read "Asked by staff" */ } }
-    draw(); ensureSuppliers();
+    ensureSuppliers(); draw();
     if (!M.demo && !(K.items && K.at && nowMs() - K.at < 60000)) load(); // a fresh list for this role is kept when only the sub-route changed
     else if (!M.demo) loadShopSoon();
     return M;
@@ -1035,7 +1035,7 @@
     if (why === 'finance_only') { K.noFinance = true; a.vals.to = 'ops'; a.step = 'form'; a.err = 'financeOnly'; return drawLayer(); }
     a.err = errKind(e, online());
     var dk = a.kind === 'undo' ? a.entry.call.fn : a.kind === 'photoremove' ? 'photo' : a.kind;
-    if (a.err === 'missing' && NEWK[a.kind]) { me.denied[dk] = true; if (a.kind === 'sort') me.denied.cat = true; if (a.itemId && !rep && a.kind !== 'create') { a.kind = 'menu'; a.vals = null; a.step = null; } else me.act = null; a.err = null; toast(ERR.missing); if (rep) drawList(); return drawLayer(); } // not here yet: hide it, no error box
+    if (a.err === 'missing' && NEWK[a.kind]) { me.denied[dk] = true; if (a.kind === 'sort') me.denied.cat = true; if (a.itemId && !rep && a.kind !== 'create') { a.kind = 'menu'; a.vals = null; a.step = null; } else me.act = null; a.err = null; toast(ERR.missing); if (rep) drawList(); else if (!a.itemId) draw(); return drawLayer(); } // not here yet: hide it, no error box
     if (!rep && (a.err === 'offline' || a.err === 'other')) { me.loading = false; load(); } // the write may have landed: look again
     if (a.err === 'refused' && a.kind === 'count' && !canManage(me.role)) { me.denied.count = true; a.kind = 'menu'; a.vals = null; a.step = null; a.err = null; toast(ERR.missing); return drawLayer(); } // s85: the count release is not applied yet for staff: hide Count for the visit, no error box
     if (a.err === 'refused') { // the server decides: calm line, and the action goes away
