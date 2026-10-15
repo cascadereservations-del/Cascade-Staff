@@ -1,7 +1,7 @@
 /* Cascade Staff - Inventory suppliers, supplier picker and price history (s86 lane D-client-sup). Plain script, no build step.
    Exposes window.I_Suppliers = { mountList(host, ctx), pick(ctx, {itemId, selectedId, preferredId?}), openPriceHistory(ctx, item), openItemSuppliers(ctx, item), lib }.
    ctx = { client, role, propertyId, esc, toast, confirm(text) -> Promise<bool>, undo(label, fn), haptic, nowMs }.
-   undo fn: returns a promise that resolves on success and rejects when the server refuses.
+   undo(label, fn, opts): opts.itemId lets the item card carry the Undo. fn returns a promise that resolves on success and rejects when the server refuses.
    Privacy: the server decides (R1 sends a cleaner only id, name, location, maps_url, active). This file also never reads or draws anything else for a cleaner.
    Every RPC probes and hides: PGRST202 / 404 means the feature is not live yet, never an error box. */
 (function (root) {
@@ -11,7 +11,7 @@
   var PAYW = {}; PAY.forEach(function (p) { PAYW[p[0]] = p[1]; });
   var MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
   var K = { missing: false, cache: null, listMissing: false }; // per visit: R1 missing hides the picker; cache = { pid, at, rows }
-  var CACHE_MS = 60000;
+  var CACHE_MS = 60000, SEQ = 0;
 
   /* ---------------------------------------------------------------- pure helpers */
   function esc0(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
@@ -113,17 +113,19 @@
 
   /* ---------------------------------------------------------------- the sheet engine (one overlay per sheet, on the page body) */
   function openSheet(o) {
-    var doc = root.document, el = doc.createElement('div'), s = { el: el, closed: false, focused: false };
+    var doc = root.document, el = doc.createElement('div'), s = { el: el, closed: false, focused: false, p: 'S' + (++SEQ) + '_', opener: doc.activeElement };
     el.className = 'S_layer';
     s.draw = function () {
       if (s.closed) return;
-      el.innerHTML = '<div class="scrim on" data-s-act="close"></div><div class="sheet on S_sheet" role="dialog" aria-modal="true" aria-labelledby="S_sh_t">' + o.render(s) + '</div>';
-      if (!s.focused) { s.focused = true; var h = el.querySelector('#S_sh_t'); if (h && h.focus) h.focus(); }
+      // ids are made unique per sheet instance: stacked sheets (picker over links, edit over pack) never share one
+      el.innerHTML = ('<div class="scrim on" data-s-act="close"></div><div class="sheet on S_sheet" role="dialog" aria-modal="true" aria-labelledby="S_sh_t">' + o.render(s) + '</div>').replace(/(id|for|aria-labelledby)="S_/g, '$1="' + s.p);
+      if (!s.focused) { s.focused = true; var h = el.querySelector('#' + s.p + 'sh_t'); if (h && h.focus) h.focus(); }
     };
-    s.refocus = function (id) { var n = el.querySelector('#' + id); if (n && n.focus) { n.focus(); try { n.setSelectionRange(n.value.length, n.value.length); } catch (e) { /* not a text box */ } } };
+    s.refocus = function (id) { var n = el.querySelector('#' + id.replace(/^S_/, s.p)); if (n && n.focus) { n.focus(); try { n.setSelectionRange(n.value.length, n.value.length); } catch (e) { /* not a text box */ } } };
     s.close = function (r) {
       if (s.closed) return; s.closed = true;
       try { doc.body.removeChild(el); } catch (e) { /* already gone */ }
+      if (s.opener && s.opener.focus && s.opener.isConnected !== false) { try { s.opener.focus(); } catch (e2) { /* nothing to focus */ } }
       if (o.onClose) o.onClose(r);
     };
     el.addEventListener('click', function (ev) {
@@ -133,9 +135,16 @@
       o.act(act, b, s);
     });
     el.addEventListener('submit', function (ev) { if (ev.preventDefault) ev.preventDefault(); if (o.submit) o.submit(s); });
-    var inp = function (ev) { var t = ev.target; if (t && t.id && o.input) o.input(t.id.replace(/^S_f_/, ''), t.value, s); };
+    var inp = function (ev) { var t = ev.target; if (t && t.id && o.input) o.input(t.id.replace(/^S\d*_f_/, ''), t.value, s); };
     el.addEventListener('input', inp); el.addEventListener('change', inp);
-    el.addEventListener('keydown', function (ev) { if (ev.key === 'Escape') s.close(); });
+    el.addEventListener('keydown', function (ev) {
+      if (ev.key === 'Escape') return s.close();
+      if (ev.key !== 'Enter' && ev.key !== ' ') return;
+      var t = ev.target, b = t && t.closest ? t.closest('[data-s-act]') : null; // a dot is not a native button: Enter and Space press it
+      if (!b || b.tagName === 'BUTTON' || b.tagName === 'A') return;
+      if (ev.preventDefault) ev.preventDefault();
+      o.act(b.getAttribute('data-s-act'), b, s);
+    });
     doc.body.appendChild(el);
     s.draw();
     return s;
@@ -147,6 +156,14 @@
     var e = E(ctx);
     return '<div class="field"><label for="S_f_payment">How you pay</label><div class="input"><select id="S_f_payment"><option value="">Not set</option>' + PAY.map(function (p) { return '<option value="' + p[0] + '"' + (p[0] === val ? ' selected' : '') + '>' + e(p[1]) + '</option>'; }).join('') + '</select></div></div>';
   }
+  // The shell's confirm draws in its own layer, under this one: hide this sheet while the question is open, then bring it back.
+  function ask(ctx, s, text) {
+    var show = function (y) { if (!s.closed) s.el.style.display = ''; return !!y; };
+    s.el.style.display = 'none';
+    return Promise.resolve(ctx.confirm(text)).then(show, function () { return show(false); });
+  }
+  // A change with an Undo bar needs no toast as well (1b rule); without the bar the toast says it.
+  function done0(ctx, label, undoFn, opts) { buzz(ctx); if (undoFn && ctx.undo) ctx.undo(label, undoFn, opts); else say(ctx, label); }
   function say(ctx, m) { if (ctx.toast) ctx.toast(m); }
   function buzz(ctx, k) { if (ctx.haptic) { try { ctx.haptic(k || 'ok'); } catch (e) { /* no haptics here */ } } }
 
@@ -160,7 +177,7 @@
     if (name.length < 2 || name.length > 80) errs.name = 'Use a name of 2 to 80 characters.';
     if (ph && !/^[0-9+() -]{7,20}$/.test(ph)) errs.phone = 'Use digits, spaces, + ( ) or -, 7 to 20 characters.';
     if (loc.length > 120) errs.location = 'Keep this under 120 characters.';
-    if (mu && !/^https:\/\/[^ ]{5,300}$/.test(mu)) errs.maps_url = 'A map link starts with https:// and has no spaces.';
+    if (mu && !/^https:\/\/\S{5,292}$/.test(mu)) errs.maps_url = 'A map link starts with https:// and has no spaces.';
     if (nt.length > 500) errs.notes = 'Keep this under 500 characters.';
     return { ok: !Object.keys(errs).length, errs: errs, vals: { name: name, phone: ph, location: loc, maps_url: mu, payment: v.payment || '', notes: nt } };
   }
@@ -250,13 +267,12 @@
         if (act === 'edit') { s.close(); return supplierForm(ctx, sup, onChange); }
         if (act === 'stop' || act === 'again') {
           var on = act === 'again';
-          ctx.confirm(on ? 'Use ' + sup.name + ' again?' : 'Stop using ' + sup.name + '? It stays in your old records and you can use it again.').then(function (yes) {
+          ask(ctx, s, on ? 'Use ' + sup.name + ' again?' : 'Stop using ' + sup.name + '? It stays in your old records and you can use it again.').then(function (yes) {
             if (!yes) return;
             return saveSupplier(ctx, { id: sup.id, active: on }, null).then(function (r) {
               if (!r.ok) return say(ctx, ERR.other);
-              buzz(ctx); say(ctx, on ? sup.name + ' is in use again.' : 'Stopped using ' + sup.name + '.');
               var prev = r.before && Object.keys(r.before).length ? r.before : { active: !on };
-              ctx.undo((on ? 'Used again: ' : 'Stopped using: ') + sup.name, function () { return undoSave(ctx, sup.id, prev); });
+              done0(ctx, (on ? 'Using ' : 'Stopped using ') + sup.name + (on ? ' again' : ''), function () { return undoSave(ctx, sup.id, prev); });
               s.close(); if (onChange) onChange();
             }, function (er) { say(ctx, ERR[errKind(er, online())] || ERR.other); });
           });
@@ -299,7 +315,7 @@
         '<button class="btn btn-secondary btn-block" type="button" data-s-act="close">Cancel</button></div></form>';
     }
     function done(s, r, label, undoFn) {
-      buzz(ctx); say(ctx, label); if (undoFn) ctx.undo(label, undoFn); s.close(); if (onChange) onChange();
+      done0(ctx, label, undoFn); s.close(); if (onChange) onChange();
     }
     return openSheet({
       render: render,
@@ -307,7 +323,7 @@
       act: function (act, b, s) {
         if (act === 'reuse' && S.reuse) {
           var id = S.reuse.id;
-          saveSupplier(ctx, { id: id, active: true }, null).then(function (r) { if (r.ok) done(s, r, 'Using ' + V.name.trim() + ' again.', function () { return undoSave(ctx, id, { active: false }); }); }, function (er) { S.err = errKind(er, online()); s.draw(); });
+          saveSupplier(ctx, { id: id, active: true }, null).then(function (r) { if (r.ok) done(s, r, 'Using ' + V.name.trim() + ' again', function () { return undoSave(ctx, id, { active: false }); }); }, function (er) { S.err = errKind(er, online()); s.draw(); });
         }
       },
       submit: function (s) {
@@ -318,12 +334,12 @@
         if (isNew) {
           payload.name = v.vals.name;
           ['phone', 'location', 'maps_url', 'payment', 'notes'].forEach(function (k) { if (v.vals[k]) payload[k] = v.vals[k]; });
-          label = 'Added ' + v.vals.name + '.';
+          label = 'Added ' + v.vals.name;
         } else {
           payload.id = sup.id;
           ['name', 'phone', 'location', 'maps_url', 'payment', 'notes'].forEach(function (k) { var now = v.vals[k], was = sup[k] || ''; if (now !== was) payload[k] = now === '' ? null : now; });
           if (Object.keys(payload).length === 1) { S.err = 'Nothing changed yet.'; return s.draw(); }
-          label = 'Saved ' + v.vals.name + '.';
+          label = 'Saved ' + v.vals.name;
         }
         var go = function () {
           S.sending = true; s.draw();
@@ -334,13 +350,13 @@
               if (isNew) return done(s, r, label, function () { return undoSave(ctx, sid, { active: false }); });
               return done(s, r, label, function () { return undoSave(ctx, sup.id, r.before || {}); });
             }
-            if (r.reason === 'name_exists') { if (r.active === false) S.reuse = { id: r.supplier_id, name: v.vals.name }; else S.err = 'A supplier with that name is already in your list.'; }
+            if (r.reason === 'name_exists') { if (isNew && r.active === false) S.reuse = { id: r.supplier_id, name: v.vals.name }; else S.err = isNew ? 'A supplier with that name is already in your list.' : 'Another supplier already has that name.'; }
             else S.err = 'other';
             s.draw();
           }, function (er) { S.sending = false; S.err = errKind(er, online()); s.draw(); });
         };
         if (isNew) return go();
-        ctx.confirm('Save changes to ' + sup.name + '?').then(function (yes) { if (yes) go(); });
+        ask(ctx, s, 'Save changes to ' + sup.name + '?').then(function (yes) { if (yes) go(); });
       }
     });
   }
@@ -369,7 +385,7 @@
             '<div class="card list S_list">' + shown.map(function (s) {
               var sel = s.id === o.selectedId, pre = s.id === o.preferredId;
               return '<button class="rowi S_row" type="button" data-s-act="choose" data-id="' + e(s.id) + '" aria-pressed="' + (sel ? 'true' : 'false') + '"><span class="S_rt"><span class="t">' + e(s.name) + '</span><span class="s">' + e((s.location ? s.location + ' · ' : '') + (s.last_bought_at ? 'last bought ' + fmtDate(s.last_bought_at, nowMs(ctx)) : 'not bought from yet')) + '</span></span>' +
-                (pre ? '<span class="S_tag">' + gi('star', 's16') + ' Preferred</span>' : '') + (sel ? '<span class="S_tag">' + gi('check', 's16') + ' Selected</span>' : '') + '</button>';
+                (pre ? '<span class="S_tag">' + gi('star', 's16') + ' Usual</span>' : '') + (sel ? '<span class="S_tag">' + gi('check', 's16') + ' Selected</span>' : '') + '</button>';
             }).join('') +
             '<button class="rowi S_row S_newrow" type="button" data-s-act="new"><span class="S_rt"><span class="t">' + gi('plus', 's16') + ' New supplier…</span></span></button></div>' +
             '<div class="I_btns"><button class="btn btn-ghost btn-block" type="button" data-s-act="close">Cancel</button></div>';
@@ -388,7 +404,7 @@
             else if (act === 'back') { S.phase = 'list'; S.err = null; S.reuse = null; S.nameErr = null; s.focused = false; s.draw(); }
             else if (act === 'reuse' && S.reuse) {
               var rid = S.reuse.id, rn = S.reuse.name;
-              saveSupplier(ctx, { id: rid, active: true }, null).then(function (r) { if (r.ok) { buzz(ctx); fin({ id: rid, name: rn, created: false }, s); } }, function (er) { S.err = errKind(er, online()); s.draw(); });
+              saveSupplier(ctx, { id: rid, active: true }, null).then(function (r) { if (r.ok) { buzz(ctx); fin({ id: rid, name: rn, created: false, reactivated: true }, s); } }, function (er) { S.err = errKind(er, online()); s.draw(); });
             }
           },
           submit: function (s) {
@@ -424,7 +440,9 @@
       var sel = S.pt != null ? sp.points[S.pt] : null;
       return '<div class="S_spark"><svg viewBox="0 0 280 80" width="100%" role="img" aria-label="Price per unit over time, oldest on the left">' +
         (sp.points.length > 1 ? '<polyline class="S_line" fill="none" points="' + sp.path + '"/>' : '') +
-        sp.points.map(function (p, i) { return '<circle class="S_dot' + (i === S.pt ? ' S_dot-on' : '') + '" cx="' + p.x + '" cy="' + p.y + '" r="' + (i === S.pt ? 5 : 3.5) + '" tabindex="0" role="button" data-s-act="pt" data-i="' + i + '" aria-label="' + e(fmtDate(p.at, nowMs(ctx)) + ', ' + money(p.v) + ' each' + (p.supplier ? ' at ' + p.supplier : '')) + '"/>'; }).join('') + '</svg>' +
+        sp.points.map(function (p, i) { return '<circle class="S_dot' + (i === S.pt ? ' S_dot-on' : '') + '" cx="' + p.x + '" cy="' + p.y + '" r="' + (i === S.pt ? 5 : 3.5) + '" pointer-events="none"/>'; }).join('') +
+        // an invisible 44 px target per point (r 22 in a 280 wide box), focusable, pressed with a tap, Enter or Space
+        sp.points.map(function (p, i) { return '<circle class="S_hit" id="S_pt_' + i + '" cx="' + p.x + '" cy="' + p.y + '" r="22" fill="transparent" tabindex="0" role="button" data-s-act="pt" data-i="' + i + '" aria-label="' + e(fmtDate(p.at, nowMs(ctx)) + ', ' + money(p.v) + ' each' + (p.supplier ? ' at ' + p.supplier : '')) + '"/>'; }).join('') + '</svg>' +
         '<p class="S_cap" role="status">' + (sel ? e(fmtDate(sel.at, nowMs(ctx)) + ': ' + money(sel.v) + ' each' + (sel.supplier ? ' at ' + sel.supplier : '')) : 'Tap a dot to see the price.') + '</p></div>';
     }
     function body() {
@@ -446,7 +464,7 @@
     var sh = openSheet({
       render: function () { return head(ctx, item.name || 'Price history', 'Price history') + body() + '<div class="I_btns"><button class="btn btn-ghost btn-block" type="button" data-s-act="close">Close</button></div>'; },
       act: function (act, b, s) {
-        if (act === 'pt') { S.pt = parseInt(b.getAttribute('data-i'), 10); s.draw(); }
+        if (act === 'pt') { S.pt = parseInt(b.getAttribute('data-i'), 10); s.draw(); s.refocus('S_pt_' + S.pt); }
         if (act === 'retry') load();
       }
     });
@@ -487,7 +505,7 @@
       if (S.phase === 'load') inner = '<p class="help S_load" role="status">Loading…</p>';
       else if (S.phase === 'err') inner = errBox(ctx, S.err) + '<button class="btn btn-secondary" type="button" data-s-act="retry">Try again</button>';
       else inner = (S.links.length ? '<ul class="S_il">' + S.links.map(function (l) {
-        return '<li class="S_lk"><span class="t">' + e(l.name) + '</span><span class="s">' + e(packText(l)) + '</span><div class="S_lb">' +
+        return '<li class="S_lk"><span class="t">' + e(l.name) + (l.active === false ? ' <span class="S_tag">Not in use</span>' : '') + '</span><span class="s">' + e(packText(l)) + '</span><div class="S_lb">' +
           '<button class="btn btn-secondary" type="button" data-s-act="pref" data-id="' + e(l.supplier_id) + '" aria-pressed="' + (l.preferred ? 'true' : 'false') + '">' + gi('star', 's16') + ' ' + (l.preferred ? 'Preferred' : 'Make preferred') + '</button>' +
           '<button class="btn btn-secondary" type="button" data-s-act="pack" data-id="' + e(l.supplier_id) + '">Edit pack</button>' +
           '<button class="btn btn-ghost" type="button" data-s-act="unlink" data-id="' + e(l.supplier_id) + '">Remove</button></div></li>';
@@ -496,7 +514,7 @@
     }
     function link(supId, patch, label, undoFn) {
       return call(ctx, 'inventory_item_supplier_link_v1', { p_item_id: item.id, p_supplier_id: supId, p_link: patch }).then(function (r) {
-        if (!r || !r.ok) throw new Error('refused'); buzz(ctx); say(ctx, label); if (undoFn) ctx.undo(label, function () { return undoFn(r.before); }); return r;
+        if (!r || !r.ok) throw new Error('refused'); done0(ctx, label, undoFn && function () { return undoFn(r.before); }, { itemId: item.id }); return r;
       });
     }
     function relink(supId, before) {
@@ -509,8 +527,9 @@
       S.phase = 'load'; s.draw();
       call(ctx, 'inventory_supplier_list_v1', { p_property_id: ctx.propertyId }).then(function (d) {
         var sups = normList(d, true);
+        // ponytail: N+1 R3 calls; add inventory_item_supplier_list_v1(p_item_id) when suppliers pass ~15. A failed R3 fails the whole load: a hidden link must not be overwritten.
         return Promise.all(sups.map(function (sp) {
-          return call(ctx, 'inventory_supplier_detail_v1', { p_supplier_id: sp.id }).then(function (x) { return ((x && x.items) || []).filter(function (i) { return i.item_id === item.id; }).map(function (i) { return { supplier_id: sp.id, name: sp.name, preferred: !!i.preferred, pack_label: i.pack_label, pack_size: i.pack_size, quoted_pack_price: i.quoted_pack_price, last_unit_price: i.last_unit_price, times: i.times }; }); }, function () { return []; });
+          return call(ctx, 'inventory_supplier_detail_v1', { p_supplier_id: sp.id }).then(function (x) { return ((x && x.items) || []).filter(function (i) { return i.item_id === item.id; }).map(function (i) { return { supplier_id: sp.id, name: sp.name, active: sp.active, preferred: !!i.preferred, pack_label: i.pack_label, pack_size: i.pack_size, quoted_pack_price: i.quoted_pack_price, last_unit_price: i.last_unit_price, times: i.times }; }); });
         }));
       }).then(function (parts) { S.links = [].concat.apply([], parts); S.links.sort(function (a, b) { return (b.preferred ? 1 : 0) - (a.preferred ? 1 : 0) || (a.name < b.name ? -1 : 1); }); S.phase = 'ok'; s.draw(); }, function (er) {
         var k = errKind(er, online()); if (k === 'missing') { s.close(); return say(ctx, 'Supplier details are not available yet.'); }
@@ -527,21 +546,22 @@
         if (act === 'pack' && l) { S.edit = id; S.V = { pack_label: l.pack_label || '', pack_size: l.pack_size == null ? '' : String(num(l.pack_size)), quoted: l.quoted_pack_price == null ? '' : String(num(l.quoted_pack_price)) }; S.formErr = null; s.focused = false; return s.draw(); }
         if (act === 'pref' && l) {
           var prev = S.links.filter(function (x) { return x.preferred && x.supplier_id !== id; })[0], on = !l.preferred;
-          return ctx.confirm((on ? 'Make ' + l.name + ' the usual supplier for ' : 'Stop ' + l.name + ' being the usual supplier for ') + (item.name || 'this item') + '?').then(function (yes) {
+          return ask(ctx, s, (on ? 'Make ' + l.name + ' the usual supplier for ' : 'Stop ' + l.name + ' being the usual supplier for ') + (item.name || 'this item') + '?').then(function (yes) {
             if (!yes) return;
-            return link(id, { preferred: on }, on ? l.name + ' is now the usual supplier.' : l.name + ' is no longer the usual supplier.', function (before) {
-              if (on && prev) return relink(prev.supplier_id, { preferred: true });
-              return relink(id, before || { preferred: !on });
+            return link(id, { preferred: on }, on ? 'Made ' + l.name + ' the usual supplier' : 'Stopped ' + l.name + ' being the usual supplier', function (before) {
+              // 2.7 undo map: a link that was new goes away (R5); otherwise the old values return, and the previous usual supplier is made usual again
+              var mine = function () { return before ? relink(id, before) : unlinkUndo(id); };
+              return on && prev ? relink(prev.supplier_id, { preferred: true }).then(function () { return before ? true : unlinkUndo(id); }) : mine();
             }).then(function () { return load(s); }, function (er) { fail(s, er); });
           });
         }
         if (act === 'unlink' && l) {
-          return ctx.confirm('Remove ' + l.name + ' from ' + (item.name || 'this item') + '? Past purchases stay as they are.').then(function (yes) {
+          return ask(ctx, s, 'Remove ' + l.name + ' from ' + (item.name || 'this item') + '? Past purchases stay as they are.').then(function (yes) {
             if (!yes) return;
             return call(ctx, 'inventory_item_supplier_unlink_v1', { p_item_id: item.id, p_supplier_id: id }).then(function (r) {
               if (!r || !r.ok) throw new Error('refused');
               if (!r.removed) { say(ctx, l.name + ' was only bought from, not listed.'); return load(s); }
-              buzz(ctx); say(ctx, 'Removed ' + l.name + '.'); ctx.undo('Removed ' + l.name, function () { return relink(id, r.before); }); return load(s);
+              done0(ctx, 'Removed ' + l.name, function () { return relink(id, r.before); }, { itemId: item.id }); return load(s);
             }).catch(function (er) { fail(s, er); });
           });
         }
@@ -549,7 +569,7 @@
           return pick(ctx, { itemId: item.id }).then(function (p) {
             if (!p) return;
             if (linkOf(p.id)) return say(ctx, p.name + ' is already listed here.');
-            return link(p.id, { preferred: false }, 'Added ' + p.name + '.', function (before) { return before ? relink(p.id, before) : unlinkUndo(p.id); }).then(function () { return load(s); }, function (er) { fail(s, er); });
+            return link(p.id, { preferred: false }, 'Added ' + p.name, function (before) { return before ? relink(p.id, before) : unlinkUndo(p.id); }).then(function () { return load(s); }, function (er) { fail(s, er); });
           });
         }
       },
@@ -565,10 +585,10 @@
         if (sz !== (l.pack_size == null ? '' : String(num(l.pack_size)))) patch.pack_size = sz ? num(sz) : null;
         if (q !== (l.quoted_pack_price == null ? '' : String(num(l.quoted_pack_price)))) patch.quoted_pack_price = q ? num(q) : null;
         if (!Object.keys(patch).length) { S.formErr = 'Nothing changed yet.'; return s.draw(); }
-        ctx.confirm('Save pack details for ' + l.name + '?').then(function (yes) {
+        ask(ctx, s, 'Save pack details for ' + l.name + '?').then(function (yes) {
           if (!yes) return;
           S.sending = true; s.draw();
-          return link(id, patch, 'Saved pack details for ' + l.name + '.', function (before) { return before ? relink(id, before) : unlinkUndo(id); }).then(function () { S.sending = false; S.edit = null; s.focused = false; return load(s); }, function (er) { fail(s, er); });
+          return link(id, patch, 'Saved pack details for ' + l.name, function (before) { return before ? relink(id, before) : unlinkUndo(id); }).then(function () { S.sending = false; S.edit = null; s.focused = false; return load(s); }, function (er) { fail(s, er); });
         });
       }
     });

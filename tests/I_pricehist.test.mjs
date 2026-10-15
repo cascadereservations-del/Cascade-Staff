@@ -76,7 +76,7 @@ test('sheet draws an inline SVG 280 x 80 polyline, no library, with focusable la
   const s = e.sheet();
   assert.match(s, /<svg viewBox="0 0 280 80" width="100%" role="img"/);
   assert.match(s, /<polyline class="S_line" fill="none" points="[\d.,\- ]+"/);
-  assert.equal((s.match(/<circle /g) || []).length, 3);
+  assert.equal((s.match(/<circle /g) || []).length, 6); // a visible dot and an invisible hit target per point
   assert.match(s, /tabindex="0" role="button" data-s-act="pt" data-i="2" aria-label="Oct 10, PHP 12\.50 each at SM Supermarket"/);
   assert.match(s, /Tap a dot to see the price/);
   await e.click('pt', { 'data-i': '1' });
@@ -141,4 +141,18 @@ test('markup is escaped: a supplier or item name cannot inject HTML', async () =
   const e = await setup({ rpc: r6(evil) });
   await open(e, { id: 'i1', name: '<b>Paper</b>' });
   assert.doesNotMatch(e.sheet(), /<img src=x|<b>Paper/); assert.match(e.sheet(), /&lt;img/);
+});
+
+test('r2 F5: every sparkline dot has a 44 px invisible hit target, Enter and Space pick it, focus stays on the dot', async () => {
+  const e = await setup({ rpc: r6(HISTORY) });
+  await open(e);
+  let s = e.sheet();
+  assert.equal((s.match(/class="S_hit"/g) || []).length, 3);
+  assert.match(s, /class="S_hit"[^>]*r="22"/); assert.match(s, /class="S_dot[^"]*"[^>]*pointer-events="none"/);
+  await e.key('Enter', 'pt', { 'data-i': '1' });
+  assert.match(e.sheet(), /Sep 20: PHP 11 each at Robinsons/);
+  await e.key(' ', 'pt', { 'data-i': '2' });
+  assert.match(e.sheet(), /Oct 10: PHP 12\.50 each at SM Supermarket/);
+  const stub = Object.entries(e.top().byId).filter(([k]) => /pt_2$/.test(k))[0][1];
+  assert.ok(stub.focused >= 1);
 });

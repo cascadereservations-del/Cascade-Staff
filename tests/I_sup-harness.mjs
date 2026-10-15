@@ -14,7 +14,7 @@ export const flush = async () => { for (let i = 0; i < 14; i++) await new Promis
 class Stub { constructor() { this.focused = 0; this.value = ''; } focus() { this.focused++; } setSelectionRange() {} }
 // An element: innerHTML, listeners, a stub per #id.
 export class El {
-  constructor() { this.l = {}; this.innerHTML = ''; this.className = ''; this.attrs = {}; this.byId = {}; }
+  constructor() { this.l = {}; this.innerHTML = ''; this.className = ''; this.attrs = {}; this.byId = {}; this.style = {}; }
   addEventListener(t, f) { (this.l[t] ||= []).push(f); }
   removeEventListener(t, f) { this.l[t] = (this.l[t] || []).filter((x) => x !== f); }
   setAttribute(k, v) { this.attrs[k] = v; } removeAttribute(k) { delete this.attrs[k]; }
@@ -73,12 +73,12 @@ function wrapS(S) {
 }
 export async function setup(o = {}) {
   const role = o.role || 'owner', nav = { onLine: o.offline ? false : true };
-  const toasts = [], undos = [], confirms = [], hapts = [];
+  const toasts = [], undos = [], confirms = [], hapts = [], pending = [];
   const client = o.client || mockClient({ rpc: Object.assign({ inventory_supplier_list_v1: okRows(role === 'cleaner' ? cleanerRows() : suppliers()) }, o.rpc || {}) });
   let n = 0;
   const body = new El(); body.children = [];
   body.appendChild = (e) => { body.children.push(e); }; body.removeChild = (e) => { body.children = body.children.filter((x) => x !== e); };
-  const doc = { body, createElement: () => new El() };
+  const doc = { body, createElement: () => new El(), activeElement: new Stub() };
   const win = { crypto: { randomUUID: () => 'uuid-' + String(++n).padStart(8, '0') + '-aaaa-bbbb-cccc-dddddddddddd' }, document: doc, navigator: nav };
   const ctx0 = { window: win, self: win, navigator: nav, document: doc, console };
   vm.createContext(ctx0);
@@ -88,8 +88,8 @@ export async function setup(o = {}) {
   const ctx = {
     client, role, propertyId: PID, esc: (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])),
     toast: (m) => toasts.push(m), haptic: (k) => hapts.push(k), nowMs: () => when,
-    confirm: (t) => { confirms.push(t); return Promise.resolve(o.confirm !== false); },
-    undo: (label, fn) => undos.push({ label, fn })
+    confirm: (t) => { confirms.push(t); if (o.hold) return new Promise((r) => pending.push(r)); return Promise.resolve(o.confirm !== false); },
+    undo: (label, fn, opts) => undos.push({ label, fn, opts })
   };
   const host = new El();
   const top = () => body.children[body.children.length - 1];
@@ -102,7 +102,8 @@ export async function setup(o = {}) {
     clickHost: (act, extra) => fire(host, 'click', { target: tgt(act, extra) }),
     type: (id, value, el) => fire(el || top(), 'input', { target: { id: 'S_f_' + id, value } }),
     submit: (el) => fire(el || top(), 'submit', { preventDefault() {} }),
-    key: (k) => fire(top(), 'keydown', { key: k }),
+    key: (k, act, extra) => fire(top(), 'keydown', { key: k, target: act ? Object.assign(tgt(act, extra), { tagName: 'circle' }) : undefined, preventDefault() {} }),
+    answer: async (v) => { pending.shift()(v); await flush(); }, pending,
     mountList: async () => { const h = env.S.mountList(host, ctx); await flush(); return h; },
     flush
   };
