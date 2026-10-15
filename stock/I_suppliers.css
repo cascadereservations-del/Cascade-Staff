@@ -1,0 +1,54 @@
+/* Suppliers, supplier picker and price history (s86 lane D-client-sup). Tokens only; the shell's card, rowi, btn, field, input, sheet and scrim classes do the rest. Light and dark come from the Phase A tokens. */
+.S_wrap { display: grid; gap: 12px; min-width: 0; }
+.S_wrap > * { min-width: 0; }
+.S_head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 12px; }
+.S_h { margin: 0; font: 650 var(--v5-t-section)/1.25 var(--font-ui); color: var(--fg); }
+.S_new { min-height: 48px; }
+.S_list .S_row { align-items: center; min-height: 48px; }
+.S_rt { display: grid; gap: 2px; min-width: 0; flex: 1; }
+.S_rt .t, .S_il .t { font: 600 var(--v5-t-body)/1.3 var(--font-ui); overflow-wrap: anywhere; color: var(--fg); }
+.S_rt .s, .S_il .s { font-size: var(--v5-t-2); color: var(--fg-2); overflow-wrap: anywhere; }
+.S_tag { flex: none; display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: var(--r-full); font: 600 var(--v5-t-2)/1.3 var(--font-ui); background: var(--v5-sunk); color: var(--fg-2); white-space: nowrap; }
+.S_row[aria-pressed="true"] { background: var(--v5-fill); }
+.S_more { justify-self: start; min-height: 48px; }
+.S_load { padding: 16px 0; text-align: center; }
+.S_sheet { max-height: 92vh; overflow-y: auto; overscroll-behavior: contain; display: block; }
+.S_sheet .S_sht { font: 650 var(--v5-t-section)/1.25 var(--font-ui); margin: 0 0 4px; overflow-wrap: anywhere; }
+.S_sheet .S_sht:focus { outline: none; }
+.S_sheet form { display: grid; gap: 12px; }
+.S_sheet .help { font-size: var(--v5-t-2); margin: 0 0 8px; }
+.S_sheet .input input, .S_sheet .input select, .S_sheet .input textarea { min-height: 44px; width: 100%; font: inherit; color: inherit; background: transparent; border: 0; }
+.S_sheet .input textarea { padding: 10px 0; resize: vertical; }
+.S_sheet .field .err { font-size: var(--v5-t-2); }
+.S_sheet .I_btns { display: grid; gap: 12px; margin-top: 12px; }
+.S_sheet .I_dl { margin: 12px 0; display: grid; }
+.S_sheet .I_kv { display: flex; justify-content: space-between; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--v5-sep); font-size: var(--v5-t-2); }
+.S_sheet .I_kv dt { color: var(--fg-2); }
+.S_sheet .I_kv dd { margin: 0; text-align: right; font-weight: 600; overflow-wrap: anywhere; }
+.S_btns { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0; }
+.S_act { min-height: 48px; flex: 1 1 8rem; }
+.S_hh { margin: 16px 0 4px; font: 650 var(--v5-t-body)/1.3 var(--font-ui); }
+.S_il { list-style: none; margin: 0 0 12px; padding: 0; display: grid; }
+.S_il > li { display: grid; gap: 2px; padding: 10px 0; border-bottom: 1px solid var(--v5-sep); min-width: 0; }
+.S_lb { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+.S_lb .btn { min-height: 44px; }
+.S_lb .btn[aria-pressed="true"] { background: var(--v5-fill); border-color: var(--v5-act); color: var(--v5-act); }
+/* price history */
+.S_stats { margin: 8px 0; font: 600 var(--v5-t-body)/1.4 var(--font-ui); color: var(--fg); overflow-wrap: anywhere; }
+.S_up { display: inline-flex; align-items: center; gap: 6px; margin: 8px 0 0; padding: 4px 10px; border-radius: var(--r-full); font: 650 var(--v5-t-2)/1.3 var(--font-ui); background: var(--v5-warn-w); color: var(--v5-warn-t); }
+.S_cheap { display: flex; align-items: center; gap: 6px; margin: 8px 0; font: 600 var(--v5-t-2)/1.35 var(--font-ui); color: var(--v5-ok-t); }
+.S_spark { margin: 12px 0; max-width: 280px; }
+.S_spark svg { display: block; width: 100%; height: auto; overflow: visible; }
+.S_line { stroke: var(--v5-act); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+.S_dot { fill: var(--v5-surf); stroke: var(--v5-act); stroke-width: 2; }
+.S_hit { cursor: pointer; outline: none; }
+.S_hit:focus-visible { stroke: var(--v5-act); stroke-width: 2; }
+.S_dot-on { fill: var(--v5-act); }
+.S_cap { margin: 4px 0 0; min-height: 1.4em; font-size: var(--v5-t-2); color: var(--fg-2); }
+.S_hl { list-style: none; margin: 8px 0 0; padding: 0; display: grid; }
+.S_hr { display: grid; grid-template-columns: 4.5rem minmax(0, 1fr); gap: 2px 12px; padding: 10px 0; border-bottom: 1px solid var(--v5-sep); font-size: var(--v5-t-2); }
+.S_hd { font-weight: 650; color: var(--fg); font-variant-numeric: tabular-nums; }
+.S_hm { color: var(--fg-2); overflow-wrap: anywhere; }
+.S_hp { grid-column: 2; font-weight: 600; color: var(--fg); font-variant-numeric: tabular-nums; }
+.S_src { grid-column: 2; color: var(--fg-2); }
+@media (prefers-reduced-motion: reduce) { .S_sheet, .S_layer * { transition: none !important; animation: none !important; } }
