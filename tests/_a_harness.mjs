@@ -24,7 +24,7 @@ export async function boot({ winInit, tour, tourDelay, role, hash, handlers, now
   const when = now || NOW;
   class FixedDate extends Date { constructor(...a) { if (a.length) super(...a); else super(when.getTime()); } static now() { return when.getTime(); } }
   const els = pre || {}, listeners = {}, winListeners = {}, calls = [], location = { hash, pathname: '/', search: demo ? '?demo' : '', origin: 'https://staff.example', replace() {} };
-  const docObj = { getElementById: (id) => (els[id] ||= el()), querySelector: (q) => (docQuery ? docQuery(q) : null), querySelectorAll: () => [], visibilityState: visible === false ? 'hidden' : 'visible', addEventListener: (t, fn) => { (listeners[t] ||= []).push(fn); } };
+  const docObj = { getElementById: (id) => (els[id] ||= el()), querySelector: (q) => (docQuery ? docQuery(q) : null), querySelectorAll: () => [], visibilityState: visible === false ? 'hidden' : 'visible', addEventListener: (t, fn) => { (listeners[t] ||= []).push(fn); }, removeEventListener: (t, fn) => { const l = listeners[t] || []; const i = l.indexOf(fn); if (i >= 0) l.splice(i, 1); } };
   const sb = {
     auth: { getSession: () => Promise.resolve({ data: { session: { user: { email: 'ana@staff.cascade.invalid', user_metadata: { display_name: 'Ana' } }, access_token: 't' } } }), signOut: () => Promise.resolve({}) },
     rpc: (name, args) => { calls.push([name, JSON.parse(JSON.stringify(args || {}))]); const h = handlers[name]; if (!h) return Promise.resolve({ error: null, data: null }); const r = h(args); return r && typeof r.then === 'function' ? r : Promise.resolve(JSON.parse(JSON.stringify(r))); },
