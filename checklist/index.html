@@ -5756,7 +5756,7 @@ const K_PHASE_ZONES      = ['door', 'plug', 'door', 'bed', 'bath', 'plug', 'door
    The server counts these as "other" photos and requires none of them (submit-cleaning index.ts ~554-558), so the rule is client-side. */
 const K_PHOTO_SLOTS = [
   { id: 'k_utensils',  area: 'Kitchen',  label: 'Kitchen utensils: drawer and rack' },
-  { id: 'k_cookware',  area: 'Kitchen',  label: 'Plates and cookware (pans: check their condition)' },
+  { id: 'k_cookware',  area: 'Kitchen',  label: 'Plates and cookware: check the condition of the pans' },
 ];
 const K_KITCHEN_PHOTO_MAX = 12;
 const K_slotLabel = id => { const s = K_PHOTO_SLOTS.find(x => x.id === id); return s ? s.label : ''; };  // zone illustration per phase (sprite ids K_z-*)
@@ -5882,7 +5882,7 @@ const CONFIRM_LEAVE_ITEMS = [
   // ponytail: static list; read the catalogue cache if the set starts changing.
   { id: 'check_utensils_complete', phase: 4, only: ['turnover', 'deep_clean'],
     text: 'Kitchen utensils complete — photos taken of the drawer, the rack and the cookware',
-    detail: 'Take the "Kitchen utensils" photo on this screen (the first spot in the photo card): lay the set out the way that photo shows it and count it against this list, flagging anything missing, chipped or broken as an Issue: 1 frying pan · 1 casserole · 1 sauce pan · 1 can opener · 6 spoons · 2 knives · 6 forks · 6 teaspoons · 4 highball glasses · 6 wine glasses · 4 plates · 2 soup bowls · 4 ladles · 4 white mugs · 2 coloured mugs.' },
+    detail: 'Take the two kitchen photos on this screen (the drawer and rack, then the plates and cookware) and count the set against this list, flagging anything missing, chipped or broken as an Issue: 1 frying pan · 1 casserole · 1 sauce pan · 1 can opener · 6 spoons · 2 knives · 6 forks · 6 teaspoons · 4 highball glasses · 6 wine glasses · 4 plates · 2 soup bowls · 4 ladles · 4 white mugs · 2 coloured mugs.' },
   { id: 'check_key_card',      text: 'Guest access verified — key card unlocks door and guest PIN code opens cleanly',
     detail: 'Two checks before you leave: (1) Key card — physically tap the card on the door reader. It must beep and unlock. Leave the key card on the keychain inside the unit for the arriving guest. (2) Guest PIN — enter the code from the current booking on the smart lock keypad. The lock must click open cleanly. If either test fails, call the property manager immediately before leaving.' },
   { id: 'check_guest_code',    text: 'Smart lock battery not low — no dim backlight or warning beep',

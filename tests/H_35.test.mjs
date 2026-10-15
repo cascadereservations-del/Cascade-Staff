@@ -137,5 +137,6 @@ test('3.4.1 checklist: the kitchen card requires exactly the two named kitchen p
   assert.match(h, /const K_KITCHEN_PHOTO_MIN\s*=\s*2;/); assert.match(h, /const SECTION_PHOTO_MIN\s*=\s*3;/);
   assert.match(h, /label: 'bedroom',\s+photoMin: SECTION_PHOTO_MIN/); assert.match(h, /label: 'kitchen',\s+photoMin: K_KITCHEN_PHOTO_MIN/);
   assert.match(h, /kitchenPhotos\.length < K_KITCHEN_PHOTO_MIN\) return false/);
+  for (const m of slots.matchAll(/label: '([^']+)'/g)) assert.doesNotMatch(m[1].split(':')[0], /\(/, 'the short name (before the colon) is shown alone in the nudge and the thumbnail caption');
   assert.match(h, /Required &nbsp;·&nbsp; 2 kitchen photos/); assert.doesNotMatch(h, /3 bathroom|b_toilet|six spots/);
 });
