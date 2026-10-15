@@ -69,7 +69,7 @@ test('I_card Edit levels: owner and admin only; sends inventory_item_update_v1 {
   await e.mount(''); await e.open('i1'); await e.begin('levels');
   assert.match(e.sheet(), /value="12"/); assert.match(e.sheet(), /value="36"/);
   await e.input('I_f_reorder', '10'); await e.input('I_f_par', '30'); await e.submit();
-  assert.match(e.sheet(), /Save the levels for Toilet paper\?/);
+  assert.match(e.sheet(), /Save the details for Toilet paper\?/);
   await e.submit();
   const c = e.client.rpcCalls('inventory_item_update_v1');
   assert.equal(c.length, 1);

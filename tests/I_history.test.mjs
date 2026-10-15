@@ -93,7 +93,7 @@ test('I_history probe-and-hide: PGRST202 hides the History button, with a calm t
   await e.mount(''); await e.open('i1'); await e.act('history-open');
   assert.match(e.toasts[e.toasts.length - 1], /not available right now/);
   assert.match(e.sheet(), /Toilet paper/); assert.doesNotMatch(e.sheet(), /data-act="history-open"/);
-  await e.begin('levels'); assert.match(e.sheet(), /Edit levels/); assert.doesNotMatch(e.sheet(), /Suggested/);
+  await e.begin('levels'); assert.match(e.sheet(), /Edit details/); assert.doesNotMatch(e.sheet(), /Suggested/);
 });
 
 test('I_history a failure that is not "missing" gives the calm line and Back; the demo has no History', async () => {

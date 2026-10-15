@@ -112,7 +112,7 @@ test('I_scan new item: form, confirm, then inventory_item_create_v1 with the exa
   const e = await make('owner');
   await e.mount(''); await e.act('scan'); await typeCode(e, '555000777');
   await e.act('scan-new');
-  assert.match(e.sheet(), /Miscellaneous/); assert.match(e.sheet(), /<option value="" selected>Choose one/);
+  assert.match(e.sheet(), /Miscellaneous/); assert.match(e.sheet(), /<option value="__cassy" selected>Let Cassy choose/);
   await e.input('I_f_name', 'Spare keys'); await e.input('I_f_category', 'Miscellaneous'); await e.input('I_f_unit', 'pieces'); await e.input('I_f_qty', '3'); await e.input('I_f_reorder', '1');
   await e.submit();
   assert.match(e.sheet(), /Add Spare keys as a new item\?/); assert.match(e.sheet(), /Telegram \/count will skip it/);
