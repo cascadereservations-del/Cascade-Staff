@@ -18,7 +18,7 @@ for (const role of ['owner', 'admin', 'cleaner', 'finance']) {
     assert.match(e.sheet(), /Toilet paper/);
     assert.doesNotMatch(e.sheet(), /data-kind="count"|data-kind="used"/);
     await e.begin('count'); await e.begin('used');
-    assert.doesNotMatch(e.sheet(), /Count Toilet paper|Used some Toilet paper/);
+    assert.doesNotMatch(e.sheet(), /Count Toilet paper|Used some Toilet paper|Record use: Toilet paper/);
     await e.submit();
     assert.equal(e.client.rpcCalls('reconcile_inventory_baseline_v1').length + e.client.rpcCalls('record_inventory_usage').length, 0);
     assert.match(e.sheet(), /data-kind="shop"/); // everything else stays
