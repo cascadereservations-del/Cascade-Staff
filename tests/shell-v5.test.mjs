@@ -190,7 +190,7 @@ test('A_ live mock: notices_v1 is called with exactly p_property_id; the cleaner
   assert.ok(iToday > 0 && iTurn > iToday && iSlot > iTurn && h.indexOf('aria-label="Notices"') > iSlot, 'E_: the paid-notice slot sits directly under the Turnover card, above Notices');
   assert.match(h, /id="slot-paid-notice" class="A_slot" hidden>/);
   assert.match(h, /out 12:00 noon/, 'a guest with no check-out time shows the house time, not a made-up one');
-  assert.match(h, /1 h 30 min until check-in/); assert.match(h, /Slide to start cleaning/); assert.match(h, /data-slide/);
+  assert.match(h, /1 h 30 min until check-in/); assert.match(h, /Start cleaning/); assert.match(h, /data-slide/);
   assert.match(h, /aria-label="Notices"/); assert.match(h, /Rain watch, 2 to 5 pm/);
   for (const w of ['Work', 'Ask Cassy', 'Cleaning checklist', 'Cleaning fee', 'Calendar', 'Cassy · OPS', 'Quick guide']) assert.ok(h.includes(w), w);
   assert.doesNotMatch(h, /Admin hub|slot-inbox|to confirm|Tell the guest/);
