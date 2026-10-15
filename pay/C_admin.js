@@ -58,8 +58,8 @@
   function ds(iso) { return CS.dayShort(String(iso).slice(0, 10)); } // "Fri 2 Oct"
   function dm(iso) { return CS.dayLabel(String(iso).slice(0, 10)); } // B3: "15 Oct", the shell's own style (CS.dayLabel)
   function theirs(r) { return r.status === 'paying' && !(S.me && r.paying_by_user_id === S.me); }
-  function row(r, i) {
-    var first = i === 0; // one filled button per screen
+  function row(r, firstId) {
+    var first = r.id === firstId; // one filled button per screen: the first row that renders a Pay button
     var st = A.status(r), other = theirs(r), who = r.paying_by_name || 'Someone';
     if (other) {
       return '<div class="rowi C_row" style="cursor:default"><span class="lead">' + ICON('cash') + '</span><span class="mid"><span class="t">' + esc(r.payee_name) + ' · <span class="num">' + esc(P.peso(r.total)) + '</span></span>' +
@@ -91,9 +91,10 @@
   function group(title, rows) { return '<div class="P_group"><div class="cap up">' + title + '</div><div class="card list">' + rows + '</div></div>'; }
   function renderList() {
     var open = (S.list || []).filter(function (r) { return r.status === 'requested' || r.status === 'paying'; }), paid = (S.list || []).filter(function (r) { return r.status === 'paid'; });
+    var firstPay = open.filter(function (r) { return !theirs(r); })[0];
     var un = (S.unreq || []).filter(function (u) { return (u.sessions || []).length + (u.claims || []).length > 0; });
     var inner = '<div class="stack">' + (S.listMsg ? '<div class="errbox" role="alert">' + ICON('alert') + '<span>' + esc(S.listMsg) + '</span></div>' : '') + (S.listNote ? '<div class="okbox" role="status">' + ICON('checks') + '<span>' + esc(S.listNote) + '</span></div>' : '') +
-      (open.length || un.length || paid.length ? (open.length ? group('To pay', open.map(function (r, i) { return row(r, i); }).join('')) : '') + (un.length ? group('Not yet requested', un.map(unreqRow).join('')) : '') + (paid.length ? group('Paid recently', paid.map(paidRow).join('')) : '')
+      (open.length || un.length || paid.length ? (open.length ? group('To pay', open.map(function (r) { return row(r, firstPay && firstPay.id); }).join('')) : '') + (un.length ? group('Not yet requested', un.map(unreqRow).join('')) : '') + (paid.length ? group('Paid recently', paid.map(paidRow).join('')) : '')
         : '<div class="card empty"><div class="disc">' + ICON('checks') + '</div><h2 class="hd">Nothing to pay right now</h2><p>Unpaid cleans appear here as soon as a report is sent.</p></div>') + '</div>';
     root.innerHTML = shell('Pay staff', inner);
   }

@@ -18,7 +18,7 @@
 
   function shell(title, inner, back) { return P.P_shell(title, inner, { back: back, icon: ICON, esc: esc, hash: P.P_hash(window) }).replace(' aria-current="page"', ''); } // B3: a pay page is not "Today", so no tab is marked
   function dm(iso) { return CS.dayLabel(String(iso).slice(0, 10)); } // B3: "15 Oct", the shell's own style
-  function ds(iso) { return CS.dayShort(String(iso).slice(0, 10)); } // "Fri 2 Oct" // F7: the app's own bar and tab bar, badges from the hash
+  function ds(iso) { return CS.dayShort(String(iso).slice(0, 10)); } // "Fri 2 Oct"
   P.P_wireBack(window);
 
   function freshSel(c) {

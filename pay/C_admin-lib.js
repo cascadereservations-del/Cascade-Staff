@@ -63,12 +63,16 @@
   // What the Copy button puts on the clipboard: the bare amount a bank field accepts.
   function C_copyAmount(total) { var x = Math.round(Number(total) * 100) / 100; return x % 1 === 0 ? String(x) : x.toFixed(2); }
 
+  // B3: the shell's "15 Oct" / "Fri 2 Oct" (CS.dayLabel / CS.dayShort); the local copy serves node, where there is no CS
+  var C_MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'], C_DAY = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  function C_dm(iso) { var i = String(iso).slice(0, 10), CS = typeof window !== 'undefined' ? window.CS : null; if (CS && CS.dayLabel) return CS.dayLabel(i); var a = i.split('-'); return +a[2] + ' ' + C_MON[+a[1] - 1]; }
+  function C_ds(iso) { var i = String(iso).slice(0, 10), CS = typeof window !== 'undefined' ? window.CS : null; if (CS && CS.dayShort) return CS.dayShort(i); var a = i.split('-'); return C_DAY[new Date(Date.UTC(+a[0], +a[1] - 1, +a[2])).getUTCDay()] + ' ' + C_dm(i); }
   function C_lineText(l) {
-    if (l.kind === 'clean') return P.dateLabel(l.date) + ' · ' + P.typeLabel(l.type) + ' · ' + P.peso(l.amount);
+    if (l.kind === 'clean') return C_ds(l.date) + ' · ' + P.typeLabel(l.type) + ' · ' + P.peso(l.amount);
     return String(l.description || 'Expense') + ' · ' + P.peso(l.amount);
   }
   function C_status(r) {
-    if (r.status === 'paid') return { label: 'Paid ' + (r.paid_at ? P.shortDate(r.paid_at) : ''), tone: 'ok', glyph: 'checks' };
+    if (r.status === 'paid') return { label: 'Paid ' + (r.paid_at ? C_dm(r.paid_at) : ''), tone: 'ok', glyph: 'checks' };
     if (r.status === 'paying') return { label: 'Being paid' + (r.paying_by_name ? ' by ' + r.paying_by_name : ''), tone: 'info', glyph: 'info' };
     if (r.status === 'cancelled') return { label: 'Cancelled', tone: 'neutral', glyph: 'minus' };
     return { label: 'Waiting for payment', tone: 'warn', glyph: 'clock' };

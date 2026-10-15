@@ -288,3 +288,13 @@ test('B3: Pay is one filled 44 px button, Review is ghost, the amount sits over 
   const css = (await import('node:fs')).readFileSync(new URL('../pay/C_pay.css', import.meta.url), 'utf8');
   assert.match(css, /\.P_amt \{[^}]*font: 650 1\.25rem[^}]*tabular-nums/); assert.match(css, /\.P_go \{[^}]*min-height: var\(--v5-touch\)/);
 });
+
+test('B3 r2: the filled Pay goes to the first row that has a Pay button; admin-lib dates read 15 Oct', async () => {
+  const other = { ...OPEN, id: 'req0', ref: 'OTHR0000', status: 'paying', paying_by_user_id: 'someone-else', paying_by_name: 'Marifel' };
+  const b = bootAdmin({ rpc: (n) => ({ staff_pay_admin_list_v1: LIST([other, OPEN], []) }[n]) }); await tick();
+  const h = b.root.innerHTML;
+  assert.equal((h.match(/P_go btn btn-primary/g) || []).length, 1, 'a filled Pay is on screen');
+  assert.match(h, /data-id="req1"><span class="lead">[\s\S]*?P_go btn btn-primary">Pay/);
+  assert.equal((await import('../pay/C_admin-lib.js')).default.status({ status: 'paid', paid_at: '2026-10-09T04:00:00Z' }).label, 'Paid 9 Oct');
+  assert.equal((await import('../pay/C_admin-lib.js')).default.lineText({ kind: 'clean', date: '2026-10-02', type: 'turnover', amount: 500 }).slice(0, 9), 'Fri 2 Oct');
+});
