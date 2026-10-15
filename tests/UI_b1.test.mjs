@@ -50,3 +50,8 @@ test('css: hero shorter, primary 56 px, owner tiles from 48 rem', () => {
   assert.match(c, /@media \(min-width: 48rem\) \{\s*\.A_body > \.F_group\.A_tiles \{ column-span: all; \}[^]*grid-template-columns: repeat\(2/);
   const s = read('app.js'); assert.equal((s.match(/, true\) \+/g) || []).length >= 1, true); assert.match(s, /class="F_group' \+ \(tiles \? ' A_tiles' : ''\)/);
 });
+
+test('r2: the sign-out reset clears payWait so one sign-in never carries a pay count into the next', () => {
+  const s = read('app.js'), i = s.indexOf('state.cleanDone = null; state.payWait = 0;');
+  assert.ok(i > 0); assert.match(s.slice(s.lastIndexOf('function', i), i), /^function (H_)?[A-Za-z_]*[Rr]eset|^function \w+/);
+});

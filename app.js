@@ -1597,7 +1597,7 @@
     });
   }
   function signOutTo(msg) {
-    clearTimeout(H_rpT); state.H_q = ''; state.H_offKey = ''; H_unmount(); H_resetModules(); H_histGen++; H_calReset(); H_alReset(); closeSheet(); dropPhotos(); state.replyRecent = []; state.cleanDone = null; state.progress = null; state.progressAbsent = false; H_idClose(); state.reply = null; var rb = $('rp-body'); if (rb) rb.innerHTML = ''; rpLive(''); state.payload = null; state.bookings = null; state.bookingsDone = false; state.noticesDone = false; state.notices = null; state.noticesAbsent = false; state.nadd = null; state.fbOpen = false; state.tasks = null; state.access = null; state.layout = null; state.month = null; state.error = '';
+    clearTimeout(H_rpT); state.H_q = ''; state.H_offKey = ''; H_unmount(); H_resetModules(); H_histGen++; H_calReset(); H_alReset(); closeSheet(); dropPhotos(); state.replyRecent = []; state.cleanDone = null; state.payWait = 0; state.progress = null; state.progressAbsent = false; H_idClose(); state.reply = null; var rb = $('rp-body'); if (rb) rb.innerHTML = ''; rpLive(''); state.payload = null; state.bookings = null; state.bookingsDone = false; state.noticesDone = false; state.notices = null; state.noticesAbsent = false; state.nadd = null; state.fbOpen = false; state.tasks = null; state.access = null; state.layout = null; state.month = null; state.error = '';
     return sb.auth.signOut().catch(function () {}).then(function () { showSignin(msg); });
   }
   function showSignin(msg) {
