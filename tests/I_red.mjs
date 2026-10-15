@@ -126,10 +126,12 @@ const M = [
 const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'I_red-'));
 let bad = 0;
 const only = process.argv[2]; // optional: run only the mutations whose name contains this text
+let ran = 0; // mutations this run actually tried; zero means a bad filter, not a clean pass
 const shard = (process.env.I_RED_SHARD || '').split('/').map(Number); // optional i/n: run every n-th mutation, so n runners can share the work
 for (const [mi, [name, edits]] of M.entries()) {
   if (only && !name.includes(only)) continue;
-  if (shard.length === 2 && mi % shard[1] !== shard[0]) continue;
+  if (shard.length === 2 && mi % shard[1] !== shard[0] % shard[1]) continue;
+  ran++;
   let s = src;
   for (const [a, b] of edits) { if (!s.includes(a)) { console.log('SKIP (pattern not found): ' + name + ' :: ' + a.slice(0, 50)); bad++; s = null; break; } s = s.replace(a, b); }
   if (s == null) continue;
@@ -141,5 +143,6 @@ for (const [mi, [name, edits]] of M.entries()) {
   if (!ok) bad++;
   console.log((ok ? 'RED  ' : 'GREEN(!) ') + name + ' -> ' + (hung ? 'suite hangs (caught)' : red.length ? red.length + ' failing: ' + red.slice(0, 3).join(' | ') : 'no failing test'));
 }
+if (!ran) { console.log('no mutation ran (check the name filter or I_RED_SHARD)'); process.exit(1); }
 console.log(bad ? bad + ' mutation(s) not caught' : 'every mutation was caught');
 process.exit(bad ? 1 : 0);

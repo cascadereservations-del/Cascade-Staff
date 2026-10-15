@@ -583,7 +583,7 @@ button.A_chipglass { width: var(--touch); padding: 0; justify-content: center; c
 #v-home .A_greet { padding-bottom: 14px; }
 #v-home .A_greet h1 { font-size: clamp(1.625rem, 1.5rem + 0.5vw, 1.875rem); line-height: 1.15; }
 #v-home .A_greet .cap { margin-top: 2px; }
-#v-home .H_wxstrip { min-height: 0; margin-top: 4px; flex-direction: row; align-items: center; flex-wrap: wrap; column-gap: 8px; }
+#v-home .H_wxstrip { min-height: var(--touch); margin-top: 4px; flex-direction: row; align-items: center; flex-wrap: wrap; column-gap: 8px; }
 .A_primary, .A_card .A_primary { min-height: 56px; font-size: var(--v5-t-body); }
 .A_slide { margin-top: 4px; }
 @media (min-width: 48rem) {
