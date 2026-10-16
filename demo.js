@@ -150,6 +150,7 @@
         case 'current_staff_access': return done(X.access);
         case 'staff_home_v1': return done(X.home);
         case 'notices_v1': return done(X.notices);
+        case 'set_guest_photo_rotation_v1': return done({ ok: true, path: args && args.p_path, rotation: args && args.p_rotation }); // s91: memory only, like every demo write
         case 'cleaning_progress_v1': return done(admin_(view) ? { ok: true, active: { step: 4, of: 9, label: 'Bathroom', started_at: new Date().toISOString(), updated_at: new Date().toISOString(), cleaner_name: 'Demo Cleaner' } } : { ok: false });
         case 'tasks_list_v1': { var tl = X.tasks(true), inc = !!(args && args.p_include_done); tl.tasks = tl.tasks.map(function (t) { return doneSet[t.id] === undefined ? t : Object.assign({}, t, { status: doneSet[t.id] ? 'done' : 'open' }); }).filter(function (t) { return inc || t.status !== 'done'; }); return done(tl); }
         case 'task_assignees_v1': return done(X.assignees);

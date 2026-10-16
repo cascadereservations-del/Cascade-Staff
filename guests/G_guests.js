@@ -586,7 +586,7 @@
     var say = function (m) { if (S && G_live(tok) && seq === S.rotSeq) { S.rotMsg = m; G_paint(); G_focus('G_fullx'); } };
     G_rpc('set_guest_photo_rotation_v1', { p_path: path, p_rotation: d }).then(function (r) {
       if (r.error || !r.data || r.data.ok === false) return say('Could not save');
-      if (ep === G_epoch) G_rotSaved[path] = d; say('Saved');
+      if (ep === G_epoch) G_rotSaved[path] = d; say('Saved for everyone');
     });
   }
   function G_showId(id) {

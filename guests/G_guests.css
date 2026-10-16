@@ -63,12 +63,12 @@
 .G_idform { flex: 1; display: grid; gap: 8px; }
 .G_idform select, .G_root select { flex: 1; min-height: 44px; background: transparent; border: 0; color: inherit; font: inherit; }
 .G_root .ta { width: 100%; min-height: 6rem; padding: 10px 12px; border: 1px solid var(--border); border-radius: var(--r-md); background: var(--card); color: inherit; font: 400 var(--v5-t-body)/1.45 var(--font-ui); resize: vertical; }
-.G_full { position: fixed; inset: 0; z-index: 40; display: grid; place-items: center; padding: max(16px, env(safe-area-inset-top)) 16px max(16px, env(safe-area-inset-bottom)); background: var(--v5-scrim, rgba(0, 0, 0, .86)); }
-.G_full img { max-width: 100%; max-height: 82vh; object-fit: contain; border-radius: var(--r-md); }
-.G_full img { image-orientation: from-image; }
-.G_full img.G_r90 { transform: rotate(90deg); max-width: min(82vh, calc(100vw - 32px)); max-height: min(82vh, calc(100vw - 32px)); }
-.G_full img.G_r270 { transform: rotate(270deg); max-width: min(82vh, calc(100vw - 32px)); max-height: min(82vh, calc(100vw - 32px)); }
-.G_full img.G_r180 { transform: rotate(180deg); }
+.G_full { position: fixed; inset: 0; z-index: 40; padding: max(16px, env(safe-area-inset-top)) 16px max(16px, env(safe-area-inset-bottom)); background: var(--v5-bg); container-type: size; }
+.G_full img { position: absolute; top: 50%; left: 50%; width: calc(100cqw - 32px); height: calc(100cqh - 120px); object-fit: contain; transform: translate(-50%, -50%); border-radius: var(--r-md); image-orientation: from-image; }
+.G_full img.G_r90, .G_full img.G_r270 { width: calc(100cqh - 120px); height: calc(100cqw - 32px); }
+.G_full img.G_r90 { transform: translate(-50%, -50%) rotate(90deg); }
+.G_full img.G_r270 { transform: translate(-50%, -50%) rotate(270deg); }
+.G_full img.G_r180 { transform: translate(-50%, -50%) rotate(180deg); }
 .G_rotst { position: absolute; top: max(60px, calc(env(safe-area-inset-top) + 48px)); left: 12px; z-index: 1; font-size: .875rem; color: var(--text); }
 .G_rotbtn { position: absolute; top: max(12px, env(safe-area-inset-top)); left: 12px; z-index: 1; }
 .G_x { position: absolute; top: max(12px, env(safe-area-inset-top)); right: 12px; z-index: 1; }

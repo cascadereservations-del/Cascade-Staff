@@ -932,20 +932,21 @@ button.A_chipglass.E_pill { width: auto; min-width: 124px; max-width: 184px; hei
 /* guest ID: a tap shows it full screen (owner and admin) */
 .H_idbtn { display: block; width: 100%; padding: 0; border: 0; background: none; cursor: zoom-in; }
 .H_idbtn img { display: block; width: 100%; }
-.H_idfull { position: fixed; inset: 0; z-index: 60; display: none; flex-direction: column; align-items: center; justify-content: center; gap: 12px; padding: max(16px, env(safe-area-inset-top)) 16px max(16px, env(safe-area-inset-bottom)); background: var(--v5-scrim, var(--v5-bg)); }
+.H_idfull { position: fixed; inset: 0; z-index: 60; display: none; flex-direction: column; align-items: center; justify-content: center; gap: 12px; padding: max(16px, env(safe-area-inset-top)) 16px max(16px, env(safe-area-inset-bottom)); background: var(--v5-bg); }
 .H_idfull.on { display: flex; }
 .H_idbar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; justify-content: center; position: relative; z-index: 1; }
 .H_idst { flex-basis: 100%; text-align: center; min-height: 1.2em; font-size: .875rem; color: var(--v5-muted, inherit); }
-.H_idfull img.r90, .H_idfull img.r270 { max-width: min(calc(100vh - 140px), calc(100vw - 32px)); max-height: min(calc(100vh - 140px), calc(100vw - 32px)); }
-.H_idfull img.r90 { transform: rotate(90deg); }
-.H_idfull img.r180 { transform: rotate(180deg); }
-.H_idfull img.r270 { transform: rotate(270deg); }
+.H_idbox { flex: 1; min-height: 0; width: 100%; position: relative; container-type: size; }
+.H_idfull img { position: absolute; top: 50%; left: 50%; width: 100cqw; height: 100cqh; object-fit: contain; transform: translate(-50%, -50%); border-radius: var(--v5-r-field); background: var(--v5-surf); }
+.H_idfull img.r90, .H_idfull img.r270 { width: 100cqh; height: 100cqw; }
+.H_idfull img.r90 { transform: translate(-50%, -50%) rotate(90deg); }
+.H_idfull img.r180 { transform: translate(-50%, -50%) rotate(180deg); }
+.H_idfull img.r270 { transform: translate(-50%, -50%) rotate(270deg); }
 /* a photo shown turned: laid out as tall as the box is high, then turned to fill it */
 .idphoto.rot { aspect-ratio: 8 / 5; position: relative; container-type: size; }
 .idphoto.rot .H_idbtn { position: absolute; inset: 0; }
 .idphoto.rot img { position: absolute; top: 50%; left: 50%; width: 100cqh; height: 100cqw; object-fit: contain; transform: translate(-50%, -50%) rotate(var(--deg, 90deg)); }
 .idphoto.r180 img { transform: rotate(180deg); }
-.H_idfull img { max-width: 100%; max-height: calc(100% - 72px); object-fit: contain; border-radius: var(--v5-r-field); background: var(--v5-surf); }
 /* the offline strip: fixed under the app bar, 36 px, never takes a tap */
 .H_offline { display: flex; align-items: center; justify-content: center; min-height: 36px; padding: 0 var(--gutter); background: var(--v5-sunk); color: var(--v5-ink-2); font: 600 var(--v5-t-label)/1.2 var(--font-ui); text-align: center; }
 .H_offline[hidden] { display: none; }

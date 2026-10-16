@@ -518,7 +518,7 @@ test('G s91: Rotate saves the new turn and says Saved; a failed save says Could 
   await clickA(el, 'full-rot'); await tick();
   const sv = cl.calls.filter((c) => c[0] === 'set_guest_photo_rotation_v1'); assert.equal(sv.length, 1);
   assert.deepEqual(sv[0][1], { p_path: compPath, p_rotation: 90 });
-  assert.match(el.html, /aria-live="polite">Saved</);
+  assert.match(el.html, /aria-live="polite">Saved for everyone</);
   fail = true; await clickA(el, 'full-rot'); await tick();
   assert.match(el.html, /aria-live="polite">Could not save</);
   assert.match(el.html, /G_img G_r180/);

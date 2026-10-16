@@ -68,7 +68,7 @@ test('s91 Rotate: owner saves each +90 and sees Saved', async () => {
   const { app, tap, st, fimg } = await rotateFlow('owner', { staff_photo_rotation_v1: () => ({ error: null, data: [{ path: PATH, rotation: 90 }] }), set_guest_photo_rotation_v1: (a) => ({ error: null, data: { ok: true, path: a.p_path, rotation: a.p_rotation } }) });
   await tap();
   assert.deepEqual(saves(app)[0][1], { p_path: PATH, p_rotation: 180 });
-  assert.equal(fimg.className, 'r180'); assert.equal(st.textContent, 'Saved');
+  assert.equal(fimg.className, 'r180'); assert.equal(st.textContent, 'Saved for everyone');
   await tap(); assert.equal(saves(app)[1][1].p_rotation, 270); assert.equal(fimg.className, 'r270');
 });
 
@@ -90,4 +90,12 @@ test('s91 app.js: 180 has a class, nothing personal is stored, the race guards s
   const part = src.slice(src.indexOf('function H_rotLoad'), src.indexOf('function dropPhotos'));
   assert.equal(/localStorage|sessionStorage|caches\.open|indexedDB/.test(part), false);
   assert.match(part, /gen !== state\.photoGen/); assert.match(src, /state\.srot = \{\}; state\.rotReq = \{\}; state\.photoGen\+\+/);
+});
+
+test('s91 full view: the picture sits in a size container above the bar, on an opaque background, in both views; demo answers the save', () => {
+  const css = read('styles.css'), g = read('guests/G_guests.css');
+  assert.match(css, /\.H_idbox \{[^}]*container-type: size/); assert.match(css, /\.H_idfull \{[^}]*background: var\(--v5-bg\)/); assert.doesNotMatch(css, /\.H_idfull \{[^}]*scrim/);
+  assert.match(css, /\.H_idfull img\.r90, \.H_idfull img\.r270 \{ width: 100cqh; height: 100cqw/);
+  assert.match(g, /\.G_full \{[^}]*background: var\(--v5-bg\)/); assert.match(g, /\.G_full img\.G_r90, \.G_full img\.G_r270 \{ width: calc\(100cqh/);
+  assert.match(read('demo.js'), /case 'set_guest_photo_rotation_v1': return done\(\{ ok: true/);
 });

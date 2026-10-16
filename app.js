@@ -499,12 +499,13 @@
       });
     });
   }
+  function H_turnBox(box, d) { box.classList.toggle('rot', d % 180 === 90); box.classList.toggle('r180', d === 180); box.style.setProperty('--deg', d + 'deg'); }
   function putPhoto(box, url, path) {
     box.innerHTML = ''; var img = new Image(); img.decoding = 'async'; img.alt = 'Guest ID photo'; img.draggable = false;
     // An ID is a landscape card: one that loads taller than wide with no EXIF turn is shown turned 270 degrees (counter-clockwise; s91, the other way was upside down on a real phone)
     // unless a turn was saved for it. Rotate in the full-screen view fixes the rest.
     if (path && state.rot[url] === undefined && state.srot[path] !== undefined) state.rot[url] = state.srot[path];
-    var turn = function () { var d = state.rot[url] || 0; box.classList.toggle('rot', d % 180 === 90); box.classList.toggle('r180', d === 180); box.style.setProperty('--deg', d + 'deg'); };
+    var turn = function () { H_turnBox(box, state.rot[url] || 0); };
     if (state.rot[url] === undefined) img.addEventListener('load', function () { if (state.rot[url] === undefined && img.naturalWidth && img.naturalHeight > img.naturalWidth * 1.05) { state.rot[url] = 270; turn(); } });
     turn(); img.src = url;
     img.addEventListener('contextmenu', function (e) { e.preventDefault(); });
@@ -514,19 +515,19 @@
   function H_idRot(src) { return state.rot[src] || 0; }
   function H_idFull(src) {
     var o = $('H_idfull'); if (!o) { o = document.createElement('div'); o.id = 'H_idfull'; o.className = 'H_idfull'; o.setAttribute('role', 'dialog'); o.setAttribute('aria-modal', 'true'); o.setAttribute('aria-label', 'Guest ID photo'); document.body.appendChild(o); }
-    o.innerHTML = '<img alt="Guest ID photo" draggable="false" data-act="id-full-close"><div class="H_idbar"><span class="H_idst" role="status" aria-live="polite"></span><button class="btn btn-secondary" type="button" data-act="id-rot">Rotate</button><button class="btn btn-secondary" type="button" data-act="id-full-close">' + ICON('close', 's16') + 'Close</button></div>';
+    o.innerHTML = '<div class="H_idbox"><img alt="Guest ID photo" draggable="false" data-act="id-full-close"></div><div class="H_idbar"><span class="H_idst" role="status" aria-live="polite"></span><button class="btn btn-secondary" type="button" data-act="id-rot">Rotate</button><button class="btn btn-secondary" type="button" data-act="id-full-close">' + ICON('close', 's16') + 'Close</button></div>';
     o.setAttribute('data-src', src); var im = o.querySelector('img'); if (im) { im.src = src; im.className = 'r' + H_idRot(src); } o.classList.add('on'); var cb = o.querySelector('button[data-act="id-full-close"]'); if (cb && cb.focus) cb.focus();
   }
   // Rotate: +90 each tap. Owner/admin also save it (set_guest_photo_rotation_v1) so it sticks for everyone; other roles turn it for this session only.
   function H_idRotate() {
     var ro = $('H_idfull'), rs = ro && ro.getAttribute('data-src'), ri = ro && ro.querySelector('img'); if (!rs || !ri) return;
-    var d = state.rot[rs] = (H_idRot(rs) + 90) % 360; ri.className = 'r' + d;
-    var path = H_pathOf(rs); if (!path || !CS.canSeeGuestContact(role()) || DEMO || !sb) return;
+    var d = state.rot[rs] = (H_idRot(rs) + 90) % 360; ri.className = 'r' + d; var path0 = H_pathOf(rs); if (path0 && document.querySelectorAll) Array.prototype.forEach.call(document.querySelectorAll('[data-idpath]'), function (bx) { if (bx.getAttribute('data-idpath') === path0) H_turnBox(bx, d); }); // the card's small picture follows
+    var path = H_pathOf(rs); if (!path || !CS.canSeeGuestContact(role()) || !sb) return;
     var st = ro.querySelector('.H_idst'), gen = state.photoGen, seq = state.rotSeq = (state.rotSeq || 0) + 1;
     var say = function (t) { if (st && seq === state.rotSeq) st.textContent = t; };
     Promise.resolve().then(function () { return sb.rpc('set_guest_photo_rotation_v1', { p_path: path, p_rotation: d }); }).then(function (r) {
       if (!r || r.error || (r.data && r.data.ok === false)) throw new Error('save');
-      if (gen === state.photoGen) state.srot[path] = d; say('Saved');
+      if (gen === state.photoGen) state.srot[path] = d; say('Saved for everyone');
     }).catch(function () { say('Could not save'); });
   }
   function H_idClose() { var o = $('H_idfull'); if (o && o.classList) { o.classList.remove('on'); o.innerHTML = ''; } }
