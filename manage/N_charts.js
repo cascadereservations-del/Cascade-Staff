@@ -75,14 +75,14 @@
     var slot = W / n, bw = slot * 0.56;
     months.forEach(function (m, i) {
       var v = num(m.value), ly = num(m.lastYear), oc = num(m.occupancy), x = slot * i + (slot - bw) / 2, cx = (slot * i + slot / 2).toFixed(1);
-      if (v !== null && v > best) { best = v; bestI = i; }
+      if (v !== null && v > 0 && v > best) { best = v; bestI = i; }
       if (ly !== null && ly > 0) { var hl = Math.max(1.5, ph * ly / mx); svg += '<rect class="C_ly" x="' + (x - 2).toFixed(1) + '" y="' + (top + ph - hl).toFixed(1) + '" width="' + (bw + 4).toFixed(1) + '" height="' + hl.toFixed(1) + '" rx="3"/>'; }
       if (v !== null && v > 0) { var h = Math.max(1.5, ph * v / mx); svg += '<rect class="C_bar" x="' + x.toFixed(1) + '" y="' + (top + ph - h).toFixed(1) + '" width="' + bw.toFixed(1) + '" height="' + h.toFixed(1) + '" rx="3"/>'; }
       if (oc !== null) svg += '<circle class="C_occ" cx="' + cx + '" cy="' + (top + ph * (1 - Math.min(100, Math.max(0, oc)) / 100)).toFixed(1) + '" r="3"/>';
       svg += '<text class="C_lbl" x="' + cx + '" y="' + (H - 6) + '" text-anchor="middle">' + esc(String(m.label == null ? '' : m.label).slice(0, 3)) + '</text>';
       rows += '<tr><th scope="row">' + esc(m.label) + '</th><td>' + (v === null ? 'No data' : esc(fmt(v))) + '</td><td>' + (ly === null ? 'No data' : esc(fmt(ly))) + '</td><td>' + (oc === null ? 'No data' : esc(formatPercent(oc))) + '</td></tr>';
     });
-    var summary = n + ' months' + (bestI >= 0 ? '. Highest: ' + months[bestI].label + ', ' + fmt(best) : '. No figures yet') + '. Faint bars show the same month last year; dots show occupancy.';
+    var summary = n + (n === 1 ? " month" : " months") + (bestI >= 0 ? '. Highest: ' + months[bestI].label + ', ' + fmt(best) : '. No figures yet') + '. Faint bars show the same month last year; dots show occupancy.';
     return '<figure class="C_fig"><svg class="C_bars" viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="' + esc(summary) + '" focusable="false">' + svg + '</svg>' +
       '<figcaption class="C_key"><span class="C_k">This year</span><span class="C_k C_kly">Same month last year</span><span class="C_k C_kocc">Occupancy</span></figcaption>' +
       '<table class="C_sr"><caption>Monthly figures</caption><thead><tr><th scope="col">Month</th><th scope="col">This year</th><th scope="col">Last year</th><th scope="col">Occupancy</th></tr></thead><tbody>' + rows + '</tbody></table></figure>';
