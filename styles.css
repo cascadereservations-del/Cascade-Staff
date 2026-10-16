@@ -1075,3 +1075,8 @@ body { font-family: var(--v5-font-ui); }
 .A_filters .chip { font-size: var(--v5-t-2); }
 .E_tabbody[data-F-tab="notices"] .card.list .rowi { padding: 12px var(--v5-pad); }
 .E_tabbody[data-F-tab="notices"] .A_card h2.hd { margin: 0; }
+
+/* s90: the Month | Booking calendar switch is drawn before calendar/K_bookcal.css loads, so its rules live here */
+.K_view { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; padding: 4px; border-radius: var(--r-full); margin: 0 0 8px; }
+.K_view button { min-height: 44px; border: 0; border-radius: var(--r-full); background: transparent; color: var(--v5-ink-2); font: 600 var(--v5-t-2)/1.3 var(--font-ui); cursor: pointer; }
+.K_view button[aria-pressed="true"] { background: var(--v5-act); color: var(--v5-act-fg); }

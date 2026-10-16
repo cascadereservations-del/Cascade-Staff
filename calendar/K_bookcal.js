@@ -1,4 +1,4 @@
-/* Cascade Staff 3.4.5, lane K: the Booking calendar view. A native port of the admin dashboard's Booking calendar page
+/* Cascade Staff 3.4.4, lane K: the Booking calendar view. A native port of the admin dashboard's Booking calendar page
    (admin-dashboard/app/src/features/bookings/calendar-page.tsx): the same chips (A = Airbnb, D = Direct, arrow on the check-in day,
    hatched Blocked, red for two guests on one night), a Turnover day marker and the same legend. A day-by-day list on a phone and a
    month grid from 600 px, exactly as the admin page does. Pure: K_BookCal.render(opts) returns HTML; the shell draws it and handles the taps

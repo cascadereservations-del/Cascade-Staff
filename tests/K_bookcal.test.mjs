@@ -67,6 +67,6 @@ test('K pure render: conflict, tap targets, rem text, files shipped', () => {
   const h = K.render({ y: 2026, m: 10, today: TODAY, stays, rows: stays, full: false });
   assert.match(h, /data-state="conflict"/); assert.match(h, /Two guests on one night/);
   const css = fs.readFileSync(root + '/calendar/K_bookcal.css', 'utf8');
-  assert.match(css, /\.K_chip \{[^}]*min-height: 44px/); assert.match(css, /\.K_view button \{[^}]*min-height: 44px/); assert.doesNotMatch(css, /font-size:\s*\d+px/);
+  assert.match(css, /\.K_chip \{[^}]*min-height: 44px/); assert.match(fs.readFileSync(new URL('../styles.css', import.meta.url), 'utf8'), /\.K_view button \{[^}]*min-height: 44px/, 'the switch is styled before the module loads'); assert.doesNotMatch(css, /font-size:\s*\d+px/);
   const sw = fs.readFileSync(root + '/sw.js', 'utf8'); assert.match(sw, /\.\/calendar\/K_bookcal\.js/); assert.match(sw, /\.\/calendar\/K_bookcal\.css/);
 });

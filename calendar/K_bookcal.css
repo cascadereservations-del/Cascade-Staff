@@ -1,7 +1,4 @@
 /* Lane K: Booking calendar view. Tokens only; text in rem; targets 44px; a day list on a phone, the month grid from 37.5rem. */
-.K_view { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; padding: 4px; border-radius: var(--r-full); margin: 0 0 8px; }
-.K_view button { min-height: 44px; border: 0; border-radius: var(--r-full); background: transparent; color: var(--v5-ink-2); font: 600 var(--v5-t-2)/1.3 var(--font-ui); cursor: pointer; }
-.K_view button[aria-pressed="true"] { background: var(--v5-act); color: var(--v5-act-fg); }
 .K_root { display: grid; gap: 8px; min-width: 0; }
 .K_root * { min-width: 0; }
 .K_agenda, .K_chips, .K_legend { list-style: none; margin: 0; padding: 0; }
