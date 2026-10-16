@@ -193,3 +193,25 @@ test('L5 demo mode needs no network; a11y hooks present', async () => {
   assert.match(t.el.html, /role="tablist"/); assert.match(t.el.html, /aria-selected="true"/); assert.match(t.el.html, /<label class="B_lbl" for="B_q">/);
   assert.match(CSS, /min-height: 44px/);
 });
+
+test('L5 review fixes: opts.role only, noon rule, embedded, cap note, demo cleaner, calendar row, nowrap tabs', async () => {
+  const M = load(), el = new FakeEl();
+  M.mount(el, { client: client(FULL), role: 'owner', navigate() {} });
+  await tick();
+  assert.match(el.html, /5,000\.00/);
+  const { lib } = load(), b = { checkin: '2026-10-12', checkout: TODAY };
+  assert.equal(lib.segmentOf(b, TODAY, 11), 'current');
+  assert.equal(lib.segmentOf(b, TODAY, 12), 'past');
+  assert.equal(lib.statusOf({ ...b, state: 'confirmed' }, TODAY, 11).text, 'Confirmed');
+  assert.equal(lib.manilaHour(), 11);
+  const e2 = new FakeEl(); load().mount(e2, { client: client(FULL), access: 'owner', embedded: true }); await tick();
+  assert.ok(!/<h2 class="B_h">Bookings/.test(e2.html));
+  const rows = Array.from({ length: 500 }, (_, i) => ({ ...CAL[2], id: 'x' + i, uid: 'x' + i }));
+  const t = await boot({ tables: { ...FULL, calendar_events: { data: rows, error: null } } });
+  assert.match(t.text(), /Showing the latest 500 bookings/);
+  const d = await boot({ demo: true, access: 'cleaner' });
+  assert.ok(!/No upcoming bookings/.test(d.text()) && /Sample Guest D/.test(d.text()));
+  await d.click('open', 'cal:c-demo-2');
+  assert.ok(!/Calendar On the calendar/.test(d.text()));
+  assert.match(CSS, /\.B_tab \{[^}]*white-space: nowrap/);
+});

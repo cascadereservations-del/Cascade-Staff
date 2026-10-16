@@ -21,6 +21,7 @@
   function isoOf(ms) { var d = new Date(ms); return d.getUTCFullYear() + '-' + pad2(d.getUTCMonth() + 1) + '-' + pad2(d.getUTCDate()); }
   function utc(iso) { var p = String(iso).split('-'); return Date.UTC(+p[0], +p[1] - 1, +p[2]); }
   function manilaToday(ms) { return isoOf((ms == null ? clock() : ms) + 8 * 3600000); }
+  function manilaHour(ms) { return new Date((ms == null ? clock() : ms) + 8 * 3600000).getUTCHours(); }
   function addDays(iso, n) { return isoOf(utc(iso) + n * 86400000); }
   function nightsBetween(a, b) { return Math.max(0, Math.round((utc(b) - utc(a)) / 86400000)); }
   function fmtDate(iso, style) {
@@ -81,23 +82,24 @@
     });
     return out;
   }
-  function segmentOf(b, today) { return b.checkout <= today ? 'past' : b.checkin > today ? 'upcoming' : 'current'; }
-  function filterBookings(list, seg, q, today, showCancelled) {
+  // a guest checking out today stays Current until 12:00 Manila (hour defaults to 12 = already past)
+  function segmentOf(b, today, hour) { var h = hour == null ? 12 : hour; return b.checkout < today || (b.checkout === today && h >= 12) ? 'past' : b.checkin > today ? 'upcoming' : 'current'; }
+  function filterBookings(list, seg, q, today, showCancelled, hour) {
     var s = String(q || '').trim().toLowerCase();
     var out = list.filter(function (b) {
-      if (segmentOf(b, today) !== seg) return false;
+      if (segmentOf(b, today, hour) !== seg) return false;
       if (b.state === 'cancelled' && !showCancelled) return false;
       return !s || b.guest.toLowerCase().indexOf(s) >= 0;
     });
     out.sort(function (a, b) { return seg === 'past' ? (a.checkin < b.checkin ? 1 : a.checkin > b.checkin ? -1 : 0) : (a.checkin < b.checkin ? -1 : a.checkin > b.checkin ? 1 : 0); });
     return out;
   }
-  function counts(list, today, q, showCancelled) { var c = {}; SEGS.forEach(function (s) { c[s] = filterBookings(list, s, q, today, showCancelled).length; }); return c; }
+  function counts(list, today, q, showCancelled, hour) { var c = {}; SEGS.forEach(function (s) { c[s] = filterBookings(list, s, q, today, showCancelled, hour).length; }); return c; }
   function sourceLabel(b) { return b.kind === 'airbnb' ? 'Airbnb' : b.kind === 'direct' ? 'Direct' : 'Calendar'; }
-  function statusOf(b, today) {
+  function statusOf(b, today, hour) {
     if (b.state === 'cancelled') return { kind: 'bad', text: 'Cancelled' };
     if (b.state === 'pending') return { kind: 'warn', text: 'Waiting for decision' };
-    if (b.state === 'confirmed') return { kind: 'ok', text: b.checkout <= today ? 'Completed' : 'Confirmed' };
+    if (b.state === 'confirmed') return { kind: 'ok', text: segmentOf(b, today, hour) === 'past' ? 'Completed' : 'Confirmed' };
     return { kind: 'warn', text: 'Status unknown' };
   }
   function paymentText(b) {
@@ -108,8 +110,8 @@
   }
   function companions(b) { return b.pax == null ? null : Math.max(0, b.pax - 1); }
   // [label, value] pairs for the detail sheet; money rows only when allowed
-  function detailRows(b, money, today) {
-    var rows = [['Dates', fmtDate(b.checkin, 'weekday') + ' to ' + fmtDate(b.checkout, 'weekday') + ' · ' + b.nights + (b.nights === 1 ? ' night' : ' nights')], ['Source', sourceLabel(b)], ['Status', statusOf(b, today).text]];
+  function detailRows(b, money, today, hour) {
+    var rows = [['Dates', fmtDate(b.checkin, 'weekday') + ' to ' + fmtDate(b.checkout, 'weekday') + ' · ' + b.nights + (b.nights === 1 ? ' night' : ' nights')], ['Source', sourceLabel(b)], ['Status', statusOf(b, today, hour).text]];
     if (money && b.pax != null) rows.push(['Guests', b.pax + (b.pax === 1 ? ' guest' : ' guests') + ' · ' + companions(b) + (companions(b) === 1 ? ' companion' : ' companions')]);
     if (money) {
       rows.push(['Payment', paymentText(b)]);
@@ -118,7 +120,7 @@
       if (b.code) rows.push(['Code', b.code]);
       if (b.notes) rows.push(['Notes', b.notes]);
     }
-    rows.push(['Calendar', b.synced ? 'On the calendar' : 'Not on the calendar']);
+    if (!b.calOnly) rows.push(['Calendar', b.synced ? 'On the calendar' : 'Not on the calendar']);
     return rows;
   }
 
@@ -133,7 +135,9 @@
     var d = function (n) { return addDays(today, n); };
     return { res: [{ id: 'b-demo-1', confirmation_code: 'DEMOAB1', status: 'confirmed', guest_name: 'Sample Guest A', guest_count: 2, checkin_date: d(-1), checkout_date: d(2), guest_paid: '9000.00', host_payout: '8500.00', payout_date: null },
       { id: 'b-demo-2', confirmation_code: 'DEMOAB2', status: 'confirmed', guest_name: 'Sample Guest B', guest_count: 4, checkin_date: d(-9), checkout_date: d(-6), guest_paid: '12000.00', host_payout: '11000.00', payout_date: d(-5) }],
-      inq: [{ id: 'b-demo-3-0000', guest_name: 'Sample Guest C', checkin_date: d(6), checkout_date: d(8), pax: 3, total_amount: '5000.00', deposit_amount: '2500.00', status: 'pending', receipt_image_path: null, notes: 'Sample note' }], cal: [] };
+      inq: [{ id: 'b-demo-3-0000', guest_name: 'Sample Guest C', checkin_date: d(6), checkout_date: d(8), pax: 3, total_amount: '5000.00', deposit_amount: '2500.00', status: 'pending', receipt_image_path: null, notes: 'Sample note' }],
+      cal: [{ id: 'c-demo-1', uid: 'cu1', source: 'airbnb', checkin_date: d(-1), checkout_date: d(2), guest_name: 'Sample Guest A', status: 'confirmed', linked_reservation_id: null },
+        { id: 'c-demo-2', uid: 'cu2', source: 'direct', checkin_date: d(10), checkout_date: d(12), guest_name: 'Sample Guest D', status: 'confirmed', linked_reservation_id: null }] };
   }
 
   // ---- mounted instance
@@ -153,12 +157,12 @@
   var TABLE = { res: 'airbnb_reservations', inq: 'booking_inquiries', cal: 'calendar_events' };
   function load(force) {
     var L = S.load; if (L.busy) return; if (L.ok && !force) return;
-    L.busy = true; L.err = ''; L.denied = false; var g = S.gen; S.today = manilaToday(); draw();
+    L.busy = true; L.err = ''; L.denied = false; var g = S.gen; S.today = manilaToday(); S.hour = manilaHour(); draw();
     var done = function (rows, errs) {
       if (!S || S.gen !== g) return; L.busy = false;
       var bad = errs.filter(Boolean), good = errs.length - bad.length;
       if (bad.length && !good) { if (bad.every(isDenied)) L.denied = true; else L.err = bad.some(isOffline) ? 'No connection.' : 'Bookings could not be loaded.'; L.ok = false; }
-      else { L.ok = true; L.partial = bad.length > 0; L.list = buildBookings(rows, S.money); }
+      else { L.ok = true; L.partial = bad.length > 0; L.cap = ['res', 'inq', 'cal'].some(function (k) { return (rows[k] || []).length >= 500; }); L.list = buildBookings(rows, S.money); }
       draw();
     };
     if (S.demo) { Promise.resolve().then(function () { done(demoRows(S.today), [null]); }); return; }
@@ -182,7 +186,7 @@
     return '';
   }
   function card(b) {
-    var st = statusOf(b, S.today), pax = S.money && b.pax != null ? ' · ' + b.pax + (b.pax === 1 ? ' guest' : ' guests') : '';
+    var st = statusOf(b, S.today, S.hour), pax = S.money && b.pax != null ? ' · ' + b.pax + (b.pax === 1 ? ' guest' : ' guests') : '';
     return '<button class="B_card B_tap" type="button" data-b="open" data-v="' + esc(b.key) + '" aria-label="' + esc('Open booking for ' + b.guest) + '">' +
       '<span class="B_top"><span class="B_name">' + esc(b.guest) + '</span><span class="B_badge">' + esc(sourceLabel(b)) + '</span></span>' +
       '<span class="B_line">' + esc(fmtDate(b.checkin, 'weekday') + ' to ' + fmtDate(b.checkout, 'weekday') + ' · ' + b.nights + (b.nights === 1 ? ' night' : ' nights') + pax) + '</span>' +
@@ -190,13 +194,14 @@
   }
   function listHtml() {
     var box = stateBox(); if (box) return box;
-    var rows = filterBookings(S.load.list, S.seg, S.q, S.today, S.showCancelled);
-    var partial = S.load.partial ? '<div class="B_note" role="status">Some bookings could not be loaded, so this list may be incomplete.</div>' : '';
+    var rows = filterBookings(S.load.list, S.seg, S.q, S.today, S.showCancelled, S.hour);
+    var cap = S.load.cap ? '<div class="B_note" role="status">Showing the latest 500 bookings.</div>' : '';
+    var partial = cap + (S.load.partial ? '<div class="B_note" role="status">Some bookings could not be loaded, so this list may be incomplete.</div>' : '');
     if (!rows.length) return partial + '<div class="B_note">' + esc(S.q ? 'No booking matches that name.' : S.seg === 'upcoming' ? 'No upcoming bookings.' : S.seg === 'current' ? 'No guest is staying right now.' : 'No past bookings.') + '</div>';
     return partial + rows.map(card).join('');
   }
   function segHtml() {
-    var c = S.load.ok ? counts(S.load.list, S.today, S.q, S.showCancelled) : null;
+    var c = S.load.ok ? counts(S.load.list, S.today, S.q, S.showCancelled, S.hour) : null;
     return '<div class="B_seg" role="tablist" aria-label="Bookings"' + (S.sheet ? ' inert aria-hidden="true"' : '') + '>' + SEGS.map(function (s) {
       return '<button class="B_tab" type="button" role="tab" id="B_tab_' + s + '" aria-selected="' + (S.seg === s) + '" data-b="seg" data-v="' + s + '">' + SEG_LABEL[s] + (c ? ' <span class="B_cnt">' + c[s] + '</span>' : '') + '</button>';
     }).join('') + '</div>';
@@ -205,8 +210,8 @@
     if (!S.sheet) return '';
     var b = null, l = S.load.list || []; for (var i = 0; i < l.length; i++) if (l[i].key === S.sheet) b = l[i];
     if (!b) return '';
-    var st = statusOf(b, S.today);
-    var dl = detailRows(b, S.money, S.today).map(function (r) { return '<dt>' + esc(r[0]) + '</dt><dd>' + esc(r[1]) + '</dd>'; }).join('');
+    var st = statusOf(b, S.today, S.hour);
+    var dl = detailRows(b, S.money, S.today, S.hour).map(function (r) { return '<dt>' + esc(r[0]) + '</dt><dd>' + esc(r[1]) + '</dd>'; }).join('');
     var act = b.kind === 'direct' && b.state === 'pending' && !b.calOnly && S.canDecide ? '<p class="B_p">This request is waiting for a decision.</p><button class="btn btn-primary btn-block" type="button" data-b="inq">Review in Inquiries</button>' : '';
     return '<div class="B_scrim" aria-hidden="true" data-b="close"></div><div class="B_sheet" role="dialog" aria-modal="true" aria-labelledby="B_sh"><div class="B_grab" aria-hidden="true"></div>' +
       '<h2 class="B_h" id="B_sh" tabindex="-1" data-b-focus="1">' + esc(b.guest) + '</h2><div class="B_sub">' + pill(st.kind, st.text) + ' <span class="B_badge">' + esc(sourceLabel(b)) + '</span></div>' +
@@ -215,21 +220,22 @@
   function draw() {
     if (!S) return;
     var inert = S.sheet ? ' inert aria-hidden="true"' : '', ok = S.load.ok;
-    S.el.innerHTML = '<div class="B_root"><h2 class="B_h">Bookings</h2>' + segHtml() +
+    S.el.innerHTML = '<div class="B_root">' + (S.opts.embedded ? '' : '<h2 class="B_h">Bookings</h2>') + segHtml() +
       '<div class="B_tools"' + inert + '><label class="B_lbl" for="B_q">Search by guest name</label><input class="B_input" id="B_q" data-f="q" type="search" value="' + esc(S.q) + '" autocomplete="off">' +
       (ok ? '<button class="B_chip" type="button" data-b="canc" aria-pressed="' + S.showCancelled + '">Show cancelled</button>' : '') + '</div>' +
       '<div class="B_body" role="tabpanel" aria-labelledby="B_tab_' + S.seg + '" data-b-list="1"' + inert + '>' + listHtml() + '</div></div>' + sheetHtml();
+    if (S.refocus) { try { var rf = S.el.querySelector(S.refocus); if (rf && rf.focus) rf.focus(); } catch (e) { /* no focus in tests */ } S.refocus = null; }
     if (S.sheet && S.focus) { try { var h = S.el.querySelector('[data-b-focus]'); if (h && h.focus) h.focus(); } catch (e) { /* no focus in tests */ } S.focus = false; }
   }
 
   function onClick(ev) {
     if (!S) return; var t = ev.target && ev.target.closest ? ev.target.closest('[data-b]') : null; if (!t) return;
     var a = t.getAttribute('data-b'), v = t.getAttribute('data-v');
-    if (a === 'seg') { if (SEGS.indexOf(v) < 0) return; S.seg = v; S.sheet = null; draw(); return; }
+    if (a === 'seg') { if (SEGS.indexOf(v) < 0) return; S.seg = v; S.sheet = null; S.refocus = '[data-b="seg"][data-v="' + v + '"]'; draw(); return; }
     if (a === 'retry') { load(true); return; }
-    if (a === 'canc') { S.showCancelled = !S.showCancelled; draw(); return; }
-    if (a === 'open') { S.sheet = v; S.focus = true; draw(); return; }
-    if (a === 'close') { S.sheet = null; draw(); return; }
+    if (a === 'canc') { S.showCancelled = !S.showCancelled; S.refocus = '[data-b="canc"]'; draw(); return; }
+    if (a === 'open') { S.sheet = v; S.opener = v; S.focus = true; draw(); return; }
+    if (a === 'close') { closeSheet(); return; }
     if (a === 'inq') { S.sheet = null; if (S.opts.navigate) S.opts.navigate('#manage/inquiries'); }
   }
   function onInput(ev) {
@@ -238,12 +244,13 @@
     var l = null; try { l = S.el.querySelector('[data-b-list]'); } catch (e) { l = null; }
     if (l) { l.innerHTML = listHtml(); var sg = S.el.querySelector('.B_seg'); if (sg) sg.outerHTML = segHtml(); } else draw();
   }
-  function onKey(ev) { if (S && S.sheet && ev && ev.key === 'Escape') { S.sheet = null; draw(); } }
+  function closeSheet() { S.sheet = null; if (S.opener) S.refocus = '[data-b="open"][data-v="' + S.opener + '"]'; draw(); }
+  function onKey(ev) { if (S && S.sheet && ev && ev.key === 'Escape') closeSheet(); }
 
   function mount(el, opts) {
     opts = opts || {}; if (S) unmount();
-    var access = opts.access;
-    S = { el: el, opts: opts, client: opts.client, demo: !!opts.demo, money: canSeeMoney(access), canDecide: canDecide(access), gen: ++gen, today: manilaToday(), seg: 'upcoming', q: '', showCancelled: false, sheet: null, focus: false, load: {} };
+    var access = opts.access || opts.role; // the shell passes opts.role (a string)
+    S = { el: el, opts: opts, client: opts.client, demo: !!opts.demo, money: canSeeMoney(access), canDecide: canDecide(access), gen: ++gen, today: manilaToday(), hour: manilaHour(), seg: 'upcoming', q: '', showCancelled: false, sheet: null, focus: false, load: {} };
     S.onClick = onClick; S.onInput = onInput; S.onKey = onKey;
     el.addEventListener('click', onClick); el.addEventListener('input', onInput); el.addEventListener('keydown', onKey);
     draw(); load(true);
@@ -255,7 +262,7 @@
   }
 
   var api = { mount: mount, unmount: unmount, _setClock: function (fn) { clock = fn || function () { return Date.now(); }; },
-    lib: { buildBookings: buildBookings, segmentOf: segmentOf, filterBookings: filterBookings, counts: counts, statusOf: statusOf, paymentText: paymentText, detailRows: detailRows, sourceLabel: sourceLabel,
+    lib: { buildBookings: buildBookings, segmentOf: segmentOf, manilaHour: manilaHour, filterBookings: filterBookings, counts: counts, statusOf: statusOf, paymentText: paymentText, detailRows: detailRows, sourceLabel: sourceLabel,
       canSeeMoney: canSeeMoney, canDecide: canDecide, companions: companions, manilaToday: manilaToday, formatPHP: formatPHP, fmtDate: fmtDate, esc: esc, isDenied: isDenied, isOffline: isOffline } };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   if (typeof window !== 'undefined') window.N_BOOKINGS = api;
