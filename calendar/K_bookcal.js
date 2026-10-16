@@ -115,7 +115,7 @@
         r.style = 'grid-column:' + (c0 + 1) + '/span ' + (c1 - c0 + 1) + ';grid-row:' + (l + 2);
         bars += K_chip(r, r.from, full, colour, names, 'K_bar', null);
       });
-      weeks += '<div class="K_wk" style="grid-template-rows:auto repeat(' + Math.max(lanes.length, 1) + ',auto)">' + wd.map(function (d, ci) {
+      weeks += '<div class="K_wk" style="grid-template-rows:2.25rem repeat(' + Math.max(lanes.length, 1) + ',auto)">' + wd.map(function (d, ci) {
         var x = info(d), inM = d.slice(0, 7) === ym;
         return '<div class="K_cell' + (inM ? '' : ' K_off') + (d === today ? ' K_today' : '') + (x.turn ? ' K_turn' : '') + '" style="grid-column:' + (ci + 1) + ';grid-row:1/-1"><button class="K_dn" type="button" data-day="' + d + '" aria-haspopup="dialog" aria-label="' + d + '"><span>' + (+d.slice(8)) + '</span>' + (x.turn ? '<small>Turnover</small>' : '') + '</button></div>';
       }).join('') + bars + '</div>';

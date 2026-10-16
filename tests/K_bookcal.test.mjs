@@ -175,3 +175,9 @@ test('K s91 a failed name read is retried on the next draw', async () => {
   n = 1; await app.click({ 'data-act': 'next' }); await app.click({ 'data-act': 'prev' });
   assert.match(html(app), /K_nm">Nicole Aniero</);
 });
+
+test('K s91 last round: fixed day-number row, bars top-aligned, dates on a second line, red clash row', () => {
+  const css = fs.readFileSync(root + '/calendar/K_bookcal.css', 'utf8'), js = fs.readFileSync(root + '/calendar/K_bookcal.js', 'utf8');
+  assert.match(js, /grid-template-rows:2\.25rem repeat\(/); assert.match(css, /\.K_bar \{[^}]*align-self: start/);
+  assert.match(css, /\.K_agenda \.K_meta \{[^}]*flex-basis: 100%/); assert.match(css, /\.K_chip\[data-col="0"\]\[data-state="conflict"\] \{[^}]*--v5-danger-w/);
+});

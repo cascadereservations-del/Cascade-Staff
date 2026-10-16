@@ -32,7 +32,7 @@
 .K_wk { min-height: 6rem; position: relative; }
 .K_cell { border-right: 1px solid var(--v5-line); border-bottom: 1px solid var(--v5-line); font-size: 0.8125rem; }
 .K_cell:nth-child(7n) { border-right: 0; }
-.K_bar { z-index: 1; display: flex; align-items: center; min-width: 0; min-height: 2rem; margin: 2px 3px; padding: 2px 6px; border: 0; border-radius: var(--r-sm, 6px); text-align: left; cursor: pointer; font: 500 0.8125rem/1.25 var(--font-ui); background: var(--v5-k1); color: var(--v5-k1-fg); }
+.K_bar { align-self: start; z-index: 1; display: flex; align-items: center; min-width: 0; min-height: 2rem; margin: 2px 3px; padding: 2px 6px; border: 0; border-radius: var(--r-sm, 6px); text-align: left; cursor: pointer; font: 500 0.8125rem/1.25 var(--font-ui); background: var(--v5-k1); color: var(--v5-k1-fg); }
 .K_bar:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
 .K_dn { display: flex; justify-content: space-between; width: 100%; padding: 4px 8px; border: 0; background: none; color: inherit; font: inherit; cursor: pointer; }
 .K_off { background: var(--v5-fill); color: var(--v5-ink-2); }
@@ -47,3 +47,9 @@
 
 /* the month swipe also listens here (E_drag sel .cal, .K_root): without this the browser takes a sideways finger move as its own pan and cancels the drag */
 .K_root { touch-action: pan-y pinch-zoom; }
+
+/* phone list: dates on a second line so the full name keeps the row; a clash row with no guest colour is red */
+.K_agenda .K_chip { flex-wrap: wrap; }
+.K_agenda .K_nm { flex: 1 1 auto; white-space: normal; overflow-wrap: anywhere; }
+.K_agenda .K_meta { flex-basis: 100%; margin-left: 0; padding-left: 0; }
+.K_chip[data-col="0"][data-state="conflict"] { background: var(--v5-danger-w); color: var(--v5-danger-t); }
