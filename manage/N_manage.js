@@ -878,7 +878,7 @@
   // The server's refusals for a review, in plain sentences
   function reviewWords(msg) {
     msg = String(msg || '');
-    return /not waiting for review|not pending|already/i.test(msg) ? 'This was already done.' : /reason/i.test(msg) ? 'Write a short reason, at least three letters.' : /amount/i.test(msg) ? 'Enter the amount, more than zero.' : /date/i.test(msg) ? 'Choose the date.' : /categor/i.test(msg) ? 'Choose a category.' : 'The server could not accept this. Please check it and try again.';
+    return /not waiting for review|not pending|already/i.test(msg) ? 'This was already done.' : /reason/i.test(msg) ? 'Write a short reason, at least three letters.' : /amount/i.test(msg) ? 'Enter the amount, more than zero.' : /future/i.test(msg) ? 'The date cannot be in the future.' : /date/i.test(msg) ? 'Choose the date.' : /categor/i.test(msg) ? 'Choose a category.' : 'The server could not accept this. Please check it and try again.';
   }
   function doReview(action) {
     var sh = S.sheet, r = rqOf(sh.id); if (!r) return; var f = sh.f, edits = {};
