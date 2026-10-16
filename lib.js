@@ -834,7 +834,7 @@
       if (today && date && date < today) return;
       var src = A_NOTICE_SOURCE[n.source] || '';
       list.push({ key: 'n:' + n.id, id: String(n.id), type: type, group: type === 'power' || type === 'water' ? type : 'other', title: String(n.title), date: date, start: n.start_time || null, end: n.end_time || null,
-        sub: [date ? dayShort(date) : '', A_titleHasTime(n.title) ? '' : A_timeRange(n.start_time, n.end_time), src].filter(Boolean).join(' · '), detail: n.detail ? String(n.detail) : '', source: src, url: H_noticeUrl(n.url), tell: canSeeGuestContact(role) && (type === 'power' || type === 'water' || type === 'rain') });
+        sub: [date ? dayShort(date) : '', A_titleHasTime(n.title) ? '' : A_timeRange(n.start_time, n.end_time), src].filter(Boolean).join(' · '), detail: n.detail ? String(n.detail) : '', source: src, raw: String(n.source || ''), url: H_noticeUrl(n.url), tell: canSeeGuestContact(role) && (type === 'power' || type === 'water' || type === 'rain') });
     });
     list.sort(function (a, b) { return (a.type === 'rain' && a.key === 'rain-watch' ? 0 : 1) - (b.type === 'rain' && b.key === 'rain-watch' ? 0 : 1) || String(a.date || '9999').localeCompare(String(b.date || '9999')) || String(a.start || '').localeCompare(String(b.start || '')); });
     var house = mgr ? (Array.isArray(raw.house) ? raw.house : []).filter(function (h) { return h && (h.kind === 'low_stock' || h.kind === 'finding') && h.title; })
@@ -979,7 +979,7 @@
   // ================================================================ E_ streamline pass (s81, lane E) ================================================
   // ---- the one notification pill: what needs a person, counted once ----
   // Groups in priority order. n counts rows in the first six; notices are shown in the sheet but never counted (the Notices card carries them).
-  var E_SECTIONS = [['risk', 'Turnover at risk'], ['overdue', 'Overdue'], ['due', 'Due today'], ['clash', 'Clash days'], ['confirm', 'To confirm'], ['inbox', 'Inbox'], ['warn', 'Warnings'], ['notice', 'Notices today and tomorrow']];
+  var E_SECTIONS = [['risk', 'Turnover at risk'], ['overdue', 'Overdue'], ['due', 'Due today'], ['clash', 'Clash days'], ['confirm', 'To confirm'], ['pay', 'Pay staff'], ['review', 'To review'], ['inbox', 'Inbox'], ['warn', 'Warnings'], ['find', 'Findings'], ['stock', 'Low stock'], ['notice', 'Notices today and tomorrow']];
   var E_MAX_ROWS = 3;
   // "Brownout Fri 16 Oct, 1:00 to 4:00 pm": the one time format used everywhere (not the 24-hour "13:00, 3 h" of the Stays list)
   function E_brownTitle(w, b) {
@@ -997,7 +997,7 @@
   function E_attention(i) {
     i = i || {}; var role = i.role, today = i.today || manilaToday(), rd = i.ready || {};
     var money = layoutForRole(role) === 'admin', mgr = canSeeGuestContact(role), canBk = canSeeBookingsToConfirm(role);
-    var by = { risk: [], overdue: [], due: [], clash: [], confirm: [], inbox: [], warn: [], notice: [] }, taken = {};
+    var by = { risk: [], overdue: [], due: [], clash: [], confirm: [], pay: [], review: [], inbox: [], warn: [], find: [], stock: [], notice: [] }, taken = {};
     (Array.isArray(i.tasks) ? i.tasks : []).forEach(function (t) {
       if (!t || t.status === 'done') return;
       var key = t.source + ':' + t.id, due = taskDue(t.due_at, today);
@@ -1020,6 +1020,10 @@
     }
     var bn = canBk ? bookingsToConfirmCount(i.bookings) : 0;
     if (bn > 0) by.confirm.push({ group: 'confirm', id: 'confirm', glyph: 'clip', n: bn, title: plural(bn, 'booking') + ' to confirm', sub: 'Open the pending bookings', go: { kind: 'bookings' } });
+    // s91: pay requests waiting and transactions waiting for review (owner, admin, finance); each is one row with its count
+    var pn = money && typeof i.pay === 'number' && i.pay > 0 ? Math.floor(i.pay) : 0, rn = money && typeof i.review === 'number' && i.review > 0 ? Math.floor(i.review) : 0;
+    if (pn > 0) by.pay.push({ group: 'pay', id: 'pay', glyph: 'wallet', n: pn, title: plural(pn, 'pay request') + ' waiting', sub: 'Pay by QR, then add the proof', go: { kind: 'pay' } });
+    if (rn > 0) by.review.push({ group: 'review', id: 'review', glyph: 'cash', n: rn, title: plural(rn, 'transaction') + ' to review', sub: 'Check each one, then approve', go: { kind: 'review' } });
     var inn = mgr && typeof i.inbox === 'number' && i.inbox > 0 ? Math.floor(i.inbox) : 0;
     if (inn > 0) by.inbox.push({ group: 'inbox', id: 'inbox', glyph: 'chat', n: inn, title: inn === 1 ? '1 open message' : inn + ' open messages', sub: 'Guests waiting for a reply', go: { kind: 'inbox' } });
     var brown = {};
@@ -1031,19 +1035,28 @@
         var l = lowStockText(w); by.warn.push({ group: 'warn', id: E_warnKey(w), glyph: 'alert', word: 'Low stock', title: 'Low stock · ' + l.rest, sub: 'Inventory', go: { kind: 'inventory' } });
       } else by.warn.push({ group: 'warn', id: E_warnKey(w), glyph: 'info', word: 'System check', title: 'System check · ' + (w.title || ''), sub: 'Needs a person to look', go: { kind: 'warn', key: E_warnKey(w) } });
     });
+    // s91: house items from notices_v1. The same finding or low-stock item can arrive as a payload warning too; a warning that already says it wins, so nothing is counted twice.
+    var allW = Array.isArray(i.warnings) ? i.warnings : [], hasInv = allW.some(function (w) { return w && w.kind === 'inventory'; }), wvKeys = {};
+    allW.forEach(function (w) { if (w && w.kind === 'verifier') { var k = findingKey(w, i.tasks); if (k) wvKeys[k] = 1; wvKeys['t:' + w.title] = 1; } });
+    (mgr && Array.isArray(i.house) ? i.house : []).forEach(function (h) {
+      if (!h || !h.title) return;
+      if (h.kind === 'finding') { if (wvKeys[h.id] || wvKeys['t:' + h.title]) return; by.find.push({ group: 'find', id: h.id, glyph: 'alert', word: 'Finding', title: h.title, sub: h.detail || 'Needs a person to look', go: { kind: 'finding', key: h.id } }); }
+      else if (h.kind === 'low_stock') { if (hasInv) return; by.stock.push({ group: 'stock', id: h.key || h.id, glyph: 'box', word: 'Low stock', title: h.title, sub: h.detail || 'Inventory', go: { kind: 'inventory' } }); }
+    });
     var tomorrow = addDays(today, 1);
     (Array.isArray(i.notices) ? i.notices : []).forEach(function (n) {
       if (!n || !n.date || (n.date !== today && n.date !== tomorrow)) return;
       if (n.type === 'power' && brown[n.date]) return; // the brownout warning already says it
       by.notice.push({ group: 'notice', id: n.key, glyph: (A_NOTICE_TYPES[n.type] || A_NOTICE_TYPES.note).icon, title: n.title, sub: n.sub || '', go: { kind: 'notices' } });
     });
-    var counted = ['risk', 'overdue', 'due', 'clash', 'confirm', 'inbox', 'warn'], n = 0, first = null;
+    var counted = ['risk', 'overdue', 'due', 'clash', 'confirm', 'pay', 'review', 'inbox', 'warn', 'find', 'stock'], n = 0, first = null;
     counted.forEach(function (k) { n += by[k].length; if (!first && by[k].length) first = k; });
     var top = '', word = '', tone = 'ok';
     if (first) {
       var rs = by[first], c = rs.length;
       top = first === 'risk' ? 'Turnover at risk' : first === 'overdue' ? c + ' overdue' : first === 'due' ? c + ' due today' : first === 'clash' ? (c === 1 ? 'Clash day' : c + ' clash days') : first === 'confirm' ? rs[0].n + ' to confirm' : first === 'inbox' ? rs[0].n + ' in inbox' : rs[0].word;
       word = first === 'risk' ? (c === 1 ? '1 blocks arrival' : c + ' block arrival') : first === 'overdue' ? 'Overdue' : first === 'due' ? 'Due today' : first === 'due' ? 'Due today' : first === 'clash' ? (c === 1 ? 'Clash day' : 'Clash days') : first === 'confirm' ? 'To confirm' : first === 'inbox' ? 'In inbox' : rs[0].word;
+      if (first === 'pay' || first === 'review') { word = first === 'pay' ? 'To pay' : 'To review'; top = rs[0].n + ' ' + word.toLowerCase(); } else if (first === 'find' || first === 'stock') { word = first === 'find' ? 'Finding' : 'Low stock'; top = rs[0].title; }
       tone = first === 'risk' || first === 'overdue' || first === 'clash' ? 'danger' : 'warn';
     }
     var sections = E_SECTIONS.filter(function (s) { return by[s[0]].length; }).map(function (s) {
@@ -1062,6 +1075,45 @@
       aria: n === 1 ? '1 thing to look at: ' + top.toLowerCase() + '. Opens the list' : shown + ' things to look at. Most urgent: ' + top.toLowerCase() + '. Opens the list' };
     var empty = !sections.length;
     return { partial: failed && n > 0, phase: phase, n: n, top: top, topWord: word, tone: tone, sections: sections, pill: pill, empty: empty, say: phase === 'items' ? shown + (n === 1 ? ' thing' : ' things') + ' to look at' : phase === 'clear' ? 'All clear' : phase === 'offline' ? 'No connection' : phase === 'stale' ? 'Could not update' : '' };
+  }
+
+  // ================================================================ s91: the "Needs action" board on Home (owner, admin, finance) ================================================
+  // Built from the same CS.E_attention result as the pill, so the two always agree: board.n === att.n. Every row has one primary action (a link or a fix in place).
+  // Overdue and due-today tasks fold into one row each (their count is the weight); other groups show up to 4 rows, else 3 and one "N more" row. Notices are never rows: they are the heads-up group.
+  var B_WORD = { risk: 'At risk', clash: 'Clash day', confirm: 'To confirm', pay: 'To pay', review: 'To review', inbox: 'Inbox', find: 'Finding', stock: 'Low stock' };
+  var B_LABEL = { risk: 'Open tasks', clash: 'Open day', confirm: 'Review', pay: 'Pay staff', review: 'Review', inbox: 'Open inbox', find: 'Resolve', stock: 'Restock' };
+  function A_board(att) {
+    var rows = [], n = 0; att = att || {};
+    (att.sections || []).forEach(function (s) {
+      if (s.key === 'notice') return;
+      var r = s.rows || [], k = s.key;
+      if (!r.length) return;
+      if (k === 'overdue' || k === 'due') {
+        rows.push({ key: k, group: k, glyph: k === 'overdue' ? 'alert' : 'clock', word: k === 'overdue' ? 'Overdue' : 'Due today', title: plural(r.length, 'task') + (k === 'overdue' ? ' overdue' : ' due today'),
+          sub: r[0].title + (r.length > 1 ? ' and ' + (r.length - 1) + ' more' : ''), count: r.length, weight: r.length, label: 'Open tasks', go: { kind: 'tasks', filter: 'due' } });
+        n += r.length; return;
+      }
+      var shown = r.length > 4 ? r.slice(0, 3) : r;
+      shown.forEach(function (x) {
+        var warn = k === 'warn', sys = warn && x.go && x.go.kind === 'warn', label = warn ? (x.go.kind === 'inventory' ? 'Restock' : x.go.kind === 'notices' ? 'See notice' : 'Open') : B_LABEL[k];
+        rows.push({ key: k + ':' + x.id, group: k, glyph: x.glyph, word: warn ? x.word : B_WORD[k], title: x.title, sub: x.sub || '', count: x.n || 0, weight: 1, label: label, go: x.go, sys: sys });
+        n += 1;
+      });
+      if (shown.length < r.length) {
+        var more = r.length - shown.length;
+        rows.push({ key: k + ':more', group: k, glyph: shown[0].glyph, word: k === 'warn' ? 'Warnings' : B_WORD[k] || s.label, title: more + ' more', sub: s.label, count: 0, weight: more, label: 'See all', go: { kind: 'all' }, more: true });
+        n += more;
+      }
+    });
+    return { n: n, rows: rows };
+  }
+  // The informational group: notices_v1 notices still in the future. gone = notice keys just closed, skip = { 'YYYY-MM-DD': 1 } days a brownout warning already states.
+  // Only a notice that has an id and was added by hand (manual or staff) can be closed, and only by an owner or admin.
+  function A_heads(view, role, o) {
+    o = o || {}; var gone = o.gone || {}, skip = o.skip || {}, mgr = role === 'owner' || role === 'admin';
+    return (view && Array.isArray(view.list) ? view.list : []).filter(function (n) { return !gone[n.key] && !(n.type === 'power' && n.date && skip[n.date]); }).map(function (n) {
+      return { key: n.key, id: n.id || '', type: n.type, title: n.title, sub: n.sub || '', detail: n.detail || '', date: n.date || null, url: n.url || null, closable: mgr && !!n.id && (n.raw === 'manual' || n.raw === 'staff') };
+    });
   }
 
   // ================================================================ H_ shell pass (s82, lane H) ================================================
@@ -1305,7 +1357,7 @@
     orderWarnings: orderWarnings, brownoutText: brownoutText, lowStockText: lowStockText, warningSummary: warningSummary,
     weatherLine: weatherLine, rainLine: rainLine, weatherStale: weatherStale, WEATHER_STALE_MIN: WEATHER_STALE_MIN, esc: esc,
     A_HOUSE_FALLBACK: A_HOUSE_FALLBACK, A_houseTimes: A_houseTimes, A_turnoverClock: A_turnoverClock, A_turnoverLine: A_turnoverLine, A_hm: A_hm, A_NOTICE_TYPES: A_NOTICE_TYPES, A_noticesView: A_noticesView, A_noticeFilters: A_noticeFilters, A_dayMarks: A_dayMarks, A_noticeDay: A_noticeDay, A_guestMessage: A_guestMessage, A_CAL_TABS: A_CAL_TABS, A_calTab: A_calTab, A_stayShade: A_stayShade, A_hubGroups: A_hubGroups, A_hubRoutes: A_hubRoutes, A_hubRouteOk: A_hubRouteOk, A_hubDoorUrl: A_hubDoorUrl, A_whatsNew: A_whatsNew, A_shortTime: A_shortTime, A_PINNED: A_PINNED, A_noticeAddError: A_noticeAddError, A_NOTICE_HINT: A_NOTICE_HINT, A_flagDup: A_flagDup, A_facebookUrl: A_facebookUrl, A_fbPluginUrl: A_fbPluginUrl, A_noticeAddProblem: A_noticeAddProblem, A_noticeAddArgs: A_noticeAddArgs, A_plainRefusal: A_plainRefusal, A_hour12: A_hour12, A_timeRange: A_timeRange,
-    taskPriorityLabel: taskPriorityLabel, E_attention: E_attention, E_warnKey: E_warnKey, E_buzz: E_buzz, E_hapticsOn: E_hapticsOn, E_hapticsSet: E_hapticsSet, E_PATTERNS: E_PATTERNS,
+    taskPriorityLabel: taskPriorityLabel, E_attention: E_attention, A_board: A_board, A_heads: A_heads, E_warnKey: E_warnKey, E_buzz: E_buzz, E_hapticsOn: E_hapticsOn, E_hapticsSet: E_hapticsSet, E_PATTERNS: E_PATTERNS,
     H_monthOk: H_monthOk, H_dataFrom: H_dataFrom, H_waitStep: H_waitStep, H_withFlags: H_withFlags, H_powerProblem: H_powerProblem, H_noticeUrl: H_noticeUrl, H_noticeHead: H_noticeHead, H_weatherShort: H_weatherShort, H_agenda: H_agenda, H_ready: H_ready, H_readyChips: H_readyChips, H_readyOk: H_readyOk, H_clock12: H_clock12, H_readyLine: H_readyLine, H_progress: H_progress, H_cleanLine: H_cleanLine, H_houseLine: H_houseLine, H_untilLine: H_untilLine, H_manualIndex: H_manualIndex, H_search: H_search, H_dayStep: H_dayStep,
     E_drag: E_drag, E_lockOf: E_lockOf, E_inEdge: E_inEdge, E_velocity: E_velocity, E_tabFollow: E_tabFollow, E_tabCommit: E_tabCommit, E_sheetFollow: E_sheetFollow, E_sheetCommit: E_sheetCommit,
     E_taskFollow: E_taskFollow, E_taskCommit: E_taskCommit, E_taskDist: E_taskDist, E_EDGE_R_TASK: E_EDGE_R_TASK, E_taskOpens: E_taskOpens, E_slideCommit: E_slideCommit, E_tabNeighbour: E_tabNeighbour, F_widthClass: F_widthClass, E_setClock: E_setClock

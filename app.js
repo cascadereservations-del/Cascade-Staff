@@ -173,8 +173,9 @@
     return { role: role(), today: p ? p.today : CS.manilaToday(), error: !!state.error, errorKind: state.errorKind || 'network',
       failed: { tasks: !!state.tasksErr && !state.tasksDenied, notices: state.noticesFailed, bookings: state.bookingsFailed }, lastAt: state.loadedAt ? new Date(state.loadedAt).toISOString() : '',
       ready: { payload: !!p, tasks: !!state.tasks || !!state.tasksErr, bookings: state.bookingsDone, notices: state.noticesDone || state.noticesAbsent },
-      tasks: state.tasks ? state.tasks.tasks : [], clashDays: p && money ? A_clashList() : [], bookings: state.bookings, inbox: v ? v.inbox : null,
-      warnings: p ? p.warnings || [] : [], notices: v ? v.list : [] };
+      tasks: state.tasks ? state.tasks.tasks.filter(function (t) { return !(t.source === 'verifier_findings' && B_gone['f:' + t.id]); }) : [], clashDays: p && money ? A_clashList() : [], bookings: state.bookings, inbox: v ? v.inbox : null,
+      pay: money ? state.payWait : 0, review: money ? state.reviewN : 0, house: v ? v.house.filter(function (h) { return !(h.kind === 'finding' && B_gone['f:' + h.id]); }) : [],
+      warnings: p ? (p.warnings || []).filter(function (w) { var k = w.kind === 'verifier' ? CS.findingKey(w, state.tasks && state.tasks.tasks) : null; return !(k && B_gone['f:' + k]); }) : [], notices: v ? v.list.filter(function (n) { return !B_gone[n.key]; }) : [] };
   }
   function E_att() { return CS.E_attention(E_input()); }
   function E_pill(att) {
@@ -267,6 +268,94 @@
     var mgr = CS.canSeeGuestContact(role()), add = mgr && v ? '<button class="btn btn-secondary btn-block H_addrow" type="button" data-act="notice-add-open" data-date="' + esc(state.payload.today) + '">' + ICON('plus', 's16') + 'Add a notice</button>' : '';
     return '<section class="card glass A_card A_noticecard' + (mgr ? ' H_mgr' : '') + '" aria-label="Notices"' + (loading ? ' aria-busy="true"' : '') + '><div class="A_head"><h2>Notices</h2>' + (v ? '<a href="#calendar/notices">' + (v.counts.all ? 'See all ' + v.counts.all : 'Open') + ICON('chev', 's16') + '</a>' : '') + '</div>' + body + add + '</section>';
   }
+  // ---------------------------------------------------------------- s91: "Needs action" (Home for owner, admin, finance; replaces the Notices card there)
+  // One list from CS.E_attention (so the pill and this card always count the same), each row with one action that fixes it or opens the exact screen,
+  // then a Heads-up group for the informational notices. A row goes the moment its fix is sent; if the write fails it comes back with the reason.
+  var B_gone = {}; // 'f:<finding key>' / 'n:<notice id>' just fixed: hidden from the card and the pill until the reload has landed or the write failed
+  function B_loadReview() { // admin_review_queue_v1: only the count is kept. A missing function counts nothing; a failed read leaves the last count.
+    if (state.layout !== 'admin' || !/^(owner|admin|finance)$/.test(role() || '')) return;
+    sb.rpc('admin_review_queue_v1', { p_property_id: pid() }).then(function (r) {
+      var d = r && r.data;
+      if (r.error) { if (CS.rpcMissing(r.error)) state.reviewN = 0; return; }
+      state.reviewN = d && d.ok !== false ? (typeof d.count === 'number' ? d.count : Array.isArray(d.rows) ? d.rows.length : Array.isArray(d) ? d.length : 0) : 0;
+    }).catch(function () {}).then(function () { if (current === 'home' && state.layout) renderHome(); });
+  }
+  function B_resolveKey(r) { // the finding key ack_verifier_finding_v1 wants, or null (not a finding, or not an owner/admin)
+    if (!CS.canSeeGuestContact(role()) || !r.go) return null;
+    if (r.go.kind === 'finding') return r.go.key || null;
+    var w = r.go.kind === 'warn' ? findWarn(r.go.key) : null;
+    return w && w.kind === 'verifier' ? CS.findingKey(w, state.tasks && state.tasks.tasks) : null;
+  }
+  function B_findRow(key) { var rows = CS.A_board(E_att()).rows, i; for (i = 0; i < rows.length; i++) if (rows[i].key === key) return rows[i]; return null; }
+  function B_goHtml(r, cls) { // the one primary control of a row: a link or a button, label + glyph
+    var g = r.go || {}, lab = esc(r.label), tail = ICON('chev', 's16'), l = null;
+    if (g.kind === 'tasks') return '<a class="' + cls + '" href="#tasks" data-act="attn-tasks" data-filter="' + esc(g.filter) + '">' + lab + tail + '</a>';
+    if (g.kind === 'day') return '<button class="' + cls + '" type="button" data-act="notice-cal" data-date="' + esc(g.date) + '">' + lab + tail + '</button>';
+    if (g.kind === 'all') return '<button class="' + cls + '" type="button" data-act="attn-open" aria-haspopup="dialog">' + lab + tail + '</button>';
+    if (g.kind === 'warn') return '<button class="' + cls + '" type="button" data-warn="' + esc(g.key) + '" aria-haspopup="dialog">' + lab + tail + '</button>';
+    if (g.kind === 'bookings') l = /^(owner|admin)$/.test(role() || '') ? { href: '#manage/inquiries', external: false } : (A_hubLink('bookings/inquiries') || { href: CS.INQUIRIES_URL, external: true });
+    else if (g.kind === 'inbox') l = { href: '#inbox', external: false };
+    else if (g.kind === 'pay') l = LINKS.pay ? { href: H_payUrl('admin.html'), external: false } : null;
+    else if (g.kind === 'review') l = /^(owner|admin)$/.test(role() || '') ? { href: '#manage/money', external: false } : A_hubLink('finance');
+    else if (g.kind === 'inventory') l = { href: '#stock', external: false };
+    else if (g.kind === 'notices') l = { href: '#calendar/notices', external: false };
+    else if (g.kind === 'finding') l = { href: '#tasks', external: false };
+    if (!l) return '';
+    return '<a class="' + cls + '" href="' + esc(l.href) + '"' + (l.external ? ' target="_blank" rel="noopener"' : '') + '>' + lab + ICON(l.external ? 'ext' : 'chev', 's16') + '</a>';
+  }
+  function B_ask(key, what, yes) { // the confirm that stands in for the buttons of a row
+    return '<p class="B_ask" id="B_ask">' + esc(what) + '</p><div class="B_acts"><button class="btn btn-primary btn-sm" type="button" id="B_yes" data-act="board-yes" data-bkey="' + esc(key) + '">' + esc(yes) + '</button>' +
+      '<button class="btn btn-ghost btn-sm" type="button" data-act="board-no">Cancel</button></div>';
+  }
+  function B_rowHtml(r) {
+    var rk = B_resolveKey(r), ask = state.bconfirm === r.key, acts;
+    if (ask) acts = B_ask(r.key, 'Mark this as handled? It leaves the list.', 'Yes, resolve');
+    else if (rk) acts = '<div class="B_acts"><button class="btn btn-primary btn-sm" type="button" data-act="board-ask" data-bkey="' + esc(r.key) + '">' + ICON('check', 's16') + 'Resolve</button>' + B_goHtml(Object.assign({}, r, { label: 'Open' }), 'btn btn-ghost btn-sm') + '</div>';
+    else { var go = B_goHtml(r, 'btn btn-primary btn-sm'); acts = go ? '<div class="B_acts">' + go + '</div>' : ''; }
+    return '<li class="B_row" data-bkey="' + esc(r.key) + '"><div class="B_top"><span class="lead">' + ICON(r.glyph) + '</span><span class="mid"><span class="B_word">' + esc(r.word) + '</span><span class="t">' + esc(r.title) + '</span>' +
+      (r.sub ? '<span class="s">' + esc(r.sub) + '</span>' : '') + '</span>' + (r.count > 1 ? '<span class="count" aria-label="' + esc(r.count + ' items') + '">' + esc(r.count) + '</span>' : '') + '</div>' + acts + '</li>';
+  }
+  function B_headHtml(h) {
+    var ty = CS.A_NOTICE_TYPES[h.type] || CS.A_NOTICE_TYPES.note, ask = state.bconfirm === h.key;
+    var acts = ask ? B_ask(h.key, 'Close this notice? It leaves the calendar and every list.', 'Yes, close it')
+      : (h.closable || h.date) ? '<div class="B_acts">' + (h.closable ? '<button class="btn btn-secondary btn-sm" type="button" data-act="board-ask" data-bkey="' + esc(h.key) + '">' + ICON('close', 's16') + 'Close notice</button>' : '') +
+        (h.date ? '<button class="btn btn-ghost btn-sm" type="button" data-act="notice-cal" data-date="' + esc(h.date) + '">Open on calendar</button>' : '') + '</div>' : '';
+    return '<li class="B_row B_headrow" data-bkey="' + esc(h.key) + '"><div class="B_top"><span class="lead A_t-' + esc(h.type) + '">' + ICON(ty.icon) + '</span><span class="mid"><span class="B_word">' + esc(ty.word) + '</span><span class="t">' + esc(h.title) + '</span>' +
+      (h.sub ? '<span class="s">' + esc(h.sub) + '</span>' : '') + (h.detail ? '<span class="s B_det">' + esc(h.detail) + '</span>' : '') + '</span></div>' + acts + '</li>';
+  }
+  function B_card() {
+    var att = E_att(), v = A_notices(), board = CS.A_board(att), mgr = CS.canSeeGuestContact(role()), when = state.loadedAt ? CS.clockLabel(new Date(state.loadedAt).toISOString()) : '';
+    var brown = {}; ((state.payload && state.payload.warnings) || []).forEach(function (w) { if (w.kind === 'brownout' && w.detail && w.detail.date) brown[w.detail.date] = 1; });
+    var heads = v && !state.noticesAbsent ? CS.A_heads(v, role(), { gone: B_gone, skip: brown }) : [], body, busy = att.phase === 'loading';
+    if (busy) body = '<div class="skel" style="height:96px"></div>';
+    else if (!board.n && (att.phase === 'offline' || att.phase === 'stale')) body = '<p class="sub" style="margin:0">' + esc((att.phase === 'offline' ? 'No connection.' : 'Could not update.') + (when ? ' Last checked ' + when + '.' : '')) + ' <button class="btn btn-ghost btn-sm" type="button" data-act="refresh">Try again</button></p>';
+    else if (!board.n) body = '<div class="B_clear">' + ICON('checks', 's24') + '<span><b>Nothing needs you right now.</b><span class="s">' + esc(when ? 'Last checked ' + when : 'Checked just now') + '</span></span></div>';
+    else body = '<ul class="B_list" role="list">' + board.rows.map(B_rowHtml).join('') + '</ul>' +
+      (att.partial || att.phase === 'offline' || att.phase === 'stale' ? '<p class="help" style="margin:0">' + esc(att.partial ? 'Some items could not be loaded.' : (att.phase === 'offline' ? 'No connection' : 'Could not update') + (when ? ' · showing ' + when : '')) + ' <button class="btn btn-ghost btn-sm" type="button" data-act="refresh">Try again</button></p>' : '');
+    var hd = heads.length ? '<div class="A_head B_sub"><h3>Heads-up</h3><span class="help">' + esc(CS.plural(heads.length, 'notice')) + '</span></div><ul class="B_list" role="list">' + heads.slice(0, 3).map(B_headHtml).join('') + '</ul>' +
+      (heads.length > 3 ? '<a class="B_all" href="#calendar/notices">' + esc('See all ' + heads.length) + ICON('chev', 's16') + '</a>' : '') : '';
+    var add = mgr && v && !state.noticesAbsent ? '<button class="btn btn-secondary btn-block H_addrow" type="button" data-act="notice-add-open" data-date="' + esc(state.payload.today) + '">' + ICON('plus', 's16') + 'Add a notice</button>' : '';
+    return '<section class="card glass A_card B_card" id="B_card" aria-label="Needs action"' + (busy ? ' aria-busy="true"' : '') + '><div class="A_head"><h2>Needs action</h2>' + (board.n ? '<span class="count B_total" aria-label="' + esc(board.n + (board.n === 1 ? ' thing needs action' : ' things need action')) + '">' + esc(board.n > 99 ? '99+' : board.n) + '</span>' : '') + '</div>' +
+      '<p class="B_msg" role="status" aria-live="polite">' + esc(state.bmsg || '') + '</p>' + body + hd + add + '</section>';
+  }
+  function B_do(key) { // a confirmed Resolve or Close: the row leaves at once; a failed write brings it back with the reason
+    if (state.bbusy || !key || !CS.canSeeGuestContact(role())) return;
+    var rpc, args, gk, ok;
+    if (key.indexOf('n:') === 0) { var id = key.slice(2); if (!/^[\w-]{1,64}$/.test(id)) return; rpc = 'ops_notice_close_v1'; args = { p_id: id, p_property_id: pid() }; gk = key; ok = 'Notice closed.'; }
+    else { var r = B_findRow(key), k = r && B_resolveKey(r); if (!k) return; rpc = 'ack_verifier_finding_v1'; args = { p_key: k }; gk = 'f:' + k; ok = 'Marked as handled.'; }
+    state.bbusy = true; state.bconfirm = ''; state.bmsg = ''; B_gone[gk] = 1; if (current === 'home') renderHome();
+    var landed = false;
+    sb.rpc(rpc, args).then(function (res) {
+      if (res.error) throw res.error;
+      if (res.data && res.data.ok === false) throw { message: res.data.error || 'not ok' };
+      landed = true; state.bmsg = ok; toast(ok); E_vibe('tap');
+      return Promise.all([loadHome(), loadTasks()]);
+    }).then(function () { return landed ? A_loadNotices() : null; }).then(function () { if (landed && !state.error && !state.noticesFailed) delete B_gone[gk]; }).catch(function (e) {
+      if (!landed) { delete B_gone[gk]; E_vibe('error'); }
+      state.bmsg = landed ? ok : CS.rpcMissing(e) ? 'Available after the next update.' : e && e.code === '42501' ? 'Only an owner or admin can change this.' : 'That did not save. Check your signal and try again.';
+    }).then(function () { state.bbusy = false; if (current === 'home' && state.layout) renderHome(); });
+  }
+
   function A_noticeIcon(type) { return type === 'house' ? 'house' : (CS.A_NOTICE_TYPES[type] || CS.A_NOTICE_TYPES.note).icon; }
   // F_: a label and its card travel as one grid item (F_group), so a two-column grid never splits them
   function A_navCard(label, rows, tiles) { return rows ? '<div class="F_group' + (tiles ? ' A_tiles' : '') + '"><div class="A_label">' + esc(label) + '</div><nav class="card glass list" aria-label="' + esc(label) + '">' + rows + '</nav></div>' : ''; }
@@ -291,7 +380,7 @@
       // only owner and admin have an inbox; the reserve is kept while notices load, and dropped on failure, when absent, and for finance
       // 3.2: the row opens the shell's own #inbox (which falls back to the dashboard's conversations page when the module is not shipped)
       var inboxShown = CS.canSeeGuestContact(role()) && !state.noticesAbsent && (v ? inbox != null : state.noticesLoading);
-      body = '<div class="A_body">' + errBanner() + todayCard() + A_turnoverCard(false) + H_cleanDoneCard() + H_alertsCard() + A_noticesCard() +
+      body = '<div class="A_body">' + errBanner() + todayCard() + A_turnoverCard(false) + H_cleanDoneCard() + H_alertsCard() + B_card() +
         A_navCard('Guests and bookings', (bk ? row({ icon: 'clip', title: 'Bookings to confirm', sub: 'Open the pending bookings', href: bk.href, external: bk.external, count: bk.count, countLabel: bk.n === 1 ? ' booking to confirm' : ' bookings to confirm' }) : '') +
           row({ icon: 'calendar', title: 'Calendar', sub: 'Stays, blocked nights, notices', href: '#calendar', count: n || '' }) +
           '<div id="slot-inbox"' + (inboxShown ? '' : ' hidden') + (inboxShown && !v ? ' style="min-height:64px"' : '') + '>' + (inboxShown && v ? row({ icon: 'chat', title: 'Inbox', sub: inbox ? inbox + ' open' : 'No open messages', href: '#inbox', count: inbox || '', countLabel: ' open messages' }) : '') + '</div>' +
@@ -1679,7 +1768,7 @@
     });
   }
   function signOutTo(msg) {
-    clearTimeout(H_rpT); state.H_q = ''; state.H_offKey = ''; H_unmount(); H_resetModules(); H_histGen++; H_calReset(); H_alReset(); closeSheet(); dropPhotos(); state.replyRecent = []; state.cleanDone = null; state.payWait = 0; state.progress = null; state.progressAbsent = false; H_idClose(); state.reply = null; var rb = $('rp-body'); if (rb) rb.innerHTML = ''; rpLive(''); state.payload = null; state.bookings = null; state.bookingsDone = false; state.noticesDone = false; state.notices = null; state.noticesAbsent = false; state.nadd = null; state.fbOpen = false; state.tasks = null; state.access = null; state.layout = null; state.month = null; state.error = '';
+    clearTimeout(H_rpT); state.H_q = ''; state.H_offKey = ''; H_unmount(); H_resetModules(); H_histGen++; H_calReset(); H_alReset(); closeSheet(); dropPhotos(); state.replyRecent = []; state.cleanDone = null; state.payWait = 0; state.reviewN = 0; B_gone = {}; state.bconfirm = ''; state.bmsg = ''; state.progress = null; state.progressAbsent = false; H_idClose(); state.reply = null; var rb = $('rp-body'); if (rb) rb.innerHTML = ''; rpLive(''); state.payload = null; state.bookings = null; state.bookingsDone = false; state.noticesDone = false; state.notices = null; state.noticesAbsent = false; state.nadd = null; state.fbOpen = false; state.tasks = null; state.access = null; state.layout = null; state.month = null; state.error = '';
     return sb.auth.signOut().catch(function () {}).then(function () { showSignin(msg); });
   }
   function showSignin(msg) {
@@ -1701,7 +1790,7 @@
       try { CS.assertNoMoney(r.data, { allowContact: CS.canSeeGuestContact(state.access && state.access.role) }); } catch (e) { state.payload = null; state.errorKind = 'blocked'; state.error = 'This page was blocked because the data carried an amount or a contact detail. Tell Lloyd.'; return; }
       if (!CS.canSeeGuestContact(state.access && state.access.role)) r.data.warnings = (r.data.warnings || []).filter(function (w) { return w.kind !== 'verifier'; });
       state.payload = r.data; state.loadedAt = Date.now(); state.error = ''; state.errorKind = '';
-      H_wxP = null; refreshWeather(); loadPayHint(); loadBookingsToConfirm(); A_loadNotices(); H_loadProgress();
+      H_wxP = null; refreshWeather(); loadPayHint(); loadBookingsToConfirm(); B_loadReview(); A_loadNotices(); H_loadProgress();
     }).catch(function (e) {
       state.errorKind = E_netErr(e) ? 'network' : 'server'; // "No connection" only when the network is the problem
       state.error = state.errorKind === 'network' ? (state.payload ? 'Live information needs a connection. Showing the last update.' : 'Live information needs a connection.') : (state.payload ? 'Could not update. Showing the last update.' : 'Could not update.');
@@ -1954,6 +2043,9 @@
     else if (a === 'notice-add-save') A_noticeAddSave();
     else if (a === 'notice-tell') { var nt = CS.canSeeGuestContact(role()) ? A_noticeByKey(t.getAttribute('data-nkey')) : null; var gm = nt ? CS.A_guestMessage(nt) : null; if (nt && !gm) toast('Check the notice text first.'); else if (gm) copyText(gm).then(function () { toast('Message copied. Paste it to the guest.'); E_vibe('tap'); }, function () { toast('Copy did not work on this phone.'); }); }
     else if (a === 'notice-cal') { var nd0 = t.getAttribute('data-date'), np = nd0.split('-'); if (CS.monthInRange(+np[0], +np[1], state.payload.today)) state.month = { y: +np[0], m: +np[1] }; state.calTab = 'calendar'; if (location.hash !== '#calendar') { closeSheet(); state.dayAfter = nd0; location.hash = '#calendar'; } else { render('calendar'); openSheet('day', nd0); state.sheet.view = 'calendar'; } } // from another screen the day sheet opens once the calendar has settled, so a Home redraw cannot close it
+    else if (a === 'board-ask') { state.bconfirm = t.getAttribute('data-bkey') || ''; state.bmsg = ''; if (current === 'home') renderHome(); var yb = $('B_yes'); if (yb && yb.focus) yb.focus(); }
+    else if (a === 'board-no') { state.bconfirm = ''; if (current === 'home') renderHome(); }
+    else if (a === 'board-yes') B_do(t.getAttribute('data-bkey'));
     else if (a === 'notice-resolve') { if (CS.canSeeGuestContact(role())) sb.rpc('ack_verifier_finding_v1', { p_key: t.getAttribute('data-id') }).then(function (r) { if (r.error) throw r.error; return A_loadNotices(); }).catch(function () { toast('That did not save. Check your signal and try again.'); }); }
     else if (t.hasAttribute('data-nfilter')) { state.noticeFilter = t.getAttribute('data-nfilter'); renderCalendar(); }
     else if (t.hasAttribute('data-tfilter')) { state.taskFilter = t.getAttribute('data-tfilter'); renderTasks(); }
