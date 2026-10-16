@@ -317,7 +317,7 @@ test('E_ tap-twin guard: every element that carries data-E-swipe has a visible w
 test('E_ the rejected gestures are not built: no main-tab swipe, snooze, pull to refresh, notice dismiss, long press, sub-tab swipe, or touch-event listener', () => {
   const src = read('app.js');
   assert.equal((src.match(/E_drag\(document, \{ sel:/g) || []).length, 5, 'the slide, the sheet pull, the task row, the month grid and the day sheet: all through the one helper');
-  assert.match(src, /sel: '\.cal', axis: 'x'/); assert.doesNotMatch(src, /sel: '\.E_tabbody'/, 'the sub-tab swipe (old G1) is removed: the segmented control is tap only');
+  assert.match(src, /sel: '\.cal, \.K_root', axis: 'x'/); assert.doesNotMatch(src, /sel: '\.E_tabbody'/, 'the sub-tab swipe (old G1) is removed: the segmented control is tap only');
   assert.doesNotMatch(src, /touchstart|touchmove|touchend|contextmenu', function \(ev\) \{ var .*press|longpress|long-press|snooze|pull.to.refresh|ptr/i);
   assert.doesNotMatch(src, /sel: '\.cal \.d'|sel: '\.A_nlist|sel: '\.C_notice|sel: '\.tabbar|sel: '#app'|sel: '\.view/, 'no swipe between the main tabs');
 });
