@@ -122,3 +122,4 @@
 .N_v1 { display: grid; gap: 12px; min-width: 0; }
 .N_tiles { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; }
 @media (min-width: 37.5rem) { .N_tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+button.N_link { background: none; border: 0; padding: 0; font: inherit; cursor: pointer; }

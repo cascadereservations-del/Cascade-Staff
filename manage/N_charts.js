@@ -70,20 +70,20 @@
   function monthBars(o) {
     o = o || {}; var months = o.months || [], fmt = typeof o.format === 'function' ? o.format : formatPHP, n = months.length;
     if (!n) return '<figure class="C_fig"><p class="C_empty">No monthly data yet.</p></figure>';
-    var W = 360, H = 140, top = 12, bot = 22, ph = H - top - bot, mx = 0, svg = '', rows = '', bestI = -1, best = -Infinity;
+    var W = 360, H = 140, top = 12, bot = 6, ph = H - top - bot, mx = 0, svg = '', rows = '', labs = '', bestI = -1, best = -Infinity;
     months.forEach(function (m) { [num(m.value), num(m.lastYear)].forEach(function (v) { if (v !== null && v > mx) mx = v; }); }); if (mx <= 0) mx = 1;
     var slot = W / n, bw = slot * 0.56;
     months.forEach(function (m, i) {
       var v = num(m.value), ly = num(m.lastYear), oc = num(m.occupancy), x = slot * i + (slot - bw) / 2, cx = (slot * i + slot / 2).toFixed(1);
       if (v !== null && v > 0 && v > best) { best = v; bestI = i; }
-      if (ly !== null && ly > 0) { var hl = Math.max(1.5, ph * ly / mx); svg += '<rect class="C_ly" x="' + (x - 2).toFixed(1) + '" y="' + (top + ph - hl).toFixed(1) + '" width="' + (bw + 4).toFixed(1) + '" height="' + hl.toFixed(1) + '" rx="3"/>'; }
       if (v !== null && v > 0) { var h = Math.max(1.5, ph * v / mx); svg += '<rect class="C_bar" x="' + x.toFixed(1) + '" y="' + (top + ph - h).toFixed(1) + '" width="' + bw.toFixed(1) + '" height="' + h.toFixed(1) + '" rx="3"/>'; }
+      if (ly !== null && ly > 0) { var hl = Math.max(1.5, ph * ly / mx); svg += '<rect class="C_ly" x="' + (x - 3).toFixed(1) + '" y="' + (top + ph - hl - 1.25).toFixed(1) + '" width="' + (bw + 6).toFixed(1) + '" height="2.5" rx="1.25"/>'; }
       if (oc !== null) svg += '<circle class="C_occ" cx="' + cx + '" cy="' + (top + ph * (1 - Math.min(100, Math.max(0, oc)) / 100)).toFixed(1) + '" r="3"/>';
-      svg += '<text class="C_lbl" x="' + cx + '" y="' + (H - 6) + '" text-anchor="middle">' + esc(String(m.label == null ? '' : m.label).slice(0, 3)) + '</text>';
+      labs += '<span>' + esc(String(m.label == null ? '' : m.label).slice(0, 3)) + '</span>';
       rows += '<tr><th scope="row">' + esc(m.label) + '</th><td>' + (v === null ? 'No data' : esc(fmt(v))) + '</td><td>' + (ly === null ? 'No data' : esc(fmt(ly))) + '</td><td>' + (oc === null ? 'No data' : esc(formatPercent(oc))) + '</td></tr>';
     });
-    var summary = n + (n === 1 ? " month" : " months") + (bestI >= 0 ? '. Highest: ' + months[bestI].label + ', ' + fmt(best) : '. No figures yet') + '. Faint bars show the same month last year; dots show occupancy.';
-    return '<figure class="C_fig"><svg class="C_bars" viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="' + esc(summary) + '" focusable="false">' + svg + '</svg>' +
+    var summary = n + (n === 1 ? " month" : " months") + (bestI >= 0 ? '. Highest: ' + months[bestI].label + ', ' + fmt(best) : '. No figures yet') + '. A short line marks the same month last year; dots show occupancy.';
+    return '<figure class="C_fig"><svg class="C_bars" viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="' + esc(summary) + '" focusable="false">' + svg + '</svg><div class="C_labs" aria-hidden="true">' + labs + '</div>' +
       '<figcaption class="C_key"><span class="C_k">This year</span><span class="C_k C_kly">Same month last year</span><span class="C_k C_kocc">Occupancy</span></figcaption>' +
       '<table class="C_sr"><caption>Monthly figures</caption><thead><tr><th scope="col">Month</th><th scope="col">This year</th><th scope="col">Last year</th><th scope="col">Occupancy</th></tr></thead><tbody>' + rows + '</tbody></table></figure>';
   }

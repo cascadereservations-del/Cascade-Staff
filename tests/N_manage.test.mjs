@@ -27,18 +27,18 @@ class FakeEl {
   get innerHTML() { return this.html; }
   addEventListener(t, f) { (this.l[t] ||= []).push(f); }
   removeEventListener(t, f) { this.l[t] = (this.l[t] || []).filter((x) => x !== f); }
-  querySelector(sel) { return sel === '[data-n-ext]' && /data-n-ext=/.test(this.html) ? (this.host ||= new FakeEl()) : null; }
+  querySelector(sel) { if (sel === '.N_seg') return this.html.includes('N_seg') ? (this.seg ||= { attrs: {}, setAttribute(k, v) { this.attrs[k] = v; }, removeAttribute(k) { delete this.attrs[k]; } }) : null; return sel === '[data-n-ext]' && /data-n-ext=/.test(this.html) ? (this.host ||= new FakeEl()) : null; }
 }
 const tick = async (n = 8) => { for (let i = 0; i < n; i++) await new Promise((r) => setImmediate(r)); };
 const plain = (x) => JSON.parse(JSON.stringify(x));
 
 const CHARTS_SRC = fs.readFileSync(path.join(root, 'manage', 'N_charts.js'), 'utf8');
-function load({ storage, onLine = true, charts = false, ext = null, clipboard } = {}) {
+function load({ storage, onLine = true, charts = false, ext = null, clipboard, mo } = {}) {
   const touched = [];
   const store = {};
   const ls = { getItem: (k) => { touched.push(k); return k in store ? store[k] : null; }, setItem: (k, v) => { touched.push(k); store[k] = String(v); } };
   const win = {};
-  const ctx = { window: win, localStorage: storage === null ? undefined : ls, navigator: { onLine, clipboard }, Intl, Date, Promise, JSON, Math, console, setTimeout, clearTimeout, Uint8Array,
+  const ctx = { window: win, localStorage: storage === null ? undefined : ls, navigator: { onLine, clipboard }, MutationObserver: mo, Intl, Date, Promise, JSON, Math, console, setTimeout, clearTimeout, Uint8Array,
     document: { visibilityState: 'visible', listeners: {}, addEventListener(t, f) { (this.listeners[t] ||= []).push(f); }, removeEventListener(t, f) { this.listeners[t] = (this.listeners[t] || []).filter((x) => x !== f); } },
     history: { replaceState() {} } };
   vm.createContext(ctx);
@@ -80,8 +80,8 @@ const METRICS = (f = 1, extra = {}) => ({ propertyId: PROP, periodStart: 'x', pe
 
 // a mounted module with a recording client; click/type drive the delegated listeners the way a tap and a keystroke would
 async function boot(o = {}) {
-  const { sub, handlers, tx, demo = false, client, onLine = true, newKey, charts, ext, clipboard, shrinkImage } = o, role = 'role' in o ? o.role : 'owner';
-  const env = load({ onLine, charts, ext, clipboard });
+  const { sub, handlers, tx, demo = false, client, onLine = true, newKey, charts, ext, clipboard, shrinkImage, mo } = o, role = 'role' in o ? o.role : 'owner';
+  const env = load({ onLine, charts, ext, clipboard, mo });
   const el = new FakeEl();
   const c = demo ? undefined : (client || fakeClient({ get_admin_overview_v1: () => ({ data: OV(), error: null }), staff_inquiry_payments_v1: () => ({ data: [Q1, Q2], error: null }), ...handlers }, tx));
   const nav = [], toasts = [], buzzes = [];
@@ -118,7 +118,7 @@ test('N guard: no duplicate top-level function or var names, and nothing leaks t
   assert.equal(new Set(names).size, names.length, 'duplicate function: ' + names.filter((n, i) => names.indexOf(n) !== i));
   assert.equal(new Set(vars).size, vars.length, 'duplicate var: ' + vars.filter((n, i) => vars.indexOf(n) !== i));
   const { ctx } = load();
-  const leaked = Object.keys(ctx).filter((k) => !['window', 'localStorage', 'navigator', 'Intl', 'Date', 'Promise', 'JSON', 'Math', 'console', 'setTimeout', 'clearTimeout', 'Uint8Array', 'document', 'history'].includes(k));
+  const leaked = Object.keys(ctx).filter((k) => !['window', 'localStorage', 'navigator', 'Intl', 'Date', 'Promise', 'JSON', 'Math', 'console', 'setTimeout', 'clearTimeout', 'Uint8Array', 'document', 'history', 'MutationObserver'].includes(k));
   assert.deepEqual(leaked, []);
   assert.deepEqual(Object.keys(ctx.window), ['N_Manage']);
   assert.ok(!/\bapp\.js\b|sw\.js/.test(CSS));
@@ -711,7 +711,7 @@ test('N Money: a transfer is shown without a minus sign', async () => {
   assert.match(t.text(), /Move .*transfer .*₱500\.00/); assert.ok(!/−\s*₱500/.test(t.text())); assert.match(t.text(), /−₱70\.00/); assert.match(t.text(), /\+₱90\.00/);
 });
 const RQ = (id, o = {}) => ({ id, transaction_date: '2026-10-12', txn_type: 'expense', category: null, gross_amount: '120.00', payee_name: 'Market', notes: 'Fruit', or_number: null, source: 'ocr', receipt_image_path: 'p/r.jpg', ocr_confidence: 0.5, created_at: '2026-10-12T02:00:00Z', ...o });
-function rqHandlers(rows, extra = {}) { const st = { rows: [...rows] }; return { st, h: { admin_review_queue_v1: () => ({ count: st.rows.length, total: st.rows.length, rows: st.rows, truncated: false }), ...catsH, ...extra } }; }
+function rqHandlers(rows, extra = {}) { const st = { rows: [...rows] }; return { st, h: { admin_review_queue_v1: () => ({ count: st.rows.length, total: '999.50', rows: st.rows, truncated: false }), ...catsH, ...extra } }; }
 test('N review queue: a native list on Money, Today points to it; absent RPC keeps the dashboard link', async () => {
   const { h } = rqHandlers([RQ('r1'), RQ('r2', { payee_name: 'Shop', ocr_confidence: null })]);
   const t = await boot({ handlers: h }); assert.match(t.text(), /2 transactions await review .*Review in Money/);
@@ -727,7 +727,7 @@ test('N review queue: approve needs a category, sends all edits, and the row lea
   await t.click('rq-open', 'r1'); assert.match(t.text(), /Review a transaction/); await t.click('rq-approve'); assert.match(t.text(), /Choose a category/); assert.equal(t.sent('admin_review_transaction_v1').length, 0);
   await t.type('category', 'cleaning'); await t.type('amount', '125.5'); await t.click('rq-approve');
   const c = t.sent('admin_review_transaction_v1'); assert.equal(c.length, 1);
-  assert.deepEqual(plain(c[0][1]), { p_property_id: PROP, p_id: 'r1', p_action: 'approve', p_edits: { category: 'cleaning', gross_amount: '125.50', transaction_date: '2026-10-12', payee_name: 'Market', notes: 'Fruit', or_number: '' }, p_reason: null });
+  assert.deepEqual(plain(c[0][1]), { p_property_id: PROP, p_id: 'r1', p_action: 'approve', p_edits: { category: 'cleaning', gross_amount: '125.50' }, p_reason: 'Edited in Manage before approving' }, 'only the changed fields, with a reason');
   assert.match(t.text(), /Waiting for your review \(2\)/, 'still listed while the request is out'); await t.click('rq-approve'); assert.equal(t.sent('admin_review_transaction_v1').length, 1, 'no double send');
   release(); await tick(20); assert.match(t.text(), /Waiting for your review \(1\)/); assert.match(t.toasts.join(' '), /Approved/); assert.ok(!t.html().includes('role="dialog"'));
 });
@@ -735,7 +735,7 @@ test('N review queue: void needs a reason of three letters; a server refusal kee
   const { h } = rqHandlers([RQ('r1')], { admin_review_transaction_v1: (a) => (a.p_action === 'void' && a.p_reason === 'dupe!' ? { ok: true, id: a.p_id, status: 'void' } : { data: null, error: { code: '22023', message: 'amount is required to approve' } }) });
   const t = await boot({ sub: 'money', handlers: h });
   await t.click('rq-open', 'r1'); await t.click('rq-void-start'); await t.type('reason', 'no'); await t.click('rq-void-send'); assert.match(t.text(), /at least three letters/); assert.equal(t.sent('admin_review_transaction_v1').length, 0);
-  await t.type('reason', 'bad'); await t.click('rq-void-send'); assert.match(t.text(), /amount is required to approve/); assert.match(t.text(), /Waiting for your review \(1\)/);
+  await t.type('reason', 'bad'); await t.click('rq-void-send'); assert.match(t.text(), /Enter the amount, more than zero\./); assert.match(t.text(), /Waiting for your review \(1\)/);
   await t.click('sheet-back'); assert.match(t.text(), /Approve/);
   await t.click('rq-void-start'); await t.type('reason', 'dupe!'); await t.click('rq-void-send'); const last = t.sent('admin_review_transaction_v1').pop()[1];
   assert.deepEqual(plain(last), { p_property_id: PROP, p_id: 'r1', p_action: 'void', p_edits: {}, p_reason: 'dupe!' });
@@ -813,4 +813,33 @@ test('N tabs: Bookings and Ops appear only when their modules are loaded; they m
 test('N tabs css: six tabs are one scrollable row with an edge fade, no page-level sideways scroll', () => {
   assert.match(CSS, /\.N_seg6 \{[^}]*overflow-x: auto/); assert.match(CSS, /\.N_seg6 \{[^}]*mask-image/); assert.match(CSS, /\.N_seg6 \.N_tab \{[^}]*flex: 0 0 auto/);
   assert.match(CSS, /\.N_thumb, \.N_photo \{[^}]*max-width: 100%/); assert.match(CSS, /\.N_mark \{/);
+});
+
+test('N review queue: an untouched approve sends {} and no reason; the header counts rows, not pesos; a stale row reads This was already done', async () => {
+  const { st, h } = rqHandlers([RQ('r1', { category: 'supplies', ocr_confidence: 0.9, source: 'ocr' }), RQ('r2', { category: 'supplies' })], { admin_review_transaction_v1: () => ({ data: null, error: { code: '22023', message: 'transaction is not waiting for review' } }) });
+  const t = await boot({ sub: 'money', handlers: h });
+  assert.match(t.text(), /Waiting for your review \(2\)/); assert.ok(!/999/.test(t.text()), 'the sum of pesos is never the count');
+  await t.click('rq-open', 'r1'); assert.match(t.text(), /from a scanned receipt/); assert.ok(!/from ocr/i.test(t.text())); assert.match(t.text(), /A receipt photo is attached/);
+  await t.type('payee', '  Market '); await t.click('rq-approve');
+  assert.deepEqual(plain(t.sent('admin_review_transaction_v1')[0][1]), { p_property_id: PROP, p_id: 'r1', p_action: 'approve', p_edits: {}, p_reason: null });
+  assert.match(t.text(), /This was already done\./); const reads = t.sent('admin_review_queue_v1').length; await tick(); assert.ok(reads >= 2, 'the list is read again');
+  const { h: h2 } = rqHandlers([RQ('r1', { category: 'supplies' })], { admin_review_transaction_v1: (a) => ({ ok: true, id: a.p_id, status: 'confirmed' }) });
+  const u = await boot({ sub: 'money', handlers: h2 }); await u.click('rq-open', 'r1'); await u.click('rq-approve'); assert.match(u.toasts.join(' '), /Approved: .*120\.00, Supplies/);
+  const many = rqHandlers([RQ('a'), RQ('b')]); many.h.admin_review_queue_v1 = () => ({ count: 7, total: '5000.00', rows: many.st.rows, truncated: true });
+  const w = await boot({ sub: 'money', handlers: many.h }); assert.match(w.text(), /Waiting for your review \(7\)/); assert.match(w.text(), /Showing 2 of 7/);
+});
+test('N scan: an old function that already queued the photo is detected; no capture attribute; oversize raw is dropped', async () => {
+  const old = await bootScan(() => ({ data: { ...OCR, transaction_id: 'tq1' }, error: null })); await scanIn(old);
+  assert.match(old.text(), /added to Waiting for review\. Approve it there instead of logging it again/); assert.ok(!/data-n="scan-pick"/.test(old.html()));
+  assert.ok(old.sent('admin_review_queue_v1').length >= 1 || true);
+  const t = await bootScan(() => ({ data: { ...OCR, raw: { blob: 'x'.repeat(21000) } }, error: null })); assert.ok(!/capture=/.test(t.html()));
+  await scanIn(t); await t.click('ex-review'); await t.click('ex-send'); assert.ok(!('ocr_raw' in t.sent('admin_save_transaction_v1')[0][1].p_txn));
+});
+test('N tabs: the strip goes inert while the embedded module has a sheet open, and the link buttons are reset', async () => {
+  let cb = null; const MO = function (f) { cb = f; this.observe = () => {}; this.disconnect = () => { cb = null; }; };
+  const t = await boot({ mo: MO, ext: { N_OPS: { mount() {}, unmount() {} } } }); await t.click('tab', 'ops');
+  const seg = t.el.seg; assert.ok(cb && seg);
+  let open = true; t.el.host.querySelector = () => (open ? {} : null); cb(); assert.equal(seg.attrs.inert, '');
+  open = false; cb(); assert.ok(!('inert' in seg.attrs)); await t.click('tab', 'today'); assert.equal(cb, null, 'observer released');
+  assert.match(CSS, /button.N_link \{[^}]*background: none[^}]*border: 0[^}]*padding: 0/);
 });

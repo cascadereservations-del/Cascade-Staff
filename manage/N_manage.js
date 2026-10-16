@@ -298,7 +298,7 @@
         { id: 'n-demo-t2', transaction_date: d(-2), txn_type: 'income', category: 'direct_income', gross_amount: '5000.00', payee_name: null, notes: 'Sample: deposit', status: 'confirmed' }
       ],
       cats: [{ slug: 'cleaning', label: 'Cleaning', sort_order: 1 }, { slug: 'supplies', label: 'Supplies', sort_order: 2 }, { slug: 'utilities', label: 'Utilities', sort_order: 3 }, { slug: 'repairs', label: 'Repairs', sort_order: 4 }, { slug: 'other', label: 'Other', sort_order: 9 }],
-      rq: function () { return { count: this.rqRows.length, total: this.rqRows.length, truncated: false, rows: this.rqRows }; },
+      rq: function () { return { count: this.rqRows.length, total: this.rqRows.reduce(function (a, r) { return a + Number(r.gross_amount); }, 0).toFixed(2), truncated: false, rows: this.rqRows }; },
       rqRows: [{ id: 'n-demo-r1', transaction_date: d(-1), txn_type: 'expense', category: '', gross_amount: '1200.00', payee_name: 'Sample market', notes: 'Sample: scanned receipt', or_number: null, source: 'ocr', receipt_image_path: 'n/a', ocr_confidence: 0.5, created_at: d(-1) + 'T02:00:00Z' }],
       seriesV1: function () {
         var y = +today.slice(0, 4), m = +today.slice(5, 7) - 1, months = [], pace = [], i, mo, cap = 30;
@@ -519,6 +519,7 @@
   function signOf(type) { return type === 'income' ? '+' : type === 'expense' ? '−' : ''; } // a transfer moves money between accounts: no sign
   function rqRows() { var q = S.d.rq; return q && q.ok && q.data && Array.isArray(q.data.rows) ? q.data.rows : []; }
   function rqOf(id) { var r = rqRows(); for (var i = 0; i < r.length; i++) if (r[i].id === id) return r[i]; return null; }
+  function srcWords(src) { var k = String(src || '').toLowerCase(); return /ocr|scan|receipt/.test(k) ? 'a scanned receipt' : /telegram/.test(k) ? 'Telegram' : /manual|staff|app/.test(k) ? 'an entry in the app' : /email|mail/.test(k) ? 'an e-mail' : 'another source'; }
   function lowConf(c) { return typeof c === 'number' && c < SCAN_LOW; }
   function rqHtml() {
     var q = S.d.rq || {}; if (q.absent || q.denied) return '';
@@ -526,7 +527,7 @@
     if (!q.ok) return '';
     var rows = rqRows(), d = q.data || {};
     if (!rows.length) return '<p class="N_foot">Nothing is waiting for your review.</p>';
-    var total = typeof d.total === 'number' ? d.total : rows.length;
+    var total = typeof d.count === 'number' ? d.count : rows.length; // count is the number of rows; total is a sum of pesos
     return '<section class="N_card N_list" aria-labelledby="N_rq"><h3 class="N_h3 N_pad" id="N_rq">' + esc('Waiting for your review (' + total + ')') + '</h3>' +
       (d.truncated || total > rows.length ? '<p class="N_sub N_pad">' + esc('Showing ' + rows.length + ' of ' + total + '. The rest appear as you clear these.') + '</p>' : '') + rows.map(function (r) {
         var sub = fmtDate(r.transaction_date, 'weekday') + ' · ' + (r.category ? catName(r.category) : 'No category yet') + (r.receipt_image_path ? ' · Receipt photo' : '') + (lowConf(r.ocr_confidence) ? ' · Hard to read, please check' : '');
@@ -687,7 +688,7 @@
   function scanBlock(sh) {
     var busy = sh.scan === 'reading';
     return '<div class="N_scan"><button class="btn btn-secondary btn-block" type="button" data-n="scan-pick"' + (busy ? ' disabled aria-busy="true"' : '') + '>' + esc(busy ? 'Reading the receipt…' : sh.receipt ? 'Scan another receipt' : 'Scan receipt') + '</button>' +
-      '<input class="N_sr" id="N_xs" type="file" accept="image/*" capture="environment" data-f="scan" tabindex="-1" aria-label="Receipt photo">' +
+      '<input class="N_sr" id="N_xs" type="file" accept="image/*" data-f="scan" tabindex="-1" aria-label="Receipt photo">' +
       (sh.thumb ? '<img class="N_thumb" src="' + esc(sh.thumb) + '" alt="The receipt photo you took">' : '') +
       (sh.scanMsg ? '<p class="N_p" role="status">' + esc(sh.scanMsg) + '</p>' : '') +
       (sh.receipt && lowConf(sh.receipt.confidence) ? '<p class="N_ferr" role="alert"><span aria-hidden="true">!</span> The photo was hard to read. Please check every figure.</p>' : '') +
@@ -753,7 +754,7 @@
           field('N_rvr', 'Why is it being voided?', '<textarea class="N_input N_ta" id="N_rvr" data-f="reason" rows="3">' + esc(sh.reason) + '</textarea>', er.reason) + sheetErr(sh) + btns('Void it', 'rq-void-send', 'Back', 'sheet-back', sh.busy, true);
         return sheetShell('Void a transaction', rb);
       }
-      rb += '<p class="N_sub">' + esc('Added ' + fmtDate(rr.transaction_date, 'long') + (rr.source ? ' from ' + catLabel(rr.source) : '') + '. Check it, change what is wrong, then approve or void it.') + '</p>' +
+      rb += '<p class="N_sub">' + esc('Added ' + fmtDate(rr.transaction_date, 'long') + (rr.source ? ' from ' + srcWords(rr.source) : '') + '. Check it, change what is wrong, then approve or void it.') + '</p>' +
         (rr.receipt_image_path ? '<p class="N_box">A receipt photo is attached.</p>' : '') + (lowConf(rr.ocr_confidence) ? '<p class="N_ferr" role="alert"><span aria-hidden="true">!</span> The receipt was hard to read. Please check every figure.</p>' : '') +
         field('N_rd', 'Date', '<input class="N_input" id="N_rd" type="date" data-f="date" value="' + esc(fr.date) + '"' + (er.date ? ' aria-invalid="true"' : '') + '>', er.date) +
         field('N_ra', 'Amount (PHP)', inp('N_ra', 'amount', fr.amount, 'inputmode="decimal"'), er.amount) +
@@ -789,18 +790,26 @@
     }).join('') + '</div>';
   }
   function revealTab() { try { var a = S.el.querySelector('.N_seg6 [aria-selected="true"]'); if (a && a.scrollIntoView) a.scrollIntoView({ inline: 'nearest', block: 'nearest' }); } catch (e) { /* courtesy */ } }
-  function extStop() { var x = S && S.ext; if (!S) return; S.ext = null; if (x && x.mod && typeof x.mod.unmount === 'function') { try { x.mod.unmount(); } catch (e) { /* never block */ } } }
+  function extStop() { var x = S && S.ext; if (!S) return; S.ext = null; if (x && x.obs) { try { x.obs.disconnect(); } catch (e) { /* ok */ } } if (x && x.mod && typeof x.mod.unmount === 'function') { try { x.mod.unmount(); } catch (e) { /* never block */ } } }
   // Bookings and Ops are other lanes' modules. They draw into their own box, so a late reload of another tab must not wipe them.
   function drawExt(mod) {
     if (S.ext && S.ext.tab === S.tab && S.el.querySelector && S.el.querySelector('[data-n-ext]')) return;
     extStop();
     S.el.innerHTML = '<div class="N_root">' + tabsHtml() + '<div class="N_body" role="tabpanel" aria-labelledby="N_tab_' + S.tab + '"><div id="N_ext" data-n-ext="' + S.tab + '"></div></div></div>';
     revealTab(); var host = S.el.querySelector ? S.el.querySelector('[data-n-ext]') : null; S.ext = { tab: S.tab, mod: mod }; if (!host) return;
+    if (typeof MutationObserver !== 'undefined') { // the tab strip is inert while the module has a sheet open
+      var seg = S.el.querySelector('.N_seg'), watch = function () {
+        var open = !!host.querySelector('[role="dialog"], .O_sheet, .B_sheet'); if (!seg) return;
+        if (open) { seg.setAttribute('inert', ''); seg.setAttribute('aria-hidden', 'true'); } else { seg.removeAttribute('inert'); seg.removeAttribute('aria-hidden'); }
+      };
+      try { S.ext.obs = new MutationObserver(watch); S.ext.obs.observe(host, { childList: true, subtree: true }); } catch (e) { /* ok */ }
+    }
     try { mod.mount(host, { client: S.client, demo: S.demo, role: S.role, access: { role: S.role, property_ids: [pid()] }, propertyId: pid(), sub: null, embedded: true, navigate: S.opts.navigate, toast: S.opts.toast, haptic: S.opts.haptic }); }
     catch (e) { host.innerHTML = '<div class="N_note">This part could not open just now. Try again in a moment.</div>'; }
   }
   function draw() {
     if (!S) return;
+    if (S.thumbUrl && !(S.sheet && S.sheet.thumb === S.thumbUrl)) revokeThumb();
     if (EXT[S.tab] && extMod(S.tab)) { drawExt(extMod(S.tab)); return; }
     extStop();
     var body = S.tab === 'inquiries' ? viewInquiries() : S.tab === 'money' ? viewMoney() : S.tab === 'kpis' ? viewKpis() : viewToday();
@@ -826,6 +835,7 @@
       if (!S || S.gen !== gen) return; sheetObj.busy = false;
       if (res.error) {
         if (isMissing(res.error)) { S.d[prefixName] = { absent: true }; sheetObj.msg = 'This is not available in this version of the app yet.'; }
+        else if (sheetObj.kind === 'review' && (String(errCode(res.error)) === '22023' || String(errCode(res.error)) === 'P0002')) { sheetObj.msg = reviewWords(errMsg(res.error)); if (sheetObj.msg === 'This was already done.') refreshAfterWrite(); }
         else sheetObj.msg = plainError(res.error, true);
         draw(); return;
       }
@@ -854,17 +864,33 @@
     if (r.txn_type === 'expense' && !catOk(f.category)) e.category = 'Choose a category.';
     return e;
   }
+  // Only what the person changed goes to the server (the server wants a reason for any edit). Amounts compare in centavos, text trimmed, null equals empty.
+  function changedEdits(f, r) {
+    var e = {}, t = function (v) { return String(v == null ? '' : v).trim(); };
+    if (f.date !== r.transaction_date) e.transaction_date = f.date;
+    if (parseAmount(f.amount) !== null && toCentavos(parseAmount(f.amount)) !== toCentavos(r.gross_amount)) e.gross_amount = parseAmount(f.amount);
+    if (t(f.payee) !== t(r.payee_name)) e.payee_name = t(f.payee);
+    if (t(f.notes) !== t(r.notes)) e.notes = t(f.notes);
+    if (t(f.or_number) !== t(r.or_number)) e.or_number = t(f.or_number);
+    if (r.txn_type === 'expense' && f.category !== t(r.category)) e.category = f.category;
+    return e;
+  }
+  // The server's refusals for a review, in plain sentences
+  function reviewWords(msg) {
+    msg = String(msg || '');
+    return /not waiting for review|not pending|already/i.test(msg) ? 'This was already done.' : /reason/i.test(msg) ? 'Write a short reason, at least three letters.' : /amount/i.test(msg) ? 'Enter the amount, more than zero.' : /date/i.test(msg) ? 'Choose the date.' : /categor/i.test(msg) ? 'Choose a category.' : 'The server could not accept this. Please check it and try again.';
+  }
   function doReview(action) {
     var sh = S.sheet, r = rqOf(sh.id); if (!r) return; var f = sh.f, edits = {};
     if (action === 'approve') {
       sh.errs = validateReview(f, r); if (Object.keys(sh.errs).length) { sh.msg = 'Please fix the items marked below.'; draw(); return; }
-      edits = { category: r.txn_type === 'expense' ? f.category : r.category, gross_amount: parseAmount(f.amount), transaction_date: f.date, payee_name: f.payee.trim(), notes: f.notes.trim(), or_number: f.or_number.trim() };
+      edits = changedEdits(f, r);
     } else if (String(sh.reason || '').trim().length < 3) { sh.errs = { reason: 'Write a short reason, at least three letters.' }; sh.msg = 'Please fix the items marked below.'; draw(); return; }
-    sendWrite('review', 'admin_review_transaction_v1', { p_property_id: pid(), p_id: sh.id, p_action: action, p_edits: edits, p_reason: action === 'void' ? sh.reason.trim() : null }, function (res, s2) {
+    sendWrite('review', 'admin_review_transaction_v1', { p_property_id: pid(), p_id: sh.id, p_action: action, p_edits: edits, p_reason: action === 'void' ? sh.reason.trim() : Object.keys(edits).length ? 'Edited in Manage before approving' : null }, function (res, s2) {
       if (res && res.ok === true) { // the list changes only now that the server has said yes
-        var q = S.d.rq && S.d.rq.data; if (q && Array.isArray(q.rows)) { q.rows = q.rows.filter(function (x) { return x.id !== sh.id; }); if (typeof q.count === 'number') q.count = Math.max(0, q.count - 1); if (typeof q.total === 'number') q.total = Math.max(0, q.total - 1); }
+        var q = S.d.rq && S.d.rq.data; if (q && Array.isArray(q.rows)) { q.rows = q.rows.filter(function (x) { return x.id !== sh.id; }); if (typeof q.count === 'number') q.count = Math.max(0, q.count - 1); }
         if (S.demo) S.demoData.rqRows = S.demoData.rqRows.filter(function (x) { return x.id !== sh.id; });
-        var m = action === 'approve' ? 'Approved: ' + formatPHP(edits.gross_amount) + (edits.category ? ', ' + catName(edits.category) : '') + '.' : 'Voided: ' + formatPHP(r.gross_amount) + '.';
+        var m = action === 'approve' ? 'Approved: ' + formatPHP('gross_amount' in edits ? edits.gross_amount : r.gross_amount) + (('category' in edits ? edits.category : r.category) ? ', ' + catName('category' in edits ? edits.category : r.category) : '') + '.' : 'Voided: ' + formatPHP(r.gross_amount) + '.';
         buzz('success'); tell(m); S.notice = m; S.sheet = null; refreshAfterWrite(); draw(); return;
       }
       s2.msg = 'Nothing was changed. Please check it and try again.'; draw();
@@ -905,6 +931,12 @@
       return new Promise(function (res, rej) { var fr = new FileReader(); fr.onload = function () { res({ base64: String(fr.result).replace(/^data:[^,]*,/, ''), mime: 'image/jpeg' }); }; fr.onerror = function () { rej(new Error('read')); }; fr.readAsDataURL(blob); });
     });
   }
+  // the preview is a blob link, not a long data string in the page; draw() revokes it as soon as no open sheet shows it
+  function setThumb(sh, img) {
+    try { var bin = atob(img.base64), u8 = new Uint8Array(bin.length), i; for (i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i); revokeThumb(); S.thumbUrl = sh.thumb = URL.createObjectURL(new Blob([u8], { type: img.mime })); }
+    catch (e) { sh.thumb = null; }
+  }
+  function revokeThumb() { if (S && S.thumbUrl) { try { URL.revokeObjectURL(S.thumbUrl); } catch (e) { /* ok */ } S.thumbUrl = null; } }
   var DEMO_SCAN = { ok: true, receipt_path: 'n-demo/receipt.jpg', amount: '640.00', date: null, vendor: 'Sample shop', category: 'supplies', line_items: [{ description: 'Sample kitchen supplies', qty: 1, unit_cost: 640 }], confidence: 0.9 };
   function scanReceipt(file) {
     var sh = S.sheet; if (!sh || sh.kind !== 'expense' || !file || sh.scan === 'reading') return;
@@ -913,15 +945,19 @@
     shrinkReceipt(file).then(function (img) {
       if (!live()) return;
       if (!img || !img.base64 || img.base64.length > 8000000) { stop('That photo is too large. Take it again a little further back.'); return; }
-      sh.thumb = 'data:' + img.mime + ';base64,' + img.base64;
+      setThumb(sh, img);
       if (!online()) { stop(NO_CONNECTION + ' You can still fill the form in by hand.'); return; }
       return (S.demo ? Promise.resolve({ ok: true, status: 200, data: DEMO_SCAN }) : S.client && S.client.functions && typeof S.client.functions.invoke === 'function' ? callFn('ocr-receipt', { mode: 'extract', image_base64: img.base64, mime_type: img.mime }) : Promise.resolve({ ok: false, status: 404 })).then(function (r) {
         if (!live()) return;
         var d = r.data || {};
+        if (r.ok && d.transaction_id) { // an older function added the photo to the review list by itself: do not log it twice
+          S.d.scan = { absent: true }; sh.thumb = null; if (S.d.rq) S.d.rq.ok = false; load('rq', true);
+          stop('This photo was added to Waiting for review. Approve it there instead of logging it again.'); return;
+        }
         if (r.ok && d.receipt_path) {
           var cl = catList(), pre = scanPrefill(d, cl), ck = {}; Object.keys(pre).forEach(function (k) { sh.f[k] = pre[k]; ck[k] = true; });
           sh.checks = ck; sh.receipt = { path: d.receipt_path, confidence: typeof d.confidence === 'number' ? d.confidence : null,
-            raw: d.raw && typeof d.raw === 'object' ? d.raw : null };
+            raw: d.raw && typeof d.raw === 'object' && JSON.stringify(d.raw).length <= 20000 ? d.raw : null };
           sh.scan = 'done'; sh.scanMsg = Object.keys(pre).length ? 'Read from the receipt. Please check the marked fields.' : 'The receipt is attached. Nothing could be read from it, so please fill the form in.'; sh.errs = {}; draw(); return;
         }
         if (d.error === 'ocr_failed' && d.receipt_path) { sh.receipt = { path: d.receipt_path, confidence: null, raw: null }; sh.scan = 'done'; sh.scanMsg = 'The receipt photo is attached, but it could not be read. Please fill the form in.'; draw(); return; }
@@ -1045,7 +1081,7 @@
     if (!S) return;
     try { S.el.removeEventListener && S.el.removeEventListener('click', S.onClick); S.el.removeEventListener && S.el.removeEventListener('input', S.onInput); S.el.removeEventListener && S.el.removeEventListener('change', S.onInput); } catch (e) { /* ok */ }
     try { if (typeof document !== 'undefined' && document.removeEventListener) document.removeEventListener('visibilitychange', S.onVis); } catch (e) { /* ok */ }
-    extStop(); (S.timers || []).forEach(function (t) { clearTimeout(t); });
+    revokeThumb(); extStop(); (S.timers || []).forEach(function (t) { clearTimeout(t); });
     N_gen++; S = null; // a late reply finds no state and is dropped
   }
 
