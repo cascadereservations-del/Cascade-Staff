@@ -114,5 +114,5 @@ test('Home hides the row at 0 and when the RPC errors or is missing (logged once
   const bad = await boot({ role: 'admin', hash: '', handlers: handlersFor('admin', () => ({ error: { code: '42883', message: 'function does not exist' }, data: null })) });
   assert.equal(rpcs(bad).length, 1);
   assert.doesNotMatch(bad.els['v-home'].innerHTML, ROW);
-  assert.match(bad.els['v-home'].innerHTML, /Admin dashboard/, 'the rest of Home still draws');
+  assert.match(bad.els['v-home'].innerHTML, /Admin hub/, 'the rest of Home still draws');
 });

@@ -201,7 +201,7 @@ test('A_ live mock: the admin home has the one pill (no status strip), the notic
   const h = app.els['v-home'].innerHTML;
   assert.match(h, /class="A_chipglass E_pill"/); assert.doesNotMatch(h, /aria-label="Status"|A_strip|Turnover on track|Nothing overdue|No clash days/);
   for (const g of ['Guests and bookings', 'Admin']) assert.ok(h.includes(g), g);
-  assert.doesNotMatch(h, /Money and stock|Team and help|Admin hub/, 'E_: one Admin group; help and the hub live on More');
+  assert.doesNotMatch(h, /Money and stock|Team and help/, 'E_: one Admin group; help lives on More'); assert.match(h, /href="#hub"/, 's90: Home opens the Admin hub');
   assert.match(h, /id="slot-inbox"[^>]*>/); assert.doesNotMatch(h, /id="slot-inbox" hidden/); assert.match(h, /Inbox/); assert.match(h, /3 open/);
   assert.match((await boot({ role: 'admin', hash: '#more', handlers: base('admin') })).els['v-more'].innerHTML, /href="#hub"/);
   assert.match(h, /id="slot-inbox"[^>]*><a class="rowi" href="#inbox"/, '3.2: the Inbox opens the shell\'s own #inbox');
@@ -291,7 +291,7 @@ test('A_ motion and accessibility floor: press 0.97 at 160 ms, sheets 300 ms wit
   assert.match(css, /\.A_tabs a \{ min-height: 44px/); assert.match(css, /\.chip \{ min-height: var\(--touch\)/); // F_: controls grow with the text size instead of clipping it
 });
 test('A_ service worker and manifest: new cache name, tokens + house photos precached and each photo is 60 KB or less, theme colours are the v5 backgrounds', () => {
-  const sw = read('sw.js'); assert.match(sw, /CACHE_NAME = 'cs-shell-v28'/);
+  const sw = read('sw.js'); assert.match(sw, /CACHE_NAME = 'cs-shell-v29'/);
   for (const u of ['./tokens.css', './img/house-hero.webp', './img/house-blur.webp', './fonts/dm-serif-display-400.woff2']) assert.ok(sw.includes("'" + u + "'") || sw.includes(u.replace('./', '').replace('fonts/', '')) , u);
   for (const f of ['img/house-hero.webp', 'img/house-blur.webp']) assert.ok(fs.statSync(path.join(root, f)).size <= 60 * 1024, f + ' is 60 KB or less');
   const man = JSON.parse(read('manifest.webmanifest')); assert.equal(man.theme_color, '#EEF1F4'); assert.equal(man.background_color, '#EEF1F4');

@@ -20,7 +20,7 @@
     url: 'https://qkgfhsdppslwunarczeq.supabase.co',
     key: 'sb_publishable_JFuRYZ9csmQULcMRmHXDSg_Abo9UeCj',
     propertyId: '6ae230f4-c189-4547-84b1-cb6e0b2cc9bd',
-    version: '3.4.3'
+    version: '3.4.4'
   };
   var LINKS = {
     checklist: 'https://cascadereservations-del.github.io/CH-Cleaners-Checklist/',
@@ -297,7 +297,7 @@
           '<div id="slot-inbox"' + (inboxShown ? '' : ' hidden') + (inboxShown && !v ? ' style="min-height:64px"' : '') + '>' + (inboxShown && v ? row({ icon: 'chat', title: 'Inbox', sub: inbox ? inbox + ' open' : 'No open messages', href: '#inbox', count: inbox || '', countLabel: ' open messages' }) : '') + '</div>' +
           (CS.canSeeGuestContact(role()) ? row({ icon: 'user', title: 'Guests', sub: 'Guest records, ID photos and notes', href: '#guests' }) : '') +
           (canReply() ? row({ icon: 'sparkles', title: 'Cassy reply', sub: 'Draft a warm reply to a guest message', href: '#reply' }) : ''), true) +
-        A_navCard('Admin', row({ icon: 'dash', title: 'Admin dashboard', sub: 'Today, bookings, money, operations', door: 'dashboard' }) +
+        A_navCard('Admin', row({ icon: 'dash', title: 'Admin hub', sub: 'Every dashboard page, in one list', href: '#hub' }) +
           (trustOn ? '' : '<div class="help doornote">Sign-in is kept only on trusted devices</div>') +
           (/^(owner|admin|finance)$/.test(role() || '') ? row({ icon: 'wallet', title: 'Pay staff', sub: 'Pay a request by QR, then add the proof', href: H_payUrl('admin.html') }) : '') +
           (CS.canEditRates(role()) ? row({ icon: 'cash', title: 'Pay rates', sub: 'What a clean and its transport pay', href: '#payrates' }) : '') +

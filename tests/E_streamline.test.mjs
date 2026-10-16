@@ -21,13 +21,13 @@ test('E_ cleaner home order: Today, Turnover, the paid-notice slot, Notices, Wor
   assert.match(h, /id="slot-paid-notice" class="A_slot" hidden><\/div>/);
 });
 
-test('E_ admin home: one Admin group (dashboard, Pay staff, Pay rates, Inventory), no Team and help, no hub row, Calendar renamed; More has the rest', async () => {
+test('E_ admin home: one Admin group (dashboard, Pay staff, Pay rates, Inventory), no Team and help, the hub row (s90), Calendar renamed; More has the rest', async () => {
   const app = await boot({ role: 'owner', hash: '#home', handlers: baseHandlers('owner') });
   const h = app.els['v-home'].innerHTML;
   assert.deepEqual([...h.matchAll(/<div class="A_label">([^<]*)</g)].map((m) => m[1]), ['Guests and bookings', 'Admin']);
-  assert.doesNotMatch(h, /Team and help|Money and stock|Admin hub|House manual|System Guide|Quick guide|Cassy · /);
+  assert.doesNotMatch(h, /Team and help|Money and stock|House manual|System Guide|Quick guide|Cassy · /);
   const admin = h.slice(idx(h, 'aria-label="Admin"'));
-  for (const w of ['Admin dashboard', 'Pay staff', 'Pay rates', 'Inventory']) assert.ok(admin.includes(w), w);
+  for (const w of ['Admin hub', 'Pay staff', 'Pay rates', 'Inventory']) assert.ok(admin.includes(w), w);
   assert.match(h, /<span class="t">Calendar<\/span><span class="s">Stays, blocked nights, notices/);
   const more = (await boot({ role: 'owner', hash: '#more', handlers: baseHandlers('owner') })).els['v-more'].innerHTML;
   for (const w of ['Cassy · Telegram OPS', 'Cassy · Telegram Finance', 'Quick guide', 'Cascade Manual', 'Admin hub', 'Pay rates', 'Inventory']) assert.ok(more.includes(w), 'reachable on More: ' + w);

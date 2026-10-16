@@ -153,12 +153,12 @@ test('demo app: owner, admin and cleaner each draw their own home from the fixtu
   const owner = await bootDemo('owner'), admin = await bootDemo('admin'), cleaner = await bootDemo('cleaner');
   for (const a of [owner, admin]) {
     const h = a.els['v-home'].innerHTML;
-    assert.match(h, /Demo Guest One/); assert.match(h, /Admin dashboard/); assert.match(h, /Cassy reply/); assert.match(h, /Pay rates/); assert.match(h, /Bookings to confirm/);
+    assert.match(h, /Demo Guest One/); assert.match(h, /Admin hub/); assert.match(h, /Cassy reply/); assert.match(h, /Pay rates/); assert.match(h, /Bookings to confirm/);
     assert.match(h, /Good (morning|afternoon|evening),/);
   }
   const c = cleaner.els['v-home'].innerHTML;
   assert.match(c, /Demo Guest One/); assert.match(c, /Cleaning checklist/); assert.match(c, /Cleaning fee/);
-  assert.match(c, /Cassy reply/, 'every role'); assert.doesNotMatch(c, /Pay rates|Admin dashboard/);
+  assert.match(c, /Cassy reply/, 'every role'); assert.doesNotMatch(c, /Pay rates|Admin hub/);
 });
 
 test('demo app: the calendar draws the half-days, the turnover, the clash and the guest card with companions and the ID box', async () => {

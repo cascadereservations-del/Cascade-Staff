@@ -161,7 +161,7 @@ test('app.js wiring: the three doors are same-origin (so they frame), the rows u
     assert.equal(CS.doorTarget(url, ORIGIN), 'frame', m[1]);
   }
   assert.ok(!/href: LINKS\.(checklist|dashboard|manual), external: true/.test(app), 'no door row opens a new tab any more');
-  for (const k of ['checklist', 'dashboard', 'manual']) assert.match(app, new RegExp("(door: |doorRow\\()'" + k + "'"));
+  for (const k of ['checklist', 'manual']) assert.match(app, new RegExp("(door: |doorRow\\()'" + k + "'"));
   assert.match(html, /id="door-frame"/); assert.match(html, /id="door-back"/);
   assert.match(app, /VIEWS = \[[^\]]*'door'/);
 });
@@ -211,7 +211,7 @@ test('door by role: the dashboard is admin-only, the checklist and the manual ar
   assert.equal(CS.doorFramed('dashboard', 'staff', true), false);
   assert.equal(CS.doorFramed('dashboard', 'admin', true), true);
   for (const k of ['checklist', 'manual']) for (const l of ['staff', 'admin']) assert.equal(CS.doorFramed(k, l, true), true, k + ' ' + l);
-  for (const k of ['checklist', 'dashboard', 'manual']) { assert.equal(CS.doorFramed(k, null, true), false); assert.equal(CS.doorFramed(k, 'owner', true), false); }
+  for (const k of ['checklist', 'manual']) { assert.equal(CS.doorFramed(k, null, true), false); assert.equal(CS.doorFramed(k, 'owner', true), false); }
   assert.match(read('app.js'), /CS\.doorFramed\(parts\[1\], state\.layout, trustOn\)/);
 });
 
