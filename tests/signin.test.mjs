@@ -49,7 +49,7 @@ test('keypad input becomes the checklist password: pin 4242 -> 88884242 for slug
 
 test('password accounts send the password exactly as typed, e-mail as the handle; empty is not sent', () => {
   assert.deepEqual(CS.signinCredentials(LLOYD, 'Correct horse 9'), { email: 'lloyd@example.com', password: 'Correct horse 9' });
-  assert.deepEqual(CS.signinCredentials(LLOYD, '1234'), { email: 'lloyd@example.com', password: '1234' }, 'no 8888 prefix on a mailbox account');
+  assert.deepEqual(CS.signinCredentials(LLOYD, '1234'), { email: 'lloyd@example.com', password: '88881234' }, 'exactly 4 digits are padded on any account, like the dashboard (a real password is 6+ characters)');
   assert.equal(CS.signinCredentials(LLOYD, ''), null);
 });
 
@@ -279,7 +279,7 @@ test('3.4.3 sign-in: Use a password instead keeps the handle, sends the typed va
   const pin = { label: 'Ana', handle: 'ana@staff.cascade.invalid', kind: 'pin', team: 'staff' };
   const pw = CS.signinAsKind(pin, 'password');
   assert.equal(pw.handle, pin.handle); assert.equal(pw.kind, 'password'); assert.equal(pw.wasPin, true); assert.equal(pin.kind, 'pin');
-  assert.deepEqual(CS.signinCredentials(pw, '1234'), { email: pin.handle, password: '1234' }); // as typed, not padded
+  assert.deepEqual(CS.signinCredentials(pw, '1234'), { email: pin.handle, password: CS.staffAuthPassword('1234') }); // 4 digits are padded, like the dashboard
   assert.deepEqual(CS.signinCredentials(pw, 'my mailbox pw'), { email: pin.handle, password: 'my mailbox pw' });
   assert.equal(CS.signinCredentials(pw, ''), null);
   const back = CS.signinAsKind(pw, 'pin'); assert.equal(back.kind, 'pin');

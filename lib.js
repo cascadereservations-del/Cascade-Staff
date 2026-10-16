@@ -87,7 +87,7 @@
     if (!entry || !entry.handle) return null;
     var s = String(secret == null ? '' : secret);
     if (entry.kind === 'pin') return STAFF_PIN_RE.test(s) ? { email: entry.handle, password: staffAuthPassword(s) } : null;
-    return s ? { email: entry.handle, password: s } : null;
+    return s ? { email: entry.handle, password: staffAuthPassword(s) } : null; // a 4-digit value is padded too: a real password is 6+ characters
   }
   // "Use a password instead" / "Use PIN": the same handle for this attempt only. A PIN entry may really hold a mailbox password, so it must never lock the person out.
   // 'password' sends the typed value as-is (no padding); 'pin' goes back to 4 digits. The caller's entry is not changed, and a fresh pick starts from its own kind.
