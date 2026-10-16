@@ -131,7 +131,7 @@
   var RPC_TIMEOUT_MS = 30000;
   function newKeyDefault(prefix) {
     var hex = '';
-    try { if (typeof crypto !== 'undefined' && crypto.getRandomValues) { var a = new Uint8Array(16); crypto.getRandomValues(a); for (var i = 0; i < a.length; i++) hex += pad2(a[i].toString(16)).slice(-2); } } catch (e) { hex = ''; }
+    try { if (typeof crypto !== 'undefined' && crypto.getRandomValues) { var a = new Uint8Array(16); crypto.getRandomValues(a); for (var i = 0; i < a.length; i++) hex += ('0' + a[i].toString(16)).slice(-2); } } catch (e) { hex = ''; }
     while (hex.length < 32) hex += Math.floor(Math.random() * 16).toString(16);
     return prefix + '-' + hex; // 35 chars: inside the RPC's 16..160 range
   }
@@ -151,18 +151,20 @@
   function callRpc(name, args) { return timed(function () { return S.client.rpc(name, args); }); }
 
   // ---- loads
-  function loadOrders(force) {
-    var st = S.d.orders || (S.d.orders = {}); if (st.busy || (st.ok && !force)) return;
+  function loadOrders(force, cb) {
+    var st = S.d.orders || (S.d.orders = {}); if (cb) st.cb = cb;
+    if (st.busy || (st.ok && !force)) { if (!st.busy && cb) { st.cb = null; cb(); } return; }
     st.busy = true; st.err = ''; var gen = S.gen; draw();
     var fin = function (res) {
       if (!S || S.gen !== gen) return; st.busy = false;
       if (res.error) { st.ok = false; st.missing = isMissing(res.error); st.denied = isDenied(res.error); st.err = plainError(res.error, false); }
       else { st.ok = true; st.missing = false; st.denied = false; st.rows = res.data || []; }
+      var after = st.cb; st.cb = null; if (after) after();
       draw();
     };
     if (S.demo) { Promise.resolve().then(function () { fin({ data: S.demoData.orders.slice(), error: null }); }); return; }
-    timed(function () { // dashboard fetchWorkOrders, newest 200
-      return S.client.from('work_orders').select('*').eq('property_id', pid()).order('blocks_arrival', { ascending: false }).order('created_at', { ascending: true }).limit(200);
+    timed(function () { // same table and property filter as the dashboard's fetchWorkOrders; newest 200, the client sorts for display
+      return S.client.from('work_orders').select('*').eq('property_id', pid()).order('created_at', { ascending: false }).limit(200);
     }).then(fin);
   }
   function loadReady(force) {
@@ -245,8 +247,8 @@
   }
 
   // ---- sheets
-  function field(id, label, control, err) { return '<div class="O_field"><label class="O_lbl" for="' + id + '">' + esc(label) + '</label>' + control + (err ? '<p class="O_ferr" id="' + id + '-e" role="alert"><span aria-hidden="true">✕</span> ' + esc(err) + '</p>' : '') + '</div>'; }
-  function shell(title, body) { return '<div class="O_scrim" aria-hidden="true"></div><div class="O_sheet" role="dialog" aria-modal="true" aria-labelledby="O_sh"><div class="O_grab" aria-hidden="true"></div><h2 class="O_h" id="O_sh" tabindex="-1" data-o-focus="1">' + esc(title) + '</h2>' + body + '</div>'; }
+  function field(id, label, control, err) { return '<div class="O_field"><label class="O_lbl" for="' + id + '">' + esc(label) + '</label>' + control + (err ? '<p class="O_ferr" id="' + id + '-e"><span aria-hidden="true">✕</span> ' + esc(err) + '</p>' : '') + '</div>'; }
+  function shell(title, body) { return '<div class="O_scrim" data-o="close" aria-hidden="true"></div><div class="O_sheet" role="dialog" aria-modal="true" aria-labelledby="O_sh"><div class="O_grab" aria-hidden="true"></div><h2 class="O_h" id="O_sh" tabindex="-1" data-o-focus="1">' + esc(title) + '</h2>' + body + '</div>'; }
   function orderOf(id) { var rows = (S.d.orders && S.d.orders.rows) || []; for (var i = 0; i < rows.length; i++) if (rows[i].id === id) return rows[i]; return null; }
   function sheetErr(sh) { return sh.msg ? '<div class="O_err" role="alert"><span>' + esc(sh.msg) + '</span></div>' : ''; }
   function btns(label, act, busy, second, secondAct) {
@@ -255,6 +257,7 @@
   }
   function sheetHtml() {
     var sh = S.sheet; if (!sh) return '';
+    if (sh.kind === 'new' && sh.confirmDiscard) return shell('Discard this work order?', '<p class="O_p">What you typed will be lost.</p><div class="O_btns"><button class="btn btn-primary btn-block" type="button" data-o="keep">Keep editing</button><button class="btn btn-secondary btn-block" type="button" data-o="discard">Discard</button></div>');
     if (sh.kind === 'new') {
       var f = sh.f, e = sh.errs || {};
       return shell('New work order',
@@ -270,21 +273,40 @@
     var dl = '<dl class="O_dl"><dt>Status</dt><dd>' + esc(STATUS_LABEL[w.status] || w.status) + '</dd><dt>Priority</dt><dd>' + esc(PRIORITY_LABEL[w.priority] || w.priority) + '</dd>' +
       (ar ? '<dt>Area</dt><dd>' + esc(ar) + '</dd>' : '') + '<dt>Opened</dt><dd>' + esc(fmtDateTime(w.created_at) + ' · ' + ageText(w.created_at)) + '</dd>' +
       (w.blocks_arrival && isOpen(w) ? '<dt>Arrival</dt><dd>' + pill('bad', 'Blocks arrival') + '</dd>' : '') +
-      (w.resolution ? '<dt>Result</dt><dd>' + esc(w.resolution) + '</dd>' : '') + '</dl>' + (nt ? '<p class="O_box">' + esc(nt) + '</p>' : '');
+      (w.resolution && !isOpen(w) ? '<dt>Result</dt><dd>' + esc(w.resolution) + '</dd>' : '') + '</dl>' + (nt ? '<p class="O_box">' + esc(nt) + '</p>' : '');
     if (sh.kind === 'done') {
-      return shell('Mark done', '<p class="O_p">' + esc(w.title) + '</p>' + field('O_res', 'What was done', '<textarea class="O_input O_ta" id="O_res" data-f="resolution" rows="3" maxlength="500">' + esc(sh.resolution) + '</textarea>', sh.err) +
+      return shell('Mark done', '<p class="O_p">' + esc(w.title) + '</p>' + field('O_res', 'What was done', '<textarea class="O_input O_ta" id="O_res" data-f="resolution" rows="3" maxlength="500"' + (sh.err ? ' aria-invalid="true" aria-describedby="O_res-e"' : '') + '>' + esc(sh.resolution) + '</textarea>', sh.err) +
         sheetErr(sh) + btns('Mark done', 'done-send', sh.busy, 'Back', 'back'));
     }
     var act = '';
     if (S.write) act = isOpen(w) ? '<button class="btn btn-primary btn-block" type="button" data-o="done-start">Mark done</button>' : (w.status === 'resolved' ? '<button class="btn btn-secondary btn-block" type="button" data-o="reopen"' + (sh.busy ? ' disabled aria-busy="true"' : '') + '>' + (sh.busy ? 'Sending…' : 'Reopen') + '</button>' : '');
     return shell(w.title, dl + sheetErr(sh) + '<div class="O_btns">' + act + '<button class="btn btn-secondary btn-block" type="button" data-o="close"' + (sh.busy ? ' disabled' : '') + '>Close</button></div>');
   }
+  function focusSel(sel) { try { var h = S.el.querySelector(sel); if (h && h.focus) { h.focus(); return true; } } catch (e) { /* no focus in tests */ } return false; }
+  function selOf(a) { // a selector for the control that has focus now, so a redraw can put it back
+    try {
+      if (!a || !S.el.contains || !S.el.contains(a)) return null;
+      if (a.id) return '#' + a.id;
+      var o = a.getAttribute && a.getAttribute('data-o'), v = a.getAttribute && a.getAttribute('data-v');
+      return o ? '[data-o="' + o + '"]' + (v != null ? '[data-v="' + v + '"]' : '') : null;
+    } catch (e) { return null; }
+  }
   function draw() {
     if (!S) return;
+    var ae = typeof document !== 'undefined' ? selOf(document.activeElement) : null, sh = S.sheet;
     var body = S.tab === 'ready' ? viewReady() : viewOrders();
     var live = S.notice ? '<div class="O_okbox" role="status">' + esc(S.notice) + '</div>' : '';
-    S.el.innerHTML = '<div class="O_root">' + tabsHtml() + live + '<div class="O_body" role="tabpanel" aria-labelledby="O_tab_' + S.tab + '"' + (S.sheet ? ' inert aria-hidden="true"' : '') + '>' + body + '</div></div>' + sheetHtml();
-    if (S.sheet && S.sheet.focus !== false) { try { var h = S.el.querySelector('[data-o-focus]'); if (h && h.focus) h.focus(); } catch (e) { /* no focus in tests */ } S.sheet.focus = false; }
+    S.el.innerHTML = '<div class="O_root' + (S.opts.embedded ? ' O_embedded' : '') + '">' + tabsHtml() + live + '<div class="O_body" role="tabpanel" aria-labelledby="O_tab_' + S.tab + '"' + (S.sheet ? ' inert aria-hidden="true"' : '') + '>' + body + '</div></div>' + sheetHtml();
+    if (!sh && S.restore) { var r = S.restore; S.restore = null; focusSel(r); return; } // a sheet just closed: back to the control that opened it
+    if (sh && sh.focusSel) { var fs = sh.focusSel; sh.focusSel = null; if (focusSel(fs)) return; }
+    if (sh && sh.focus !== false) { sh.focus = false; focusSel('[data-o-focus]'); return; }
+    if (ae) focusSel(ae);
+  }
+  function closeSheet() { S.restore = S.opener; S.opener = null; S.sheet = null; }
+  function requestClose() { // asks once before throwing away typed text
+    var sh = S.sheet; if (!sh || sh.busy) return;
+    if (sh.kind === 'new' && !sh.confirmDiscard && (String(sh.f.title).trim() || String(sh.f.note).trim())) { sh.confirmDiscard = true; sh.focus = true; draw(); return; }
+    closeSheet(); draw();
   }
 
   // ---- actions
@@ -303,10 +325,13 @@
         var e = res.error || { message: 'unclear' };
         sh.msg = isMissing(e) ? 'This is not available in this version of the app yet.' : plainError(e, true);
         if (!isOffline(e)) { sh.key = mintKey('wo'); if (onFail) onFail(); }
-        if (isStale(e)) { S.sheet = null; loadOrders(true); S.notice = sh.msg; }
+        if (isStale(e)) { // the first try may have landed: reload, and call it done if the order already has the status we asked for
+          var staleMsg = sh.msg; closeSheet(); S.notice = '';
+          loadOrders(true, function () { var w = order.id ? orderOf(order.id) : null; if (w && order.status && w.status === order.status) { S.notice = okMsg; tell(okMsg); } else S.notice = staleMsg; });
+        }
         draw(); return;
       }
-      buzz('success'); tell(okMsg); S.notice = okMsg; S.sheet = null; loadOrders(true); draw();
+      buzz('success'); tell(okMsg); S.notice = okMsg; closeSheet(); loadOrders(true); draw();
     };
     if (S.demo) { Promise.resolve().then(function () { applyDemo(order); settle({ data: { ok: true }, error: null }); }); return; }
     callRpc('save_work_order_v1', workOrderCall(pid(), order, key)).then(settle);
@@ -321,19 +346,21 @@
     var a = t.getAttribute('data-o'), v = t.getAttribute('data-v'), sh = S.sheet;
     if (t.disabled || t.getAttribute('aria-busy') === 'true') return;
     if (sh && sh.busy) return; // a request is in flight: nothing may orphan its sheet
-    if (a === 'tab') { S.tab = v === 'ready' ? 'ready' : 'orders'; S.sheet = null; S.notice = ''; draw(); if (S.tab === 'ready') loadReady(false); else loadOrders(false); return; }
+    if (a === 'tab') { S.tab = v === 'ready' ? 'ready' : 'orders'; S.sheet = null; S.opener = null; S.notice = ''; draw(); if (S.tab === 'ready') loadReady(false); else loadOrders(false); return; }
     if (a === 'retry') { S.notice = ''; if (S.tab === 'ready') loadReady(true); else loadOrders(true); return; }
     if (a === 'filter') { S.filter = v === 'done' ? 'done' : 'open'; draw(); return; }
     S.notice = '';
-    if (a === 'open') { if (orderOf(v)) { S.sheet = { kind: 'order', id: v, msg: '', focus: true }; draw(); } return; }
-    if (a === 'new') { if (!S.write) return; S.sheet = { kind: 'new', key: mintKey('wo'), busy: false, msg: '', errs: {}, focus: true, f: { title: '', area: '', priority: 'normal', note: '', blocks: false } }; draw(); return; }
+    if (a === 'open') { if (orderOf(v)) { S.opener = '[data-o="open"][data-v="' + v + '"]'; S.sheet = { kind: 'order', id: v, msg: '', focus: true }; draw(); } return; }
+    if (a === 'new') { if (!S.write) return; S.opener = '[data-o="new"]'; S.sheet = { kind: 'new', key: mintKey('wo'), busy: false, msg: '', errs: {}, focus: true, f: { title: '', area: '', priority: 'normal', note: '', blocks: false } }; draw(); return; }
     if (!sh) return;
-    if (a === 'close') { S.sheet = null; draw(); return; }
+    if (a === 'close') return requestClose();
+    if (a === 'discard') { closeSheet(); draw(); return; }
+    if (a === 'keep') { sh.confirmDiscard = false; sh.focusSel = '#O_title'; draw(); return; }
     if (a === 'back') { S.sheet = { kind: 'order', id: sh.id, msg: '', focus: true }; draw(); return; }
     if (a === 'prio') { if (sh.f) { sh.f.priority = v; draw(); } return; }
-    if (a === 'new-send') { sh.errs = validateNew(sh.f); if (Object.keys(sh.errs).length) { sh.msg = 'Please fix the item marked below.'; draw(); return; } send(newOrder(sh.f), sh.key, 'Work order saved: ' + String(sh.f.title).trim() + '.'); return; }
+    if (a === 'new-send') { sh.errs = validateNew(sh.f); if (Object.keys(sh.errs).length) { sh.msg = 'Please fix the item marked above.'; sh.focusSel = '[aria-invalid="true"]'; draw(); return; } send(newOrder(sh.f), sh.key, 'Work order saved: ' + String(sh.f.title).trim() + '.'); return; }
     if (a === 'done-start') { S.sheet = { kind: 'done', id: sh.id, key: mintKey('wo'), busy: false, msg: '', err: '', resolution: '', focus: true }; draw(); return; }
-    if (a === 'done-send') { var w = orderOf(sh.id); if (!w) return; if (String(sh.resolution).trim().length < 3) { sh.err = 'Write what was done, at least 3 letters.'; sh.msg = 'Please fix the item marked below.'; draw(); return; } send(doneOrder(w, sh.resolution), sh.key, 'Marked done: ' + w.title + '.'); return; }
+    if (a === 'done-send') { var w = orderOf(sh.id); if (!w) return; if (String(sh.resolution).trim().length < 3) { sh.err = 'Write what was done, at least 3 letters.'; sh.msg = 'Please fix the item marked above.'; sh.focusSel = '[aria-invalid="true"]'; draw(); return; } send(doneOrder(w, sh.resolution), sh.key, 'Marked done: ' + w.title + '.'); return; }
     if (a === 'reopen') { var w2 = orderOf(sh.id); if (!w2) return; sh.key = sh.key || mintKey('wo'); send(reopenOrder(w2), sh.key, 'Reopened: ' + w2.title + '.'); return; }
   }
   function onInput(ev) {
@@ -351,21 +378,26 @@
   function mount(el, opts) {
     opts = opts || {};
     if (S) unmount();
+    // the shell and Manage pass opts.role (a string); the shell state passes opts.access ({ role, property_ids }). Accept both.
+    var acc = opts.access || (opts.role ? { role: opts.role, property_ids: opts.propertyId ? [opts.propertyId] : [] } : null);
+    opts = Object.assign({}, opts, { access: acc });
     if (!canRead(opts.access)) { if (opts.navigate) opts.navigate('#home'); return; }
     S = { el: el, opts: opts, client: opts.client, demo: !!opts.demo, gen: ++N_gen, today: manilaToday(), d: {}, sheet: null, notice: '', tab: opts.sub === 'ready' ? 'ready' : 'orders', filter: 'open',
       write: canWrite(opts.access), loadedAt: clock(), demoData: demoData(manilaToday()) };
     if (!S.demo && !S.client) { S.d.orders = { err: 'No connection.' }; S.d.ready = { err: 'No connection.' }; }
     S.onClick = onClick; S.onInput = onInput; S.onVis = onVisible;
+    S.onSubmit = function (e) { if (e && e.preventDefault) e.preventDefault(); };
+    S.onKey = function (e) { if (e && e.key === 'Escape' && S && S.sheet) requestClose(); };
     el.addEventListener('click', S.onClick); el.addEventListener('input', S.onInput); el.addEventListener('change', S.onInput);
-    el.addEventListener('submit', function (e) { if (e && e.preventDefault) e.preventDefault(); });
-    try { if (typeof document !== 'undefined' && document.addEventListener) document.addEventListener('visibilitychange', S.onVis); } catch (e) { /* ok */ }
+    el.addEventListener('submit', S.onSubmit);
+    try { if (typeof document !== 'undefined' && document.addEventListener) { document.addEventListener('visibilitychange', S.onVis); document.addEventListener('keydown', S.onKey); } } catch (e) { /* ok */ }
     draw();
     if (S.demo || S.client) { if (S.tab === 'ready') loadReady(true); else loadOrders(true); }
   }
   function unmount() {
     if (!S) return;
-    try { S.el.removeEventListener('click', S.onClick); S.el.removeEventListener('input', S.onInput); S.el.removeEventListener('change', S.onInput); } catch (e) { /* ok */ }
-    try { if (typeof document !== 'undefined' && document.removeEventListener) document.removeEventListener('visibilitychange', S.onVis); } catch (e) { /* ok */ }
+    try { S.el.removeEventListener('click', S.onClick); S.el.removeEventListener('input', S.onInput); S.el.removeEventListener('change', S.onInput); S.el.removeEventListener('submit', S.onSubmit); } catch (e) { /* ok */ }
+    try { if (typeof document !== 'undefined' && document.removeEventListener) { document.removeEventListener('visibilitychange', S.onVis); document.removeEventListener('keydown', S.onKey); } } catch (e) { /* ok */ }
     (S.timers || []).forEach(function (t) { clearTimeout(t); });
     N_gen++; S = null; // a late reply finds no state and is dropped
   }
