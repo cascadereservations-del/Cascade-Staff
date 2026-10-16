@@ -86,7 +86,7 @@ test('3.2 sign-out: G_Guests.reset and X_Inbox.reset run, and a reset that throw
 
 // ------------------------------------------------------------------------------------------------ 3. service worker and push
 test('3.2 sw: version 3.2.1, cs-shell-v25, the four new files are precached best effort only, pay/bank.html is gone from the precache', () => {
-  const sw = read('sw.js'); assert.match(sw, /CACHE_NAME = 'cs-shell-v31'/); assert.equal(JSON.parse(read('package.json')).version, '3.4.6'); assert.match(read('app.js'), /version: '3.4.6'/);
+  const sw = read('sw.js'); assert.match(sw, /CACHE_NAME = 'cs-shell-v32'/); assert.equal(JSON.parse(read('package.json')).version, '3.4.7'); assert.match(read('app.js'), /version: '3.4.7'/);
   const ctx = vm.createContext({ self: { addEventListener() {}, location: { href: 'https://x/' } }, URL, Request: class {}, Promise });
   vm.runInContext(sw.replace(/^const /gm, 'var ').replace(/^if \(typeof module[^\n]*$/m, ''), ctx);
   const opt = [...vm.runInContext('OPTIONAL_URLS', ctx)], req = [...vm.runInContext('SHELL_URLS', ctx)];

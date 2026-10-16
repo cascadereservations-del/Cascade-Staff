@@ -20,7 +20,7 @@
     url: 'https://qkgfhsdppslwunarczeq.supabase.co',
     key: 'sb_publishable_JFuRYZ9csmQULcMRmHXDSg_Abo9UeCj',
     propertyId: '6ae230f4-c189-4547-84b1-cb6e0b2cc9bd',
-    version: '3.4.6'
+    version: '3.4.7'
   };
   var LINKS = {
     checklist: 'https://cascadereservations-del.github.io/CH-Cleaners-Checklist/',
@@ -1750,10 +1750,11 @@
   }
   // ---------------------------------------------------------------- Admin hub (owner, admin, finance): every dashboard page, in the groups of the admin home
   function renderHub() {
-    var groups = CS.A_hubGroups(role());
-    $('v-hub').innerHTML = appbar({ title: 'Admin hub', back: '#more' }) + '<div class="screen"><p class="sub" style="margin:0 0 12px">Every page of the admin dashboard. Each opens inside this app, already signed in.</p><div class="stack">' +
+    var groups = CS.A_hubGroups(role()), nat = CS.A_hubNative(role());
+    $('v-hub').innerHTML = appbar({ title: 'Admin hub', back: '#more' }) + '<div class="screen"><p class="sub" style="margin:0 0 12px">Dashboard pages the app does not have itself. Each opens inside this app, already signed in.</p><div class="stack">' +
+      (nat.length ? '<div class="A_hubgrp"><div class="A_label">Already in this app</div><p class="help" style="margin:0 0 6px">These dashboard pages are now screens here.</p><nav class="card glass list" aria-label="Already in this app">' + nat.map(function (n) { return row({ icon: n.icon, title: n.title, sub: n.sub, href: n.href }); }).join('') + '</nav></div>' : '') +
       groups.map(function (g) {
-        return '<div class="A_hubgrp"><div class="A_label">' + esc(g.title) + '</div><nav class="card glass list" aria-label="' + esc(g.title) + '">' + g.items.map(function (i) {
+        return '<div class="A_hubgrp"><div class="A_label">' + esc(g.title) + '</div><p class="help" style="margin:0 0 6px">' + esc(g.sub) + '</p><nav class="card glass list" aria-label="' + esc(g.title) + '">' + g.items.map(function (i) {
           var l = A_hubLink(i.route); return l ? row({ icon: i.icon, title: i.title, sub: i.sub, href: l.href, external: l.external }) : '';
         }).join('') + '</nav></div>';
       }).join('') + '</div></div>';

@@ -153,7 +153,7 @@ test('A_fix M7: the hub lists pricing/advisor (read_finance) and search (read_op
   const flat = (role) => CS.A_hubGroups(role).flatMap((g) => g.items.map((i) => i.route));
   for (const r of ['owner', 'admin', 'finance']) { assert.ok(flat(r).includes('pricing/advisor'), r); assert.ok(flat(r).includes('search'), r); }
   assert.ok(!flat('finance').includes('pricing'), 'the rate card itself is still owner/admin');
-  const g = CS.A_hubGroups('owner').find((x) => x.items.some((i) => i.route === 'pricing/advisor')); assert.equal(g.title, 'Money and stock');
+  const g = CS.A_hubGroups('owner').find((x) => x.items.some((i) => i.route === 'pricing/advisor')); assert.equal(g.title, 'Money');
   const file = path.join(root, '..', 's81-admin-D', 'app', 'src', 'routes.tsx');
   if (fs.existsSync(file)) { const tsx = fs.readFileSync(file, 'utf8'); for (const r of ['pricing/advisor', 'search']) assert.ok(tsx.includes("path: '" + r + "'"), r); }
 });

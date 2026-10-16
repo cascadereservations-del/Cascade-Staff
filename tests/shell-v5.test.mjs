@@ -108,9 +108,10 @@ test('A_ hub: every route is a real dashboard route, grouped like the admin home
   const routes = CS.A_hubRoutes(), file = path.join(root, '..', 's81-admin-D', 'app', 'src', 'routes.tsx');
   assert.equal(new Set(routes).size, routes.length, 'no duplicate routes');
   if (fs.existsSync(file)) { const tsx = fs.readFileSync(file, 'utf8'); for (const r of routes) assert.ok(tsx.includes("path: '" + r + "'"), 'not a dashboard route: ' + r); }
-  assert.deepEqual(CS.A_hubGroups('owner').map((g) => g.title), ['Guests and bookings', 'Money and stock', 'Team and help']);
+  assert.deepEqual(CS.A_hubGroups('owner').map((g) => g.title), ['Guests and bookings', 'Money', 'Stock and house', 'Team and system']);
   const flat = (role) => CS.A_hubGroups(role).flatMap((g) => g.items.map((i) => i.route));
-  assert.deepEqual(flat('owner'), routes); assert.deepEqual(flat('admin'), routes);
+  const NATIVE = ['today', 'bookings/calendar', 'inventory', 'operations/tasks', 'operations/notices', 'settings/pay-rates'];
+  assert.deepEqual(flat('owner'), routes.filter((r) => !NATIVE.includes(r))); assert.deepEqual(flat('admin'), flat('owner'));
   assert.ok(flat('finance').includes('finance/statements')); assert.ok(!flat('finance').includes('settings/audit')); assert.ok(!flat('finance').includes('guests')); assert.ok(!flat('finance').includes('pricing'));
   assert.deepEqual(CS.A_hubGroups('cleaner'), []); assert.deepEqual(CS.A_hubGroups('constructor'), []);
   assert.equal(CS.A_hubDoorUrl('./admin/#/today', 'bookings/calendar'), './admin/#/bookings/calendar');
@@ -291,7 +292,7 @@ test('A_ motion and accessibility floor: press 0.97 at 160 ms, sheets 300 ms wit
   assert.match(css, /\.A_tabs a \{ min-height: 44px/); assert.match(css, /\.chip \{ min-height: var\(--touch\)/); // F_: controls grow with the text size instead of clipping it
 });
 test('A_ service worker and manifest: new cache name, tokens + house photos precached and each photo is 60 KB or less, theme colours are the v5 backgrounds', () => {
-  const sw = read('sw.js'); assert.match(sw, /CACHE_NAME = 'cs-shell-v31'/);
+  const sw = read('sw.js'); assert.match(sw, /CACHE_NAME = 'cs-shell-v32'/);
   for (const u of ['./tokens.css', './img/house-hero.webp', './img/house-blur.webp', './fonts/dm-serif-display-400.woff2']) assert.ok(sw.includes("'" + u + "'") || sw.includes(u.replace('./', '').replace('fonts/', '')) , u);
   for (const f of ['img/house-hero.webp', 'img/house-blur.webp']) assert.ok(fs.statSync(path.join(root, f)).size <= 60 * 1024, f + ' is 60 KB or less');
   const man = JSON.parse(read('manifest.webmanifest')); assert.equal(man.theme_color, '#EEF1F4'); assert.equal(man.background_color, '#EEF1F4');
@@ -337,4 +338,17 @@ test('A_ notice text: the [hidden] marker and odd weather (null code, null aqi, 
   const v = CS.A_noticesView(RAW({ notices: [{ id: 'h', type: 'note', title: 'Call [hidden] about the gate', date: '2026-10-16', source: 'manual', detail: 'Mail [hidden]' }], weather: { source: 'google', fetched_at: '2026-10-15T02:00:00Z', temp_c: 28, condition: 'Clear', code: null, rain_chance_pct: 10, aqi: null, hourly: [], rain_watch: null, hourly_source: 'google' } }), 'owner', TODAY);
   assert.equal(v.list[0].title, 'Call [hidden] about the gate'); assert.equal(v.weather.watch, null); assert.deepEqual(v.weather.hours, []); assert.equal(v.weather.aqi, null);
   assert.equal(CS.A_noticesView(RAW({ role: 'inspector' }), 'inspector', TODAY).house.length, 0);
+});
+
+test('s92 hub: six pages the app has natively are hidden but stay valid routes; finance, cleaner and the Already-in-this-app rows follow the role', () => {
+  const flat = (role) => CS.A_hubGroups(role).flatMap((g) => g.items.map((i) => i.route));
+  const GONE = ['today', 'bookings/calendar', 'inventory', 'operations/tasks', 'operations/notices', 'settings/pay-rates'];
+  for (const r of ['owner', 'admin', 'finance']) for (const g of GONE) assert.ok(!flat(r).includes(g), r + ' ' + g);
+  for (const g of GONE) assert.ok(CS.A_hubRouteOk(g), 'still a valid link target: ' + g);
+  assert.equal(flat('owner').length, 23); assert.equal(flat('admin').length, 23); assert.equal(flat('finance').length, 16);
+  assert.ok(flat('owner').includes('bookings/inquiries') && flat('finance').includes('bookings/inquiries') && flat('finance').includes('insights'), 'finance has no native twin for these');
+  assert.deepEqual(CS.A_hubGroups('cleaner'), []); assert.deepEqual(CS.A_hubNative('cleaner'), []); assert.deepEqual(CS.A_hubNative('inspector'), []);
+  assert.deepEqual(CS.A_hubNative('owner').map((n) => n.href), ['#home', '#calendar', '#tasks', '#stock', '#payrates']);
+  assert.deepEqual(CS.A_hubNative('finance').map((n) => n.href), ['#home', '#calendar', '#tasks', '#stock'], 'finance cannot open #payrates');
+  for (const r of ['owner', 'finance']) for (const g of CS.A_hubGroups(r)) assert.ok(g.sub && !/!/.test(g.sub), g.title);
 });

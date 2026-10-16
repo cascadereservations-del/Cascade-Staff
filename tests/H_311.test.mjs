@@ -117,7 +117,7 @@ test('3.1.1 More: every group has a caps label; the groups are dealt into two st
 });
 
 test('3.1.1 version: 3.1.1, cache v19, What is new names the new things for the right roles', () => {
-  assert.equal(JSON.parse(read('package.json')).version, '3.4.6'); assert.match(read('app.js'), /version: '3.4.6'/); assert.match(read('sw.js'), /CACHE_NAME = 'cs-shell-v31'/); assert.match(read('README.md'), /cs-shell-v31/);
+  assert.equal(JSON.parse(read('package.json')).version, '3.4.7'); assert.match(read('app.js'), /version: '3.4.7'/); assert.match(read('sw.js'), /CACHE_NAME = 'cs-shell-v32'/); assert.match(read('README.md'), /cs-shell-v32/);
   const titles = (role) => CS.A_whatsNew(role, { notices: true }).map((i) => i.title);
   for (const r of ['cleaner', 'owner']) for (const t of ['Undo works every time', 'Earlier months', 'Cassy reply shows its progress', 'Better on a tablet']) assert.ok(titles(r).includes(t), r + ': ' + t);
   assert.ok(titles('owner').includes('Add a notice from Today')); assert.ok(!titles('cleaner').includes('Add a notice from Today')); assert.match(CS.A_whatsNew('cleaner', {}).find((i) => i.title === 'Earlier months').text, /not shown here/); assert.match(CS.A_whatsNew('owner', {}).find((i) => i.title === 'Earlier months').text, /admin dashboard/);
