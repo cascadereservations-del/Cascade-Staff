@@ -700,19 +700,20 @@
     var e = H_monthEdges(m), gen = H_histGen;
     var res = sb.from('airbnb_reservations').select('guest_id,checkin_date').eq('status', 'confirmed').eq('property_id', pid()).gte('checkout_date', e.start).lte('checkin_date', e.last).not('guest_id', 'is', null).limit(300);
     Promise.resolve(res).then(function (r) {
-      var rows = r && !r.error && r.data || []; if (!rows.length) return;
+      if (!r || r.error) { delete K_names.done[key]; return; } // a failed read is tried again on the next draw; an empty answer is final
+      var rows = r.data || []; if (!rows.length) return;
       var ids = rows.map(function (x) { return x.guest_id; }).filter(function (x, i, a) { return a.indexOf(x) === i; });
       return Promise.resolve(sb.from('guests').select('id,name').in('id', ids)).then(function (g) {
-        if (gen !== H_histGen || !g || g.error) return; var nm = {}; (g.data || []).forEach(function (x) { nm[x.id] = x.name; });
+        if (gen !== H_histGen) return; if (!g || g.error) { delete K_names.done[key]; return; } var nm = {}; (g.data || []).forEach(function (x) { nm[x.id] = x.name; });
         rows.forEach(function (x) { if (nm[x.guest_id]) K_names.list.push({ checkin_date: x.checkin_date, name: nm[x.guest_id] }); });
         if (current === 'calendar' && state.calView === 'bookings' && state.calTab === 'calendar' && state.payload) renderCalendar();
       });
-    }).catch(function () {});
+    }).catch(function () { if (gen === H_histGen) delete K_names.done[key]; });
   }
   function K_body(m) {
     if (!window.K_BookCal) { if (!K_state.failed) { K_load(); return '<div class="skel" style="height:300px"></div>'; } return null; }
     var mgr = CS.canSeeGuestContact(role()); if (mgr) K_loadNames(m);
-    return window.K_BookCal.render({ y: m.y, m: m.m, today: state.payload.today, stays: staysOf(), rows: H_allCal(), full: mgr, names: mgr ? K_names.list : null }) + H_olderLine(m, state.payload.today);
+    return window.K_BookCal.render({ y: m.y, m: m.m, today: state.payload.today, stays: staysOf(), rows: H_allCal(), full: mgr, names: mgr ? K_names.list : null }) + H_olderLine(m, state.payload.today, true);
   }
   function calTabs(cur) {
     var t = [['calendar', '#calendar', 'Calendar'], ['notices', '#calendar/notices', 'Notices']]; // tap only: the old sub-tab swipe is gone
@@ -770,11 +771,12 @@
     return html + '</div>';
   }
   // The server sends stays from a week back. An earlier month shows what exists and says where the rest is; the days it cannot know are dashed, never "free".
-  function H_olderLine(m, today) {
+  function H_olderLine(m, today, bk) {
     var from = CS.H_dataFrom(today); if (m.y + '-' + (m.m < 10 ? '0' : '') + m.m + '-01' >= from) return ''; var he = H_hist[H_ymKey(m)]; if (he && he.st === 'ok') return ''; // the months before today-7 are loaded for owner and admin
     var l = CS.canSeeGuestContact(role()) ? A_hubLink('bookings/calendar') : null;
-    return '<p class="help H_older" style="text-align:center;margin:6px 0 0">' + esc('Stays before ' + CS.dayLabel(from) + ' are ' + (l ? 'in the admin dashboard.' : 'not shown here.')) + '</p>' +
-      (l ? '<div style="text-align:center">' + (l.external ? ext(l.href, 'Open the booking calendar' + ICON('ext', 's16'), 'btn btn-ghost btn-sm') : '<a class="btn btn-ghost btn-sm" href="' + esc(l.href) + '">Open the booking calendar</a>') + '</div>' : '');
+    var lab = bk ? 'Stays before ' + CS.dayLabel(from) + ': open the admin dashboard' : 'Open the booking calendar'; // in the booking view the plain label would point at itself
+    return (bk && l ? '' : '<p class="help H_older" style="text-align:center;margin:6px 0 0">' + esc('Stays before ' + CS.dayLabel(from) + ' are ' + (l ? 'in the admin dashboard.' : 'not shown here.')) + '</p>') +
+      (l ? '<div style="text-align:center">' + (l.external ? ext(l.href, esc(lab) + ICON('ext', 's16'), 'btn btn-ghost btn-sm') : '<a class="btn btn-ghost btn-sm" href="' + esc(l.href) + '">' + esc(lab) + '</a>') + '</div>' : '');
   }
   // The Notices view: weather with the rain watch, power and water notices, house items (owner and admin), how to add one. Cleaners never get Tell the guest, Resolve or the House list.
   function A_noticeRow(n) {

@@ -125,3 +125,53 @@ test('K s91 touching or overlapping stays never share a colour; all colours exis
   const lum = (h) => { const c = [1, 3, 5].map((j) => parseInt(h.slice(j, j + 2), 16) / 255).map((v) => (v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4)); return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]; };
   for (let n = 1; n <= 8; n++) for (const i of [1, 2, 3]) { const a = lum(hex('k' + n, i)), b = lum(hex('k' + n + '-fg', i)); assert.ok((Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05) >= 4.5, 'k' + n + ' set ' + i); }
 });
+
+// s91 fix round: bars, per-stay list, clash keeps colour, palette distance, 14-day colour spread.
+test('K s91 palette: every pair differs by deltaE >= 20 in light and dark, text contrast >= 4.5', () => {
+  const tok = fs.readFileSync(root + '/tokens.css', 'utf8');
+  const hex = (name, i) => tok.split('--v5-' + name + ': ')[i].slice(0, 7);
+  const lin = (v) => (v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4);
+  const lab = (h) => { const [r, g, b] = [1, 3, 5].map((j) => lin(parseInt(h.slice(j, j + 2), 16) / 255)); const f = (t) => (t > 0.008856 ? Math.cbrt(t) : 7.787 * t + 16 / 116); const x = f((0.4124 * r + 0.3576 * g + 0.1805 * b) / 0.95047), y = f(0.2126 * r + 0.7152 * g + 0.0722 * b), z = f((0.0193 * r + 0.1192 * g + 0.9505 * b) / 1.08883); return [116 * y - 16, 500 * (x - y), 200 * (y - z)]; };
+  for (const i of [1, 2, 3]) for (let a = 1; a <= 8; a++) for (let b = a + 1; b <= 8; b++) { const p = lab(hex('k' + a, i)), q = lab(hex('k' + b, i)); assert.ok(Math.hypot(p[0] - q[0], p[1] - q[1], p[2] - q[2]) >= 20, 'k' + a + '/k' + b + ' set ' + i); }
+});
+
+test('K s91 colours: stays within 14 days of each other get different colours when eight allow', () => {
+  const st = [0, 1, 2, 3, 4, 5].map((i) => S('W' + i, '2026-10-' + String(1 + i * 4).padStart(2, '0'), '2026-10-' + String(3 + i * 4).padStart(2, '0')));
+  const col = K.colours(st); assert.equal(new Set(st.map(col)).size, 6);
+});
+
+test('K s91 phone list: one row per stay with dates and nights; a clash keeps both colours and gets its own row', () => {
+  const st = [S('Cy', '2026-10-05', '2026-10-08', { source: 'direct' }), S('Di', '2026-10-06', '2026-10-09')];
+  const h = K.render({ y: 2026, m: 10, today: TODAY, stays: st, rows: st, full: true });
+  const ag = /<ul class="K_agenda"[^]*?<\/ul>\s*<div class="K_grid"/.exec(h)[0];
+  assert.equal((ag.match(/<li class="K_arow/g) || []).length, 3, 'two stays and one clash row');
+  assert.match(ag, /Mon 5<[^]*K_nm">Cy<\/span><span class="K_meta">→ Thu 8 · 3 nights/); assert.match(ag, /Clash: Cy and Di/);
+  const cy = /data-state="conflict" data-col="(\d)"[^>]*aria-label="2026-10-05/.exec(ag); assert.ok(cy && cy[1] !== '0', 'conflict keeps the guest colour');
+  const css = fs.readFileSync(root + '/calendar/K_bookcal.css', 'utf8');
+  assert.doesNotMatch(css, /K_chip\[data-state="conflict"\][^}]*background/); assert.match(css, /\.K_ad \{[^}]*width: 4rem; white-space: nowrap/); assert.match(css, /\.K_chip > \[aria-hidden\]/);
+});
+
+test('K s91 grid: one bar per stay per week spanning its nights, name once', () => {
+  const st = [S('Ana Reyes', '2026-10-07', '2026-10-13', { source: 'direct' })];
+  const h = K.render({ y: 2026, m: 10, today: TODAY, stays: st, rows: st, full: true });
+  const grid = h.slice(h.indexOf('class="K_grid"'));
+  const bars = grid.match(/<button class="K_bar"[^>]*>/g); assert.equal(bars.length, 2, 'Wed 7 to Mon 12 crosses a week');
+  assert.match(bars[0], /grid-column:3\/span 5/); assert.match(bars[1], /grid-column:1\/span 1/); assert.match(grid, /K_nm">Ana Reyes</);
+});
+
+test('K s91 booking view older-stays link is labelled for the dashboard, not the booking calendar', async () => {
+  const app = await open('admin', { cs_cal_view: 'bookings' }); await app.flush();
+  await app.click({ 'data-act': 'prev' }); await app.click({ 'data-act': 'prev' });
+  const h = html(app); if (/H_older/.test(h) || /open the admin dashboard/.test(h)) assert.doesNotMatch(h, /Open the booking calendar/);
+});
+
+test('K s91 a failed name read is retried on the next draw', async () => {
+  let n = 0;
+  const q = (t) => { const o = { select: () => o, eq: () => o, gte: () => o, lte: () => o, not: () => o, in: () => o, limit: () => o, then: (f, g) => Promise.resolve(n === 0 ? { error: { message: 'net' }, data: null } : { error: null, data: t === 'guests' ? [{ id: 'g1', name: 'Nicole Aniero' }] : [{ guest_id: 'g1', checkin_date: '2026-10-12' }] }).then(f, g) }; return o; };
+  const rows = [stayRow('Nicole', '2026-10-12', '2026-10-17', { source: 'airbnb' })];
+  const app = await boot({ role: 'admin', hash: '#calendar', ls: mem({ cs_cal_view: 'bookings' }).ls, handlers: baseHandlers('admin', { staff_home_v1: () => HOMEWITH(rows) }),
+    winInit: (w) => { w.K_BookCal = K; w.H_loadAsset = () => Promise.resolve(); const cc = w.supabase.createClient; w.supabase.createClient = (...a) => { const sb = cc(...a); sb.from = q; return sb; }; } });
+  await app.flush(); assert.match(html(app), /K_nm">Nicole</); assert.doesNotMatch(html(app), /Aniero/);
+  n = 1; await app.click({ 'data-act': 'next' }); await app.click({ 'data-act': 'prev' });
+  assert.match(html(app), /K_nm">Nicole Aniero</);
+});

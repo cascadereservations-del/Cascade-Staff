@@ -20,10 +20,14 @@
   function K_colours(stays) {
     var list = stays.slice().sort(function (a, b) { return a.checkin_date < b.checkin_date ? -1 : a.checkin_date > b.checkin_date ? 1 : a.checkout_date < b.checkout_date ? -1 : 1; }), got = new Map(), done = [];
     list.forEach(function (st) {
-      var used = {}, c = Math.floor(K_utc(st.checkin_date) / 86400000) % NCOL, i;
-      done.forEach(function (o) { if (o.st.checkin_date <= st.checkout_date && st.checkin_date <= o.st.checkout_date) used[o.c] = 1; });
-      for (i = 0; i < NCOL && used[c]; i++) c = (c + 1) % NCOL;
-      got.set(st, c); done.push({ st: st, c: c });
+      var c0 = Math.floor(K_utc(st.checkin_date) / 86400000) % NCOL, pick = null;
+      [14, 0].some(function (gap) { // first keep clear of every stay within 14 days either side; if eight colours are not enough, only of the ones that touch
+        var used = {}, i; done.forEach(function (o) { if (o.st.checkin_date <= K_add(st.checkout_date, gap) && st.checkin_date <= K_add(o.st.checkout_date, gap)) used[o.c] = 1; });
+        for (i = 0; i < NCOL; i++) if (!used[(c0 + i) % NCOL]) { pick = (c0 + i) % NCOL; return true; }
+        return false;
+      });
+      if (pick == null) pick = c0;
+      got.set(st, pick); done.push({ st: st, c: pick });
     });
     return function (st) { return got.has(st) ? got.get(st) + 1 : 0; };
   }
@@ -50,14 +54,29 @@
       return { colour: colour, stays: e.stays, blocks: e.blocks, conflict: e.stays.length >= 2, turn: e.stays.some(function (a) { return a.checkin_date === d; }) && (outBy[d] || []).length > 0 };
     };
   }
-  function K_chip(st, d, conflict, full, colour, names) {
-    var blocked = st.status === 'blocked', state = blocked ? 'blocked' : conflict ? 'conflict' : 'booked', who = blocked ? 'Blocked' : K_name(st, full, names);
-    var word = st.source === 'direct' ? 'Direct booking' : 'Airbnb stay';
-    var title = blocked ? 'Blocked (not a stay)' : who + ' · ' + word + (conflict ? ' · overlaps another guest' : '');
-    return '<button class="K_chip" type="button" data-day="' + d + '" data-state="' + state + '" data-col="' + (blocked ? 0 : colour(st)) + '" data-source="' + (st.source === 'direct' ? 'direct' : 'airbnb') + '" aria-haspopup="dialog" title="' + K_esc(title) + '" aria-label="' + K_esc(d + ': ' + title + (st.checkin_date === d ? ', checks in' : '')) + '">' +
-      (st.checkin_date === d ? '<span aria-hidden="true">→ </span>' : '') + (conflict && !blocked ? '<span aria-hidden="true">! </span>' : '') + '<span class="K_nm">' + K_esc(who) + '</span></button>';
+  function K_dl(iso) { return DAYN[K_dow(iso)] + ' ' + (+iso.slice(8)); }
+  function K_nights(a, b) { return Math.round((K_utc(b) - K_utc(a)) / 86400000); }
+  // A run = one stay (or one blocked stretch) over consecutive nights: { it, from, to (last night), conflict, blocked }.
+  function K_runs(info, days) {
+    var open = new Map(), out = [], prev = null;
+    days.forEach(function (d) {
+      var x = info(d);
+      x.stays.concat(x.blocks).forEach(function (it) {
+        var r = open.get(it);
+        if (r && r.to === prev) r.to = d; else { r = { it: it, from: d, to: d, conflict: false, blocked: it.status === 'blocked' }; open.set(it, r); out.push(r); }
+        if (x.conflict && !r.blocked) r.conflict = true;
+      });
+      prev = d;
+    });
+    return out;
   }
-  function K_items(info, d, full, names) { return info.stays.map(function (st) { return K_chip(st, d, info.conflict, full, info.colour, names); }).concat(info.blocks.map(function (b) { return K_chip(b, d, false, full, info.colour, names); })); }
+  // One bar or row: the arrow only where the stay checks in, "!" where it overlaps another guest (its own colour stays), the name once.
+  function K_chip(r, d, full, colour, names, cls, meta) {
+    var st = r.it, blocked = r.blocked, who = blocked ? 'Blocked' : K_name(st, full, names), word = st.source === 'direct' ? 'Direct booking' : 'Airbnb stay';
+    var title = blocked ? 'Blocked (not a stay)' : who + ' · ' + word + (r.conflict ? ' · overlaps another guest' : '');
+    return '<button class="' + cls + '" type="button" data-day="' + d + '" data-state="' + (blocked ? 'blocked' : r.conflict ? 'conflict' : 'booked') + '" data-col="' + (blocked ? 0 : colour(st)) + '" data-source="' + (st.source === 'direct' ? 'direct' : 'airbnb') + '" aria-haspopup="dialog" title="' + K_esc(title) + '" aria-label="' + K_esc(d + ': ' + title + (st.checkin_date === d ? ', checks in' : '')) + '"' + (r.style ? ' style="' + r.style + '"' : '') + '>' +
+      (st.checkin_date === d ? '<span aria-hidden="true">→</span>' : '') + (r.conflict ? '<span aria-hidden="true">!</span>' : '') + '<span class="K_nm">' + K_esc(who) + '</span>' + (meta ? '<span class="K_meta">' + K_esc(meta) + '</span>' : '') + '</button>';
+  }
   function K_legend(show) {
     var li = function (cls, t) { return '<li><span class="K_sw ' + cls + '" aria-hidden="true"></span>' + t + '</li>'; };
     return '<ul class="K_legend" aria-label="Legend">' + li('guest', 'Each guest has their own colour') + li('blocked', 'Blocked (not a stay)') + (show.conflict ? li('conflict', 'Two guests on one night') : '') + (show.turn ? li('turn', 'Turnover day') : '') + '<li>Arrow marks the check-in day.</li></ul>';
@@ -66,18 +85,42 @@
     var y = o.y, m = o.m, ym = y + '-' + K_pad(m), first = ym + '-01', info = K_days(o), full = !!o.full, names = full ? o.names : null, today = o.today || '';
     var lead = (K_dow(first) + 6) % 7, start = K_add(first, -lead), days = [], i;
     for (i = 0; i < 42; i++) days.push(K_add(start, i));
-    var inMonth = days.filter(function (d) { return d.slice(0, 7) === ym; }).map(function (d) { var x = info(d); x.d = d; return x; });
-    var show = { conflict: inMonth.some(function (x) { return x.conflict; }), turn: inMonth.some(function (x) { return x.turn; }) };
-    var busy = inMonth.filter(function (x) { return x.stays.length || x.blocks.length; });
-    var agenda = '<ul class="K_agenda" aria-label="Month agenda">' + (busy.length ? busy.map(function (x) {
-      return '<li class="K_arow' + (x.turn ? ' K_turn' : '') + (x.d === today ? ' K_today' : '') + '"><div class="K_ad">' + DAYN[K_dow(x.d)] + ' ' + (+x.d.slice(8)) + (x.turn ? '<small>Turnover</small>' : '') + '</div><ul class="K_chips">' +
-        K_items(x, x.d, full, names).map(function (c) { return '<li>' + c + '</li>'; }).join('') + '</ul></li>';
+    var mdays = days.filter(function (d) { return d.slice(0, 7) === ym; }), inMonth = mdays.map(function (d) { var x = info(d); x.d = d; return x; });
+    var show = { conflict: inMonth.some(function (x) { return x.conflict; }), turn: inMonth.some(function (x) { return x.turn; }) }, colour = info(first).colour;
+    // phone: one row per stay (or blocked stretch), then one row per stretch of nights two guests share
+    var rows = K_runs(info, mdays).map(function (r) {
+      var st = r.it, co = r.blocked ? K_add(r.to, 1) : st.checkout_date, n = K_nights(r.blocked ? r.from : st.checkin_date, co);
+      return { d: r.from, turn: !r.blocked && st.checkin_date === r.from && info(r.from).turn, html: K_chip(r, r.from, full, colour, names, 'K_chip', '→ ' + K_dl(co) + ' · ' + n + (n === 1 ? ' night' : ' nights')) };
+    }), cl = null;
+    inMonth.forEach(function (x) {
+      if (!x.conflict) { cl = null; return; }
+      if (!cl) { cl = { d: x.d, from: x.d, to: x.d, who: [], clash: 1 }; rows.push(cl); }
+      cl.to = x.d; x.stays.forEach(function (s) { var w = K_name(s, full, names); if (cl.who.indexOf(w) < 0) cl.who.push(w); });
+    });
+    rows.forEach(function (r) {
+      if (r.clash) r.html = '<button class="K_chip" type="button" data-day="' + r.from + '" data-state="conflict" data-col="0" aria-haspopup="dialog" aria-label="' + K_esc(r.from + ': clash, ' + r.who.join(' and ') + ' on the same night') + '"><span aria-hidden="true">!</span><span class="K_nm">' + K_esc('Clash: ' + r.who.join(' and ')) + '</span><span class="K_meta">' + K_esc(K_dl(r.from) + (r.to > r.from ? ' to ' + K_dl(r.to) : '')) + '</span></button>';
+    });
+    rows.sort(function (a, b) { return a.d < b.d ? -1 : a.d > b.d ? 1 : (a.clash ? 1 : 0) - (b.clash ? 1 : 0); });
+    var agenda = '<ul class="K_agenda" aria-label="Month agenda">' + (rows.length ? rows.map(function (r) {
+      return '<li class="K_arow' + (r.turn ? ' K_turn' : '') + (r.d === today ? ' K_today' : '') + '"><div class="K_ad">' + K_dl(r.d) + (r.turn ? '<small>Turnover</small>' : '') + '</div><div class="K_chips">' + r.html + '</div></li>';
     }).join('') : '<li class="K_none">No stays or blocked nights this month.</li>') + '</ul>';
-    var grid = '<div class="K_grid" role="group" aria-label="Calendar grid"><div class="K_dows" aria-hidden="true">' + MON.map(function (d) { return '<div>' + d + '</div>'; }).join('') + '</div><div class="K_cells">' + days.map(function (d) {
-      var x = info(d), its = K_items(x, d, full, names), inM = d.slice(0, 7) === ym;
-      return '<div class="K_cell' + (inM ? '' : ' K_off') + (d === today ? ' K_today' : '') + (x.turn ? ' K_turn' : '') + '"><div class="K_n"><span>' + (+d.slice(8)) + '</span>' + (x.turn ? '<small>Turnover</small>' : '') + '</div>' +
-        its.slice(0, 3).join('') + (its.length > 3 ? '<span class="K_more">+' + (its.length - 3) + ' more</span>' : '') + '</div>';
-    }).join('') + '</div></div>';
+    // tablet and up: each week is a grid row; a stay is one bar across its nights, the name once per week
+    var weeks = '', w;
+    for (w = 0; w < 6; w++) {
+      var wd = days.slice(w * 7, w * 7 + 7), lanes = [], bars = '';
+      K_runs(info, wd).forEach(function (r) {
+        var c0 = wd.indexOf(r.from), c1 = wd.indexOf(r.to), l = 0;
+        while (lanes[l] != null && lanes[l] >= c0) l++;
+        lanes[l] = c1;
+        r.style = 'grid-column:' + (c0 + 1) + '/span ' + (c1 - c0 + 1) + ';grid-row:' + (l + 2);
+        bars += K_chip(r, r.from, full, colour, names, 'K_bar', null);
+      });
+      weeks += '<div class="K_wk" style="grid-template-rows:auto repeat(' + Math.max(lanes.length, 1) + ',auto)">' + wd.map(function (d, ci) {
+        var x = info(d), inM = d.slice(0, 7) === ym;
+        return '<div class="K_cell' + (inM ? '' : ' K_off') + (d === today ? ' K_today' : '') + (x.turn ? ' K_turn' : '') + '" style="grid-column:' + (ci + 1) + ';grid-row:1/-1"><button class="K_dn" type="button" data-day="' + d + '" aria-haspopup="dialog" aria-label="' + d + '"><span>' + (+d.slice(8)) + '</span>' + (x.turn ? '<small>Turnover</small>' : '') + '</button></div>';
+      }).join('') + bars + '</div>';
+    }
+    var grid = '<div class="K_grid" role="group" aria-label="Calendar grid"><div class="K_dows" aria-hidden="true">' + MON.map(function (d) { return '<div>' + d + '</div>'; }).join('') + '</div>' + weeks + '</div>';
     return '<div class="K_root" data-E-swipe="month">' + agenda + grid + K_legend(show) + '</div>';
   }
   var api = { render: K_render, colours: K_colours, days: K_days };
