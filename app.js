@@ -63,7 +63,7 @@
   var sb = DEMO ? window.CSDemo.client(window.CSDemo.role()) : window.supabase.createClient(CFG.url, CFG.key, { auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: false,
     storage: CS.authStorage(store('localStorage'), store('sessionStorage'), function () { return trustOn; }) } });
 
-  var state = { access: null, user: null, name: '', layout: null, payload: null, loadedAt: 0, loading: false, error: '', month: null, payHint: null, photos: {}, photoReq: {}, rot: {},
+  var state = { access: null, user: null, name: '', layout: null, payload: null, loadedAt: 0, loading: false, error: '', month: null, payHint: null, photos: {}, photoReq: {}, rot: {}, photoGen: 0,
     notices: null, noticesAbsent: false, noticesLoading: false, noticeFilter: 'all', nadd: null, fbOpen: false, ratesMore: false, calTab: 'calendar', calView: 'month', legendOpen: false, H_peekedCal: false, H_peekedTask: false, progress: null, progressAbsent: false, taskFilter: 'all', hubRoute: '', tasks: null, tasksErr: '', tasksLoading: false, showDone: false, lastDone: null, add: null, assignees: null, rates: null, ratesErr: '', rateForm: null, rateSaving: false, reply: null, bookings: null, bookingsDone: false, noticesDone: false, tasksDenied: false, noticesFailed: false, bookingsFailed: false, errorKind: '' };
   var $ = function (id) { return document.getElementById(id); };
   try { var lsLegend = store('localStorage'); state.legendOpen = !!lsLegend && lsLegend.getItem('cs_legend_open') === '1'; if (lsLegend && lsLegend.getItem('cs_cal_view') === 'bookings') state.calView = 'bookings'; } catch (e) {} // F2: the legend's More stays as it was left
@@ -378,14 +378,15 @@
     root.querySelectorAll('[data-idpath]').forEach(function (box) {
       var path = box.getAttribute('data-idpath'), hit = state.photos[path];
       if (hit && Date.now() - hit.at < 30 * 60000) { putPhoto(box, hit.url); return; } // kept in memory for the session: reopening a card does not sign or download again
-      var req = state.photoReq[path] || (state.photoReq[path] = sb.storage.from('guest-id-photos').createSignedUrl(path, 300).then(function (r) {
+      var gen = state.photoGen, req = state.photoReq[path] || (state.photoReq[path] = sb.storage.from('guest-id-photos').createSignedUrl(path, 300).then(function (r) {
         if (r.error || !r.data) throw new Error('sign');
         return net(r.data.signedUrl, { cache: 'no-store', referrerPolicy: 'no-referrer' });
       }).then(function (res) { if (!res.ok) throw new Error('fetch'); return res.blob(); }).then(function (blob) {
+        if (gen !== state.photoGen) return ''; // signed out while this was downloading: drop it, never store it in the new session
         var old = state.photos[path]; if (old) URL.revokeObjectURL(old.url);
         var url = URL.createObjectURL(blob); state.photos[path] = { url: url, at: Date.now() }; delete state.photoReq[path]; return url;
       }, function (e) { delete state.photoReq[path]; throw e; })); // one request per path at a time
-      req.then(function (url) { putPhoto(box, url); }).catch(function () {
+      req.then(function (url) { if (url && gen === state.photoGen) putPhoto(box, url); }).catch(function () {
         box.className = 'idphoto empty'; box.innerHTML = 'The photo could not be loaded. <button class="btn btn-ghost btn-sm" type="button" data-act="refresh">Try again</button>';
       });
     });
@@ -407,7 +408,7 @@
     o.setAttribute('data-src', src); var im = o.querySelector('img'); if (im) { im.src = src; im.className = 'r' + H_idRot(src); } o.classList.add('on'); var cb = o.querySelector('button[data-act="id-full-close"]'); if (cb && cb.focus) cb.focus();
   }
   function H_idClose() { var o = $('H_idfull'); if (o && o.classList) { o.classList.remove('on'); o.innerHTML = ''; } }
-  function dropPhotos() { Object.keys(state.photos).forEach(function (k) { URL.revokeObjectURL(state.photos[k].url); }); state.photos = {}; state.photoReq = {}; state.rot = {}; }
+  function dropPhotos() { Object.keys(state.photos).forEach(function (k) { URL.revokeObjectURL(state.photos[k].url); }); state.photos = {}; state.photoReq = {}; state.rot = {}; state.photoGen++; }
 
   // ---------------------------------------------------------------- Guest Calendar Info
   function monthState() {

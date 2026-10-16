@@ -32,13 +32,16 @@ const plain = (x) => JSON.parse(JSON.stringify(x));
 function load() {
   const touched = [];
   const trap = (name) => new Proxy({}, { get: (_, k) => { touched.push(name + '.' + String(k)); return undefined; }, set: () => { touched.push(name + '.set'); return true; } });
-  const win = {};
+  let blobN = 0; const fetched = [], revoked = [];
+  const win = {}; // fetch and URL are hidden from Object.keys so the global-names test still sees only G_Guests
+  Object.defineProperty(win, 'fetch', { value: (u, o) => { fetched.push([u, o]); return Promise.resolve({ ok: true, blob: () => Promise.resolve({ u }) }); } });
+  Object.defineProperty(win, 'URL', { value: { createObjectURL: () => 'blob:t/' + (++blobN), revokeObjectURL: (u) => revoked.push(u) } });
   const ctx = { window: win, localStorage: trap('localStorage'), sessionStorage: trap('sessionStorage'), Intl, Date, Promise, JSON, Math, console, setTimeout, clearTimeout, Uint8Array,
     document: { cookie: '' } };
   vm.createContext(ctx);
   vm.runInContext(SRC, ctx, { filename: 'G_guests.js' });
   win.G_Guests._setClock(() => NOW);
-  return { M: win.G_Guests, touched, win };
+  return { M: win.G_Guests, touched, win, fetched, revoked };
 }
 
 // One fake client. `tables` maps a table name to a result (or a function returning one); `rpcs` maps an rpc name to a handler; `fn` is the function handler.
@@ -81,10 +84,10 @@ function detailClient(over = {}) {
     fn: (b) => (b.action === 'context' ? { status: 200, j: { ok: true, features: FEAT, stay: null } } : { status: 200, j: { ok: true, saved: [] } }), ...over });
 }
 async function mount(cl, sub = '', role = 'owner', extra = {}) {
-  const { M, touched } = load(); const el = new FakeEl(); const toasts = [];
+  const { M, touched, fetched, revoked } = load(); const el = new FakeEl(); const toasts = [];
   M.mount(el, { client: cl, demo: false, role, sub, propertyId: PROP, navigate: () => {}, toast: (m) => toasts.push(m), haptic: () => {}, ...extra });
   await tick();
-  return { M, el, touched, toasts };
+  return { M, el, touched, toasts, fetched, revoked };
 }
 const click = (el, act, attrs = {}) => { const node = { getAttribute: (k) => (k === 'data-act' ? act : k in attrs ? attrs[k] : k === 'data-' + k ? null : attrs['data-' + k.replace(/^data-/, '')] ?? null) }; return el.l.click[0]({ target: { closest: () => node } }); };
 const clickA = (el, act, attrs) => { const a = { 'data-act': act }; for (const [k, v] of Object.entries(attrs || {})) a['data-' + k] = v; return el.l.click[0]({ target: { closest: () => ({ getAttribute: (k) => (k in a ? a[k] : null) }) } }); };
@@ -322,8 +325,8 @@ test('G: Show ID photo signs only on tap, for 300 s, from the private bucket; th
   const { el } = await mount(cl, GID);
   assert.equal(cl.signed.length, 0);
   await clickA(el, 'show-id', { id: CID }); await tick();
-  assert.deepEqual(cl.signed, [['guest-id-photos', CID + '/a.jpg', 3600]]);
-  assert.match(el.html, /https:\/\/signed\.test\//);
+  assert.deepEqual(cl.signed, [['guest-id-photos', CID + '/a.jpg', 300]]);
+  assert.match(el.html, /blob:t\//);
   await clickA(el, 'full', { id: CID });
   assert.match(el.html, /role="dialog"/); assert.match(el.html, /Close/);
   await clickA(el, 'full-close');
@@ -455,13 +458,13 @@ test('G s90: a second open of the same guest reuses the signed link (no second s
   M.unmount();
   const el2 = new FakeEl();
   M.mount(el2, { client: cl, demo: false, role: 'owner', sub: GID, propertyId: PROP, navigate: () => {}, toast: () => {}, haptic: () => {} }); await tick();
-  assert.match(el2.html, /https:\/\/signed\.test\//);
+  assert.match(el2.html, /blob:t\//);
   assert.equal(cl.signed.length, 1);
   assert.deepEqual(touched, []); // nothing read from or written to browser storage
   M.reset(); // sign-out
   const el3 = new FakeEl();
   M.mount(el3, { client: cl, demo: false, role: 'owner', sub: GID, propertyId: PROP, navigate: () => {}, toast: () => {}, haptic: () => {} }); await tick();
-  assert.doesNotMatch(el3.html, /https:\/\/signed\.test\//);
+  assert.doesNotMatch(el3.html, /blob:t\//);
   await clickA(el3, 'show-id', { id: CID }); await tick();
   assert.equal(cl.signed.length, 2);
 });
@@ -487,4 +490,31 @@ test('G s90: app.js keeps ID photos in memory only, dedupes requests, and offers
   assert.match(app, /a === 'id-rot'/);
   assert.match(app, /state\.photos = \{\}; state\.photoReq = \{\}; state\.rot = \{\}/); // sign-out drops all three
   assert.equal(/localStorage|sessionStorage|caches\.open|indexedDB/.test(app.slice(app.indexOf('function loadIdPhotos'), app.indexOf('function dropPhotos'))), false);
+});
+
+test('G s90: photos are fetched no-store into a blob; expiry, errors and sign-out drop them; a download that lands after sign-out is not stored', async () => {
+  const cl = detailClient();
+  const { M, el, fetched, revoked } = await mount(cl, GID);
+  await clickA(el, 'show-id', { id: CID }); await tick();
+  assert.equal(fetched.length, 1); assert.equal(fetched[0][1].cache, 'no-store');
+  assert.match(el.html, /src="blob:t\/1"/);
+  // the picture fails to show: forgotten, the button returns
+  M._onImgErr({ target: { closest: () => ({ getAttribute: () => CID + '/a.jpg' }) } });
+  assert.match(el.html, /Show ID photo/); assert.deepEqual(revoked, ['blob:t/1']);
+  // expiry: a record left open past the cache time falls back to the button, never an old link
+  await clickA(el, 'show-id', { id: CID }); await tick();
+  assert.match(el.html, /blob:t\/2/);
+  const realNow = Date.now; Date.now = () => realNow() + 31 * 60000;
+  try { M._state().d.companions = M._state().d.companions.slice(); await clickA(el, 'detail-retry'); await tick(); } finally { Date.now = realNow; }
+  // sign-out while a download is in flight
+  M.reset();
+  const slow = detailClient(); let release; const gate = new Promise((r) => { release = r; });
+  const w = load(); const e2 = new FakeEl();
+  const origFrom = slow.storage.from; slow.storage.from = (b) => ({ createSignedUrl: (p) => gate.then(() => origFrom(b).createSignedUrl(p, 300)) });
+  w.M.mount(e2, { client: slow, demo: false, role: 'owner', sub: GID, propertyId: PROP, navigate: () => {}, toast: () => {}, haptic: () => {} }); await tick();
+  await clickA(e2, 'show-id', { id: CID }); await tick();
+  w.M.reset(); release(); await tick(20);
+  const e3 = new FakeEl();
+  w.M.mount(e3, { client: slow, demo: false, role: 'owner', sub: GID, propertyId: PROP, navigate: () => {}, toast: () => {}, haptic: () => {} }); await tick();
+  assert.doesNotMatch(e3.html, /blob:t\//);
 });

@@ -26,19 +26,22 @@
   var S = null, G_seq = 0;
   // Photo links live for the sign-in session only, in memory (never written to storage): a path keeps its signed URL until 5 minutes before it
   // expires, so reopening a guest neither signs nor downloads again. G_rot is the per-session turn (0/90/180/270) of a path; G_reset clears both.
-  var G_SIGN_SEC = 3600, G_cache = {}, G_inflight = {}, G_rot = {};
-  function G_cached(path) { var h = G_cache[path]; return h && h.exp - 300000 > Date.now() ? h.url : ''; }
+  var G_SIGN_SEC = 300, G_TTL = 30 * 60000, G_epoch = 0, G_cache = {}, G_inflight = {}, G_rot = {};
+  function G_cached(path) { var h = G_cache[path]; return h && h.exp > Date.now() ? h.url : ''; }
+  function G_drop(path) { var h = G_cache[path]; if (h) { try { root.URL.revokeObjectURL(h.url); } catch (e) { /* nothing to free */ } } delete G_cache[path]; }
   function G_sign(client, path) {
     var u = G_cached(path); if (u) return Promise.resolve({ url: u });
     if (G_inflight[path]) return G_inflight[path];
-    var p = Promise.resolve(client.storage.from(G_BUCKET).createSignedUrl(path, G_SIGN_SEC)).then(function (r) { return r; }, function (e) { return { data: null, error: e || { message: 'network' } }; }).then(function (r) {
-      delete G_inflight[path];
-      if (r.error || !r.data || !r.data.signedUrl) return { url: '' };
-      G_cache[path] = { url: r.data.signedUrl, exp: Date.now() + G_SIGN_SEC * 1000 }; return { url: r.data.signedUrl };
-    });
+    var ep = G_epoch, p = Promise.resolve(client.storage.from(G_BUCKET).createSignedUrl(path, G_SIGN_SEC)).then(function (r) { return r; }, function (e) { return { data: null, error: e || { message: 'network' } }; }).then(function (r) {
+      if (r.error || !r.data || !r.data.signedUrl) throw new Error('sign');
+      return root.fetch(r.data.signedUrl, { cache: 'no-store', referrerPolicy: 'no-referrer' }); // like app.js: no browser HTTP cache, shown from a memory blob
+    }).then(function (res) { if (!res.ok) throw new Error('fetch'); return res.blob(); }).then(function (blob) {
+      if (ep !== G_epoch) return { url: '' }; // signed out while downloading: never stored in the next session
+      G_drop(path); var url = root.URL.createObjectURL(blob); G_cache[path] = { url: url, exp: Date.now() + G_TTL }; return { url: url };
+    }).then(function (o) { if (G_inflight[path] === p) delete G_inflight[path]; return o; }, function () { if (G_inflight[path] === p) delete G_inflight[path]; return { url: '' }; });
     G_inflight[path] = p; return p;
   }
-  function G_reset() { G_unmount(); G_cache = {}; G_inflight = {}; G_rot = {}; }
+  function G_reset() { G_unmount(); G_epoch++; Object.keys(G_cache).forEach(G_drop); G_cache = {}; G_inflight = {}; G_rot = {}; }
 
   // ------------------------------------------------------------------------------------------------ pure helpers (tested)
   function G_esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
@@ -305,7 +308,7 @@
     if (D.cErr) return '<div class="card glass G_card"><div class="card-head"><h3>People and ID photos</h3></div>' + G_err('No connection, so the people and ID photos could not load.', 'G_cerr') + '<button class="btn btn-secondary" type="button" data-act="detail-retry">Try again</button></div>';
     var list = D.companions || [], g = D.guest;
     var rows = list.map(function (c) {
-      var own = G_exact(c.name, g.name), url = D.urls[c.id] || G_cached(c.id_photo_path), conf = S.confirm && S.confirm.id === c.id ? S.confirm.kind : '';
+      var own = G_exact(c.name, g.name), url = G_cached(c.id_photo_path), conf = S.confirm && S.confirm.id === c.id ? S.confirm.kind : '';
       var photo = c.id_photo_path ? (url ? '<button class="G_photo' + G_rotCls(c.id_photo_path) + '" type="button" data-act="full" data-id="' + G_esc(c.id) + '" data-path="' + G_esc(c.id_photo_path) + '" aria-label="Open the ID photo of ' + G_esc(c.name) + ' full screen"><img class="G_img" src="' + G_esc(url) + '" loading="lazy" decoding="async" alt="ID photo of ' + G_esc(c.name) + '"></button>' :
         '<button class="btn btn-secondary btn-sm" type="button" data-act="show-id" data-id="' + G_esc(c.id) + '">' + (D.urlBusy === c.id ? 'Opening…' : 'Show ID photo') + '</button>') : '<span class="G_none">No ID photo</span>';
       var pick = function (label, act) {
@@ -572,7 +575,7 @@
     G_sign(S.client, c.id_photo_path).then(function (r) {
       if (!G_live(tok)) return;
       D.urlBusy = '';
-      if (!r.url) S.cerr = 'The ID photo could not be opened. Tap again in a moment.'; else { S.cerr = ''; D.urls[id] = r.url; }
+      if (!r.url) S.cerr = 'The ID photo could not be opened. Tap again in a moment.'; else S.cerr = '';
       G_paint();
     });
   }
@@ -605,7 +608,7 @@
   }
   function G_forget(D, id) { // a replaced or removed photo must not come back from the cache
     var c = D.companions.filter(function (x) { return x.id === id; })[0]; delete D.urls[id];
-    if (c && c.id_photo_path) { delete G_cache[c.id_photo_path]; delete G_rot[c.id_photo_path]; }
+    if (c && c.id_photo_path) { G_drop(c.id_photo_path); delete G_rot[c.id_photo_path]; }
   }
   function G_refreshCompanions() {
     var tok = S.token, D = S.d;
@@ -650,7 +653,7 @@
     else if (a === 'vip') { G_readEdit(); S.edit.vip = !S.edit.vip; G_paint(); G_focus('G_f_vip'); }
     else if (a === 'save-edit') G_saveEdit();
     else if (a === 'show-id') G_showId(id);
-    else if (a === 'full') { var fc = S.d.companions.filter(function (x) { return x.id === id; })[0]; S.fullPath = fc ? fc.id_photo_path : ''; S.full = S.d.urls[id] || (fc && G_cached(fc.id_photo_path)) || null; G_paint(); G_focus('G_fullx'); }
+    else if (a === 'full') { var fc = S.d.companions.filter(function (x) { return x.id === id; })[0]; S.fullPath = fc ? fc.id_photo_path : ''; S.full = (fc && G_cached(fc.id_photo_path)) || null; G_paint(); G_focus('G_fullx'); }
     else if (a === 'full-rot') { if (S.fullPath) { G_rot[S.fullPath] = ((G_rot[S.fullPath] || 0) + 90) % 360; G_paint(); G_focus('G_fullx'); } }
     else if (a === 'full-close') { S.full = null; G_paint(); }
     else if (a === 'remove-photo') { S.confirm = { id: id, kind: 'remove-photo' }; G_paint(); }
@@ -707,7 +710,7 @@
       d: null, edit: null, add: null, msg: null, err: '', cerr: '', confirm: null, cbusy: '', busy: false, full: null
     };
     if (S.role !== 'owner' && S.role !== 'admin') { G_paint(); return; }
-    el.addEventListener('click', G_onClick); el.addEventListener('change', G_onChange); el.addEventListener('input', G_onInput); el.addEventListener('keydown', G_onKey); el.addEventListener('load', G_onImg, true);
+    el.addEventListener('click', G_onClick); el.addEventListener('change', G_onChange); el.addEventListener('input', G_onInput); el.addEventListener('keydown', G_onKey); el.addEventListener('load', G_onImg, true); el.addEventListener('error', G_onImgErr, true);
     if (S.demo || !S.client) {
       if (!S.demo) { el.innerHTML = '<div class="G_root">' + G_err('No connection, so Guests could not open.') + '</div>'; return; }
       S.list.rows = G_DEMO; S.list.total = G_DEMO.length;
@@ -723,10 +726,14 @@
     if (!path || !im.naturalWidth || G_rot[path] !== undefined || im.naturalHeight <= im.naturalWidth * 1.05) return;
     G_rot[path] = 90; if (b.classList) b.classList.add('G_r90');
   }
+  function G_onImgErr(ev) { // a photo that will not show: forget it so the Show ID photo button comes back
+    var im = ev && ev.target, b = im && im.closest && im.closest('[data-path]'), path = b && b.getAttribute('data-path');
+    if (path && S) { G_drop(path); G_paint(); }
+  }
   function G_unmount() {
     if (!S) return;
     var el = S.el; if (G_timer) { clearTimeout(G_timer); G_timer = null; }
-    try { el.removeEventListener('click', G_onClick); el.removeEventListener('change', G_onChange); el.removeEventListener('input', G_onInput); el.removeEventListener('keydown', G_onKey); el.removeEventListener('load', G_onImg, true); } catch (e) { /* the screen is going away */ }
+    try { el.removeEventListener('click', G_onClick); el.removeEventListener('change', G_onChange); el.removeEventListener('input', G_onInput); el.removeEventListener('keydown', G_onKey); el.removeEventListener('load', G_onImg, true); el.removeEventListener('error', G_onImgErr, true); } catch (e) { /* the screen is going away */ }
     S.token = -1; S = null; // guest data, signed photo links and chosen photos leave memory here
   }
 
@@ -734,6 +741,6 @@
     mount: G_mount, unmount: G_unmount, reset: G_reset, _setClock: function (f) { G_clock = f; },
     _t: { searchPattern: G_searchPattern, daysToBirthday: G_daysToBirthday, stayMap: G_stayMap, tagsFromText: G_tagsFromText, check: G_check, patch: G_patch, sameName: G_sameName,
       errText: G_errText, rpcText: G_rpcText, absent: G_absent, saveLines: G_saveLines, stayLine: G_stayLine, sheetFrom: G_sheetFrom, addBody: G_addBody, today: G_today },
-    _state: function () { return S; }, _onImg: G_onImg
+    _state: function () { return S; }, _onImg: G_onImg, _onImgErr: G_onImgErr
   };
 })(typeof window !== 'undefined' ? window : this);
