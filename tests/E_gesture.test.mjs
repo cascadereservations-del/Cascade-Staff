@@ -185,7 +185,7 @@ test('E_ G4: in reduced motion the knob still follows the finger, the release is
 
 // ---------------------------------------------------------------------------------------------------- G1 the month grid (s82)
 async function calApp(hash, o) { return boot(Object.assign({ role: 'admin', hash, handlers: baseHandlers('admin', { staff_home_v1: () => HOMEWITH([stayRow('Ana Reyes', '2026-10-14', '2026-10-17')]) }) }, o || {})); }
-const swipeCal = (app, pts, o) => { const cal = surf({ offsetWidth: 328 }); drive(app, cal, pts, Object.assign({ pick: (s) => (s === '.cal' ? cal : null) }, o || {})); return cal; };
+const swipeCal = (app, pts, o) => { const cal = surf({ offsetWidth: 328 }); drive(app, cal, pts, Object.assign({ pick: (s) => (s === '.cal, .K_root' ? cal : null) }, o || {})); return cal; };
 const monthOf = (app) => (/<h2 class="dlg"[^>]*>([^<]+)<\/h2>/.exec(app.els['v-calendar'].innerHTML) || [])[1];
 
 test('E_ G1 (s82): swiping the month grid left shows the next month, right the previous one; min(20% of the width, 64 px) or a 32 px flick at 0.3 px/ms', async () => {
@@ -204,19 +204,19 @@ test('E_ G1 (s82): swiping the month grid left shows the next month, right the p
 
 test('E_ G1 (s82): the month follows the finger at 0.6x (cap 96 px), a month that is not there does not follow, and the release snaps back over 160 ms', async () => {
   const a = await calApp('#calendar'); const cal = surf({ offsetWidth: 328 }), fire = (t, ev) => (a.listeners[t] || []).forEach((f) => f(ev));
-  fire('pointerdown', { target: { closest: (s) => (s === '.cal' ? cal : null) }, clientX: 300, clientY: 300, pointerId: 1, timeStamp: 0, button: 0 });
+  fire('pointerdown', { target: { closest: (s) => (s === '.cal, .K_root' ? cal : null) }, clientX: 300, clientY: 300, pointerId: 1, timeStamp: 0, button: 0 });
   fire('pointermove', { clientX: 200, clientY: 301, pointerId: 1, timeStamp: 100 }); assert.equal(cal.style.transform, 'translateX(-60px)'); assert.equal(cal.style.transition, 'none');
   fire('pointermove', { clientX: 30, clientY: 301, pointerId: 1, timeStamp: 200 }); assert.equal(cal.style.transform, 'translateX(-96px)');
   fire('pointerup', { clientX: 30, clientY: 301, pointerId: 1, timeStamp: 210 }); assert.equal(cal.style.transition, 'transform 160ms ease-out, opacity 160ms ease-out'); assert.equal(monthOf(a), 'November 2026');
   const none = await calApp('#calendar'); const c2 = surf({ offsetWidth: 328 }), f2 = (t, ev) => (none.listeners[t] || []).forEach((f) => f(ev));
-  f2('pointerdown', { target: { closest: (s) => (s === '.cal' ? c2 : null) }, clientX: 100, clientY: 300, pointerId: 1, timeStamp: 0, button: 0 });
+  f2('pointerdown', { target: { closest: (s) => (s === '.cal, .K_root' ? c2 : null) }, clientX: 100, clientY: 300, pointerId: 1, timeStamp: 0, button: 0 });
   f2('pointermove', { clientX: 200, clientY: 301, pointerId: 1, timeStamp: 100 }); assert.equal(c2.style.transform, 'translateX(60px)', '3.1.1: right of October is September: it is offered, so the grid follows');
   f2('pointerup', { clientX: 200, clientY: 301, pointerId: 1, timeStamp: 110 });
 });
 
 test('E_ G1 (s82): a cancel (the browser took the pan) resets the grid and changes nothing; the sub-tabs are tap only and the arrow keys move between the two', async () => {
   const a = await calApp('#calendar'); const cal = surf({ offsetWidth: 328 }), fire = (t, ev) => (a.listeners[t] || []).forEach((f) => f(ev));
-  fire('pointerdown', { target: { closest: (s) => (s === '.cal' ? cal : null) }, clientX: 300, clientY: 300, pointerId: 1, timeStamp: 0, button: 0 });
+  fire('pointerdown', { target: { closest: (s) => (s === '.cal, .K_root' ? cal : null) }, clientX: 300, clientY: 300, pointerId: 1, timeStamp: 0, button: 0 });
   fire('pointermove', { clientX: 200, clientY: 301, pointerId: 1, timeStamp: 100 }); fire('pointercancel', { pointerId: 1 });
   assert.equal(cal.style.transform, ''); assert.equal(monthOf(a), 'October 2026');
   const html = a.els['v-calendar'].innerHTML;
@@ -317,7 +317,7 @@ test('E_ tap-twin guard: every element that carries data-E-swipe has a visible w
 test('E_ the rejected gestures are not built: no main-tab swipe, snooze, pull to refresh, notice dismiss, long press, sub-tab swipe, or touch-event listener', () => {
   const src = read('app.js');
   assert.equal((src.match(/E_drag\(document, \{ sel:/g) || []).length, 5, 'the slide, the sheet pull, the task row, the month grid and the day sheet: all through the one helper');
-  assert.match(src, /sel: '\.cal', axis: 'x'/); assert.doesNotMatch(src, /sel: '\.E_tabbody'/, 'the sub-tab swipe (old G1) is removed: the segmented control is tap only');
+  assert.match(src, /sel: '\.cal, \.K_root', axis: 'x'/); assert.doesNotMatch(src, /sel: '\.E_tabbody'/, 'the sub-tab swipe (old G1) is removed: the segmented control is tap only');
   assert.doesNotMatch(src, /touchstart|touchmove|touchend|contextmenu', function \(ev\) \{ var .*press|longpress|long-press|snooze|pull.to.refresh|ptr/i);
   assert.doesNotMatch(src, /sel: '\.cal \.d'|sel: '\.A_nlist|sel: '\.C_notice|sel: '\.tabbar|sel: '#app'|sel: '\.view/, 'no swipe between the main tabs');
 });
