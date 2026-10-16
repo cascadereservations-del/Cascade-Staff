@@ -224,7 +224,7 @@ test('E_fix: until the fold manifest answers the bookings row and the pill row l
 test('E_fix: the tap twin of G1, G2 and G4 does the same thing as the gesture (same resulting state), not just "a control exists"', async () => {
   const cal = await boot({ role: 'admin', hash: '#calendar', handlers: baseHandlers('admin', { staff_home_v1: () => HOMEWITH([stayRow('Ana Reyes', '2026-10-14', '2026-10-17')]) }) });
   const title = (a) => (/<h2 class="dlg"[^>]*>([^<]+)</.exec(a.els['v-calendar'].innerHTML) || [])[1];
-  const body = surf({ offsetWidth: 328 }); drive(cal, body, [[0, 300, 300], [100, 250, 302], [200, 150, 302], [260, 150, 302]], (s, el) => (s === '.cal' ? el : null));
+  const body = surf({ offsetWidth: 328 }); drive(cal, body, [[0, 300, 300], [100, 250, 302], [200, 150, 302], [260, 150, 302]], (s, el) => (s === '.cal, .K_root' ? el : null));
   const tap = await boot({ role: 'admin', hash: '#calendar', handlers: baseHandlers('admin', { staff_home_v1: () => HOMEWITH([stayRow('Ana Reyes', '2026-10-14', '2026-10-17')]) }) }); await tap.click({ 'data-act': 'next' });
   assert.equal(title(cal), title(tap), 'swiping the grid lands on the month the next arrow goes to');
   const state = async (how) => { const app = await boot({ role: 'admin', hash: '#tasks', handlers: baseHandlers('admin', { tasks_list_v1: tasksOf([], true) }) }); await app.click({ 'data-act': 'task-add-open' });

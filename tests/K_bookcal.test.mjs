@@ -59,7 +59,7 @@ test('K the module is loaded on demand; a failed load keeps the month grid', asy
   const loaded = [];
   const app = await boot({ role: 'admin', hash: '#calendar', ls: mem({ cs_cal_view: 'bookings' }).ls, winInit: (w) => { w.H_loadAsset = (m) => { loaded.push(m.src, m.css); return Promise.reject(new Error('404')); }; }, handlers: handlers('admin') });
   await app.flush(); assert.deepEqual(loaded, ['calendar/K_bookcal.js', 'calendar/K_bookcal.css']);
-  assert.match(html(app), /class="cal"/); assert.doesNotMatch(html(app), /skel"[^>]*height:160px/);
+  assert.match(html(app), /class="cal"/); assert.doesNotMatch(html(app), /skel"[^>]*height:300px/);
 });
 
 test('K pure render: conflict, tap targets, rem text, files shipped', () => {
@@ -69,4 +69,13 @@ test('K pure render: conflict, tap targets, rem text, files shipped', () => {
   const css = fs.readFileSync(root + '/calendar/K_bookcal.css', 'utf8');
   assert.match(css, /\.K_chip \{[^}]*min-height: 44px/); assert.match(fs.readFileSync(new URL('../styles.css', import.meta.url), 'utf8'), /\.K_view button \{[^}]*min-height: 44px/, 'the switch is styled before the module loads'); assert.doesNotMatch(css, /font-size:\s*\d+px/);
   const sw = fs.readFileSync(root + '/sw.js', 'utf8'); assert.match(sw, /\.\/calendar\/K_bookcal\.js/); assert.match(sw, /\.\/calendar\/K_bookcal\.css/);
+});
+
+test('K swipe works on the booking view, the failed load says so and a second tap retries', async () => {
+  assert.match(fs.readFileSync(root + '/app.js', 'utf8'), /sel: '\.cal, \.K_root'/);
+  let ok = false, n = 0;
+  const app = await boot({ role: 'admin', hash: '#calendar', ls: mem({ cs_cal_view: 'bookings' }).ls, winInit: (w) => { w.H_loadAsset = () => { n++; if (!ok) return Promise.reject(new Error('404')); w.K_BookCal = K; return Promise.resolve(); }; }, handlers: handlers('admin') });
+  await app.flush(); assert.match(html(app), /class="cal"/); assert.match(html(app), /could not load, so the month is shown/);
+  ok = true; await app.click({ 'data-act': 'cal-view', 'data-view': 'bookings' });
+  assert.equal(n, 2); assert.match(html(app), /class="K_root"/); assert.doesNotMatch(html(app), /could not load/);
 });

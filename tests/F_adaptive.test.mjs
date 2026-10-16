@@ -155,7 +155,7 @@ test('F_ gestures and haptics keep working in every class: the calendar swipe, t
   const FOLD = { schema: 1, surfaces: { admin: { files: 84 }, checklist: { files: 8 }, manual: { files: 16 }, guide: { files: 48, adminGuide: true } } };
   for (const width of [360, 768, 1280]) {
     const tab = await boot({ role: 'admin', hash: '#calendar', width, handlers: baseHandlers('admin', { staff_home_v1: () => HOMEWITH([stayRow('Ana Reyes', '2026-10-14', '2026-10-17')]) }) });
-    const body = surf({ offsetWidth: width }); drive(tab, body, [[0, width - 80, 300], [100, width - 80 - Math.round(width * 0.15), 302], [200, width - 80 - Math.round(width * 0.4), 302], [260, width - 80 - Math.round(width * 0.4), 302]], (s, el) => (s === '.cal' ? el : null));
+    const body = surf({ offsetWidth: width }); drive(tab, body, [[0, width - 80, 300], [100, width - 80 - Math.round(width * 0.15), 302], [200, width - 80 - Math.round(width * 0.4), 302], [260, width - 80 - Math.round(width * 0.4), 302]], (s, el) => (s === '.cal, .K_root' ? el : null));
     assert.match(tab.els['v-calendar'].innerHTML, /<h2 class="dlg"[^>]*>November 2026</, 'month swipe at ' + width);
     const done = new Set(), calls = [];
     const task = await boot({ role: 'admin', hash: '#tasks', width, nav: { vibrate: (p) => { calls.push(p); return true; } }, handlers: baseHandlers('admin', { tasks_list_v1: () => ({ error: null, data: { ok: true, manager: true, today: TODAY, tasks: [T({})].filter((t) => !done.has(t.id)) } }), task_set_done_v1: (a) => { done.add(a.p_id); return { error: null, data: { ok: true } }; } }) });
