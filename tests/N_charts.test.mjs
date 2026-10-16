@@ -66,8 +66,25 @@ test('monthBars: aria summary, hidden table, 12 months, gaps', () => {
   assert.equal((h.match(/<th scope="row">/g) || []).length, 12);
   assert.match(h, /class="C_sr"/);
   assert.match(h, /No data/);
-  assert.equal((h.match(/class="C_bar"/g) || []).length, 11);
+  assert.equal((h.match(/class="C_bar( C_on)?"/g) || []).length, 11);
   assert.match(clean(C.monthBars({ months: [{ label: 'Jan', value: 0, lastYear: 0, occupancy: 0 }] })), /No figures yet/);
+});
+test('kpiTile: chips name the compared period; defaults stay for old callers; last spark point is a dot', () => {
+  const h = C.kpiTile({ title: 'ADR', value: 1, spark: [1, 2, 3], deltaPrev: 4, deltaYoY: -2, prevLabel: 'vs Aug', yoyLabel: 'vs Sep 2025', goodWhen: 'up' });
+  assert.match(h, /class="C_vs">vs Aug</); assert.match(h, /vs Sep 2025: down 2%/); assert.match(h, /vs Aug: up 4%/);
+  assert.match(C.kpiTile({ title: 'a', value: 1, deltaPrev: 1, deltaYoY: 1 }), /vs previous.*vs last year/);
+  assert.equal((h.match(/class="C_sdot"/g) || []).length, 1);
+  assert.ok(!/C_sdot/.test(C.kpiTile({ title: 'a', value: 1, spark: [1, 2, null] })), 'no dot when the newest month has no value');
+});
+test('monthBars: newest bar highlighted, tap caption, grid, occupancy line, last-year marks', () => {
+  const months = [{ label: 'Aug', title: 'Aug 2026', value: 1000, lastYear: 800, occupancy: 50 }, { label: 'Sep', title: 'Sep 2026', value: 2000, lastYear: 1500, occupancy: 75 }];
+  const h = clean(C.monthBars({ months }));
+  assert.equal((h.match(/class="C_bar C_on"/g) || []).length, 1);
+  assert.match(h, /role="status"[^>]*>Sep 2026: ₱2,000 · same month last year ₱1,500 · occupancy 75%</);
+  assert.equal((h.match(/class="C_grid"/g) || []).length, 3); assert.match(h, /class="C_oline"/); assert.equal((h.match(/class="C_ly"/g) || []).length, 2);
+  assert.equal((h.match(/class="C_hit"[^>]*data-n="mon"/g) || []).length, 2); assert.match(h, /class="C_max"[^>]*>₱2,000</);
+  const first = clean(C.monthBars({ months, sel: 0 })); assert.match(first, /role="status"[^>]*>Aug 2026: ₱1,000/); assert.match(first, /aria-pressed="true"/);
+  assert.match(clean(C.monthBars({ months, sel: 9 })), /role="status"[^>]*>Sep 2026/, 'a stale selection falls back to the newest');
 });
 test('paceCard: empty, ahead/behind, null capacity', () => {
   assert.match(clean(C.paceCard({ nextMonths: [] })), /No upcoming/);

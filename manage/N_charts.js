@@ -26,6 +26,7 @@
   function spark(vals) {
     var W = 120, H = 32, mn = Infinity, mx = -Infinity; vals = vals || [];
     vals.forEach(function (v) { v = num(v); if (v !== null) { if (v < mn) mn = v; if (v > mx) mx = v; } });
+    var dot = function (p) { return '<path class="C_sdot" d="M' + p.x.toFixed(1) + ' ' + p.y.toFixed(1) + ' h0.01"/>'; }; // zero-length round-cap stroke: a dot that stays round when the svg is stretched
     var open = '<svg class="C_spark" viewBox="0 0 ' + W + ' ' + H + '" preserveAspectRatio="none" aria-hidden="true" focusable="false">';
     if (mn === Infinity) return open + '</svg>';
     mn = Math.min(0, mn); var span = mx - mn, segs = [], cur = [];
@@ -36,9 +37,9 @@
     });
     if (cur.length) segs.push(cur);
     return open + segs.map(function (sg) {
-      if (sg.length === 1) return '<circle class="C_sdot" cx="' + sg[0].x.toFixed(1) + '" cy="' + sg[0].y.toFixed(1) + '" r="2.5"/>';
+      if (sg.length === 1) return dot(sg[0]);
       var d = sg.map(function (p, i) { return (i ? 'L' : 'M') + p.x.toFixed(1) + ' ' + p.y.toFixed(1); }).join(' ');
-      return '<path class="C_sarea" d="' + d + ' L' + sg[sg.length - 1].x.toFixed(1) + ' ' + H + ' L' + sg[0].x.toFixed(1) + ' ' + H + ' Z"/><path class="C_sline" d="' + d + '"/>';
+      return '<path class="C_sarea" d="' + d + ' L' + sg[sg.length - 1].x.toFixed(1) + ' ' + H + ' L' + sg[0].x.toFixed(1) + ' ' + H + ' Z"/><path class="C_sline" d="' + d + '"/>' + (sg === segs[segs.length - 1] && num(vals[vals.length - 1]) !== null ? dot(sg[sg.length - 1]) : '');
     }).join('') + '</svg>';
   }
 
@@ -55,36 +56,48 @@
     return '<span class="C_chip ' + cls + '" aria-label="' + esc(label + ': ' + (v === 0 ? 'unchanged' : (v > 0 ? 'up ' : 'down ') + txt.replace(/^[+−]/, ''))) + '"><span aria-hidden="true">' + glyph + '</span> ' + esc(txt) + ' <span class="C_vs">' + esc(label) + '</span></span>';
   }
 
-  // kpiTile({title, value, unit, spark, deltaPrev, deltaYoY, goodWhen}) -> HTML. A string value is shown as given (pre-formatted).
+  // kpiTile({title, value, unit, spark, deltaPrev, deltaYoY, prevLabel, yoyLabel, goodWhen}) -> HTML; the labels name the compared period ("vs Aug"). A string value is shown as given (pre-formatted).
   function kpiTile(o) {
     o = o || {}; var gw = o.goodWhen === 'up' || o.goodWhen === 'down' ? o.goodWhen : 'neutral', val;
     if (typeof o.value === 'number') val = num(o.value) === null ? '—' : String(Math.round(o.value * 10) / 10);
     else val = o.value == null || o.value === '' ? '—' : String(o.value);
-    var chips = chip(o.deltaPrev, 'vs previous', gw) + chip(o.deltaYoY, 'vs last year', gw);
+    var chips = chip(o.deltaPrev, o.prevLabel || 'vs previous', gw) + chip(o.deltaYoY, o.yoyLabel || 'vs last year', gw);
     return '<article class="C_tile C_' + gw + '"><h3 class="C_title">' + esc(o.title) + '</h3>' +
       '<p class="C_val"><span class="C_num">' + esc(val) + '</span>' + (o.unit ? '<span class="C_unit"> ' + esc(o.unit) + '</span>' : '') + '</p>' +
       (chips ? '<p class="C_chips">' + chips + '</p>' : '') + spark(o.spark) + '</article>';
   }
 
-  // monthBars({months:[{label, value, lastYear, occupancy}], format}) -> figure with role=img svg + visually hidden table.
+  // monthBars({months:[{label, title, value, lastYear, occupancy}], format, sel}) -> figure: bars, faint grid, occupancy line, tap/hover caption (role=status), hidden table.
+  // sel = highlighted month (default newest); the host re-renders on a hit button's data-n="mon". Text is HTML, never svg text, so it does not stretch.
   function monthBars(o) {
     o = o || {}; var months = o.months || [], fmt = typeof o.format === 'function' ? o.format : formatPHP, n = months.length;
     if (!n) return '<figure class="C_fig"><p class="C_empty">No monthly data yet.</p></figure>';
-    var W = 360, H = 140, top = 12, bot = 6, ph = H - top - bot, mx = 0, svg = '', rows = '', labs = '', bestI = -1, best = -Infinity;
+    var W = 360, H = 140, top = 6, bot = 4, ph = H - top - bot, mx = 0, svg = '', rows = '', labs = '', hits = '', caps = [], bestI = -1, best = -Infinity, pts = [];
+    var sel = typeof o.sel === 'number' && o.sel >= 0 && o.sel < n ? Math.floor(o.sel) : n - 1;
     months.forEach(function (m) { [num(m.value), num(m.lastYear)].forEach(function (v) { if (v !== null && v > mx) mx = v; }); }); if (mx <= 0) mx = 1;
-    var slot = W / n, bw = slot * 0.56;
+    var slot = W / n, bw = slot * 0.56, yAt = function (f) { return (top + ph * (1 - f)).toFixed(1); };
+    [1, 2 / 3, 1 / 3].forEach(function (f) { svg += '<line class="C_grid" x1="0" x2="' + W + '" y1="' + yAt(f) + '" y2="' + yAt(f) + '"/>'; });
+    svg += '<line class="C_base" x1="0" x2="' + W + '" y1="' + yAt(0) + '" y2="' + yAt(0) + '"/>';
     months.forEach(function (m, i) {
-      var v = num(m.value), ly = num(m.lastYear), oc = num(m.occupancy), x = slot * i + (slot - bw) / 2, cx = (slot * i + slot / 2).toFixed(1);
+      var v = num(m.value), ly = num(m.lastYear), oc = num(m.occupancy), x = slot * i + (slot - bw) / 2, cx = slot * i + slot / 2, ttl = m.title || m.label, txt;
       if (v !== null && v > 0 && v > best) { best = v; bestI = i; }
-      if (v !== null && v > 0) { var h = Math.max(1.5, ph * v / mx); svg += '<rect class="C_bar" x="' + x.toFixed(1) + '" y="' + (top + ph - h).toFixed(1) + '" width="' + bw.toFixed(1) + '" height="' + h.toFixed(1) + '" rx="3"/>'; }
-      if (ly !== null && ly > 0) { var hl = Math.max(1.5, ph * ly / mx); svg += '<rect class="C_ly" x="' + (x - 3).toFixed(1) + '" y="' + (top + ph - hl - 1.25).toFixed(1) + '" width="' + (bw + 6).toFixed(1) + '" height="2.5" rx="1.25"/>'; }
-      if (oc !== null) svg += '<circle class="C_occ" cx="' + cx + '" cy="' + (top + ph * (1 - Math.min(100, Math.max(0, oc)) / 100)).toFixed(1) + '" r="3"/>';
-      labs += '<span>' + esc(String(m.label == null ? '' : m.label).slice(0, 3)) + '</span>';
-      rows += '<tr><th scope="row">' + esc(m.label) + '</th><td>' + (v === null ? 'No data' : esc(fmt(v))) + '</td><td>' + (ly === null ? 'No data' : esc(fmt(ly))) + '</td><td>' + (oc === null ? 'No data' : esc(formatPercent(oc))) + '</td></tr>';
+      if (v !== null && v > 0) { var h = Math.max(1.5, ph * v / mx); svg += '<rect class="C_bar' + (i === sel ? ' C_on' : '') + '" x="' + x.toFixed(1) + '" y="' + (top + ph - h).toFixed(1) + '" width="' + bw.toFixed(1) + '" height="' + h.toFixed(1) + '" rx="3"/>'; }
+      if (ly !== null && ly > 0) { var hl = Math.max(1.5, ph * ly / mx); svg += '<rect class="C_ly" x="' + (x - 3).toFixed(1) + '" y="' + (top + ph - hl - 1.5).toFixed(1) + '" width="' + (bw + 6).toFixed(1) + '" height="3" rx="1.5"/>'; }
+      if (oc !== null) pts.push({ x: cx, y: top + ph * (1 - Math.min(100, Math.max(0, oc)) / 100), i: i }); else pts.push(null);
+      labs += '<span' + (i === sel ? ' class="C_on"' : '') + '>' + esc(String(m.label == null ? '' : m.label).slice(0, 3)) + '</span>';
+      txt = ttl + ': ' + (v === null ? 'No data' : fmt(v)) + (ly === null ? '' : ' · same month last year ' + fmt(ly)) + (oc === null ? '' : ' · occupancy ' + formatPercent(oc));
+      caps.push(txt);
+      hits += '<button class="C_hit" type="button" data-n="mon" data-v="' + i + '" aria-pressed="' + (i === sel) + '" aria-label="' + esc(txt) + '"></button>';
+      rows += '<tr><th scope="row">' + esc(ttl) + '</th><td>' + (v === null ? 'No data' : esc(fmt(v))) + '</td><td>' + (ly === null ? 'No data' : esc(fmt(ly))) + '</td><td>' + (oc === null ? 'No data' : esc(formatPercent(oc))) + '</td></tr>';
     });
-    var summary = n + (n === 1 ? " month" : " months") + (bestI >= 0 ? '. Highest: ' + months[bestI].label + ', ' + fmt(best) : '. No figures yet') + '. A short line marks the same month last year; dots show occupancy.';
-    return '<figure class="C_fig"><svg class="C_bars" viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="' + esc(summary) + '" focusable="false">' + svg + '</svg><div class="C_labs" aria-hidden="true">' + labs + '</div>' +
-      '<figcaption class="C_key"><span class="C_k">This year</span><span class="C_k C_kly">Same month last year</span><span class="C_k C_kocc">Occupancy</span></figcaption>' +
+    var seg = [], cur = []; pts.forEach(function (p) { if (p) cur.push(p); else { if (cur.length) seg.push(cur); cur = []; } }); if (cur.length) seg.push(cur);
+    seg.forEach(function (sg) { if (sg.length > 1) svg += '<path class="C_oline" d="' + sg.map(function (p, j) { return (j ? 'L' : 'M') + p.x.toFixed(1) + ' ' + p.y.toFixed(1); }).join(' ') + '"/>'; });
+    pts.forEach(function (p) { if (p) svg += '<circle class="C_occ' + (p.i === sel ? ' C_on' : '') + '" cx="' + p.x.toFixed(1) + '" cy="' + p.y.toFixed(1) + '" r="' + (p.i === sel ? 4 : 3) + '"/>'; });
+    var summary = n + (n === 1 ? " month" : " months") + (bestI >= 0 ? '. Highest: ' + (months[bestI].title || months[bestI].label) + ', ' + fmt(best) : '. No figures yet') + '. A short line marks the same month last year; dots show occupancy.';
+    return '<figure class="C_fig"><div class="C_plot"><span class="C_max" aria-hidden="true">' + esc(fmt(mx)) + '</span><svg class="C_bars" viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="' + esc(summary) + '" focusable="false">' + svg + '</svg>' +
+      '<div class="C_hits" style="grid-template-columns:repeat(' + n + ',minmax(0,1fr))">' + hits + '</div></div><div class="C_labs" aria-hidden="true">' + labs + '</div>' +
+      '<p class="C_cap" role="status" aria-live="polite">' + esc(caps[sel]) + '</p>' +
+      '<figcaption class="C_key"><span class="C_k">Revenue</span><span class="C_k C_kly">Same month last year</span><span class="C_k C_kocc">Occupancy (0-100%)</span></figcaption>' +
       '<table class="C_sr"><caption>Monthly figures</caption><thead><tr><th scope="col">Month</th><th scope="col">This year</th><th scope="col">Last year</th><th scope="col">Occupancy</th></tr></thead><tbody>' + rows + '</tbody></table></figure>';
   }
 

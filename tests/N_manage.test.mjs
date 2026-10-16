@@ -361,7 +361,7 @@ test('N KPIs: one card per group, label left and number right, delta versus the 
   const t = await boot({ sub: 'kpis', handlers: { get_hospitality_metrics_v1: (a) => ({ data: a.p_start === '2026-10-01' ? METRICS(1) : METRICS(0.8), error: null }) } });
   const x = t.text();
   for (const g of ['Stays', 'Revenue', 'Money', 'Guests']) assert.ok(x.includes(g), g);
-  assert.match(x, /Occupancy .*Before: 48\.0% · \+12 pts .*60\.0%/); assert.match(x, /Accommodation revenue .*Before: .*24,000\.00 · \+25% .*30,000\.00/); assert.match(x, /Expected payout .*Not available/);
+  assert.match(x, /Occupancy .*vs 1–13 Sep: 48\.0% · \+12 pts .*60\.0%/); assert.match(x, /Accommodation revenue .*vs 1–13 Sep: .*24,000\.00 · \+25% .*30,000\.00/); assert.match(x, /Expected payout .*Not available/);
   assert.match(x, /Month to date \(13 of 31 nights elapsed\): 1 Oct 2026 to 14 Oct 2026/); assert.match(x, /Compared with 1 Sep 2026 to 14 Sep 2026/);
   assert.match(t.html(), /N_num/); assert.match(t.html(), /Desk tools: full KPIs in the dashboard/); assert.match(t.html(), /data-n="refresh"/);
   await t.click('refresh'); assert.equal(t.period().length, 4);
@@ -595,7 +595,7 @@ test('N charts: four headline cards with big number, delta chip (glyph, word, fi
   const t = await boot({ sub: 'kpis', handlers: monthHandlers() }); await tick(20);
   const h = t.html(); assert.equal(count(h, /class="N_card N_hcard"/g), 4);
   for (const name of ['Occupancy', 'Accommodation revenue', 'Accommodation ADR', 'Sold nights']) assert.ok(new RegExp('aria-label="' + name + '"').test(h), name);
-  assert.match(t.text(), /Occupancy 60\.0% ▲ Up 12 pts vs before/); assert.match(t.text(), /Accommodation revenue .*30,000\.00 ▲ Up 25% vs before/);
+  assert.match(t.text(), /Occupancy 60\.0% ▲ Up 12 pts vs 1–13 Sep/); assert.match(t.text(), /Accommodation revenue .*30,000\.00 ▲ Up 25% vs 1–13 Sep/);
   assert.equal(count(h, /class="N_spark"/g), 4); assert.ok(count(h, /class="N_sline"/g) >= 2 && count(h, /class="N_sbar"/g) >= 6);
   const L = load().M.lib;
   assert.deepEqual(plain(L.chipFor({ value: '50', unit: 'percent' }, { value: '60', unit: 'percent' })), { dir: 'down', glyph: '▼', text: 'Down 10 pts' });
@@ -768,7 +768,7 @@ test('N KPIs v1: one series call replaces the six; four tiles, year-on-year only
   const t = await boot({ sub: 'kpis', charts: true, handlers: { get_hospitality_series_v1: () => mkSeries(), get_hospitality_metrics_v1: mH } }); await tick(20);
   const s = t.sent('get_hospitality_series_v1'); assert.equal(s.length, 1); assert.deepEqual(plain(s[0][1]), { p_property_id: PROP, p_months: 13 }); assert.equal(t.series().length, 0);
   const h = t.html(); assert.equal(count(h, /<article class="C_tile/g), 4); for (const n of ['RevPAR', 'Revenue', 'Occupancy', 'ADR']) assert.ok(h.includes('>' + n + '<'), n);
-  assert.equal(count(h, /class="C_vs">vs last year/g), 4); assert.match(t.text(), /Sep 2026, the last full month/);
+  assert.equal(count(h, /class="C_vs">vs Sep 2025/g), 4); assert.equal(count(h, /class="C_vs">vs Aug</g), 4); assert.equal(count(h, /class="C_sdot"/g), 4, 'the month shown is the highlighted last point'); assert.match(t.text(), /Sep 2026, the last full month/);
   assert.equal(count(h, /<th scope="row">/g), 12, 'twelve full months, not the running one'); assert.match(t.text(), /On the books/); assert.match(t.text(), /leaves out 2 stays with no booking date/);
   assert.ok(!/missing coverage|partial coverage/.test(t.text())); assert.match(t.text(), /Not enough data yet/); assert.match(t.text(), /Some of the data is still to come/);
   assert.ok(/N_rows N_gd/.test(h), 'falling cancellation rate is good news'); assert.ok(!/N_rows N_dn/.test(h), 'nothing is red: lead time is neutral');
@@ -777,7 +777,7 @@ test('N KPIs v1: one series call replaces the six; four tiles, year-on-year only
 test('N KPIs v1: no last-year data hides that chip; money hidden without finance; old server falls back to six calls once; no chart module means no series call', async () => {
   const none = mkSeries(); none.months.forEach((m) => { m.ly = null; });
   const t = await boot({ sub: 'kpis', charts: true, handlers: { get_hospitality_series_v1: () => none, get_hospitality_metrics_v1: () => ({ data: METRICS(1), error: null }) } }); await tick(20);
-  assert.ok(!/vs last year/.test(t.text())); assert.match(t.text(), /vs previous/);
+  assert.ok(!/vs last year/.test(t.text())); assert.match(t.text(), /vs Aug/);
   const nf = await boot({ sub: 'kpis', charts: true, handlers: { get_hospitality_series_v1: () => mkSeries({ financeVisible: false }), get_hospitality_metrics_v1: () => ({ data: METRICS(1), error: null }) } }); await tick(20);
   assert.equal(count(nf.html(), /<article class="C_tile/g), 1); assert.match(nf.text(), /Bars are nights sold/);
   const old = await boot({ sub: 'kpis', charts: true, handlers: monthHandlers() }); await new Promise((r) => setTimeout(r, 80)); await tick(20);

@@ -97,6 +97,14 @@
     var start = mode === 'month' ? isoOf(Date.UTC(+s[0], +s[1] - 2, +s[2])) : isoOf(Date.UTC(+s[0] - 1, +s[1] - 1, +s[2]));
     return { key: per.key + '-cmp-' + mode, start: start, endExclusive: addDays(start, len), label: 'Same elapsed period, previous ' + mode };
   }
+  // "1–17 Sep", "Sep" (whole month), "1 Sep – 17 Oct"; a year is added when it differs from the current period's year. Same dates as the sentence at the top of the page.
+  function shortRange(a, bEx, refYear) {
+    var e = addDays(bEx, -1), sp = a.split('-'), ep = e.split('-'), sm = MON[+sp[1] - 1], em = MON[+ep[1] - 1], yr = +sp[0] !== refYear || +ep[0] !== refYear ? ' ' + ep[0] : '', t;
+    if (+sp[2] === 1 && bEx.slice(8) === '01' && sp[1] === ep[1]) t = sm; // one whole month
+    else if (sp[1] === ep[1] && sp[0] === ep[0]) t = +sp[2] === +ep[2] ? +sp[2] + ' ' + sm : +sp[2] + '–' + +ep[2] + ' ' + sm;
+    else t = +sp[2] + ' ' + sm + ' – ' + +ep[2] + ' ' + em;
+    return t + yr;
+  }
   // insights-page.tsx:587 picks the comparison mode this way
   function compareMode(key) { return ['ytd', 'prev-year', 'qtd', 'prev-quarter'].indexOf(key) >= 0 ? 'year' : 'month'; }
   // insights-page.tsx:62 pctDelta and :65 fmtDeltaPct
@@ -107,10 +115,10 @@
   // Colour follows meaning, not direction: a falling cancellation rate is good news; lead time and length of stay are neither good nor bad.
   var POLARITY = { cancellation_rate: 'down', booking_lead_time: 'neutral', average_length_of_stay: 'neutral' };
   function tone(key, dir) { var pol = POLARITY[key] || 'up'; return !dir || pol === 'neutral' ? '' : (dir === pol ? 'good' : 'bad'); }
-  function deltaLine(cur, prev, key) { var r = deltaCore(cur, prev); r.tone = tone(key, r.dir); return r; }
-  function deltaCore(cur, prev) {
-    if (!cur || !prev || prev.value === null || prev.value === undefined) return { text: prev ? 'Before: not available' : '', dir: '' };
-    var c = num(cur.value), p = num(prev.value), before = 'Before: ' + formatMetricValue(prev);
+  function deltaLine(cur, prev, key, lbl) { var r = deltaCore(cur, prev, lbl); r.tone = tone(key, r.dir); return r; }
+  function deltaCore(cur, prev, lbl) { lbl = lbl || 'Before'; // lbl: "vs 1–17 Sep" names the compared period; the default keeps the old wording
+    if (!cur || !prev || prev.value === null || prev.value === undefined) return { text: prev ? lbl + ': not available' : '', dir: '' };
+    var c = num(cur.value), p = num(prev.value), before = lbl + ': ' + formatMetricValue(prev);
     if (!isFinite(c) || !isFinite(p)) return { text: before, dir: '' };
     var change;
     if (cur.unit === 'percent') { var pts = c - p; change = (pts >= 0 ? '+' : '') + pts.toFixed(0) + ' pts'; if (Math.abs(pts) < 0.5) change = ''; return { text: before + (change ? ' · ' + change : ''), dir: !change ? '' : pts > 0 ? 'up' : 'down' }; }
@@ -558,11 +566,12 @@
     out += '<p class="N_sub">' + esc(per.label + ': ' + fmtDate(per.start, 'long') + ' to ' + fmtDate(per.endExclusive, 'long') + ' (end day not counted). Compared with ' + fmtDate(cmp.start, 'long') + ' to ' + fmtDate(cmp.endExclusive, 'long') + '.') + '</p>';
     var box = stateBox(k, 'KPIs', 'kpis'); if (box) return out + (k.busy || (!k.ok && !k.err && !k.absent && !k.denied) ? chartsSkeleton() : '') + box;
     var now = k.data && k.data.now, prev = k.data && k.data.prev, mNow = (now && now.metrics) || {}, mPrev = (prev && prev.metrics) || {};
-    out += chartsHtml(mNow, mPrev, !!prev);
+    var cl = 'vs ' + shortRange(cmp.start, cmp.endExclusive, +per.start.slice(0, 4));
+    out += chartsHtml(mNow, mPrev, !!prev, cl);
     KPI_GROUPS.forEach(function (g) {
       var rows = g.keys.filter(function (key) { return mNow[key]; }); if (!rows.length) return;
       out += '<section class="N_card N_list" aria-label="' + esc(g.title) + '"><h3 class="N_h3 N_pad">' + esc(g.title) + '</h3>' + rows.map(function (key) {
-        var m = mNow[key], dl = deltaLine(m, prev ? mPrev[key] : null, key), na = m.value === null || m.value === undefined;
+        var m = mNow[key], dl = deltaLine(m, prev ? mPrev[key] : null, key, cl), na = m.value === null || m.value === undefined;
         return '<div class="N_row N_static N_kpi"><span class="N_rowmid"><span class="N_rowt">' + esc(KPI_TITLE[key] || key) + '</span>' +
           (dl.text ? '<span class="N_rows' + (dl.tone === 'bad' ? ' N_dn' : dl.tone === 'good' ? ' N_gd' : '') + '">' + (dl.dir === 'up' ? '<span aria-hidden="true">▲</span> ' : dl.dir === 'down' ? '<span aria-hidden="true">▼</span> ' : '') + esc(dl.text) + '</span>' : '') +
           (m.coverage === 'missing' ? '<span class="N_rows">Not enough data yet</span>' : m.coverage === 'partial' ? '<span class="N_rows">Some of the data is still to come</span>' : '') + '</span>' +
@@ -600,10 +609,10 @@
       return '<rect class="N_sbar" x="' + x.toFixed(1) + '" y="' + (H - h).toFixed(1) + '" width="' + bw.toFixed(1) + '" height="' + h.toFixed(1) + '" rx="2"/>';
     }).join('') + '</svg>';
   }
-  function chipHtml(c) { return c ? '<span class="N_chipd N_' + c.dir + '"><span aria-hidden="true">' + c.glyph + '</span> ' + esc(c.text) + ' <span class="N_vs">vs before</span></span>' : '<span class="N_chipd N_flat N_vs">No comparison</span>'; }
+  function chipHtml(c, lbl) { return c ? '<span class="N_chipd N_' + c.dir + '"><span aria-hidden="true">' + c.glyph + '</span> ' + esc(c.text) + ' <span class="N_vs">' + esc(lbl || 'vs before') + '</span></span>' : '<span class="N_chipd N_flat N_vs">No comparison</span>'; }
   var HEADS = [['occupancy', 'Occupancy', 'occ', 'line'], ['accommodation_revenue', 'Accommodation revenue', 'rev', 'bars'], ['adr', 'Accommodation ADR', 'adr', 'line'], ['sold_nights', 'Sold nights', 'nights', 'bars']];
   function monthFigures(m) { return m.failed || (m.rev === null && m.occ === null) ? esc(monthTitle(m)) + ': No data' : esc(monthTitle(m)) + ': Revenue ' + (m.rev === null ? 'No data' : esc(formatPHP(String(m.rev)))) + ' · Occupancy ' + (m.occ === null ? 'No data' : esc(formatPercent(m.occ))); }
-  function chartsHtml(mNow, mPrev, hasPrev) {
+  function chartsHtml(mNow, mPrev, hasPrev, cl) {
     var se = S.d.series || {};
     if (se.absent || se.denied || se.err) return ''; // old server or refused: the number rows below remain
     if (se.busy || !se.ok) return chartsSkeleton();
@@ -612,7 +621,7 @@
     HEADS.forEach(function (h) {
       var m = mNow[h[0]]; if (!m) return;
       var vals = series.map(function (x) { return x[h[2]]; });
-      out += '<section class="N_card N_hcard" aria-label="' + esc(h[1]) + '"><span class="N_hl">' + esc(h[1]) + '</span><span class="N_hv N_num">' + esc(formatMetricValue(m)) + '</span>' + chipHtml(hasPrev ? chipFor(m, mPrev[h[0]]) : null) +
+      out += '<section class="N_card N_hcard" aria-label="' + esc(h[1]) + '"><span class="N_hl">' + esc(h[1]) + '</span><span class="N_hv N_num">' + esc(formatMetricValue(m)) + '</span>' + chipHtml(hasPrev ? chipFor(m, mPrev[h[0]]) : null, cl) +
         (vals.some(function (v) { return v !== null; }) ? (h[3] === 'line' ? sparkLine(vals, h[0] === 'occupancy' ? 'pct' : 'zero') : sparkBars(vals)) + '<span class="N_hs">Last 6 months</span>' : '<span class="N_hs">No data for the last 6 months</span>') + '</section>';
     });
     // the wide card
@@ -648,16 +657,18 @@
     var out = '<div class="N_v1">';
     if (!ms.length) out += '<div class="N_note">Not enough data yet.</div>';
     else {
-      var last = ms[ms.length - 1], prev = ms.length > 1 ? ms[ms.length - 2] : null, ly = last.ly || null;
+      var last = ms[ms.length - 1], prev = ms.length > 1 ? ms[ms.length - 2] : null, ly = last.ly || null, ly0 = +String(last.month).slice(0, 4);
+      var mlab = function (mo) { var y = +String(mo).slice(0, 4); return lab(mo) + (y === ly0 ? '' : ' ' + y); }; // "Aug", or "Dec 2025" across a year
       var chg = function (a, b, pts) { a = nm(a); b = nm(b); if (a === null || b === null) return null; if (pts) return { v: a - b, unit: 'pt' }; return b === 0 ? null : (a - b) / Math.abs(b) * 100; };
       var tiles = [['revpar', 'RevPAR', 1], ['revenue', 'Revenue', 1], ['occupancy', 'Occupancy', 0], ['adr', 'ADR', 1]].filter(function (t) { return fin || !t[2]; }).map(function (t) {
         var k = t[0], v = nm(last[k]), pts = k === 'occupancy';
         return C.kpiTile({ title: t[1], value: v === null ? null : (pts ? C.formatPercent(v) : C.formatPHP(v)), spark: ms.map(function (m) { return nm(m[k]); }),
-          deltaPrev: prev ? chg(last[k], prev[k], pts) : null, deltaYoY: ly ? chg(last[k], ly[k], pts) : null, goodWhen: 'up' });
+          deltaPrev: prev ? chg(last[k], prev[k], pts) : null, deltaYoY: ly ? chg(last[k], ly[k], pts) : null, goodWhen: 'up',
+          prevLabel: prev ? 'vs ' + mlab(prev.month) : '', yoyLabel: 'vs ' + lab(last.month) + ' ' + (ly0 - 1) });
       }).join('');
       out += '<p class="N_sub">' + esc(lab(last.month) + ' ' + String(last.month).slice(0, 4) + ', the last full month. Compared with the month before' + (ly ? ' and with the same month last year.' : '.')) + '</p><div class="N_tiles">' + tiles + '</div>';
-      out += '<h3 class="N_h3 N_gap">Month by month</h3><p class="N_sub">' + esc(fin ? 'Bars are accommodation revenue.' : 'Bars are nights sold.') + '</p>' + C.monthBars({
-        months: ms.map(function (m) { return { label: lab(m.month), value: fin ? nm(m.revenue) : nm(m.sold_nights), lastYear: m.ly ? (fin ? nm(m.ly.revenue) : nm(m.ly.sold_nights)) : null, occupancy: nm(m.occupancy) }; }),
+      out += '<h3 class="N_h3 N_gap">Month by month</h3><p class="N_sub">' + esc((fin ? 'Bars are accommodation revenue.' : 'Bars are nights sold.') + ' Tap a month for its figures.') + '</p>' + C.monthBars({ sel: S.monSel,
+        months: ms.map(function (m) { return { label: lab(m.month), title: lab(m.month) + ' ' + String(m.month).slice(0, 4), value: fin ? nm(m.revenue) : nm(m.sold_nights), lastYear: m.ly ? (fin ? nm(m.ly.revenue) : nm(m.ly.sold_nights)) : null, occupancy: nm(m.occupancy) }; }),
         format: fin ? undefined : function (v) { return v + (v === 1 ? ' night' : ' nights'); } });
     }
     var pace = d.pace || [], unk = pace.reduce(function (a, p) { return a + (nm(p && p.ly_unknown_booking_date) || 0); }, 0);
