@@ -6,7 +6,11 @@
   var CS = window.CS, ICON = window.ICON, esc = CS.esc, root = document.getElementById('inst');
   var ua = navigator.userAgent || '';
   var standalone = (window.matchMedia && matchMedia('(display-mode: standalone)').matches) || navigator.standalone === true;
-  var link = CS.INSTALL_URL; // the one canonical link: what Copy link copies and the Open in Chrome / Safari buttons carry
+  // ?team=staff|admin (or the stored cs-team, same rule as the app) rides on every link, so a staff install stays a staff install.
+  var team = null; try { var tm = /[?&]team=(staff|admin)(&|#|$)/.exec(location.search); team = tm ? tm[1] : localStorage.getItem('cs-team'); } catch (e) {}
+  if (team !== 'staff' && team !== 'admin') team = null;
+  var q = team ? '&team=' + team : '';
+  var link = CS.INSTALL_URL + (team ? '?team=' + team : ''); // the one canonical link: what Copy link copies and the Open in Chrome / Safari buttons carry
   var deferred = null, installed = false, phase = 'idle'; // phase: idle | installing | done (the one-tap install on Android and desktop)
   var copied = '', copyTimer = 0;
 
@@ -15,11 +19,13 @@
   // ---- the three iPhone pictures: simple inline drawings, the thing to tap is drawn in the brand colour ----
   var SHARE_ICO = '<path class="ink hi2" d="M12 3v9M8.5 6.5 12 3l3.5 3.5M7 10H6a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-8a1 1 0 0 0-1-1h-1"/>';
   var PICS = {
-    share: '<svg class="pic" viewBox="0 0 240 88" role="img" aria-label="The bottom bar of Safari. The Share button, a square with an arrow pointing up, is in the middle and is marked."><rect class="box" x="1" y="22" width="238" height="64" rx="14"/>' +
-      '<path class="ink" d="m30 54-6 5 6 5"/><path class="ink" d="m66 54 6 5-6 5"/>' +
-      '<circle class="hi" cx="120" cy="58" r="22"/><g transform="translate(108 46)">' + SHARE_ICO + '</g>' +
-      '<rect class="ink" x="166" y="50" width="16" height="16" rx="3"/><circle class="ink" cx="214" cy="58" r="2"/><circle class="ink" cx="206" cy="58" r="2"/><circle class="ink" cx="222" cy="58" r="2"/>' +
-      '<text x="120" y="14" text-anchor="middle" class="tx-hi">Tap Share</text></svg>',
+    more: '<svg class="pic" viewBox="0 0 240 88" role="img" aria-label="The bottom bar of Safari. The address bar sits in the middle and the three dots button, at its right end, is marked."><rect class="box" x="1" y="22" width="238" height="64" rx="14"/>' +
+      '<rect class="ink" x="14" y="38" width="170" height="32" rx="16"/><text x="99" y="59" text-anchor="middle">cascadereservations-del.github.io</text>' +
+      '<circle class="hi" cx="208" cy="54" r="22"/><circle class="ink hi2" cx="198" cy="54" r="2"/><circle class="ink hi2" cx="208" cy="54" r="2"/><circle class="ink hi2" cx="218" cy="54" r="2"/>' +
+      '<text x="120" y="14" text-anchor="middle" class="tx-hi">Tap the three dots</text></svg>',
+    share: '<svg class="pic" viewBox="0 0 240 88" role="img" aria-label="A menu. The Share row, with a square and an arrow pointing up, is marked."><rect class="box" x="1" y="1" width="238" height="86" rx="14"/>' +
+      '<text x="18" y="29">Reader</text><path d="M1 40h238" stroke="var(--border)"/>' +
+      '<rect class="hi" x="6" y="48" width="228" height="34" rx="10"/><text x="18" y="70" class="tx-hi">Share</text><g transform="translate(204 58)">' + SHARE_ICO + '</g></svg>',
     add: '<svg class="pic" viewBox="0 0 240 112" role="img" aria-label="A list of choices. The row Add to Home Screen, with a plus sign, is marked."><rect class="box" x="1" y="1" width="238" height="110" rx="14"/>' +
       '<text x="18" y="29">Copy</text><path d="M1 40h238" stroke="var(--border)"/>' +
       '<text x="18" y="61">Add to Reading List</text>' +
@@ -35,7 +41,7 @@
   function copyBtn() {
     return '<button class="btn btn-secondary btn-block" type="button" data-act="copy">' + (copied ? ICON('check', 's16') + esc(copied) : ICON('clip', 's16') + 'Copy link') + '</button>';
   }
-  function openApp() { return '<a class="btn btn-primary btn-block big" href="../?source=pwa">Open Cascade Staff</a>'; }
+  function openApp() { return '<a class="btn btn-primary btn-block big" href="../?source=pwa' + q + '">Open Cascade Staff</a>'; }
 
   function view() {
     var st = state(), body;
@@ -53,15 +59,16 @@
       body = '<div class="card"><h2 class="hd">Put Cascade Staff on this phone</h2><p class="sub" style="margin-top:6px">One tap. It opens like an app, with no address bar, and keeps you signed in.</p></div>' +
         '<button class="btn btn-primary btn-block big" type="button" data-act="install">' + ICON('plus', 's16') + 'Install</button>';
     } else if (st === 'ios') {
-      body = '<div class="card"><h2 class="hd">Put Cascade Staff on your iPhone</h2><p class="sub" style="margin-top:6px">Three taps in Safari. Use Safari, not the browser inside another app.</p></div>' +
+      body = '<div class="card"><h2 class="hd">Put Cascade Staff on your iPhone</h2><p class="sub" style="margin-top:6px">A few taps in Safari. Use Safari, not the browser inside another app.</p></div>' +
         '<ol class="isteps">' +
-        '<li class="istep"><span class="inum" aria-hidden="true">1</span><div><h2>Tap the Share button</h2>' + PICS.share + '</div></li>' +
-        '<li class="istep"><span class="inum" aria-hidden="true">2</span><div><h2>Choose Add to Home Screen</h2>' + PICS.add + '<p class="help" style="margin:6px 0 0">Scroll the list down a little if you do not see it.</p></div></li>' +
-        '<li class="istep"><span class="inum" aria-hidden="true">3</span><div><h2>Tap Add</h2>' + PICS.ok + '</div></li></ol>' +
-        '<p class="help" style="text-align:center;margin:0">Then open Cascade Staff from your Home Screen.</p>' + copyBtn();
+        '<li class="istep"><span class="inum" aria-hidden="true">1</span><div><h2>Tap the three dots next to the address bar</h2>' + PICS.more + '</div></li>' +
+        '<li class="istep"><span class="inum" aria-hidden="true">2</span><div><h2>Tap Share</h2>' + PICS.share + '</div></li>' +
+        '<li class="istep"><span class="inum" aria-hidden="true">3</span><div><h2>Scroll down and tap Add to Home Screen</h2>' + PICS.add + '<p class="help" style="margin:6px 0 0">Scroll the list down a little if you do not see it.</p></div></li>' +
+        '<li class="istep"><span class="inum" aria-hidden="true">4</span><div><h2>Keep Open as Web App on, then tap Add</h2>' + PICS.ok + '</div></li></ol>' +
+        '<p class="help" style="text-align:center;margin:0">Older iPhone: tap Share at the bottom of Safari, then Add to Home Screen. Then open Cascade Staff from your Home Screen.</p>' + copyBtn();
     } else {
       body = '<div class="infobox">' + ICON('info') + '<span><b>This browser cannot install apps.</b> Copy the link and open it in Chrome on Android or Safari on iPhone.</span></div>' + copyBtn() +
-        '<p class="help" style="text-align:center;margin:0">You can also use the app in this browser without installing it. <a href="../" style="display:inline-flex;align-items:center;min-height:44px">Open Cascade Staff</a></p>';
+        '<p class="help" style="text-align:center;margin:0">You can also use the app in this browser without installing it. <a href="../' + (team ? '?team=' + team : '') + '" style="display:inline-flex;align-items:center;min-height:44px">Open Cascade Staff</a></p>';
     }
     return head + body;
   }

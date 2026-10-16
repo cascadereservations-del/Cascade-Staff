@@ -15,6 +15,7 @@
 <link rel="manifest" href="manifest.webmanifest">
 <script>(function(){try{var m=/[?&]team=(staff|admin)(&|#|$)/.exec(location.search),t=m?m[1]:localStorage.getItem("cs-team");if(t==="staff"||t==="admin")document.querySelector('link[rel="manifest"]').href="manifest-"+t+".webmanifest"}catch(e){}})()</script>
 <link rel="apple-touch-icon" href="icons/apple-touch-icon-180.png">
+<link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
 <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
 <link rel="stylesheet" href="tokens.css">
 <link rel="stylesheet" href="styles.css">
@@ -50,9 +51,11 @@
           <label id="si-pinlbl">Your PIN</label>
           <div class="dots" id="si-dots" role="img" aria-live="polite" aria-label="PIN, 0 of 4 digits"><i></i><i></i><i></i><i></i></div>
           <div class="pad" id="si-pad" role="group" aria-labelledby="si-pinlbl"></div>
+          <button class="btn btn-ghost btn-sm" id="si-topw" type="button">Use a password instead</button>
         </div>
         <div class="field" id="si-passbox" hidden><label for="si-pass">Password</label>
-          <div class="input"><input id="si-pass" name="password" type="password" autocomplete="current-password"><span id="si-lock" aria-hidden="true"></span></div></div>
+          <div class="input"><input id="si-pass" name="password" type="password" autocomplete="current-password"><span id="si-lock" aria-hidden="true"></span></div>
+          <button class="btn btn-ghost btn-sm" id="si-topin" type="button" hidden>Use PIN</button></div>
         <label class="trust"><input type="checkbox" id="si-trust" checked> Trust this device</label>
         <div class="errbox" id="si-err" role="alert" hidden></div>
         <button class="btn btn-primary btn-block" id="si-go" type="submit" hidden>Sign in</button>
@@ -89,7 +92,21 @@
 <div class="scrim" id="a2hs-scrim"></div>
 <div class="sheet" id="a2hs" role="dialog" aria-modal="true" aria-labelledby="a2hs-h" aria-hidden="true">
   <h2 class="ttl" id="a2hs-h">Add Cascade Staff to your Home Screen</h2>
-  <p class="sub" style="margin-top:8px">Tap <b>Share</b> <span id="a2hs-share" style="vertical-align:-4px"></span>, then <b>Add to Home Screen</b>. It opens like an app and keeps you signed in.</p>
+  <div id="a2hs-steps">
+    <ol class="sub" style="margin:8px 0 0;padding-left:20px">
+      <li>Tap the <b>…</b> button next to the address bar.</li>
+      <li>Tap <b>Share</b> <span id="a2hs-share" style="vertical-align:-4px"></span>.</li>
+      <li>Scroll down and tap <b>Add to Home Screen</b>.</li>
+      <li>Keep <b>Open as Web App</b> on, then tap <b>Add</b>.</li>
+    </ol>
+    <p class="help" style="margin:8px 0 0">Older iPhone: tap <b>Share</b> <span id="a2hs-share2" style="vertical-align:-4px"></span> at the bottom, then <b>Add to Home Screen</b>. It opens like an app and keeps you signed in.</p>
+  </div>
+  <div id="a2hs-inapp" hidden>
+    <p class="sub" style="margin-top:8px">This browser, inside another app, cannot add Cascade Staff to your Home Screen. Open it in Safari first, then follow the steps there.</p>
+    <a class="btn btn-primary btn-block" id="a2hs-open" href="#" style="margin-top:12px">Open in Safari</a>
+    <button class="btn btn-secondary btn-block" id="a2hs-copy" type="button" data-act="copy" data-copy="" style="margin-top:8px">Copy link</button>
+    <p class="help" style="margin:8px 0 0">If Safari does not open, tap Copy link, open Safari and paste it in the address bar.</p>
+  </div>
   <button class="btn btn-primary btn-block" id="a2hs-ok" type="button" style="margin-top:16px">Got it</button>
 </div>
 

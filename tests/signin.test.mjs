@@ -274,3 +274,16 @@ test('3.4.2 install: team manifests share id/scope with the base and carry the t
   const h = read('index.html');
   assert.match(h, /<link rel="manifest" href="manifest\.webmanifest">\s*<script>[^]*team=\(staff\|admin\)[^]*cs-team[^]*"manifest-"\+t\+"\.webmanifest"/);
 });
+
+test('3.4.3 sign-in: Use a password instead keeps the handle, sends the typed value as-is, and Use PIN goes back', () => {
+  const pin = { label: 'Ana', handle: 'ana@staff.cascade.invalid', kind: 'pin', team: 'staff' };
+  const pw = CS.signinAsKind(pin, 'password');
+  assert.equal(pw.handle, pin.handle); assert.equal(pw.kind, 'password'); assert.equal(pw.wasPin, true); assert.equal(pin.kind, 'pin');
+  assert.deepEqual(CS.signinCredentials(pw, '1234'), { email: pin.handle, password: '1234' }); // as typed, not padded
+  assert.deepEqual(CS.signinCredentials(pw, 'my mailbox pw'), { email: pin.handle, password: 'my mailbox pw' });
+  assert.equal(CS.signinCredentials(pw, ''), null);
+  const back = CS.signinAsKind(pw, 'pin'); assert.equal(back.kind, 'pin');
+  assert.equal(CS.signinCredentials(back, '1234').password, CS.staffAuthPassword('1234'));
+  assert.equal(CS.signinAsKind(null, 'pin'), null);
+  assert.match(read('index.html'), /id="si-topw"[^>]*>Use a password instead/); assert.match(read('index.html'), /id="si-topin"[^>]*hidden>Use PIN/);
+});

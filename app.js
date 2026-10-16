@@ -20,7 +20,7 @@
     url: 'https://qkgfhsdppslwunarczeq.supabase.co',
     key: 'sb_publishable_JFuRYZ9csmQULcMRmHXDSg_Abo9UeCj',
     propertyId: '6ae230f4-c189-4547-84b1-cb6e0b2cc9bd',
-    version: '3.4.2'
+    version: '3.4.3'
   };
   var LINKS = {
     checklist: 'https://cascadereservations-del.github.io/CH-Cleaners-Checklist/',
@@ -1167,6 +1167,9 @@
         '<button class="btn btn-secondary rp-big" type="button" data-act="reply-mode" data-mode="image">' + ICON('image', 's24') + 'Screenshot</button></div>' +
         '<p class="help" style="margin:0">Cassy writes the drafts in her own voice. You copy one and send it yourself.</p>' +
         '<section class="card glass H_how" aria-label="How it goes"><h2 class="hd">How it goes</h2><ol class="H_steps"><li>Paste, or screenshot, the guest’s message.</li><li>Pick a draft.</li><li>Copy it, then paste it in Messenger.</li></ol></section>' +
+        '<section class="card glass" aria-label="Common links"><h2 class="hd">Common links</h2><div class="stack" style="margin-top:8px">' + CS.COMMON_LINKS.map(function (l) {
+          return '<div class="H_recent"><p class="sub" style="margin:0"><b>' + esc(l.label) + '</b><br><span class="num">' + esc(l.url) + '</span></p><button class="btn btn-ghost btn-sm" type="button" data-act="copy" data-copy="' + esc(l.url) + '" aria-label="' + esc('Copy ' + l.label + ' link') + '">Copy</button></div>';
+        }).join('') + '</div><p class="help" style="margin:8px 0 0">Copy a link, then paste it into your reply.</p></section>' +
         ((state.replyRecent || []).length ? '<section class="card glass" aria-label="Recent drafts"><h2 class="hd">Recent</h2><div class="stack" style="margin-top:8px">' + state.replyRecent.map(function (r, i) {
           return '<div class="H_recent"><p class="sub" style="margin:0"><b>' + esc(r.who) + '</b> · ' + esc(CS.clampText(r.text, 90)) + '</p><button class="btn btn-ghost btn-sm" type="button" data-act="reply-copy-recent" data-i="' + i + '">Copy</button></div>';
         }).join('') + '</div><p class="help" style="margin:8px 0 0">Kept on this screen only, until you leave the app.</p></section>' : '');
@@ -1769,7 +1772,7 @@
   function setEntry(entry) {
     si.entry = entry; si.pin = ''; $('si-pass').value = '';
     var pin = !!entry && entry.kind === 'pin', pw = !!entry && entry.kind === 'password';
-    $('si-pinbox').hidden = !pin; $('si-passbox').hidden = !pw; $('si-go').hidden = !pw;
+    $('si-pinbox').hidden = !pin; $('si-passbox').hidden = !pw; $('si-go').hidden = !pw; $('si-topin').hidden = !(pw && entry.wasPin);
     $('si-pinlbl').textContent = entry && entry.label && !si.typed ? 'PIN for ' + entry.label : 'Your PIN';
     var e = $('si-err'); e.hidden = true; drawDots();
     if (pw && !si.typed) $('si-pass').focus();
@@ -1819,6 +1822,9 @@
   $('si-who').addEventListener('change', function () {
     var h = this.value; setEntry(si.list.filter(function (r) { return r.handle === h; })[0] || null);
   });
+  // Use a password instead / Use PIN: same name, other kind, this attempt only (a PIN entry may hold a mailbox password).
+  $('si-topw').addEventListener('click', function () { if (si.entry && !si.busy) { setEntry(CS.signinAsKind(si.entry, 'password')); $('si-pass').focus(); } });
+  $('si-topin').addEventListener('click', function () { if (si.entry && !si.busy) setEntry(CS.signinAsKind(si.entry, 'pin')); });
   $('si-typed').addEventListener('input', function () { setEntry(CS.typedEntry(this.value)); });
   $('si-pad').addEventListener('click', function (ev) {
     var b = ev.target.closest('[data-key]'); if (!b || si.busy) return;
@@ -2066,7 +2072,13 @@
     };
   }
   function seen() { if (DEMO) return true; try { return !!localStorage.getItem('cs_a2hs_seen'); } catch (e) { return false; } }
-  function showA2hs() { $('a2hs-share').innerHTML = ICON('share'); $('a2hs').classList.add('on'); $('a2hs').setAttribute('aria-hidden', 'false'); $('a2hs-scrim').classList.add('on'); }
+  // Inside Messenger, Facebook, Instagram, Gmail and the like an iPhone cannot add to the Home Screen: show "Open in Safari" (this same address, ?team= kept) instead of the steps.
+  var inApp = isIOS && CS.isInAppBrowser(ua);
+  function showA2hs() {
+    var link = CS.pageLink(location), b = inApp ? CS.openInBrowserLink(ua, link) : null;
+    $('a2hs-steps').hidden = inApp; $('a2hs-inapp').hidden = !inApp;
+    if (inApp) { $('a2hs-h').textContent = 'Open Cascade Staff in Safari'; $('a2hs-open').hidden = !b; if (b) { $('a2hs-open').href = b.href; $('a2hs-open').textContent = b.label; } $('a2hs-copy').setAttribute('data-copy', link); }
+    $('a2hs-share').innerHTML = ICON('share'); $('a2hs-share2').innerHTML = ICON('share'); $('a2hs').classList.add('on'); $('a2hs').setAttribute('aria-hidden', 'false'); $('a2hs-scrim').classList.add('on'); }
   function hideA2hs() { $('a2hs').classList.remove('on'); $('a2hs').setAttribute('aria-hidden', 'true'); $('a2hs-scrim').classList.remove('on'); if (!DEMO) try { localStorage.setItem('cs_a2hs_seen', '1'); } catch (e) {} }
   function maybeIosHint() { if (isIOS && !standalone && !seen()) setTimeout(showA2hs, 800); }
   $('a2hs-ok').addEventListener('click', hideA2hs); $('a2hs-scrim').addEventListener('click', hideA2hs);

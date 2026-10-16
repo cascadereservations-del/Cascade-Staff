@@ -89,6 +89,13 @@
     if (entry.kind === 'pin') return STAFF_PIN_RE.test(s) ? { email: entry.handle, password: staffAuthPassword(s) } : null;
     return s ? { email: entry.handle, password: s } : null;
   }
+  // "Use a password instead" / "Use PIN": the same handle for this attempt only. A PIN entry may really hold a mailbox password, so it must never lock the person out.
+  // 'password' sends the typed value as-is (no padding); 'pin' goes back to 4 digits. The caller's entry is not changed, and a fresh pick starts from its own kind.
+  function signinAsKind(entry, kind) {
+    if (!entry || !entry.handle || (kind !== 'pin' && kind !== 'password')) return entry || null;
+    var o = {}; for (var k in entry) o[k] = entry[k];
+    o.kind = kind; o.wasPin = !!entry.wasPin || entry.kind === 'pin'; return o;
+  }
   // supabase-js storage adapter. Default storage key on purpose (the dashboard on this origin reads the same one). "Trust this device"
   // ON writes localStorage (persisted); OFF writes sessionStorage (gone when the browser session ends). Reads look in both, and a write
   // clears the other side so one session never lives in two places. Storage can be missing or throw (private mode): every call is guarded.
@@ -763,6 +770,13 @@
     return null;
   }
   var INSTALL_URL = 'https://cascadereservations-del.github.io/Cascade-Staff/install/';
+  // The two links staff paste into guest replies most often (3.4.3). Add a row here and the Cassy reply screen lists it.
+  var COMMON_LINKS = [
+    { label: 'Welcome guide', url: 'https://tinyurl.com/WelcomeToCascade' },
+    { label: 'Direct booking site', url: 'https://tinyurl.com/Stay-at-Cascade' }
+  ];
+  // The page the person is on, as the Open-in-Safari / Copy link buttons should carry it: same address, ?team= kept, no fragment.
+  function pageLink(loc) { return String(loc && loc.href || '').replace(/#.*$/, ''); }
 
   // ---- v5 shell (Lane A, s81). Everything new carries the A_ prefix. Pure; the screens in app.js only draw what these return. ------------------------
   // The house times: check-out 12:00 noon, check-in 2:00 pm (turnover window 12:00 to 2:00 pm). Read from notices_v1.house_times; this is the one fallback.
@@ -944,6 +958,8 @@
       ['Plain bars', 'In More, switch glass off for a calmer, easier-to-read screen. It turns on by itself on slower phones.']];
     if (flags.notices) items.push(['Notices', 'Rain watch, brownouts and water interruptions show on Today and on the calendar. Tap the weather for the forecast.']);
     items.push(['Cassy reply', 'Draft a warm reply to a guest message. You get two or three drafts to pick from.']);
+    items.push(['Common links', 'The Cassy reply screen lists the Welcome guide and the Direct booking site with a Copy button each.']);
+    items.push(['Install on iPhone', 'Opened inside Messenger or Facebook, the app now shows Open in Safari. The Home Screen steps match the latest iPhone Safari.']);
     items.push(['Cleaning fee', 'Ask for payment for your cleans and expenses. When you finish a clean, a card on Today takes you there.']);
     if (mgr) items.push(['Add a notice from Today', 'The Notices card has an Add a notice button. Water and Power are the first two choices.']);
     items.push(['Alerts turn on by themselves', 'Alerts now turn on by themselves when this phone allows them. If they are blocked, Today shows how to allow them.']);
@@ -1267,7 +1283,7 @@
   function E_tabNeighbour(cur, dir) { var i = A_CAL_TABS.indexOf(cur) + dir; return i < 0 || i >= A_CAL_TABS.length ? null : A_CAL_TABS[i]; }
 
   return {
-    isInAppBrowser: isInAppBrowser, installState: installState, openInBrowserLink: openInBrowserLink, INSTALL_URL: INSTALL_URL,
+    isInAppBrowser: isInAppBrowser, installState: installState, openInBrowserLink: openInBrowserLink, INSTALL_URL: INSTALL_URL, COMMON_LINKS: COMMON_LINKS, pageLink: pageLink,
     taskKindLabel: taskKindLabel, manilaDayOf: manilaDayOf, taskDue: taskDue, taskDueLabel: taskDueLabel, dueFromDate: dueFromDate, taskGroups: taskGroups,
     taskDueCount: taskDueCount, reminderProblem: reminderProblem, canEditRates: canEditRates, rateNum: rateNum, rateLine: rateLine,
     earliestRateStart: earliestRateStart, rateProblem: rateProblem, rateArgs: rateArgs,
@@ -1275,7 +1291,7 @@
     canDraftReply: canDraftReply, canAddGuestDetails: canAddGuestDetails, shrinkSize: shrinkSize, replyProblem: replyProblem, replyBody: replyBody, replyErrorText: replyErrorText, replyResult: replyResult, clampText: clampText,
     REPLY_MAX_IMAGE_BYTES: REPLY_MAX_IMAGE_BYTES, REPLY_MAX_EDGE: REPLY_MAX_EDGE,
     staffAuthPassword: staffAuthPassword, staffLoginEmail: staffLoginEmail, deriveDisplayName: deriveDisplayName, greetingName: greetingName,
-    signinKind: signinKind, signinList: signinList, resolveTeam: resolveTeam, signinForTeam: signinForTeam, typedEntry: typedEntry, keypadPress: keypadPress, signinCredentials: signinCredentials,
+    signinKind: signinKind, signinList: signinList, resolveTeam: resolveTeam, signinForTeam: signinForTeam, typedEntry: typedEntry, keypadPress: keypadPress, signinCredentials: signinCredentials, signinAsKind: signinAsKind,
     authStorage: authStorage, trustedFromStorage: trustedFromStorage, rememberName: rememberName, recalledName: recalledName, doorTarget: doorTarget, doorLink: doorLink, doorRule: doorRule, doorFramed: doorFramed, doorAllowed: doorAllowed, doorsForRole: doorsForRole, foldedDoorUrls: foldedDoorUrls, framedParentTarget: framedParentTarget, FOLD_DOORS: FOLD_DOORS,
     layoutForRole: layoutForRole, accessVerdict: accessVerdict, assertNoMoney: assertNoMoney, moneyKeys: moneyKeys,
     manilaToday: manilaToday, manilaParts: manilaParts, addDays: addDays, daysBetween: daysBetween, weekdayIndex: weekdayIndex,
