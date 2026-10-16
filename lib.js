@@ -90,7 +90,7 @@
     return s ? { email: entry.handle, password: staffAuthPassword(s) } : null; // a 4-digit value is padded too: a real password is 6+ characters
   }
   // "Use a password instead" / "Use PIN": the same handle for this attempt only. A PIN entry may really hold a mailbox password, so it must never lock the person out.
-  // 'password' sends the typed value as-is (no padding); 'pin' goes back to 4 digits. The caller's entry is not changed, and a fresh pick starts from its own kind.
+  // 'password' sends the typed value as-is, except an exactly-4-digit value is padded like a PIN; 'pin' goes back to 4 digits. The caller's entry is not changed, and a fresh pick starts from its own kind.
   function signinAsKind(entry, kind) {
     if (!entry || !entry.handle || (kind !== 'pin' && kind !== 'password')) return entry || null;
     var o = {}; for (var k in entry) o[k] = entry[k];

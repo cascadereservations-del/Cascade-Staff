@@ -20,7 +20,7 @@
   var SHARE_ICO = '<path class="ink hi2" d="M12 3v9M8.5 6.5 12 3l3.5 3.5M7 10H6a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-8a1 1 0 0 0-1-1h-1"/>';
   var PICS = {
     more: '<svg class="pic" viewBox="0 0 240 88" role="img" aria-label="The bottom bar of Safari. The address bar sits in the middle and the three dots button, at its right end, is marked."><rect class="box" x="1" y="22" width="238" height="64" rx="14"/>' +
-      '<rect class="ink" x="14" y="38" width="170" height="32" rx="16"/><text x="99" y="59" text-anchor="middle">cascadereservations-del.github.io</text>' +
+      '<rect class="ink" x="14" y="38" width="170" height="32" rx="16"/><text x="99" y="59" text-anchor="middle">github.io</text>' +
       '<circle class="hi" cx="208" cy="54" r="22"/><circle class="ink hi2" cx="198" cy="54" r="2"/><circle class="ink hi2" cx="208" cy="54" r="2"/><circle class="ink hi2" cx="218" cy="54" r="2"/>' +
       '<text x="120" y="14" text-anchor="middle" class="tx-hi">Tap the three dots</text></svg>',
     share: '<svg class="pic" viewBox="0 0 240 88" role="img" aria-label="A menu. The Share row, with a square and an arrow pointing up, is marked."><rect class="box" x="1" y="1" width="238" height="86" rx="14"/>' +
