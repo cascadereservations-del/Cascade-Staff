@@ -677,7 +677,7 @@
   function A_firstName(st) { return String((st && st.guest_name) || 'Guest').split(/\s+/)[0]; }
   function calendarGrid() {
     var p = state.payload, m = monthState(), cells = CS.monthGrid(m.y, m.m), view = A_notices();
-    if (!window.K_BookCal) K_load(); else if (CS.canSeeGuestContact(role())) K_loadNames(m); // colours come from the Booking calendar module (and the full names it keys on)
+    if (!window.K_BookCal) { if (!K_state.failed) K_load(); } else if (CS.canSeeGuestContact(role())) K_loadNames(m); // colours come from the Booking calendar module (and the full names it keys on)
     var dows = ['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su'].map(function (d) { return '<div class="dow" aria-hidden="true">' + d + '</div>'; }).join('');
     monthHas = { turn: false, clash: false, marks: {} };
     var info = cells.map(function (c) { return c.iso ? dayStatusOf(c.iso) : null; });
