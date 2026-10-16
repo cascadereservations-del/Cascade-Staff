@@ -515,11 +515,11 @@ test('G s91: Rotate saves the new turn and says Saved; a failed save says Could 
   const { el } = await mount(cl, GID); await tick();
   await clickA(el, 'show-id', { id: CID }); await tick();
   await clickA(el, 'full', { id: CID }); await tick();
-  await clickA(el, 'full-rot'); await tick();
+  await clickA(el, 'full-rot'); await new Promise((r) => setTimeout(r, 700)); await tick();
   const sv = cl.calls.filter((c) => c[0] === 'set_guest_photo_rotation_v1'); assert.equal(sv.length, 1);
   assert.deepEqual(sv[0][1], { p_path: compPath, p_rotation: 90 });
   assert.match(el.html, /aria-live="polite">Saved for everyone</);
-  fail = true; await clickA(el, 'full-rot'); await tick();
+  fail = true; await clickA(el, 'full-rot'); await new Promise((r) => setTimeout(r, 700)); await tick();
   assert.match(el.html, /aria-live="polite">Could not save</);
   assert.match(el.html, /G_img G_r180/);
 });
