@@ -164,3 +164,14 @@ test('K s91 booking view older-stays link is labelled for the dashboard, not the
   await app.click({ 'data-act': 'prev' }); await app.click({ 'data-act': 'prev' });
   const h = html(app); if (/H_older/.test(h) || /open the admin dashboard/.test(h)) assert.doesNotMatch(h, /Open the booking calendar/);
 });
+
+test('K s91 a failed name read is retried on the next draw', async () => {
+  let n = 0;
+  const q = (t) => { const o = { select: () => o, eq: () => o, gte: () => o, lte: () => o, not: () => o, in: () => o, limit: () => o, then: (f, g) => Promise.resolve(n === 0 ? { error: { message: 'net' }, data: null } : { error: null, data: t === 'guests' ? [{ id: 'g1', name: 'Nicole Aniero' }] : [{ guest_id: 'g1', checkin_date: '2026-10-12' }] }).then(f, g) }; return o; };
+  const rows = [stayRow('Nicole', '2026-10-12', '2026-10-17', { source: 'airbnb' })];
+  const app = await boot({ role: 'admin', hash: '#calendar', ls: mem({ cs_cal_view: 'bookings' }).ls, handlers: baseHandlers('admin', { staff_home_v1: () => HOMEWITH(rows) }),
+    winInit: (w) => { w.K_BookCal = K; w.H_loadAsset = () => Promise.resolve(); const cc = w.supabase.createClient; w.supabase.createClient = (...a) => { const sb = cc(...a); sb.from = q; return sb; }; } });
+  await app.flush(); assert.match(html(app), /K_nm">Nicole</); assert.doesNotMatch(html(app), /Aniero/);
+  n = 1; await app.click({ 'data-act': 'next' }); await app.click({ 'data-act': 'prev' });
+  assert.match(html(app), /K_nm">Nicole Aniero</);
+});

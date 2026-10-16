@@ -691,14 +691,15 @@
     var e = H_monthEdges(m), gen = H_histGen;
     var res = sb.from('airbnb_reservations').select('guest_id,checkin_date').eq('status', 'confirmed').eq('property_id', pid()).gte('checkout_date', e.start).lte('checkin_date', e.last).not('guest_id', 'is', null).limit(300);
     Promise.resolve(res).then(function (r) {
-      var rows = r && !r.error && r.data || []; if (!rows.length) return;
+      if (!r || r.error) { delete K_names.done[key]; return; } // a failed read is tried again on the next draw; an empty answer is final
+      var rows = r.data || []; if (!rows.length) return;
       var ids = rows.map(function (x) { return x.guest_id; }).filter(function (x, i, a) { return a.indexOf(x) === i; });
       return Promise.resolve(sb.from('guests').select('id,name').in('id', ids)).then(function (g) {
-        if (gen !== H_histGen || !g || g.error) return; var nm = {}; (g.data || []).forEach(function (x) { nm[x.id] = x.name; });
+        if (gen !== H_histGen) return; if (!g || g.error) { delete K_names.done[key]; return; } var nm = {}; (g.data || []).forEach(function (x) { nm[x.id] = x.name; });
         rows.forEach(function (x) { if (nm[x.guest_id]) K_names.list.push({ checkin_date: x.checkin_date, name: nm[x.guest_id] }); });
         if (current === 'calendar' && state.calView === 'bookings' && state.calTab === 'calendar' && state.payload) renderCalendar();
       });
-    }).catch(function () {});
+    }).catch(function () { if (gen === H_histGen) delete K_names.done[key]; });
   }
   function K_body(m) {
     if (!window.K_BookCal) { if (!K_state.failed) { K_load(); return '<div class="skel" style="height:300px"></div>'; } return null; }
