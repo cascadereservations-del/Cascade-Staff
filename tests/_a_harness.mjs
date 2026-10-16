@@ -20,15 +20,15 @@ export function el() {
   return e;
 }
 // E_ options (all optional): fold = a fold-manifest.json object; reduced = prefers-reduced-motion; nav = extra navigator members (vibrate); width = innerWidth; ls = a localStorage stand-in; visible = false hides the page.
-export async function boot({ winInit, tour, tourDelay, role, hash, handlers, now, demo, els: pre, docQuery, serviceWorker, fold, foldFetch, reduced, nav: navExtra, width, ls, visible }) {
+export async function boot({ winInit, tour, tourDelay, role, hash, handlers, now, demo, els: pre, docQuery, serviceWorker, fold, foldFetch, reduced, nav: navExtra, width, ls, visible, storage, ctxExtra }) {
   const when = now || NOW;
   class FixedDate extends Date { constructor(...a) { if (a.length) super(...a); else super(when.getTime()); } static now() { return when.getTime(); } }
   const els = pre || {}, listeners = {}, winListeners = {}, calls = [], location = { hash, pathname: '/', search: demo ? '?demo' : '', origin: 'https://staff.example', replace() {} };
-  const docObj = { getElementById: (id) => (els[id] ||= el()), querySelector: (q) => (docQuery ? docQuery(q) : null), querySelectorAll: () => [], visibilityState: visible === false ? 'hidden' : 'visible', addEventListener: (t, fn) => { (listeners[t] ||= []).push(fn); }, removeEventListener: (t, fn) => { const l = listeners[t] || []; const i = l.indexOf(fn); if (i >= 0) l.splice(i, 1); } };
+  const docObj = { getElementById: (id) => (els[id] ||= el()), createElement: () => el(), querySelector: (q) => (docQuery ? docQuery(q) : null), querySelectorAll: () => [], visibilityState: visible === false ? 'hidden' : 'visible', addEventListener: (t, fn) => { (listeners[t] ||= []).push(fn); }, removeEventListener: (t, fn) => { const l = listeners[t] || []; const i = l.indexOf(fn); if (i >= 0) l.splice(i, 1); } };
   const sb = {
     auth: { getSession: () => Promise.resolve({ data: { session: { user: { email: 'ana@staff.cascade.invalid', user_metadata: { display_name: 'Ana' } }, access_token: 't' } } }), signOut: () => Promise.resolve({}) },
     rpc: (name, args) => { calls.push([name, JSON.parse(JSON.stringify(args || {}))]); const h = handlers[name]; if (!h) return Promise.resolve({ error: null, data: null }); const r = h(args); return r && typeof r.then === 'function' ? r : Promise.resolve(JSON.parse(JSON.stringify(r))); },
-    storage: { from: () => ({ createSignedUrl: () => Promise.resolve({ error: { message: 'x' } }) }) } };
+    storage: storage || { from: () => ({ createSignedUrl: () => Promise.resolve({ error: { message: 'x' } }) }) } };
   const win = { supabase: { createClient: () => sb }, CS, P, CSPay: P, ICON: (n, c) => '<svg class="i ' + (c || '') + '" data-i="' + n + '"></svg>', CSTheme: { get: () => 'auto', set() {}, plainOn: () => false, setPlain() {} },
     addEventListener: (t, fn) => { (winListeners[t] ||= []).push(fn); }, matchMedia: (q) => ({ matches: !!(reduced && /reduced-motion/.test(String(q))) || (/min-width: 37\.5rem/.test(String(q)) && (width || 360) >= 600) }), scrollTo() {}, scrollY: 0, innerWidth: width || 360, localStorage: ls || { getItem: (k) => (k === 'cs_seen_v3' && !tour ? '1' : null), setItem() {}, removeItem() {} }, sessionStorage: { getItem: () => null, setItem() {}, removeItem() {} } };
   if (fold) win.fetch = () => Promise.resolve({ ok: true, json: () => Promise.resolve(fold) });
@@ -38,6 +38,7 @@ export async function boot({ winInit, tour, tourDelay, role, hash, handlers, now
   const nav = Object.assign({ userAgent: 'test' }, navExtra || {}); if (serviceWorker !== false) nav.serviceWorker = { register: (u) => { registered.push(u); return Promise.resolve(); } };
   const ctx = { window: win, document: docObj, location, history: { replaceState(a, b, h) { location.hash = h; } }, navigator: nav, localStorage: win.localStorage, matchMedia: win.matchMedia,
     fetch: () => Promise.resolve({ ok: false }), setTimeout, clearTimeout, console, URL, AbortController, Image: function () {}, Date: FixedDate, Math, JSON, Promise, crypto: { randomUUID: () => 'uuid' } };
+  if (ctxExtra) Object.assign(ctx, ctxExtra); // s91: photo tests replace Image and URL
   if (tourDelay != null) win.H_TOUR_DELAY = tourDelay;
   if (winInit) winInit(win);
   win.crypto = ctx.crypto; vm.createContext(ctx); vm.runInContext(read('app.js'), ctx);

@@ -63,7 +63,7 @@
   var sb = DEMO ? window.CSDemo.client(window.CSDemo.role()) : window.supabase.createClient(CFG.url, CFG.key, { auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: false,
     storage: CS.authStorage(store('localStorage'), store('sessionStorage'), function () { return trustOn; }) } });
 
-  var state = { access: null, user: null, name: '', layout: null, payload: null, loadedAt: 0, loading: false, error: '', month: null, payHint: null, photos: {}, photoReq: {}, rot: {}, photoGen: 0,
+  var state = { access: null, user: null, name: '', layout: null, payload: null, loadedAt: 0, loading: false, error: '', month: null, payHint: null, photos: {}, photoReq: {}, rot: {}, srot: {}, rotReq: {}, photoGen: 0,
     notices: null, noticesAbsent: false, noticesLoading: false, noticeFilter: 'all', nadd: null, fbOpen: false, ratesMore: false, calTab: 'calendar', calView: 'month', legendOpen: false, H_peekedCal: false, H_peekedTask: false, progress: null, progressAbsent: false, taskFilter: 'all', hubRoute: '', tasks: null, tasksErr: '', tasksLoading: false, showDone: false, lastDone: null, add: null, assignees: null, rates: null, ratesErr: '', rateForm: null, rateSaving: false, reply: null, bookings: null, bookingsDone: false, noticesDone: false, tasksDenied: false, noticesFailed: false, bookingsFailed: false, errorKind: '' };
   var $ = function (id) { return document.getElementById(id); };
   try { var lsLegend = store('localStorage'); state.legendOpen = !!lsLegend && lsLegend.getItem('cs_legend_open') === '1'; if (lsLegend && lsLegend.getItem('cs_cal_view') === 'bookings') state.calView = 'bookings'; } catch (e) {} // F2: the legend's More stays as it was left
@@ -374,10 +374,29 @@
   // The ID photo comes from the private guest-id-photos bucket through a 5-minute signed URL made with the user's own session
   // (a storage policy lets staff read only the current and next guest's photo). It is fetched with no-store and shown from memory:
   // no download link, no disk cache, gone on reload.
+  // s91: the turn an owner/admin saved for a photo (0/90/180/270) comes in one batched staff_photo_rotation_v1 call and wins over the auto guess.
+  // It is a number about a file path, held in memory only. A missing function or an error leaves the auto guess in charge.
+  function H_rotLoad(paths) {
+    var need = paths.filter(function (p) { return state.srot[p] === undefined && !state.rotReq[p]; });
+    if (need.length && sb && !DEMO) {
+      var gen = state.photoGen, pr;
+      try { pr = Promise.resolve(sb.rpc('staff_photo_rotation_v1', { p_paths: need.slice(0, 50) })); } catch (e) { pr = Promise.resolve(null); }
+      pr = pr.then(function (r) {
+        if (gen !== state.photoGen || !r || r.error || !Array.isArray(r.data)) return;
+        r.data.forEach(function (x) { if (x && x.path && x.rotation != null && [0, 90, 180, 270].indexOf(Number(x.rotation)) >= 0) state.srot[x.path] = Number(x.rotation); });
+      }).catch(function () { /* not deployed yet: auto guess */ });
+      need.forEach(function (p) { state.rotReq[p] = pr; });
+    }
+    var all = paths.map(function (p) { return state.rotReq[p]; }).filter(Boolean);
+    return all.length ? Promise.all(all) : null;
+  }
+  function H_pathOf(url) { var ks = Object.keys(state.photos); for (var i = 0; i < ks.length; i++) if (state.photos[ks[i]].url === url) return ks[i]; return ''; }
   function loadIdPhotos(root) {
-    root.querySelectorAll('[data-idpath]').forEach(function (box) {
-      var path = box.getAttribute('data-idpath'), hit = state.photos[path];
-      if (hit && Date.now() - hit.at < 30 * 60000) { putPhoto(box, hit.url); return; } // kept in memory for the session: reopening a card does not sign or download again
+    var boxes = Array.prototype.slice.call(root.querySelectorAll('[data-idpath]')), rp = H_rotLoad(boxes.map(function (b) { return b.getAttribute('data-idpath'); }));
+    boxes.forEach(function (box) {
+      var path = box.getAttribute('data-idpath'), hit = state.photos[path], g0 = state.photoGen;
+      var put = function (url) { if (rp) rp.then(function () { if (g0 === state.photoGen) putPhoto(box, url, path); }); else putPhoto(box, url, path); };
+      if (hit && Date.now() - hit.at < 30 * 60000) { put(hit.url); return; } // kept in memory for the session: reopening a card does not sign or download again
       var gen = state.photoGen, req = state.photoReq[path] || (state.photoReq[path] = sb.storage.from('guest-id-photos').createSignedUrl(path, 300).then(function (r) {
         if (r.error || !r.data) throw new Error('sign');
         return net(r.data.signedUrl, { cache: 'no-store', referrerPolicy: 'no-referrer' });
@@ -386,16 +405,18 @@
         var old = state.photos[path]; if (old) URL.revokeObjectURL(old.url);
         var url = URL.createObjectURL(blob); state.photos[path] = { url: url, at: Date.now() }; delete state.photoReq[path]; return url;
       }, function (e) { delete state.photoReq[path]; throw e; })); // one request per path at a time
-      req.then(function (url) { if (url && gen === state.photoGen) putPhoto(box, url); }).catch(function () {
+      req.then(function (url) { if (url && gen === state.photoGen) put(url); }).catch(function () {
         box.className = 'idphoto empty'; box.innerHTML = 'The photo could not be loaded. <button class="btn btn-ghost btn-sm" type="button" data-act="refresh">Try again</button>';
       });
     });
   }
-  function putPhoto(box, url) {
+  function putPhoto(box, url, path) {
     box.innerHTML = ''; var img = new Image(); img.decoding = 'async'; img.alt = 'Guest ID photo'; img.draggable = false;
-    // An ID is a landscape card: one that loads taller than wide with no EXIF turn is shown turned 90 degrees (Rotate in the full-screen view fixes the rest).
+    // An ID is a landscape card: one that loads taller than wide with no EXIF turn is shown turned 270 degrees (counter-clockwise; s91, the other way was upside down on a real phone)
+    // unless a turn was saved for it. Rotate in the full-screen view fixes the rest.
+    if (path && state.rot[url] === undefined && state.srot[path] !== undefined) state.rot[url] = state.srot[path];
     var turn = function () { var d = state.rot[url] || 0; box.classList.toggle('rot', d % 180 === 90); box.classList.toggle('r180', d === 180); box.style.setProperty('--deg', d + 'deg'); };
-    if (state.rot[url] === undefined) img.addEventListener('load', function () { if (state.rot[url] === undefined && img.naturalWidth && img.naturalHeight > img.naturalWidth * 1.05) { state.rot[url] = 90; turn(); } });
+    if (state.rot[url] === undefined) img.addEventListener('load', function () { if (state.rot[url] === undefined && img.naturalWidth && img.naturalHeight > img.naturalWidth * 1.05) { state.rot[url] = 270; turn(); } });
     turn(); img.src = url;
     img.addEventListener('contextmenu', function (e) { e.preventDefault(); });
     if (CS.canSeeGuestContact(role())) { var b = document.createElement('button'); b.type = 'button'; b.className = 'H_idbtn'; b.setAttribute('data-act', 'id-full'); b.setAttribute('aria-label', 'Show the ID photo full screen'); b.appendChild(img); box.appendChild(b); } else box.appendChild(img);
@@ -404,11 +425,23 @@
   function H_idRot(src) { return state.rot[src] || 0; }
   function H_idFull(src) {
     var o = $('H_idfull'); if (!o) { o = document.createElement('div'); o.id = 'H_idfull'; o.className = 'H_idfull'; o.setAttribute('role', 'dialog'); o.setAttribute('aria-modal', 'true'); o.setAttribute('aria-label', 'Guest ID photo'); document.body.appendChild(o); }
-    o.innerHTML = '<img alt="Guest ID photo" draggable="false" data-act="id-full-close"><div class="H_idbar"><button class="btn btn-secondary" type="button" data-act="id-rot">Rotate</button><button class="btn btn-secondary" type="button" data-act="id-full-close">' + ICON('close', 's16') + 'Close</button></div>';
+    o.innerHTML = '<img alt="Guest ID photo" draggable="false" data-act="id-full-close"><div class="H_idbar"><span class="H_idst" role="status" aria-live="polite"></span><button class="btn btn-secondary" type="button" data-act="id-rot">Rotate</button><button class="btn btn-secondary" type="button" data-act="id-full-close">' + ICON('close', 's16') + 'Close</button></div>';
     o.setAttribute('data-src', src); var im = o.querySelector('img'); if (im) { im.src = src; im.className = 'r' + H_idRot(src); } o.classList.add('on'); var cb = o.querySelector('button[data-act="id-full-close"]'); if (cb && cb.focus) cb.focus();
   }
+  // Rotate: +90 each tap. Owner/admin also save it (set_guest_photo_rotation_v1) so it sticks for everyone; other roles turn it for this session only.
+  function H_idRotate() {
+    var ro = $('H_idfull'), rs = ro && ro.getAttribute('data-src'), ri = ro && ro.querySelector('img'); if (!rs || !ri) return;
+    var d = state.rot[rs] = (H_idRot(rs) + 90) % 360; ri.className = 'r' + d;
+    var path = H_pathOf(rs); if (!path || !CS.canSeeGuestContact(role()) || DEMO || !sb) return;
+    var st = ro.querySelector('.H_idst'), gen = state.photoGen, seq = state.rotSeq = (state.rotSeq || 0) + 1;
+    var say = function (t) { if (st && seq === state.rotSeq) st.textContent = t; };
+    Promise.resolve().then(function () { return sb.rpc('set_guest_photo_rotation_v1', { p_path: path, p_rotation: d }); }).then(function (r) {
+      if (!r || r.error || (r.data && r.data.ok === false)) throw new Error('save');
+      if (gen === state.photoGen) state.srot[path] = d; say('Saved');
+    }).catch(function () { say('Could not save'); });
+  }
   function H_idClose() { var o = $('H_idfull'); if (o && o.classList) { o.classList.remove('on'); o.innerHTML = ''; } }
-  function dropPhotos() { Object.keys(state.photos).forEach(function (k) { URL.revokeObjectURL(state.photos[k].url); }); state.photos = {}; state.photoReq = {}; state.rot = {}; state.photoGen++; }
+  function dropPhotos() { Object.keys(state.photos).forEach(function (k) { URL.revokeObjectURL(state.photos[k].url); }); state.photos = {}; state.photoReq = {}; state.rot = {}; state.srot = {}; state.rotReq = {}; state.photoGen++; }
 
   // ---------------------------------------------------------------- Guest Calendar Info
   function monthState() {
@@ -1921,7 +1954,7 @@
     else if (a === 'tour-next') { var TS = state.sheet; if (TS && TS.kind === 'tour') { if ((TS.step || 0) >= H_TOUR.length - 1) closeSheet(); else { TS.step = (TS.step || 0) + 1; drawSheet(); } } }
     else if (a === 'tour-skip') closeSheet();
     else if (a === 'id-full') { var im = t.querySelector && t.querySelector('img'); if (im && CS.canSeeGuestContact(role())) H_idFull(im.src); }
-    else if (a === 'id-rot') { var ro = $('H_idfull'), rs = ro && ro.getAttribute('data-src'), ri = ro && ro.querySelector('img'); if (rs && ri) { state.rot[rs] = (H_idRot(rs) + 90) % 360; ri.className = 'r' + state.rot[rs]; } }
+    else if (a === 'id-rot') H_idRotate();
     else if (a === 'id-full-close') H_idClose();
     else if (a === 'attn-ack') H_attnAck(t.getAttribute('data-warn'));
     else if (a === 'reply-back') { if (state.reply) { state.reply.step = 'pick'; state.reply.err = ''; state.reply.signout = false; } renderReply('heading'); }

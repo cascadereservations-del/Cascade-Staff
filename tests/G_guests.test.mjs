@@ -474,14 +474,60 @@ test('G s90: a tall ID photo is turned, and Rotate turns it a quarter each tap',
   const { M, el } = await mount(cl, GID);
   await clickA(el, 'show-id', { id: CID }); await tick();
   const wide = imgEv('', 800, 500); M._onImg(wide.ev); assert.equal(wide.box.cls.size, 0);
-  const tall = imgEv('', 500, 800); M._onImg(tall.ev); assert.ok(tall.box.cls.has('G_r90'));
+  const tall = imgEv('', 500, 800); M._onImg(tall.ev); assert.ok(tall.box.cls.has('G_r270'));
   await clickA(el, 'full', { id: CID }); await tick();
-  assert.match(el.html, /class="G_img G_r90"/);
+  assert.match(el.html, /class="G_img G_r270"/);
   assert.match(el.html, /data-act="full-rot"/);
   await clickA(el, 'full-rot'); await tick();
-  assert.match(el.html, /class="G_img G_r180"/);
+  assert.match(el.html, /class="G_img"/); // 270 + 90 = upright
   await clickA(el, 'full-rot'); await clickA(el, 'full-rot'); await tick();
-  assert.match(el.html, /class="G_img"/); // back to upright after four turns in total
+  assert.match(el.html, /class="G_img G_r180"/); // the 180 class
+});
+
+// ---- s91: saved rotation
+const compPath = CID + '/a.jpg';
+const rotDetail = (extra = {}) => client({ tables: { guests: { data: GUEST, error: null }, guest_profile_details: { data: PROFILE, error: null } }, rpcs: { list_guest_companions_v1: () => ({ data: COMPS, error: null }), ...extra },
+  fn: (b) => (b.action === 'context' ? { status: 200, j: { ok: true, features: FEAT, stay: null } } : { status: 200, j: { ok: true, saved: [] } }) });
+
+test('G s91: a saved rotation is fetched in one batched call and beats the auto guess', async () => {
+  const cl = rotDetail({ staff_photo_rotation_v1: () => ({ data: [{ path: compPath, rotation: 180 }], error: null }) });
+  const { M, el } = await mount(cl, GID); await tick();
+  const calls = cl.calls.filter((c) => c[0] === 'staff_photo_rotation_v1'); assert.equal(calls.length, 1);
+  assert.deepEqual(calls[0][1], { p_paths: [compPath] });
+  await clickA(el, 'show-id', { id: CID }); await tick();
+  const tall = imgEv('', 500, 800); M._onImg(tall.ev);
+  assert.equal(tall.box.cls.has('G_r270'), false, 'saved 180 wins, no auto turn');
+  assert.match(el.html, /G_photo G_r180/);
+});
+
+test('G s91: the RPC missing falls back to the auto guess (270) silently', async () => {
+  const cl = rotDetail();
+  const { M, el } = await mount(cl, GID); await tick();
+  assert.ok(cl.calls.some((c) => c[0] === 'staff_photo_rotation_v1'));
+  assert.doesNotMatch(el.html, /role="alert"/);
+  await clickA(el, 'show-id', { id: CID }); await tick();
+  const tall = imgEv('', 500, 800); M._onImg(tall.ev); assert.ok(tall.box.cls.has('G_r270'));
+});
+
+test('G s91: Rotate saves the new turn and says Saved; a failed save says Could not save but still turns', async () => {
+  let fail = false;
+  const cl = rotDetail({ set_guest_photo_rotation_v1: (a) => (fail ? { data: null, error: { message: 'x' } } : { data: { ok: true, path: a.p_path, rotation: a.p_rotation }, error: null }) });
+  const { el } = await mount(cl, GID); await tick();
+  await clickA(el, 'show-id', { id: CID }); await tick();
+  await clickA(el, 'full', { id: CID }); await tick();
+  await clickA(el, 'full-rot'); await tick();
+  const sv = cl.calls.filter((c) => c[0] === 'set_guest_photo_rotation_v1'); assert.equal(sv.length, 1);
+  assert.deepEqual(sv[0][1], { p_path: compPath, p_rotation: 90 });
+  assert.match(el.html, /aria-live="polite">Saved</);
+  fail = true; await clickA(el, 'full-rot'); await tick();
+  assert.match(el.html, /aria-live="polite">Could not save</);
+  assert.match(el.html, /G_img G_r180/);
+});
+
+test('G s91: a cleaner never reaches the Guests screen, so no rotation call is made', async () => {
+  const cl = rotDetail();
+  await mount(cl, GID, 'cleaner');
+  assert.equal(cl.calls.filter((c) => /rotation/.test(c[0])).length, 0);
 });
 
 test('G s90: app.js keeps ID photos in memory only, dedupes requests, and offers Rotate', () => {

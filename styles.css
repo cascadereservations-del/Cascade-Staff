@@ -934,7 +934,8 @@ button.A_chipglass.E_pill { width: auto; min-width: 124px; max-width: 184px; hei
 .H_idbtn img { display: block; width: 100%; }
 .H_idfull { position: fixed; inset: 0; z-index: 60; display: none; flex-direction: column; align-items: center; justify-content: center; gap: 12px; padding: max(16px, env(safe-area-inset-top)) 16px max(16px, env(safe-area-inset-bottom)); background: var(--v5-scrim, var(--v5-bg)); }
 .H_idfull.on { display: flex; }
-.H_idbar { display: flex; gap: 8px; position: relative; z-index: 1; }
+.H_idbar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; justify-content: center; position: relative; z-index: 1; }
+.H_idst { flex-basis: 100%; text-align: center; min-height: 1.2em; font-size: .875rem; color: var(--v5-muted, inherit); }
 .H_idfull img.r90, .H_idfull img.r270 { max-width: min(calc(100vh - 140px), calc(100vw - 32px)); max-height: min(calc(100vh - 140px), calc(100vw - 32px)); }
 .H_idfull img.r90 { transform: rotate(90deg); }
 .H_idfull img.r180 { transform: rotate(180deg); }
