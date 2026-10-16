@@ -318,7 +318,7 @@
     return l ? { tag: 'a', attrs: ' href="' + esc(l.href) + '"' + (l.external ? ' target="_blank" rel="noopener"' : ''), ext: l.external } : null;
   }
   function B_ask(key, what, yes) { // the confirm that takes the place of one row: same 64 px, focus on the confirm button
-    return '<li class="B_row B_confirm" data-bkey="' + esc(key) + '"><span class="mid"><span class="t" id="B_ask">' + esc(what) + '</span></span><button class="btn btn-primary btn-sm" type="button" id="B_yes" data-act="board-yes" data-bkey="' + esc(key) + '" aria-describedby="B_ask">' + esc(yes) + '</button>' +
+    return '<li class="B_row B_confirm" data-bkey="' + esc(key) + '"><span class="sr" id="B_ask">' + esc(what) + '</span><button class="btn btn-primary btn-sm" type="button" id="B_yes" data-act="board-yes" data-bkey="' + esc(key) + '" aria-describedby="B_ask">' + esc(yes) + '</button>' +
       '<button class="btn btn-ghost btn-sm" type="button" data-act="board-no">Keep</button></li>';
   }
   function B_tile(tone, glyph) { return '<span class="lead B_t-' + tone + '">' + ICON(glyph) + '</span>'; }
@@ -358,8 +358,22 @@
     var add = mgr && v && !state.noticesAbsent ? '<button class="btn btn-ghost btn-sm B_add" type="button" data-act="notice-add-open" data-date="' + esc(state.payload.today) + '">' + ICON('plus', 's16') + 'Add a notice</button>' : '';
     return { top: !busy && board.top, html: '<section class="card glass A_card B_card" id="B_card" aria-label="Needs action"' + (busy ? ' aria-busy="true"' : '') + '><div class="A_head"><h2 id="B_h" tabindex="-1">Needs action</h2>' +
       (board.n ? '<span class="count B_total" aria-hidden="true">' + esc(board.n > 99 ? '99+' : board.n) + '</span><span class="sr">' + esc(board.n + (board.n === 1 ? ' thing needs action' : ' things need action')) + '</span>' : '') + '</div>' +
-      '<p class="B_msg" role="status" aria-live="polite">' + esc(state.bmsg || '') + '</p>' + body + (list ? '<ul class="B_list" role="list">' + list + '</ul>' : '') + note + add + '</section>' };
+      '<p class="B_msg">' + esc(state.bmsg || '') + '</p>' + body + (list ? '<ul class="B_list" role="list">' + list + '</ul>' : '') + note + add + '</section>' };
   }
+  // The Home view is rebuilt with innerHTML on every draw, so a live region inside it is born holding its text and is never announced. The announcer is the persistent one outside the views.
+  function B_say(msg) {
+    state.bmsg = msg; var l = $('E_attn-live'); if (l) l.textContent = msg;
+    var t = setTimeout(function () { if (state.bmsg === msg) { state.bmsg = ''; if (l) l.textContent = ''; if (current === 'home' && state.layout && !state.bbusy) renderHome(); } }, 5000); if (t && t.unref) t.unref();
+  }
+  // renderHome replaces every node, so a focused control is remembered by what it is (id, or its row key and action) and found again afterwards; a later redraw never steals focus
+  function B_focusSel() {
+    var f = document.activeElement, a, k, li; if (state.bfocus) { var s0 = state.bfocus; state.bfocus = ''; return s0; }
+    if (!f || !f.getAttribute || f === document.body || (f.closest && !f.closest('#v-home'))) return '';
+    if (f.id) return '#' + f.id; a = f.getAttribute('data-act'); k = f.getAttribute('data-bkey');
+    if (a && k) return '[data-act="' + a + '"][data-bkey="' + k + '"]'; if (a === 'heads-toggle') return '[data-act="heads-toggle"]';
+    li = f.closest ? f.closest('li[data-bkey]') : null; return li && li.getAttribute('data-bkey') && /\browi\b/.test(f.className || '') ? '[data-bkey="' + li.getAttribute('data-bkey') + '"] .rowi' : '';
+  }
+  function B_refocus(sel) { if (!sel) return; try { var n = document.querySelector(sel); if (n && n.focus) n.focus(); } catch (x) { /* focus is a courtesy */ } }
   function B_do(key) { // a confirmed Mark handled or Close: the row leaves at once; a failed write brings it back with the reason
     if (state.bbusy || !key || !CS.canSeeGuestContact(role())) return;
     var rpc, args, gk, ok, at = B_order.indexOf(key), next = at >= 0 ? (B_order[at + 1] || B_order[at - 1] || '') : '';
@@ -370,11 +384,11 @@
     sb.rpc(rpc, args).then(function (res) { // the message line is the one announcer: no toast
       if (res.error) throw res.error;
       if (res.data && res.data.ok === false) throw { message: res.data.error || 'not ok' };
-      landed = true; state.bmsg = ok; E_vibe('tap');
+      landed = true; B_say(ok); E_vibe('tap');
       return gk.indexOf('n:') === 0 ? A_loadNotices() : Promise.all([loadHome({ again: true }), loadTasks()]).then(function () { return H_nLast; }); // loadHome refreshes the notices too: one notices_v1 read either way
     }).then(function () { if (landed && !state.error && !state.noticesFailed) delete B_gone[gk]; }).catch(function (e) {
       if (!landed) { delete B_gone[gk]; E_vibe('error'); }
-      state.bmsg = landed ? ok : CS.rpcMissing(e) ? 'Available after the next update.' : e && e.code === '42501' ? 'Only an owner or admin can change this.' : 'That did not save. Check your signal and try again.';
+      B_say(landed ? ok : CS.rpcMissing(e) ? 'Available after the next update.' : e && e.code === '42501' ? 'Only an owner or admin can change this.' : 'That did not save. Check your signal and try again.');
     }).then(function () {
       state.bbusy = false; if (current === 'home' && state.layout) renderHome();
       try { var nx = landed && next ? document.querySelector('[data-bkey="' + next + '"] .rowi') : null, f = nx || $('B_h'); if (f && f.focus) f.focus(); } catch (x) { /* focus is a courtesy */ }
@@ -419,7 +433,9 @@
           row({ icon: 'box', title: 'Inventory', sub: 'Stock levels and usage', href: '#stock' }), true) + footerLine() + '</div>';
     }
     var keep = el.querySelector && el.querySelector('#slot-paid-notice'); if (keep && keep.parentNode) keep.parentNode.removeChild(keep);
+    var keepSel = B_focusSel();
     el.innerHTML = A_hero() + '<div class="screen" style="min-height:0;padding-top:0">' + body + '</div>';
+    B_refocus(keepSel);
     if (keep) { var fresh = el.querySelector('#slot-paid-notice'); if (fresh && fresh.parentNode) fresh.parentNode.replaceChild(keep, fresh); }
     // "You were paid" notice (pay/C_paid-notice.js): mounted once per slot node; the node is carried across redraws above and is new again after a sign-in.
     var paid = el.querySelector && el.querySelector('#slot-paid-notice');
@@ -814,7 +830,7 @@
   }
   function A_houseRow(h) {
     var mgr = CS.canSeeGuestContact(role()), inv = h.kind === 'low_stock' ? A_hubLink('inventory') : null;
-    var acts = (mgr && h.kind === 'finding' && h.id ? '<button class="btn btn-secondary btn-sm" type="button" data-act="notice-resolve" data-id="' + esc(h.id) + '">Resolve</button>' : '') +
+    var acts = (mgr && h.kind === 'finding' && h.id ? '<button class="btn btn-secondary btn-sm" type="button" data-act="notice-resolve" data-id="' + esc(h.id) + '">Mark handled</button>' : '') +
       (h.kind === 'finding' ? '<a class="btn btn-ghost btn-sm" href="#tasks">Go to' + ICON('chev', 's16') + '</a>' : inv ? '<a class="btn btn-ghost btn-sm" href="' + esc(inv.href) + '"' + (inv.external ? ' target="_blank" rel="noopener"' : '') + '>Go to' + ICON('chev', 's16') + '</a>' : '');
     return '<div class="rowi" style="cursor:default;flex-wrap:wrap"><span class="lead A_t-house">' + ICON(h.kind === 'low_stock' ? 'box' : 'alert') + '</span><span class="mid"><span class="t">' + esc(h.title) + '</span>' + (h.detail ? '<span class="s">' + esc(h.detail) + '</span>' : '') + '</span>' +
       (acts ? '<div class="A_acts">' + acts + '</div>' : '') + '</div>';
@@ -2083,7 +2099,7 @@
     else if (a === 'notice-cal') { var nd0 = t.getAttribute('data-date'), np = nd0.split('-'); if (CS.monthInRange(+np[0], +np[1], state.payload.today)) state.month = { y: +np[0], m: +np[1] }; state.calTab = 'calendar'; if (location.hash !== '#calendar') { closeSheet(); state.dayAfter = nd0; location.hash = '#calendar'; } else { render('calendar'); openSheet('day', nd0); state.sheet.view = 'calendar'; } } // from another screen the day sheet opens once the calendar has settled, so a Home redraw cannot close it
     else if (a === 'board-ask') { state.bconfirm = t.getAttribute('data-bkey') || ''; state.bmsg = ''; if (current === 'home') renderHome(); var yb = $('B_yes'); if (yb && yb.focus) yb.focus(); }
     else if (a === 'heads-toggle') { state.bheads = !state.bheads; if (current === 'home') renderHome(); }
-    else if (a === 'board-no') { state.bconfirm = ''; if (current === 'home') renderHome(); }
+    else if (a === 'board-no') { state.bfocus = '[data-act="board-ask"][data-bkey="' + state.bconfirm + '"]'; state.bconfirm = ''; if (current === 'home') renderHome(); }
     else if (a === 'board-yes') B_do(t.getAttribute('data-bkey'));
     else if (a === 'notice-resolve') { if (CS.canSeeGuestContact(role())) sb.rpc('ack_verifier_finding_v1', { p_key: t.getAttribute('data-id') }).then(function (r) { if (r.error) throw r.error; return A_loadNotices(); }).catch(function () { toast('That did not save. Check your signal and try again.'); }); }
     else if (t.hasAttribute('data-nfilter')) { state.noticeFilter = t.getAttribute('data-nfilter'); renderCalendar(); }
