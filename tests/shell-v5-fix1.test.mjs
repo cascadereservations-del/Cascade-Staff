@@ -66,12 +66,13 @@ test('A_fix M1: the Notices card has one fixed height for loaded, empty and fail
   assert.match(css, /\.A_noticecard \.rowi \{ height: 64px; min-height: 64px; overflow: hidden; \}/);
   assert.match(css, /\.A_noticecard \.rowi \.t, \.A_noticecard \.rowi \.s \{ white-space: nowrap; overflow: hidden; text-overflow: ellipsis; \}/);
   const three = NOTICES_RAW({ notices: [...NOTICES_RAW().notices, { id: 'n3', type: 'deep_clean', title: 'Deep clean', date: '2026-10-21', source: 'manual' }] });
-  const ok = await boot({ role: 'admin', hash: '#home', handlers: baseHandlers('admin', { notices_v1: () => ({ error: null, data: three }) }) });
+  const ok = await boot({ role: 'cleaner', hash: '#home', handlers: baseHandlers('cleaner', { notices_v1: () => ({ error: null, data: three }) }) }); // s91: owner/admin/finance get Needs action; the card stays for the cleaner
   const h = ok.els['v-home'].innerHTML; assert.match(h, /A_noticecard/); assert.equal((h.match(/<a class="rowi" href="#calendar\/notices"/g) || []).length, 2, 'two rows and See all 3'); assert.match(h, /See all 3/);
-  const empty = await boot({ role: 'admin', hash: '#home', handlers: baseHandlers('admin', { notices_v1: () => ({ error: null, data: NOTICES_RAW({ notices: [], weather: null }) }) }) });
+  const empty = await boot({ role: 'cleaner', hash: '#home', handlers: baseHandlers('cleaner', { notices_v1: () => ({ error: null, data: NOTICES_RAW({ notices: [], weather: null }) }) }) });
   assert.match(empty.els['v-home'].innerHTML, /A_noticecard[^>]*>.*No notices/s);
   const failed = await boot({ role: 'admin', hash: '#home', handlers: baseHandlers('admin', { notices_v1: () => ({ error: { code: '500', message: 'boom' }, data: null }) }) });
-  const fh = failed.els['v-home'].innerHTML; assert.match(fh, /A_noticecard/); assert.match(fh, /No connection\. <button/); assert.match(fh, /id="slot-inbox" hidden>/, 'a failed read drops the inbox reserve');
+  const fh = failed.els['v-home'].innerHTML; assert.match(fh, /id="B_card"/); assert.match(fh, /Could not update\./); assert.match(fh, /id="slot-inbox" hidden>/, 'a failed read drops the inbox reserve');
+  const cf = await boot({ role: 'cleaner', hash: '#home', handlers: baseHandlers('cleaner', { notices_v1: () => ({ error: { code: '500', message: 'boom' }, data: null }) }) }); assert.match(cf.els['v-home'].innerHTML, /A_noticecard/); assert.match(cf.els['v-home'].innerHTML, /No connection\. <button/);
   assert.match(ok.els['v-home'].innerHTML, /title="Brownout 1:00 to 4:00 pm · /, 'the row is one line; the full text is in its title');
   const never = new Promise(() => {});
   const pend = await boot({ role: 'admin', hash: '#home', handlers: baseHandlers('admin', { notices_v1: () => never }) });
@@ -79,7 +80,7 @@ test('A_fix M1: the Notices card has one fixed height for loaded, empty and fail
   const fin = await boot({ role: 'finance', hash: '#home', handlers: baseHandlers('finance', { notices_v1: () => never }) });
   assert.match(fin.els['v-home'].innerHTML, /id="slot-inbox" hidden>/, 'finance never has an inbox');
   const gone = await boot({ role: 'admin', hash: '#home', handlers: baseHandlers('admin', { notices_v1: () => ({ error: { code: 'PGRST202', message: 'x' }, data: null }) }) });
-  assert.doesNotMatch(gone.els['v-home'].innerHTML, /A_noticecard/);
+  assert.doesNotMatch(gone.els['v-home'].innerHTML, /A_noticecard/); assert.match(gone.els['v-home'].innerHTML, /Nothing needs you right now/);
 });
 test('A_fix M2: a redraw of Home carries the paid-notice slot node over instead of rebuilding it', async () => {
   let html = '', rendered = false, phase = 'idle'; const swaps = [], removed = [];

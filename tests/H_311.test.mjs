@@ -157,7 +157,7 @@ test('3.1.1 fix notices: a hand-added Power notice says it is on the calendar, a
   const flags = [{ id: 'f1', date: '2026-10-17', kind: 'brownout', label: 'Brownout 1 to 4 pm', source: 'manual' }, { id: 'f2', date: '2026-10-18', kind: 'brownout', label: 'Auto flag', source: 'auto' }, { id: 'f3', date: '2026-10-16', kind: 'brownout', label: 'Same day as a notice', source: 'manual' },
     { id: 'f4', date: '2026-10-19', kind: 'maintenance', label: 'Aircon service', source: 'manual' }, { id: 'f5', date: '2026-12-01', kind: 'brownout', label: 'Too far', source: 'manual' }, { id: 'f6', date: '2026-10-20', kind: 'deep_clean', label: 'Deep one', source: 'manual' }];
   const app = await boot({ role: 'owner', hash: '#home', handlers: baseHandlers('owner', { staff_home_v1: () => HOMEWITH([], { day_flags: flags }) }) });
-  assert.match(app.els['v-home'].innerHTML, /Brownout · Fri 16 Oct/, 'the real SOCOTECO notice is still first');
+  assert.match(app.els['v-home'].innerHTML, /Brownout 1:00 to 4:00 pm/, 'the real SOCOTECO notice is still first (s91: in the Heads-up group of Needs action)');
   await app.click({ 'data-act': 'notice-add-open', 'data-date': TODAY }); await app.click({ 'data-act': 'nkind', 'data-kind': 'power' }); app.input('n-title', 'Brownout 5 to 7 pm'); await app.click({ 'data-act': 'notice-add-save' });
   assert.match(app.els['cs-toast'].textContent, /Marked on the calendar for that day\./); assert.doesNotMatch(app.els['cs-toast'].textContent, /Notice added/);
   app.location.hash = '#calendar/notices'; for (const f of app.winListeners.hashchange || []) f(); await app.flush(); const n = app.els['v-calendar'].innerHTML;
