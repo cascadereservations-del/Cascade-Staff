@@ -104,7 +104,7 @@ test('s91 board: Mark handled asks in place (focus on the confirm), calls ack_ve
   assert.match(card(app), /<li class="B_row B_confirm"[^>]*>.*Mark this handled\?.*id="B_yes"[^>]*>Mark handled<\/button><button[^>]*>Keep<\/button>/s); assert.ok(!app.calls.some((x) => x[0] === 'ack_verifier_finding_v1'), 'nothing is sent before the yes');
   await app.click({ 'data-act': 'board-yes', 'data-bkey': 'find:V9:abc' });
   const ack = app.calls.filter((x) => x[0] === 'ack_verifier_finding_v1'); assert.equal(ack.length, 1); assert.deepEqual(ack[0][1], { p_key: 'V9:abc' });
-  assert.doesNotMatch(card(app), /Door sensor offline/); assert.match(card(app), /<p class="B_msg" role="status" aria-live="polite">Marked handled\./); assert.equal(pillN(app), 0);
+  assert.doesNotMatch(card(app), /Door sensor offline/); assert.match(card(app), /<p class="B_msg">Marked handled\./); assert.equal(pillN(app), 0);
   assert.ok(!app.els['cs-toast'] || !app.els['cs-toast'].textContent, 'no second announcement: the message line is the only one');
 });
 
@@ -174,10 +174,10 @@ test('s91 board: the Home button reads as a sentence for a count-led group, and 
 
 test('s91 board: counts are aria-hidden numbers with .sr text, and nothing but the message line announces board actions', async () => {
   const app = await own({ bookings: 2, house: [FIND] });
-  assert.match(card(app), /<p class="B_msg" role="status" aria-live="polite">/); assert.match(card(app), /class="count B_total" aria-hidden="true">2<\/span><span class="sr">2 things need action/);
+  assert.match(card(app), /<p class="B_msg">/); assert.match(card(app), /class="count B_total" aria-hidden="true">2<\/span><span class="sr">2 things need action/);
   const html = fs.readFileSync(new URL('../index.html', import.meta.url), 'utf8'); for (const v of ['home', 'calendar', 'tasks']) assert.doesNotMatch(html, new RegExp('id="v-' + v + '"[^>]*aria-live'));
   const css = fs.readFileSync(new URL('../styles.css', import.meta.url), 'utf8'), b = css.slice(css.indexOf('/* s91 Needs action'));
-  assert.match(b, /\.B_row > \.rowi \{ min-height: 64px/); assert.match(b, /\.B_confirm \.btn \{ min-height: var\(--touch\)/); assert.doesNotMatch(b, /#[0-9a-fA-F]{3,8}\b|rgba?\(|font-size:\s*\d+px/);
+  assert.match(b, /\.B_row > \.rowi \{ min-height: 64px/); assert.match(b, /\.B_confirm \.btn \{ flex: 1 1 0; min-width: 0; min-height: var\(--touch\)/); assert.doesNotMatch(b, /#[0-9a-fA-F]{3,8}\b|rgba?\(|font-size:\s*\d+px/);
 });
 
 test('s91 board: the demo owner gets at most 5 action rows and one Heads-up row, and Mark handled in the demo drops the row', async () => {
@@ -196,4 +196,26 @@ test('s91 A_board: the weights add up to the pill count for any mix, and notices
     bookings: 4, inbox: 1, pay: 2, review: 5, warnings: [], house: [FIND, STOCK], notices: [{ key: 'n:1', type: 'note', title: 'x', date: TODAY }] });
   const b = CS.A_board(att); assert.equal(b.n, att.n); assert.equal(b.rows.reduce((a, r) => a + r.weight, 0), att.n);
   assert.ok(b.rows.length <= 5 && b.rows[b.rows.length - 1].more); assert.ok(!b.rows.some((r) => r.group === 'notice'));
+});
+
+test('s91 board: the message is plain text on the card and is announced by the persistent live region outside the view (success and failure)', async () => {
+  let gone = false;
+  const ok = await own({ house: [FIND], over: { notices_v1: () => ({ error: null, data: NOTICES_RAW({ role: 'owner', house: gone ? [] : [FIND] }) }), ack_verifier_finding_v1: () => { gone = true; return { ok: true }; } } });
+  await ok.click({ 'data-act': 'board-ask', 'data-bkey': 'find:V9:abc' }); await ok.click({ 'data-act': 'board-yes', 'data-bkey': 'find:V9:abc' });
+  assert.match(card(ok), /<p class="B_msg">Marked handled\./); assert.doesNotMatch(card(ok), /B_msg" role|aria-live/); assert.equal(ok.els['E_attn-live'].textContent, 'Marked handled.');
+  const bad = await own({ house: [FIND], over: { ack_verifier_finding_v1: () => ({ error: { code: '500', message: 'boom' }, data: null }) } });
+  await bad.click({ 'data-act': 'board-ask', 'data-bkey': 'find:V9:abc' }); await bad.click({ 'data-act': 'board-yes', 'data-bkey': 'find:V9:abc' });
+  assert.equal(bad.els['E_attn-live'].textContent, 'That did not save. Check your signal and try again.');
+});
+
+test('s91 board: a redraw of Home puts focus back where it was (Keep returns to its row button, Heads-up toggle stays), and the confirm row stays one line', async () => {
+  const asked = []; let active = null;
+  const el = (attrs) => ({ id: attrs.id || '', className: attrs.cls || '', getAttribute: (n) => (n in attrs ? attrs[n] : null), closest: (q) => (q === '#v-home' ? {} : attrs.li ? { getAttribute: () => attrs.li } : null), focus() {} });
+  const app = await boot({ role: 'owner', hash: '#home', activeEl: () => active, docQuery: (q) => { asked.push(q); return { focus() {} }; }, handlers: sources('owner', { house: [FIND] }) });
+  asked.length = 0; active = el({ 'data-act': 'heads-toggle' }); await app.click({ 'data-act': 'refresh' }); assert.ok(asked.includes('[data-act="heads-toggle"]'), 'the Heads-up toggle');
+  asked.length = 0; active = el({ 'data-act': 'attn-open' }); await app.click({ 'data-act': 'board-ask', 'data-bkey': 'find:V9:abc' }); await app.click({ 'data-act': 'board-no' });
+  assert.ok(asked.includes('[data-act="board-ask"][data-bkey="find:V9:abc"]'), 'Keep goes back to Mark handled of the same row');
+  asked.length = 0; active = el({ cls: 'rowi', li: 'find:V9:abc' }); await app.click({ 'data-act': 'refresh' }); assert.ok(asked.includes('[data-bkey="find:V9:abc"] .rowi'), 'a row link keeps focus through a late redraw');
+  const css = fs.readFileSync(new URL('../styles.css', import.meta.url), 'utf8'); assert.match(css, /\.B_confirm \{ display: flex; flex-wrap: nowrap;[^}]*min-height: 64px/);
+  assert.match(fs.readFileSync(new URL('../app.js', import.meta.url), 'utf8'), /data-act="notice-resolve" data-id="' \+ esc\(h\.id\) \+ '">Mark handled<\/button>/, 'the Notices tab says Mark handled too');
 });

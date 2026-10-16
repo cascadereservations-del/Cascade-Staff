@@ -1098,9 +1098,8 @@ body { font-family: var(--v5-font-ui); }
 .B_t-bad { background: var(--v5-danger-w); color: var(--v5-danger-t); }
 .B_t-warn { background: var(--v5-warn-w); color: var(--v5-warn-t); }
 .B_t-info { background: var(--v5-fill); color: var(--v5-act); }
-.B_confirm { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; min-height: 64px; padding: 8px 12px; }
-.B_confirm .mid { flex: 1 1 8rem; }
-.B_confirm .btn { min-height: var(--touch); }
+.B_confirm { display: flex; flex-wrap: nowrap; align-items: center; gap: 8px; min-height: 64px; padding: 8px 12px; }
+.B_confirm .btn { flex: 1 1 0; min-width: 0; min-height: var(--touch); }
 .B_clear { display: flex; gap: 12px; align-items: center; }
 .B_clear span { display: grid; gap: 4px; }
 .B_add { align-self: start; min-height: var(--touch); }
