@@ -181,3 +181,15 @@ test('K s91 last round: fixed day-number row, bars top-aligned, dates on a secon
   assert.match(js, /grid-template-rows:2\.25rem repeat\(/); assert.match(css, /\.K_bar \{[^}]*align-self: start/);
   assert.match(css, /\.K_agenda \.K_meta \{[^}]*flex-basis: 100%/); assert.match(css, /\.K_chip\[data-col="0"\]\[data-state="conflict"\] \{[^}]*--v5-danger-w/);
 });
+
+test('K s91 one colour per guest: same guest shares, different adjacent guests and nameless stays do not', () => {
+  const colOf = (h, day) => new RegExp('data-day="' + day + '"[^>]*data-col="(\d)"|data-col="(\d)"[^>]*data-day="' + day + '"').exec(h);
+  const cols = (h) => [...h.slice(h.indexOf('<ul class="K_agenda"'), h.indexOf('class="K_grid"')).matchAll(/data-day="([\d-]+)"[^>]*?data-col="(\d)"/g)].map((m) => [m[1], m[2]]);
+  const st = [S('Ana Reyes', '2026-10-05', '2026-10-07'), S('  ana   REYES ', '2026-10-20', '2026-10-22'), S('Ben Cruz', '2026-10-07', '2026-10-09'), S('Guest', '2026-10-09', '2026-10-10'), S('', '2026-10-10', '2026-10-11')];
+  const m = Object.fromEntries(cols(K.render({ y: 2026, m: 10, today: TODAY, stays: st, rows: st, full: true })));
+  assert.equal(m['2026-10-05'], m['2026-10-20'], 'same guest, any case or spacing, two bookings'); assert.notEqual(m['2026-10-05'], m['2026-10-07']);
+  assert.notEqual(m['2026-10-09'], m['2026-10-10'], 'nameless stays keep their own colours'); assert.notEqual(m['2026-10-07'], m['2026-10-09']);
+  const id = [Object.assign(S('A', '2026-10-01', '2026-10-02'), { guest_id: 'g1' }), Object.assign(S('B', '2026-10-20', '2026-10-21'), { guest_id: 'g1' })];
+  const m2 = Object.fromEntries(cols(K.render({ y: 2026, m: 10, today: TODAY, stays: id, rows: id, full: true }))); assert.equal(m2['2026-10-01'], m2['2026-10-20'], 'a guest id wins');
+  void colOf;
+});

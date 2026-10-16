@@ -14,7 +14,7 @@ function load(opts = {}) {
     module: { exports: {} }, URL, Request: Req, setTimeout, clearTimeout, Promise, importScripts: undefined,
     fetch: (r) => { fetched.push(r); return opts.offline ? Promise.reject(new Error('offline')) : Promise.resolve({ status: 200, type: 'basic', clone() { return this; }, url: r.url }); },
     caches: { match: (r) => Promise.resolve(store.get(typeof r === 'string' ? r.replace(/^\.\//, 'https://x.github.io/Cascade-Staff/') : r.url) || null), open: () => Promise.resolve({ put: (r, v) => { store.set(r.url, v); return Promise.resolve(); } }),
-      keys: () => Promise.resolve(['cs-shell-v1', 'cs-shell-v23', 'cs-shell-v24', 'cs-shell-v25', 'cs-shell-v26', 'cs-shell-v27', 'cs-shell-v28', 'cs-shell-v29', 'ch-shell-v3', 'other']), delete: (k) => { deleted.push(k); return Promise.resolve(true); } } };
+      keys: () => Promise.resolve(['cs-shell-v1', 'cs-shell-v23', 'cs-shell-v24', 'cs-shell-v25', 'cs-shell-v26', 'cs-shell-v27', 'cs-shell-v28', 'cs-shell-v29', 'cs-shell-v30', 'ch-shell-v3', 'other']), delete: (k) => { deleted.push(k); return Promise.resolve(true); } } };
   vm.runInNewContext(SRC, sandbox);
   const run = async (url, mode) => { let p; const req = new Req(url); req.mode = mode || 'cors'; handlers.fetch({ request: req, respondWith: (x) => { p = x; } }); return p ? await p : undefined; };
   return { run, fetched, store, deleted, handlers, sandbox };
@@ -46,6 +46,6 @@ test('F_ sw: folded apps, Supabase, Telegram and the jsDelivr build are passed t
 
 test('F_ sw: activate deletes only old cs-shell-* caches and claims clients', async () => {
   const w = load(); let waited; w.handlers.activate({ waitUntil: (p) => { waited = p; } }); await waited;
-  assert.deepEqual(w.deleted, ['cs-shell-v1', 'cs-shell-v23', 'cs-shell-v24', 'cs-shell-v25', 'cs-shell-v26', 'cs-shell-v27', 'cs-shell-v28', 'cs-shell-v29'], 'ch-shell-* (the checklist) and everything else are left alone');
-  assert.match(SRC, /CACHE_NAME = 'cs-shell-v30'/);
+  assert.deepEqual(w.deleted, ['cs-shell-v1', 'cs-shell-v23', 'cs-shell-v24', 'cs-shell-v25', 'cs-shell-v26', 'cs-shell-v27', 'cs-shell-v28', 'cs-shell-v29', 'cs-shell-v30'], 'ch-shell-* (the checklist) and everything else are left alone');
+  assert.match(SRC, /CACHE_NAME = 'cs-shell-v31'/);
 });

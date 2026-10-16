@@ -1,4 +1,4 @@
-/* Cascade Staff 3.4.5, lane K: the Booking calendar view. A native port of the admin dashboard's Booking calendar page
+/* Cascade Staff 3.4.6, lane K: the Booking calendar view. A native port of the admin dashboard's Booking calendar page
    (admin-dashboard/app/src/features/bookings/calendar-page.tsx): the same chips (one colour per stay from an eight-colour palette, no A/D letters; arrow on the check-in day,
    hatched Blocked, red for two guests on one night), a Turnover day marker and the same legend. A day-by-day list on a phone and a
    month grid from 600 px, exactly as the admin page does. Pure: K_BookCal.render(opts) returns HTML; the shell draws it and handles the taps
@@ -17,19 +17,30 @@
   function K_dow(iso) { return new Date(K_utc(iso)).getUTCDay(); }
   // One colour per stay: start from the check-in day (stable when earlier months load), then step on past any colour a stay that
   // overlaps or touches this one (a turnover day) already holds. Eight colours, so a free one always exists in practice.
-  function K_colours(stays) {
-    var list = stays.slice().sort(function (a, b) { return a.checkin_date < b.checkin_date ? -1 : a.checkin_date > b.checkin_date ? 1 : a.checkout_date < b.checkout_date ? -1 : 1; }), got = new Map(), done = [];
-    list.forEach(function (st) {
-      var c0 = Math.floor(K_utc(st.checkin_date) / 86400000) % NCOL, pick = null;
-      [14, 0].some(function (gap) { // first keep clear of every stay within 14 days either side; if eight colours are not enough, only of the ones that touch
-        var used = {}, i; done.forEach(function (o) { if (o.st.checkin_date <= K_add(st.checkout_date, gap) && st.checkin_date <= K_add(o.st.checkout_date, gap)) used[o.c] = 1; });
+  // One colour per GUEST, so every booking and night of the same person looks the same. The key is a guest id when the stay carries one, else the name
+  // (trimmed, spaces collapsed, lower-case; the full name for owner/admin, the first name for a cleaner, so two different guests with one first name may share a colour for a cleaner).
+  // An empty name or "Guest" never merges: each such stay keeps its own colour. Guests are placed in first-check-in order, each avoiding the colours of OTHER guests whose
+  // stays are within 14 days of any of theirs (if eight colours are not enough: only those that touch or overlap).
+  function K_colours(stays, keyOf) {
+    var by = {}, order = [];
+    stays.slice().sort(function (a, b) { return a.checkin_date < b.checkin_date ? -1 : a.checkin_date > b.checkin_date ? 1 : a.checkout_date < b.checkout_date ? -1 : 1; }).forEach(function (st, i) {
+      var k = keyOf ? keyOf(st) : '', g;
+      k = k && k !== 'guest' ? k : '#' + i; g = by[k];
+      if (!g) { g = by[k] = { stays: [], c: 0 }; order.push(g); }
+      g.stays.push(st);
+    });
+    var done = [];
+    order.forEach(function (g) {
+      var c0 = Math.floor(K_utc(g.stays[0].checkin_date) / 86400000) % NCOL, pick = null;
+      [14, 0].some(function (gap) {
+        var used = {}, i; done.forEach(function (o) { if (o.stays.some(function (x) { return g.stays.some(function (y) { return x.checkin_date <= K_add(y.checkout_date, gap) && y.checkin_date <= K_add(x.checkout_date, gap); }); })) used[o.c] = 1; });
         for (i = 0; i < NCOL; i++) if (!used[(c0 + i) % NCOL]) { pick = (c0 + i) % NCOL; return true; }
         return false;
       });
-      if (pick == null) pick = c0;
-      got.set(st, pick); done.push({ st: st, c: pick });
+      g.c = pick == null ? c0 : pick; done.push(g);
     });
-    return function (st) { return got.has(st) ? got.get(st) + 1 : 0; };
+    var map = new Map(); order.forEach(function (g) { g.stays.forEach(function (st) { map.set(st, g.c + 1); }); });
+    return function (st) { return map.has(st) ? map.get(st) : 0; };
   }
   function K_first(n) { return String(n || '').trim().split(/\s+/)[0]; }
   function K_name(st, full, names) {
@@ -48,7 +59,11 @@
     rows.filter(function (r) { return r && r.status === 'blocked' && r.checkin_date && r.checkout_date; }).forEach(function (r) {
       var d; for (d = r.checkin_date; d < r.checkout_date; d = K_add(d, 1)) { var e = (by[d] = by[d] || { stays: [], blocks: [] }); if (!e.stays.length && !e.blocks.length) e.blocks.push(r); }
     });
-    var colour = K_colours(stays);
+    var full = !!o.full, names = full ? o.names : null;
+    var colour = K_colours(stays, function (st) {
+      var id = st.guest_id || (st.rows || []).map(function (r) { return r.guest_id; }).filter(Boolean)[0];
+      return id ? 'id:' + id : K_name(st, full, names).replace(/\s+/g, ' ').trim().toLowerCase();
+    });
     return function (d) {
       var e = by[d] || { stays: [], blocks: [] };
       return { colour: colour, stays: e.stays, blocks: e.blocks, conflict: e.stays.length >= 2, turn: e.stays.some(function (a) { return a.checkin_date === d; }) && (outBy[d] || []).length > 0 };
