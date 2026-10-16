@@ -26,7 +26,7 @@ class FakeEl {
 }
 function load({ onLine = true } = {}) {
   const win = {};
-  const ctx = { window: win, navigator: { onLine }, Intl, Date, Promise, JSON, Math, console, setTimeout, clearTimeout, Uint8Array, document: { visibilityState: 'visible', addEventListener() {}, removeEventListener() {} } };
+  const ctx = { window: win, navigator: { onLine }, Intl, Date, Promise, JSON, Math, console, setTimeout, clearTimeout, Uint8Array, document: { visibilityState: 'visible', ls: {}, activeElement: null, addEventListener(k, f) { (this.ls[k] ||= []).push(f); }, removeEventListener(k, f) { this.ls[k] = (this.ls[k] || []).filter((x) => x !== f); } } };
   vm.createContext(ctx); vm.runInContext(SRC, ctx, { filename: 'N_ops.js' });
   win.N_OPS._setClock(() => NOW);
   return { M: win.N_OPS, ctx };
@@ -50,14 +50,14 @@ function fakeClient({ rows = [], rpcs = {}, tables = {} } = {}) {
     }
   };
 }
-async function boot({ access = { role: 'admin', property_ids: [PROP] }, sub, demo, client, ...c } = {}) {
+async function boot({ access = { role: 'admin', property_ids: [PROP] }, sub, demo, client, mountOpts, ...c } = {}) {
   const env = load(); const el = new FakeEl(); const cl = demo ? undefined : (client !== undefined ? client : fakeClient(c));
   const nav = [], toasts = []; let n = 0;
-  env.M.mount(el, { client: cl, access, sub, demo, navigate: (h) => nav.push(h), toast: (m) => toasts.push(m), newKey: (p) => `${p}-0000000000000000${String(++n).padStart(4, '0')}` });
+  env.M.mount(el, { ...(mountOpts ? { role: mountOpts.role, propertyId: mountOpts.propertyId, embedded: mountOpts.embedded } : { access }), client: cl, sub, demo, navigate: (h) => nav.push(h), toast: (m) => toasts.push(m), newKey: (p) => `${p}-0000000000000000${String(++n).padStart(4, '0')}` });
   await tick();
   const fire = async (type, ev) => { for (const f of el.l[type] || []) f(ev); await tick(); };
   const target = (attrs, extra = {}) => { const t = { ...extra, getAttribute: (k) => (k in attrs ? attrs[k] : null) }; t.closest = (sel) => { const m = /^\[([\w-]+)\]$/.exec(sel); return m && m[1] in attrs ? t : null; }; return t; };
-  return { ...env, el, client: cl, nav, toasts, html: () => el.innerHTML, text: () => el.innerHTML.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' '),
+  return { ...env, el, client: cl, esc: () => (env.ctx.document.ls.keydown || []).forEach((f) => f({ key: 'Escape' })), nav, toasts, html: () => el.innerHTML, text: () => el.innerHTML.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' '),
     click: (a, v) => fire('click', { target: target({ 'data-o': a, ...(v !== undefined ? { 'data-v': v } : {}) }), preventDefault() {} }),
     type: (f, value, extra = {}) => fire('input', { target: target({ 'data-f': f }, { value, type: 'text', ...extra }) }),
     sent: () => (cl ? cl.calls.filter((x) => x[0] === 'save_work_order_v1') : []) };
@@ -86,7 +86,7 @@ test('read shape: work_orders read mirrors the dashboard query under the propert
   const t = await boot({ rows: [WO()] });
   const rec = t.client.chains[0];
   assert.deepEqual(rec[0], ['from', 'work_orders']); assert.deepEqual(rec.find((r) => r[0] === 'eq'), ['eq', 'property_id', PROP]);
-  assert.deepEqual(plain(rec.find((r) => r[0] === 'order')), ['order', 'blocks_arrival', { ascending: false }]);
+  assert.deepEqual(plain(rec.find((r) => r[0] === 'order')), ['order', 'created_at', { ascending: false }]);
   const d = fs.existsSync(DASH) ? fs.readFileSync(DASH, 'utf8') : null;
   if (d) { assert.match(d, /from\('work_orders'\)\.select\('\*'\)\.eq\('property_id', propertyId\)/); assert.match(d, /p_property_id: propertyId, p_order: order, p_idempotency_key: key/); }
 });
@@ -204,4 +204,48 @@ test('layout: 44px targets, 16px inputs, reduced motion, no px font sizes', () =
   assert.match(CSS, /\.O_tab \{[^}]*min-height: 44px/); assert.match(CSS, /\.O_chip \{[^}]*min-height: 44px/); assert.match(CSS, /\.O_row \{[^}]*min-height: 44px/);
   assert.match(CSS, /\.O_select, \.O_input \{[^}]*max\(1rem/); assert.match(CSS, /prefers-reduced-motion/);
   assert.equal([...CSS.matchAll(/font-size:\s*\d+px/g)].length, 0);
+});
+
+test('shell contract: mounting with only role + propertyId (as Manage and the shell pass it) works and uses that property', async () => {
+  const t = await boot({ mountOpts: { role: 'owner', propertyId: 'pppppppp-0000-4000-8000-000000000000' }, rows: [WO()] });
+  assert.deepEqual(t.nav, []); assert.ok(t.html().includes('data-o="new"'));
+  assert.deepEqual(plain(t.client.chains[0].find((r) => r[0] === 'eq')), ['eq', 'property_id', 'pppppppp-0000-4000-8000-000000000000']);
+  const c = await boot({ mountOpts: { role: 'cleaner' }, rows: [WO()] }); assert.ok(!c.html().includes('data-o="new"'));
+  const g = await boot({ mountOpts: { role: 'guest' } }); assert.deepEqual(g.nav, ['#home']);
+  const e = await boot({ mountOpts: { role: 'admin', embedded: true }, rows: [] }); assert.ok(e.html().includes('O_embedded'));
+});
+test('list is read newest first with limit 200 and re-sorted on the client', async () => {
+  const t = await boot({ rows: [] }); const rec = t.client.chains[0];
+  assert.deepEqual(plain(rec.find((r) => r[0] === 'order')), ['order', 'created_at', { ascending: false }]); assert.deepEqual(rec.find((r) => r[0] === 'limit'), ['limit', 200]);
+});
+test('form errors: one alert only, copy says above, first invalid field is focused', async () => {
+  const t = await boot({ rows: [] }); await t.click('new'); await t.click('new-send');
+  assert.match(t.text(), /Please fix the item marked above\./); assert.equal((t.html().match(/role="alert"/g) || []).length, 1);
+  assert.ok(t.html().includes('aria-invalid="true"')); assert.equal(t.sent().length, 0);
+});
+test('close: scrim and Escape close an empty sheet; typed text asks once to discard; busy sheet ignores both', async () => {
+  const t = await boot({ rows: [] });
+  await t.click('new'); assert.ok(t.html().includes('data-o="close"')); await t.esc(); await tick(); assert.ok(!t.html().includes('role="dialog"'));
+  await t.click('new'); await t.type('title', 'Half typed'); await t.click('close');
+  assert.match(t.text(), /Discard this work order\?/); await t.click('keep'); assert.ok(t.html().includes('Half typed'));
+  await t.esc(); assert.match(t.text(), /Discard this work order\?/); await t.click('discard'); assert.ok(!t.html().includes('role="dialog"'));
+  let release; const gate = new Promise((r) => { release = r; });
+  const b = await boot({ rows: [], rpcs: { save_work_order_v1: () => gate.then(() => ({ ok: true, id: 'n', version: 1, status: 'open' })) } });
+  await b.click('new'); await b.type('title', 'Busy one'); await b.click('new-send'); await b.click('close'); await b.esc();
+  assert.ok(b.html().includes('role="dialog"')); release(); await tick(); assert.ok(!b.html().includes('role="dialog"'));
+});
+test('stale on retry: if the order already has the status we asked for, it reads as success', async () => {
+  const rows = [WO()];
+  const t = await boot({ rows, rpcs: { save_work_order_v1: () => { rows[0] = WO({ status: 'resolved', resolution: 'Done earlier', version: 3 }); return { error: { code: '40001', message: 'stale version: x' } }; } } });
+  await t.click('open', 'w1'); await t.click('done-start'); await t.type('resolution', 'Fixed it'); await t.click('done-send');
+  assert.match(t.text(), /Marked done: Tap drips/); assert.ok(!/Someone else changed/.test(t.text()));
+});
+test('detail: Result row only on a finished order; nothing is left listening after unmount', async () => {
+  const t = await boot({ rows: [WO({ resolution: 'old note' })] }); await t.click('open', 'w1'); assert.ok(!t.text().includes('Result'));
+  t.M.unmount(); assert.equal((t.ctx.document.ls.keydown || []).length, 0); assert.equal((t.ctx.document.ls.visibilitychange || []).length, 0); assert.equal((t.el.l.submit || []).length, 0);
+});
+test('css: every O_ class in the stylesheet is used by the script', () => {
+  const used = new Set(SRC.match(/O_[A-Za-z0-9]+/g)); used.add('O_ok'); used.add('O_warn'); used.add('O_bad');
+  const unused = [...new Set(CSS.match(/\.(O_[A-Za-z0-9]+)/g).map((x) => x.slice(1)))].filter((c) => !used.has(c));
+  assert.deepEqual(unused, []);
 });
