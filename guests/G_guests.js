@@ -26,7 +26,7 @@
   var S = null, G_seq = 0;
   // Photo links live for the sign-in session only, in memory (never written to storage): a path keeps its signed URL until 5 minutes before it
   // expires, so reopening a guest neither signs nor downloads again. G_rot is the per-session turn (0/90/180/270) of a path; G_reset clears both.
-  var G_SIGN_SEC = 300, G_TTL = 30 * 60000, G_epoch = 0, G_cache = {}, G_inflight = {}, G_rot = {}, G_rotSaved = {};
+  var G_SIGN_SEC = 300, G_TTL = 30 * 60000, G_epoch = 0, G_cache = {}, G_inflight = {}, G_rot = {}, G_rotSaved = {}, G_rotTimers = {};
   function G_cached(path) { var h = G_cache[path]; return h && h.exp > Date.now() ? h.url : ''; }
   function G_drop(path) { var h = G_cache[path]; if (h) { try { root.URL.revokeObjectURL(h.url); } catch (e) { /* nothing to free */ } } delete G_cache[path]; }
   function G_sign(client, path) {
@@ -41,7 +41,7 @@
     }).then(function (o) { if (G_inflight[path] === p) delete G_inflight[path]; return o; }, function () { if (G_inflight[path] === p) delete G_inflight[path]; return { url: '' }; });
     G_inflight[path] = p; return p;
   }
-  function G_reset() { G_unmount(); G_epoch++; Object.keys(G_cache).forEach(G_drop); G_cache = {}; G_inflight = {}; G_rot = {}; G_rotSaved = {}; }
+  function G_reset() { G_unmount(); G_epoch++; Object.keys(G_cache).forEach(G_drop); G_cache = {}; G_inflight = {}; G_rot = {}; G_rotSaved = {}; Object.keys(G_rotTimers).forEach(function (k) { clearTimeout(G_rotTimers[k]); }); G_rotTimers = {}; }
 
   // ------------------------------------------------------------------------------------------------ pure helpers (tested)
   function G_esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
@@ -584,10 +584,15 @@
   function G_saveRot(path, d) {
     var tok = S.token, ep = G_epoch, seq = S.rotSeq = (S.rotSeq || 0) + 1;
     var say = function (m) { if (S && G_live(tok) && seq === S.rotSeq) { S.rotMsg = m; G_paint(); G_focus('G_fullx'); } };
-    G_rpc('set_guest_photo_rotation_v1', { p_path: path, p_rotation: d }).then(function (r) {
-      if (r.error || !r.data || r.data.ok === false) return say('Could not save');
-      if (ep === G_epoch) G_rotSaved[path] = d; say('Saved for everyone');
-    });
+    // Debounced: quick taps send one write of the last value (the server cannot commit them out of order).
+    clearTimeout(G_rotTimers[path]);
+    G_rotTimers[path] = setTimeout(function () {
+      delete G_rotTimers[path]; if (ep !== G_epoch) return;
+      G_rpc('set_guest_photo_rotation_v1', { p_path: path, p_rotation: d }).then(function (r) {
+        if (r.error || !r.data || r.data.ok === false) return say('Could not save');
+        if (ep === G_epoch) G_rotSaved[path] = d; say('Saved for everyone');
+      });
+    }, 600);
   }
   function G_showId(id) {
     var D = S.d, c = D.companions.filter(function (x) { return x.id === id; })[0], tok = S.token; if (!c || !c.id_photo_path || D.urlBusy) return;

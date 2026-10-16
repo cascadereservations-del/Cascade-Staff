@@ -63,7 +63,7 @@
   var sb = DEMO ? window.CSDemo.client(window.CSDemo.role()) : window.supabase.createClient(CFG.url, CFG.key, { auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: false,
     storage: CS.authStorage(store('localStorage'), store('sessionStorage'), function () { return trustOn; }) } });
 
-  var state = { access: null, user: null, name: '', layout: null, payload: null, loadedAt: 0, loading: false, error: '', month: null, payHint: null, photos: {}, photoReq: {}, rot: {}, srot: {}, rotReq: {}, photoGen: 0,
+  var state = { access: null, user: null, name: '', layout: null, payload: null, loadedAt: 0, loading: false, error: '', month: null, payHint: null, photos: {}, photoReq: {}, rot: {}, srot: {}, rotReq: {}, rotTimers: {}, photoGen: 0,
     notices: null, noticesAbsent: false, noticesLoading: false, noticeFilter: 'all', nadd: null, fbOpen: false, ratesMore: false, calTab: 'calendar', calView: 'month', legendOpen: false, H_peekedCal: false, H_peekedTask: false, progress: null, progressAbsent: false, taskFilter: 'all', hubRoute: '', tasks: null, tasksErr: '', tasksLoading: false, showDone: false, lastDone: null, add: null, assignees: null, rates: null, ratesErr: '', rateForm: null, rateSaving: false, reply: null, bookings: null, bookingsDone: false, noticesDone: false, tasksDenied: false, noticesFailed: false, bookingsFailed: false, errorKind: '' };
   var $ = function (id) { return document.getElementById(id); };
   try { var lsLegend = store('localStorage'); state.legendOpen = !!lsLegend && lsLegend.getItem('cs_legend_open') === '1'; if (lsLegend && lsLegend.getItem('cs_cal_view') === 'bookings') state.calView = 'bookings'; } catch (e) {} // F2: the legend's More stays as it was left
@@ -474,6 +474,8 @@
         if (gen !== state.photoGen || !r || r.error || !Array.isArray(r.data)) return;
         r.data.forEach(function (x) { if (x && x.path && x.rotation != null && [0, 90, 180, 270].indexOf(Number(x.rotation)) >= 0) state.srot[x.path] = Number(x.rotation); });
       }).catch(function () { /* not deployed yet: auto guess */ });
+      // A weak signal must never hold the photo back: after 2.5 s the auto guess is used, and the paths are forgotten so a later open asks again.
+      pr = Promise.race([pr, new Promise(function (res) { setTimeout(function () { need.forEach(function (p) { if (state.rotReq[p] === pr) delete state.rotReq[p]; }); res(); }, 2500); })]);
       need.forEach(function (p) { state.rotReq[p] = pr; });
     }
     var all = paths.map(function (p) { return state.rotReq[p]; }).filter(Boolean);
@@ -523,15 +525,21 @@
     var ro = $('H_idfull'), rs = ro && ro.getAttribute('data-src'), ri = ro && ro.querySelector('img'); if (!rs || !ri) return;
     var d = state.rot[rs] = (H_idRot(rs) + 90) % 360; ri.className = 'r' + d; var path0 = H_pathOf(rs); if (path0 && document.querySelectorAll) Array.prototype.forEach.call(document.querySelectorAll('[data-idpath]'), function (bx) { if (bx.getAttribute('data-idpath') === path0) H_turnBox(bx, d); }); // the card's small picture follows
     var path = H_pathOf(rs); if (!path || !CS.canSeeGuestContact(role()) || !sb) return;
+    // Debounced: three quick taps send one write of the last value, so the server cannot commit them out of order.
     var st = ro.querySelector('.H_idst'), gen = state.photoGen, seq = state.rotSeq = (state.rotSeq || 0) + 1;
     var say = function (t) { if (st && seq === state.rotSeq) st.textContent = t; };
-    Promise.resolve().then(function () { return sb.rpc('set_guest_photo_rotation_v1', { p_path: path, p_rotation: d }); }).then(function (r) {
-      if (!r || r.error || (r.data && r.data.ok === false)) throw new Error('save');
-      if (gen === state.photoGen) state.srot[path] = d; say('Saved for everyone');
-    }).catch(function () { say('Could not save'); });
+    if (st) st.textContent = '';
+    clearTimeout(state.rotTimers[path]);
+    state.rotTimers[path] = setTimeout(function () {
+      delete state.rotTimers[path]; if (gen !== state.photoGen) return;
+      Promise.resolve().then(function () { return sb.rpc('set_guest_photo_rotation_v1', { p_path: path, p_rotation: d }); }).then(function (r) {
+        if (!r || r.error || (r.data && r.data.ok === false)) throw new Error('save');
+        if (gen === state.photoGen) state.srot[path] = d; say('Saved for everyone');
+      }).catch(function () { say('Could not save'); });
+    }, 600);
   }
   function H_idClose() { var o = $('H_idfull'); if (o && o.classList) { o.classList.remove('on'); o.innerHTML = ''; } }
-  function dropPhotos() { Object.keys(state.photos).forEach(function (k) { URL.revokeObjectURL(state.photos[k].url); }); state.photos = {}; state.photoReq = {}; state.rot = {}; state.srot = {}; state.rotReq = {}; state.photoGen++; }
+  function dropPhotos() { Object.keys(state.photos).forEach(function (k) { URL.revokeObjectURL(state.photos[k].url); }); state.photos = {}; state.photoReq = {}; state.rot = {}; state.srot = {}; state.rotReq = {}; Object.keys(state.rotTimers).forEach(function (k) { clearTimeout(state.rotTimers[k]); }); state.rotTimers = {}; state.photoGen++; }
 
   // ---------------------------------------------------------------- Guest Calendar Info
   function monthState() {
