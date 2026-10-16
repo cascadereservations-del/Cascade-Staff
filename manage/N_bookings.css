@@ -4,7 +4,7 @@
 .B_h { font: 400 var(--v5-t-section)/1.2 var(--font-display); margin: 0; overflow-wrap: anywhere; }
 .B_h:focus { outline: none; }
 .B_seg { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px; padding: 4px; background: var(--muted); border-radius: var(--r-md); }
-.B_tab { min-height: 44px; padding: 0 2px; border: 0; border-radius: calc(var(--r-md) - 4px); background: transparent; color: var(--fg-2); font: 600 max(0.8125rem, var(--v5-t-2))/1.2 var(--font-ui); cursor: pointer; overflow-wrap: anywhere; }
+.B_tab { min-height: 44px; padding: 0 2px; border: 0; border-radius: calc(var(--r-md) - 4px); background: transparent; color: var(--fg-2); font: 600 max(0.8125rem, var(--v5-t-2))/1.2 var(--font-ui); cursor: pointer; white-space: nowrap; }
 .B_tab[aria-selected="true"] { background: var(--card); color: var(--primary); box-shadow: 0 1px 3px var(--v5-card-shadow); }
 .B_cnt { font-weight: 400; font-variant-numeric: tabular-nums; }
 .B_tab:focus-visible, .B_tap:focus-visible, .B_chip:focus-visible, .B_input:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
