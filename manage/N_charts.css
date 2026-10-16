@@ -1,0 +1,39 @@
+/* s89 L3 charts. Tokens only (tokens.css, light and dark). Sizes in rem; cards shrink to 320 px with no sideways scroll. */
+.C_tile, .C_pace, .C_fig { position: relative; box-sizing: border-box; max-width: 100%; min-width: 0; margin: 0; padding: var(--v5-pad); background: var(--v5-surf); border-radius: var(--v5-r-card); box-shadow: var(--v5-shadow-card); color: var(--v5-ink); font-family: var(--v5-font-ui); }
+.C_title { margin: 0 0 0.25rem; font: 600 var(--v5-t-label)/1.3 var(--v5-font-ui); color: var(--v5-ink-2); }
+.C_val { margin: 0 0 0.5rem; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.C_num { font: 700 var(--v5-t-num)/1.15 var(--v5-font-ui); color: var(--v5-ink); }
+.C_unit { font: 500 var(--v5-t-label)/1.2 var(--v5-font-ui); color: var(--v5-ink-2); }
+.C_chips { display: flex; flex-wrap: wrap; gap: 0.375rem; margin: 0 0 0.5rem; }
+.C_chip { display: inline-flex; align-items: center; gap: 0.25rem; min-height: 1.5rem; padding: 0 0.625rem; border-radius: var(--v5-r-full); font: 600 var(--v5-t-min)/1.2 var(--v5-font-ui); background: var(--v5-sunk); color: var(--v5-ink-2); }
+.C_chip.C_good { background: var(--v5-ok-w); color: var(--v5-ok-t); }
+.C_chip.C_bad { background: var(--v5-danger-w); color: var(--v5-danger-t); }
+.C_vs { font-weight: 500; }
+.C_spark { display: block; width: 100%; height: 2rem; overflow: visible; }
+.C_sline { fill: none; stroke: var(--v5-gold-text); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; vector-effect: non-scaling-stroke; }
+.C_sarea { fill: var(--v5-gold-soft); stroke: none; }
+.C_sdot { fill: var(--v5-gold-text); }
+.C_neutral .C_sline { stroke: var(--v5-ink-3); }
+.C_neutral .C_sarea { fill: var(--v5-sunk); }
+.C_neutral .C_sdot { fill: var(--v5-ink-3); }
+.C_bars { display: block; width: 100%; height: auto; }
+.C_bar { fill: var(--v5-act); }
+.C_ly { fill: var(--v5-line); }
+.C_occ { fill: var(--v5-gold-text); stroke: var(--v5-surf); stroke-width: 1.5; }
+.C_lbl { fill: var(--v5-ink-2); font: 500 10px var(--v5-font-ui); }
+.C_key { display: flex; flex-wrap: wrap; gap: 0.25rem 0.875rem; margin: 0.5rem 0 0; font: 500 var(--v5-t-min)/1.3 var(--v5-font-ui); color: var(--v5-ink-2); }
+.C_k::before { content: ""; display: inline-block; width: 0.625rem; height: 0.625rem; margin-right: 0.375rem; border-radius: 2px; background: var(--v5-act); }
+.C_kly::before { background: var(--v5-line-2); }
+.C_kocc::before { background: var(--v5-gold-text); border-radius: 50%; }
+.C_sr { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+.C_plist { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.75rem; }
+.C_prow { display: grid; grid-template-columns: minmax(2.5rem, 4rem) minmax(0, 1fr) auto; align-items: center; gap: 0.625rem; font: 500 var(--v5-t-2)/1.3 var(--v5-font-ui); }
+.C_track { position: relative; height: 0.75rem; border-radius: var(--v5-r-full); background: var(--v5-sunk); }
+.C_fill { position: absolute; inset: 0 auto 0 0; border-radius: inherit; background: var(--v5-act); transition: width 300ms ease; }
+.C_mark { position: absolute; top: -0.25rem; bottom: -0.25rem; width: 2px; background: var(--v5-gold-text); }
+.C_pv { font-variant-numeric: tabular-nums; font-weight: 600; text-align: right; }
+.C_pv.C_good { color: var(--v5-ok-t); }
+.C_pv.C_bad { color: var(--v5-danger-t); }
+.C_pv.C_flat { color: var(--v5-ink-2); }
+.C_note, .C_empty { margin: 0.75rem 0 0; font: 500 var(--v5-t-min)/1.4 var(--v5-font-ui); color: var(--v5-ink-2); }
+@media (prefers-reduced-motion: reduce) { .C_fill { transition: none; } }

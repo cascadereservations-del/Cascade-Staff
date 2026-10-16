@@ -108,3 +108,17 @@
 @keyframes N_grow { from { transform: scaleY(0); } to { transform: scaleY(1); } }
 @media (prefers-reduced-motion: reduce) { .N_bar { animation: none; } }
 @media (min-width: 37.5rem) { .N_plot { height: 14rem; } .N_wide { min-height: 23.5rem; } }
+
+/* s89 L4: more tabs, scan receipt, review queue, photos, year-on-year tiles. Tokens only; rem so text follows the phone's text size. */
+.N_seg6 { display: flex; gap: 4px; overflow-x: auto; overscroll-behavior-x: contain; scrollbar-width: none; -webkit-mask-image: linear-gradient(to right, transparent 0, black 0.75rem, black calc(100% - 1.5rem), transparent 100%); mask-image: linear-gradient(to right, transparent 0, black 0.75rem, black calc(100% - 1.5rem), transparent 100%); }
+.N_seg6::-webkit-scrollbar { display: none; }
+.N_seg6 .N_tab { flex: 0 0 auto; padding: 0 clamp(0.75rem, 3.5vw, 1rem); white-space: nowrap; }
+.N_rows.N_gd { color: var(--ok); }
+.N_sr { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+.N_scan { display: grid; gap: 8px; margin-bottom: 12px; }
+.N_scan .N_link { justify-self: start; }
+.N_mark { display: inline-flex; align-items: center; margin-left: 6px; padding: 0 clamp(0.5rem, 2vw, 0.625rem); min-height: 1.25rem; border-radius: var(--r-full); background: var(--warn-soft); color: var(--warn); font: 600 0.8125rem/1.2 var(--font-ui); }
+.N_thumb, .N_photo { display: block; max-width: 100%; max-height: clamp(9rem, 40vh, 16rem); object-fit: contain; border-radius: var(--r-md); border: 1px solid var(--border); background: var(--muted); }
+.N_v1 { display: grid; gap: 12px; min-width: 0; }
+.N_tiles { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; }
+@media (min-width: 37.5rem) { .N_tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
