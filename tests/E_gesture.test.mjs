@@ -265,12 +265,12 @@ test('E_ G3: a short swipe past 48 px leaves the row open on a real Done button;
   assert.equal(app.calls.filter((c) => c[0] === 'task_set_done_v1').length, 1, 'a 45 px flick at 0.75 px/ms commits (it needed 60 at 0.5 before)');
 });
 
-test('E_ G3: a finished row swipes to Undo; the markup carries an Undo underlay; a system check row only opens "Mark as handled" and never auto-commits', async () => {
+test('E_ G3: a finished row swipes to Undo; the markup carries an Undo underlay; a system check row only opens "Mark handled" and never auto-commits', async () => {
   const done = T({ id: 'd', status: 'done', title: 'Finished job' }), ver = T({ source: 'verifier_findings', id: 'V10:abc', kind: 'verifier', title: 'A check needs a look' });
   const app = await taskApp([done, ver]); await showDone(app);
   const h = app.els['v-tasks'].innerHTML;
   assert.match(h, /data-E-swipe="task-undo"[^>]*data-task="follow_up_tasks:d"/); assert.match(h, /<button class="E_underbtn" type="button" data-act="task-undo" data-task="follow_up_tasks:d" aria-label="Undo: Finished job"/);
-  assert.match(h, /data-E-verifier="1" data-E-w="148"/); assert.match(h, /data-act="task-done" data-task="verifier_findings:V10:abc" aria-label="Mark as handled: A check needs a look">[^<]*<svg[^>]*><\/svg>Mark as handled<\/button>/);
+  assert.match(h, /data-E-verifier="1" data-E-w="148"/); assert.match(h, /data-act="task-done" data-task="verifier_findings:V10:abc" aria-label="Mark handled: A check needs a look">[^<]*<svg[^>]*><\/svg>Mark handled<\/button>/);
   const v = rowEl('verifier_findings:V10:abc', 'task-done', true, 148); swipeTask(app, v, [[0, 330, 200], [60, 250, 201], [120, 60, 201], [500, 60, 201]]); await app.flush();
   assert.equal(app.calls.filter((c) => c[0] === 'ack_verifier_finding_v1').length, 0, 'a swipe never acknowledges a system check'); assert.equal(app.calls.filter((c) => c[0] === 'task_set_done_v1').length, 0);
   assert.ok(v.wrap.cls.has('E_open'), 'it opens its button instead');

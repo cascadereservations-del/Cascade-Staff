@@ -140,16 +140,17 @@
   var clone = function (x) { return JSON.parse(JSON.stringify(x)); };
   function admin_(v) { return v === 'owner' || v === 'admin'; }
   function client(role, now) {
-    var view = VIEWS.indexOf(role) >= 0 ? role : 'owner', D = function () { return build(view, now); }, doneSet = {}; // doneSet: this page load only, so a task marked done leaves the list and Undo brings it back, like the live app
+    var view = VIEWS.indexOf(role) >= 0 ? role : 'owner', D = function () { return build(view, now); }, doneSet = {}, acked = {}, closed = {}; // doneSet: this page load only, so a task marked done leaves the list and Undo brings it back, like the live app
     var done = function (data) { return Promise.resolve({ data: clone(data), error: null }); };
     function rpc(name, args) {
       var X = D();
       if (name === 'task_set_done_v1' && args && args.p_id) doneSet[args.p_id] = !!args.p_done; // memory only: nothing is ever saved
+      if (name === 'ack_verifier_finding_v1' && args && args.p_key) acked[args.p_key] = 1; if (name === 'ops_notice_close_v1' && args && args.p_id) closed[args.p_id] = 1; // memory only, so the reload drops the row
       if (WRITES.indexOf(name) >= 0) { toast(NOTE); return done({ ok: true }); }
       switch (name) {
         case 'current_staff_access': return done(X.access);
-        case 'staff_home_v1': return done(X.home);
-        case 'notices_v1': return done(X.notices);
+        case 'staff_home_v1': X.home.warnings = X.home.warnings.filter(function (w) { return !(w.kind === 'verifier' && acked[w.key]); }); return done(X.home);
+        case 'notices_v1': X.notices.house = X.notices.house.filter(function (h) { return !(h.kind === 'finding' && acked[h.id]); }); X.notices.notices = X.notices.notices.filter(function (n) { return !closed[n.id]; }); return done(X.notices);
         case 'set_guest_photo_rotation_v1': return done({ ok: true, path: args && args.p_path, rotation: args && args.p_rotation }); // s91: memory only, like every demo write
         case 'cleaning_progress_v1': return done(admin_(view) ? { ok: true, active: { step: 4, of: 9, label: 'Bathroom', started_at: new Date().toISOString(), updated_at: new Date().toISOString(), cleaner_name: 'Demo Cleaner' } } : { ok: false });
         case 'tasks_list_v1': { var tl = X.tasks(true), inc = !!(args && args.p_include_done); tl.tasks = tl.tasks.map(function (t) { return doneSet[t.id] === undefined ? t : Object.assign({}, t, { status: doneSet[t.id] ? 'done' : 'open' }); }).filter(function (t) { return inc || t.status !== 'done'; }); return done(tl); }

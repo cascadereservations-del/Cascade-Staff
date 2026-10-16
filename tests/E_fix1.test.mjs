@@ -85,16 +85,16 @@ test('E_fix F3: a Home redraw under the finger never lets the slide commit: trav
 });
 
 // ------------------------------------------------------------------------------------------------ F4
-test('E_fix F4: a warning sheet opened from the pill on Home stays open through a Home redraw and says "Marked as handled." after the ack', async () => {
+test('E_fix F4: a warning sheet opened from the pill on Home stays open through a Home redraw and says "Marked handled." after the ack', async () => {
   const w = { kind: 'verifier', title: 'Airbnb block runs past the last guest night', severity: 'alert', key: 'V1m:x', detail: {} };
   let acked = false;
   const app = await boot({ role: 'admin', hash: '#home', handlers: baseHandlers('admin', { staff_home_v1: () => HOMEWITH([], { warnings: acked ? [] : [w] }), tasks_list_v1: tasksOf([], true), ack_verifier_finding_v1: () => { acked = true; return { error: null, data: { ok: true } }; } }) });
   await app.click({ 'data-act': 'attn-open' }); await app.click({ 'data-warn': CS.E_warnKey(w) });
-  assert.match(app.els['cs-body'].innerHTML, /Mark as handled/); assert.equal(app.els['cal-sheet'].getAttribute('aria-hidden'), 'false');
+  assert.match(app.els['cs-body'].innerHTML, /Mark handled/); assert.equal(app.els['cal-sheet'].getAttribute('aria-hidden'), 'false');
   await app.click({ 'data-act': 'refresh' }); assert.equal(app.els['cal-sheet'].getAttribute('aria-hidden'), 'false', 'a Home redraw does not close it');
   await app.click({ 'data-act': 'warn-ack' });
   assert.deepEqual(app.calls.filter((c) => c[0] === 'ack_verifier_finding_v1').map((c) => c[1]), [{ p_key: 'V1m:x' }]);
-  assert.equal(app.els['cal-sheet'].getAttribute('aria-hidden'), 'false'); assert.match(app.els['cs-body'].innerHTML, /Marked as handled\./, 'the person sees it worked');
+  assert.equal(app.els['cal-sheet'].getAttribute('aria-hidden'), 'false'); assert.match(app.els['cs-body'].innerHTML, /Marked handled\./, 'the person sees it worked');
   // a sheet belongs to the screen it was opened on: leaving that screen closes it
   const cal = await boot({ role: 'admin', hash: '#calendar', handlers: baseHandlers('admin', { staff_home_v1: () => HOMEWITH([stayRow('Ana', '2026-10-14', '2026-10-17')]) }) });
   await cal.click({ 'data-day': '2026-10-16' }); assert.equal(cal.els['cal-sheet'].getAttribute('aria-hidden'), 'false');

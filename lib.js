@@ -241,6 +241,8 @@
   function weekdayIndex(iso) { return new Date(utc(iso)).getUTCDay(); } // 0 = Sunday
   function dayLabel(iso) { var a = String(iso).split('-'); return +a[2] + ' ' + MONTHS[+a[1] - 1].slice(0, 3); } // 5 Oct
   function dayLong(iso) { var a = String(iso).split('-'); return DAYS[weekdayIndex(iso)] + ' ' + +a[2] + ' ' + MONTHS[+a[1] - 1]; } // Monday 5 October
+  // "26-27 Oct" for the nights from 26 to 27 Oct, "26 Oct" for one night, "30 Oct-1 Nov" across a month
+  function A_rangeLabel(a, b) { if (!a) return ''; if (!b || b === a) return dayLabel(a); var x = String(a).split('-'), y = String(b).split('-'); return x[1] === y[1] ? +x[2] + '-' + dayLabel(b) : dayLabel(a) + '-' + dayLabel(b); }
   function dayShort(iso) { return DAYS[weekdayIndex(iso)].slice(0, 3) + ' ' + dayLabel(iso); } // Thu 8 Oct
   function monthTitle(y, m) { return MONTHS[m - 1] + ' ' + y; }
   function monthShortYear(ym) { var a = String(ym).split('-'); return MONTHS[+a[1] - 1].slice(0, 3) + ' ' + a[0]; } // 2026-06 -> Jun 2026
@@ -546,6 +548,7 @@
     if (d.posted_by) bits.push('posted by ' + d.posted_by);
     return { head: head.replace(/\s+/g, ' ').trim(), rest: bits.join(' · ') };
   }
+  function lowStockParts(w) { var d = w.detail || {}; return { name: String(w.title || '').replace(/^Low stock:\s*/i, ''), qty: d.qty != null ? +d.qty : null, unit: d.unit || '', below: d.reorder_below != null ? +d.reorder_below : null }; }
   function lowStockText(w) {
     var d = w.detail || {};
     var name = String(w.title || '').replace(/^Low stock:\s*/i, '');
@@ -1012,14 +1015,19 @@
       if (!t || t.status === 'done' || taken[t.source + ':' + t.id] || taskDue(t.due_at, today) !== 'today') return;
       by.due.push({ group: 'due', id: t.source + ':' + t.id, glyph: 'clock', title: t.title, sub: E_dueSub(t, today) || 'Due today', go: { kind: 'tasks', filter: 'due' } });
     });
-    if (money) {
+    if (money && Array.isArray(i.clashes)) { // s91: one row per overlapping pair of bookings, from the app: { key, a, b, from, to (last night), nights, first (first clash night) }
+      i.clashes.forEach(function (c) {
+        if (!c || !c.key || typeof c.first !== 'string' || c.first < today || c.first > addDays(today, 59)) return;
+        by.clash.push({ group: 'clash', id: c.key, glyph: 'alert', title: 'Clash: ' + c.a + ' and ' + c.b + ' overlap', sub: A_rangeLabel(c.from, c.to) + ' · ' + plural(c.nights, 'night') + ' · one booking needs to move', go: { kind: 'day', date: c.first }, when: c.first, near: c.first <= addDays(today, 3) });
+      });
+    } else if (money) {
       var seen = {}; (Array.isArray(i.clashDays) ? i.clashDays : []).slice().sort().forEach(function (d) {
         if (typeof d !== 'string' || d < today || d > addDays(today, 59) || seen[d]) return; seen[d] = 1;
-        by.clash.push({ group: 'clash', id: d, glyph: 'alert', title: 'Two guests on ' + dayShort(d), sub: 'One booking needs to move', go: { kind: 'day', date: d } });
+        by.clash.push({ group: 'clash', id: d, glyph: 'alert', title: 'Two guests on ' + dayShort(d), sub: 'One booking needs to move', go: { kind: 'day', date: d }, when: d, near: d <= addDays(today, 3) });
       });
     }
     var bn = canBk ? bookingsToConfirmCount(i.bookings) : 0;
-    if (bn > 0) by.confirm.push({ group: 'confirm', id: 'confirm', glyph: 'clip', n: bn, title: plural(bn, 'booking') + ' to confirm', sub: 'Open the pending bookings', go: { kind: 'bookings' } });
+    if (bn > 0) by.confirm.push({ group: 'confirm', id: 'confirm', glyph: 'clip', n: bn, title: plural(bn, 'booking') + ' to confirm', sub: typeof i.oldest === 'string' && /^\d{4}-\d{2}-\d{2}/.test(i.oldest) ? 'Oldest waiting since ' + dayLabel(i.oldest.slice(0, 10)) : 'Open the pending bookings', go: { kind: 'bookings' } });
     // s91: pay requests waiting and transactions waiting for review (owner, admin, finance); each is one row with its count
     var pn = money && typeof i.pay === 'number' && i.pay > 0 ? Math.floor(i.pay) : 0, rn = money && typeof i.review === 'number' && i.review > 0 ? Math.floor(i.review) : 0;
     if (pn > 0) by.pay.push({ group: 'pay', id: 'pay', glyph: 'wallet', n: pn, title: plural(pn, 'pay request') + ' waiting', sub: 'Pay by QR, then add the proof', go: { kind: 'pay' } });
@@ -1030,9 +1038,10 @@
     orderWarnings((Array.isArray(i.warnings) ? i.warnings : []).filter(function (w) { return w && w.kind && (w.kind !== 'verifier' || mgr); })).forEach(function (w) {
       if (w.kind === 'brownout') {
         var b = brownoutText(w), d = w.detail && w.detail.date; if (d) brown[d] = 1;
+        if (i.info) return; // s91: on the Needs action board a brownout is information (Heads-up), not an action
         by.warn.push({ group: 'warn', id: E_warnKey(w), glyph: 'alert', word: 'Brownout' + (d ? ' ' + dayShort(d).split(' ')[0] : ''), title: E_brownTitle(w, b), sub: b.rest, go: { kind: 'notices' } });
       } else if (w.kind === 'inventory') {
-        var l = lowStockText(w); by.warn.push({ group: 'warn', id: E_warnKey(w), glyph: 'alert', word: 'Low stock', title: 'Low stock · ' + l.rest, sub: 'Inventory', go: { kind: 'inventory' } });
+        var l = lowStockText(w); by.warn.push({ group: 'warn', id: E_warnKey(w), glyph: 'alert', word: 'Low stock', title: 'Low stock · ' + l.rest, sub: 'Inventory', go: { kind: 'inventory' }, stock: lowStockParts(w) });
       } else by.warn.push({ group: 'warn', id: E_warnKey(w), glyph: 'info', word: 'System check', title: 'System check · ' + (w.title || ''), sub: 'Needs a person to look', go: { kind: 'warn', key: E_warnKey(w) } });
     });
     // s91: house items from notices_v1. The same finding or low-stock item can arrive as a payload warning too; a warning that already says it wins, so nothing is counted twice.
@@ -1041,7 +1050,7 @@
     (mgr && Array.isArray(i.house) ? i.house : []).forEach(function (h) {
       if (!h || !h.title) return;
       if (h.kind === 'finding') { if (wvKeys[h.id] || wvKeys['t:' + h.title]) return; by.find.push({ group: 'find', id: h.id, glyph: 'alert', word: 'Finding', title: h.title, sub: h.detail || 'Needs a person to look', go: { kind: 'finding', key: h.id } }); }
-      else if (h.kind === 'low_stock') { if (hasInv) return; by.stock.push({ group: 'stock', id: h.key || h.id, glyph: 'box', word: 'Low stock', title: h.title, sub: h.detail || 'Inventory', go: { kind: 'inventory' } }); }
+      else if (h.kind === 'low_stock') { if (hasInv) return; by.stock.push({ group: 'stock', id: h.key || h.id, glyph: 'box', word: 'Low stock', title: h.title, sub: h.detail || 'Inventory', go: { kind: 'inventory' }, stock: { name: String(h.title).replace(/^Low stock:\s*/i, ''), text: h.detail ? String(h.detail) : '' } }); }
     });
     var tomorrow = addDays(today, 1);
     (Array.isArray(i.notices) ? i.notices : []).forEach(function (n) {
@@ -1056,7 +1065,7 @@
       var rs = by[first], c = rs.length;
       top = first === 'risk' ? 'Turnover at risk' : first === 'overdue' ? c + ' overdue' : first === 'due' ? c + ' due today' : first === 'clash' ? (c === 1 ? 'Clash day' : c + ' clash days') : first === 'confirm' ? rs[0].n + ' to confirm' : first === 'inbox' ? rs[0].n + ' in inbox' : rs[0].word;
       word = first === 'risk' ? (c === 1 ? '1 blocks arrival' : c + ' block arrival') : first === 'overdue' ? 'Overdue' : first === 'due' ? 'Due today' : first === 'due' ? 'Due today' : first === 'clash' ? (c === 1 ? 'Clash day' : 'Clash days') : first === 'confirm' ? 'To confirm' : first === 'inbox' ? 'In inbox' : rs[0].word;
-      if (first === 'pay' || first === 'review') { word = first === 'pay' ? 'To pay' : 'To review'; top = rs[0].n + ' ' + word.toLowerCase(); } else if (first === 'find' || first === 'stock') { word = first === 'find' ? 'Finding' : 'Low stock'; top = rs[0].title; }
+      if (first === 'pay' || first === 'review') { word = first === 'pay' ? 'To pay' : 'To review'; top = rs[0].title; } else if (first === 'find' || first === 'stock') { word = first === 'find' ? 'Finding' : 'Low stock'; top = rs[0].title; }
       tone = first === 'risk' || first === 'overdue' || first === 'clash' ? 'danger' : 'warn';
     }
     var sections = E_SECTIONS.filter(function (s) { return by[s[0]].length; }).map(function (s) {
@@ -1078,41 +1087,59 @@
   }
 
   // ================================================================ s91: the "Needs action" board on Home (owner, admin, finance) ================================================
-  // Built from the same CS.E_attention result as the pill, so the two always agree: board.n === att.n. Every row has one primary action (a link or a fix in place).
-  // Overdue and due-today tasks fold into one row each (their count is the weight); other groups show up to 4 rows, else 3 and one "N more" row. Notices are never rows: they are the heads-up group.
-  var B_WORD = { risk: 'At risk', clash: 'Clash day', confirm: 'To confirm', pay: 'To pay', review: 'To review', inbox: 'Inbox', find: 'Finding', stock: 'Low stock' };
-  var B_LABEL = { risk: 'Open tasks', clash: 'Open day', confirm: 'Review', pay: 'Pay staff', review: 'Review', inbox: 'Open inbox', find: 'Resolve', stock: 'Restock' };
-  function A_board(att) {
-    var rows = [], n = 0; att = att || {};
-    (att.sections || []).forEach(function (s) {
-      if (s.key === 'notice') return;
-      var r = s.rows || [], k = s.key;
-      if (!r.length) return;
-      if (k === 'overdue' || k === 'due') {
-        rows.push({ key: k, group: k, glyph: k === 'overdue' ? 'alert' : 'clock', word: k === 'overdue' ? 'Overdue' : 'Due today', title: plural(r.length, 'task') + (k === 'overdue' ? ' overdue' : ' due today'),
-          sub: r[0].title + (r.length > 1 ? ' and ' + (r.length - 1) + ' more' : ''), count: r.length, weight: r.length, label: 'Open tasks', go: { kind: 'tasks', filter: 'due' } });
-        n += r.length; return;
-      }
-      var shown = r.length > 4 ? r.slice(0, 3) : r;
-      shown.forEach(function (x) {
-        var warn = k === 'warn', sys = warn && x.go && x.go.kind === 'warn', label = warn ? (x.go.kind === 'inventory' ? 'Restock' : x.go.kind === 'notices' ? 'See notice' : 'Open') : B_LABEL[k];
-        rows.push({ key: k + ':' + x.id, group: k, glyph: x.glyph, word: warn ? x.word : B_WORD[k], title: x.title, sub: x.sub || '', count: x.n || 0, weight: 1, label: label, go: x.go, sys: sys });
-        n += 1;
-      });
-      if (shown.length < r.length) {
-        var more = r.length - shown.length;
-        rows.push({ key: k + ':more', group: k, glyph: shown[0].glyph, word: k === 'warn' ? 'Warnings' : B_WORD[k] || s.label, title: more + ' more', sub: s.label, count: 0, weight: more, label: 'See all', go: { kind: 'all' }, more: true });
-        n += more;
-      }
-    });
-    return { n: n, rows: rows };
+  // Built from the same CS.E_attention result as the pill, so the two always agree: board.n === att.n (every row carries a weight = the items it stands for).
+  // Tiers, most urgent first: 1 red (blocks the next arrival, overdue, a clash within 3 days), 2 a guest is waiting (inbox, then bookings to confirm),
+  // 3 due today and later clashes, 4 information (pay, system checks, low stock, review). Soonest first inside a tier. Two or more system checks, or low-stock items, fold into one row.
+  // At most 5 rows: with more, the first 4 and one "See all N" row that opens the attention sheet.
+  function A_spanShort(a, b) { // '13:00','16:00' -> '1-4 pm'; '10:00','14:30' -> '10 am-2:30 pm'
+    var x = /^(\d{1,2}):(\d{2})/.exec(String(a || '')), y = /^(\d{1,2}):(\d{2})/.exec(String(b || '')); if (!x) return '';
+    function one(m, mer) { var h = +m[1] % 12 || 12; return h + (+m[2] ? ':' + m[2] : '') + (mer ? ' ' + (+m[1] >= 12 ? 'pm' : 'am') : ''); }
+    if (!y) return one(x, true);
+    return (+x[1] >= 12) === (+y[1] >= 12) ? one(x, false) + '-' + one(y, true) : one(x, true) + '-' + one(y, true);
   }
-  // The informational group: notices_v1 notices still in the future. gone = notice keys just closed, skip = { 'YYYY-MM-DD': 1 } days a brownout warning already states.
+  function B_cap(t) { t = String(t || ''); return t.charAt(0).toUpperCase() + t.slice(1); }
+  function B_stockTitle(r) {
+    var s = r.stock || {};
+    if (s.qty != null) return B_cap(s.name) + ': ' + s.qty + (s.unit ? ' ' + s.unit : '') + ' left' + (s.below != null ? ' (reorder at ' + s.below + ')' : '');
+    return B_cap(s.name || r.title) + (s.text ? ': ' + s.text : '');
+  }
+  function A_board(att) {
+    var cand = [], finds = [], stocks = [], ix = 0; att = att || {};
+    function add(o) { o.i = ix++; o.count = o.count || 0; cand.push(o); }
+    (att.sections || []).forEach(function (s) {
+      var r = s.rows || [], k = s.key; if (k === 'notice' || !r.length) return;
+      r.forEach(function (x) {
+        if (k === 'find' || (k === 'warn' && x.go && x.go.kind === 'warn')) finds.push(x);
+        else if (k === 'stock' || (k === 'warn' && x.go && x.go.kind === 'inventory')) stocks.push(x);
+      });
+      if (k === 'risk') r.forEach(function (x) { add({ key: 'risk:' + x.id, group: 'risk', tier: 1, tone: 'bad', glyph: 'alert', title: 'At risk: ' + x.title, sub: x.sub || '', weight: 1, go: x.go }); });
+      else if (k === 'overdue' || k === 'due') add({ key: k, group: k, tier: k === 'overdue' ? 1 : 3, tone: k === 'overdue' ? 'bad' : 'warn', glyph: k === 'overdue' ? 'alert' : 'clock', title: (k === 'overdue' ? 'Overdue: ' : 'Due today: ') + plural(r.length, 'task'),
+        sub: r[0].title + (r.length > 1 ? ' and ' + (r.length - 1) + ' more' : ''), weight: r.length, go: { kind: 'tasks', filter: 'due' } });
+      else if (k === 'clash') r.forEach(function (x) { add({ key: 'clash:' + x.id, group: 'clash', tier: x.near ? 1 : 3, tone: x.near ? 'bad' : 'warn', glyph: 'alert', title: x.title, sub: x.sub || '', when: x.when, weight: 1, go: x.go }); });
+      else if (k === 'inbox') add({ key: 'inbox', group: 'inbox', tier: 2, tone: 'warn', glyph: 'chat', title: r[0].title, sub: r[0].sub, count: r[0].n, weight: 1, go: r[0].go });
+      else if (k === 'confirm') add({ key: 'confirm', group: 'confirm', tier: 2.5, tone: 'warn', glyph: 'clip', title: r[0].title, sub: r[0].sub, count: r[0].n, weight: 1, go: r[0].go });
+      else if (k === 'pay' || k === 'review') add({ key: k, group: k, tier: 4, tone: 'info', glyph: r[0].glyph, title: r[0].title, sub: r[0].sub, count: r[0].n, weight: 1, go: r[0].go });
+      else if (k === 'warn') r.forEach(function (x) { if (!x.go || (x.go.kind !== 'warn' && x.go.kind !== 'inventory')) add({ key: 'warn:' + x.id, group: 'warn', tier: 3, tone: 'warn', glyph: x.glyph, title: x.title, sub: x.sub || '', weight: 1, go: x.go }); });
+    });
+    if (finds.length === 1) { var f = finds[0]; add({ key: f.group + ':' + f.id, group: f.group, tier: 4, tone: 'info', glyph: 'alert', title: String(f.title).replace(/^System check · /, ''), sub: 'Found by the nightly check', weight: 1, go: f.go, single: true }); }
+    else if (finds.length) add({ key: 'find:all', group: 'find', tier: 4, tone: 'info', glyph: 'alert', title: finds.length + ' system checks', sub: 'Found by the nightly check', count: finds.length, weight: finds.length, go: { kind: 'finding', key: null } });
+    if (stocks.length === 1) add({ key: stocks[0].group + ':' + stocks[0].id, group: 'stock', tier: 4, tone: 'info', glyph: 'box', title: B_stockTitle(stocks[0]), sub: 'Inventory', weight: 1, go: { kind: 'inventory' } });
+    else if (stocks.length) add({ key: 'stock:all', group: 'stock', tier: 4, tone: 'info', glyph: 'box', title: stocks.length + ' items low', sub: stocks.slice(0, 2).map(function (x) { return (x.stock && x.stock.name) || x.title; }).map(B_cap).join(', ') + (stocks.length > 2 ? ' and ' + (stocks.length - 2) + ' more' : ''), count: stocks.length, weight: stocks.length, go: { kind: 'inventory' } });
+    cand.sort(function (a, b) { return a.tier - b.tier || String(a.when || '~').localeCompare(String(b.when || '~')) || a.i - b.i; });
+    var n = cand.reduce(function (a, r) { return a + r.weight; }, 0), rows = cand;
+    if (cand.length > 5) {
+      var rest = cand.slice(4), w = rest.reduce(function (a, r) { return a + r.weight; }, 0);
+      rows = cand.slice(0, 4).concat([{ key: 'more', group: 'more', tier: 9, tone: 'info', glyph: 'tasks', title: 'See all ' + n, sub: w + ' more to look at', count: 0, weight: w, go: { kind: 'all' }, more: true }]);
+    }
+    return { n: n, rows: rows, top: rows.some(function (r) { return r.tier < 3; }) };
+  }
+  // The informational group: notices_v1 notices still in the future (a brownout or a water cut is information, not an action). gone = notice keys just closed.
   // Only a notice that has an id and was added by hand (manual or staff) can be closed, and only by an owner or admin.
   function A_heads(view, role, o) {
-    o = o || {}; var gone = o.gone || {}, skip = o.skip || {}, mgr = role === 'owner' || role === 'admin';
-    return (view && Array.isArray(view.list) ? view.list : []).filter(function (n) { return !gone[n.key] && !(n.type === 'power' && n.date && skip[n.date]); }).map(function (n) {
-      return { key: n.key, id: n.id || '', type: n.type, title: n.title, sub: n.sub || '', detail: n.detail || '', date: n.date || null, url: n.url || null, closable: mgr && !!n.id && (n.raw === 'manual' || n.raw === 'staff') };
+    o = o || {}; var gone = o.gone || {}, mgr = role === 'owner' || role === 'admin';
+    return (view && Array.isArray(view.list) ? view.list : []).filter(function (n) { return !gone[n.key]; }).map(function (n) {
+      return { key: n.key, id: n.id || '', type: n.type, title: n.title, sub: [n.date && n.date !== o.today ? dayShort(n.date) : '', A_spanShort(n.start, n.end), n.detail || n.source].filter(Boolean).join(' · '), detail: n.detail || '', date: n.date || null, url: n.url || null,
+        closable: mgr && !!n.id && (n.raw === 'manual' || n.raw === 'staff') };
     });
   }
 
@@ -1357,7 +1384,7 @@
     orderWarnings: orderWarnings, brownoutText: brownoutText, lowStockText: lowStockText, warningSummary: warningSummary,
     weatherLine: weatherLine, rainLine: rainLine, weatherStale: weatherStale, WEATHER_STALE_MIN: WEATHER_STALE_MIN, esc: esc,
     A_HOUSE_FALLBACK: A_HOUSE_FALLBACK, A_houseTimes: A_houseTimes, A_turnoverClock: A_turnoverClock, A_turnoverLine: A_turnoverLine, A_hm: A_hm, A_NOTICE_TYPES: A_NOTICE_TYPES, A_noticesView: A_noticesView, A_noticeFilters: A_noticeFilters, A_dayMarks: A_dayMarks, A_noticeDay: A_noticeDay, A_guestMessage: A_guestMessage, A_CAL_TABS: A_CAL_TABS, A_calTab: A_calTab, A_stayShade: A_stayShade, A_hubGroups: A_hubGroups, A_hubRoutes: A_hubRoutes, A_hubRouteOk: A_hubRouteOk, A_hubDoorUrl: A_hubDoorUrl, A_whatsNew: A_whatsNew, A_shortTime: A_shortTime, A_PINNED: A_PINNED, A_noticeAddError: A_noticeAddError, A_NOTICE_HINT: A_NOTICE_HINT, A_flagDup: A_flagDup, A_facebookUrl: A_facebookUrl, A_fbPluginUrl: A_fbPluginUrl, A_noticeAddProblem: A_noticeAddProblem, A_noticeAddArgs: A_noticeAddArgs, A_plainRefusal: A_plainRefusal, A_hour12: A_hour12, A_timeRange: A_timeRange,
-    taskPriorityLabel: taskPriorityLabel, E_attention: E_attention, A_board: A_board, A_heads: A_heads, E_warnKey: E_warnKey, E_buzz: E_buzz, E_hapticsOn: E_hapticsOn, E_hapticsSet: E_hapticsSet, E_PATTERNS: E_PATTERNS,
+    taskPriorityLabel: taskPriorityLabel, E_attention: E_attention, A_board: A_board, A_heads: A_heads, A_rangeLabel: A_rangeLabel, A_spanShort: A_spanShort, E_warnKey: E_warnKey, E_buzz: E_buzz, E_hapticsOn: E_hapticsOn, E_hapticsSet: E_hapticsSet, E_PATTERNS: E_PATTERNS,
     H_monthOk: H_monthOk, H_dataFrom: H_dataFrom, H_waitStep: H_waitStep, H_withFlags: H_withFlags, H_powerProblem: H_powerProblem, H_noticeUrl: H_noticeUrl, H_noticeHead: H_noticeHead, H_weatherShort: H_weatherShort, H_agenda: H_agenda, H_ready: H_ready, H_readyChips: H_readyChips, H_readyOk: H_readyOk, H_clock12: H_clock12, H_readyLine: H_readyLine, H_progress: H_progress, H_cleanLine: H_cleanLine, H_houseLine: H_houseLine, H_untilLine: H_untilLine, H_manualIndex: H_manualIndex, H_search: H_search, H_dayStep: H_dayStep,
     E_drag: E_drag, E_lockOf: E_lockOf, E_inEdge: E_inEdge, E_velocity: E_velocity, E_tabFollow: E_tabFollow, E_tabCommit: E_tabCommit, E_sheetFollow: E_sheetFollow, E_sheetCommit: E_sheetCommit,
     E_taskFollow: E_taskFollow, E_taskCommit: E_taskCommit, E_taskDist: E_taskDist, E_EDGE_R_TASK: E_EDGE_R_TASK, E_taskOpens: E_taskOpens, E_slideCommit: E_slideCommit, E_tabNeighbour: E_tabNeighbour, F_widthClass: F_widthClass, E_setClock: E_setClock

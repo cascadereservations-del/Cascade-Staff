@@ -255,7 +255,7 @@ test('H_ ID photo: owner and admin get a full-screen tap on the picture; the cod
   assert.doesNotMatch(src.slice(src.indexOf('function H_idFull'), src.indexOf('function H_idClose')), /download|href=/);
 });
 
-test('H_ attention: a task row has a tick box, a system check says Mark as handled, the count falls as she works', async () => {
+test('H_ attention: a task row has a tick box, a system check says Mark handled, the count falls as she works', async () => {
   const gone = new Set(); const handlers = baseHandlers('admin', { tasks_list_v1: () => tasksOf([T({ blocks_arrival: true }), T({ source: 'verifier_findings', id: 'V1:x', kind: 'verifier', title: 'Check', due_at: null })].filter((t) => !gone.has(t.id)), true)(), task_set_done_v1: (a) => { gone.add(a.p_id); return { error: null, data: { ok: true } }; }, ack_verifier_finding_v1: () => ({ error: null, data: { ok: true } }) });
   const app = await boot({ role: 'admin', hash: '#home', handlers }); await app.click({ 'data-act': 'attn-open' });
   const b = app.els['cs-body'].innerHTML; assert.match(b, /class="chk H_chk" type="button" role="checkbox"[^>]*data-act="task-done" data-task="follow_up_tasks:a"/);
