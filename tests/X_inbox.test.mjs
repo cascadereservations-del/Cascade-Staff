@@ -139,7 +139,9 @@ async function uncertain(kind) {
   const c = mkClient({ rpc: { concierge_conversations_v1: () => ({ data: [listRow()], error: null }), concierge_thread_v1: () => { if (first) { first = false; return { data: thread(), error: null }; } return new Promise((r) => { release = r; }); } },
     fn: { 'host-reply': () => (kind === '504' ? httpErr(504) : kind === 'timeout' ? new Promise(() => {}) : { data: null, error: { name: 'FunctionsFetchError', message: 'Failed to send a request' } }) } });
   const m = await openReview(env, c, 'Hello.'); if (kind === 'timeout') env.X._setRpcTimeout(40);
-  await m.el.click('send'); if (kind === 'timeout') await new Promise((r) => setTimeout(r, 48)); await settle();
+  await m.el.click('send'); await settle();
+  // s91: wait for the 40 ms timeout by condition, not a fixed 48 ms sleep (that raced the timer under full-suite load)
+  for (let i = 0; kind === 'timeout' && i < 100 && !/may have been sent/.test(m.el.html('cmsg')); i++) { await new Promise((r) => setTimeout(r, 20)); await settle(); }
   return { env, c, m, release: (v) => release(v) };
 }
 for (const kind of ['504', 'timeout', 'fetcherror']) {
