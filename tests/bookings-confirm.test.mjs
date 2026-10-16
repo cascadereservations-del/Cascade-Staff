@@ -100,11 +100,11 @@ test('finance calls it once with the property id; Home shows the row with the co
   assert.deepEqual(rpcs(app)[0][1], { p_property_id: 'prop-1' });
   const html = app.els['v-home'].innerHTML;
   assert.match(html, ROW);
-  assert.match(html, /aria-label="3 bookings to confirm">3</);
+  assert.match(html, /aria-hidden="true">3<\/span><span class="sr">3 bookings to confirm<\/span>/);
   assert.match(html, /href="https:\/\/cascadereservations-del\.github\.io\/cascade-admin-dashboard\/#\/bookings\/inquiries"[^>]*target="_blank"/);
   assert.doesNotMatch(html, /5000/, 'payment rows are not rendered or kept');
   const one = await boot({ role: 'owner', hash: '', handlers: handlersFor('owner', () => ({ error: null, data: [{ id: 'b1' }] })) });
-  assert.match(one.els['v-home'].innerHTML, /aria-label="1 booking to confirm">1</);
+  assert.match(one.els['v-home'].innerHTML, /aria-hidden="true">1<\/span><span class="sr">1 booking to confirm<\/span>/);
 });
 
 test('Home hides the row at 0 and when the RPC errors or is missing (logged once)', async () => {

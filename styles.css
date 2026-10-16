@@ -1081,23 +1081,25 @@ body { font-family: var(--v5-font-ui); }
 .K_view { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; padding: 4px; border-radius: var(--r-full); margin: 0 0 8px; }
 .K_view button { min-height: 44px; border: 0; border-radius: var(--r-full); background: transparent; color: var(--v5-ink-2); font: 600 var(--v5-t-2)/1.3 var(--font-ui); cursor: pointer; }
 .K_view button[aria-pressed="true"] { background: var(--v5-act); color: var(--v5-act-fg); }
-/* s91 Needs action (Home, owner/admin/finance). Type tokens only, 44 px targets, no sideways scroll at 360 px; colours come from the same tokens as the rest of Home (light and dark). */
-.B_card { gap: 12px; }
-.B_card .A_head h3 { font: 650 var(--v5-t-body)/1.3 var(--v5-font-ui); margin: 0; }
+/* s91 Needs action (Home, owner/admin/finance): rows are the 64 px .rowi of the attention sheet, the whole row is the action. Tokens only; light and dark follow the tokens. */
+.B_card { gap: 8px; }
 .B_total { min-width: 1.75rem; }
 .B_msg { margin: 0; font: 500 var(--v5-t-2)/1.4 var(--v5-font-ui); color: var(--v5-ink-2); }
 .B_msg:empty { display: none; }
-.B_list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
-.B_row { display: grid; gap: 8px; padding: 12px; border-radius: var(--v5-r-field); border: 1px solid var(--v5-line); min-width: 0; }
-.B_top { display: flex; gap: 12px; align-items: flex-start; min-width: 0; }
-.B_top .mid { display: grid; gap: 4px; min-width: 0; flex: 1; }
-.B_top .t, .B_top .s { overflow-wrap: anywhere; }
-.B_top .s { font: 400 var(--v5-t-2)/1.4 var(--v5-font-ui); }
-.B_word { font: 650 var(--v5-t-label)/1.2 var(--v5-font-ui); text-transform: uppercase; letter-spacing: .04em; }
-.B_acts { display: flex; gap: 8px; flex-wrap: wrap; padding-left: 52px; }
-.B_acts .btn { min-height: var(--touch); }
-.B_ask { margin: 0; padding-left: 52px; font: 600 var(--v5-t-2)/1.4 var(--v5-font-ui); }
+.B_list { list-style: none; margin: 0; padding: 0; display: grid; }
+.B_row { min-width: 0; border-bottom: 1px solid var(--v5-sep); }
+.B_row:last-child { border-bottom: 0; }
+.B_row > .rowi { min-height: 64px; width: 100%; text-align: left; }
+.B_row .mid { min-width: 0; }
+.B_row > .rowi { padding: 8px 8px 8px 12px; gap: 12px; }
+.B_row .t { font: 600 var(--v5-t-2)/1.3 var(--v5-font-ui); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; }
+.B_row .s { font: 400 var(--v5-t-label)/1.3 var(--v5-font-ui); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.B_t-bad { background: var(--v5-danger-w); color: var(--v5-danger-t); }
+.B_t-warn { background: var(--v5-warn-w); color: var(--v5-warn-t); }
+.B_t-info { background: var(--v5-fill); color: var(--v5-act); }
+.B_confirm { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; min-height: 64px; padding: 8px 12px; }
+.B_confirm .mid { flex: 1 1 8rem; }
+.B_confirm .btn { min-height: var(--touch); }
 .B_clear { display: flex; gap: 12px; align-items: center; }
 .B_clear span { display: grid; gap: 4px; }
-.B_all { min-height: var(--touch); display: inline-flex; align-items: center; gap: 4px; color: var(--v5-act); font: 600 var(--v5-t-2)/1.3 var(--v5-font-ui); text-decoration: none; }
-.B_sub { margin-top: 4px; }
+.B_add { align-self: start; min-height: var(--touch); }

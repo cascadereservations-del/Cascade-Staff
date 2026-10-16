@@ -69,10 +69,10 @@ test('E_ pill: tapping it opens the "To look at" sheet: groups in order, three r
   const b = app.els['cs-body'].innerHTML;
   assert.match(b, /<h2 class="ttl" id="cs-h" tabindex="-1">To look at<\/h2>/);
   const caps = [...b.matchAll(/<div class="cap up"[^>]*>([^<]*)</g)].map((m) => m[1]);
-  assert.deepEqual(caps, ['Turnover at risk', 'Overdue', 'To confirm', 'Inbox', 'Warnings']);
+  assert.deepEqual(caps, ['Turnover at risk', 'Overdue', 'To confirm', 'Inbox']); // s91: a brownout is Heads-up information on the admin board, not a counted warning
   const risk = b.slice(b.indexOf('Turnover at risk'), b.indexOf('>Overdue<'));
   assert.equal((risk.match(/class="rowi"/g) || []).length, 3, 'three rows'); assert.match(risk, /See all 4/); assert.match(risk, /href="#tasks" data-act="attn-tasks" data-filter="blocks"/);
-  assert.match(b, /2 bookings to confirm/); assert.match(b, /2 open messages/); assert.match(b, /Brownout Fri 16 Oct/);
+  assert.match(b, /2 bookings to confirm/); assert.match(b, /2 open messages/); assert.doesNotMatch(b, /Brownout Fri 16 Oct/);
   assert.equal(app.els['cal-sheet'].getAttribute('aria-hidden'), 'false');
   // the row closes the sheet first, sets the filter, and the link goes on to #tasks
   await app.click({ 'data-act': 'attn-tasks', 'data-filter': 'blocks' });
@@ -84,7 +84,7 @@ test('E_ pill: "Bookings to confirm" and the sheet row open the in-app door, nev
   const app = await boot({ role: 'admin', hash: '#home', fold: FOLD, handlers });
   const h = app.els['v-home'].innerHTML;
   assert.match(h, /<a class="rowi" href="#door\/dashboard\/bookings\/inquiries"><span class="lead">[^]*?Bookings to confirm/);
-  assert.match(h, /aria-label="1 booking to confirm">1</); assert.doesNotMatch(h, /target="_blank"[^>]*>(?:(?!<\/a>)[^])*Bookings to confirm/);
+  assert.match(h, /aria-hidden="true">1<\/span><span class="sr">1 booking to confirm<\/span>/); assert.doesNotMatch(h, /target="_blank"[^>]*>(?:(?!<\/a>)[^])*Bookings to confirm/);
   await app.click({ 'data-act': 'attn-open' });
   const b = app.els['cs-body'].innerHTML; assert.match(b, /href="#door\/dashboard\/bookings\/inquiries" data-act="sheet-close"/);
   assert.doesNotMatch(h + b, /cascade-admin-dashboard|github\.io/, 'the old dashboard URL appears nowhere in the rendered output');

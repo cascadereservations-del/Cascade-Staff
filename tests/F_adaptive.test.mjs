@@ -67,7 +67,7 @@ test('F_ 200 percent text: a control grows instead of clipping (min-height, not 
   assert.match(payCss, /\.btn \{ min-height: var\(--v5-touch\)/); assert.match(payCss, /\.btn-block \{ min-height: 52px;/);
   assert.match(b, /\.A_hero \{ width: 100%; height: auto; min-height: 252px; display: flex; flex-direction: column; \}/); assert.match(b, /\.A_greet \{ position: static; margin-top: auto;/);
   const nowrap = [...b.matchAll(/([^{}]+)\{[^}]*white-space:\s*nowrap[^}]*\}/g)].map((x) => x[1].trim()).filter((s) => !/^\.sr$|\.okbox\.sr/.test(s));
-  const allowed = /A_noticecard|\.appbar \.ttl|\.doorbar \.ttl|A_herobar \.brand|E_pill|\.pill|\.A_steps b|\.A_tag|\.A_legend|\.A_chipglass|\.cal|\.tgbtn|\.tab|\.chip|\.A_slide|\.A_chk|\.btn|\.A_filters|\.A_mk|\.badge|\.count|\.toast|\.ctval|\.lead|\.A_switch|\.seg|\.sw|\.A_prof|\.dots|\.A_hours|\.A_greet|\.H_railhead|\.H_offline/;
+  const allowed = /A_noticecard|.B_row|\.appbar \.ttl|\.doorbar \.ttl|A_herobar \.brand|E_pill|\.pill|\.A_steps b|\.A_tag|\.A_legend|\.A_chipglass|\.cal|\.tgbtn|\.tab|\.chip|\.A_slide|\.A_chk|\.btn|\.A_filters|\.A_mk|\.badge|\.count|\.toast|\.ctval|\.lead|\.A_switch|\.seg|\.sw|\.A_prof|\.dots|\.A_hours|\.A_greet|\.H_railhead|\.H_offline/;
   assert.deepEqual(nowrap.filter((s) => !allowed.test(s)), [], 'an unexpected no-wrap rule');
 });
 

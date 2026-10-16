@@ -87,7 +87,7 @@
       if ((opts.door === 'dashboard' || opts.door === 'inventory') && !foldKnown && CS.doorFramed(opts.door, state.layout, trustOn)) { opts.href = '#door/' + opts.door; opts.external = false; } // both live in the admin build // before the manifest answers: the in-app door, not a flash of the stand-alone address
     }
     var inner = '<span class="lead' + (opts.tile ? ' A_t-' + opts.tile : '') + '">' + ICON(opts.icon) + '</span><span class="mid"><span class="t">' + esc(opts.title) + '</span><span class="s"' + (opts.subId ? ' id="' + opts.subId + '"' : '') + '>' + esc(opts.sub || '') + '</span></span>' +
-      (opts.count ? '<span class="count' + (opts.countCls ? ' ' + opts.countCls : '') + '" aria-label="' + esc(opts.count + (opts.countLabel || ' warnings')) + '">' + esc(opts.count) + '</span>' : '') +
+      (opts.count ? '<span class="count' + (opts.countCls ? ' ' + opts.countCls : '') + '" aria-hidden="true">' + esc(opts.count) + '</span><span class="sr">' + esc(opts.count + (opts.countLabel || ' warnings')) + '</span>' : '') +
       '<span class="chev">' + ICON(opts.external ? 'ext' : 'chev', opts.external ? 's16' : '') + '</span>';
     if (opts.tg) return tgA(opts.tg, inner, 'rowi');
     if (opts.href && opts.external) return ext(opts.href, inner, 'rowi');
@@ -173,6 +173,7 @@
     return { role: role(), today: p ? p.today : CS.manilaToday(), error: !!state.error, errorKind: state.errorKind || 'network',
       failed: { tasks: !!state.tasksErr && !state.tasksDenied, notices: state.noticesFailed, bookings: state.bookingsFailed }, lastAt: state.loadedAt ? new Date(state.loadedAt).toISOString() : '',
       ready: { payload: !!p, tasks: !!state.tasks || !!state.tasksErr, bookings: state.bookingsDone, notices: state.noticesDone || state.noticesAbsent },
+      clashes: p && money ? A_clashPairs() : null, info: money, oldest: state.bookingsOldest || '',
       tasks: state.tasks ? state.tasks.tasks.filter(function (t) { return !(t.source === 'verifier_findings' && B_gone['f:' + t.id]); }) : [], clashDays: p && money ? A_clashList() : [], bookings: state.bookings, inbox: v ? v.inbox : null,
       pay: money ? state.payWait : 0, review: money ? state.reviewN : 0, house: v ? v.house.filter(function (h) { return !(h.kind === 'finding' && B_gone['f:' + h.id]); }) : [],
       warnings: p ? (p.warnings || []).filter(function (w) { var k = w.kind === 'verifier' ? CS.findingKey(w, state.tasks && state.tasks.tasks) : null; return !(k && B_gone['f:' + k]); }) : [], notices: v ? v.list.filter(function (n) { return !B_gone[n.key]; }) : [] };
@@ -218,8 +219,8 @@
       return LINKS.pay ? '<a class="' + cls + '" data-primary="cleaning-fee" href="' + esc(H_payUrl()) + '">Ask for the cleaning fee</a>' : '<a class="' + cls + '" data-primary="calendar" href="#calendar">Open the calendar</a>';
     }
     if (LINKS.pay && state.payWait > 0 && /^(owner|admin|finance)$/.test(role() || '')) return '<a class="' + cls + '" data-primary="pay-staff" href="' + esc(H_payUrl('admin.html')) + '">Pay staff</a>';
-    var att = E_att();
-    if (att.phase === 'items' && att.top) return '<button class="' + cls + '" type="button" data-primary="attention" data-act="attn-open" aria-haspopup="dialog">Review ' + esc(att.top.toLowerCase()) + '</button>';
+    var att = E_att(), atRisk = state.layout === 'admin' && CS.A_board(att).rows.some(function (r) { return r.group === 'risk'; }); // the board already carries the at-risk row as its action: one primary per issue
+    if (att.phase === 'items' && att.top) return '<button class="' + (atRisk ? 'btn btn-ghost btn-block A_primary' : cls) + '" type="button" data-primary="attention" data-act="attn-open" aria-haspopup="dialog">' + esc(/^\d/.test(att.top) ? att.top : 'Review ' + att.top.toLowerCase()) + '</button>';
     return '<a class="' + cls + '" data-primary="calendar" href="#calendar">Open the calendar</a>';
   }
   function A_turnoverCard(staff) {
@@ -269,10 +270,11 @@
     return '<section class="card glass A_card A_noticecard' + (mgr ? ' H_mgr' : '') + '" aria-label="Notices"' + (loading ? ' aria-busy="true"' : '') + '><div class="A_head"><h2>Notices</h2>' + (v ? '<a href="#calendar/notices">' + (v.counts.all ? 'See all ' + v.counts.all : 'Open') + ICON('chev', 's16') + '</a>' : '') + '</div>' + body + add + '</section>';
   }
   // ---------------------------------------------------------------- s91: "Needs action" (Home for owner, admin, finance; replaces the Notices card there)
-  // One list from CS.E_attention (so the pill and this card always count the same), each row with one action that fixes it or opens the exact screen,
-  // then a Heads-up group for the informational notices. A row goes the moment its fix is sent; if the write fails it comes back with the reason.
+  // One list from CS.E_attention (so the pill and this card always count the same). The whole row is the action; a finding also has a trailing "Mark handled".
+  // Brownouts and water cuts are information: they live in the Heads-up rows below. A row goes the moment its fix is sent; if the write fails it comes back with the reason.
   var B_gone = {}; // 'f:<finding key>' / 'n:<notice id>' just fixed: hidden from the card and the pill until the reload has landed or the write failed
-  function B_loadReview() { // admin_review_queue_v1: only the count is kept. A missing function counts nothing; a failed read leaves the last count.
+  var B_order = []; // the data-bkey of every row of the last draw, in order, so focus can move to the next row after a fix
+  function B_loadReview() { // admin_review_queue_v1: only the count is kept (follow-up: a count-only RPC, so the page stops fetching the rows just to count them). A missing function counts nothing; a failed read leaves the last count.
     if (state.layout !== 'admin' || !/^(owner|admin|finance)$/.test(role() || '')) return;
     sb.rpc('admin_review_queue_v1', { p_property_id: pid() }).then(function (r) {
       var d = r && r.data;
@@ -280,19 +282,32 @@
       state.reviewN = d && d.ok !== false ? (typeof d.count === 'number' ? d.count : Array.isArray(d.rows) ? d.rows.length : Array.isArray(d) ? d.length : 0) : 0;
     }).catch(function () {}).then(function () { if (current === 'home' && state.layout) renderHome(); });
   }
-  function B_resolveKey(r) { // the finding key ack_verifier_finding_v1 wants, or null (not a finding, or not an owner/admin)
+  // One row per overlapping PAIR of bookings (not per night): who, which nights, how many, and the first night to open.
+  function A_clashPairs() {
+    var out = [], seen = {}, st = state.payload ? staysOf() : [];
+    A_clashList().forEach(function (d) {
+      var on = st.filter(function (s) { return d >= s.checkin_date && d < s.checkout_date; }), a, b, k, from, end;
+      for (a = 0; a < on.length; a++) for (b = a + 1; b < on.length; b++) {
+        k = (on[a].uid || on[a].guest_name || '') + '|' + on[a].checkin_date + '~' + (on[b].uid || on[b].guest_name || '') + '|' + on[b].checkin_date; if (seen[k]) continue; seen[k] = 1;
+        from = on[a].checkin_date > on[b].checkin_date ? on[a].checkin_date : on[b].checkin_date; end = on[a].checkout_date < on[b].checkout_date ? on[a].checkout_date : on[b].checkout_date;
+        out.push({ key: k, a: on[a].guest_name || 'Guest', b: on[b].guest_name || 'Guest', from: from, to: CS.addDays(end, -1), nights: Math.max(1, CS.daysBetween(from, end)), first: d });
+      }
+    });
+    return out;
+  }
+  function B_resolveKey(r) { // the finding key ack_verifier_finding_v1 wants, or null (not a single finding, or not an owner/admin)
     if (!CS.canSeeGuestContact(role()) || !r.go) return null;
     if (r.go.kind === 'finding') return r.go.key || null;
     var w = r.go.kind === 'warn' ? findWarn(r.go.key) : null;
     return w && w.kind === 'verifier' ? CS.findingKey(w, state.tasks && state.tasks.tasks) : null;
   }
   function B_findRow(key) { var rows = CS.A_board(E_att()).rows, i; for (i = 0; i < rows.length; i++) if (rows[i].key === key) return rows[i]; return null; }
-  function B_goHtml(r, cls) { // the one primary control of a row: a link or a button, label + glyph
-    var g = r.go || {}, lab = esc(r.label), tail = ICON('chev', 's16'), l = null;
-    if (g.kind === 'tasks') return '<a class="' + cls + '" href="#tasks" data-act="attn-tasks" data-filter="' + esc(g.filter) + '">' + lab + tail + '</a>';
-    if (g.kind === 'day') return '<button class="' + cls + '" type="button" data-act="notice-cal" data-date="' + esc(g.date) + '">' + lab + tail + '</button>';
-    if (g.kind === 'all') return '<button class="' + cls + '" type="button" data-act="attn-open" aria-haspopup="dialog">' + lab + tail + '</button>';
-    if (g.kind === 'warn') return '<button class="' + cls + '" type="button" data-warn="' + esc(g.key) + '" aria-haspopup="dialog">' + lab + tail + '</button>';
+  function B_target(r) { // -> { tag, attrs, ext } for the row's own action, or null when this role has nowhere to go
+    var g = r.go || {}, l = null;
+    if (g.kind === 'tasks') return { tag: 'a', attrs: ' href="#tasks" data-act="attn-tasks" data-filter="' + esc(g.filter) + '"' };
+    if (g.kind === 'day') return { tag: 'button', attrs: ' type="button" data-act="notice-cal" data-date="' + esc(g.date) + '"' };
+    if (g.kind === 'all') return { tag: 'button', attrs: ' type="button" data-act="attn-open" aria-haspopup="dialog"' };
+    if (g.kind === 'warn') return { tag: 'button', attrs: ' type="button" data-warn="' + esc(g.key) + '" aria-haspopup="dialog"' };
     if (g.kind === 'bookings') l = /^(owner|admin)$/.test(role() || '') ? { href: '#manage/inquiries', external: false } : (A_hubLink('bookings/inquiries') || { href: CS.INQUIRIES_URL, external: true });
     else if (g.kind === 'inbox') l = { href: '#inbox', external: false };
     else if (g.kind === 'pay') l = LINKS.pay ? { href: H_payUrl('admin.html'), external: false } : null;
@@ -300,62 +315,71 @@
     else if (g.kind === 'inventory') l = { href: '#stock', external: false };
     else if (g.kind === 'notices') l = { href: '#calendar/notices', external: false };
     else if (g.kind === 'finding') l = { href: '#tasks', external: false };
-    if (!l) return '';
-    return '<a class="' + cls + '" href="' + esc(l.href) + '"' + (l.external ? ' target="_blank" rel="noopener"' : '') + '>' + lab + ICON(l.external ? 'ext' : 'chev', 's16') + '</a>';
+    return l ? { tag: 'a', attrs: ' href="' + esc(l.href) + '"' + (l.external ? ' target="_blank" rel="noopener"' : ''), ext: l.external } : null;
   }
-  function B_ask(key, what, yes) { // the confirm that stands in for the buttons of a row
-    return '<p class="B_ask" id="B_ask">' + esc(what) + '</p><div class="B_acts"><button class="btn btn-primary btn-sm" type="button" id="B_yes" data-act="board-yes" data-bkey="' + esc(key) + '">' + esc(yes) + '</button>' +
-      '<button class="btn btn-ghost btn-sm" type="button" data-act="board-no">Cancel</button></div>';
+  function B_ask(key, what, yes) { // the confirm that takes the place of one row: same 64 px, focus on the confirm button
+    return '<li class="B_row B_confirm" data-bkey="' + esc(key) + '"><span class="mid"><span class="t" id="B_ask">' + esc(what) + '</span></span><button class="btn btn-primary btn-sm" type="button" id="B_yes" data-act="board-yes" data-bkey="' + esc(key) + '" aria-describedby="B_ask">' + esc(yes) + '</button>' +
+      '<button class="btn btn-ghost btn-sm" type="button" data-act="board-no">Keep</button></li>';
   }
-  function B_rowHtml(r) {
-    var rk = B_resolveKey(r), ask = state.bconfirm === r.key, acts;
-    if (ask) acts = B_ask(r.key, 'Mark this as handled? It leaves the list.', 'Yes, resolve');
-    else if (rk) acts = '<div class="B_acts"><button class="btn btn-primary btn-sm" type="button" data-act="board-ask" data-bkey="' + esc(r.key) + '">' + ICON('check', 's16') + 'Resolve</button>' + B_goHtml(Object.assign({}, r, { label: 'Open' }), 'btn btn-ghost btn-sm') + '</div>';
-    else { var go = B_goHtml(r, 'btn btn-primary btn-sm'); acts = go ? '<div class="B_acts">' + go + '</div>' : ''; }
-    return '<li class="B_row" data-bkey="' + esc(r.key) + '"><div class="B_top"><span class="lead">' + ICON(r.glyph) + '</span><span class="mid"><span class="B_word">' + esc(r.word) + '</span><span class="t">' + esc(r.title) + '</span>' +
-      (r.sub ? '<span class="s">' + esc(r.sub) + '</span>' : '') + '</span>' + (r.count > 1 ? '<span class="count" aria-label="' + esc(r.count + ' items') + '">' + esc(r.count) + '</span>' : '') + '</div>' + acts + '</li>';
+  function B_tile(tone, glyph) { return '<span class="lead B_t-' + tone + '">' + ICON(glyph) + '</span>'; }
+  function B_rowHtml(r, i) {
+    if (state.bconfirm === r.key) return B_ask(r.key, 'Mark this handled?', 'Mark handled');
+    var rk = B_resolveKey(r), sid = 'B_s' + i, tg = B_target(r), num = r.count > 1 && !/\d/.test(r.title);
+    var inner = B_tile(r.tone, r.glyph) + '<span class="mid"><span class="t">' + esc(r.title) + '</span><span class="s" id="' + sid + '">' + esc(r.sub || '') + '</span></span>' +
+      (num ? '<span class="count" aria-hidden="true">' + esc(r.count) + '</span><span class="sr">' + esc(r.count + ' items') + '</span>' : '') + '<span class="chev">' + ICON(tg && tg.ext ? 'ext' : 'chev', tg && tg.ext ? 's16' : '') + '</span>';
+    var main = tg ? '<' + tg.tag + ' class="rowi"' + tg.attrs + ' aria-describedby="' + sid + '">' + inner + '</' + tg.tag + '>' : '<div class="rowi">' + inner + '</div>';
+    return '<li class="B_row H_attrow" data-bkey="' + esc(r.key) + '">' + main +
+      (rk ? '<button class="iconbtn" type="button" data-act="board-ask" data-bkey="' + esc(r.key) + '" aria-label="' + esc('Mark handled: ' + r.title) + '">' + ICON('check', 's24') + '</button>' : '') + '</li>';
   }
-  function B_headHtml(h) {
-    var ty = CS.A_NOTICE_TYPES[h.type] || CS.A_NOTICE_TYPES.note, ask = state.bconfirm === h.key;
-    var acts = ask ? B_ask(h.key, 'Close this notice? It leaves the calendar and every list.', 'Yes, close it')
-      : (h.closable || h.date) ? '<div class="B_acts">' + (h.closable ? '<button class="btn btn-secondary btn-sm" type="button" data-act="board-ask" data-bkey="' + esc(h.key) + '">' + ICON('close', 's16') + 'Close notice</button>' : '') +
-        (h.date ? '<button class="btn btn-ghost btn-sm" type="button" data-act="notice-cal" data-date="' + esc(h.date) + '">Open on calendar</button>' : '') + '</div>' : '';
-    return '<li class="B_row B_headrow" data-bkey="' + esc(h.key) + '"><div class="B_top"><span class="lead A_t-' + esc(h.type) + '">' + ICON(ty.icon) + '</span><span class="mid"><span class="B_word">' + esc(ty.word) + '</span><span class="t">' + esc(h.title) + '</span>' +
-      (h.sub ? '<span class="s">' + esc(h.sub) + '</span>' : '') + (h.detail ? '<span class="s B_det">' + esc(h.detail) + '</span>' : '') + '</span></div>' + acts + '</li>';
+  function B_headHtml(h, i) {
+    if (state.bconfirm === h.key) return B_ask(h.key, 'Close this notice?', 'Close notice');
+    var ty = CS.A_NOTICE_TYPES[h.type] || CS.A_NOTICE_TYPES.note, sid = 'B_h' + i;
+    var inner = B_tile('info', ty.icon) + '<span class="mid"><span class="t">' + esc(h.title) + '</span><span class="s" id="' + sid + '">' + esc(h.sub) + '</span></span><span class="chev">' + ICON('chev') + '</span>';
+    var main = h.date ? '<button class="rowi" type="button" data-act="notice-cal" data-date="' + esc(h.date) + '" aria-describedby="' + sid + '">' + inner + '</button>' : '<a class="rowi" href="#calendar/notices" aria-describedby="' + sid + '">' + inner + '</a>';
+    return '<li class="B_row H_attrow" data-bkey="' + esc(h.key) + '">' + main + (h.closable ? '<button class="iconbtn" type="button" data-act="board-ask" data-bkey="' + esc(h.key) + '" aria-label="' + esc('Close notice: ' + h.title) + '">' + ICON('close', 's24') + '</button>' : '') + '</li>';
   }
-  function B_card() {
+  // -> { html, top }: top = a tier 1 or tier 2 row exists, so the card sits above the Turnover card
+  function B_build() {
     var att = E_att(), v = A_notices(), board = CS.A_board(att), mgr = CS.canSeeGuestContact(role()), when = state.loadedAt ? CS.clockLabel(new Date(state.loadedAt).toISOString()) : '';
-    var brown = {}; ((state.payload && state.payload.warnings) || []).forEach(function (w) { if (w.kind === 'brownout' && w.detail && w.detail.date) brown[w.detail.date] = 1; });
-    var heads = v && !state.noticesAbsent ? CS.A_heads(v, role(), { gone: B_gone, skip: brown }) : [], body, busy = att.phase === 'loading';
+    var heads = v && !state.noticesAbsent ? CS.A_heads(v, role(), { gone: B_gone, today: state.payload.today }) : [], busy = att.phase === 'loading', keys = [], body = '', hrows = '';
+    board.rows.forEach(function (r) { keys.push(r.key); });
+    if (heads.length) {
+      var fold = board.rows.length >= 3, shown = fold ? (state.bheads ? heads : []) : heads.slice(0, 2);
+      if (fold) hrows += '<li class="B_row"><button class="rowi" type="button" data-act="heads-toggle" aria-expanded="' + (state.bheads ? 'true' : 'false') + '">' + B_tile('info', 'bell') + '<span class="mid"><span class="t">' + esc('Heads-up · ' + CS.plural(heads.length, 'notice')) + '</span><span class="s">' + esc(heads[0].title) + '</span></span><span class="chev turn">' + ICON('chev') + '</span></button></li>';
+      shown.forEach(function (h, i) { keys.push(h.key); hrows += B_headHtml(h, i); });
+      if (!fold && heads.length > 2) hrows += '<li class="B_row"><a class="rowi" href="#calendar/notices"><span class="mid"><span class="t">' + esc('See all ' + heads.length + ' notices') + '</span></span><span class="chev">' + ICON('chev') + '</span></a></li>';
+    }
+    B_order = keys;
     if (busy) body = '<div class="skel" style="height:96px"></div>';
     else if (!board.n && (att.phase === 'offline' || att.phase === 'stale')) body = '<p class="sub" style="margin:0">' + esc((att.phase === 'offline' ? 'No connection.' : 'Could not update.') + (when ? ' Last checked ' + when + '.' : '')) + ' <button class="btn btn-ghost btn-sm" type="button" data-act="refresh">Try again</button></p>';
     else if (!board.n) body = '<div class="B_clear">' + ICON('checks', 's24') + '<span><b>Nothing needs you right now.</b><span class="s">' + esc(when ? 'Last checked ' + when : 'Checked just now') + '</span></span></div>';
-    else body = '<ul class="B_list" role="list">' + board.rows.map(B_rowHtml).join('') + '</ul>' +
-      (att.partial || att.phase === 'offline' || att.phase === 'stale' ? '<p class="help" style="margin:0">' + esc(att.partial ? 'Some items could not be loaded.' : (att.phase === 'offline' ? 'No connection' : 'Could not update') + (when ? ' · showing ' + when : '')) + ' <button class="btn btn-ghost btn-sm" type="button" data-act="refresh">Try again</button></p>' : '');
-    var hd = heads.length ? '<div class="A_head B_sub"><h3>Heads-up</h3><span class="help">' + esc(CS.plural(heads.length, 'notice')) + '</span></div><ul class="B_list" role="list">' + heads.slice(0, 3).map(B_headHtml).join('') + '</ul>' +
-      (heads.length > 3 ? '<a class="B_all" href="#calendar/notices">' + esc('See all ' + heads.length) + ICON('chev', 's16') + '</a>' : '') : '';
-    var add = mgr && v && !state.noticesAbsent ? '<button class="btn btn-secondary btn-block H_addrow" type="button" data-act="notice-add-open" data-date="' + esc(state.payload.today) + '">' + ICON('plus', 's16') + 'Add a notice</button>' : '';
-    return '<section class="card glass A_card B_card" id="B_card" aria-label="Needs action"' + (busy ? ' aria-busy="true"' : '') + '><div class="A_head"><h2>Needs action</h2>' + (board.n ? '<span class="count B_total" aria-label="' + esc(board.n + (board.n === 1 ? ' thing needs action' : ' things need action')) + '">' + esc(board.n > 99 ? '99+' : board.n) + '</span>' : '') + '</div>' +
-      '<p class="B_msg" role="status" aria-live="polite">' + esc(state.bmsg || '') + '</p>' + body + hd + add + '</section>';
+    var list = (board.n && !busy ? board.rows.map(B_rowHtml).join('') : '') + hrows;
+    var note = board.n && (att.partial || att.phase === 'offline' || att.phase === 'stale') ? '<p class="help" style="margin:0">' + esc(att.partial ? 'Some items could not be loaded.' : (att.phase === 'offline' ? 'No connection' : 'Could not update') + (when ? ' · showing ' + when : '')) + ' <button class="btn btn-ghost btn-sm" type="button" data-act="refresh">Try again</button></p>' : '';
+    var add = mgr && v && !state.noticesAbsent ? '<button class="btn btn-ghost btn-sm B_add" type="button" data-act="notice-add-open" data-date="' + esc(state.payload.today) + '">' + ICON('plus', 's16') + 'Add a notice</button>' : '';
+    return { top: !busy && board.top, html: '<section class="card glass A_card B_card" id="B_card" aria-label="Needs action"' + (busy ? ' aria-busy="true"' : '') + '><div class="A_head"><h2 id="B_h" tabindex="-1">Needs action</h2>' +
+      (board.n ? '<span class="count B_total" aria-hidden="true">' + esc(board.n > 99 ? '99+' : board.n) + '</span><span class="sr">' + esc(board.n + (board.n === 1 ? ' thing needs action' : ' things need action')) + '</span>' : '') + '</div>' +
+      '<p class="B_msg" role="status" aria-live="polite">' + esc(state.bmsg || '') + '</p>' + body + (list ? '<ul class="B_list" role="list">' + list + '</ul>' : '') + note + add + '</section>' };
   }
-  function B_do(key) { // a confirmed Resolve or Close: the row leaves at once; a failed write brings it back with the reason
+  function B_do(key) { // a confirmed Mark handled or Close: the row leaves at once; a failed write brings it back with the reason
     if (state.bbusy || !key || !CS.canSeeGuestContact(role())) return;
-    var rpc, args, gk, ok;
+    var rpc, args, gk, ok, at = B_order.indexOf(key), next = at >= 0 ? (B_order[at + 1] || B_order[at - 1] || '') : '';
     if (key.indexOf('n:') === 0) { var id = key.slice(2); if (!/^[\w-]{1,64}$/.test(id)) return; rpc = 'ops_notice_close_v1'; args = { p_id: id, p_property_id: pid() }; gk = key; ok = 'Notice closed.'; }
-    else { var r = B_findRow(key), k = r && B_resolveKey(r); if (!k) return; rpc = 'ack_verifier_finding_v1'; args = { p_key: k }; gk = 'f:' + k; ok = 'Marked as handled.'; }
+    else { var r = B_findRow(key), k = r && B_resolveKey(r); if (!k) return; rpc = 'ack_verifier_finding_v1'; args = { p_key: k }; gk = 'f:' + k; ok = 'Marked handled.'; }
     state.bbusy = true; state.bconfirm = ''; state.bmsg = ''; B_gone[gk] = 1; if (current === 'home') renderHome();
     var landed = false;
-    sb.rpc(rpc, args).then(function (res) {
+    sb.rpc(rpc, args).then(function (res) { // the message line is the one announcer: no toast
       if (res.error) throw res.error;
       if (res.data && res.data.ok === false) throw { message: res.data.error || 'not ok' };
-      landed = true; state.bmsg = ok; toast(ok); E_vibe('tap');
-      return Promise.all([loadHome(), loadTasks()]);
-    }).then(function () { return landed ? A_loadNotices() : null; }).then(function () { if (landed && !state.error && !state.noticesFailed) delete B_gone[gk]; }).catch(function (e) {
+      landed = true; state.bmsg = ok; E_vibe('tap');
+      return gk.indexOf('n:') === 0 ? A_loadNotices() : Promise.all([loadHome({ again: true }), loadTasks()]).then(function () { return H_nLast; }); // loadHome refreshes the notices too: one notices_v1 read either way
+    }).then(function () { if (landed && !state.error && !state.noticesFailed) delete B_gone[gk]; }).catch(function (e) {
       if (!landed) { delete B_gone[gk]; E_vibe('error'); }
       state.bmsg = landed ? ok : CS.rpcMissing(e) ? 'Available after the next update.' : e && e.code === '42501' ? 'Only an owner or admin can change this.' : 'That did not save. Check your signal and try again.';
-    }).then(function () { state.bbusy = false; if (current === 'home' && state.layout) renderHome(); });
+    }).then(function () {
+      state.bbusy = false; if (current === 'home' && state.layout) renderHome();
+      try { var nx = landed && next ? document.querySelector('[data-bkey="' + next + '"] .rowi') : null, f = nx || $('B_h'); if (f && f.focus) f.focus(); } catch (x) { /* focus is a courtesy */ }
+    });
   }
-
   function A_noticeIcon(type) { return type === 'house' ? 'house' : (CS.A_NOTICE_TYPES[type] || CS.A_NOTICE_TYPES.note).icon; }
   // F_: a label and its card travel as one grid item (F_group), so a two-column grid never splits them
   function A_navCard(label, rows, tiles) { return rows ? '<div class="F_group' + (tiles ? ' A_tiles' : '') + '"><div class="A_label">' + esc(label) + '</div><nav class="card glass list" aria-label="' + esc(label) + '">' + rows + '</nav></div>' : ''; }
@@ -380,7 +404,8 @@
       // only owner and admin have an inbox; the reserve is kept while notices load, and dropped on failure, when absent, and for finance
       // 3.2: the row opens the shell's own #inbox (which falls back to the dashboard's conversations page when the module is not shipped)
       var inboxShown = CS.canSeeGuestContact(role()) && !state.noticesAbsent && (v ? inbox != null : state.noticesLoading);
-      body = '<div class="A_body">' + errBanner() + todayCard() + A_turnoverCard(false) + H_cleanDoneCard() + H_alertsCard() + B_card() +
+      var BD = B_build(); // the board sits above the Turnover card while something blocks an arrival or a guest is waiting; otherwise under it
+      body = '<div class="A_body">' + errBanner() + todayCard() + (BD.top ? BD.html : '') + A_turnoverCard(false) + H_cleanDoneCard() + H_alertsCard() + (BD.top ? '' : BD.html) +
         A_navCard('Guests and bookings', (bk ? row({ icon: 'clip', title: 'Bookings to confirm', sub: 'Open the pending bookings', href: bk.href, external: bk.external, count: bk.count, countLabel: bk.n === 1 ? ' booking to confirm' : ' bookings to confirm' }) : '') +
           row({ icon: 'calendar', title: 'Calendar', sub: 'Stays, blocked nights, notices', href: '#calendar', count: n || '' }) +
           '<div id="slot-inbox"' + (inboxShown ? '' : ' hidden') + (inboxShown && !v ? ' style="min-height:64px"' : '') + '>' + (inboxShown && v ? row({ icon: 'chat', title: 'Inbox', sub: inbox ? inbox + ' open' : 'No open messages', href: '#inbox', count: inbox || '', countLabel: ' open messages' }) : '') + '</div>' +
@@ -948,7 +973,7 @@
     var details = info.details.concat(task && task.detail ? [task.detail] : []);
     if (details.length) html += '<ul class="notes" style="margin-top:10px">' + details.map(function (d) { return '<li>' + ICON('info') + '<span style="white-space:pre-line">' + esc(d) + '</span></li>'; }).join('') + '</ul>';
     var acts = '';
-    if (w.kind === 'verifier' && info.resolvable) acts += key ? '<button class="btn btn-primary" type="button" data-act="warn-ack"' + (S.busy ? ' disabled' : '') + '>' + ICON('check', 's16') + (S.busy ? 'Saving…' : 'Mark as handled') + '</button>'
+    if (w.kind === 'verifier' && info.resolvable) acts += key ? '<button class="btn btn-primary" type="button" data-act="warn-ack"' + (S.busy ? ' disabled' : '') + '>' + ICON('check', 's16') + (S.busy ? 'Saving…' : 'Mark handled') + '</button>'
       : '<a class="btn btn-secondary" href="#tasks" data-act="sheet-close">Mark it in Tasks</a>';
     if (info.go) acts += info.go.external ? ext(info.go.href, esc(info.go.label) + ICON('ext', 's16'), 'btn btn-secondary', ' data-act="sheet-close"') : '<a class="btn btn-secondary" href="' + esc(info.go.href) + '" data-act="sheet-close">' + esc(info.go.label) + '</a>';
     if (acts) html += '<div class="row-wrap" style="margin-top:14px">' + acts + '</div>';
@@ -1016,14 +1041,14 @@
   }
   function warnAck() {
     var S = state.sheet, w = S && findWarn(S.key), key = w && CS.findingKey(w, state.tasks && state.tasks.tasks); if (!key) return;
-    sheetCall('ack_verifier_finding_v1', { p_key: key }, 'Marked as handled.');
+    sheetCall('ack_verifier_finding_v1', { p_key: key }, 'Marked handled.');
   }
 
   // ---------------------------------------------------------------- "To look at" sheet (E_): what the pill opens
   // One list, in the order of CS.E_attention: at most 3 rows a group, then "See all N". Every row is a real link or button; a tap closes the sheet first.
   function H_attnAck(key) {
     var w = findWarn(key), k = w && CS.findingKey(w, state.tasks && state.tasks.tasks); if (!k || !CS.canSeeGuestContact(role())) return;
-    sb.rpc('ack_verifier_finding_v1', { p_key: k }).then(function (r) { if (r.error) throw r.error; toast('Marked as handled'); E_vibe('tap'); return Promise.all([loadHome(), loadTasks()]); })
+    sb.rpc('ack_verifier_finding_v1', { p_key: k }).then(function (r) { if (r.error) throw r.error; toast('Marked handled'); E_vibe('tap'); return Promise.all([loadHome(), loadTasks()]); })
       .catch(function () { E_vibe('error'); toast('That did not save. Check your signal and try again.'); });
   }
   function E_go(r) { // -> { tag, attrs, ext }
@@ -1045,9 +1070,9 @@
     var isTask = r.go.kind === 'tasks' && typeof r.id === 'string' && r.id.indexOf(':') > 0, ver = isTask && r.id.indexOf('verifier_findings:') === 0;
     var off = isTask && state.H_offKey === r.id ? '<span class="help c-danger H_noconn H_attoff" role="status">No connection</span>' : '';
     if (isTask && !ver) return '<div class="H_attrow"><button class="chk H_chk" type="button" role="checkbox" aria-checked="false" aria-label="' + esc('Mark done: ' + r.title) + '" data-act="task-done" data-task="' + esc(r.id) + '">' + ICON('check', 's16') + '</button>' + inner + off + '</div>';
-    if (ver) return '<div class="H_attrow H_stack">' + inner + '<button class="btn btn-ghost btn-sm" type="button" data-act="task-done" data-task="' + esc(r.id) + '" aria-label="' + esc('Mark as handled: ' + r.title) + '">' + ICON('check', 's16') + 'Mark as handled</button>' + off + '</div>';
+    if (ver) return '<div class="H_attrow H_stack">' + inner + '<button class="btn btn-ghost btn-sm" type="button" data-act="task-done" data-task="' + esc(r.id) + '" aria-label="' + esc('Mark handled: ' + r.title) + '">' + ICON('check', 's16') + 'Mark handled</button>' + off + '</div>';
     var w = r.go.kind === 'warn' ? findWarn(r.go.key) : null;
-    if (w && w.kind === 'verifier' && CS.findingKey(w, state.tasks && state.tasks.tasks)) return '<div class="H_attrow H_stack">' + inner + '<button class="btn btn-ghost btn-sm" type="button" data-act="attn-ack" data-warn="' + esc(r.go.key) + '">' + ICON('check', 's16') + 'Mark as handled</button></div>';
+    if (w && w.kind === 'verifier' && CS.findingKey(w, state.tasks && state.tasks.tasks)) return '<div class="H_attrow H_stack">' + inner + '<button class="btn btn-ghost btn-sm" type="button" data-act="attn-ack" data-warn="' + esc(r.go.key) + '">' + ICON('check', 's16') + 'Mark handled</button></div>';
     return inner;
   }
   var E_ALL = { risk: ['#tasks', 'blocks'], overdue: ['#tasks', 'due'], clash: ['#calendar', ''], warn: ['#calendar/warnings', ''], notice: ['#calendar/notices', ''] };
@@ -1113,8 +1138,8 @@
     var flags = (t.mine ? pill('info', 'user', 'Yours') : '') + (t.blocks_arrival && !done ? pill('danger', 'alert', 'Blocks arrival') : '') +
       (CS.taskPriorityLabel(t.priority) && !done ? pill(t.priority === 'urgent' ? 'danger' : 'warn', 'alert', CS.taskPriorityLabel(t.priority)) : '');
     // Swipe left: a green "Done" underlay (an "Undo" one on a finished row). The underlay is a real button too, so the gesture is never the only way;
-    // a system check (verifier) row never completes on a swipe: it only opens its "Mark as handled" button.
-    var act = done ? 'task-undo' : 'task-done', ver = t.source === 'verifier_findings', uw = ver && !done ? 148 : 96, ul = done ? 'Undo' : ver ? 'Mark as handled' : 'Done';
+    // a system check (verifier) row never completes on a swipe: it only opens its "Mark handled" button.
+    var act = done ? 'task-undo' : 'task-done', ver = t.source === 'verifier_findings', uw = ver && !done ? 148 : 96, ul = done ? 'Undo' : ver ? 'Mark handled' : 'Done';
     return '<div class="E_swipewrap" style="--E-w:' + uw + 'px"><div class="E_under ' + (done ? 'E_undo' : 'E_done') + '"><button class="E_underbtn" type="button" data-act="' + act + '" data-task="' + esc(key) + '" aria-label="' + esc(ul + ': ' + t.title) + '">' + ICON('check', 's24') + esc(ul) + '</button></div>' +
       '<div class="payrow taskrow' + (done ? ' off' : '') + '" data-E-swipe="' + act + '" data-E-verifier="' + (ver ? '1' : '') + '" data-E-w="' + uw + '" data-task="' + esc(key) + '"><button class="chk" type="button" role="checkbox" aria-checked="' + done + '" aria-label="' + esc((done ? 'Done: ' : 'Mark done: ') + t.title) + '" data-act="' + act + '" data-task="' + esc(key) + '">' + ICON('check', 's16') + '</button>' +
       '<div><div class="t"><span' + (done ? ' style="text-decoration:line-through;color:var(--fg-2)"' : '') + '>' + esc(t.title) + '</span></div>' +
@@ -1707,12 +1732,13 @@
       }).join('') + '</div></div>';
   }
   // A_loadNotices: notices_v1, probed. A missing RPC hides the card and the tab content (not an error); a failed read keeps what we had.
+  var H_nLast = null; // the newest notices_v1 read, so a fix can wait for the answer that is after its write
   var H_nSeq = 0; // only the newest read counts: an older one that lands last must not put the null-weather card back
   function A_loadNotices() {
     if (!state.access) return Promise.resolve();
     state.noticesLoading = !state.notices && !state.noticesAbsent;
     var my = ++H_nSeq;
-    return sb.rpc('notices_v1', { p_property_id: pid() }).then(function (r) {
+    return (H_nLast = sb.rpc('notices_v1', { p_property_id: pid() }).then(function (r) {
       if (my !== H_nSeq) return;
       if (r.error) throw r.error;
       CS.assertNoMoney(r.data);
@@ -1723,7 +1749,7 @@
       if (my !== H_nSeq) return;
       if (CS.rpcMissing(e)) { state.noticesAbsent = true; state.notices = null; state.noticesFailed = false; } else state.noticesFailed = true; // a missing feature is not a failure; a failed read is
     }).then(function () { if (my !== H_nSeq) return; state.noticesLoading = false; state.noticesDone = true; if (state.layout && (current === 'home' || current === 'calendar')) render(current);
-      if (state.notices && !state.notices.weather && !H_wxP && state.payload) H_wxFetch(); }); // self-heal: the server cache is over 60 minutes old, so ask for a fresh one once; the answer re-reads this card
+      if (state.notices && !state.notices.weather && !H_wxP && state.payload) H_wxFetch(); })); // self-heal: the server cache is over 60 minutes old, so ask for a fresh one once; the answer re-reads this card
   }
   var NADD_TYPES = [['water', 'Water interruption'], ['maintenance', 'Maintenance'], ['deep_clean', 'Deep cleaning'], ['note', 'Note']]; // a brownout is refused by the server
   function A_noticeAddForm() {
@@ -1768,7 +1794,7 @@
     });
   }
   function signOutTo(msg) {
-    clearTimeout(H_rpT); state.H_q = ''; state.H_offKey = ''; H_unmount(); H_resetModules(); H_histGen++; H_calReset(); H_alReset(); closeSheet(); dropPhotos(); state.replyRecent = []; state.cleanDone = null; state.payWait = 0; state.reviewN = 0; B_gone = {}; state.bconfirm = ''; state.bmsg = ''; state.progress = null; state.progressAbsent = false; H_idClose(); state.reply = null; var rb = $('rp-body'); if (rb) rb.innerHTML = ''; rpLive(''); state.payload = null; state.bookings = null; state.bookingsDone = false; state.noticesDone = false; state.notices = null; state.noticesAbsent = false; state.nadd = null; state.fbOpen = false; state.tasks = null; state.access = null; state.layout = null; state.month = null; state.error = '';
+    clearTimeout(H_rpT); state.H_q = ''; state.H_offKey = ''; H_unmount(); H_resetModules(); H_histGen++; H_calReset(); H_alReset(); closeSheet(); dropPhotos(); state.replyRecent = []; state.cleanDone = null; state.payWait = 0; state.reviewN = 0; B_gone = {}; state.bheads = false; state.bookingsOldest = ''; state.bconfirm = ''; state.bmsg = ''; state.progress = null; state.progressAbsent = false; H_idClose(); state.reply = null; var rb = $('rp-body'); if (rb) rb.innerHTML = ''; rpLive(''); state.payload = null; state.bookings = null; state.bookingsDone = false; state.noticesDone = false; state.notices = null; state.noticesAbsent = false; state.nadd = null; state.fbOpen = false; state.tasks = null; state.access = null; state.layout = null; state.month = null; state.error = '';
     return sb.auth.signOut().catch(function () {}).then(function () { showSignin(msg); });
   }
   function showSignin(msg) {
@@ -1779,10 +1805,10 @@
   }
   function loadHome(opts) {
     opts = opts || {};
-    if (state.loading) return Promise.resolve();
+    if (state.loading) return opts.again && state.homeP ? state.homeP.then(function () { return loadHome(); }) : Promise.resolve(); // a fix that needs a read taken AFTER its write waits for the one in flight, then reads again
     state.loading = true;
     var pid = (state.access && state.access.property_ids && state.access.property_ids[0]) || CFG.propertyId;
-    return sb.rpc('staff_home_v1', { p_property_id: pid }).then(function (r) {
+    return (state.homeP = sb.rpc('staff_home_v1', { p_property_id: pid }).then(function (r) {
       if (r.error) {
         if (r.error.code === '42501' || /forbidden/i.test(r.error.message || '')) return signOutTo('Your access was turned off. Ask Lloyd.');
         throw r.error;
@@ -1794,7 +1820,7 @@
     }).catch(function (e) {
       state.errorKind = E_netErr(e) ? 'network' : 'server'; // "No connection" only when the network is the problem
       state.error = state.errorKind === 'network' ? (state.payload ? 'Live information needs a connection. Showing the last update.' : 'Live information needs a connection.') : (state.payload ? 'Could not update. Showing the last update.' : 'Could not update.');
-    }).then(function () { state.loading = false; if (state.layout) render(); E_announce(); H_offlineSync(); });
+    }).then(function () { state.loading = false; if (state.layout) render(); E_announce(); H_offlineSync(); }));
   }
   // cleaning_progress_v1 (owner and admin): the "Clean" check of the Turnover card. Probed: a missing RPC hides the row, it is not an error.
   function H_loadProgress() {
@@ -1847,7 +1873,8 @@
     var fail = function (e) { state.bookings = null; state.bookingsDone = true; state.bookingsFailed = !CS.rpcMissing(e && e.code ? e : { message: String((e && e.message) || e || '') }); if (!bkWarned) { bkWarned = true; console.warn('bookings to confirm unavailable', e && e.message ? e.message : e); } };
     sb.rpc('staff_inquiry_payments_v1', { p_property_id: pid() }).then(function (r) {
       if (r.error) return fail(r.error);
-      state.bookings = CS.bookingsToConfirmCount(r.data); state.bookingsFailed = false; // the count only; the payment rows are never kept
+      state.bookings = CS.bookingsToConfirmCount(r.data); state.bookingsFailed = false;
+      state.bookingsOldest = (Array.isArray(r.data) ? r.data : []).map(function (q) { return String((q && (q.created_at || q.inserted_at || q.submitted_at)) || '').slice(0, 10); }).filter(function (d) { return /^\d{4}-\d{2}-\d{2}$/.test(d); }).sort()[0] || ''; // only a date is kept; the rows are not // the count only; the payment rows are never kept
     }).catch(fail).then(function () { state.bookingsDone = true; if (current === 'home' && state.layout) render('home'); });
   }
 
@@ -2044,6 +2071,7 @@
     else if (a === 'notice-tell') { var nt = CS.canSeeGuestContact(role()) ? A_noticeByKey(t.getAttribute('data-nkey')) : null; var gm = nt ? CS.A_guestMessage(nt) : null; if (nt && !gm) toast('Check the notice text first.'); else if (gm) copyText(gm).then(function () { toast('Message copied. Paste it to the guest.'); E_vibe('tap'); }, function () { toast('Copy did not work on this phone.'); }); }
     else if (a === 'notice-cal') { var nd0 = t.getAttribute('data-date'), np = nd0.split('-'); if (CS.monthInRange(+np[0], +np[1], state.payload.today)) state.month = { y: +np[0], m: +np[1] }; state.calTab = 'calendar'; if (location.hash !== '#calendar') { closeSheet(); state.dayAfter = nd0; location.hash = '#calendar'; } else { render('calendar'); openSheet('day', nd0); state.sheet.view = 'calendar'; } } // from another screen the day sheet opens once the calendar has settled, so a Home redraw cannot close it
     else if (a === 'board-ask') { state.bconfirm = t.getAttribute('data-bkey') || ''; state.bmsg = ''; if (current === 'home') renderHome(); var yb = $('B_yes'); if (yb && yb.focus) yb.focus(); }
+    else if (a === 'heads-toggle') { state.bheads = !state.bheads; if (current === 'home') renderHome(); }
     else if (a === 'board-no') { state.bconfirm = ''; if (current === 'home') renderHome(); }
     else if (a === 'board-yes') B_do(t.getAttribute('data-bkey'));
     else if (a === 'notice-resolve') { if (CS.canSeeGuestContact(role())) sb.rpc('ack_verifier_finding_v1', { p_key: t.getAttribute('data-id') }).then(function (r) { if (r.error) throw r.error; return A_loadNotices(); }).catch(function () { toast('That did not save. Check your signal and try again.'); }); }
@@ -2158,7 +2186,7 @@
       cancel: function (el) { E_sheetReset(el, scrim()); } });
   })();
   // G3. Task row: swipe left to mark done (Undo on a finished row). a third of the row (110 px at most), or a fast flick, takes the same path as the box; a shorter swipe past
-  // 48 px leaves the row open on its real button. A system check row only ever opens its "Mark as handled" button.
+  // 48 px leaves the row open on its real button. A system check row only ever opens its "Mark handled" button.
   (function E_taskSwipe() {
     var openW = function (el) { return parseInt(el.getAttribute('data-E-w'), 10) || 96; };
     function shut(el) { var w = el.parentNode; if (w && w.classList) { w.classList.remove('E_open'); setTimeout(function () { if (!w.classList.contains('E_open')) w.classList.remove('E_live'); }, 220); } E_tr(el, 200); el.style.transform = ''; }

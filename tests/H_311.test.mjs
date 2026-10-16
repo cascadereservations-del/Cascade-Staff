@@ -87,7 +87,7 @@ test('3.1.1 hero weather: a failed refresh (refused, offline, or an empty answer
 // ------------------------------------------------------------------------------------------------ 5. Add a notice from Today
 test('3.1.1 notices: Today has a visible Add a notice button for owner and admin; the form leads with Water and Power; the whole flow is three taps from Home', async () => {
   const h = async (role) => (await boot({ role, hash: '#home', handlers: baseHandlers(role) }));
-  for (const role of ['owner', 'admin']) assert.match((await h(role)).els['v-home'].innerHTML, /<button class="btn btn-secondary btn-block H_addrow" type="button" data-act="notice-add-open"[^>]*>[^]*Add a notice<\/button>/, role);
+  for (const role of ['owner', 'admin']) assert.match((await h(role)).els['v-home'].innerHTML, /<button class="btn btn-ghost btn-sm B_add" type="button" data-act="notice-add-open"[^>]*>[^]*Add a notice<\/button>/, role);
   for (const role of ['cleaner', 'finance']) assert.doesNotMatch((await h(role)).els['v-home'].innerHTML, /H_addrow/, role + ' has no button');
   // water: tap 1 the button, tap 2 the title field (typing), tap 3 Add notice
   const w = await h('owner'); await w.click({ 'data-act': 'notice-add-open', 'data-date': TODAY }); const f = w.els['cs-body'].innerHTML;
