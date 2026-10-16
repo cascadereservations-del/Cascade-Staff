@@ -230,7 +230,8 @@ hr.hair { width: auto; height: 1px; border: 0; background: var(--rule); }
 .notes li svg.i { color: var(--fg-3); margin-top: 2px; }
 .notegroup + .notegroup { margin-top: 12px; }
 .idphoto { width: 100%; border-radius: var(--r-md); background: var(--muted); display: flex; align-items: center; justify-content: center; min-height: 160px; overflow: hidden; color: var(--fg-3); }
-.idphoto img { width: 100%; height: auto; display: block; -webkit-touch-callout: none; user-select: none; -webkit-user-select: none; }
+.idphoto { image-orientation: from-image; }
+.idphoto img { image-orientation: from-image; aspect-ratio: 8 / 5; background: var(--muted); width: 100%; height: auto; display: block; -webkit-touch-callout: none; user-select: none; -webkit-user-select: none; }
 .idphoto.empty { padding: 24px 16px; text-align: center; font: 400 var(--v5-t-label)/clamp(1.125rem, 1.0518rem + 0.3253vw, 1.26rem) var(--font-ui); }
 .idphoto.idadd { flex-direction: column; gap: 8px; color: var(--fg-2); text-decoration: none; border: 1px dashed var(--border-strong); cursor: pointer; }
 .idphoto.idadd b { color: var(--fg); }
@@ -933,6 +934,16 @@ button.A_chipglass.E_pill { width: auto; min-width: 124px; max-width: 184px; hei
 .H_idbtn img { display: block; width: 100%; }
 .H_idfull { position: fixed; inset: 0; z-index: 60; display: none; flex-direction: column; align-items: center; justify-content: center; gap: 12px; padding: max(16px, env(safe-area-inset-top)) 16px max(16px, env(safe-area-inset-bottom)); background: var(--v5-scrim, var(--v5-bg)); }
 .H_idfull.on { display: flex; }
+.H_idbar { display: flex; gap: 8px; }
+.H_idfull img.r90, .H_idfull img.r270 { max-width: calc(100vh - 140px); max-height: calc(100vw - 32px); }
+.H_idfull img.r90 { transform: rotate(90deg); }
+.H_idfull img.r180 { transform: rotate(180deg); }
+.H_idfull img.r270 { transform: rotate(270deg); }
+/* a photo shown turned: laid out as tall as the box is high, then turned to fill it */
+.idphoto.rot { aspect-ratio: 8 / 5; position: relative; container-type: size; }
+.idphoto.rot .H_idbtn { position: absolute; inset: 0; }
+.idphoto.rot img { position: absolute; top: 50%; left: 50%; width: 100cqh; height: 100cqw; object-fit: contain; transform: translate(-50%, -50%) rotate(var(--deg, 90deg)); }
+.idphoto.r180 img { transform: rotate(180deg); }
 .H_idfull img { max-width: 100%; max-height: calc(100% - 72px); object-fit: contain; border-radius: var(--v5-r-field); background: var(--v5-surf); }
 /* the offline strip: fixed under the app bar, 36 px, never takes a tap */
 .H_offline { display: flex; align-items: center; justify-content: center; min-height: 36px; padding: 0 var(--gutter); background: var(--v5-sunk); color: var(--v5-ink-2); font: 600 var(--v5-t-label)/1.2 var(--font-ui); text-align: center; }

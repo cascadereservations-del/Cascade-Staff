@@ -63,7 +63,7 @@
   var sb = DEMO ? window.CSDemo.client(window.CSDemo.role()) : window.supabase.createClient(CFG.url, CFG.key, { auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: false,
     storage: CS.authStorage(store('localStorage'), store('sessionStorage'), function () { return trustOn; }) } });
 
-  var state = { access: null, user: null, name: '', layout: null, payload: null, loadedAt: 0, loading: false, error: '', month: null, payHint: null, photos: {},
+  var state = { access: null, user: null, name: '', layout: null, payload: null, loadedAt: 0, loading: false, error: '', month: null, payHint: null, photos: {}, photoReq: {}, rot: {},
     notices: null, noticesAbsent: false, noticesLoading: false, noticeFilter: 'all', nadd: null, fbOpen: false, ratesMore: false, calTab: 'calendar', legendOpen: false, H_peekedCal: false, H_peekedTask: false, progress: null, progressAbsent: false, taskFilter: 'all', hubRoute: '', tasks: null, tasksErr: '', tasksLoading: false, showDone: false, lastDone: null, add: null, assignees: null, rates: null, ratesErr: '', rateForm: null, rateSaving: false, reply: null, bookings: null, bookingsDone: false, noticesDone: false, tasksDenied: false, noticesFailed: false, bookingsFailed: false, errorKind: '' };
   var $ = function (id) { return document.getElementById(id); };
   try { var lsLegend = store('localStorage'); state.legendOpen = !!lsLegend && lsLegend.getItem('cs_legend_open') === '1'; } catch (e) {} // F2: the legend's More stays as it was left
@@ -377,31 +377,37 @@
   function loadIdPhotos(root) {
     root.querySelectorAll('[data-idpath]').forEach(function (box) {
       var path = box.getAttribute('data-idpath'), hit = state.photos[path];
-      if (hit && Date.now() - hit.at < 4 * 60000) { putPhoto(box, hit.url); return; }
-      sb.storage.from('guest-id-photos').createSignedUrl(path, 300).then(function (r) {
+      if (hit && Date.now() - hit.at < 30 * 60000) { putPhoto(box, hit.url); return; } // kept in memory for the session: reopening a card does not sign or download again
+      var req = state.photoReq[path] || (state.photoReq[path] = sb.storage.from('guest-id-photos').createSignedUrl(path, 300).then(function (r) {
         if (r.error || !r.data) throw new Error('sign');
         return net(r.data.signedUrl, { cache: 'no-store', referrerPolicy: 'no-referrer' });
       }).then(function (res) { if (!res.ok) throw new Error('fetch'); return res.blob(); }).then(function (blob) {
-        if (hit) URL.revokeObjectURL(hit.url);
-        var url = URL.createObjectURL(blob); state.photos[path] = { url: url, at: Date.now() }; putPhoto(box, url);
-      }).catch(function () {
+        var old = state.photos[path]; if (old) URL.revokeObjectURL(old.url);
+        var url = URL.createObjectURL(blob); state.photos[path] = { url: url, at: Date.now() }; delete state.photoReq[path]; return url;
+      }, function (e) { delete state.photoReq[path]; throw e; })); // one request per path at a time
+      req.then(function (url) { putPhoto(box, url); }).catch(function () {
         box.className = 'idphoto empty'; box.innerHTML = 'The photo could not be loaded. <button class="btn btn-ghost btn-sm" type="button" data-act="refresh">Try again</button>';
       });
     });
   }
   function putPhoto(box, url) {
-    box.innerHTML = ''; var img = new Image(); img.src = url; img.alt = 'Guest ID photo'; img.draggable = false;
+    box.innerHTML = ''; var img = new Image(); img.decoding = 'async'; img.alt = 'Guest ID photo'; img.draggable = false;
+    // An ID is a landscape card: one that loads taller than wide with no EXIF turn is shown turned 90 degrees (Rotate in the full-screen view fixes the rest).
+    var turn = function () { var d = state.rot[url] || 0; box.classList.toggle('rot', d % 180 === 90); box.classList.toggle('r180', d === 180); box.style.setProperty('--deg', d + 'deg'); };
+    if (state.rot[url] === undefined) img.addEventListener('load', function () { if (state.rot[url] === undefined && img.naturalWidth && img.naturalHeight > img.naturalWidth * 1.05) { state.rot[url] = 90; turn(); } });
+    turn(); img.src = url;
     img.addEventListener('contextmenu', function (e) { e.preventDefault(); });
     if (CS.canSeeGuestContact(role())) { var b = document.createElement('button'); b.type = 'button'; b.className = 'H_idbtn'; b.setAttribute('data-act', 'id-full'); b.setAttribute('aria-label', 'Show the ID photo full screen'); b.appendChild(img); box.appendChild(b); } else box.appendChild(img);
   }
   // Full screen: the same in-memory picture, no download, no new request. A tap on the picture or Close puts it away.
+  function H_idRot(src) { return state.rot[src] || 0; }
   function H_idFull(src) {
     var o = $('H_idfull'); if (!o) { o = document.createElement('div'); o.id = 'H_idfull'; o.className = 'H_idfull'; o.setAttribute('role', 'dialog'); o.setAttribute('aria-modal', 'true'); o.setAttribute('aria-label', 'Guest ID photo'); document.body.appendChild(o); }
-    o.innerHTML = '<img alt="Guest ID photo" draggable="false" data-act="id-full-close"><button class="btn btn-secondary" type="button" data-act="id-full-close">' + ICON('close', 's16') + 'Close</button>';
-    var im = o.querySelector('img'); if (im) im.src = src; o.classList.add('on'); var cb = o.querySelector('button'); if (cb && cb.focus) cb.focus();
+    o.innerHTML = '<img alt="Guest ID photo" draggable="false" data-act="id-full-close"><div class="H_idbar"><button class="btn btn-secondary" type="button" data-act="id-rot">Rotate</button><button class="btn btn-secondary" type="button" data-act="id-full-close">' + ICON('close', 's16') + 'Close</button></div>';
+    o.setAttribute('data-src', src); var im = o.querySelector('img'); if (im) { im.src = src; im.className = 'r' + H_idRot(src); } o.classList.add('on'); var cb = o.querySelector('button[data-act="id-full-close"]'); if (cb && cb.focus) cb.focus();
   }
   function H_idClose() { var o = $('H_idfull'); if (o && o.classList) { o.classList.remove('on'); o.innerHTML = ''; } }
-  function dropPhotos() { Object.keys(state.photos).forEach(function (k) { URL.revokeObjectURL(state.photos[k].url); }); state.photos = {}; }
+  function dropPhotos() { Object.keys(state.photos).forEach(function (k) { URL.revokeObjectURL(state.photos[k].url); }); state.photos = {}; state.photoReq = {}; state.rot = {}; }
 
   // ---------------------------------------------------------------- Guest Calendar Info
   function monthState() {
@@ -1896,6 +1902,7 @@
     else if (a === 'tour-next') { var TS = state.sheet; if (TS && TS.kind === 'tour') { if ((TS.step || 0) >= H_TOUR.length - 1) closeSheet(); else { TS.step = (TS.step || 0) + 1; drawSheet(); } } }
     else if (a === 'tour-skip') closeSheet();
     else if (a === 'id-full') { var im = t.querySelector && t.querySelector('img'); if (im && CS.canSeeGuestContact(role())) H_idFull(im.src); }
+    else if (a === 'id-rot') { var ro = $('H_idfull'), rs = ro && ro.getAttribute('data-src'), ri = ro && ro.querySelector('img'); if (rs && ri) { state.rot[rs] = (H_idRot(rs) + 90) % 360; ri.className = 'r' + state.rot[rs]; } }
     else if (a === 'id-full-close') H_idClose();
     else if (a === 'attn-ack') H_attnAck(t.getAttribute('data-warn'));
     else if (a === 'reply-back') { if (state.reply) { state.reply.step = 'pick'; state.reply.err = ''; state.reply.signout = false; } renderReply('heading'); }

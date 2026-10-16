@@ -322,7 +322,7 @@ test('G: Show ID photo signs only on tap, for 300 s, from the private bucket; th
   const { el } = await mount(cl, GID);
   assert.equal(cl.signed.length, 0);
   await clickA(el, 'show-id', { id: CID }); await tick();
-  assert.deepEqual(cl.signed, [['guest-id-photos', CID + '/a.jpg', 300]]);
+  assert.deepEqual(cl.signed, [['guest-id-photos', CID + '/a.jpg', 3600]]);
   assert.match(el.html, /https:\/\/signed\.test\//);
   await clickA(el, 'full', { id: CID });
   assert.match(el.html, /role="dialog"/); assert.match(el.html, /Close/);
@@ -440,4 +440,51 @@ test('G: after remove_id also clears the ID flag, the record reloads so ID reads
   await clickA(el, 'remove-photo', { id: CID }); await clickA(el, 'remove-photo-yes', { id: CID }); await tick();
   assert.equal(cl.chains.filter((c) => c[0][1] === 'guest_profile_details').length, 2);
   assert.match(el.html, /ID photo removed/); assert.match(el.html, /<dt>ID<\/dt><dd><span class="G_none">Not on file/);
+});
+
+// ------------------------------------------------------------------------------------------------ s90: photo cache and turning
+const imgEv = (cls, w, h) => { const box = { cls: new Set(), getAttribute: (k) => (k === 'data-path' ? CID + '/a.jpg' : null), classList: { add: (c) => box.cls.add(c) } };
+  return { box, ev: { target: { naturalWidth: w, naturalHeight: h, closest: () => box } } }; };
+
+test('G s90: a second open of the same guest reuses the signed link (no second sign call) and shows the photo without a tap', async () => {
+  const cl = detailClient();
+  const { M, el, touched } = await mount(cl, GID);
+  await clickA(el, 'show-id', { id: CID }); await tick();
+  assert.equal(cl.signed.length, 1);
+  assert.match(el.html, /loading="lazy" decoding="async"/);
+  M.unmount();
+  const el2 = new FakeEl();
+  M.mount(el2, { client: cl, demo: false, role: 'owner', sub: GID, propertyId: PROP, navigate: () => {}, toast: () => {}, haptic: () => {} }); await tick();
+  assert.match(el2.html, /https:\/\/signed\.test\//);
+  assert.equal(cl.signed.length, 1);
+  assert.deepEqual(touched, []); // nothing read from or written to browser storage
+  M.reset(); // sign-out
+  const el3 = new FakeEl();
+  M.mount(el3, { client: cl, demo: false, role: 'owner', sub: GID, propertyId: PROP, navigate: () => {}, toast: () => {}, haptic: () => {} }); await tick();
+  assert.doesNotMatch(el3.html, /https:\/\/signed\.test\//);
+  await clickA(el3, 'show-id', { id: CID }); await tick();
+  assert.equal(cl.signed.length, 2);
+});
+
+test('G s90: a tall ID photo is turned, and Rotate turns it a quarter each tap', async () => {
+  const cl = detailClient();
+  const { M, el } = await mount(cl, GID);
+  await clickA(el, 'show-id', { id: CID }); await tick();
+  const wide = imgEv('', 800, 500); M._onImg(wide.ev); assert.equal(wide.box.cls.size, 0);
+  const tall = imgEv('', 500, 800); M._onImg(tall.ev); assert.ok(tall.box.cls.has('G_r90'));
+  await clickA(el, 'full', { id: CID }); await tick();
+  assert.match(el.html, /class="G_img G_r90"/);
+  assert.match(el.html, /data-act="full-rot"/);
+  await clickA(el, 'full-rot'); await tick();
+  assert.match(el.html, /class="G_img G_r180"/);
+  await clickA(el, 'full-rot'); await clickA(el, 'full-rot'); await tick();
+  assert.match(el.html, /class="G_img"/); // back to upright after four turns in total
+});
+
+test('G s90: app.js keeps ID photos in memory only, dedupes requests, and offers Rotate', () => {
+  const app = fs.readFileSync(path.join(root, 'app.js'), 'utf8');
+  assert.match(app, /state\.photoReq\[path\]/);
+  assert.match(app, /a === 'id-rot'/);
+  assert.match(app, /state\.photos = \{\}; state\.photoReq = \{\}; state\.rot = \{\}/); // sign-out drops all three
+  assert.equal(/localStorage|sessionStorage|caches\.open|indexedDB/.test(app.slice(app.indexOf('function loadIdPhotos'), app.indexOf('function dropPhotos'))), false);
 });

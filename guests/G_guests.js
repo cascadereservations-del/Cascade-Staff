@@ -24,6 +24,21 @@
 
   var G_clock = function () { return Date.now(); };
   var S = null, G_seq = 0;
+  // Photo links live for the sign-in session only, in memory (never written to storage): a path keeps its signed URL until 5 minutes before it
+  // expires, so reopening a guest neither signs nor downloads again. G_rot is the per-session turn (0/90/180/270) of a path; G_reset clears both.
+  var G_SIGN_SEC = 3600, G_cache = {}, G_inflight = {}, G_rot = {};
+  function G_cached(path) { var h = G_cache[path]; return h && h.exp - 300000 > Date.now() ? h.url : ''; }
+  function G_sign(client, path) {
+    var u = G_cached(path); if (u) return Promise.resolve({ url: u });
+    if (G_inflight[path]) return G_inflight[path];
+    var p = Promise.resolve(client.storage.from(G_BUCKET).createSignedUrl(path, G_SIGN_SEC)).then(function (r) { return r; }, function (e) { return { data: null, error: e || { message: 'network' } }; }).then(function (r) {
+      delete G_inflight[path];
+      if (r.error || !r.data || !r.data.signedUrl) return { url: '' };
+      G_cache[path] = { url: r.data.signedUrl, exp: Date.now() + G_SIGN_SEC * 1000 }; return { url: r.data.signedUrl };
+    });
+    G_inflight[path] = p; return p;
+  }
+  function G_reset() { G_unmount(); G_cache = {}; G_inflight = {}; G_rot = {}; }
 
   // ------------------------------------------------------------------------------------------------ pure helpers (tested)
   function G_esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
@@ -290,8 +305,8 @@
     if (D.cErr) return '<div class="card glass G_card"><div class="card-head"><h3>People and ID photos</h3></div>' + G_err('No connection, so the people and ID photos could not load.', 'G_cerr') + '<button class="btn btn-secondary" type="button" data-act="detail-retry">Try again</button></div>';
     var list = D.companions || [], g = D.guest;
     var rows = list.map(function (c) {
-      var own = G_exact(c.name, g.name), url = D.urls[c.id], conf = S.confirm && S.confirm.id === c.id ? S.confirm.kind : '';
-      var photo = c.id_photo_path ? (url ? '<button class="G_photo" type="button" data-act="full" data-id="' + G_esc(c.id) + '" aria-label="Open the ID photo of ' + G_esc(c.name) + ' full screen"><img src="' + G_esc(url) + '" alt="ID photo of ' + G_esc(c.name) + '"></button>' :
+      var own = G_exact(c.name, g.name), url = D.urls[c.id] || G_cached(c.id_photo_path), conf = S.confirm && S.confirm.id === c.id ? S.confirm.kind : '';
+      var photo = c.id_photo_path ? (url ? '<button class="G_photo' + G_rotCls(c.id_photo_path) + '" type="button" data-act="full" data-id="' + G_esc(c.id) + '" data-path="' + G_esc(c.id_photo_path) + '" aria-label="Open the ID photo of ' + G_esc(c.name) + ' full screen"><img class="G_img" src="' + G_esc(url) + '" loading="lazy" decoding="async" alt="ID photo of ' + G_esc(c.name) + '"></button>' :
         '<button class="btn btn-secondary btn-sm" type="button" data-act="show-id" data-id="' + G_esc(c.id) + '">' + (D.urlBusy === c.id ? 'Opening…' : 'Show ID photo') + '</button>') : '<span class="G_none">No ID photo</span>';
       var pick = function (label, act) {
         return '<label class="btn btn-secondary btn-sm G_pick">' + label + '<input class="sr" type="file" accept="image/*" data-pick="' + act + '" data-id="' + G_esc(c.id) + '" aria-label="' + G_esc(label + ' for ' + c.name) + '"></label>';
@@ -310,8 +325,9 @@
     return '<div class="G_ask" role="group" aria-label="Please confirm"><p class="help">' + G_esc(text) + '</p><div class="G_btns"><button class="btn btn-danger btn-sm" type="button" data-act="' + act + '" data-id="' + G_esc(id) + '">' + G_esc(label) + '</button><button class="btn btn-secondary btn-sm" type="button" data-act="confirm-no">Keep it</button></div></div>';
   }
   function G_typeName(t) { for (var i = 0; i < G_ID_TYPES.length; i++) if (G_ID_TYPES[i][0] === t) return G_ID_TYPES[i][1]; return 'ID'; }
+  function G_rotCls(path) { var d = G_rot[path] || 0; return d ? ' G_r' + d : ''; }
   function G_fullHtml() {
-    return '<div class="G_full" role="dialog" aria-modal="true" aria-label="ID photo"><button class="btn btn-secondary G_x" type="button" data-act="full-close" id="G_fullx">Close</button><img src="' + G_esc(S.full) + '" alt="ID photo, full screen"></div>';
+    return '<div class="G_full" role="dialog" aria-modal="true" aria-label="ID photo"><button class="btn btn-secondary G_x" type="button" data-act="full-close" id="G_fullx">Close</button><button class="btn btn-secondary G_rotbtn" type="button" data-act="full-rot">Rotate</button><img class="G_img' + G_rotCls(S.fullPath) + '" src="' + G_esc(S.full) + '" alt="ID photo, full screen"></div>';
   }
 
   // ---- add from text, screenshot or photo
@@ -553,10 +569,10 @@
   function G_showId(id) {
     var D = S.d, c = D.companions.filter(function (x) { return x.id === id; })[0], tok = S.token; if (!c || !c.id_photo_path || D.urlBusy) return;
     D.urlBusy = id; G_paint();
-    Promise.resolve(S.client.storage.from(G_BUCKET).createSignedUrl(c.id_photo_path, 300)).then(function (r) { return r; }, function (e) { return { data: null, error: e || { message: 'network' } }; }).then(function (r) {
+    G_sign(S.client, c.id_photo_path).then(function (r) {
       if (!G_live(tok)) return;
       D.urlBusy = '';
-      if (r.error || !r.data || !r.data.signedUrl) S.cerr = 'The ID photo could not be opened. Tap again in a moment.'; else { S.cerr = ''; D.urls[id] = r.data.signedUrl; }
+      if (!r.url) S.cerr = 'The ID photo could not be opened. Tap again in a moment.'; else { S.cerr = ''; D.urls[id] = r.url; }
       G_paint();
     });
   }
@@ -569,7 +585,7 @@
       if (!G_live(tok)) return;
       S.cbusy = '';
       if ((o.status === 200 || o.status === 207) && o.j.saved) {
-        S.msg = G_saveLines(o.j.saved); S.haptic(o.j.ok ? 'ok' : 'warn'); delete D.urls[id];
+        S.msg = G_saveLines(o.j.saved); S.haptic(o.j.ok ? 'ok' : 'warn'); G_forget(D, id);
         if (o.j.ok) { G_refreshCompanions(); return; }
       } else S.cerr = G_errText(o.status, o.j.error);
       G_paint();
@@ -580,12 +596,16 @@
     G_call({ action: 'remove_id', guest_id: S.gid, companion_id: id, reason: G_REASON_PHOTO }).then(function (o) {
       if (!G_live(tok)) return;
       S.cbusy = '';
-      if ((o.status === 200 || o.status === 207) && o.j.saved) { S.msg = G_saveLines(o.j.saved); delete D.urls[id];
+      if ((o.status === 200 || o.status === 207) && o.j.saved) { S.msg = G_saveLines(o.j.saved); G_forget(D, id);
         if (o.j.saved.some(function (x) { return x.what === 'profile'; })) { var m = S.msg; G_loadDetail(); S.msg = m; return; } // the ID flag changed too: reload so "ID: On file" is current
         if (o.j.ok) { G_refreshCompanions(); return; } }
       else S.cerr = G_errText(o.status, o.j.error);
       G_paint();
     });
+  }
+  function G_forget(D, id) { // a replaced or removed photo must not come back from the cache
+    var c = D.companions.filter(function (x) { return x.id === id; })[0]; delete D.urls[id];
+    if (c && c.id_photo_path) { delete G_cache[c.id_photo_path]; delete G_rot[c.id_photo_path]; }
   }
   function G_refreshCompanions() {
     var tok = S.token, D = S.d;
@@ -630,7 +650,8 @@
     else if (a === 'vip') { G_readEdit(); S.edit.vip = !S.edit.vip; G_paint(); G_focus('G_f_vip'); }
     else if (a === 'save-edit') G_saveEdit();
     else if (a === 'show-id') G_showId(id);
-    else if (a === 'full') { S.full = S.d.urls[id] || null; G_paint(); G_focus('G_fullx'); }
+    else if (a === 'full') { var fc = S.d.companions.filter(function (x) { return x.id === id; })[0]; S.fullPath = fc ? fc.id_photo_path : ''; S.full = S.d.urls[id] || (fc && G_cached(fc.id_photo_path)) || null; G_paint(); G_focus('G_fullx'); }
+    else if (a === 'full-rot') { if (S.fullPath) { G_rot[S.fullPath] = ((G_rot[S.fullPath] || 0) + 90) % 360; G_paint(); G_focus('G_fullx'); } }
     else if (a === 'full-close') { S.full = null; G_paint(); }
     else if (a === 'remove-photo') { S.confirm = { id: id, kind: 'remove-photo' }; G_paint(); }
     else if (a === 'remove-comp') { S.confirm = { id: id, kind: 'remove-comp' }; G_paint(); }
@@ -686,7 +707,7 @@
       d: null, edit: null, add: null, msg: null, err: '', cerr: '', confirm: null, cbusy: '', busy: false, full: null
     };
     if (S.role !== 'owner' && S.role !== 'admin') { G_paint(); return; }
-    el.addEventListener('click', G_onClick); el.addEventListener('change', G_onChange); el.addEventListener('input', G_onInput); el.addEventListener('keydown', G_onKey);
+    el.addEventListener('click', G_onClick); el.addEventListener('change', G_onChange); el.addEventListener('input', G_onInput); el.addEventListener('keydown', G_onKey); el.addEventListener('load', G_onImg, true);
     if (S.demo || !S.client) {
       if (!S.demo) { el.innerHTML = '<div class="G_root">' + G_err('No connection, so Guests could not open.') + '</div>'; return; }
       S.list.rows = G_DEMO; S.list.total = G_DEMO.length;
@@ -696,17 +717,23 @@
     if (uuid) G_loadDetail();
     else { G_paint(); G_loadStays(); G_loadList(false); }
   }
+  // An ID is a landscape card: a photo that loads taller than wide with no EXIF turn is shown turned 90 degrees (the Rotate button fixes the rest).
+  function G_onImg(ev) {
+    var im = ev && ev.target, b = im && im.closest && im.closest('[data-path]'), path = b && b.getAttribute('data-path');
+    if (!path || !im.naturalWidth || G_rot[path] !== undefined || im.naturalHeight <= im.naturalWidth * 1.05) return;
+    G_rot[path] = 90; if (b.classList) b.classList.add('G_r90');
+  }
   function G_unmount() {
     if (!S) return;
     var el = S.el; if (G_timer) { clearTimeout(G_timer); G_timer = null; }
-    try { el.removeEventListener('click', G_onClick); el.removeEventListener('change', G_onChange); el.removeEventListener('input', G_onInput); el.removeEventListener('keydown', G_onKey); } catch (e) { /* the screen is going away */ }
+    try { el.removeEventListener('click', G_onClick); el.removeEventListener('change', G_onChange); el.removeEventListener('input', G_onInput); el.removeEventListener('keydown', G_onKey); el.removeEventListener('load', G_onImg, true); } catch (e) { /* the screen is going away */ }
     S.token = -1; S = null; // guest data, signed photo links and chosen photos leave memory here
   }
 
   root.G_Guests = {
-    mount: G_mount, unmount: G_unmount, _setClock: function (f) { G_clock = f; },
+    mount: G_mount, unmount: G_unmount, reset: G_reset, _setClock: function (f) { G_clock = f; },
     _t: { searchPattern: G_searchPattern, daysToBirthday: G_daysToBirthday, stayMap: G_stayMap, tagsFromText: G_tagsFromText, check: G_check, patch: G_patch, sameName: G_sameName,
       errText: G_errText, rpcText: G_rpcText, absent: G_absent, saveLines: G_saveLines, stayLine: G_stayLine, sheetFrom: G_sheetFrom, addBody: G_addBody, today: G_today },
-    _state: function () { return S; }
+    _state: function () { return S; }, _onImg: G_onImg
   };
 })(typeof window !== 'undefined' ? window : this);
