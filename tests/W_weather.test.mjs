@@ -270,8 +270,9 @@ test('the live map loads only after a tap; layers switch the overlay; the data l
   assert.equal(new URL(/<iframe[^>]*src="([^"]+)"/.exec(e.innerHTML)[1].replace(/&amp;/g, '&')).searchParams.get('overlay'), 'temp');
   assert.ok(/referrerpolicy="no-referrer"/.test(e.innerHTML) && /title="Live weather map/.test(e.innerHTML));
   assert.equal(w.calls.length, 1, 'the map is the only thing that leaves the page, and it is an iframe, not a call from the script');
-  const server = fs.readFileSync(path.join(root, '..', 's82-waves-W', 'supabase', 'functions', 'weather-proxy', 'index.ts'), 'utf8');
-  assert.ok(server.includes('GEN_SAN_LAT    = 6.1164') && server.includes('GEN_SAN_LNG    = 125.1716'));
+  // The server copy lives in the waves repo; s89 moved this off a deleted s82 worktree onto the long-lived waves clone, and skips when absent (CI).
+  const proxy = path.join(root, '..', 'direct-booking-waves-0-1-sol', 'supabase', 'functions', 'weather-proxy', 'index.ts');
+  if (fs.existsSync(proxy)) { const server = fs.readFileSync(proxy, 'utf8'); assert.ok(server.includes('GEN_SAN_LAT    = 6.1164') && server.includes('GEN_SAN_LNG    = 125.1716')); }
 });
 
 test('return to the screen: no refetch inside 15 minutes, a refetch after; hidden pages do nothing; the clock-dependent text moves', async () => {
