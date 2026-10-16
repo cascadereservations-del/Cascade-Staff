@@ -64,9 +64,9 @@
     storage: CS.authStorage(store('localStorage'), store('sessionStorage'), function () { return trustOn; }) } });
 
   var state = { access: null, user: null, name: '', layout: null, payload: null, loadedAt: 0, loading: false, error: '', month: null, payHint: null, photos: {},
-    notices: null, noticesAbsent: false, noticesLoading: false, noticeFilter: 'all', nadd: null, fbOpen: false, ratesMore: false, calTab: 'calendar', legendOpen: false, H_peekedCal: false, H_peekedTask: false, progress: null, progressAbsent: false, taskFilter: 'all', hubRoute: '', tasks: null, tasksErr: '', tasksLoading: false, showDone: false, lastDone: null, add: null, assignees: null, rates: null, ratesErr: '', rateForm: null, rateSaving: false, reply: null, bookings: null, bookingsDone: false, noticesDone: false, tasksDenied: false, noticesFailed: false, bookingsFailed: false, errorKind: '' };
+    notices: null, noticesAbsent: false, noticesLoading: false, noticeFilter: 'all', nadd: null, fbOpen: false, ratesMore: false, calTab: 'calendar', calView: 'month', legendOpen: false, H_peekedCal: false, H_peekedTask: false, progress: null, progressAbsent: false, taskFilter: 'all', hubRoute: '', tasks: null, tasksErr: '', tasksLoading: false, showDone: false, lastDone: null, add: null, assignees: null, rates: null, ratesErr: '', rateForm: null, rateSaving: false, reply: null, bookings: null, bookingsDone: false, noticesDone: false, tasksDenied: false, noticesFailed: false, bookingsFailed: false, errorKind: '' };
   var $ = function (id) { return document.getElementById(id); };
-  try { var lsLegend = store('localStorage'); state.legendOpen = !!lsLegend && lsLegend.getItem('cs_legend_open') === '1'; } catch (e) {} // F2: the legend's More stays as it was left
+  try { var lsLegend = store('localStorage'); state.legendOpen = !!lsLegend && lsLegend.getItem('cs_legend_open') === '1'; if (lsLegend && lsLegend.getItem('cs_cal_view') === 'bookings') state.calView = 'bookings'; } catch (e) {} // F2: the legend's More stays as it was left
   var VIEWS = ['signin', 'home', 'calendar', 'tasks', 'payrates', 'more', 'door', 'reply', 'hub', 'weather', 'stock', 'manage', 'guests', 'inbox', 'search'];
   function pid() { return (state.access && state.access.property_ids && state.access.property_ids[0]) || CFG.propertyId; }
   function canReply() { return CS.canDraftReply(state.access && state.access.role); } // s82 decision 5: every signed-in staff role
@@ -541,6 +541,23 @@
     if (r) items.push('<li>' + ICON('rain').replace('class="i"', 'class="i c-info"') + '<span class="num"><b>' + esc(r.head) + '</b>' + (r.rest ? ' · ' + esc(r.rest) : '') + '</span></li>');
     return items;
   }
+  // s90 lane K: the Booking calendar view (calendar/K_bookcal.js, a port of the admin Booking calendar page). Loaded the first time it is chosen; a load that fails leaves the month grid.
+  var K_state = { p: null, failed: false };
+  function K_load() {
+    if (window.K_BookCal || K_state.p) return;
+    var load = typeof window.H_loadAsset === 'function' ? window.H_loadAsset : H_domLoad;
+    K_state.p = load({ src: 'calendar/K_bookcal.js', css: 'calendar/K_bookcal.css', global: 'K_BookCal' }).then(function () { if (!window.K_BookCal) throw new Error('no module'); }).catch(function () { K_state.failed = true; K_state.p = null; })
+      .then(function () { if (current === 'calendar' && state.calTab === 'calendar' && state.payload) renderCalendar(); });
+  }
+  function K_saveView() { var ls = store('localStorage'); try { if (ls) ls.setItem('cs_cal_view', state.calView); } catch (e) {} }
+  function K_switch() { // two buttons, same place as the tabs; every role has it (no new data is read)
+    var b = function (v, t) { return '<button type="button" data-act="cal-view" data-view="' + v + '" aria-pressed="' + (state.calView === v) + '">' + t + '</button>'; };
+    return '<div class="K_view card glass" role="group" aria-label="Calendar view">' + b('month', 'Month') + b('bookings', 'Booking calendar') + '</div>';
+  }
+  function K_body(m) {
+    if (!window.K_BookCal) { if (!K_state.failed) { K_load(); return '<div class="skel" style="height:160px"></div>'; } return null; }
+    return window.K_BookCal.render({ y: m.y, m: m.m, today: state.payload.today, stays: staysOf(), rows: H_allCal(), full: CS.canSeeGuestContact(role()) }) + H_olderLine(m, state.payload.today);
+  }
   function calTabs(cur) {
     var t = [['calendar', '#calendar', 'Calendar'], ['notices', '#calendar/notices', 'Notices']]; // tap only: the old sub-tab swipe is gone
     return '<nav class="A_tabs card glass" aria-label="View">' + t.map(function (x) { return '<a href="' + x[1] + '" data-act="cal-tab" data-tab="' + x[0] + '"' + (x[0] === cur ? ' aria-current="page"' : '') + '>' + x[2] + '</a>'; }).join('') + '</nav>';
@@ -575,11 +592,11 @@
   // One screen: the month, then the next 14 days (arrivals and departures; the full Arriving next and In the house cards come first), blocked nights and warnings.
   function calCalendar() {
     var p = state.payload, m = monthState(), ng = p.next_guest, cg = p.current_guest;
-    var prevOk = !!monthStep(-1), nextOk = !!monthStep(1), grid = calendarGrid();
+    var prevOk = !!monthStep(-1), nextOk = !!monthStep(1), kbody = state.calView === 'bookings' ? K_body(m) : null, grid = kbody != null ? '' : calendarGrid();
     var same = function (st, g) { return !!g && st.guest_name === g.guest_name && st.checkin_date === g.checkin_date; };
     var rows = CS.H_agenda(staysOf(), p.today, 14, function (st) { return same(st, ng) || same(st, cg); });
     var html = '<div class="calhdr"><button class="iconbtn" type="button" data-act="prev" aria-label="Previous month"' + (prevOk ? '' : ' disabled style="opacity:.35"') + '>' + ICON('back', 's24') + '</button><h2 class="dlg" aria-live="polite">' + esc(CS.monthTitle(m.y, m.m)) + '</h2><button class="iconbtn" type="button" data-act="next" aria-label="Next month"' + (nextOk ? '' : ' disabled style="opacity:.35"') + '>' + ICON('chev', 's24') + '</button></div>' +
-      H_bookedSlot(m) + legend() + grid + '<p class="help H_help" style="text-align:center;margin:8px 0 0">Tap a day for who is staying. Swipe for the next month.</p>' + H_olderLine(m, p.today);
+      K_switch() + H_bookedSlot(m) + (kbody != null ? kbody + '<p class="help H_help" style="text-align:center;margin:8px 0 0">Tap a stay for the day. Swipe for the next month.</p>' : legend() + grid + '<p class="help H_help" style="text-align:center;margin:8px 0 0">Tap a day for who is staying. Swipe for the next month.</p>' + H_olderLine(m, p.today));
     html = '<div class="H_calleft">' + html + '</div><div class="H_calright">';
     html += '<div class="sect" id="agenda"><h2 class="hd H_agendahd">Next 14 days</h2>';
     if (ng) html += '<div class="stack">' + guestBlock(ng, 'next') + '</div>'; else if (!cg && !rows.length) html += '<p class="sub" style="margin:0">Nothing is booked to arrive or leave in the next 14 days.</p>';
@@ -1861,6 +1878,7 @@
     else if (a === 'attn-open') openSheet('attn', 'attn-open');
     else if (a === 'day-prev') H_dayGo(-1);
     else if (a === 'day-next') H_dayGo(1);
+    else if (a === 'cal-view') { var kv = t.getAttribute('data-view') === 'bookings' ? 'bookings' : 'month'; if (kv !== state.calView) { state.calView = kv; K_saveView(); renderCalendar(); } }
     else if (a === 'legend-more') { state.legendOpen = !state.legendOpen; H_legendSave(); var lg = t.closest && t.closest('.H_legend'); if (lg) { lg.setAttribute('data-open', state.legendOpen ? '1' : '0'); t.setAttribute('aria-expanded', String(state.legendOpen)); } }
     else if (a === 'tasks-toggle-done') { state.showDone = !state.showDone; loadTasks(); renderTasks(); }
     else if (a === 'attn-tasks') { var tf0 = t.getAttribute('data-filter'); if (/^(all|mine|due|blocks)$/.test(tf0 || '')) state.taskFilter = tf0; closeSheet(); }
