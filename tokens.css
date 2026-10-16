@@ -26,6 +26,8 @@
   /* bookings: one blue family, a shade per guest */
   --v5-g1: #1F3A68; --v5-g1-fg: #FFFFFF; --v5-g2: #3563A8; --v5-g2-fg: #FFFFFF; --v5-g3: #5B8BD0; --v5-g3-fg: #0F1B2A;
   --v5-g4: #8DB2E3; --v5-g4-fg: #0F1B2A; --v5-g6: #27508A; --v5-g6-fg: #FFFFFF;
+  /* booking calendar: eight guest colours, text AA on each */
+  --v5-k1: #1F3A68; --v5-k1-fg: #FFFFFF; --v5-k2: #0B6150; --v5-k2-fg: #FFFFFF; --v5-k3: #8A3A10; --v5-k3-fg: #FFFFFF; --v5-k4: #6B2F8A; --v5-k4-fg: #FFFFFF; --v5-k5: #9C2A5B; --v5-k5-fg: #FFFFFF; --v5-k6: #566508; --v5-k6-fg: #FFFFFF; --v5-k7: #A8420A; --v5-k7-fg: #FFFFFF; --v5-k8: #17678C; --v5-k8-fg: #FFFFFF;
   --v5-cal-booked: #1F3A68; --v5-cal-booked-fg: #FFFFFF; --v5-cal-2nd: #8DB2E3; --v5-cal-2nd-fg: #0F1B2A; --v5-cal-2nd-bar: #3563A8;
   --v5-cal-blocked: #D5DBE2; --v5-cal-blocked-fg: #3B4756; --v5-cal-hatch: rgba(74, 88, 105, 0.22);
   --v5-cal-clash-ring: #E5484D; --v5-cal-free-edge: #8FA6BC; --v5-cal-past-fg: #5E6B7A;
@@ -82,6 +84,8 @@
     --v5-danger: #F0646F; --v5-danger-t: #F4A3AA; --v5-danger-w: #3B1A1E; --v5-info-t: #A9C4F5; --v5-info-w: #17284A;
     --v5-g1: #8DB2E3; --v5-g1-fg: #0F1B2A; --v5-g2: #5B8BD0; --v5-g2-fg: #0F1B2A; --v5-g3: #3563A8; --v5-g3-fg: #FFFFFF;
     --v5-g4: #C3D6F0; --v5-g4-fg: #0F1B2A; --v5-g6: #A9C4F5; --v5-g6-fg: #0F1B2A;
+    /* booking calendar: eight guest colours, text AA on each */
+    --v5-k1: #8DB2E3; --v5-k1-fg: #0F1B2A; --v5-k2: #6FD0BC; --v5-k2-fg: #0F1B2A; --v5-k3: #E8A27C; --v5-k3-fg: #0F1B2A; --v5-k4: #C9A0E6; --v5-k4-fg: #0F1B2A; --v5-k5: #F0A0C0; --v5-k5-fg: #0F1B2A; --v5-k6: #C5D66E; --v5-k6-fg: #0F1B2A; --v5-k7: #F2B25C; --v5-k7-fg: #0F1B2A; --v5-k8: #7CC8E8; --v5-k8-fg: #0F1B2A;
     --v5-cal-booked: #8DB2E3; --v5-cal-booked-fg: #0F1B2A; --v5-cal-2nd: #3563A8; --v5-cal-2nd-fg: #FFFFFF; --v5-cal-2nd-bar: #C3D6F0;
     --v5-cal-blocked: #2A3A4E; --v5-cal-blocked-fg: #C9D3DE; --v5-cal-hatch: rgba(200, 220, 240, 0.14);
     --v5-cal-clash-ring: #F0646F; --v5-cal-free-edge: #4A6580; --v5-cal-past-fg: #8C9BAB;
@@ -109,6 +113,8 @@
   --v5-danger: #F0646F; --v5-danger-t: #F4A3AA; --v5-danger-w: #3B1A1E; --v5-info-t: #A9C4F5; --v5-info-w: #17284A;
   --v5-g1: #8DB2E3; --v5-g1-fg: #0F1B2A; --v5-g2: #5B8BD0; --v5-g2-fg: #0F1B2A; --v5-g3: #3563A8; --v5-g3-fg: #FFFFFF;
   --v5-g4: #C3D6F0; --v5-g4-fg: #0F1B2A; --v5-g6: #A9C4F5; --v5-g6-fg: #0F1B2A;
+  /* booking calendar: eight guest colours, text AA on each */
+  --v5-k1: #8DB2E3; --v5-k1-fg: #0F1B2A; --v5-k2: #6FD0BC; --v5-k2-fg: #0F1B2A; --v5-k3: #E8A27C; --v5-k3-fg: #0F1B2A; --v5-k4: #C9A0E6; --v5-k4-fg: #0F1B2A; --v5-k5: #F0A0C0; --v5-k5-fg: #0F1B2A; --v5-k6: #C5D66E; --v5-k6-fg: #0F1B2A; --v5-k7: #F2B25C; --v5-k7-fg: #0F1B2A; --v5-k8: #7CC8E8; --v5-k8-fg: #0F1B2A;
   --v5-cal-booked: #8DB2E3; --v5-cal-booked-fg: #0F1B2A; --v5-cal-2nd: #3563A8; --v5-cal-2nd-fg: #FFFFFF; --v5-cal-2nd-bar: #C3D6F0;
   --v5-cal-blocked: #2A3A4E; --v5-cal-blocked-fg: #C9D3DE; --v5-cal-hatch: rgba(200, 220, 240, 0.14);
   --v5-cal-clash-ring: #F0646F; --v5-cal-free-edge: #4A6580; --v5-cal-past-fg: #8C9BAB;

@@ -434,7 +434,7 @@
   // 3.2 round 2 (owner and admin): the months before today-7 come from staff_calendar_history_v1, one call per month shown, kept in memory for the session only and dropped on sign-out.
   // Rows carry a first name and dates, nothing else. A missing RPC or a refusal turns the feature off for the session and the grid keeps the dashed "in the admin dashboard" behaviour.
   var H_hist = {}, H_histV = 0, H_histOff = false, H_occ = {}, H_occOff = false, H_calMemo = { p: null, v: -1, list: [] };
-  function H_calReset() { H_hist = {}; H_histV++; H_histOff = false; H_occ = {}; H_occOff = false; H_calMemo = { p: null, v: -1, list: [] }; }
+  function H_calReset() { H_hist = {}; H_histV++; H_histOff = false; H_occ = {}; H_occOff = false; H_calMemo = { p: null, v: -1, list: [] }; K_names = { list: [], done: {}, gen: 0 }; }
   function H_allCal() {
     var p = state.payload; if (H_calMemo.p === p && H_calMemo.v === H_histV) return H_calMemo.list;
     var from = CS.H_dataFrom(p.today), seen = {}, extra = [];
@@ -561,9 +561,27 @@
     var b = function (v, t) { return '<button type="button" data-act="cal-view" data-view="' + v + '" aria-pressed="' + (state.calView === v) + '">' + t + '</button>'; };
     return '<div class="K_view card glass" role="group" aria-label="Calendar view">' + b('month', 'Month') + b('bookings', 'Booking calendar') + '</div>';
   }
+  // Full guest names for the booking view (owner and admin only). An Airbnb calendar row carries a first name; the full name lives on the guest record, the same
+  // table the Guests screen reads. One read per month shown, kept for the session; a refusal or no connection leaves the first names the rows carry.
+  var K_names = { list: [], done: {}, gen: 0 };
+  function K_loadNames(m) {
+    var key = H_ymKey(m); if (K_names.done[key] || typeof sb.from !== 'function') return; K_names.done[key] = 1;
+    var e = H_monthEdges(m), gen = H_histGen;
+    var res = sb.from('airbnb_reservations').select('guest_id,checkin_date').eq('status', 'confirmed').eq('property_id', pid()).gte('checkout_date', e.start).lte('checkin_date', e.last).not('guest_id', 'is', null).limit(300);
+    Promise.resolve(res).then(function (r) {
+      var rows = r && !r.error && r.data || []; if (!rows.length) return;
+      var ids = rows.map(function (x) { return x.guest_id; }).filter(function (x, i, a) { return a.indexOf(x) === i; });
+      return Promise.resolve(sb.from('guests').select('id,name').in('id', ids)).then(function (g) {
+        if (gen !== H_histGen || !g || g.error) return; var nm = {}; (g.data || []).forEach(function (x) { nm[x.id] = x.name; });
+        rows.forEach(function (x) { if (nm[x.guest_id]) K_names.list.push({ checkin_date: x.checkin_date, name: nm[x.guest_id] }); });
+        if (current === 'calendar' && state.calView === 'bookings' && state.calTab === 'calendar' && state.payload) renderCalendar();
+      });
+    }).catch(function () {});
+  }
   function K_body(m) {
     if (!window.K_BookCal) { if (!K_state.failed) { K_load(); return '<div class="skel" style="height:300px"></div>'; } return null; }
-    return window.K_BookCal.render({ y: m.y, m: m.m, today: state.payload.today, stays: staysOf(), rows: H_allCal(), full: CS.canSeeGuestContact(role()) }) + H_olderLine(m, state.payload.today);
+    var mgr = CS.canSeeGuestContact(role()); if (mgr) K_loadNames(m);
+    return window.K_BookCal.render({ y: m.y, m: m.m, today: state.payload.today, stays: staysOf(), rows: H_allCal(), full: mgr, names: mgr ? K_names.list : null }) + H_olderLine(m, state.payload.today);
   }
   function calTabs(cur) {
     var t = [['calendar', '#calendar', 'Calendar'], ['notices', '#calendar/notices', 'Notices']]; // tap only: the old sub-tab swipe is gone
