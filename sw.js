@@ -27,7 +27,7 @@ const SHELL_URLS = [
   ...ICON_FILES.map((f) => './icons/' + f)
 ];
 // The module folders (weather, stock, manage, guests, inbox) are built by their own lanes: precached best effort, so a missing file never touches the install or the required list above.
-const OPTIONAL_URLS = ['./weather/W_weather.js', './weather/W_weather.css', './stock/I_stock.js', './stock/I_stock.css', './stock/I_suppliers.js', './stock/I_suppliers.css', './manage/N_manage.js', './manage/N_manage.css', './guests/G_guests.js', './guests/G_guests.css', './inbox/X_inbox.js', './inbox/X_inbox.css'];
+const OPTIONAL_URLS = ['./weather/W_weather.js', './weather/W_weather.css', './stock/I_stock.js', './stock/I_stock.css', './stock/I_suppliers.js', './stock/I_suppliers.css', './manage/N_manage.js', './manage/N_manage.css', './manage/N_charts.js', './manage/N_charts.css', './manage/N_bookings.js', './manage/N_bookings.css', './manage/N_ops.js', './manage/N_ops.css', './guests/G_guests.js', './guests/G_guests.css', './inbox/X_inbox.js', './inbox/X_inbox.css'];
 const NETWORK_ONLY_HOSTS = ['supabase.co', 'supabase.in', 'api.telegram.org', 't.me'];
 const FONT_HOSTS = ['cdn.jsdelivr.net']; // public files only: the pinned supabase-js build
 const NEVER_PATHS = ['/rest/v1/', '/functions/v1/', '/auth/v1/', '/storage/v1/'];

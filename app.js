@@ -1360,7 +1360,8 @@
   var H_MODULES = {
     weather: { src: 'weather/W_weather.js', css: 'weather/W_weather.css', global: 'W_Weather', title: 'Weather', roles: null },
     stock:   { src: 'stock/I_stock.js',     css: 'stock/I_stock.css',     global: 'I_Stock',   title: 'Inventory', roles: ['owner', 'admin', 'cleaner', 'finance'] },
-    manage:  { src: 'manage/N_manage.js',   css: 'manage/N_manage.css',   global: 'N_Manage',  title: 'Manage', roles: ['owner', 'admin'] },
+    manage:  { src: 'manage/N_manage.js',   css: 'manage/N_manage.css',   global: 'N_Manage',  title: 'Manage', roles: ['owner', 'admin'],
+               deps: [{ src: 'manage/N_charts.js', css: 'manage/N_charts.css' }, { src: 'manage/N_bookings.js', css: 'manage/N_bookings.css' }, { src: 'manage/N_ops.js', css: 'manage/N_ops.css' }] }, // s89: the KPI charts and the Bookings / Ops tabs load with Manage
     guests:  { src: 'guests/G_guests.js',   css: 'guests/G_guests.css',   global: 'G_Guests',  title: 'Guests', roles: ['owner', 'admin'] },
     inbox:   { src: 'inbox/X_inbox.js',     css: 'inbox/X_inbox.css',     global: 'X_Inbox',   title: 'Inbox', roles: ['owner', 'admin'] }
   };
@@ -1376,7 +1377,9 @@
   function H_loadModule(key) {
     var m = H_MODULES[key]; if (H_mod.p[key]) return H_mod.p[key];
     var load = typeof window.H_loadAsset === 'function' ? window.H_loadAsset : H_domLoad; // tests replace the loader
-    var pr = H_mod.p[key] = (window[m.global] ? Promise.resolve() : load(m)).then(function () { if (!window[m.global] || typeof window[m.global].mount !== 'function') throw new Error('no module'); });
+    // s89: helper scripts (deps) load first; one that fails only hides its tab, the module still opens
+    var deps = (m.deps || []).reduce(function (p, d) { return p.then(function () { return load(d).catch(function () {}); }); }, Promise.resolve());
+    var pr = H_mod.p[key] = (window[m.global] ? Promise.resolve() : deps.then(function () { return load(m); })).then(function () { if (!window[m.global] || typeof window[m.global].mount !== 'function') throw new Error('no module'); });
     pr.catch(function () { if (H_mod.p[key] === pr) delete H_mod.p[key]; }); // a failed load (offline, a 404) is never remembered: the next open retries
     return pr;
   }
