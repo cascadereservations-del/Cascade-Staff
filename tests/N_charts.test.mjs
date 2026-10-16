@@ -86,6 +86,9 @@ test('monthBars: newest bar highlighted, tap caption, grid, occupancy line, last
   const first = clean(C.monthBars({ months, sel: 0 })); assert.match(first, /role="status"[^>]*>Aug 2026: ₱1,000/); assert.match(first, /aria-pressed="true"/);
   assert.match(clean(C.monthBars({ months, sel: 9 })), /role="status"[^>]*>Sep 2026/, 'a stale selection falls back to the newest');
 });
+test('monthBars: no max label when every value is empty', () => {
+  assert.ok(!/C_max/.test(clean(C.monthBars({ months: [{ label: 'Jan', value: 0, lastYear: null, occupancy: null }, { label: 'Feb', value: null }] }))));
+});
 test('paceCard: empty, ahead/behind, null capacity', () => {
   assert.match(clean(C.paceCard({ nextMonths: [] })), /No upcoming/);
   const h = clean(C.paceCard({ nextMonths: [{ label: 'Nov', booked: 12, bookedLastYear: 8, capacity: 30 }, { label: 'Dec', booked: 5, bookedLastYear: 9, capacity: 31 }, { label: 'Jan', booked: null, bookedLastYear: null, capacity: 0 }] }));

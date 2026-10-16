@@ -566,7 +566,7 @@
     out += '<p class="N_sub">' + esc(per.label + ': ' + fmtDate(per.start, 'long') + ' to ' + fmtDate(per.endExclusive, 'long') + ' (end day not counted). Compared with ' + fmtDate(cmp.start, 'long') + ' to ' + fmtDate(cmp.endExclusive, 'long') + '.') + '</p>';
     var box = stateBox(k, 'KPIs', 'kpis'); if (box) return out + (k.busy || (!k.ok && !k.err && !k.absent && !k.denied) ? chartsSkeleton() : '') + box;
     var now = k.data && k.data.now, prev = k.data && k.data.prev, mNow = (now && now.metrics) || {}, mPrev = (prev && prev.metrics) || {};
-    var cl = 'vs ' + shortRange(cmp.start, cmp.endExclusive, +per.start.slice(0, 4));
+    var cl = cmp.endExclusive > cmp.start ? 'vs ' + shortRange(cmp.start, cmp.endExclusive, +per.start.slice(0, 4)) : ''; // the 1st of a period compares an empty window: keep the default wording
     out += chartsHtml(mNow, mPrev, !!prev, cl);
     KPI_GROUPS.forEach(function (g) {
       var rows = g.keys.filter(function (key) { return mNow[key]; }); if (!rows.length) return;
@@ -667,7 +667,7 @@
           prevLabel: prev ? 'vs ' + mlab(prev.month) : '', yoyLabel: 'vs ' + lab(last.month) + ' ' + (ly0 - 1) });
       }).join('');
       out += '<p class="N_sub">' + esc(lab(last.month) + ' ' + String(last.month).slice(0, 4) + ', the last full month. Compared with the month before' + (ly ? ' and with the same month last year.' : '.')) + '</p><div class="N_tiles">' + tiles + '</div>';
-      out += '<h3 class="N_h3 N_gap">Month by month</h3><p class="N_sub">' + esc((fin ? 'Bars are accommodation revenue.' : 'Bars are nights sold.') + ' Tap a month for its figures.') + '</p>' + C.monthBars({ sel: S.monSel,
+      out += '<h3 class="N_h3 N_gap">Month by month</h3><p class="N_sub">' + esc((fin ? 'Bars are accommodation revenue.' : 'Bars are nights sold.') + ' Tap a month for its figures.') + '</p>' + C.monthBars({ sel: S.monSel, // clamped inside monthBars: a stored index from the 6-month chart never points past the list
         months: ms.map(function (m) { return { label: lab(m.month), title: lab(m.month) + ' ' + String(m.month).slice(0, 4), value: fin ? nm(m.revenue) : nm(m.sold_nights), lastYear: m.ly ? (fin ? nm(m.ly.revenue) : nm(m.ly.sold_nights)) : null, occupancy: nm(m.occupancy) }; }),
         format: fin ? undefined : function (v) { return v + (v === 1 ? ' night' : ' nights'); } });
     }

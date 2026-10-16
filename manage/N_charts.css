@@ -21,7 +21,7 @@
 .C_bars { display: block; width: 100%; height: auto; }
 .C_grid { stroke: var(--v5-line); stroke-width: 1; stroke-dasharray: 2 4; vector-effect: non-scaling-stroke; }
 .C_base { stroke: var(--v5-line-2); stroke-width: 1; vector-effect: non-scaling-stroke; }
-.C_max { position: absolute; top: 0; left: 0; padding: 0 0.25rem 0 0; background: var(--v5-surf); font: 500 var(--v5-t-min)/1.1 var(--v5-font-ui); color: var(--v5-ink-2); font-variant-numeric: tabular-nums; pointer-events: none; }
+.C_max { position: absolute; top: 0; left: 0; padding: 0; font: 500 var(--v5-t-min)/1.1 var(--v5-font-ui); color: var(--v5-ink-2); font-variant-numeric: tabular-nums; pointer-events: none; }
 .C_bar { fill: var(--v5-act); fill-opacity: 0.6; }
 .C_bar.C_on { fill-opacity: 1; }
 .C_ly { fill: var(--v5-ink-2); stroke: var(--v5-surf); stroke-width: 1; paint-order: stroke; }

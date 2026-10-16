@@ -72,9 +72,9 @@
   function monthBars(o) {
     o = o || {}; var months = o.months || [], fmt = typeof o.format === 'function' ? o.format : formatPHP, n = months.length;
     if (!n) return '<figure class="C_fig"><p class="C_empty">No monthly data yet.</p></figure>';
-    var W = 360, H = 140, top = 6, bot = 4, ph = H - top - bot, mx = 0, svg = '', rows = '', labs = '', hits = '', caps = [], bestI = -1, best = -Infinity, pts = [];
+    var W = 360, H = 140, top = 22, bot = 4, ph = H - top - bot, mx = 0, svg = '', rows = '', labs = '', hits = '', caps = [], bestI = -1, best = -Infinity, pts = [];
     var sel = typeof o.sel === 'number' && o.sel >= 0 && o.sel < n ? Math.floor(o.sel) : n - 1;
-    months.forEach(function (m) { [num(m.value), num(m.lastYear)].forEach(function (v) { if (v !== null && v > mx) mx = v; }); }); if (mx <= 0) mx = 1;
+    months.forEach(function (m) { [num(m.value), num(m.lastYear)].forEach(function (v) { if (v !== null && v > mx) mx = v; }); }); var hasMax = mx > 0; if (!hasMax) mx = 1;
     var slot = W / n, bw = slot * 0.56, yAt = function (f) { return (top + ph * (1 - f)).toFixed(1); };
     [1, 2 / 3, 1 / 3].forEach(function (f) { svg += '<line class="C_grid" x1="0" x2="' + W + '" y1="' + yAt(f) + '" y2="' + yAt(f) + '"/>'; });
     svg += '<line class="C_base" x1="0" x2="' + W + '" y1="' + yAt(0) + '" y2="' + yAt(0) + '"/>';
@@ -94,7 +94,7 @@
     seg.forEach(function (sg) { if (sg.length > 1) svg += '<path class="C_oline" d="' + sg.map(function (p, j) { return (j ? 'L' : 'M') + p.x.toFixed(1) + ' ' + p.y.toFixed(1); }).join(' ') + '"/>'; });
     pts.forEach(function (p) { if (p) svg += '<circle class="C_occ' + (p.i === sel ? ' C_on' : '') + '" cx="' + p.x.toFixed(1) + '" cy="' + p.y.toFixed(1) + '" r="' + (p.i === sel ? 4 : 3) + '"/>'; });
     var summary = n + (n === 1 ? " month" : " months") + (bestI >= 0 ? '. Highest: ' + (months[bestI].title || months[bestI].label) + ', ' + fmt(best) : '. No figures yet') + '. A short line marks the same month last year; dots show occupancy.';
-    return '<figure class="C_fig"><div class="C_plot"><span class="C_max" aria-hidden="true">' + esc(fmt(mx)) + '</span><svg class="C_bars" viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="' + esc(summary) + '" focusable="false">' + svg + '</svg>' +
+    return '<figure class="C_fig"><div class="C_plot">' + (hasMax ? '<span class="C_max" aria-hidden="true">' + esc(fmt(mx)) + '</span>' : '') + '<svg class="C_bars" viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="' + esc(summary) + '" focusable="false">' + svg + '</svg>' +
       '<div class="C_hits" style="grid-template-columns:repeat(' + n + ',minmax(0,1fr))">' + hits + '</div></div><div class="C_labs" aria-hidden="true">' + labs + '</div>' +
       '<p class="C_cap" role="status" aria-live="polite">' + esc(caps[sel]) + '</p>' +
       '<figcaption class="C_key"><span class="C_k">Revenue</span><span class="C_k C_kly">Same month last year</span><span class="C_k C_kocc">Occupancy (0-100%)</span></figcaption>' +

@@ -515,6 +515,13 @@ test('N clock: a screen opened after midnight uses the new day for its periods',
   now = Date.parse('2026-10-15T20:00:00Z'); t.M._setClock(() => now); // 04:00 on 16 Oct in Manila
   await t.click('refresh'); assert.equal(t.period().slice(-2)[0][1].p_end_exclusive, '2026-10-16');
 });
+test('N KPIs: the 1st of a period compares an empty window, so rows keep the plain wording instead of a backwards range', async () => {
+  let now = NOW; const t = await boot({ sub: 'kpis', handlers: { get_hospitality_metrics_v1: () => ({ data: METRICS(1), error: null }) } });
+  now = Date.parse('2026-10-31T20:00:00Z'); t.M._setClock(() => now); await t.click('refresh'); // 1 Nov in Manila, month to date
+  assert.ok(!/vs \d+ \w+ – \d+ \w+/.test(t.text()), 'no backwards range'); assert.match(t.text(), /Before:/);
+  await t.type('period', 'ytd'); now = Date.parse('2026-12-31T20:00:00Z'); t.M._setClock(() => now); await t.click('refresh'); // 1 Jan 2027
+  assert.ok(!/vs \d+ \w+ – \d+ \w+/.test(t.text())); assert.match(t.text(), /Before:/);
+});
 test('N no client, not demo: every tab shows the calm error with Try again, never an endless Loading', async () => {
   const env = load(); const el = new FakeEl();
   env.M.mount(el, { role: 'owner', navigate() {} }); await tick();
