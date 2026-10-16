@@ -374,18 +374,19 @@ test('fix 3: an old copy labels days against Manila today, drops days that are o
   assert.deepEqual(Array.from(L.alerts(L.parse(fresh, NOW), null), (a) => a.kind), ['thunder', 'gust', 'rain']);
 });
 
-test('fix 4: a call that never answers ends after the timeout: Refresh comes back, the saved copy stays with the failed-refresh line, and a late answer is ignored', async () => {
+test('fix 4: a call that never answers ends after the timeout: Refresh comes back, the saved copy stays with the failed-refresh line, and a late answer is ignored', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] }); // s91: the 30 ms timeout fires only on tick, never during settle() on a loaded machine
   let late; const hang = new Promise((r) => { late = r; });
   const w = world({ store: { cs_w_wx: JSON.stringify({ at: NOW - HR, j: full(NOW - HR) }) }, invoke: () => hang }); const e = el();
   w.W.mount(e, { client: w.client, timeoutMs: 30 }); await settle();
   assert.ok(e.innerHTML.includes('data-w-refresh="1" disabled'), 'busy while the call is out');
-  await new Promise((r) => setTimeout(r, 80)); await settle();
+  t.mock.timers.tick(30); await settle();
   assert.ok(!e.innerHTML.includes('data-w-refresh="1" disabled') && e.innerHTML.includes('data-w-refresh="1"'), 'Refresh is usable again');
   assert.ok(e.innerHTML.includes('Could not refresh. Showing the saved forecast.'));
   const before = e.innerHTML; late({ data: full(NOW + HR), error: null }); await settle();
   assert.equal(e.innerHTML, before, 'the late answer changes nothing');
   const w2 = world({ invoke: () => new Promise(() => {}) }); const e2 = el();
-  w2.W.mount(e2, { client: w2.client, timeoutMs: 30 }); await new Promise((r) => setTimeout(r, 80)); await settle();
+  w2.W.mount(e2, { client: w2.client, timeoutMs: 30 }); await settle(); t.mock.timers.tick(30); await settle();
   assert.ok(e2.innerHTML.includes('No connection') && e2.innerHTML.includes('Try again'));
 });
 
