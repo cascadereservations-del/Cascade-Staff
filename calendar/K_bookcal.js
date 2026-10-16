@@ -1,5 +1,5 @@
 /* Cascade Staff 3.4.6, lane K: the Booking calendar view. A native port of the admin dashboard's Booking calendar page
-   (admin-dashboard/app/src/features/bookings/calendar-page.tsx): the same chips (one colour per stay from an eight-colour palette, no A/D letters; arrow on the check-in day,
+   (admin-dashboard/app/src/features/bookings/calendar-page.tsx): the same chips (one colour per guest from an eight-colour palette, no A/D letters; arrow on the check-in day,
    hatched Blocked, red for two guests on one night), a Turnover day marker and the same legend. A day-by-day list on a phone and a
    month grid from 600 px, exactly as the admin page does. Pure: K_BookCal.render(opts) returns HTML; the shell draws it and handles the taps
    (every chip is a data-day button, so a tap opens the shell's own day sheet). It reads only what the Calendar already loaded
@@ -15,10 +15,8 @@
   function K_utc(iso) { var a = iso.split('-'); return Date.UTC(+a[0], +a[1] - 1, +a[2]); }
   function K_add(iso, n) { var d = new Date(K_utc(iso) + n * 86400000); return d.getUTCFullYear() + '-' + K_pad(d.getUTCMonth() + 1) + '-' + K_pad(d.getUTCDate()); }
   function K_dow(iso) { return new Date(K_utc(iso)).getUTCDay(); }
-  // One colour per stay: start from the check-in day (stable when earlier months load), then step on past any colour a stay that
-  // overlaps or touches this one (a turnover day) already holds. Eight colours, so a free one always exists in practice.
   // One colour per GUEST, so every booking and night of the same person looks the same. The key is a guest id when the stay carries one, else the name
-  // (trimmed, spaces collapsed, lower-case; the full name for owner/admin, the first name for a cleaner, so two different guests with one first name may share a colour for a cleaner).
+  // (trimmed, spaces collapsed, lower-case). Owner/admin key on the shown full name; a cleaner keys on the raw row name, which the key never displays, so guests who share a first name keep their own colours.
   // An empty name or "Guest" never merges: each such stay keeps its own colour. Guests are placed in first-check-in order, each avoiding the colours of OTHER guests whose
   // stays are within 14 days of any of theirs (if eight colours are not enough: only those that touch or overlap).
   function K_colours(stays, keyOf) {
@@ -62,7 +60,8 @@
     var full = !!o.full, names = full ? o.names : null;
     var colour = K_colours(stays, function (st) {
       var id = st.guest_id || (st.rows || []).map(function (r) { return r.guest_id; }).filter(Boolean)[0];
-      return id ? 'id:' + id : K_name(st, full, names).replace(/\s+/g, ' ').trim().toLowerCase();
+      var raw = String(st.guest_name || '').replace(/\s+/g, ' ').trim().toLowerCase();
+      return id ? 'id:' + id : full ? K_name(st, full, names).replace(/\s+/g, ' ').trim().toLowerCase() : raw;
     });
     return function (d) {
       var e = by[d] || { stays: [], blocks: [] };

@@ -193,3 +193,11 @@ test('K s91 one colour per guest: same guest shares, different adjacent guests a
   const m2 = Object.fromEntries(cols(K.render({ y: 2026, m: 10, today: TODAY, stays: id, rows: id, full: true }))); assert.equal(m2['2026-10-01'], m2['2026-10-20'], 'a guest id wins');
   void colOf;
 });
+
+test('K s91 a cleaner sees first names only but two guests with one first name keep their own colours', () => {
+  const st = [S('Ana Reyes', '2026-10-05', '2026-10-07'), S('Ana Cruz', '2026-10-07', '2026-10-09')];
+  const h = K.render({ y: 2026, m: 10, today: TODAY, stays: st, rows: st, full: false });
+  const ag = h.slice(h.indexOf('<ul class="K_agenda"'), h.indexOf('class="K_grid"'));
+  const c = [...ag.matchAll(/data-day="([\d-]+)"[^>]*?data-col="(\d)"/g)].map((m) => m[2]);
+  assert.equal(c.length, 2); assert.notEqual(c[0], c[1]); assert.doesNotMatch(h, /Reyes|Cruz/); assert.match(h, /K_nm">Ana</);
+});
