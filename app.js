@@ -606,8 +606,8 @@
   function dayStatusOf(iso) { var p = state.payload; return CS.dayStatus(iso, H_allCal(), p.day_flags, p.warnings, staysOf()); }
   // 3.2 round 2 (owner and admin): the months before today-7 come from staff_calendar_history_v1, one call per month shown, kept in memory for the session only and dropped on sign-out.
   // Rows carry a first name and dates, nothing else. A missing RPC or a refusal turns the feature off for the session and the grid keeps the dashed "in the admin dashboard" behaviour.
-  var H_hist = {}, H_histV = 0, H_histOff = false, H_occ = {}, H_occOff = false, H_calMemo = { p: null, v: -1, list: [] }; K_col = { s: null, v: -1, n: -1, f: null };
-  function H_calReset() { H_hist = {}; H_histV++; H_histOff = false; H_occ = {}; H_occOff = false; H_calMemo = { p: null, v: -1, list: [] }; K_names = { list: [], done: {}, gen: 0 }; }
+  var H_hist = {}, H_histV = 0, H_histOff = false, H_occ = {}, H_occOff = false, H_calMemo = { p: null, v: -1, list: [] };
+  function H_calReset() { H_hist = {}; H_histV++; H_histOff = false; H_occ = {}; H_occOff = false; H_calMemo = { p: null, v: -1, list: [] }; K_names = { list: [], done: {}, gen: 0 }; K_col = { s: null, v: -1, n: -1, f: null }; }
   function H_allCal() {
     var p = state.payload; if (H_calMemo.p === p && H_calMemo.v === H_histV) return H_calMemo.list;
     var from = CS.H_dataFrom(p.today), seen = {}, extra = [];
