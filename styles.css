@@ -611,7 +611,7 @@ button.A_chipglass { width: var(--touch); padding: 0; justify-content: center; c
 .cal .d.stay::after { display: none; }
 .cal .d.dep .n, .cal .d.dep.out-t1 .n { color: var(--A_gfg, var(--v5-g1-fg)); }
 .cal .d.s-blocked { background: repeating-linear-gradient(135deg, transparent 0 5px, var(--v5-cal-hatch) 5px 7px), var(--v5-cal-blocked); color: var(--v5-cal-blocked-fg); border: 0; }
-.cal .d.today { box-shadow: none; outline: 2px solid var(--v5-gold-text); outline-offset: 1px; z-index: 3; } /* s93: an OUTSIDE ring shows on any fill */
+.cal .d.today { box-shadow: 0 0 0 2px var(--v5-bg); outline: 2px solid var(--v5-ink); outline-offset: 2px; z-index: 3; } /* s93: an OUTSIDE ink ring with a background gap, so it shows on any guest colour (a gold ring vanished on a gold stay) */
 .cal .d.today .n { font-weight: 800; }
 .cal .d.past { background: var(--v5-surf-2); }
 .cal .d.clash, .cal .d.s-booked.clash { background: var(--v5-danger-w); box-shadow: inset 0 0 0 2px var(--v5-cal-clash-ring); }
@@ -1057,7 +1057,7 @@ body { font-family: var(--v5-font-ui); }
 .cal .d.past.s-booked:not(.arr):not(.clash) .n, .cal .d.past.s-booked:not(.arr):not(.clash) .A_tag { color: var(--A_gfg, var(--v5-g1-fg)); }
 .cal .d.past .A_tag.in { background: var(--A_g, var(--v5-g1)); color: var(--A_gfg, var(--v5-g1-fg)); padding: 0 3px; }
 .cal .d.past .hx { opacity: 1; }
-.cal .d.today:focus-visible { outline: 3px double var(--ring); outline-offset: 3px; } /* keeps a ring distinct from the gold today ring */
+.cal .d.today:focus-visible { outline: 3px double var(--ring); outline-offset: 3px; } /* keeps a ring distinct from the today ring */
 .taskrow .s.dt.open { display: block; -webkit-line-clamp: unset; line-clamp: unset; overflow: visible; }
 .cal .d.clash.today { box-shadow: inset 0 0 0 2px var(--v5-cal-clash-ring); }
 
