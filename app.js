@@ -448,7 +448,7 @@
     var label = kind === 'house' ? 'In the house' : 'Next arrival';
     var st = kind === 'house' ? pill('ok', 'check', g.checkin_date === state.payload.today ? 'Arrived today' : 'Checked in') : pill('info', 'info', 'Arrives ' + CS.dayLabel(g.checkin_date));
     var ret = CS.returningLabel(g, false), src = CS.sourceLabel(g.source), earlier = CS.earlierLine(g), withLine = CS.canSeeGuestContact(state.access && state.access.role) ? CS.companionsLine(g) : null; // D-319: owner/admin only, even if the server sent it
-    var tint = kind === 'house' ? (g.checkout_date === state.payload.today ? 'G_out' : 'G_stay') : 'G_in'; // s93: arriving = green, in the house = blue, leaving today = amber
+    var tint = kind === 'house' ? 'G_stay' : 'G_in'; // s93: arriving = green, in the house = blue (the house guest always checks out after today, so no third tint)
     var info = '<div class="card glass ' + tint + '" id="' + (kind === 'house' ? 'house' : 'next') + '"><div class="row-between"><span class="cap up">' + label + '</span>' + st + '</div>' +
       '<h3 class="ttl" style="margin-top:8px">' + esc(g.guest_name || 'Guest') + '</h3>' + (withLine ? '<p class="sub" style="margin:2px 0 0">' + esc(withLine) + '</p>' : '') +
       '<div class="row-wrap" style="margin-top:6px">' + (ret ? pill('brand', 'repeat', ret) : '') + (src ? '<span class="pill p-neutral">' + esc(src) + '</span>' : '') + '</div>' +
@@ -606,7 +606,7 @@
   function dayStatusOf(iso) { var p = state.payload; return CS.dayStatus(iso, H_allCal(), p.day_flags, p.warnings, staysOf()); }
   // 3.2 round 2 (owner and admin): the months before today-7 come from staff_calendar_history_v1, one call per month shown, kept in memory for the session only and dropped on sign-out.
   // Rows carry a first name and dates, nothing else. A missing RPC or a refusal turns the feature off for the session and the grid keeps the dashed "in the admin dashboard" behaviour.
-  var H_hist = {}, H_histV = 0, H_histOff = false, H_occ = {}, H_occOff = false, H_calMemo = { p: null, v: -1, list: [] };
+  var H_hist = {}, H_histV = 0, H_histOff = false, H_occ = {}, H_occOff = false, H_calMemo = { p: null, v: -1, list: [] }; K_col = { s: null, v: -1, n: -1, f: null };
   function H_calReset() { H_hist = {}; H_histV++; H_histOff = false; H_occ = {}; H_occOff = false; H_calMemo = { p: null, v: -1, list: [] }; K_names = { list: [], done: {}, gen: 0 }; }
   function H_allCal() {
     var p = state.payload; if (H_calMemo.p === p && H_calMemo.v === H_histV) return H_calMemo.list;
@@ -1184,7 +1184,7 @@
     return '<div class="E_swipewrap" style="--E-w:' + uw + 'px"><div class="E_under ' + (done ? 'E_undo' : 'E_done') + '"><button class="E_underbtn" type="button" data-act="' + act + '" data-task="' + esc(key) + '" aria-label="' + esc(ul + ': ' + t.title) + '">' + ICON('check', 's24') + esc(ul) + '</button></div>' +
       '<div class="payrow taskrow' + (done ? ' off' : '') + '" data-E-swipe="' + act + '" data-E-verifier="' + (ver ? '1' : '') + '" data-E-w="' + uw + '" data-task="' + esc(key) + '"><button class="chk" type="button" role="checkbox" aria-checked="' + done + '" aria-label="' + esc((done ? 'Done: ' : 'Mark done: ') + t.title) + '" data-act="' + act + '" data-task="' + esc(key) + '">' + ICON('check', 's16') + '</button>' +
       '<div><div class="t"><span' + (done ? ' style="text-decoration:line-through;color:var(--fg-2)"' : '') + '>' + esc(t.title) + '</span></div>' +
-      (t.detail ? '<span class="s dt" style="white-space:pre-line">' + esc(t.detail) + '</span>' : '') +
+      (t.detail ? '<span class="s dt" style="white-space:pre-line">' + esc(t.detail) + '</span>' + (String(t.detail).length > 120 ? '<button class="btn btn-ghost btn-sm dtmore" type="button" data-act="task-more" aria-expanded="false" style="margin-left:-12px">More</button>' : '') : '') +
       '<span class="s' + (due === 'overdue' && !done ? ' c-danger' : '') + '">' + esc(meta.join(' · ')) + '</span>' + (state.H_offKey === key ? '<span class="s c-danger H_noconn" role="status">No connection</span>' : '') +
       (flags ? '<div class="row-wrap" style="margin-top:6px">' + flags + '</div>' : '') + '</div></div></div>';
   }
@@ -2095,6 +2095,7 @@
     else if (a === 'day-prev') H_dayGo(-1);
     else if (a === 'day-next') H_dayGo(1);
     else if (a === 'cal-view') { var kv = t.getAttribute('data-view') === 'bookings' ? 'bookings' : 'month'; if (kv === 'bookings') K_state.failed = false; if (kv !== state.calView || kv === 'bookings') { state.calView = kv; K_saveView(); renderCalendar(); } }
+    else if (a === 'task-more') { var dm = t.previousElementSibling, dopen = !(dm && dm.classList.contains('open')); if (dm) dm.classList.toggle('open', dopen); t.setAttribute('aria-expanded', String(dopen)); t.textContent = dopen ? 'Less' : 'More'; } // s93: the clamped detail, read in full
     else if (a === 'legend-more') { state.legendOpen = !state.legendOpen; H_legendSave(); var lg = t.closest && t.closest('.H_legend'); if (lg) { lg.setAttribute('data-open', state.legendOpen ? '1' : '0'); t.setAttribute('aria-expanded', String(state.legendOpen)); } }
     else if (a === 'tasks-toggle-done') { state.showDone = !state.showDone; loadTasks(); renderTasks(); }
     else if (a === 'attn-tasks') { var tf0 = t.getAttribute('data-filter'); if (/^(all|mine|due|blocks)$/.test(tf0 || '')) state.taskFilter = tf0; closeSheet(); }
