@@ -717,7 +717,7 @@
       sw('background:repeating-linear-gradient(135deg,transparent 0 3px,var(--v5-cal-hatch) 3px 5px),var(--v5-cal-blocked)', 'Blocked') +
       sw('background:var(--v5-danger-w);box-shadow:inset 0 0 0 2px var(--v5-cal-clash-ring)', 'Clash') +
       '<button class="H_more" type="button" data-act="legend-more" aria-expanded="' + open + '" aria-controls="H_extra">More' + ICON('chevdown', 's16') + '</button></div>' +
-      '<div class="H_extra" id="H_extra">' + sw('background:var(--v5-surf);border:1px solid var(--v5-cal-free-edge)', 'Free') + sw('background:var(--v5-surf);box-shadow:inset 0 0 0 2px var(--v5-gold-text)', 'Today') +
+      '<div class="H_extra" id="H_extra">' + sw('background:var(--v5-surf);border:1px solid var(--v5-cal-free-edge)', 'Free') + sw('background:var(--v5-surf);box-shadow:inset 0 0 0 2px var(--v5-ink)', 'Today') +
       Object.keys(MARK_ICON).filter(function (k) { return monthHas.marks[k]; }).map(mk).join('') + '</div></div>';
   }
   function H_legendSave() { var ls = store('localStorage'); try { if (ls) ls.setItem('cs_legend_open', state.legendOpen ? '1' : '0'); } catch (e) {} }
