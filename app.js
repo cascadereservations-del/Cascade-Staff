@@ -448,7 +448,8 @@
     var label = kind === 'house' ? 'In the house' : 'Next arrival';
     var st = kind === 'house' ? pill('ok', 'check', g.checkin_date === state.payload.today ? 'Arrived today' : 'Checked in') : pill('info', 'info', 'Arrives ' + CS.dayLabel(g.checkin_date));
     var ret = CS.returningLabel(g, false), src = CS.sourceLabel(g.source), earlier = CS.earlierLine(g), withLine = CS.canSeeGuestContact(state.access && state.access.role) ? CS.companionsLine(g) : null; // D-319: owner/admin only, even if the server sent it
-    var info = '<div class="card glass" id="' + (kind === 'house' ? 'house' : 'next') + '"><div class="row-between"><span class="cap up">' + label + '</span>' + st + '</div>' +
+    var tint = kind === 'house' ? 'G_stay' : 'G_in'; // s93: arriving = green, in the house = blue (the house guest always checks out after today, so no third tint)
+    var info = '<div class="card glass ' + tint + '" id="' + (kind === 'house' ? 'house' : 'next') + '"><div class="row-between"><span class="cap up">' + label + '</span>' + st + '</div>' +
       '<h3 class="ttl" style="margin-top:8px">' + esc(g.guest_name || 'Guest') + '</h3>' + (withLine ? '<p class="sub" style="margin:2px 0 0">' + esc(withLine) + '</p>' : '') +
       '<div class="row-wrap" style="margin-top:6px">' + (ret ? pill('brand', 'repeat', ret) : '') + (src ? '<span class="pill p-neutral">' + esc(src) + '</span>' : '') + '</div>' +
       '<p class="sub num" style="margin:8px 0 0">' + esc(datesLine(g)) + '</p>' + (earlier ? '<p class="help num" style="margin:2px 0 0">' + esc(earlier) + '</p>' : '') + contactBlock(g) +
@@ -465,7 +466,7 @@
     }
     // Owner/admin: the empty box opens Add guest details in ID mode (take or choose the guest's own ID photo; D-320.5).
     var addId = canAddDetails() && g.uid ? './guest/?for=id#' + encodeURIComponent(g.uid) : '';
-    var idcard = '<div class="card glass"><h3 class="hd">Guest ID</h3><div style="margin-top:10px">' +
+    var idcard = '<div class="card glass ' + tint + '"><h3 class="hd">Guest ID</h3><div style="margin-top:10px">' +
       (g.id_photo_path ? '<div class="idphoto" data-idpath="' + esc(g.id_photo_path) + '"><span class="help">Loading the photo…</span></div><p class="help" style="margin:10px 0 0">Check the face and the name against the guest at the door.</p>'
         : addId ? '<a class="idphoto empty idadd" href="' + esc(addId) + '">' + ICON('camera', 's24') + '<span><b>No ID photo yet.</b><br>Tap to take or choose a photo of the guest’s ID.</span></a>'
         : '<div class="idphoto empty">No ID photo to show for this guest.</div>') +
@@ -606,7 +607,7 @@
   // 3.2 round 2 (owner and admin): the months before today-7 come from staff_calendar_history_v1, one call per month shown, kept in memory for the session only and dropped on sign-out.
   // Rows carry a first name and dates, nothing else. A missing RPC or a refusal turns the feature off for the session and the grid keeps the dashed "in the admin dashboard" behaviour.
   var H_hist = {}, H_histV = 0, H_histOff = false, H_occ = {}, H_occOff = false, H_calMemo = { p: null, v: -1, list: [] };
-  function H_calReset() { H_hist = {}; H_histV++; H_histOff = false; H_occ = {}; H_occOff = false; H_calMemo = { p: null, v: -1, list: [] }; K_names = { list: [], done: {}, gen: 0 }; }
+  function H_calReset() { H_hist = {}; H_histV++; H_histOff = false; H_occ = {}; H_occOff = false; H_calMemo = { p: null, v: -1, list: [] }; K_names = { list: [], done: {}, gen: 0 }; K_col = { s: null, v: -1, n: -1, f: null }; }
   function H_allCal() {
     var p = state.payload; if (H_calMemo.p === p && H_calMemo.v === H_histV) return H_calMemo.list;
     var from = CS.H_dataFrom(p.today), seen = {}, extra = [];
@@ -649,7 +650,19 @@
 
   // The arrival / checkout halves (hotel-calendar style): the arriving stay fills the lower-right triangle, the stay checking out the upper-left one.
   // Each stay keeps one shade of the blue family (--v5-g1..g6) for its whole length, so a turnover day is two halves in two shades.
-  function A_shadeOf(st) { return st ? CS.A_stayShade(staysOf().indexOf(st)) : ''; }
+  // s93: the SAME per-guest colour as the Booking calendar (K_BookCal.days(...).colour, fed exactly as K_body feeds it), so a guest looks alike in both views.
+  // Until that module has loaded (or if it failed) the old blue family stays. Memoised per stays list / history version / names count.
+  var K_col = { s: null, v: -1, n: -1, f: null };
+  function A_kColour() {
+    var s = staysOf(), mgr = CS.canSeeGuestContact(role()), n = mgr ? K_names.list.length : 0;
+    if (K_col.s !== s || K_col.v !== H_histV || K_col.n !== n) K_col = { s: s, v: H_histV, n: n, f: window.K_BookCal.days({ stays: s, rows: H_allCal(), full: mgr, names: mgr ? K_names.list : null })('1970-01-01').colour };
+    return K_col.f;
+  }
+  function A_shadeOf(st) {
+    if (!st) return '';
+    var i = window.K_BookCal ? A_kColour()(st) : 0;
+    return i >= 1 && i <= 8 ? '--A_g:var(--v5-k' + i + ');--A_gfg:var(--v5-k' + i + '-fg)' : CS.A_stayShade(staysOf().indexOf(st));
+  }
   function halves(ds) {
     var h = '';
     if (ds.out) h += '<span class="hx hx-out" style="' + A_shadeOf(ds.out) + '" aria-hidden="true"></span>';
@@ -664,6 +677,7 @@
   function A_firstName(st) { return String((st && st.guest_name) || 'Guest').split(/\s+/)[0]; }
   function calendarGrid() {
     var p = state.payload, m = monthState(), cells = CS.monthGrid(m.y, m.m), view = A_notices();
+    if (!window.K_BookCal) { if (!K_state.failed) K_load(); } else if (CS.canSeeGuestContact(role())) K_loadNames(m); // colours come from the Booking calendar module (and the full names it keys on)
     var dows = ['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su'].map(function (d) { return '<div class="dow" aria-hidden="true">' + d + '</div>'; }).join('');
     monthHas = { turn: false, clash: false, marks: {} };
     var info = cells.map(function (c) { return c.iso ? dayStatusOf(c.iso) : null; });
@@ -699,11 +713,11 @@
     var mk = function (k) { return '<span><i class="A_mk ' + k + ' A_sw" style="display:inline-flex;align-items:center;justify-content:center">' + ICON(MARK_ICON[k], 's12') + '</i>' + MARK_WORD[k] + '</span>'; };
     var open = !!state.legendOpen;
     return '<div class="A_legend H_legend" role="group" aria-label="Legend" data-open="' + (open ? '1' : '0') + '"><div class="H_row">' +
-      sw('background:var(--v5-g1)', 'Booked') + sw('background:linear-gradient(135deg,var(--v5-g1) 50%,var(--v5-g3) 50%)', 'Turnover') +
+      sw('background:var(--v5-k1)', 'Booked') + sw('background:linear-gradient(135deg,var(--v5-k1) 50%,var(--v5-k4) 50%)', 'Turnover') +
       sw('background:repeating-linear-gradient(135deg,transparent 0 3px,var(--v5-cal-hatch) 3px 5px),var(--v5-cal-blocked)', 'Blocked') +
       sw('background:var(--v5-danger-w);box-shadow:inset 0 0 0 2px var(--v5-cal-clash-ring)', 'Clash') +
       '<button class="H_more" type="button" data-act="legend-more" aria-expanded="' + open + '" aria-controls="H_extra">More' + ICON('chevdown', 's16') + '</button></div>' +
-      '<div class="H_extra" id="H_extra">' + sw('background:var(--v5-surf);border:1px solid var(--v5-cal-free-edge)', 'Free') + sw('background:var(--v5-surf);box-shadow:inset 0 0 0 2px var(--v5-gold)', 'Today') +
+      '<div class="H_extra" id="H_extra">' + sw('background:var(--v5-surf);border:1px solid var(--v5-cal-free-edge)', 'Free') + sw('background:var(--v5-surf);box-shadow:inset 0 0 0 2px var(--v5-gold-text)', 'Today') +
       Object.keys(MARK_ICON).filter(function (k) { return monthHas.marks[k]; }).map(mk).join('') + '</div></div>';
   }
   function H_legendSave() { var ls = store('localStorage'); try { if (ls) ls.setItem('cs_legend_open', state.legendOpen ? '1' : '0'); } catch (e) {} }
@@ -747,7 +761,7 @@
       return Promise.resolve(sb.from('guests').select('id,name').in('id', ids)).then(function (g) {
         if (gen !== H_histGen) return; if (!g || g.error) { delete K_names.done[key]; return; } var nm = {}; (g.data || []).forEach(function (x) { nm[x.id] = x.name; });
         rows.forEach(function (x) { if (nm[x.guest_id]) K_names.list.push({ checkin_date: x.checkin_date, name: nm[x.guest_id] }); });
-        if (current === 'calendar' && state.calView === 'bookings' && state.calTab === 'calendar' && state.payload) renderCalendar();
+        if (current === 'calendar' && state.calTab === 'calendar' && state.payload) renderCalendar();
       });
     }).catch(function () { if (gen === H_histGen) delete K_names.done[key]; });
   }
@@ -1170,7 +1184,7 @@
     return '<div class="E_swipewrap" style="--E-w:' + uw + 'px"><div class="E_under ' + (done ? 'E_undo' : 'E_done') + '"><button class="E_underbtn" type="button" data-act="' + act + '" data-task="' + esc(key) + '" aria-label="' + esc(ul + ': ' + t.title) + '">' + ICON('check', 's24') + esc(ul) + '</button></div>' +
       '<div class="payrow taskrow' + (done ? ' off' : '') + '" data-E-swipe="' + act + '" data-E-verifier="' + (ver ? '1' : '') + '" data-E-w="' + uw + '" data-task="' + esc(key) + '"><button class="chk" type="button" role="checkbox" aria-checked="' + done + '" aria-label="' + esc((done ? 'Done: ' : 'Mark done: ') + t.title) + '" data-act="' + act + '" data-task="' + esc(key) + '">' + ICON('check', 's16') + '</button>' +
       '<div><div class="t"><span' + (done ? ' style="text-decoration:line-through;color:var(--fg-2)"' : '') + '>' + esc(t.title) + '</span></div>' +
-      (t.detail ? '<span class="s" style="white-space:pre-line">' + esc(t.detail) + '</span>' : '') +
+      (t.detail ? '<span class="s dt" style="white-space:pre-line">' + esc(t.detail) + '</span>' + (String(t.detail).length > 120 ? '<button class="btn btn-ghost btn-sm dtmore" type="button" data-act="task-more" aria-expanded="false" style="margin-left:-12px">More</button>' : '') : '') +
       '<span class="s' + (due === 'overdue' && !done ? ' c-danger' : '') + '">' + esc(meta.join(' · ')) + '</span>' + (state.H_offKey === key ? '<span class="s c-danger H_noconn" role="status">No connection</span>' : '') +
       (flags ? '<div class="row-wrap" style="margin-top:6px">' + flags + '</div>' : '') + '</div></div></div>';
   }
@@ -2081,6 +2095,7 @@
     else if (a === 'day-prev') H_dayGo(-1);
     else if (a === 'day-next') H_dayGo(1);
     else if (a === 'cal-view') { var kv = t.getAttribute('data-view') === 'bookings' ? 'bookings' : 'month'; if (kv === 'bookings') K_state.failed = false; if (kv !== state.calView || kv === 'bookings') { state.calView = kv; K_saveView(); renderCalendar(); } }
+    else if (a === 'task-more') { var dm = t.previousElementSibling, dopen = !(dm && dm.classList.contains('open')); if (dm) dm.classList.toggle('open', dopen); t.setAttribute('aria-expanded', String(dopen)); t.textContent = dopen ? 'Less' : 'More'; } // s93: the clamped detail, read in full
     else if (a === 'legend-more') { state.legendOpen = !state.legendOpen; H_legendSave(); var lg = t.closest && t.closest('.H_legend'); if (lg) { lg.setAttribute('data-open', state.legendOpen ? '1' : '0'); t.setAttribute('aria-expanded', String(state.legendOpen)); } }
     else if (a === 'tasks-toggle-done') { state.showDone = !state.showDone; loadTasks(); renderTasks(); }
     else if (a === 'attn-tasks') { var tf0 = t.getAttribute('data-filter'); if (/^(all|mine|due|blocks)$/.test(tf0 || '')) state.taskFilter = tf0; closeSheet(); }

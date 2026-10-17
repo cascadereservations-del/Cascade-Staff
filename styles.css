@@ -611,7 +611,8 @@ button.A_chipglass { width: var(--touch); padding: 0; justify-content: center; c
 .cal .d.stay::after { display: none; }
 .cal .d.dep .n, .cal .d.dep.out-t1 .n { color: var(--A_gfg, var(--v5-g1-fg)); }
 .cal .d.s-blocked { background: repeating-linear-gradient(135deg, transparent 0 5px, var(--v5-cal-hatch) 5px 7px), var(--v5-cal-blocked); color: var(--v5-cal-blocked-fg); border: 0; }
-.cal .d.today { box-shadow: inset 0 0 0 2px var(--v5-act); }
+.cal .d.today { box-shadow: none; outline: 2px solid var(--v5-gold-text); outline-offset: 1px; z-index: 3; } /* s93: an OUTSIDE ring shows on any fill */
+.cal .d.today .n { font-weight: 800; }
 .cal .d.past { background: var(--v5-surf-2); }
 .cal .d.clash, .cal .d.s-booked.clash { background: var(--v5-danger-w); box-shadow: inset 0 0 0 2px var(--v5-cal-clash-ring); }
 .cal .d.clash .n { color: var(--v5-danger-t); }
@@ -1050,6 +1051,32 @@ body { font-family: var(--v5-font-ui); }
 .lead { border-radius: var(--v5-r-md); }
 .A_body { border-radius: var(--v5-r-sheet) var(--v5-r-sheet) 0 0; }
 .btn, .chip, .cal .d, .H_chk, .A_steps b, .count, .toast, .pill, time, .amt, .num, [data-amount], [data-date] { font-variant-numeric: tabular-nums; }
+
+/* s93 ui 1: past stays keep the guest colour (the Booking calendar's per-guest palette); only free/blocked past days stay quiet */
+.cal .d.past.s-booked:not(.arr):not(.clash), .cal .d.past.s-booked.t1:not(.arr):not(.clash) { background: var(--A_g, var(--v5-g1)); color: var(--A_gfg, var(--v5-g1-fg)); }
+.cal .d.past.s-booked:not(.arr):not(.clash) .n, .cal .d.past.s-booked:not(.arr):not(.clash) .A_tag { color: var(--A_gfg, var(--v5-g1-fg)); }
+.cal .d.past .A_tag.in { background: var(--A_g, var(--v5-g1)); color: var(--A_gfg, var(--v5-g1-fg)); padding: 0 3px; }
+.cal .d.past .hx { opacity: 1; }
+.cal .d.today:focus-visible { outline: 3px double var(--ring); outline-offset: 3px; } /* keeps a ring distinct from the gold today ring */
+.taskrow .s.dt.open { display: block; -webkit-line-clamp: unset; line-clamp: unset; overflow: visible; }
+.cal .d.clash.today { box-shadow: inset 0 0 0 2px var(--v5-cal-clash-ring); }
+
+/* s93 ui 3: guest cards tinted by kind (arriving green, in the house blue, leaving today amber); the Guest ID card shares the tint */
+.card.glass.G_in { background: color-mix(in oklab, var(--v5-ok-t) 10%, var(--v5-surf)); border-left: 4px solid var(--v5-ok-t); }
+.card.glass.G_stay { background: color-mix(in oklab, var(--v5-info-t) 10%, var(--v5-surf)); border-left: 4px solid var(--v5-info-t); }
+.idphoto:not(.empty) { aspect-ratio: 8 / 5; min-height: 0; box-sizing: border-box; padding: 4px; border: 1px solid var(--v5-line); }
+.idphoto:not(.empty) { position: relative; }
+.idphoto:not(.empty):not(.rot) img { object-fit: contain; aspect-ratio: auto; } .idphoto:not(.rot) .H_idbtn img { width: 100%; height: 100%; }
+.idphoto:not(.rot) .H_idbtn { position: absolute; inset: 4px; display: block; padding: 0; border: 0; background: none; }
+.idphoto:not(.rot) > img { position: absolute; inset: 4px; width: calc(100% - 8px); height: calc(100% - 8px); }
+.idphoto.rot { padding: 4px; }
+
+/* s93 ui 4: task row = a 44px tick column, a 6px gap (about 14px to the box), then the text; nothing sits under the left edge */
+.payrow.taskrow { grid-template-columns: 44px minmax(0, 1fr); column-gap: 6px; padding: 12px 16px 12px 8px; align-items: start; }
+.taskrow .chk { margin-top: -10px; border-width: 9px; } /* a 26px box, centred on the title's first line */
+.taskrow .t { font-weight: 600; }
+.taskrow .s.dt { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; }
+.taskrow .row-wrap { gap: 6px; }
 
 /* B4 notices (s85): one rhythm on the 4/8/12/16/24 scale, text on the type tokens (fluid clamp), hourly bars that always fit and stay labelled. Only the Notices tab and its sheet. */
 .E_tabbody[data-F-tab="notices"] { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; align-content: start; } /* cards 12 apart; the label sits 8 above its card, 24 below the previous group */
