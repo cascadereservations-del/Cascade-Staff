@@ -74,3 +74,21 @@ test('s94: the owed card is hidden for an empty or absent list and shows a butto
   assert.equal(N.owedHtml([], '#x'), '');
   assert.match(N.owedHtml([{ date: '2026-10-14' }], '#door/checklist'), /Reports still owed[\s\S]*href="#door\/checklist"/);
 });
+
+test('s94 fix: with two staff nobody is preselected and Pay now stays inert until one is chosen', async () => {
+  const two = [...UN, { payee_user_id: 'u-9', payee_name: 'Marites', has_qr: true, total: 0, sessions: [], claims: [] }];
+  const b = bootAdmin({ rpc: (n) => ({ staff_pay_admin_list_v1: LISTA(ADV, two), staff_pay_admin_create_v2: { data: { ok: true, id: 'n1', ref: 'N' }, error: null } }[n]) }); await tick();
+  await click(b, { 'data-act': 'ahead' });
+  assert.match(b.root.innerHTML, /Choose who cleaned, then tick what to pay ahead\./);
+  assert.match(b.root.innerHTML, /<option value="" selected>Choose who cleaned<\/option>/);
+  await click(b, { 'data-act': 'u-ases', 'data-id': '2026-10-14' });
+  assert.match(b.root.innerHTML, /data-act="u-pay" disabled/);
+  await click(b, { 'data-act': 'u-pay' });
+  assert.ok(!b.rpcs.some((r) => r[0] === 'staff_pay_admin_create_v2'));
+});
+
+test('s94 fix: the owed sentence says "paid ahead" only for paid rows', () => {
+  const T = req('../pay/C_paid-text.js');
+  assert.equal(T.owedText([{ date: '2026-10-14', status: 'requested' }]), 'Please send the cleaning report for 14 Oct. Its pay was set up before the report.');
+  assert.match(T.owedText([{ date: '2026-10-14', status: 'paid' }, { date: '2026-10-17', status: 'paying' }]), /^You were paid ahead for 14 Oct\. Please still send the cleaning report for it\. Please send the cleaning report for 17 Oct\./);
+});

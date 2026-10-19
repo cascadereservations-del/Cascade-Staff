@@ -119,7 +119,8 @@
   function uCands() { return { sessions: S.u.p.sessions || [], claims: S.u.p.claims || [], advance: S.adv || [] }; }
   function openAhead() {
     var ps = payees(); if (!ps.length) return;
-    var p = { payee_user_id: ps[0].id, payee_name: ps[0].name, has_qr: ps[0].has_qr, sessions: [], claims: [], ahead: true };
+    var one = ps.length === 1 ? ps[0] : null; // several staff: nobody is chosen until the admin says who cleaned (the server's order is not a hint)
+    var p = { payee_user_id: one ? one.id : null, payee_name: one ? one.name : '', has_qr: one ? one.has_qr : undefined, sessions: [], claims: [], ahead: true };
     S.listMsg = ''; S.listNote = ''; S.u = { p: p, sel: { sessions: {}, claims: {}, extras: [], advance: {} }, busy: false, msg: '' }; S.view = 'unreq'; renderUnreq();
   }
   function openUnreq(uid) {
@@ -148,19 +149,19 @@
         '<div><div class="t"><span>' + esc(ds(a.checkout_date) + ' · Turnover') + '</span><span class="val">' + esc(P.peso(amt)) + '</span></div><span class="s">Base ' + esc(P.peso(a.base)) + (a.guest ? ' · ' + esc(a.guest) + ' checked out' : '') + ' · report owed</span>' + opt + '</div></div>';
     }).join('');
     var pick = '';
-    if (p.ahead && payees().length > 1) pick = '<div class="field"><label for="A_payee">Paying</label><select class="sel" id="A_payee" style="max-width:none;text-align:left;text-align-last:left">' + payees().map(function (x) { return '<option value="' + esc(x.id) + '"' + (x.id === p.payee_user_id ? ' selected' : '') + '>' + esc(x.name) + '</option>'; }).join('') + '</select></div>';
-    var inner = '<div class="stack"><p class="help P_sub">' + esc(p.payee_name) + (p.ahead ? ' has not sent these reports yet. Tick what you want to pay ahead.' : ' has not asked for this yet. Tick what you want to pay now.') + '</p>' + pick +
+    if (p.ahead && payees().length > 1) pick = '<div class="field"><label for="A_payee">Who cleaned</label><select class="sel" id="A_payee" style="max-width:none;text-align:left;text-align-last:left"><option value=""' + (p.payee_user_id ? '' : ' selected') + '>Choose who cleaned</option>' + payees().map(function (x) { return '<option value="' + esc(x.id) + '"' + (x.id === p.payee_user_id ? ' selected' : '') + '>' + esc(x.name) + '</option>'; }).join('') + '</select></div>';
+    var inner = '<div class="stack"><p class="help P_sub">' + (p.ahead ? (p.payee_user_id ? 'Tick what you want to pay ahead to ' + esc(p.payee_name) + '. She is still asked for each report.' : 'Choose who cleaned, then tick what to pay ahead.') : esc(p.payee_name) + ' has not asked for this yet. Tick what you want to pay now.') + '</p>' + pick +
       (cleans || claims ? '<div class="P_group"><div class="cap up">Unpaid work</div><div class="card list">' + cleans + claims + '</div></div>' : '') +
       (advRows ? '<div class="P_group"><div class="cap up">Pay ahead (no report yet)</div><div class="card list">' + advRows + '</div><p class="help">She is still asked to send each report.</p></div>' : '') +
       (p.has_qr === false ? '<div class="infobox">' + ICON('info') + '<span>' + esc(p.payee_name) + ' has not saved a payout QR yet. You can still pay her usual account and add the screenshot.</span></div>' : '') +
       (over ? '<div class="errbox">' + ICON('alert') + '<span>A request holds up to ' + P.MAX_LINES + ' lines. Untick some and pay the rest next.</span></div>' : '') +
       (U.msg ? '<div class="errbox" role="alert">' + ICON('alert') + '<span>' + esc(U.msg) + '</span></div>' : '') + '</div>' +
       '<div class="sticky"><div class="total"><span class="cap up">Total to pay</span><span class="amt num">' + esc(P.peso(total)) + '</span></div>' + (p.self ? '<p class="help" role="status">This is your own work. Another admin pays it.</p></div>' : 
-      '<button class="btn btn-primary btn-block" type="button" data-act="u-pay"' + (total > 0 && !over && !U.busy ? '' : ' disabled') + '>' + ICON('cash') + (U.busy ? 'Making the request…' : 'Pay now') + '</button></div>');
-    root.innerHTML = shell('Pay ' + p.payee_name, inner, '#back');
+      '<button class="btn btn-primary btn-block" type="button" data-act="u-pay"' + (total > 0 && !over && !U.busy && p.payee_user_id ? '' : ' disabled') + '>' + ICON('cash') + (U.busy ? 'Making the request…' : 'Pay now') + '</button></div>');
+    root.innerHTML = shell(p.payee_user_id ? 'Pay ' + p.payee_name : 'Pay ahead', inner, '#back');
   }
   function createRequest() {
-    var U = S.u; if (!U || U.busy || U.p.self) return;
+    var U = S.u; if (!U || U.busy || U.p.self || !U.p.payee_user_id) return;
     var c = uCands(), ch = P.chosen(c, U.sel); if (!ch.sessions.length && !ch.claims.length && !ch.advance.length) return;
     var key = S.K.forSelection(c, U.sel); U.busy = true; U.msg = ''; renderUnreq();
     token().then(function () {

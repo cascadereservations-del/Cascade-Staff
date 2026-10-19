@@ -39,7 +39,15 @@
   function C_dm(iso) { var m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(iso == null ? '' : iso)); return m ? (+m[3]) + ' ' + (MON[+m[2] - 1] || m[2]) : String(iso == null ? '' : iso); }
   function C_advanceLine(l) { return C_dm(l.date || l.checkout_date) + ' turnover' + (l.guest ? ' - ' + l.guest : '') + ' (paid ahead, report owed)'; }
   function C_list(dates) { var d = dates.map(C_dm); return d.length < 2 ? d.join('') : d.slice(0, -1).join(', ') + ' and ' + d[d.length - 1]; }
-  function C_owedText(dates) { return 'You were paid ahead for ' + C_list(dates) + '. Please still send the cleaning report for ' + (dates.length === 1 ? 'it' : 'each') + '.'; }
+  // rows: [{date, status}] (or bare date strings, read as paid). Paid: "You were paid ahead"; a request still waiting is not yet paid, so it only says the report is owed.
+  function C_owedText(rows) {
+    var paid = [], open = [];
+    rows.forEach(function (r) { if (typeof r === 'string') paid.push(r); else (r.status === 'paid' ? paid : open).push(r.date); });
+    var out = [];
+    if (paid.length) out.push('You were paid ahead for ' + C_list(paid) + '. Please still send the cleaning report for ' + (paid.length === 1 ? 'it' : 'each') + '.');
+    if (open.length) out.push('Please send the cleaning report for ' + C_list(open) + '. ' + (open.length === 1 ? 'Its' : 'Their') + ' pay was set up before the report.');
+    return out.join(' ');
+  }
 
   var C_PUSH_TITLE = 'Your payment has been sent';
   function C_pushBody(n) {

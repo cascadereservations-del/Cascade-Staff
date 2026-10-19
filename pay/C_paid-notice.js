@@ -80,7 +80,7 @@
   function owedHtml(rows, href) {
     var dates = rows.map(function (r) { return r.date; }).filter(Boolean).sort();
     if (!dates.length) return '';
-    return '<div class="C_notice C_owed" role="status"><div class="C_notice-body"><div class="C_notice-head">Reports still owed</div><div class="C_notice-line">' + C_esc(T.owedText(dates)) + '</div></div>' +
+    return '<div class="C_notice C_owed" role="status"><div class="C_notice-body"><div class="C_notice-head">Reports still owed</div><div class="C_notice-line">' + C_esc(T.owedText(rows.filter(function (r) { return r && r.date; }).sort(function (a, b) { return a.date < b.date ? -1 : 1; }))) + '</div></div>' +
       '<div class="C_notice-acts"><a class="btn btn-primary" href="' + C_esc(href) + '" data-C-owed="1">Start the cleaning report</a></div></div>';
   }
   function mountOwed(el, o) {
