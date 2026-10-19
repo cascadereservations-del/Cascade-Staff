@@ -12,7 +12,7 @@
 .C_notice-text[hidden] { display: none; }
 
 /* s94: reports still owed after a pay-ahead - same card, no tile, the one button fills the row */
-.C_owed { grid-template-columns: minmax(0, 1fr); background: var(--v5-card, var(--surface, #fff)); color: var(--v5-ink); }
+.C_owed { grid-template-columns: minmax(0, 1fr); }
 .C_owed .C_notice-acts .btn { padding: 0 16px; text-align: center; text-decoration: none; }
 
 @media (prefers-reduced-motion: reduce) { .C_notice-ok, .C_notice-more { transition: none; } }

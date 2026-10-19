@@ -93,7 +93,11 @@
     }).join('') + '</div></div>' + slot;
   }
   // s94: paid ahead for a turnover whose report is still owed
-  function owedBlock() { return window.C_PaidNotice ? window.C_PaidNotice.owedHtml((S.cands && S.cands.reports_owed) || [], '../#door/checklist') : ''; }
+  function owedBlock() {
+    var dates = ((S.cands && S.cands.reports_owed) || []).map(function (r) { return r.date; }).filter(Boolean).sort();
+    if (!dates.length || !window.C_PaidText) return '';
+    return '<div class="infobox">' + ICON('clip') + '<span><b>Reports still owed.</b> ' + esc(window.C_PaidText.owedText(dates)) + '</span></div><a class="btn btn-primary btn-block" href="../#door/checklist">Start the cleaning report</a>';
+  }
   function renderPick() {
     var c = S.cands, hasRows = (c.sessions || []).length || (c.claims || []).length;
     var total = P.computeTotal(c, S.sel), lines = P.lineCount(c, S.sel), over = lines > P.MAX_LINES;
