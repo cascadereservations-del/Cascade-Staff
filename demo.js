@@ -128,7 +128,7 @@
         history: [{ effective_from: d(30), regular_rate: 420, general_rate: 840, transport_rate: 100, note: 'Demo rate change' }, { effective_from: d(-90), regular_rate: 400, general_rate: 800, transport_rate: 100, note: 'Demo rate' },
           { effective_from: d(-400), regular_rate: 350, general_rate: 700, transport_rate: null, note: 'Demo first rate' }] },
       signin: [{ label: 'Demo Cleaner', handle: 'demo.cleaner@staff.cascade.invalid', kind: 'pin' }, { label: 'Demo Admin', handle: 'demo.admin@example.invalid', kind: 'password' }, { label: 'Demo Owner', handle: 'demo.owner@example.invalid', kind: 'password' }],
-      pay: { ok: true, sessions: [{ id: 'demo-s1', date: d(-3), type: 'turnover', base: 400, transport: 100, guest: 'Demo Guest Zero' }, { id: 'demo-s2', date: d(-1), type: 'deep_clean', base: 800, transport: null }],
+      pay: { ok: true, reports_owed: [{ date: '2026-10-14', ref: 'DEMO0002', status: 'paid' }, { date: '2026-10-17', ref: 'DEMO0002', status: 'paid' }, { date: '2026-10-19', ref: 'DEMO0002', status: 'paid' }], sessions: [{ id: 'demo-s1', date: d(-3), type: 'turnover', base: 400, transport: 100, guest: 'Demo Guest Zero' }, { id: 'demo-s2', date: d(-1), type: 'deep_clean', base: 800, transport: null }],
         claims: [{ id: 'demo-c1', date: d(-2), description: 'Demo: dish soap for the kitchen', amount: 35 }], missing_reports: [d(-6)],
         requests: [{ total: 450, ref: 'CASCADE-DEMO001', created_at: d(-9) + 'T10:00:00Z', status: 'paid', paid_at: d(-8) + 'T10:00:00Z' }] },
       stay: { guest_name: 'Demo Guest One', checkin: d(-1), checkout: d(2) }

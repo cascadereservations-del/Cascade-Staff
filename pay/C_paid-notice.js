@@ -76,5 +76,25 @@
     }).catch(function () { el.hidden = true; return null; });
   }
 
-  return { mount: mount, pick: C_pick, html: C_html, demoRequest: C_demoRequest, SEEN_KEY: SEEN_KEY, DAYS: DAYS };
+  // s94: "Reports still owed" card. rows = reports_owed from staff_pay_candidates_v1: [{date, ref, status}]. Hidden when empty or absent.
+  function owedHtml(rows, href) {
+    var dates = rows.map(function (r) { return r.date; }).filter(Boolean).sort();
+    if (!dates.length) return '';
+    return '<div class="C_notice C_owed" role="status"><div class="C_notice-body"><div class="C_notice-head">Reports still owed</div><div class="C_notice-line">' + C_esc(T.owedText(dates)) + '</div></div>' +
+      '<div class="C_notice-acts"><a class="btn btn-primary" href="' + C_esc(href) + '" data-C-owed="1">Start the cleaning report</a></div></div>';
+  }
+  function mountOwed(el, o) {
+    o = o || {};
+    if (!el) return Promise.resolve(null);
+    function show(rows) { var h = Array.isArray(rows) ? owedHtml(rows, o.href || '#door/checklist') : ''; el.innerHTML = h; el.hidden = !h; return h ? rows : null; }
+    if (o.demo) return Promise.resolve(show([{ date: '2026-10-14', ref: 'DEMO0002', status: 'paid' }, { date: '2026-10-17', ref: 'DEMO0002', status: 'paid' }, { date: '2026-10-19', ref: 'DEMO0002', status: 'paid' }]));
+    if (!o.client || typeof o.client.rpc !== 'function') { el.hidden = true; return Promise.resolve(null); }
+    return new Promise(function (ok) { ok(o.client.rpc('staff_pay_candidates_v1')); }).then(function (res) {
+      var d = res && res.data;
+      if (!res || res.error || !d || d.ok === false) { el.hidden = true; return null; }
+      return show(d.reports_owed);
+    }).catch(function () { el.hidden = true; return null; });
+  }
+
+  return { mountOwed: mountOwed, owedHtml: owedHtml, mount: mount, pick: C_pick, html: C_html, demoRequest: C_demoRequest, SEEN_KEY: SEEN_KEY, DAYS: DAYS };
 });

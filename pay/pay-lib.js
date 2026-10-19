@@ -41,16 +41,21 @@
       .map(function (s) { var on = !!sel.sessions[s.id].transport && s.transport != null; return { s: s, transport: on, amount: sessionAmount(s, on) }; });
     var claims = ((cands && cands.claims) || []).filter(function (c) { return sel.claims && sel.claims[c.id]; });
     var extras = ((sel.extras) || []).map(parseExtra).filter(Boolean);
-    return { sessions: sessions, claims: claims, extras: extras };
+    // s94: pay ahead - a checkout with no report yet, keyed by its date. cands.advance = [{checkout_date, guest, base, transport}]
+    var advance = ((cands && cands.advance) || []).filter(function (a) { return sel.advance && sel.advance[a.checkout_date] && sel.advance[a.checkout_date].on; })
+      .map(function (a) { var on = !!sel.advance[a.checkout_date].transport && a.transport != null; return { a: a, transport: on, amount: round2(Number(a.base) + (on ? Number(a.transport) : 0)) }; });
+    return { sessions: sessions, claims: claims, extras: extras, advance: advance };
   }
+  function advanceBody(ch) { return ch.advance.map(function (x) { return { checkout_date: x.a.checkout_date, transport: x.transport }; }); }
   function computeTotal(cands, sel) {
     var c = chosen(cands, sel), t = 0;
     c.sessions.forEach(function (x) { t += x.amount; });
     c.claims.forEach(function (x) { t += Number(x.amount); });
     c.extras.forEach(function (x) { t += x.amount; });
+    c.advance.forEach(function (x) { t += x.amount; });
     return round2(t);
   }
-  function lineCount(cands, sel) { var c = chosen(cands, sel); return c.sessions.length + c.claims.length + c.extras.length; }
+  function lineCount(cands, sel) { var c = chosen(cands, sel); return c.sessions.length + c.claims.length + c.extras.length + c.advance.length; }
 
   // The body of POST /functions/v1/notify-cleaner-payment (SPEC-37 5.2). receiptPaths maps extra index -> uploaded path.
   function buildPayload(cands, sel, key, receiptPaths) {
@@ -113,7 +118,7 @@
       forSelection: function (cands, sel) {
         var c = chosen(cands, sel);
         var s = JSON.stringify([c.sessions.map(function (x) { return [x.s.id, x.transport]; }), c.claims.map(function (x) { return x.id; }),
-          c.extras.map(function (x) { return [x.description, x.amount]; })]);
+          c.extras.map(function (x) { return [x.description, x.amount]; }), c.advance.map(function (x) { return [x.a.checkout_date, x.transport]; })]);
         if (!key || s !== sig) {
           var m = read();
           key = typeof m[s] === 'string' && m[s] ? m[s] : newKey(cryptoObj); sig = s;
@@ -197,7 +202,7 @@
   return {
     P_hashCounts: P_hashCounts, P_fromShell: P_fromShell, P_backIsHistory: P_backIsHistory, P_tabs: P_tabs, P_shell: P_shell, P_wireBack: P_wireBack, P_param: P_param, P_hash: P_hash, P_plural: P_plural,
     peso: peso, plain: plain, dateLabel: dateLabel, shortDate: shortDate, typeLabel: typeLabel, parseExtra: parseExtra, sessionAmount: sessionAmount,
-    chosen: chosen, computeTotal: computeTotal, lineCount: lineCount, buildPayload: buildPayload, reviewBlock: reviewBlock, newKey: newKey, keyKeeper: keyKeeper,
+    advanceBody: advanceBody, chosen: chosen, computeTotal: computeTotal, lineCount: lineCount, buildPayload: buildPayload, reviewBlock: reviewBlock, newKey: newKey, keyKeeper: keyKeeper,
     resultMessage: resultMessage, requestStatus: requestStatus, fitSize: fitSize,
     MAX_EXTRA: MAX_EXTRA, MAX_LINES: MAX_LINES
   };

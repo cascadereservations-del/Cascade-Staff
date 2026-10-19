@@ -20,7 +20,7 @@
     url: 'https://qkgfhsdppslwunarczeq.supabase.co',
     key: 'sb_publishable_JFuRYZ9csmQULcMRmHXDSg_Abo9UeCj',
     propertyId: '6ae230f4-c189-4547-84b1-cb6e0b2cc9bd',
-    version: '3.4.8'
+    version: '3.4.9'
   };
   var LINKS = {
     checklist: 'https://cascadereservations-del.github.io/CH-Cleaners-Checklist/',
@@ -201,6 +201,7 @@
   function footerLine() { return '<div class="help F_span" style="text-align:center;margin-top:16px">Updated ' + esc(state.loadedAt ? CS.agoLabel(new Date(state.loadedAt).toISOString()) : 'just now') + ' · v' + CFG.version + '</div>'; }
 
   // The turnover: guest out, clean, guest in, against the 12:00 noon to 2:00 pm window. Slide (or tap) to start opens the checklist door; no second PIN from here.
+  function S94_owedHref() { var d = doorDef('checklist'); return d && CS.doorAllowed('checklist', role()) ? CS.doorLink('checklist', d.url, location.origin, trustOn).href : '#home'; }
   function A_slideStart() {
     var d = doorDef('checklist'); if (!d || !CS.doorAllowed('checklist', role())) return '';
     var dl = CS.doorLink('checklist', d.url, location.origin, trustOn);
@@ -404,7 +405,7 @@
     var body;
     if (staff) {
       // Today, Turnover, the paid notice (under Turnover: Turnover and Slide to start never move when it lands), Notices, then the doors
-      body = '<div class="A_body">' + errBanner() + todayCard() + A_turnoverCard(true) + H_cleanDoneCard() + '<div id="slot-paid-notice" class="A_slot" hidden></div>' + H_alertsCard() + A_noticesCard() +
+      body = '<div class="A_body">' + errBanner() + todayCard() + A_turnoverCard(true) + H_cleanDoneCard() + '<div id="slot-paid-notice" class="A_slot" hidden></div><div id="slot-owed" class="A_slot" hidden></div>' + H_alertsCard() + A_noticesCard() +
         A_navCard('Work', row({ icon: 'cloud', title: 'Weather', sub: 'Today and the next few hours', href: '#weather' }) + doorRow('checklist', 'clip', 'Start or continue today’s turnover') +
           (LINKS.pay ? row({ icon: 'cash', title: 'Cleaning fee', sub: state.payHint || 'Ask for payment for your cleans and expenses', href: H_payUrl(), subId: 'pay-sub' }) : '') +
           row({ icon: 'calendar', title: 'Calendar', sub: 'Who is staying, who is next', href: '#calendar', count: n || '' }) +
@@ -433,13 +434,18 @@
           row({ icon: 'box', title: 'Inventory', sub: 'Stock levels and usage', href: '#stock' }), true) + footerLine() + '</div>';
     }
     var keep = el.querySelector && el.querySelector('#slot-paid-notice'); if (keep && keep.parentNode) keep.parentNode.removeChild(keep);
+    var keepOwed = el.querySelector && el.querySelector('#slot-owed'); if (keepOwed && keepOwed.parentNode) keepOwed.parentNode.removeChild(keepOwed);
     var keepSel = B_focusSel();
     el.innerHTML = A_hero() + '<div class="screen" style="min-height:0;padding-top:0">' + body + '</div>';
     B_refocus(keepSel);
     if (keep) { var fresh = el.querySelector('#slot-paid-notice'); if (fresh && fresh.parentNode) fresh.parentNode.replaceChild(keep, fresh); }
+    if (keepOwed) { var freshOwed = el.querySelector('#slot-owed'); if (freshOwed && freshOwed.parentNode) freshOwed.parentNode.replaceChild(keepOwed, freshOwed); }
     // "You were paid" notice (pay/C_paid-notice.js): mounted once per slot node; the node is carried across redraws above and is new again after a sign-in.
     var paid = el.querySelector && el.querySelector('#slot-paid-notice');
     if (paid && !paid.__paidMounted && window.C_PaidNotice && state.access) { paid.__paidMounted = true; try { window.C_PaidNotice.mount(paid, { client: sb, demo: DEMO }); } catch (e) {} }
+    // s94: "Reports still owed" after a pay-ahead; hidden when the list is empty or the server does not send it. The button opens the checklist door.
+    var owed = el.querySelector && el.querySelector('#slot-owed');
+    if (owed && !owed.__owedMounted && window.C_PaidNotice && window.C_PaidNotice.mountOwed && state.access) { owed.__owedMounted = true; try { window.C_PaidNotice.mountOwed(owed, { client: sb, demo: DEMO, href: S94_owedHref() }); } catch (e) {} }
   }
   function loadingBlock() { return '<div class="stack" style="margin-top:16px"><div class="skel" style="height:40px;width:70%"></div><div class="skel" style="height:110px"></div><div class="skel" style="height:240px"></div></div>'; }
 

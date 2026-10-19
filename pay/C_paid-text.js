@@ -35,6 +35,12 @@
   }
   function C_account(n) { return n.bank_label && String(n.bank_label).trim() ? 'your ' + String(n.bank_label).trim() + ' account' : 'your account'; }
 
+  // s94: "14 Oct" style for the pay-ahead sentences, and the line for a paid-ahead turnover.
+  function C_dm(iso) { var m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(iso == null ? '' : iso)); return m ? (+m[3]) + ' ' + (MON[+m[2] - 1] || m[2]) : String(iso == null ? '' : iso); }
+  function C_advanceLine(l) { return C_dm(l.date || l.checkout_date) + ' turnover' + (l.guest ? ' - ' + l.guest : '') + ' (paid ahead, report owed)'; }
+  function C_list(dates) { var d = dates.map(C_dm); return d.length < 2 ? d.join('') : d.slice(0, -1).join(', ') + ' and ' + d[d.length - 1]; }
+  function C_owedText(dates) { return 'You were paid ahead for ' + C_list(dates) + '. Please still send the cleaning report for ' + (dates.length === 1 ? 'it' : 'each') + '.'; }
+
   var C_PUSH_TITLE = 'Your payment has been sent';
   function C_pushBody(n) {
     var r = C_range(n.date_from, n.date_to);
@@ -43,6 +49,7 @@
   function C_noticeText(n) {
     var r = C_range(n.date_from, n.date_to), ref = C_reference(n);
     return 'Hi ' + n.first_name + ', we have sent ' + C_php(n.total) + ' to ' + C_account(n) + (r ? ' for your work on ' + r : '') + '.' + (ref ? ' Reference: ' + ref + '.' : '') +
+      (n.reports_owed && n.reports_owed.length ? ' Paid ahead - please still send the report for ' + n.reports_owed.map(C_dm).join(', ') + '.' : '') +
       ' Please let us know if anything looks different on your side. Thank you for your care with the house. Marifel & The Cascade Team';
   }
   // The short line on her home: "Paid PHP 1,235 · Oct 15 · ref …5678". The tail is the last four characters of the bank's reference.
@@ -69,5 +76,5 @@
         .map(function (s, i) { return { key: s.key, label: s.label, state: i < at ? 'done' : i === at ? 'now' : 'next' }; })
     };
   }
-  return { dayShort: C_dayShort, manilaDay: C_manilaDay, range: C_range, php: C_php, reference: C_reference, pushTitle: C_PUSH_TITLE, pushBody: C_pushBody, noticeText: C_noticeText, homeLine: C_homeLine, titleLine: C_titleLine, subLine: C_subLine, steps: C_steps };
+  return { dm: C_dm, advanceLine: C_advanceLine, owedText: C_owedText, dayShort: C_dayShort, manilaDay: C_manilaDay, range: C_range, php: C_php, reference: C_reference, pushTitle: C_PUSH_TITLE, pushBody: C_pushBody, noticeText: C_noticeText, homeLine: C_homeLine, titleLine: C_titleLine, subLine: C_subLine, steps: C_steps };
 });

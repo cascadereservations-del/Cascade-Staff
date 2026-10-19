@@ -11,4 +11,8 @@
 .C_notice-text { grid-column: 1 / -1; margin: 0; font-size: var(--v5-t-2); line-height: clamp(1.375rem, 1.2855rem + 0.3975vw, 1.54rem); color: var(--v5-ink); }
 .C_notice-text[hidden] { display: none; }
 
+/* s94: reports still owed after a pay-ahead - same card, no tile, the one button fills the row */
+.C_owed { grid-template-columns: minmax(0, 1fr); background: var(--v5-card, var(--surface, #fff)); color: var(--v5-ink); }
+.C_owed .C_notice-acts .btn { padding: 0 16px; text-align: center; text-decoration: none; }
+
 @media (prefers-reduced-motion: reduce) { .C_notice-ok, .C_notice-more { transition: none; } }

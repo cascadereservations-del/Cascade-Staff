@@ -20,10 +20,12 @@
     var list = [{ id: 'demo-1', ref: 'DEMO0001', status: 'requested', payee_name: 'Honey', total: 1235, created_at: '2026-10-13T02:00:00Z', has_qr: true, lines: [{ kind: 'clean', date: '2026-10-10', type: 'turnover', amount: 500 }, { kind: 'clean', date: '2026-10-12', type: 'deep_clean', amount: 735 }] },
       { id: 'demo-0', ref: 'DEMO0000', status: 'paid', payee_name: 'Honey', total: 900, created_at: '2026-10-08T02:00:00Z', paid_at: '2026-10-09T04:00:00Z', paid_by_name: 'Marifel', has_qr: true, lines: [] }];
     var unreq = [{ payee_user_id: 'demo-u2', payee_name: 'Marites', has_qr: true, total: 1340, sessions: [{ id: 'demo-us1', date: '2026-10-11', type: 'turnover', base: 500, transport: 100 }, { id: 'demo-us2', date: '2026-10-12', type: 'deep_clean', base: 735, transport: null }], claims: [{ id: 'demo-uc1', date: '2026-10-12', description: 'Trash bags', amount: 105, receipt: true }] }];
+    var adv = [{ checkout_date: '2026-10-14', guest: 'Shasha', base: 500, transport: 150 }, { checkout_date: '2026-10-17', guest: 'Abe', base: 500, transport: 150 }, { checkout_date: '2026-10-19', guest: 'Shaneen', base: 500, transport: 150 }];
     return {
       auth: { getSession: function () { return Promise.resolve({ data: { session: { access_token: 'demo', user: { id: 'demo-me' } } } }); } },
       rpc: function (name, a) {
-        if (name === 'staff_pay_admin_list_v1') return Promise.resolve({ data: { ok: true, requests: list, unrequested: unreq }, error: null });
+        if (name === 'staff_pay_admin_list_v1') return Promise.resolve({ data: { ok: true, requests: list, unrequested: unreq, advance_candidates: adv }, error: null });
+        if (name === 'staff_pay_admin_create_v2') { var ad = (a.p_advance || []).map(function (x) { return { kind: 'advance', date: x.checkout_date, type: 'turnover', guest: 'Shasha', amount: x.transport ? 650 : 500 }; }); list.unshift({ id: 'demo-3', ref: 'DEMO0003', status: 'requested', payee_name: 'Honey', total: ad.reduce(function (t, x) { return t + x.amount; }, 0), created_at: '2026-10-20T02:00:00Z', has_qr: true, lines: ad }); return Promise.resolve({ data: { ok: true, id: 'demo-3', ref: 'DEMO0003' }, error: null }); }
         if (name === 'staff_pay_admin_create_v1') { var u = unreq.splice(0, 1)[0]; list.unshift({ id: 'demo-2', ref: 'DEMO0002', status: 'requested', payee_name: u ? u.payee_name : 'Marites', total: u ? u.total : 0, created_at: '2026-10-13T02:00:00Z', has_qr: true, lines: [] }); return Promise.resolve({ data: { ok: true, id: 'demo-2', ref: 'DEMO0002' }, error: null }); }
         if (name === 'staff_pay_payout_qr_v1') { var q = list.filter(function (x) { return x.id === a.p_request_id; })[0] || list[0]; return Promise.resolve({ data: { ok: true, id: q.id, ref: q.ref, status: 'requested', payee_name: q.payee_name, total: q.total, payout_qrph: DEMO_STATIC }, error: null }); }
         if (name === 'staff_pay_admin_step_v1') return Promise.resolve({ data: { ok: true, status: a.p_step === 'pay' ? 'paying' : 'requested' }, error: null });
@@ -51,6 +53,7 @@
       var d = res.data;
       if (!d || d.ok === false) { S.loadErr = d && d.reason === 'not_authorized' ? 'denied' : 'offline'; return; }
       S.loadErr = ''; S.list = d.requests || [];
+      S.adv = Array.isArray(d.advance_candidates) ? d.advance_candidates : []; S.payees = Array.isArray(d.payees) ? d.payees : []; // s94: absent on the older server, so no Pay ahead group
       S.unreq = Array.isArray(d.unrequested) ? d.unrequested : null; // P_: absent on the older server, so the NOT YET REQUESTED group is simply not drawn
     }).catch(function (e) { S.loadErr = e && e.message === 'signin' ? 'signin' : 'offline'; });
   }
@@ -88,22 +91,40 @@
     return '<button type="button" class="rowi C_row P_row" data-act="unreq" data-id="' + esc(u.payee_user_id) + '"><span class="lead">' + ICON('cash') + '</span><span class="mid"><span class="P_amt num">' + esc(P.peso(u.total)) + '</span><span class="t">' + esc(u.payee_name) + '</span>' +
       '<span class="s">' + esc(bits.join(' · ')) + ' · not requested yet</span></span><span class="P_go btn btn-ghost">Review</span></button>';
   }
+  // s94: who can be paid ahead. advance_candidates carry no payee, so the choice comes from the staff already in the list (d.payees, else those with unpaid work).
+  function payees() {
+    var out = [], seen = {};
+    (S.payees || []).concat((S.unreq || []).map(function (u) { return { user_id: u.payee_user_id, name: u.payee_name, has_qr: u.has_qr }; })).forEach(function (p) {
+      var id = p.user_id || p.payee_user_id; if (!id || seen[id]) return; seen[id] = 1; out.push({ id: id, name: p.name || p.payee_name || 'Staff', has_qr: p.has_qr });
+    });
+    return out;
+  }
+  function aheadRow() {
+    var n = (S.adv || []).length;
+    return '<button type="button" class="rowi C_row P_row" data-act="ahead"><span class="lead">' + ICON('cash') + '</span><span class="mid"><span class="t">Pay ahead</span><span class="s">' + esc(P.P_plural(n, 'turnover') + ' with no report yet') + '</span></span><span class="P_go btn btn-ghost">Choose</span></button>';
+  }
   function group(title, rows) { return '<div class="P_group"><div class="cap up">' + title + '</div><div class="card list">' + rows + '</div></div>'; }
   function renderList() {
     var open = (S.list || []).filter(function (r) { return r.status === 'requested' || r.status === 'paying'; }), paid = (S.list || []).filter(function (r) { return r.status === 'paid'; });
     var firstPay = open.filter(function (r) { return !theirs(r); })[0];
     var un = (S.unreq || []).filter(function (u) { return (u.sessions || []).length + (u.claims || []).length > 0; });
+    var ahead = (S.adv || []).length && payees().length;
     var inner = '<div class="stack">' + (S.listMsg ? '<div class="errbox" role="alert">' + ICON('alert') + '<span>' + esc(S.listMsg) + '</span></div>' : '') + (S.listNote ? '<div class="okbox" role="status">' + ICON('checks') + '<span>' + esc(S.listNote) + '</span></div>' : '') +
-      (open.length || un.length || paid.length ? (open.length ? group('To pay', open.map(function (r) { return row(r, firstPay && firstPay.id); }).join('')) : '') + (un.length ? group('Not yet requested', un.map(unreqRow).join('')) : '') + (paid.length ? group('Paid recently', paid.map(paidRow).join('')) : '')
+      (open.length || un.length || ahead || paid.length ? (open.length ? group('To pay', open.map(function (r) { return row(r, firstPay && firstPay.id); }).join('')) : '') + (un.length ? group('Not yet requested', un.map(unreqRow).join('')) : '') + (ahead ? group('Pay ahead (no report yet)', aheadRow()) : '') + (paid.length ? group('Paid recently', paid.map(paidRow).join('')) : '')
         : '<div class="card empty"><div class="disc">' + ICON('checks') + '</div><h2 class="hd">Nothing to pay right now</h2><p>Unpaid cleans appear here as soon as a report is sent.</p></div>') + '</div>';
     root.innerHTML = shell('Pay staff', inner);
   }
 
   // ---------------------------------------------------------------- pay ahead: one staff member's unpaid work that is in no request yet
-  function uCands() { return { sessions: S.u.p.sessions || [], claims: S.u.p.claims || [] }; }
+  function uCands() { return { sessions: S.u.p.sessions || [], claims: S.u.p.claims || [], advance: S.adv || [] }; }
+  function openAhead() {
+    var ps = payees(); if (!ps.length) return;
+    var p = { payee_user_id: ps[0].id, payee_name: ps[0].name, has_qr: ps[0].has_qr, sessions: [], claims: [], ahead: true };
+    S.listMsg = ''; S.listNote = ''; S.u = { p: p, sel: { sessions: {}, claims: {}, extras: [], advance: {} }, busy: false, msg: '' }; S.view = 'unreq'; renderUnreq();
+  }
   function openUnreq(uid) {
     var p = (S.unreq || []).filter(function (x) { return x.payee_user_id === uid; })[0]; if (!p) return;
-    var sel = { sessions: {}, claims: {}, extras: [] };
+    var sel = { sessions: {}, claims: {}, extras: [], advance: {} };
     (p.sessions || []).forEach(function (s) { sel.sessions[s.id] = { on: true, transport: false }; });
     (p.claims || []).forEach(function (c) { sel.claims[c.id] = true; });
     S.listMsg = ''; S.listNote = ''; S.u = { p: p, sel: sel, busy: false, msg: '' }; S.view = 'unreq'; renderUnreq();
@@ -120,8 +141,17 @@
       return '<div class="payrow"><button class="chk" type="button" role="checkbox" aria-checked="' + !!U.sel.claims[x.id] + '" aria-label="' + esc(x.description) + '" data-act="u-clm" data-id="' + esc(x.id) + '">' + ICON('check', 's16') + '</button>' +
         '<div><div class="t"><span>' + esc(x.description) + '</span><span class="val">' + esc(P.peso(x.amount)) + '</span></div><span class="s">Expense · ' + esc(dm(x.date)) + (x.receipt ? ' · receipt saved' : '') + '</span></div></div>';
     }).join('');
-    var inner = '<div class="stack"><p class="help P_sub">' + esc(p.payee_name) + ' has not asked for this yet. Tick what you want to pay now.</p>' +
-      '<div class="P_group"><div class="cap up">Unpaid work</div><div class="card list">' + cleans + claims + '</div></div>' +
+    var advRows = (S.adv || []).map(function (a) {
+      var st = U.sel.advance[a.checkout_date] || { on: false, transport: false }, amt = Math.round((Number(a.base) + (st.on && st.transport && a.transport != null ? Number(a.transport) : 0)) * 100) / 100;
+      var opt = a.transport != null ? '<div class="opt"><button class="sw P_tr" type="button" role="switch" aria-checked="' + !!st.transport + '" aria-label="' + esc('Add ' + P.peso(a.transport) + ' transport for ' + ds(a.checkout_date)) + '" data-act="u-asw" data-id="' + esc(a.checkout_date) + '"><span>Transport +' + esc(P.peso(a.transport)) + '</span><i aria-hidden="true"></i></button></div>' : '';
+      return '<div class="payrow"><button class="chk" type="button" role="checkbox" aria-checked="' + !!st.on + '" aria-label="' + esc(ds(a.checkout_date) + ' turnover, no report yet') + '" data-act="u-ases" data-id="' + esc(a.checkout_date) + '">' + ICON('check', 's16') + '</button>' +
+        '<div><div class="t"><span>' + esc(ds(a.checkout_date) + ' · Turnover') + '</span><span class="val">' + esc(P.peso(amt)) + '</span></div><span class="s">Base ' + esc(P.peso(a.base)) + (a.guest ? ' · ' + esc(a.guest) + ' checked out' : '') + ' · report owed</span>' + opt + '</div></div>';
+    }).join('');
+    var pick = '';
+    if (p.ahead && payees().length > 1) pick = '<div class="field"><label for="A_payee">Paying</label><select class="sel" id="A_payee" style="max-width:none;text-align:left;text-align-last:left">' + payees().map(function (x) { return '<option value="' + esc(x.id) + '"' + (x.id === p.payee_user_id ? ' selected' : '') + '>' + esc(x.name) + '</option>'; }).join('') + '</select></div>';
+    var inner = '<div class="stack"><p class="help P_sub">' + esc(p.payee_name) + (p.ahead ? ' has not sent these reports yet. Tick what you want to pay ahead.' : ' has not asked for this yet. Tick what you want to pay now.') + '</p>' + pick +
+      (cleans || claims ? '<div class="P_group"><div class="cap up">Unpaid work</div><div class="card list">' + cleans + claims + '</div></div>' : '') +
+      (advRows ? '<div class="P_group"><div class="cap up">Pay ahead (no report yet)</div><div class="card list">' + advRows + '</div><p class="help">She is still asked to send each report.</p></div>' : '') +
       (p.has_qr === false ? '<div class="infobox">' + ICON('info') + '<span>' + esc(p.payee_name) + ' has not saved a payout QR yet. You can still pay her usual account and add the screenshot.</span></div>' : '') +
       (over ? '<div class="errbox">' + ICON('alert') + '<span>A request holds up to ' + P.MAX_LINES + ' lines. Untick some and pay the rest next.</span></div>' : '') +
       (U.msg ? '<div class="errbox" role="alert">' + ICON('alert') + '<span>' + esc(U.msg) + '</span></div>' : '') + '</div>' +
@@ -131,10 +161,15 @@
   }
   function createRequest() {
     var U = S.u; if (!U || U.busy || U.p.self) return;
-    var c = uCands(), ch = P.chosen(c, U.sel); if (!ch.sessions.length && !ch.claims.length) return;
+    var c = uCands(), ch = P.chosen(c, U.sel); if (!ch.sessions.length && !ch.claims.length && !ch.advance.length) return;
     var key = S.K.forSelection(c, U.sel); U.busy = true; U.msg = ''; renderUnreq();
     token().then(function () {
-      return sb.rpc('staff_pay_admin_create_v1', { p_payee_user_id: U.p.payee_user_id, p_sessions: ch.sessions.map(function (x) { return { id: x.s.id, transport: x.transport }; }), p_claim_ids: ch.claims.map(function (x) { return x.id; }), p_idempotency_key: key });
+      var a = { p_payee_user_id: U.p.payee_user_id, p_sessions: ch.sessions.map(function (x) { return { id: x.s.id, transport: x.transport }; }), p_claim_ids: ch.claims.map(function (x) { return x.id; }), p_idempotency_key: key };
+      // v2 carries the pay-ahead dates; before the SQL lands (or with nothing ahead) v1 does the same job
+      return Promise.resolve(sb.rpc('staff_pay_admin_create_v2', Object.assign({ p_advance: P.advanceBody(ch) }, a))).then(function (r) {
+        if (r && r.error && A.isAbsent(r.error) && !ch.advance.length) return sb.rpc('staff_pay_admin_create_v1', a);
+        return r;
+      });
     }).then(function (res) {
       U.busy = false; var d = res.data, left = S.u !== U || S.view !== 'unreq'; // left: the view was closed while the call was in flight, so this answer only refreshes the list
       if (res.error || !d) {
@@ -143,7 +178,7 @@
       }
       if (d.ok === false) {
         if (left) return loadList().then(render);
-        if (d.reason === 'session_taken' || d.reason === 'claim_taken') { S.view = 'list'; S.listMsg = A.refusal(d); S.listNote = ''; return loadList().then(render); }
+        if (d.reason === 'session_taken' || d.reason === 'claim_taken' || d.reason === 'advance_taken' || d.reason === 'advance_not_owed') { S.view = 'list'; S.listMsg = A.refusal(d); S.listNote = ''; return loadList().then(render); }
         U.msg = A.refusal(d); return renderUnreq();
       }
       S.K.settle(d);
@@ -350,6 +385,7 @@
     var b = $('C_done'); if (b) b.disabled = !(A.ready(S.form) && !S.busy);
   });
   root.addEventListener('change', function (ev) {
+    if (ev.target.id === 'A_payee' && S.u) { var pp = payees().filter(function (x) { return x.id === ev.target.value; })[0]; if (pp) { S.u.p.payee_user_id = pp.id; S.u.p.payee_name = pp.name; S.u.p.has_qr = pp.has_qr; renderUnreq(); } return; }
     if (ev.target.id === 'C_file' && ev.target.files && ev.target.files[0]) { S.form.file = ev.target.files[0]; S.form.uploaded = null; renderPay(); }
   });
   root.addEventListener('click', function (ev) {
@@ -357,6 +393,9 @@
     var a = t.getAttribute('data-act');
     if (a === 'pay') openPay(t.getAttribute('data-id'));
     else if (a === 'unreq') openUnreq(t.getAttribute('data-id'))
+    else if (a === 'ahead') openAhead();
+    else if (a === 'u-ases') { var as = S.u.sel.advance[t.getAttribute('data-id')] || (S.u.sel.advance[t.getAttribute('data-id')] = { on: false, transport: false }); as.on = !as.on; renderUnreq(); }
+    else if (a === 'u-asw') { var aw = S.u.sel.advance[t.getAttribute('data-id')] || (S.u.sel.advance[t.getAttribute('data-id')] = { on: false, transport: false }); aw.transport = !aw.transport; renderUnreq(); }
     else if (a === 'u-ses') { var us = S.u.sel.sessions[t.getAttribute('data-id')]; us.on = !us.on; renderUnreq(); }
     else if (a === 'u-sw') { var uw = S.u.sel.sessions[t.getAttribute('data-id')]; uw.transport = !uw.transport; renderUnreq(); }
     else if (a === 'u-clm') { var uc = t.getAttribute('data-id'); S.u.sel.claims[uc] = !S.u.sel.claims[uc]; renderUnreq(); }

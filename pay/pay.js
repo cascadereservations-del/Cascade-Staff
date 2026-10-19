@@ -87,17 +87,20 @@
     var slot = '<div id="C_push-slot"></div>';
     if (!rs.length) return slot;
     return '<div><div class="cap up" style="margin-bottom:6px">Your requests</div><div class="card list">' + rs.map(function (r) {
+      var ahead = (r.lines || []).filter(function (l) { return l && l.kind === 'advance'; }).map(function (l) { return '<span class="s C_ahead">' + esc(window.C_PaidText.advanceLine(l)) + '</span>'; }).join('');
       var bank = r.status === 'paid' && r.bank_reference ? ' · Bank ref ' + esc(window.C_PaidText.reference({ bank_reference: r.bank_reference })) : '';
-      return '<div class="rowi" style="cursor:default"><span class="lead">' + ICON('cash') + '</span><span class="mid"><span class="t num">' + esc(P.peso(r.total)) + '</span><span class="s num C_ref">Ref ' + esc(String(r.ref || '').replace(/^CASCADE-/, '')) + (r.created_at ? ' · sent ' + esc(dm(r.created_at)) : '') + (r.status === 'paid' && r.paid_at ? ' · paid ' + esc(dm(r.paid_at)) : '') + bank + '</span>' + C_stepper(r.status) + (r.status === 'requested' || r.status === 'paying' ? '<span class="help P_expect">Usually paid the same day. You will see "You were paid" here.</span>' : '') + '</span></div>';
+      return '<div class="rowi" style="cursor:default"><span class="lead">' + ICON('cash') + '</span><span class="mid"><span class="t num">' + esc(P.peso(r.total)) + '</span><span class="s num C_ref">Ref ' + esc(String(r.ref || '').replace(/^CASCADE-/, '')) + (r.created_at ? ' · sent ' + esc(dm(r.created_at)) : '') + (r.status === 'paid' && r.paid_at ? ' · paid ' + esc(dm(r.paid_at)) : '') + bank + '</span>' + ahead + C_stepper(r.status) + (r.status === 'requested' || r.status === 'paying' ? '<span class="help P_expect">Usually paid the same day. You will see "You were paid" here.</span>' : '') + '</span></div>';
     }).join('') + '</div></div>' + slot;
   }
+  // s94: paid ahead for a turnover whose report is still owed
+  function owedBlock() { return window.C_PaidNotice ? window.C_PaidNotice.owedHtml((S.cands && S.cands.reports_owed) || [], '../#door/checklist') : ''; }
   function renderPick() {
     var c = S.cands, hasRows = (c.sessions || []).length || (c.claims || []).length;
     var total = P.computeTotal(c, S.sel), lines = P.lineCount(c, S.sel), over = lines > P.MAX_LINES;
     var inner = '<div class="stack"><p class="help P_sub">Ask for payment for your cleans and expenses</p>' +
       (hasRows ? '<div><div class="cap up" style="margin-bottom:6px">Not yet paid</div><div class="card list">' + (c.sessions || []).map(cleanRow).join('') + (c.claims || []).map(claimRow).join('') + '</div></div>'
         : '<div class="card empty"><div class="disc">' + ICON('checks') + '</div><h2 class="hd">Nothing waiting</h2><p>Cleans you have reported and not been paid for will show here.</p></div>') +
-      missingBlock() +
+      owedBlock() + missingBlock() +
       '<div><div class="cap up" style="margin-bottom:6px">Other expenses</div><div class="card list">' + (S.sel.extras || []).map(extraRow).join('') +
       (S.draftOpen ? draftForm() : '<div class="payrow single"><button class="btn btn-ghost" type="button" data-act="openx" style="justify-content:flex-start;padding:0;height:36px">' + ICON('plus') + 'Add other expense</button></div>') + '</div></div>' +
       history() + '</div>' +

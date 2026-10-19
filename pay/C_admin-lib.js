@@ -36,6 +36,8 @@
       case 'amount_mismatch': return 'The amount you typed (' + P.peso(res.typed) + ') is not the request (' + P.peso(res.total) + '). If the screenshot really shows ' + P.peso(res.typed) + ', tick the box and send again.';
       case 'already_paid': return 'One of the cleans was already paid another way, so nothing was marked paid. Ask Finance to cancel this request.';
       case 'session_taken': case 'claim_taken': return 'One of these was already requested or paid, so nothing was made. The list is refreshed.';
+      case 'advance_not_owed': return 'The ' + (res.date ? C_dm(res.date) + ' ' : '') + 'turnover already has a report, or was not a check-out, so it cannot be paid ahead. The list is refreshed.';
+      case 'advance_taken': return 'The ' + (res.date ? C_dm(res.date) + ' ' : '') + 'turnover was already paid ahead' + (res.ref ? ' (request ' + res.ref + ')' : '') + ', so nothing was made. The list is refreshed.';
       case 'too_many_lines': return 'A request holds up to ' + P.MAX_LINES + ' lines. Untick some and pay the rest next.';
       case 'self': return 'You cannot pay your own request. Ask another admin.';
       case 'payee_not_allowed': return 'This person is not set up to be paid for cleans.';
@@ -68,6 +70,7 @@
   function C_dm(iso) { var i = String(iso).slice(0, 10), CS = typeof window !== 'undefined' ? window.CS : null; if (CS && CS.dayLabel) return CS.dayLabel(i); var a = i.split('-'); return +a[2] + ' ' + C_MON[+a[1] - 1]; }
   function C_ds(iso) { var i = String(iso).slice(0, 10), CS = typeof window !== 'undefined' ? window.CS : null; if (CS && CS.dayShort) return CS.dayShort(i); var a = i.split('-'); return C_DAY[new Date(Date.UTC(+a[0], +a[1] - 1, +a[2])).getUTCDay()] + ' ' + C_dm(i); }
   function C_lineText(l) {
+    if (l.kind === 'advance') return C_dm(l.date || l.checkout_date) + ' turnover' + (l.guest ? ' - ' + l.guest : '') + ' (paid ahead, report owed)';
     if (l.kind === 'clean') return C_ds(l.date) + ' · ' + P.typeLabel(l.type) + ' · ' + P.peso(l.amount);
     return String(l.description || 'Expense') + ' · ' + P.peso(l.amount);
   }
