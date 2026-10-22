@@ -632,7 +632,8 @@
   // Rotate: +90 each tap. Owner/admin also save it (set_guest_photo_rotation_v1) so it sticks for everyone; other roles turn it for this session only.
   function H_idRotate() {
     var ro = $('H_idfull'), rs = ro && ro.getAttribute('data-src'), ri = ro && ro.querySelector('img'); if (!rs || !ri) return;
-    var d = state.rot[rs] = (H_idRot(rs) + 90) % 360; ri.className = 'r' + d; Array.prototype.forEach.call(document.querySelectorAll('[data-facepath] img'), function (fi) { if (fi.src === rs) A_faceTurn(fi, d); }); // the Today face follows var path0 = H_pathOf(rs); if (path0 && document.querySelectorAll) Array.prototype.forEach.call(document.querySelectorAll('[data-idpath]'), function (bx) { if (bx.getAttribute('data-idpath') === path0) H_turnBox(bx, d); }); // the card's small picture follows
+    var d = state.rot[rs] = (H_idRot(rs) + 90) % 360; ri.className = 'r' + d; Array.prototype.forEach.call(document.querySelectorAll('[data-facepath] img'), function (fi) { if (fi.src === rs) A_faceTurn(fi, d); }); // the Today face follows
+    var path0 = H_pathOf(rs); if (path0 && document.querySelectorAll) Array.prototype.forEach.call(document.querySelectorAll('[data-idpath]'), function (bx) { if (bx.getAttribute('data-idpath') === path0) H_turnBox(bx, d); }); // the card's small picture follows
     var path = H_pathOf(rs); if (!path || !CS.canSeeGuestContact(role()) || !sb) return;
     // Debounced: three quick taps send one write of the last value, so the server cannot commit them out of order.
     var st = ro.querySelector('.H_idst'), gen = state.photoGen, seq = state.rotSeq = (state.rotSeq || 0) + 1;

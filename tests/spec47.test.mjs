@@ -140,3 +140,11 @@ test('release: 3.4.12, cache v37, tier and key-note tokens in all three theme bl
   assert.match(css, /grid-template-rows: 0fr; opacity: 0; transition: grid-template-rows 240ms var\(--v5-ease-out\)/);
   assert.doesNotMatch(css, /\n:focus-visible \{[^}]*border-radius/);
 });
+
+test('H_idRotate still turns the ID card thumbnail (code not swallowed by a comment)', () => {
+  const src = read('app.js');
+  const body = src.slice(src.indexOf('function H_idRotate'), src.indexOf('\nfunction ', src.indexOf('function H_idRotate') + 10));
+  const code = body.split('\n').map((l) => l.replace(/\/\/.*$/, '')).join('\n');
+  assert.match(code, /H_turnBox\(bx, d\)/);
+  assert.match(code, /A_faceTurn\(fi, d\)/);
+});
