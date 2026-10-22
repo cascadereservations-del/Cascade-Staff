@@ -84,9 +84,9 @@ test('the install page, the manifest and the service worker agree', () => {
   assert.deepEqual(m.related_applications, [{ platform: 'webapp', url: 'https://cascadereservations-del.github.io/Cascade-Staff/manifest.webmanifest' }]);
   assert.equal(m.scope, '/Cascade-Staff/');
   const sw = read('sw.js');
-  assert.match(sw, /CACHE_NAME = 'cs-shell-v34'/);
+  assert.match(sw, /CACHE_NAME = 'cs-shell-v35'/);
   for (const f of ['./install/', './install/index.html', './install/install.js', './demo.js']) assert.ok(sw.includes("'" + f + "'"), f + ' is precached');
-  assert.match(read('app.js'), /version: '3.4.9'/);
+  assert.match(read('app.js'), /version: '3.4.10'/);
 });
 
 test('the in-app install card links to the install page when there is no prompt and no iPhone', () => {
@@ -109,7 +109,7 @@ test('the install page runs in a stub browser for each state without throwing', 
 });
 
 test('3.4.3: common links live in lib.js and the Cassy pick screen copies them; pageLink keeps ?team= and drops the fragment', () => {
-  assert.deepEqual(CS.COMMON_LINKS.map((l) => l.url), ['https://tinyurl.com/WelcomeToCascade', 'https://tinyurl.com/Stay-at-Cascade']);
+  assert.deepEqual(CS.COMMON_LINKS.map((l) => l.url), ['https://tinyurl.com/WelcomeToCascade', 'https://tinyurl.com/Stay-at-Cascade', 'https://www.google.com/maps/dir/?api=1&destination=6.1545469,125.1852321&travelmode=driving', 'https://www.facebook.com/profile.php?id=61578158229299']);
   assert.match(read('app.js'), /aria-label="Common links"[^]*CS\.COMMON_LINKS[^]*data-act="copy" data-copy=/);
   assert.equal(CS.pageLink({ href: 'https://x.test/Cascade-Staff/?team=staff#home' }), 'https://x.test/Cascade-Staff/?team=staff');
   assert.equal(CS.openInBrowserLink('Mozilla/5.0 (iPhone) FBAN/Messenger', CS.pageLink({ href: 'https://x.test/a/?team=staff#h' })).href, 'x-safari-https://x.test/a/?team=staff');
@@ -126,4 +126,16 @@ test('3.4.3: every page names the logo favicon and the files exist', () => {
   for (const p of ['index.html', 'install/index.html', 'guest/index.html', 'pay/index.html', 'quick/index.html', 'checklist/index.html', 'manual/index.html', 'guide/index.html', 'admin/index.html']) assert.match(read(p), /favicon-32\.png/, p);
   for (const f of ['icons/favicon-32.png', 'checklist/icons/favicon-32.png', 'icons/icon-512-maskable.png']) assert.ok(fs.existsSync(new URL('../' + f, import.meta.url)), f);
   assert.match(read('manifest.webmanifest'), /"purpose": "maskable"/);
+});
+
+test('3.4.10: reply link switches add the chosen links to the draft, in list order, and copy uses the same text', () => {
+  assert.equal(CS.withLinks('Hi po.', []), 'Hi po.');
+  assert.equal(CS.withLinks('Hi po.\n\n', ['facebook', 'nav', 'bogus']),
+    'Hi po.\n\nDirections to Cascade (Google Maps): https://www.google.com/maps/dir/?api=1&destination=6.1545469,125.1852321&travelmode=driving\nOur Facebook page: https://www.facebook.com/profile.php?id=61578158229299');
+  assert.deepEqual(CS.replyLinkIds(['facebook', 'guide', 'guide', 'x']), ['guide', 'facebook']);
+  assert.deepEqual(CS.replyLinkIds('guide'), []);
+  const app = read('app.js');
+  assert.match(app, /aria-label="Add links to the reply"[^]*data-act="reply-link"[^]*aria-pressed=/);
+  assert.match(app, /copyText\(CS\.withLinks\(t, rpLinks\(\)\)\)/);
+  assert.match(app, /esc\(CS\.withLinks\(o\.text, rpLinks\(\)\)\)/);
 });

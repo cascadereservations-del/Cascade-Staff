@@ -20,7 +20,7 @@
     url: 'https://qkgfhsdppslwunarczeq.supabase.co',
     key: 'sb_publishable_JFuRYZ9csmQULcMRmHXDSg_Abo9UeCj',
     propertyId: '6ae230f4-c189-4547-84b1-cb6e0b2cc9bd',
-    version: '3.4.9'
+    version: '3.4.10'
   };
   var LINKS = {
     checklist: 'https://cascadereservations-del.github.io/CH-Cleaners-Checklist/',
@@ -1384,15 +1384,32 @@
     return '<div class="field"><span class="lbl" id="rp-pl">Where did the guest write?</span><div class="seg" role="group" aria-labelledby="rp-pl">' +
       ['messenger', 'airbnb'].map(function (p) { return '<button class="btn btn-secondary" type="button" data-act="reply-platform" data-platform="' + p + '" aria-pressed="' + (R.platform === p) + '">' + RP_NAME[p] + '</button>'; }).join('') + '</div></div>';
   }
+  // 3.4.10: links chosen under the drafts are added to the end of every draft as it is shown and copied. The choice is a per-phone
+  // convenience kept in localStorage (cs_reply_links); a blocked or empty store just means no links are on.
+  function rpLinks() {
+    if (!state.replyLinks) { try { var ls = store('localStorage'); state.replyLinks = CS.replyLinkIds(JSON.parse(ls && ls.getItem('cs_reply_links') || '[]')); } catch (e) { state.replyLinks = []; } }
+    return state.replyLinks;
+  }
+  function rpLinkToggle(id) {
+    var on = rpLinks().slice(), k = on.indexOf(id); if (k >= 0) on.splice(k, 1); else on.push(id);
+    state.replyLinks = CS.replyLinkIds(on);
+    try { var ls = store('localStorage'); if (ls) ls.setItem('cs_reply_links', JSON.stringify(state.replyLinks)); } catch (e) {}
+  }
+  function rpLinkSwitches() {
+    var on = rpLinks();
+    return '<section class="card glass" aria-label="Add links to the reply"><h2 class="hd">Add links to the reply</h2><div class="stack" style="margin-top:8px">' + CS.COMMON_LINKS.map(function (l) {
+      return '<button class="btn btn-secondary btn-sm" type="button" data-act="reply-link" data-id="' + esc(l.id) + '" aria-pressed="' + (on.indexOf(l.id) >= 0) + '">' + (on.indexOf(l.id) >= 0 ? ICON('check', 's16') : '') + esc(l.label) + '</button>';
+    }).join('') + '</div><p class="help" style="margin:8px 0 0">Links you switch on are added to the end of each draft and to what you copy. This phone remembers your choice.</p></section>';
+  }
   // focus: 'heading' (the new screen's heading), 'error' (the error message), or nothing (the user is mid-typing).
   function renderReply(focus) {
     var el = $('rp-body'), R = state.reply || (state.reply = newReply()), head = appbar({ title: 'Cassy reply', back: '#home' }), body;
     if (R.step === 'done' && R.result && !R.busy) {
       var X = R.result, who = (X.guestName ? X.guestName + ' · ' : '') + RP_NAME[X.platform];
       body = rpErr(R) + '<div class="card"><h2 class="cap up" id="rp-h" tabindex="-1">Replying to · ' + esc(who) + '</h2><p class="rp-quote">' + esc(CS.clampText(X.guestText, 280)) + '</p></div>' +
-        (X.header ? '<p class="sub" style="margin:0">' + esc(X.header) + '</p>' : '') +
+        (X.header ? '<p class="sub" style="margin:0">' + esc(X.header) + '</p>' : '') + rpLinkSwitches() +
         X.options.map(function (o, i) {
-          return '<div class="card H_draft"><span class="cap up">' + esc(o.label || (X.options.length > 1 ? 'Reply ' + (i + 1) : 'Reply')) + '</span><p class="rp-reply">' + esc(o.text) + '</p>' +
+          return '<div class="card H_draft"><span class="cap up">' + esc(o.label || (X.options.length > 1 ? 'Reply ' + (i + 1) : 'Reply')) + '</span><p class="rp-reply">' + esc(CS.withLinks(o.text, rpLinks())) + '</p>' +
             '<button class="btn btn-primary btn-block" type="button" data-act="reply-copy" data-i="' + i + '" style="margin-top:12px">' + (R.copied === i ? ICON('check', 's16') + 'Copied' : 'Copy') + '</button></div>';
         }).join('') +
         (X.platform === 'messenger' ? ext(CS.MESSENGER_INBOX, ICON('chat', 's16') + 'Open Messenger inbox', 'btn btn-secondary btn-block', R.copied >= 0 ? ' id="rp-inbox"' : ' id="rp-inbox" hidden') : '') +
@@ -1404,7 +1421,7 @@
         '<p class="help" style="margin:0">Cassy writes the drafts in her own voice. You copy one and send it yourself.</p>' +
         '<section class="card glass H_how" aria-label="How it goes"><h2 class="hd">How it goes</h2><ol class="H_steps"><li>Paste, or screenshot, the guest’s message.</li><li>Pick a draft.</li><li>Copy it, then paste it in Messenger.</li></ol></section>' +
         '<section class="card glass" aria-label="Common links"><h2 class="hd">Common links</h2><div class="stack" style="margin-top:8px">' + CS.COMMON_LINKS.map(function (l) {
-          return '<div class="H_recent"><p class="sub" style="margin:0"><b>' + esc(l.label) + '</b><br><span class="num">' + esc(l.url.replace(/^https:\/\//, '')) + '</span></p><button class="btn btn-ghost btn-sm" type="button" data-act="copy" data-copy="' + esc(l.url) + '" aria-label="' + esc('Copy ' + l.label + ' link') + '">Copy</button></div>';
+          return '<div class="H_recent"><p class="sub" style="margin:0"><b>' + esc(l.label) + '</b><br><span class="num">' + esc(CS.clampText(l.url.replace(/^https:\/\/(www\.)?/, ''), 40)) + '</span></p><button class="btn btn-ghost btn-sm" type="button" data-act="copy" data-copy="' + esc(l.url) + '" aria-label="' + esc('Copy ' + l.label + ' link') + '">Copy</button></div>';
         }).join('') + '</div><p class="help" style="margin:8px 0 0">Copy a link, then paste it into your reply.</p></section>' +
         ((state.replyRecent || []).length ? '<section class="card glass" aria-label="Recent drafts"><h2 class="hd">Recent</h2><div class="stack" style="margin-top:8px">' + state.replyRecent.map(function (r, i) {
           return '<div class="H_recent"><p class="sub" style="margin:0"><b>' + esc(r.who) + '</b> · ' + esc(CS.clampText(r.text, 90)) + '</p><button class="btn btn-ghost btn-sm" type="button" data-act="reply-copy-recent" data-i="' + i + '">Copy</button></div>';
@@ -1499,7 +1516,7 @@
   function copyBtn(i) { return document.querySelector('#v-reply [data-act="reply-copy"][data-i="' + i + '"]'); }
   function copyReply(i) {
     var R = state.reply, t = R && R.result && R.result.replies[i]; if (t == null) return;
-    copyText(t).then(function () {
+    copyText(CS.withLinks(t, rpLinks())).then(function () {
       var b = copyBtn(i); R.copied = i; R.err = ''; if (b) b.innerHTML = ICON('check', 's16') + 'Copied'; rpLive('Copied'); var ib = $('rp-inbox'); if (ib) ib.hidden = false;
       clearTimeout(copyTimer); copyTimer = setTimeout(function () { if (R.copied === i) { R.copied = -1; var b2 = copyBtn(i); if (b2) b2.textContent = 'Copy'; rpLive(''); } }, 2000);
     }).catch(function () { R.err = 'Copy did not work on this phone. Press and hold the text to copy it.'; R.signout = false; if (current === 'reply') renderReply('error'); });
@@ -2135,6 +2152,7 @@
     else if (a === 'reply-platform') { if (state.reply) { state.reply.platform = t.getAttribute('data-platform') === 'airbnb' ? 'airbnb' : 'messenger'; Array.prototype.forEach.call(document.querySelectorAll('#v-reply [data-act="reply-platform"]'), function (b) { b.setAttribute('aria-pressed', String(b === t)); }); } }
     else if (a === 'reply-send') sendReply();
     else if (a === 'reply-copy') copyReply(+t.getAttribute('data-i'));
+    else if (a === 'reply-link') { var lid = t.getAttribute('data-id'); rpLinkToggle(lid); if (state.reply) state.reply.copied = -1; renderReply(); var lb = document.querySelector('#v-reply [data-act="reply-link"][data-id="' + lid + '"]'); if (lb) lb.focus(); rpLive(rpLinks().indexOf(lid) >= 0 ? 'Link added to the drafts' : 'Link removed from the drafts'); }
     else if (a === 'reply-copy-recent') { var rr = (state.replyRecent || [])[+t.getAttribute('data-i')]; if (rr) copyText(rr.text).then(function () { toast('Copied'); }, function () { toast('Copy did not work on this phone.'); }); }
     else if (a === 'clean-done-hide') { state.cleanDone = null; if (current === 'home') renderHome(); }
     else if (a === 'tour-open') { openSheet('tour', 'tour-open'); state.sheet.step = 0; drawSheet(); }

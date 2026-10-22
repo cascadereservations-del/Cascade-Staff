@@ -773,11 +773,22 @@
     return null;
   }
   var INSTALL_URL = 'https://cascadereservations-del.github.io/Cascade-Staff/install/';
-  // The two links staff paste into guest replies most often (3.4.3). Add a row here and the Cassy reply screen lists it.
+  // The links staff paste into guest replies most often (3.4.3; directions and Facebook 3.4.10). Add a row here and the Cassy reply
+  // screen lists it with a Copy button and an "Add to the reply" switch. guest = the words the guest sees in front of the link.
   var COMMON_LINKS = [
-    { label: 'Welcome guide', url: 'https://tinyurl.com/WelcomeToCascade' },
-    { label: 'Direct booking site', url: 'https://tinyurl.com/Stay-at-Cascade' }
+    { id: 'guide', label: 'Welcome guide', guest: 'Our welcome guide', url: 'https://tinyurl.com/WelcomeToCascade' },
+    { id: 'site', label: 'Direct booking site', guest: 'Book direct with us', url: 'https://tinyurl.com/Stay-at-Cascade' },
+    { id: 'nav', label: 'Turn-by-turn directions', guest: 'Directions to Cascade (Google Maps)', url: 'https://www.google.com/maps/dir/?api=1&destination=6.1545469,125.1852321&travelmode=driving' },
+    { id: 'facebook', label: 'Facebook page', guest: 'Our Facebook page', url: 'https://www.facebook.com/profile.php?id=61578158229299' }
   ];
+  // Only known link ids survive (a stored list may be stale), in COMMON_LINKS order, no repeats.
+  function replyLinkIds(raw) { var want = Array.isArray(raw) ? raw : []; return COMMON_LINKS.filter(function (l) { return want.indexOf(l.id) >= 0; }).map(function (l) { return l.id; }); }
+  // The draft as it is copied: the text, a blank line, then one "Label: link" line per chosen link. No links chosen = the text unchanged.
+  function withLinks(text, ids) {
+    var keep = replyLinkIds(ids), t = String(text == null ? '' : text);
+    if (!keep.length) return t;
+    return t.replace(/\s+$/, '') + '\n\n' + COMMON_LINKS.filter(function (l) { return keep.indexOf(l.id) >= 0; }).map(function (l) { return l.guest + ': ' + l.url; }).join('\n');
+  }
   // The page the person is on, as the Open-in-Safari / Copy link buttons should carry it: same address, ?team= kept, no fragment.
   function pageLink(loc) { return String(loc && loc.href || '').replace(/#.*$/, ''); }
 
@@ -971,7 +982,7 @@
       ['Plain bars', 'In More, switch glass off for a calmer, easier-to-read screen. It turns on by itself on slower phones.']];
     if (flags.notices) items.push(['Notices', 'Rain watch, brownouts and water interruptions show on Today and on the calendar. Tap the weather for the forecast.']);
     items.push(['Cassy reply', 'Draft a warm reply to a guest message. You get two or three drafts to pick from.']);
-    items.push(['Common links', 'The Cassy reply screen lists the Welcome guide and the Direct booking site with a Copy button each.']);
+    items.push(['Common links', 'The Cassy reply screen lists the Welcome guide, the Direct booking site, turn-by-turn directions and the Facebook page, each with a Copy button. Switch any of them on under the drafts to add them to the reply you copy.']);
     items.push(['Install on iPhone', 'Opened inside Messenger or Facebook, the app now shows Open in Safari. The Home Screen steps match the latest iPhone Safari.']);
     if (admin) items.push(['Manage, all in one place', 'Scan a receipt to fill in an expense, approve or void rows waiting for review, and see bookings and work orders without opening the dashboard.']);
     if (admin) items.push(['Clearer KPIs', 'Four headline numbers with a 12-month trend, last year beside each month, and the nights already booked ahead.']);
@@ -1374,7 +1385,7 @@
   function E_tabNeighbour(cur, dir) { var i = A_CAL_TABS.indexOf(cur) + dir; return i < 0 || i >= A_CAL_TABS.length ? null : A_CAL_TABS[i]; }
 
   return {
-    isInAppBrowser: isInAppBrowser, installState: installState, openInBrowserLink: openInBrowserLink, INSTALL_URL: INSTALL_URL, COMMON_LINKS: COMMON_LINKS, pageLink: pageLink,
+    isInAppBrowser: isInAppBrowser, installState: installState, openInBrowserLink: openInBrowserLink, INSTALL_URL: INSTALL_URL, COMMON_LINKS: COMMON_LINKS, replyLinkIds: replyLinkIds, withLinks: withLinks, pageLink: pageLink,
     taskKindLabel: taskKindLabel, manilaDayOf: manilaDayOf, taskDue: taskDue, taskDueLabel: taskDueLabel, dueFromDate: dueFromDate, taskGroups: taskGroups,
     taskDueCount: taskDueCount, reminderProblem: reminderProblem, canEditRates: canEditRates, rateNum: rateNum, rateLine: rateLine,
     earliestRateStart: earliestRateStart, rateProblem: rateProblem, rateArgs: rateArgs,
