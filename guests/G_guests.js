@@ -228,7 +228,7 @@
   // s95 tiers: chip from guests.tier ('returning'|'regular'|'vip'). The hand-set VIP flag is a separate concept; when it is on and the tier is vip, one badge only.
   function G_tierChip(tier, manualVip) {
     var l = tier === 'returning' ? 'Returning' : tier === 'regular' ? 'Regular' : tier === 'vip' ? 'VIP' : '';
-    return !l || (tier === 'vip' && manualVip) ? '' : '<span class="pill p-brand">' + G_glyph(tier === 'vip' ? 'star' : 'ok') + l + '</span>';
+    return !l || (tier === 'vip' && manualVip) ? '' : '<span class="pill p-brand">' + (tier === 'vip' ? G_glyph('star') : '') + l + '</span>';
   }
   function G_glyph(k) { return '<span class="G_gl" aria-hidden="true">' + ({ i: 'ℹ', ok: '✓', no: '!', x: '×', star: '★', cake: '✦' }[k] || '') + '</span>'; }
   function G_err(msg, id) { return msg ? '<div class="errbox G_note" role="alert" id="' + (id || 'G_err') + '" tabindex="-1">' + G_glyph('no') + '<span>' + G_esc(msg) + '</span></div>' : ''; }

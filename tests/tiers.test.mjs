@@ -25,10 +25,25 @@ test('tierLine: trimmed text only with a known tier; null and blank draw nothing
   assert.equal(CS.tierLine(null), null);
 });
 
-test('app.js: Today card and guest block draw the chip beside the name and the line under it, escaped', () => {
+test('app.js uses CS.tierParts in both cards, in the name row and under it', () => {
   const app = read('app.js');
-  assert.match(app, /function tierChip\(g\)[^\n]*CS\.tierLabel\(g && g\.tier\)/);
-  assert.match(app, /function tierLineP\(g\)[^\n]*esc\(l\)/);
-  assert.match(app, /<h2 class="A_name">' \+ esc\(g\.guest_name \|\| 'Guest'\) \+ '<\/h2>' \+ tierChip\(g\) \+ '<\/div>' \+ tierLineP\(g\)/);
-  assert.match(app, /<h3 class="ttl">' \+ esc\(g\.guest_name \|\| 'Guest'\) \+ '<\/h3>' \+ tierChip\(g\) \+ '<\/div>' \+ tierLineP\(g\)/);
+  assert.match(app, /CS\.tierParts\(g, compact, pill\)/);
+  assert.match(app, /<h2 class="A_name">' \+ esc\(g\.guest_name \|\| 'Guest'\) \+ '<\/h2>' \+ tp\.chip \+ '<\/div>' \+ tp\.line/);
+  assert.match(app, /<h3 class="ttl">' \+ esc\(g\.guest_name \|\| 'Guest'\) \+ '<\/h3>' \+ tp\.chip \+ '<\/div>' \+ tp\.line/);
+});
+
+const pill = (tone, icon, text) => '<span class="pill p-' + tone + '">' + icon + CS.esc(text) + '</span>';
+test('tierParts: tier + line shows once (no older Returning pill); no tier keeps the older pill; hostile line is escaped', () => {
+  const a = CS.tierParts({ tier: 'regular', tier_line: 'Late checkout when free', repeat: true, stay_count: 3 }, true, pill);
+  assert.match(a.chip, /Regular/); assert.match(a.line, /Late checkout when free/); assert.equal(a.ret, '');
+  const b = CS.tierParts({ tier: null, repeat: true, stay_count: 3 }, true, pill);
+  assert.equal(b.chip, ''); assert.equal(b.line, ''); assert.match(b.ret, /Returning · 3rd stay/);
+  const c = CS.tierParts({ tier: 'vip', tier_line: '<img src=x onerror=1>' }, false, pill);
+  assert.ok(!c.line.includes('<img')); assert.match(c.line, /&lt;img src=x onerror=1&gt;/);
+  const d = CS.tierParts({ tier: 'vip', tier_line: null, repeat: true, stay_count: 2 }, false, pill);
+  assert.match(d.chip, /star/); assert.match(d.ret, /Returning guest · 2nd stay/);
+});
+
+test('guests list chip: only vip gets a glyph (no check mark shared with ID on file)', () => {
+  assert.match(read('guests/G_guests.js'), /\(tier === 'vip' \? G_glyph\('star'\) : ''\) \+ l/);
 });

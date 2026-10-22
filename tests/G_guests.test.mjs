@@ -573,7 +573,7 @@ test('G s95: list rows and guest card show the tier chip, incl. regular; manual 
   const { el } = await mount(cl, '');
   const rows = el.html.split('<a class="rowi G_row"').slice(1);
   const by = (n) => rows.find((r) => r.includes(n));
-  assert.match(by('Reg Guest'), />[^<]*<\/span>Regular<\/span>/);
+  assert.match(by("Reg Guest"), /<span class="pill p-brand">Regular</span>/); // no glyph on returning/regular
   assert.match(by('Ret Guest'), /Returning<\/span>/);
   assert.equal((by('Vip Guest').match(/VIP<\/span>/g) || []).length, 1); // manual flag on and tier vip: one badge
   assert.equal((by('Auto Vip').match(/VIP<\/span>/g) || []).length, 1); // tier vip alone: still one
