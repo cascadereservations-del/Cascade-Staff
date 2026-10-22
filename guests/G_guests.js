@@ -225,6 +225,11 @@
     var body = S.gid ? G_detailHtml() : G_listHtml();
     return '<div class="G_root">' + body + (S.full ? G_fullHtml() : '') + '</div>';
   }
+  // s95 tiers: chip from guests.tier ('returning'|'regular'|'vip'). The hand-set VIP flag is a separate concept; when it is on and the tier is vip, one badge only.
+  function G_tierChip(tier, manualVip) {
+    var l = tier === 'returning' ? 'Returning' : tier === 'regular' ? 'Regular' : tier === 'vip' ? 'VIP' : '';
+    return !l || (tier === 'vip' && manualVip) ? '' : '<span class="pill p-brand">' + G_glyph(tier === 'vip' ? 'star' : 'ok') + l + '</span>';
+  }
   function G_glyph(k) { return '<span class="G_gl" aria-hidden="true">' + ({ i: 'ℹ', ok: '✓', no: '!', x: '×', star: '★', cake: '✦' }[k] || '') + '</span>'; }
   function G_err(msg, id) { return msg ? '<div class="errbox G_note" role="alert" id="' + (id || 'G_err') + '" tabindex="-1">' + G_glyph('no') + '<span>' + G_esc(msg) + '</span></div>' : ''; }
   function G_chev() { return root.ICON ? root.ICON('chev') : '›'; }
@@ -248,6 +253,7 @@
       flags.push(d.id_on_file ? '<span class="pill p-ok">' + G_glyph('ok') + 'ID on file</span>' : '');
       if (!g.phone && !g.email && !d.contact_number) flags.push('<span class="pill p-warn">' + G_glyph('no') + 'No contact</span>');
       if (d.vip) flags.push('<span class="pill p-brand">' + G_glyph('star') + 'VIP</span>');
+      flags.push(G_tierChip(g.tier, d.vip));
       if (bd !== null && bd <= G_BDAY_DAYS) flags.push('<span class="pill p-info">' + G_glyph('cake') + (bd === 0 ? 'Birthday today' : 'Birthday in ' + bd + (bd === 1 ? ' day' : ' days')) + '</span>');
       return '<a class="rowi G_row" href="#guests/' + G_esc(g.id) + '"><span class="lead" aria-hidden="true">' + G_esc(G_initial(g.name)) + '</span><span class="mid"><span class="t">' + G_esc(g.name || 'Guest') + '</span><span class="s">' +
         G_esc(G_stayLine(g, L.stays.map[g.id], today)) + '</span>' + (flags.filter(Boolean).length ? '<span class="G_flags">' + flags.join('') + '</span>' : '') + '</span><span class="chev" aria-hidden="true">' + G_chev() + '</span></a>';
@@ -266,7 +272,7 @@
     if (S.add) return G_addHtml();
     var g = D.guest, p = D.details || {}, today = G_today(), bd = G_daysToBirthday(p.birthday, today);
     var phone = p.contact_number || g.phone || '';
-    var head = '<div class="card glass G_head"><div class="G_namerow"><h2 class="G_name" id="G_h" tabindex="-1">' + G_esc(g.name || 'Guest') + '</h2>' + (p.vip ? '<span class="pill p-brand">' + G_glyph('star') + 'VIP</span>' : '') + '</div>' +
+    var head = '<div class="card glass G_head"><div class="G_namerow"><h2 class="G_name" id="G_h" tabindex="-1">' + G_esc(g.name || 'Guest') + '</h2>' + (p.vip ? '<span class="pill p-brand">' + G_glyph('star') + 'VIP</span>' : '') + G_tierChip(g.tier, p.vip) + '</div>' +
       '<p class="G_line">' + G_esc(g.last_stay_date ? 'Last stay ' + G_date(g.last_stay_date) + (g.total_stays ? ' · ' + g.total_stays + (g.total_stays === 1 ? ' stay' : ' stays') : '') : 'No stay yet') + '</p>' +
       (bd !== null && bd <= G_BDAY_DAYS ? '<p class="G_line">' + G_glyph('cake') + G_esc(bd === 0 ? 'Birthday today' : 'Birthday in ' + bd + (bd === 1 ? ' day' : ' days')) + '</p>' : '') + '</div>';
     var notice = S.msg ? '<div class="okbox G_note" role="status" id="G_msg" tabindex="-1">' + G_glyph('ok') + '<span>' + S.msg.map(G_esc).join('<br>') + '</span></div>' : '';

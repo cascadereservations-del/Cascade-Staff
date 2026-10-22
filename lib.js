@@ -504,6 +504,10 @@
     var tail = g.stay_count ? ' · ' + ordinal(g.stay_count) + ' stay' : '';
     return (compact ? 'Returning' : 'Returning guest') + tail;
   }
+  // s95 tiers: chip text from staff_home_v1 current_guest/next_guest.tier or guests.tier; null (nothing drawn) for null or any value we do not know.
+  function tierLabel(t) { return t === 'returning' ? 'Returning' : t === 'regular' ? 'Regular' : t === 'vip' ? 'VIP' : null; }
+  // The benefits line the server wrote (guest_tier_line_v1); only shown with a known tier.
+  function tierLine(g) { return g && tierLabel(g.tier) && typeof g.tier_line === 'string' && g.tier_line.trim() ? g.tier_line.trim() : null; }
   function earlierLine(g) {
     var e = (g && g.earlier_stays) || [];
     if (!e.length) return null;
@@ -1401,7 +1405,7 @@
     fmtTime: fmtTime, fmt24: fmt24, ordinal: ordinal, plural: plural, agoLabel: agoLabel, clockLabel: clockLabel,
     monthGrid: monthGrid, dayState: dayState, dayStatus: dayStatus, mergeStays: mergeStays, sameGuest: sameGuest, dayMoves: dayMoves, blockWhy: blockWhy, flagName: flagName, FLAG_KINDS: FLAG_KINDS, blockedLines: blockedLines, blockedLineText: blockedLineText,
     canFlagDays: canFlagDays, guestContact: guestContact, canSeeGuestContact: canSeeGuestContact, MESSENGER_INBOX: MESSENGER_INBOX, rpcMissing: rpcMissing, tgLink: tgLink, warningInfo: warningInfo, findingKey: findingKey, initialOf: initialOf, sourceLabel: sourceLabel, stayDates: stayDates, monthInRange: monthInRange,
-    parseNotes: parseNotes, returningLabel: returningLabel, earlierLine: earlierLine, companionsLine: companionsLine, todayCardState: todayCardState,
+    parseNotes: parseNotes, returningLabel: returningLabel, tierLabel: tierLabel, tierLine: tierLine, earlierLine: earlierLine, companionsLine: companionsLine, todayCardState: todayCardState,
     orderWarnings: orderWarnings, brownoutText: brownoutText, lowStockText: lowStockText, warningSummary: warningSummary,
     weatherLine: weatherLine, rainLine: rainLine, weatherStale: weatherStale, WEATHER_STALE_MIN: WEATHER_STALE_MIN, esc: esc,
     A_HOUSE_FALLBACK: A_HOUSE_FALLBACK, A_houseTimes: A_houseTimes, A_turnoverClock: A_turnoverClock, A_turnoverLine: A_turnoverLine, A_hm: A_hm, A_NOTICE_TYPES: A_NOTICE_TYPES, A_noticesView: A_noticesView, A_noticeFilters: A_noticeFilters, A_dayMarks: A_dayMarks, A_noticeDay: A_noticeDay, A_guestMessage: A_guestMessage, A_CAL_TABS: A_CAL_TABS, A_calTab: A_calTab, A_stayShade: A_stayShade, A_hubGroups: A_hubGroups, A_hubNative: A_hubNative, A_hubRoutes: A_hubRoutes, A_hubRouteOk: A_hubRouteOk, A_hubDoorUrl: A_hubDoorUrl, A_whatsNew: A_whatsNew, A_shortTime: A_shortTime, A_PINNED: A_PINNED, A_noticeAddError: A_noticeAddError, A_NOTICE_HINT: A_NOTICE_HINT, A_flagDup: A_flagDup, A_facebookUrl: A_facebookUrl, A_fbPluginUrl: A_fbPluginUrl, A_noticeAddProblem: A_noticeAddProblem, A_noticeAddArgs: A_noticeAddArgs, A_plainRefusal: A_plainRefusal, A_hour12: A_hour12, A_timeRange: A_timeRange,

@@ -564,3 +564,23 @@ test('G s90: photos are fetched no-store into a blob; expiry, errors and sign-ou
   w.M.mount(e3, { client: slow, demo: false, role: 'owner', sub: GID, propertyId: PROP, navigate: () => {}, toast: () => {}, haptic: () => {} }); await tick();
   assert.doesNotMatch(e3.html, /blob:t\//);
 });
+
+// ------------------------------------------------------------------------------------------------ s95 tier chip
+test('G s95: list rows and guest card show the tier chip, incl. regular; manual VIP + tier vip is one badge', async () => {
+  const row = (id, name, tier, vip) => ({ id, name, phone: null, email: null, tier, last_stay_date: '2026-10-12', guest_profile_details: [{ id_on_file: false, birthday: null, contact_number: null, vip }] });
+  const cl = client({ tables: { guests: { data: [row('g1', 'Reg Guest', 'regular', false), row('g2', 'Ret Guest', 'returning', false), row('g3', 'Vip Guest', 'vip', true), row('g4', 'Auto Vip', 'vip', false), row('g5', 'No Tier', null, false), row('g6', 'Odd <b>', 'gold', false)], count: 6, error: null },
+    airbnb_reservations: { data: [], error: null }, booking_inquiries: { data: [], error: null } } });
+  const { el } = await mount(cl, '');
+  const rows = el.html.split('<a class="rowi G_row"').slice(1);
+  const by = (n) => rows.find((r) => r.includes(n));
+  assert.match(by('Reg Guest'), />[^<]*<\/span>Regular<\/span>/);
+  assert.match(by('Ret Guest'), /Returning<\/span>/);
+  assert.equal((by('Vip Guest').match(/VIP<\/span>/g) || []).length, 1); // manual flag on and tier vip: one badge
+  assert.equal((by('Auto Vip').match(/VIP<\/span>/g) || []).length, 1); // tier vip alone: still one
+  assert.doesNotMatch(by('No Tier'), /Regular|Returning|VIP/);
+  assert.doesNotMatch(by('Odd'), /Regular|Returning|VIP/); // unknown tier value draws nothing
+  const d = await mount(detailClient({ tables: { guests: { data: { ...GUEST, tier: 'regular' }, error: null }, guest_profile_details: { data: PROFILE, error: null } } }), GID);
+  assert.match(d.el.html, /G_namerow[\s\S]*Regular<\/span><\/div>/);
+  const v = await mount(detailClient({ tables: { guests: { data: { ...GUEST, tier: 'vip' }, error: null }, guest_profile_details: { data: { ...PROFILE, vip: true }, error: null } } }), GID);
+  assert.equal((v.el.html.split('G_namerow')[1].split('</div>')[0].match(/VIP<\/span>/g) || []).length, 1);
+});

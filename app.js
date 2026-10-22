@@ -20,7 +20,7 @@
     url: 'https://qkgfhsdppslwunarczeq.supabase.co',
     key: 'sb_publishable_JFuRYZ9csmQULcMRmHXDSg_Abo9UeCj',
     propertyId: '6ae230f4-c189-4547-84b1-cb6e0b2cc9bd',
-    version: '3.4.10'
+    version: '3.4.11'
   };
   var LINKS = {
     checklist: 'https://cascadereservations-del.github.io/CH-Cleaners-Checklist/',
@@ -150,13 +150,16 @@
     return H_nm.out;
   }
   function A_houseT() { var v = A_notices(); return v ? v.times : CS.A_houseTimes(null); } // 12:00 noon / 2:00 pm, from notices_v1.house_times, one fallback in lib.js
+  // s95: tier chip beside the guest name and the benefits line under it; both empty when the server sent no tier.
+  function tierChip(g) { var l = CS.tierLabel(g && g.tier); return l ? pill('brand', g.tier === 'vip' ? 'star' : 'repeat', l) : ''; }
+  function tierLineP(g) { var l = CS.tierLine(g); return l ? '<p class="sub" style="margin:2px 0 0">' + esc(l) + '</p>' : ''; }
   // The Today card (glass). Check-out time falls back to the house time, never a hard-coded one.
   function todayCard() {
     var p = state.payload, st = CS.todayCardState(p, p.today);
     if (!st.guest) return '<section class="card glass A_card F_span" aria-label="Today in the house"><span class="cap up">' + esc(st.label) + '</span><p class="sub">The house is free tonight. The next stay will show here.</p></section>';
     var g = st.guest, ret = CS.returningLabel(g, true), co = CS.fmtTime(g.checkout_time) || A_houseT().outLabel;
     return '<section class="card glass A_card F_span" aria-label="Today in the house"><div class="row-between"><span class="cap up">' + esc(st.label) + '</span>' + (st.pill ? pill(st.pill.tone, toneIcon(st.pill.tone), st.pill.text) : '') + '</div>' +
-      '<h2 class="A_name">' + esc(g.guest_name || 'Guest') + '</h2>' + (ret ? '<div>' + pill('brand', 'repeat', ret) + '</div>' : '') +
+      '<div class="row-wrap" style="align-items:center"><h2 class="A_name">' + esc(g.guest_name || 'Guest') + '</h2>' + tierChip(g) + '</div>' + tierLineP(g) + (ret ? '<div>' + pill('brand', 'repeat', ret) + '</div>' : '') +
       '<p class="sub num" style="margin:0">' + esc(CS.dayLabel(g.checkin_date) + ' → ' + CS.dayLabel(g.checkout_date) + ' · ' + CS.plural(g.nights != null ? g.nights : CS.daysBetween(g.checkin_date, g.checkout_date), 'night') + ' · out ' + co) + '</p>' +
       '<a class="A_more" href="#calendar/house">Open guest card' + ICON('chev', 's16') + '</a></section>';
   }
@@ -456,7 +459,7 @@
     var ret = CS.returningLabel(g, false), src = CS.sourceLabel(g.source), earlier = CS.earlierLine(g), withLine = CS.canSeeGuestContact(state.access && state.access.role) ? CS.companionsLine(g) : null; // D-319: owner/admin only, even if the server sent it
     var tint = kind === 'house' ? 'G_stay' : 'G_in'; // s93: arriving = green, in the house = blue (the house guest always checks out after today, so no third tint)
     var info = '<div class="card glass ' + tint + '" id="' + (kind === 'house' ? 'house' : 'next') + '"><div class="row-between"><span class="cap up">' + label + '</span>' + st + '</div>' +
-      '<h3 class="ttl" style="margin-top:8px">' + esc(g.guest_name || 'Guest') + '</h3>' + (withLine ? '<p class="sub" style="margin:2px 0 0">' + esc(withLine) + '</p>' : '') +
+      '<div class="row-wrap" style="align-items:center;margin-top:8px"><h3 class="ttl">' + esc(g.guest_name || 'Guest') + '</h3>' + tierChip(g) + '</div>' + tierLineP(g) + (withLine ? '<p class="sub" style="margin:2px 0 0">' + esc(withLine) + '</p>' : '') +
       '<div class="row-wrap" style="margin-top:6px">' + (ret ? pill('brand', 'repeat', ret) : '') + (src ? '<span class="pill p-neutral">' + esc(src) + '</span>' : '') + '</div>' +
       '<p class="sub num" style="margin:8px 0 0">' + esc(datesLine(g)) + '</p>' + (earlier ? '<p class="help num" style="margin:2px 0 0">' + esc(earlier) + '</p>' : '') + contactBlock(g) +
       H_readyBlock(g.arrival_ready, g, true) + (canAddDetails() && g.uid ? '<a class="btn btn-secondary btn-sm" href="./guest/#' + encodeURIComponent(g.uid) + '" style="margin-top:12px">' + ICON('idcard', 's16') + 'Add guest details</a>' : '') +
