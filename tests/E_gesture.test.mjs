@@ -164,7 +164,7 @@ test('E_ G4: the slide commits at 70% of the travel, or a flick after 40%; the k
   const run = async (pts) => { const v = vib(), s = mk(), app = await boot({ role: 'cleaner', hash: '#home', nav: v, handlers: baseHandlers('cleaner') }); drive(app, s.a, pts, { sel: '[data-slide]' }); return { v, s, app }; };
   const travel = 244; // 300 - 56
   let r = await run([[0, 40, 10], [100, 40 + travel * 0.5, 12], [200, 40 + travel * 0.7 + 1, 12], [900, 40 + travel * 0.7 + 1, 12]]);
-  assert.equal(r.app.location.hash, '#door/checklist'); assert.deepEqual(r.v.calls, [[6], [10]], 'edge at 70%, tap on commit'); assert.equal(r.s.knob.style.transition, 'transform 200ms ease-out, opacity 200ms ease-out'); assert.equal(r.s.knob.style.transform, '');
+  assert.equal(r.app.location.hash, '#door/checklist'); assert.deepEqual(r.v.calls, [[6], [10]], 'edge at 70%, tap on commit'); assert.equal(r.s.knob.style.transition, 'transform 200ms cubic-bezier(0.23,1,0.32,1), opacity 200ms cubic-bezier(0.23,1,0.32,1)'); assert.equal(r.s.knob.style.transform, '');
   r = await run([[0, 40, 10], [400, 40 + travel * 0.6, 12], [800, 40 + travel * 0.69, 12], [1200, 40 + travel * 0.69, 12]]); assert.equal(r.app.location.hash, '#home', 'slow and short of 70%: nothing happens'); assert.equal(r.s.knob.style.transform, '', 'and the knob springs back');
   assert.deepEqual(r.v.calls, [], 'no buzz');
   r = await run([[0, 40, 10], [20, 40 + travel * 0.3, 12], [60, 40 + travel * 0.5, 12], [70, 40 + travel * 0.5, 12]]); assert.equal(r.app.location.hash, '#door/checklist', 'fast after 40%: commits (velocity 0.6 px/ms)');
@@ -207,7 +207,7 @@ test('E_ G1 (s82): the month follows the finger at 0.6x (cap 96 px), a month tha
   fire('pointerdown', { target: { closest: (s) => (s === '.cal, .K_root' ? cal : null) }, clientX: 300, clientY: 300, pointerId: 1, timeStamp: 0, button: 0 });
   fire('pointermove', { clientX: 200, clientY: 301, pointerId: 1, timeStamp: 100 }); assert.equal(cal.style.transform, 'translateX(-60px)'); assert.equal(cal.style.transition, 'none');
   fire('pointermove', { clientX: 30, clientY: 301, pointerId: 1, timeStamp: 200 }); assert.equal(cal.style.transform, 'translateX(-96px)');
-  fire('pointerup', { clientX: 30, clientY: 301, pointerId: 1, timeStamp: 210 }); assert.equal(cal.style.transition, 'transform 160ms ease-out, opacity 160ms ease-out'); assert.equal(monthOf(a), 'November 2026');
+  fire('pointerup', { clientX: 30, clientY: 301, pointerId: 1, timeStamp: 210 }); assert.equal(cal.style.transition, 'transform 160ms cubic-bezier(0.23,1,0.32,1), opacity 160ms cubic-bezier(0.23,1,0.32,1)'); assert.equal(monthOf(a), 'November 2026');
   const none = await calApp('#calendar'); const c2 = surf({ offsetWidth: 328 }), f2 = (t, ev) => (none.listeners[t] || []).forEach((f) => f(ev));
   f2('pointerdown', { target: { closest: (s) => (s === '.cal, .K_root' ? c2 : null) }, clientX: 100, clientY: 300, pointerId: 1, timeStamp: 0, button: 0 });
   f2('pointermove', { clientX: 200, clientY: 301, pointerId: 1, timeStamp: 100 }); assert.equal(c2.style.transform, 'translateX(60px)', '3.1.1: right of October is September: it is offered, so the grid follows');

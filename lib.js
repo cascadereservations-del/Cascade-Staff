@@ -494,7 +494,7 @@
     return String(text).split(' || ').map(function (chunk) {
       var m = /^(\d{4}-\d{2}-\d{2}):\s*([\s\S]*)$/.exec(chunk);
       var points = (m ? m[2] : chunk).split(' | ').map(function (p) { return p.trim(); }).filter(Boolean);
-      points = points.map(function (p, i) { return { p: p, i: i }; }).sort(function (a, b) { return pointPriority(a.p) - pointPriority(b.p) || a.i - b.i; }).map(function (x) { return x.p; });
+      points = points.map(function (p, i) { return { p: p, i: i }; }).sort(function (a, b) { return pointPriority(a.p) - pointPriority(b.p) || a.i - b.i; }).map(function (x) { return { p: x.p, rank: pointPriority(x.p) }; });
       return { date: m ? m[1] : null, points: points };
     }).filter(function (g) { return g.points.length; });
   }
@@ -510,8 +510,20 @@
   function tierLine(g) { return g && tierLabel(g.tier) && typeof g.tier_line === 'string' && g.tier_line.trim() ? g.tier_line.trim() : null; }
   // s95: the three tier pieces of a guest card as markup. The older "Returning · Nth stay" pill is only the fallback when there is no tier line, so the tier shows once.
   function tierParts(g, compact, pill) {
-    var l = tierLabel(g && g.tier), line = tierLine(g), ret = line ? null : returningLabel(g, compact);
-    return { chip: l ? pill('brand', g.tier === 'vip' ? 'star' : 'repeat', l) : '', line: line ? '<p class="sub" style="margin:2px 0 0">' + esc(line) + '</p>' : '', ret: ret ? pill('brand', 'repeat', ret) : '' };
+    var l = tierLabel(g && g.tier), line = tierLine(g), ret = l || line ? null : returningLabel(g, compact);
+    return { chip: l ? pill('tier-' + g.tier, g.tier === 'vip' ? 'star' : 'repeat', l) : '', line: line ? '<p class="sub T_line T_' + g.tier + '">' + esc(line) + '</p>' : '', ret: ret ? pill('tier-returning', 'repeat', ret) : '' };
+  }
+  // s96 SPEC-47: the notes that matter (rank 0 incident/complaint, 1 special request): the strongest one first, and how many other notes there are.
+  function keyNote(text) {
+    var all = [], key = null; parseNotes(text).forEach(function (g) { g.points.forEach(function (x) { all.push(x); if (x.rank <= 1 && (!key || x.rank < key.rank)) key = x; }); });
+    return key ? { p: key.p, rank: key.rank, word: key.rank === 0 ? 'Important:' : 'Request:', more: all.length - 1 } : null;
+  }
+  // s96 SPEC-47: topics a guest asked about (card key `notable`, topic keys only), in plain words; absent or empty gives null, max 3, the third after a dot
+  var TOPIC_LABELS = { directions: 'directions', links: 'links', wifi: 'Wi-Fi', brownout: 'brownout', guest_count: 'guest count', early_checkin: 'early check-in', late_checkout: 'late check-out', parking: 'parking', pets: 'pets', id: 'ID', complaint: 'a concern' };
+  function notableLine(g) {
+    var n = g && Array.isArray(g.notable) ? g.notable : [], seen = {}, l = [];
+    n.forEach(function (x) { var k = x && x.topic; if (l.length < 3 && typeof k === 'string' && Object.prototype.hasOwnProperty.call(TOPIC_LABELS, k) && !seen[k]) { seen[k] = 1; l.push(TOPIC_LABELS[k]); } });
+    return l.length ? 'Asked about: ' + l.slice(0, 2).join(', ') + (l[2] ? ' · ' + l[2] : '') : null;
   }
   function earlierLine(g) {
     var e = (g && g.earlier_stays) || [];
@@ -592,6 +604,18 @@
     if (!c || c.rain_prob == null) return null;
     var hi = c.today_high != null ? Math.round(+c.today_high) : null, lo = c.today_low != null ? Math.round(+c.today_low) : null;
     return { head: 'Rain ' + Math.round(+c.rain_prob) + '% today', rest: hi != null && lo != null ? lo + ' to ' + hi + '°' : '' };
+  }
+  // s96 SPEC-47: glyph for the condition (the strip showed a cloud for everything)
+  function weatherIcon(desc) { var d = String(desc || ''); return /rain|shower|drizzle|storm|thunder/i.test(d) ? 'rain' : /clear|sunny|fair/i.test(d) ? 'sun' : 'cloud'; }
+  // s96 SPEC-47: rain is likely when the rain-watch notice is up, or the chance today is 60 percent or more on a reading under an hour old. Null otherwise.
+  // view = the notices view (weather.watch, weather.hours); returns the window text, the peak hour and the day's range for the alert row.
+  function rainAlert(payload, view) {
+    var w = payload && payload.weather, c = w && w.current, nw = view && view.weather, watch = nw && nw.watch ? nw.watch : null;
+    var prob = c && c.rain_prob != null && c.rain_prob !== '' ? +c.rain_prob : null;
+    if (!watch && !(prob != null && prob >= 60 && !weatherStale(w))) return null;
+    var peak = null; ((nw && nw.hours) || []).forEach(function (h) { if (h && h.pct > 0 && (!peak || h.pct > peak.pct)) peak = h; });
+    return { window: watch ? String(watch.text || '').replace(/^Rain watch,?\s*/i, '') || 'today' : 'today', pct: watch && watch.peak != null ? watch.peak : (peak ? peak.pct : prob), peakAt: peak ? peak.label : '',
+      hi: c && c.today_high != null ? Math.round(+c.today_high) : null, lo: c && c.today_low != null ? Math.round(+c.today_low) : null };
   }
   // 60 minutes: the same age at which notices_v1 stops sending its weather (SQL: c_at > now() - interval '60 minutes'). Never higher than the server rule.
   var WEATHER_STALE_MIN = 60;
@@ -1410,7 +1434,7 @@
     fmtTime: fmtTime, fmt24: fmt24, ordinal: ordinal, plural: plural, agoLabel: agoLabel, clockLabel: clockLabel,
     monthGrid: monthGrid, dayState: dayState, dayStatus: dayStatus, mergeStays: mergeStays, sameGuest: sameGuest, dayMoves: dayMoves, blockWhy: blockWhy, flagName: flagName, FLAG_KINDS: FLAG_KINDS, blockedLines: blockedLines, blockedLineText: blockedLineText,
     canFlagDays: canFlagDays, guestContact: guestContact, canSeeGuestContact: canSeeGuestContact, MESSENGER_INBOX: MESSENGER_INBOX, rpcMissing: rpcMissing, tgLink: tgLink, warningInfo: warningInfo, findingKey: findingKey, initialOf: initialOf, sourceLabel: sourceLabel, stayDates: stayDates, monthInRange: monthInRange,
-    parseNotes: parseNotes, returningLabel: returningLabel, tierLabel: tierLabel, tierLine: tierLine, tierParts: tierParts, earlierLine: earlierLine, companionsLine: companionsLine, todayCardState: todayCardState,
+    parseNotes: parseNotes, returningLabel: returningLabel, tierLabel: tierLabel, tierLine: tierLine, tierParts: tierParts, keyNote: keyNote, TOPIC_LABELS: TOPIC_LABELS, notableLine: notableLine, weatherIcon: weatherIcon, rainAlert: rainAlert, earlierLine: earlierLine, companionsLine: companionsLine, todayCardState: todayCardState,
     orderWarnings: orderWarnings, brownoutText: brownoutText, lowStockText: lowStockText, warningSummary: warningSummary,
     weatherLine: weatherLine, rainLine: rainLine, weatherStale: weatherStale, WEATHER_STALE_MIN: WEATHER_STALE_MIN, esc: esc,
     A_HOUSE_FALLBACK: A_HOUSE_FALLBACK, A_houseTimes: A_houseTimes, A_turnoverClock: A_turnoverClock, A_turnoverLine: A_turnoverLine, A_hm: A_hm, A_NOTICE_TYPES: A_NOTICE_TYPES, A_noticesView: A_noticesView, A_noticeFilters: A_noticeFilters, A_dayMarks: A_dayMarks, A_noticeDay: A_noticeDay, A_guestMessage: A_guestMessage, A_CAL_TABS: A_CAL_TABS, A_calTab: A_calTab, A_stayShade: A_stayShade, A_hubGroups: A_hubGroups, A_hubNative: A_hubNative, A_hubRoutes: A_hubRoutes, A_hubRouteOk: A_hubRouteOk, A_hubDoorUrl: A_hubDoorUrl, A_whatsNew: A_whatsNew, A_shortTime: A_shortTime, A_PINNED: A_PINNED, A_noticeAddError: A_noticeAddError, A_NOTICE_HINT: A_NOTICE_HINT, A_flagDup: A_flagDup, A_facebookUrl: A_facebookUrl, A_fbPluginUrl: A_fbPluginUrl, A_noticeAddProblem: A_noticeAddProblem, A_noticeAddArgs: A_noticeAddArgs, A_plainRefusal: A_plainRefusal, A_hour12: A_hour12, A_timeRange: A_timeRange,

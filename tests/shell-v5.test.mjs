@@ -285,14 +285,14 @@ test('A_ parse: every shell script and page parses, the new view and slots exist
 test('A_ motion and accessibility floor: press 0.97 at 160 ms, sheets 300 ms with the v5 curve, reduced motion respected, text never under 12 px', () => {
   const css = read('styles.css'), tk = read('tokens.css');
   assert.match(tk, /--v5-press-scale: 0\.97; --v5-press-ms: 160ms; --v5-sheet-ms: 300ms; --v5-sheet-ease: cubic-bezier\(0\.32, 0\.72, 0, 1\)/);
-  assert.match(css, /\.btn:active[^{]*\{ transform: scale\(var\(--v5-press-scale\)\); transition: transform var\(--v5-press-ms\) ease-out/);
+  assert.match(css, /\.btn, \.chip, \.iconbtn, \.E_pill, \.chk \{ transition: transform 120ms var\(--v5-ease-out\), background 120ms var\(--v5-ease-out\)/); assert.match(css, /\.btn:active[^{]*\{ transform: scale\(var\(--v5-press-scale\)\)/);
   assert.match(css, /\.sheet \{[^}]*transition: transform var\(--v5-sheet-ms\) var\(--v5-sheet-ease\)/);
   assert.match(css, /prefers-reduced-motion: reduce/);
   for (const m of css.matchAll(/font(?:-size)?:[^;}]*?\b(\d+(?:\.\d+)?)px/g)) assert.ok(+m[1] >= 12 || /line-height/.test(m[0]) || +m[1] === 0, 'text under 12 px: ' + m[0]);
   assert.match(css, /\.A_tabs a \{ min-height: 44px/); assert.match(css, /\.chip \{ min-height: var\(--touch\)/); // F_: controls grow with the text size instead of clipping it
 });
 test('A_ service worker and manifest: new cache name, tokens + house photos precached and each photo is 60 KB or less, theme colours are the v5 backgrounds', () => {
-  const sw = read('sw.js'); assert.match(sw, /CACHE_NAME = 'cs-shell-v36'/);
+  const sw = read('sw.js'); assert.match(sw, /CACHE_NAME = 'cs-shell-v37'/);
   for (const u of ['./tokens.css', './img/house-hero.webp', './img/house-blur.webp', './fonts/dm-serif-display-400.woff2']) assert.ok(sw.includes("'" + u + "'") || sw.includes(u.replace('./', '').replace('fonts/', '')) , u);
   for (const f of ['img/house-hero.webp', 'img/house-blur.webp']) assert.ok(fs.statSync(path.join(root, f)).size <= 60 * 1024, f + ' is 60 KB or less');
   const man = JSON.parse(read('manifest.webmanifest')); assert.equal(man.theme_color, '#EEF1F4'); assert.equal(man.background_color, '#EEF1F4');

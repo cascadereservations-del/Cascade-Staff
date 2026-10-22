@@ -41,7 +41,7 @@ test('tierParts: tier + line shows once (no older Returning pill); no tier keeps
   const c = CS.tierParts({ tier: 'vip', tier_line: '<img src=x onerror=1>' }, false, pill);
   assert.ok(!c.line.includes('<img')); assert.match(c.line, /&lt;img src=x onerror=1&gt;/);
   const d = CS.tierParts({ tier: 'vip', tier_line: null, repeat: true, stay_count: 2 }, false, pill);
-  assert.match(d.chip, /star/); assert.match(d.ret, /Returning guest · 2nd stay/);
+  assert.match(d.chip, /star/); assert.match(d.chip, /p-tier-vip/); assert.equal(d.ret, '', 's96: a tier chip means no older Returning pill');
 });
 
 test('guests list chip: only vip gets a glyph (no check mark shared with ID on file)', () => {

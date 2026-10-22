@@ -120,9 +120,9 @@ test('month range: only months inside the 7 back to 60 forward window can be ope
 test('notes parse into per-stay groups, important points first, undated chunks kept', () => {
   const g = CS.parseNotes('2026-08-01: Likes extra towels | Reported a damage to the kettle || 2026-02-10: Late check-out requested | Brought a gift || VIP - repeat guest');
   assert.equal(g.length, 3);
-  assert.equal(g[0].date, '2026-08-01'); assert.equal(g[0].points[0], 'Reported a damage to the kettle');
-  assert.equal(g[1].points[0], 'Late check-out requested');
-  assert.equal(g[2].date, null); assert.deepEqual(g[2].points, ['VIP - repeat guest']);
+  assert.equal(g[0].date, '2026-08-01'); assert.deepEqual(g[0].points[0], { p: 'Reported a damage to the kettle', rank: 0 });
+  assert.deepEqual(g[1].points[0], { p: 'Late check-out requested', rank: 1 });
+  assert.equal(g[2].date, null); assert.deepEqual(g[2].points, [{ p: 'VIP - repeat guest', rank: 4 }]);
   assert.deepEqual(CS.parseNotes(null), []);
   assert.deepEqual(CS.parseNotes(''), []);
 });

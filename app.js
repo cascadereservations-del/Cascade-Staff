@@ -20,7 +20,7 @@
     url: 'https://qkgfhsdppslwunarczeq.supabase.co',
     key: 'sb_publishable_JFuRYZ9csmQULcMRmHXDSg_Abo9UeCj',
     propertyId: '6ae230f4-c189-4547-84b1-cb6e0b2cc9bd',
-    version: '3.4.11'
+    version: '3.4.12'
   };
   var LINKS = {
     checklist: 'https://cascadereservations-del.github.io/CH-Cleaners-Checklist/',
@@ -156,11 +156,39 @@
   function todayCard() {
     var p = state.payload, st = CS.todayCardState(p, p.today);
     if (!st.guest) return '<section class="card glass A_card F_span" aria-label="Today in the house"><span class="cap up">' + esc(st.label) + '</span><p class="sub">The house is free tonight. The next stay will show here.</p></section>';
-    var g = st.guest, tp = tierP(st.guest, true), co = CS.fmtTime(g.checkout_time) || A_houseT().outLabel;
+    var g = st.guest, tp = tierP(st.guest, true), ht = A_houseT(), nl = CS.notableLine(g), kn = CS.keyNote(g.notes);
+    var key = st.kind === 'house' ? 'Out ' + (CS.fmtTime(g.checkout_time) || ht.outLabel) : 'In ' + (CS.fmtTime(g.checkin_time) || ht.inLabel); // s96: the time that matters comes first
     return '<section class="card glass A_card F_span" aria-label="Today in the house"><div class="row-between"><span class="cap up">' + esc(st.label) + '</span>' + (st.pill ? pill(st.pill.tone, toneIcon(st.pill.tone), st.pill.text) : '') + '</div>' +
-      '<div class="row-wrap" style="align-items:center"><h2 class="A_name">' + esc(g.guest_name || 'Guest') + '</h2>' + tp.chip + '</div>' + tp.line + (tp.ret ? '<div>' + tp.ret + '</div>' : '') +
-      '<p class="sub num" style="margin:0">' + esc(CS.dayLabel(g.checkin_date) + ' → ' + CS.dayLabel(g.checkout_date) + ' · ' + CS.plural(g.nights != null ? g.nights : CS.daysBetween(g.checkin_date, g.checkout_date), 'night') + ' · out ' + co) + '</p>' +
+      '<div class="T_who">' + A_face(g.id_photo_path) + '<div class="T_id"><div class="T_namerow"><h2 class="A_name">' + esc(g.guest_name || 'Guest') + '</h2>' + tp.chip + '</div>' + tp.line + (tp.ret ? '<div>' + tp.ret + '</div>' : '') +
+      (nl ? '<p class="help T_ask">' + esc(nl) + '</p>' : '') + '</div></div>' +
+      '<p class="A_key num">' + esc(key) + '</p>' +
+      '<p class="sub num" style="margin:0">' + esc(CS.dayLabel(g.checkin_date) + ' → ' + CS.dayLabel(g.checkout_date) + ' · ' + CS.plural(g.nights != null ? g.nights : CS.daysBetween(g.checkin_date, g.checkout_date), 'night')) + '</p>' +
+      (kn ? '<div class="T_key note-key">' + ICON('alert', 's16') + '<span class="T_nt"><b>' + kn.word + '</b> ' + esc(kn.p) + '</span></div>' + (kn.more ? '<a class="T_more" href="#calendar/house">+' + kn.more + ' more ' + (kn.more === 1 ? 'note' : 'notes') + '</a>' : '') : '') +
       '<a class="A_more" href="#calendar/house">Open guest card' + ICON('chev', 's16') + '</a></section>';
+  }
+  // s96 SPEC-47: the 56 px face on the Today card, cropped from the guest's ID photo while one exists (inside the 30-day window). Same in-memory photo as the Guest ID card:
+  // no download, copy or share control. Owner and admin tap it for the full ID (as on the guest card); everyone else sees it as a picture only.
+  function A_face(path) {
+    if (!path) return '';
+    return CS.canSeeGuestContact(role()) ? '<button class="T_face" type="button" data-act="id-full" data-facepath="' + esc(path) + '" aria-label="Show the ID photo full screen"></button>' : '<span class="T_face" data-facepath="' + esc(path) + '"></span>';
+  }
+  function A_loadFaces(root) {
+    Array.prototype.forEach.call(root.querySelectorAll('[data-facepath]'), function (box) {
+      var path = box.getAttribute('data-facepath'), g0 = state.photoGen, hit = state.photos[path];
+      var put = function (url) {
+        if (g0 !== state.photoGen || !box.parentNode) return;
+        var img = new Image(); img.alt = 'Guest photo from ID'; img.draggable = false; img.decoding = 'async';
+        if (path && state.rot[url] === undefined && state.srot[path] !== undefined) state.rot[url] = state.srot[path];
+        var turn = function () { var d = state.rot[url] || 0; if (d) img.style.transform = 'rotate(' + d + 'deg)'; };
+        img.addEventListener('load', function () { if (state.rot[url] === undefined && img.naturalWidth && img.naturalHeight > img.naturalWidth * 1.05) { state.rot[url] = 270; } turn(); });
+        img.addEventListener('contextmenu', function (e) { e.preventDefault(); });
+        turn(); img.src = url; box.innerHTML = ''; box.appendChild(img);
+      };
+      if (hit && Date.now() - hit.at < 30 * 60000) { put(hit.url); return; }
+      var rp = H_rotLoad([path]), req;
+      try { req = H_photoReq(path); } catch (e) { req = Promise.reject(e); } // no client (demo) or no network: the circle simply goes
+      req.then(function (url) { if (!url) return; return rp ? rp.then(function () { put(url); }) : put(url); }).catch(function () { if (box.parentNode) box.parentNode.removeChild(box); });
+    });
   }
   // ---------------------------------------------------------------- the one notification pill (E_)
   // Everything that needs a person, counted once by CS.E_attention (pure, lib.js) and drawn in the slot the "Updated" chip used to hold.
@@ -188,9 +216,9 @@
   }
   // Two fixed lines under the greeting (temperature and condition; rain chance or how old the reading is). The slot is always drawn, with the same height, so nothing jumps when the reading lands.
   function H_wxStrip(p) {
-    var w = p && p.weather, c = w && w.current, ok = !!c && c.temp != null, rl = ok ? CS.rainLine(w) : null, l2 = 'Open the forecast';
-    if (ok) { var old = w.fetched_at && CS.weatherStale(w); l2 = [rl ? rl.head + (rl.rest && !old ? ' · ' + rl.rest : '') : '', old ? 'as of ' + CS.clockLabel(w.fetched_at) : ''].filter(Boolean).join(' · '); }
-    return '<a class="H_wxstrip" href="#weather" aria-label="Weather, open the forecast"><span class="l1">' + ICON('cloud', 's16') + '<span>' + esc(ok ? CS.H_weatherShort(c.temp, c.description, (window.innerWidth || 360) < 340) : 'Weather') + '</span></span><span class="l2">' + esc(l2 || 'Tap for the forecast') + '</span></a>';
+    var w = p && p.weather, c = w && w.current, ok = !!c && c.temp != null, rl = ok ? CS.rainLine(w) : null, ra = ok ? CS.rainAlert(p, A_notices()) : null, l2 = 'Open the forecast';
+    if (ok) { var old = w.fetched_at && CS.weatherStale(w), rh = ra ? 'Rain likely' + (rl ? ', ' + rl.head.replace(/^Rain\s*/, '') : '') : (rl ? rl.head : ''); l2 = [rh ? rh + (rl && rl.rest && !old ? ' · ' + rl.rest : '') : '', old ? 'as of ' + CS.clockLabel(w.fetched_at) : ''].filter(Boolean).join(' · '); }
+    return '<a class="H_wxstrip' + (ra ? ' rain' : '') + '" href="#weather" aria-label="Weather, open the forecast"><span class="l1">' + ICON(ra ? 'alert' : ok ? CS.weatherIcon(c.description) : 'cloud', 's16') + '<span>' + esc(ok ? CS.H_weatherShort(c.temp, c.description, (window.innerWidth || 360) < 340) : 'Weather') + '</span></span><span class="l2">' + esc(l2 || 'Tap for the forecast') + '</span></a>';
   }
   // The photo header: wordmark, the pill, refresh, greeting, date and weather (as of HH:MM when the weather is old). Drawn before the first answer too.
   function A_hero() {
@@ -198,6 +226,28 @@
     return '<div class="A_hero"><img src="img/house-hero.webp" alt="" width="720" height="480" fetchpriority="high"><div class="A_herobar"><span class="brand">Cascade</span><div class="A_herorow">' + E_pill(E_att()) +
       '<button class="A_chipglass" type="button" data-act="refresh" aria-label="Refresh">' + ICON('refresh', 's24') + '</button></div></div>' +
       '<div class="A_greet"><h1>' + esc(CS.greeting() + (nm ? ', ' + nm : '')) + '</h1><div class="cap">' + esc(CS.dayLong(p ? p.today : CS.manilaToday())) + '</div>' + H_wxStrip(p) + '</div></div>';
+  }
+  // s96 SPEC-47: the rain row sits under the photo (text on a photo has unpredictable contrast). Only when rain is likely; the body opens with a grid-rows slide (styles.css, H_rain).
+  function H_wxAlert(p) {
+    var ra = CS.rainAlert(p, A_notices()); if (!ra) return '';
+    var open = !!state.wxOpen, rng = ra.hi != null && ra.lo != null ? 'High ' + ra.hi + '°, low ' + ra.lo + '°. ' : '';
+    return '<details class="H_wxalert' + (open ? ' on' : '') + '"' + (open ? ' open' : '') + '><summary data-act="wx-toggle">' + ICON('alert', 's16') + '<span class="H_wxt">Rain likely ' + esc(ra.window) + ' · bring towels in</span>' + ICON('chevdown', 's16') + '</summary>' +
+      '<div class="H_rain"><div><p>' + (ra.pct != null ? 'Peak chance ' + ra.pct + '%' + (ra.peakAt ? ' around ' + esc(ra.peakAt) : '') + '. ' : '') + rng + '</p><a class="btn btn-secondary btn-sm" href="#weather">Open the forecast</a></div></div></details>';
+  }
+  function H_wxToggle(d) {
+    if (!d) return; var on = !d.classList.contains('on'); state.wxOpen = on;
+    if (on) { d.open = true; void d.offsetHeight; d.classList.add('on'); } // rendered at 0fr first, then slides to 1fr
+    else { d.classList.remove('on'); if (E_reduced()) d.open = false; else setTimeout(function () { if (!d.classList.contains('on')) d.open = false; }, 240); }
+  }
+  // The hero (photo, wordmark, pill, greeting) is built once; a redraw patches only the greeting and the buttons, so the photo is not decoded again and focus stays put.
+  function A_heroPut(el, rest) {
+    var h = el.firstElementChild;
+    if (h && h.classList && h.classList.contains('A_hero') && h.querySelector) {
+      var t = document.createElement('div'); t.innerHTML = A_hero(); var n = t.firstChild;
+      ['.A_greet', '.A_herorow'].forEach(function (q) { var a = h.querySelector(q), b = n.querySelector(q); if (a && b && a.innerHTML !== b.innerHTML) a.innerHTML = b.innerHTML; });
+      while (h.nextSibling) el.removeChild(h.nextSibling);
+      h.insertAdjacentHTML('afterend', rest);
+    } else el.innerHTML = A_hero() + rest;
   }
   // Sign out lives on More only (a wet-hand mis-tap away from the tab bar); the footer says how fresh the screen is.
   function footerLine() { return '<div class="help F_span" style="text-align:center;margin-top:16px">Updated ' + esc(state.loadedAt ? CS.agoLabel(new Date(state.loadedAt).toISOString()) : 'just now') + ' · v' + CFG.version + '</div>'; }
@@ -402,7 +452,7 @@
   function A_navCard(label, rows, tiles) { return rows ? '<div class="F_group' + (tiles ? ' A_tiles' : '') + '"><div class="A_label">' + esc(label) + '</div><nav class="card glass list" aria-label="' + esc(label) + '">' + rows + '</nav></div>' : ''; }
   function renderHome() {
     var el = $('v-home');
-    if (!state.payload) { el.innerHTML = A_hero() + '<div class="screen" style="min-height:0;padding-top:0"><div class="A_body">' + (state.error ? errBanner() : loadingBlock()) + '</div></div>'; return; }
+    if (!state.payload) { A_heroPut(el, '<div class="screen" style="min-height:0;padding-top:0"><div class="A_body">' + (state.error ? errBanner() : loadingBlock()) + '</div></div>'); return; }
     var staff = state.layout === 'staff', n = warnCount(), v = A_notices();
     var body;
     if (staff) {
@@ -438,8 +488,8 @@
     var keep = el.querySelector && el.querySelector('#slot-paid-notice'); if (keep && keep.parentNode) keep.parentNode.removeChild(keep);
     var keepOwed = el.querySelector && el.querySelector('#slot-owed'); if (keepOwed && keepOwed.parentNode) keepOwed.parentNode.removeChild(keepOwed);
     var keepSel = B_focusSel();
-    el.innerHTML = A_hero() + '<div class="screen" style="min-height:0;padding-top:0">' + body + '</div>';
-    B_refocus(keepSel);
+    A_heroPut(el, H_wxAlert(state.payload) + '<div class="screen" style="min-height:0;padding-top:0">' + body + '</div>');
+    B_refocus(keepSel); A_loadFaces(el);
     if (keep) { var fresh = el.querySelector('#slot-paid-notice'); if (fresh && fresh.parentNode) fresh.parentNode.replaceChild(keep, fresh); }
     if (keepOwed) { var freshOwed = el.querySelector('#slot-owed'); if (freshOwed && freshOwed.parentNode) freshOwed.parentNode.replaceChild(keepOwed, freshOwed); }
     // "You were paid" notice (pay/C_paid-notice.js): mounted once per slot node; the node is carried across redraws above and is new again after a sign-in.
@@ -449,7 +499,8 @@
     var owed = el.querySelector && el.querySelector('#slot-owed');
     if (owed && !owed.__owedMounted && window.C_PaidNotice && window.C_PaidNotice.mountOwed && state.access) { owed.__owedMounted = true; try { window.C_PaidNotice.mountOwed(owed, { client: sb, demo: DEMO, href: S94_owedHref() }); } catch (e) {} }
   }
-  function loadingBlock() { return '<div class="stack" style="margin-top:16px"><div class="skel" style="height:40px;width:70%"></div><div class="skel" style="height:110px"></div><div class="skel" style="height:240px"></div></div>'; }
+  // Mirrors the real stack (Today card, Turnover card, two rows) at their heights, so nothing jumps when the answer lands.
+  function loadingBlock() { return '<div class="skel T_sk1"></div><div class="skel T_sk2"></div><div class="skel T_sk3"></div><div class="skel T_sk3"></div>'; }
 
   // ---------------------------------------------------------------- guest card (Guest Calendar Info)
   function guestBlock(g, kind) {
@@ -458,7 +509,7 @@
     var tp = tierP(g, false), src = CS.sourceLabel(g.source), earlier = CS.earlierLine(g), withLine = CS.canSeeGuestContact(state.access && state.access.role) ? CS.companionsLine(g) : null; // D-319: owner/admin only, even if the server sent it
     var tint = kind === 'house' ? 'G_stay' : 'G_in'; // s93: arriving = green, in the house = blue (the house guest always checks out after today, so no third tint)
     var info = '<div class="card glass ' + tint + '" id="' + (kind === 'house' ? 'house' : 'next') + '"><div class="row-between"><span class="cap up">' + label + '</span>' + st + '</div>' +
-      '<div class="row-wrap" style="align-items:center;margin-top:8px"><h3 class="ttl">' + esc(g.guest_name || 'Guest') + '</h3>' + tp.chip + '</div>' + tp.line + (withLine ? '<p class="sub" style="margin:2px 0 0">' + esc(withLine) + '</p>' : '') +
+      '<div class="T_namerow T_gap"><h3 class="ttl">' + esc(g.guest_name || 'Guest') + '</h3>' + tp.chip + '</div>' + tp.line + (CS.notableLine(g) ? '<p class="help T_ask">' + esc(CS.notableLine(g)) + '</p>' : '') + (withLine ? '<p class="sub" style="margin:2px 0 0">' + esc(withLine) + '</p>' : '') +
       '<div class="row-wrap" style="margin-top:6px">' + tp.ret + (src ? '<span class="pill p-neutral">' + esc(src) + '</span>' : '') + '</div>' +
       '<p class="sub num" style="margin:8px 0 0">' + esc(datesLine(g)) + '</p>' + (earlier ? '<p class="help num" style="margin:2px 0 0">' + esc(earlier) + '</p>' : '') + contactBlock(g) +
       H_readyBlock(g.arrival_ready, g, true) + (canAddDetails() && g.uid ? '<a class="btn btn-secondary btn-sm" href="./guest/#' + encodeURIComponent(g.uid) + '" style="margin-top:12px">' + ICON('idcard', 's16') + 'Add guest details</a>' : '') +
@@ -467,15 +518,15 @@
     if (groups.length) {
       notes = '<div class="card glass"><h3 class="hd">Notes from earlier stays</h3><div style="margin-top:10px">' + groups.map(function (gr) {
         return '<div class="notegroup">' + (gr.date ? '<p class="help num" style="margin-bottom:4px">' + esc(CS.dayLabel(gr.date) + ' ' + gr.date.slice(0, 4)) + '</p>' : '') +
-          '<ul class="notes">' + gr.points.map(function (p) { return '<li>' + ICON('note') + '<span>' + esc(p) + '</span></li>'; }).join('') + '</ul></div>';
+          '<ul class="notes">' + gr.points.map(function (x) { return x.rank <= 1 ? '<li class="note-key">' + ICON('alert') + '<span><b>' + (x.rank === 0 ? 'Important:' : 'Request:') + '</b> ' + esc(x.p) + '</span></li>' : '<li>' + ICON('note') + '<span>' + esc(x.p) + '</span></li>'; }).join('') + '</ul></div>';
       }).join('') + '</div></div>';
     } else if (g.repeat === true) {
       notes = '<div class="card"><h3 class="hd">Notes from earlier stays</h3><p class="sub" style="margin-top:8px">Nothing was noted last time.</p></div>';
     }
     // Owner/admin: the empty box opens Add guest details in ID mode (take or choose the guest's own ID photo; D-320.5).
     var addId = canAddDetails() && g.uid ? './guest/?for=id#' + encodeURIComponent(g.uid) : '';
-    var idcard = '<div class="card glass ' + tint + '"><h3 class="hd">Guest ID</h3><div style="margin-top:10px">' +
-      (g.id_photo_path ? '<div class="idphoto" data-idpath="' + esc(g.id_photo_path) + '"><span class="help">Loading the photo…</span></div><p class="help" style="margin:10px 0 0">Check the face and the name against the guest at the door.</p>'
+    var idcard = '<div class="card glass"><h3 class="hd">Guest ID</h3><div style="margin-top:10px">' +
+      (g.id_photo_path ? '<div class="idphoto" data-idpath="' + esc(g.id_photo_path) + '"><span class="skel T_skid"></span><span class="sr">Loading the photo…</span></div><p class="help" style="margin:10px 0 0">Check the face and the name against the guest at the door.</p>'
         : addId ? '<a class="idphoto empty idadd" href="' + esc(addId) + '">' + ICON('camera', 's24') + '<span><b>No ID photo yet.</b><br>Tap to take or choose a photo of the guest’s ID.</span></a>'
         : '<div class="idphoto empty">No ID photo to show for this guest.</div>') +
       (addId ? '<a class="btn btn-ghost btn-sm" href="./guest/?for=companion#' + encodeURIComponent(g.uid) + '" style="margin:8px 0 0 -12px">' + ICON('plus', 's16') + 'Add a companion</a>' +
@@ -488,8 +539,7 @@
   function contactBlock(g) {
     var c = CS.guestContact(g); if (!c) return '';
     var copyBtns = function (label, val) {
-      return '<button class="ctval num" type="button" data-act="copy" data-copy="' + esc(val) + '" aria-label="' + esc('Copy ' + label.toLowerCase() + ' ' + val) + '">' + esc(val) + '</button>' +
-        '<button class="btn btn-ghost btn-sm" type="button" data-act="copy" data-copy="' + esc(val) + '" aria-label="' + esc('Copy ' + label.toLowerCase()) + '">Copy</button>';
+      return '<button class="ctval num" type="button" data-act="copy" data-copy="' + esc(val) + '" aria-label="' + esc('Copy ' + label.toLowerCase() + ' ' + val) + '">' + esc(val) + '</button>';
     };
     var html = '<div class="ctbox">';
     if (c.phone) html += '<div class="ctrow"><span class="cap">Phone</span>' + copyBtns('Phone', c.phone) + (c.tel ? '<a class="btn btn-ghost btn-sm" href="' + esc(c.tel) + '" aria-label="' + esc('Call ' + c.phone) + '">Call</a>' : '') + '</div>';
@@ -532,22 +582,27 @@
     return all.length ? Promise.all(all) : null;
   }
   function H_pathOf(url) { var ks = Object.keys(state.photos); for (var i = 0; i < ks.length; i++) if (state.photos[ks[i]].url === url) return ks[i]; return ''; }
+  // One signed-URL download per path at a time; shared by the Guest ID card and the Today card face.
+  function H_photoReq(path) {
+    var gen = state.photoGen;
+    return state.photoReq[path] || (state.photoReq[path] = sb.storage.from('guest-id-photos').createSignedUrl(path, 300).then(function (r) {
+      if (r.error || !r.data) throw new Error('sign');
+      return net(r.data.signedUrl, { cache: 'no-store', referrerPolicy: 'no-referrer' });
+    }).then(function (res) { if (!res.ok) throw new Error('fetch'); return res.blob(); }).then(function (blob) {
+      if (gen !== state.photoGen) return ''; // signed out while this was downloading: drop it, never store it in the new session
+      var old = state.photos[path]; if (old) URL.revokeObjectURL(old.url);
+      var url = URL.createObjectURL(blob); state.photos[path] = { url: url, at: Date.now() }; delete state.photoReq[path]; return url;
+    }, function (e) { delete state.photoReq[path]; throw e; })); // one request per path at a time
+  }
   function loadIdPhotos(root) {
     var boxes = Array.prototype.slice.call(root.querySelectorAll('[data-idpath]')), rp = H_rotLoad(boxes.map(function (b) { return b.getAttribute('data-idpath'); }));
     boxes.forEach(function (box) {
       var path = box.getAttribute('data-idpath'), hit = state.photos[path], g0 = state.photoGen;
       var put = function (url) { if (rp) rp.then(function () { if (g0 === state.photoGen) putPhoto(box, url, path); }); else putPhoto(box, url, path); };
       if (hit && Date.now() - hit.at < 30 * 60000) { put(hit.url); return; } // kept in memory for the session: reopening a card does not sign or download again
-      var gen = state.photoGen, req = state.photoReq[path] || (state.photoReq[path] = sb.storage.from('guest-id-photos').createSignedUrl(path, 300).then(function (r) {
-        if (r.error || !r.data) throw new Error('sign');
-        return net(r.data.signedUrl, { cache: 'no-store', referrerPolicy: 'no-referrer' });
-      }).then(function (res) { if (!res.ok) throw new Error('fetch'); return res.blob(); }).then(function (blob) {
-        if (gen !== state.photoGen) return ''; // signed out while this was downloading: drop it, never store it in the new session
-        var old = state.photos[path]; if (old) URL.revokeObjectURL(old.url);
-        var url = URL.createObjectURL(blob); state.photos[path] = { url: url, at: Date.now() }; delete state.photoReq[path]; return url;
-      }, function (e) { delete state.photoReq[path]; throw e; })); // one request per path at a time
+      var gen = state.photoGen, req = H_photoReq(path);
       req.then(function (url) { if (url && gen === state.photoGen) put(url); }).catch(function () {
-        box.className = 'idphoto empty'; box.innerHTML = 'The photo could not be loaded. <button class="btn btn-ghost btn-sm" type="button" data-act="refresh">Try again</button>';
+        box.className = 'idphoto empty err'; box.innerHTML = 'The photo could not be loaded. <button class="btn btn-ghost btn-sm" type="button" data-act="refresh">Try again</button>';
       });
     });
   }
@@ -2161,6 +2216,7 @@
     else if (a === 'tour-next') { var TS = state.sheet; if (TS && TS.kind === 'tour') { if ((TS.step || 0) >= H_TOUR.length - 1) closeSheet(); else { TS.step = (TS.step || 0) + 1; drawSheet(); } } }
     else if (a === 'tour-skip') closeSheet();
     else if (a === 'id-full') { var im = t.querySelector && t.querySelector('img'); if (im && CS.canSeeGuestContact(role())) H_idFull(im.src); }
+    else if (a === 'wx-toggle') { ev.preventDefault(); H_wxToggle(t.closest('details')); }
     else if (a === 'id-rot') H_idRotate();
     else if (a === 'id-full-close') H_idClose();
     else if (a === 'attn-ack') H_attnAck(t.getAttribute('data-warn'));
@@ -2218,7 +2274,7 @@
   });
   // Gestures (E_): four swipes, each through the one helper CS.E_drag, each with a visible tap twin on the same screen. The thresholds live in lib.js.
   var E_drag = CS.E_drag;
-  function E_tr(el, ms) { if (el && el.style) el.style.transition = ms && !E_reduced() ? 'transform ' + ms + 'ms ease-out, opacity ' + ms + 'ms ease-out' : 'none'; }
+  function E_tr(el, ms) { if (el && el.style) el.style.transition = ms && !E_reduced() ? 'transform ' + ms + 'ms cubic-bezier(0.23,1,0.32,1), opacity ' + ms + 'ms cubic-bezier(0.23,1,0.32,1)' : 'none'; }
   // G4. Slide to start cleaning: 70% of the travel, or a fast flick after 40% of it. The knob follows the finger 1:1 and returns over 200 ms.
   (function A_slideInit() {
     var t0 = 1, travel = function () { return t0; }; // measured once when the drag starts: a redrawn (detached) pill must never read 0 and commit

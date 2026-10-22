@@ -37,12 +37,12 @@
   --gutter: 16px;
   --shadow-sm: 0 8px 24px var(--v5-card-shadow); --shadow-md: 0 12px 32px var(--v5-shadow); --shadow-lg: 0 20px 48px var(--v5-shadow);
   /* motion: press 0.97 at 160 ms ease-out; sheets 300 ms; nothing animates on controls used many times a day */
-  --motion-fast: var(--v5-press-ms); --motion-base: 200ms; --motion-slow: var(--v5-sheet-ms); --ease: ease-out;
+  --motion-fast: var(--v5-press-ms); --motion-base: 200ms; --motion-slow: var(--v5-sheet-ms); --ease: var(--v5-ease-out);
   --appbar-h: 56px; --tabbar-h: 72px; --touch: var(--v5-touch);
 }
 
 body { background: var(--bg); color: var(--fg); font: 400 var(--v5-t-body)/clamp(1.5rem, 1.4023rem + 0.4337vw, 1.68rem) var(--font-ui); font-variant-numeric: lining-nums; }
-@media (prefers-reduced-motion: reduce) { *, *::before, *::after { transition-duration: 1ms !important; animation-duration: 1ms !important; } }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { transition-duration: 1ms !important; animation-duration: 1ms !important; animation-iteration-count: 1 !important; } .skel { animation: none; background: var(--muted); } }
 
 /* ---- base ---- */
 *, *::before, *::after { box-sizing: border-box; }
@@ -54,7 +54,7 @@ a { color: var(--primary); }
 p { margin: 0; }
 h1, h2, h3 { margin: 0; }
 [hidden] { display: none !important; }
-:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; border-radius: var(--r-sm); }
+:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
 svg.i { display: inline-block; vertical-align: middle; flex: none; width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round; }
 svg.i.s12 { width: 12px; height: 12px; } svg.i.s16 { width: 16px; height: 16px; } svg.i.s24 { width: 24px; height: 24px; }
 .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
@@ -455,9 +455,9 @@ ol.steps li::before { content: counter(s); position: absolute; left: 0; top: 0; 
 .ctrow { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; }
 .ctrow .cap { min-width: 44px; }
 .ctval { min-height: var(--touch); padding: 0 4px; background: none; border: 0; color: var(--fg); font: 500 var(--v5-t-2)/clamp(1.375rem, 1.2855rem + 0.3975vw, 1.54rem) var(--font-ui); text-align: left; cursor: pointer; overflow-wrap: anywhere; text-decoration: underline dotted var(--fg-3); text-underline-offset: 3px; }
-.ctval:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; border-radius: var(--r-sm); }
-.toast { position: fixed; left: 50%; bottom: calc(var(--tabbar-h) + env(safe-area-inset-bottom) + 12px); transform: translateX(-50%); z-index: 30; max-width: calc(100% - 32px); padding: 8px 14px; border-radius: var(--r-full); background: var(--fg); color: var(--bg); font: 600 var(--v5-t-label)/clamp(1.125rem, 1.0518rem + 0.3253vw, 1.26rem) var(--font-ui); box-shadow: var(--shadow-md); opacity: 0; pointer-events: none; transition: opacity var(--motion-base) var(--ease); }
-.toast.on { opacity: 1; }
+.ctval:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
+.toast { position: fixed; left: 50%; bottom: calc(var(--tabbar-h) + env(safe-area-inset-bottom) + 12px); transform: translate(-50%, 8px); z-index: 30; max-width: calc(100% - 32px); padding: 8px 14px; border-radius: var(--r-full); background: var(--fg); color: var(--bg); font: 600 var(--v5-t-label)/clamp(1.125rem, 1.0518rem + 0.3253vw, 1.26rem) var(--font-ui); box-shadow: var(--shadow-md); opacity: 0; pointer-events: none; transition: opacity 150ms var(--v5-ease-out), transform 150ms var(--v5-ease-out); }
+.toast.on { opacity: 1; transform: translate(-50%, 0); transition-duration: 220ms; }
 
 /* ======================================================================================================================
    Design v5 (Lane A, s81). Later rules re-skin the older ones above. Glass = backdrop-filter var(--v5-blur) on summary cards, guest cards,
@@ -509,14 +509,15 @@ html[data-plain="1"] .tabbar { background: var(--v5-panel); } html[data-plain="1
 .input input, .sel { font-size: var(--v5-t-body); }
 
 /* motion: press 0.97 at 160 ms ease-out. Controls used many times a day do not animate (month change, filter chips, tab switch). */
-.btn:active, .chip:active, .rowi:active, .A_slide:active, .iconbtn:active, .E_pill:active, .chk:active { transform: scale(var(--v5-press-scale)); transition: transform var(--v5-press-ms) ease-out; }
-.rowi:active { background: var(--v5-fill); } .btn { transition: transform var(--v5-press-ms) ease-out, background var(--v5-press-ms) ease-out; }
+.btn, .chip, .iconbtn, .E_pill, .chk { transition: transform 120ms var(--v5-ease-out), background 120ms var(--v5-ease-out); }
+.btn:active, .chip:active, .iconbtn:active, .E_pill:active, .chk:active { transform: scale(var(--v5-press-scale)); }
+.rowi:active { background: var(--v5-fill); }
 .btn-primary { background: var(--primary); background-image: none; box-shadow: 0 1px 2px var(--v5-card-shadow); color: var(--primary-fg); }
 .btn-secondary { background: var(--v5-fill); border-color: var(--v5-line); }
 .btn-ghost { color: var(--v5-act); } @media (hover: hover) and (pointer: fine) { .btn-ghost:hover { background: var(--v5-fill); } }
 .chip { min-height: var(--touch); border-radius: var(--r-full); padding: 0 14px; background: var(--v5-fill); border-color: var(--v5-line); font-size: var(--v5-t-2); font-weight: 600; letter-spacing: 0; }
 .chip[aria-pressed="true"] { background: var(--v5-act); color: var(--v5-act-fg); border-color: var(--v5-act); }
-.pill { height: 28px; font-size: var(--v5-t-label); text-transform: none; letter-spacing: 0; font-weight: 600; }
+.pill { height: auto; min-height: 28px; padding-block: 3px; font-size: var(--v5-t-label); text-transform: none; letter-spacing: 0; font-weight: 600; }
 .p-brand { background: var(--v5-gold-soft); color: var(--v5-gold-text); }
 .card { border-radius: var(--r-lg); border-color: var(--v5-line); box-shadow: 0 1px 2px var(--v5-card-shadow); }
 .rowi { min-height: 64px; border-bottom-color: var(--v5-sep); }
@@ -707,7 +708,7 @@ button.A_chipglass.E_pill { width: auto; min-width: 124px; max-width: 184px; hei
 /* Press: the controls used many times a day change colour only (no motion) */
 .calhdr .iconbtn:active, .A_tabs a:active { transform: none; background: var(--v5-fill); }
 .A_tabs a { transition: background var(--v5-press-ms) ease-out; }
-.chk { transition: transform var(--v5-press-ms) ease-out; }
+.chk { transition: transform 120ms var(--v5-ease-out); }
 
 /* Toast with an Undo beside the thumb */
 .toast.E_hasact { display: flex; align-items: center; gap: 4px; padding: 0 4px 0 14px; }
@@ -1130,3 +1131,55 @@ body { font-family: var(--v5-font-ui); }
 .B_clear { display: flex; gap: 12px; align-items: center; }
 .B_clear span { display: grid; gap: 4px; }
 .B_add { align-self: start; min-height: var(--touch); }
+
+/* ================= s96 SPEC-47: Today card polish (tier colours, key notes, asked-about, face, rain row) ================= */
+/* tier chips: glyph + word, never colour alone. Tokens are text / wash pairs from tokens.css (VIP is solid gold). */
+.p-tier-returning { background: var(--v5-tier-returning-w); color: var(--v5-tier-returning-t); }
+.p-tier-regular { background: var(--v5-tier-regular-w); color: var(--v5-tier-regular-t); }
+.p-tier-vip { background: var(--v5-tier-vip-w); color: var(--v5-tier-vip-t); }
+p.sub.T_line { margin: 2px 0 0; padding-left: 8px; border-left: 2px solid var(--tc, var(--v5-line-2)); }
+.T_returning { --tc: var(--v5-tier-returning-t); } .T_regular { --tc: var(--v5-tier-regular-t); } .T_vip { --tc: var(--v5-tier-vip-w); }
+/* one stable row: the name takes what is left (and wraps inside itself), the chip never moves */
+.T_namerow { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
+.T_namerow > h2, .T_namerow > h3 { min-width: 0; overflow-wrap: anywhere; }
+.T_namerow > .pill { flex: none; }
+.T_gap { margin-top: 8px; }
+.T_who { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.T_id { display: grid; gap: 4px; min-width: 0; flex: 1 1 auto; }
+.A_card p.help.T_ask, p.help.T_ask { margin: 2px 0 0; color: var(--v5-ink-2); }
+.A_key { margin: 0; font-weight: 600; color: var(--fg); font-size: var(--v5-t-body); }
+/* the face: a 56 px round crop of the ID photo; the ID itself is never cropped */
+.T_face { flex: none; display: block; width: 56px; height: 56px; aspect-ratio: 1; padding: 0; border: 0; border-radius: 50%; overflow: hidden; background: var(--v5-sunk); }
+.T_face:not(:focus-visible) { outline: 1px solid var(--v5-sep); outline-offset: -1px; }
+.T_face img { display: block; width: 100%; height: 100%; object-fit: cover; object-position: 22% 45%; -webkit-touch-callout: none; user-select: none; -webkit-user-select: none; }
+/* important notes: wash, left bar, glyph + word (Important: / Request:) */
+.notes li { font-size: var(--v5-t-body); line-height: 1.45; }
+.notes li.note-key, .T_key { background: var(--v5-note-key-w); border-left: 3px solid var(--v5-warn-t); border-radius: var(--r-sm); padding: 8px 10px; color: var(--fg); }
+.notes li.note-key svg.i, .T_key svg.i { color: var(--v5-warn-t); margin-top: 2px; }
+.notes li.note-key b, .T_key b { font-weight: 700; }
+.T_key { display: flex; gap: 8px; align-items: flex-start; font-size: var(--v5-t-body); line-height: 1.45; }
+.T_nt { min-width: 0; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; overflow-wrap: anywhere; }
+a.T_more { justify-self: start; min-height: var(--touch); display: inline-flex; align-items: center; font: 600 var(--v5-t-2)/1.4 var(--font-ui); color: var(--v5-act); text-decoration: none; }
+.G_stay .help, .G_in .help { color: var(--v5-ink-2); }
+/* weather: rain likely is said in words, in the strip and in the row under the photo */
+.H_wxstrip.rain .l2 { font-weight: 600; }
+.H_wxalert { position: relative; z-index: 1; max-width: 60rem; margin: 0 auto; background: var(--v5-warn-w); color: var(--v5-warn-t); }
+.H_wxalert + .screen .A_body { margin-top: 0; }
+.H_wxalert > summary { display: flex; align-items: center; gap: 8px; min-height: var(--touch); padding: 8px var(--gutter); cursor: pointer; list-style: none; font: 600 var(--v5-t-2)/1.35 var(--font-ui); }
+.H_wxalert > summary::-webkit-details-marker { display: none; }
+.H_wxalert > summary .H_wxt { flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; }
+.H_wxalert > summary svg.i:last-child { transition: transform 240ms var(--v5-ease-out); }
+.H_wxalert.on > summary svg.i:last-child { transform: rotate(180deg); }
+.H_wxalert .H_rain { display: grid; grid-template-rows: 0fr; opacity: 0; transition: grid-template-rows 240ms var(--v5-ease-out), opacity 180ms var(--v5-ease-out); }
+.H_wxalert .H_rain > div { overflow: hidden; min-height: 0; padding-inline: var(--gutter); color: var(--fg); }
+.H_wxalert .H_rain p { margin: 4px 0 8px; font-size: var(--v5-t-body); }
+.H_wxalert .H_rain > div > :last-child { margin-bottom: 12px; }
+.H_wxalert.on .H_rain { grid-template-rows: 1fr; opacity: 1; }
+@media (prefers-reduced-motion: reduce) { .H_wxalert .H_rain { transition-property: opacity; } .H_wxalert > summary svg.i:last-child { transition: none; } }
+/* loading mirrors the real stack: Today card, Turnover card, two rows */
+.T_sk1, .T_sk2, .T_sk3 { border-radius: var(--v5-r-card); }
+.T_sk1 { height: 148px; } .T_sk2 { height: 200px; } .T_sk3 { height: 64px; }
+/* the ID frame keeps its 8:5 shape while loading and when the photo fails; inner corners are concentric with the frame */
+.T_skid { flex: 1 1 auto; align-self: stretch; border-radius: 8px; }
+.idphoto.empty.err { aspect-ratio: 8 / 5; min-height: 0; }
+.idphoto img { border-radius: 8px; }

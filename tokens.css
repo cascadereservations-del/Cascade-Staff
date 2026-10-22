@@ -63,6 +63,9 @@
   --v5-shadow-card: 0 1px 2px rgba(40, 30, 20, 0.06), 0 0 0 1px var(--v5-line); --v5-space: 4px; --v5-target-glove: 56px;
   /* motion: press 0.97 at 160 ms ease-out; sheets 300 ms; nothing animates on things used many times a day */
   --v5-press-scale: 0.97; --v5-press-ms: 160ms; --v5-sheet-ms: 300ms; --v5-sheet-ease: cubic-bezier(0.32, 0.72, 0, 1);
+  /* s96 SPEC-47: tier chips (text / wash; VIP is solid gold), key-note wash, stronger ease-out */
+  --v5-tier-returning-t: #3B4756; --v5-tier-returning-w: #E9EDF1; --v5-tier-regular-t: #5A2A75; --v5-tier-regular-w: #F1E6F7; --v5-tier-vip-t: #0F1B2A; --v5-tier-vip-w: #C9A063;
+  --v5-note-key-w: #FBF1DE; --v5-ease-out: cubic-bezier(0.23, 1, 0.32, 1);
   color-scheme: light;
   --v5-field-line: #7B8998; --v5-gold-wash: #EBE3D5; --v5-sidebar-hover: #223A55; --v5-turn-stripe: #B9CCEB; --v5-ok-wash: #DEF3E8; /* lane D (dashboard) */
 }
@@ -92,6 +95,7 @@
     --v5-water-solid: #4FC3C7; --v5-rain-solid: #B3A8EA; --v5-deep-solid: #7FD1AE;
     --v5-blocked: #2A3A4E; --v5-blocked-hatch: rgba(200, 220, 240, 0.14); --v5-blocked-fg: #C9D3DE;
     --v5-clash: #F0646F; --v5-note-dot: #E0B872; --v5-house-tile: #B8C4D2;
+    --v5-tier-returning-t: #C9D3DE; --v5-tier-returning-w: #253243; --v5-tier-regular-t: #DCC2EE; --v5-tier-regular-w: #3A2748; --v5-tier-vip-t: #0F1B2A; --v5-tier-vip-w: #E0B872; --v5-note-key-w: #2B2416;
     color-scheme: dark;
     --v5-field-line: #6A7E94; --v5-gold-wash: #2A2F33; --v5-sidebar-hover: #1A2B3F; --v5-turn-stripe: #24406E; --v5-ok-wash: #163628;
   }
@@ -121,6 +125,7 @@
   --v5-water-solid: #4FC3C7; --v5-rain-solid: #B3A8EA; --v5-deep-solid: #7FD1AE;
   --v5-blocked: #2A3A4E; --v5-blocked-hatch: rgba(200, 220, 240, 0.14); --v5-blocked-fg: #C9D3DE;
   --v5-clash: #F0646F; --v5-note-dot: #E0B872; --v5-house-tile: #B8C4D2;
+  --v5-tier-returning-t: #C9D3DE; --v5-tier-returning-w: #253243; --v5-tier-regular-t: #DCC2EE; --v5-tier-regular-w: #3A2748; --v5-tier-vip-t: #0F1B2A; --v5-tier-vip-w: #E0B872; --v5-note-key-w: #2B2416;
   color-scheme: dark;
   --v5-field-line: #6A7E94; --v5-gold-wash: #2A2F33; --v5-sidebar-hover: #1A2B3F; --v5-turn-stripe: #24406E; --v5-ok-wash: #163628;
 }

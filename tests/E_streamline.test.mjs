@@ -130,7 +130,7 @@ test('E_ More: one Sign out button, on the profile card, with the dashboard note
 
 test('E_ press and hover: the many-times-a-day controls change colour only; hover rules are behind a real hover; reduced motion turns every press transform off', () => {
   assert.match(css, /\.calhdr \.iconbtn:active, \.A_tabs a:active \{ transform: none; background: var\(--v5-fill\); \}/);
-  assert.match(css, /\.btn:active, \.chip:active, \.rowi:active, \.A_slide:active, \.iconbtn:active, \.E_pill:active, \.chk:active \{ transform: scale\(var\(--v5-press-scale\)\)/);
+  assert.match(css, /\.btn:active, \.chip:active, \.iconbtn:active, \.E_pill:active, \.chk:active \{ transform: scale\(var\(--v5-press-scale\)\)/); assert.doesNotMatch(css, /\.rowi:active[^{]*\{[^}]*scale/); assert.doesNotMatch(css, /\.A_slide:active[^{]*\{[^}]*scale/); // s96: rows and the slide track fill, they do not scale
   assert.doesNotMatch(css, /\.tab:active \{[^}]*transform/);
   const free = css.replace(/@media \(hover: hover\) and \(pointer: fine\) \{[^{}]*\{[^}]*\}\s*\}/g, '');
   assert.doesNotMatch(free, /\.btn-ghost:hover|\.iconbtn:hover/, 'hover only inside (hover: hover) and (pointer: fine)');
