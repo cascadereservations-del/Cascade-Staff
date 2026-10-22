@@ -1183,3 +1183,4 @@ a.T_more { justify-self: start; min-height: var(--touch); display: inline-flex; 
 .T_skid { flex: 1 1 auto; align-self: stretch; border-radius: 8px; }
 .idphoto.empty.err { aspect-ratio: 8 / 5; min-height: 0; }
 .idphoto img { border-radius: 8px; }
+.A_card .T_dates, .T_with { margin: 0; } .T_with { margin-top: 2px; }

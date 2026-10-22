@@ -614,7 +614,7 @@
     var prob = c && c.rain_prob != null && c.rain_prob !== '' ? +c.rain_prob : null;
     if (!watch && !(prob != null && prob >= 60 && !weatherStale(w))) return null;
     var peak = null; ((nw && nw.hours) || []).forEach(function (h) { if (h && h.pct > 0 && (!peak || h.pct > peak.pct)) peak = h; });
-    return { window: watch ? String(watch.text || '').replace(/^Rain watch,?\s*/i, '') || 'today' : 'today', pct: watch && watch.peak != null ? watch.peak : (peak ? peak.pct : prob), peakAt: peak ? peak.label : '',
+    return { src: watch ? 'watch' : 'chance', window: watch ? String(watch.text || '').replace(/^Rain watch,?\s*/i, '') || 'today' : 'today', pct: watch && watch.peak != null ? watch.peak : (peak ? peak.pct : prob), peakAt: peak ? peak.label : '',
       hi: c && c.today_high != null ? Math.round(+c.today_high) : null, lo: c && c.today_low != null ? Math.round(+c.today_low) : null };
   }
   // 60 minutes: the same age at which notices_v1 stops sending its weather (SQL: c_at > now() - interval '60 minutes'). Never higher than the server rule.

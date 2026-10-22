@@ -162,9 +162,9 @@
       '<div class="T_who">' + A_face(g.id_photo_path) + '<div class="T_id"><div class="T_namerow"><h2 class="A_name">' + esc(g.guest_name || 'Guest') + '</h2>' + tp.chip + '</div>' + tp.line + (tp.ret ? '<div>' + tp.ret + '</div>' : '') +
       (nl ? '<p class="help T_ask">' + esc(nl) + '</p>' : '') + '</div></div>' +
       '<p class="A_key num">' + esc(key) + '</p>' +
-      '<p class="sub num" style="margin:0">' + esc(CS.dayLabel(g.checkin_date) + ' → ' + CS.dayLabel(g.checkout_date) + ' · ' + CS.plural(g.nights != null ? g.nights : CS.daysBetween(g.checkin_date, g.checkout_date), 'night')) + '</p>' +
-      (kn ? '<div class="T_key note-key">' + ICON('alert', 's16') + '<span class="T_nt"><b>' + kn.word + '</b> ' + esc(kn.p) + '</span></div>' + (kn.more ? '<a class="T_more" href="#calendar/house">+' + kn.more + ' more ' + (kn.more === 1 ? 'note' : 'notes') + '</a>' : '') : '') +
-      '<a class="A_more" href="#calendar/house">Open guest card' + ICON('chev', 's16') + '</a></section>';
+      '<p class="sub num T_dates">' + esc(CS.dayLabel(g.checkin_date) + ' → ' + CS.dayLabel(g.checkout_date) + ' · ' + CS.plural(g.nights != null ? g.nights : CS.daysBetween(g.checkin_date, g.checkout_date), 'night')) + '</p>' +
+      (kn ? '<div class="T_key note-key">' + ICON('alert', 's16') + '<span class="T_nt"><b>' + kn.word + '</b> ' + esc(kn.p) + '</span></div>' + (kn.more ? '<a class="T_more" href="#calendar/' + (st.kind === 'house' ? 'house' : 'next') + '">+' + kn.more + ' more ' + (kn.more === 1 ? 'note' : 'notes') + '</a>' : '') : '') +
+      '<a class="A_more" href="#calendar/' + (st.kind === 'house' ? 'house' : 'next') + '">Open guest card' + ICON('chev', 's16') + '</a></section>';
   }
   // s96 SPEC-47: the 56 px face on the Today card, cropped from the guest's ID photo while one exists (inside the 30-day window). Same in-memory photo as the Guest ID card:
   // no download, copy or share control. Owner and admin tap it for the full ID (as on the guest card); everyone else sees it as a picture only.
@@ -172,6 +172,9 @@
     if (!path) return '';
     return CS.canSeeGuestContact(role()) ? '<button class="T_face" type="button" data-act="id-full" data-facepath="' + esc(path) + '" aria-label="Show the ID photo full screen"></button>' : '<span class="T_face" data-facepath="' + esc(path) + '"></span>';
   }
+  // The crop point (22% across, 45% down of the upright ID) is mapped back to the file's own axes for each turn, so a rotated photo still centres on the face.
+  var A_FACE_POS = { 0: '22% 45%', 90: '45% 78%', 180: '78% 55%', 270: '55% 22%' };
+  function A_faceTurn(img, d) { img.style.transform = d ? 'rotate(' + d + 'deg)' : ''; img.style.objectPosition = A_FACE_POS[d] || A_FACE_POS[0]; }
   function A_loadFaces(root) {
     Array.prototype.forEach.call(root.querySelectorAll('[data-facepath]'), function (box) {
       var path = box.getAttribute('data-facepath'), g0 = state.photoGen, hit = state.photos[path];
@@ -179,7 +182,7 @@
         if (g0 !== state.photoGen || !box.parentNode) return;
         var img = new Image(); img.alt = 'Guest photo from ID'; img.draggable = false; img.decoding = 'async';
         if (path && state.rot[url] === undefined && state.srot[path] !== undefined) state.rot[url] = state.srot[path];
-        var turn = function () { var d = state.rot[url] || 0; if (d) img.style.transform = 'rotate(' + d + 'deg)'; };
+        var turn = function () { A_faceTurn(img, state.rot[url] || 0); };
         img.addEventListener('load', function () { if (state.rot[url] === undefined && img.naturalWidth && img.naturalHeight > img.naturalWidth * 1.05) { state.rot[url] = 270; } turn(); });
         img.addEventListener('contextmenu', function (e) { e.preventDefault(); });
         turn(); img.src = url; box.innerHTML = ''; box.appendChild(img);
@@ -217,7 +220,7 @@
   // Two fixed lines under the greeting (temperature and condition; rain chance or how old the reading is). The slot is always drawn, with the same height, so nothing jumps when the reading lands.
   function H_wxStrip(p) {
     var w = p && p.weather, c = w && w.current, ok = !!c && c.temp != null, rl = ok ? CS.rainLine(w) : null, ra = ok ? CS.rainAlert(p, A_notices()) : null, l2 = 'Open the forecast';
-    if (ok) { var old = w.fetched_at && CS.weatherStale(w), rh = ra ? 'Rain likely' + (rl ? ', ' + rl.head.replace(/^Rain\s*/, '') : '') : (rl ? rl.head : ''); l2 = [rh ? rh + (rl && rl.rest && !old ? ' · ' + rl.rest : '') : '', old ? 'as of ' + CS.clockLabel(w.fetched_at) : ''].filter(Boolean).join(' · '); }
+    if (ok) { var old = w.fetched_at && CS.weatherStale(w), rh = ra ? (ra.src === 'watch' ? 'Rain likely ' + ra.window + (ra.pct != null ? ', up to ' + ra.pct + '%' : '') : 'Rain likely' + (rl ? ', ' + rl.head.replace(/^Rain\s*/, '') : '')) : (rl ? rl.head : ''); l2 = [rh ? rh + (rl && rl.rest && !old ? ' · ' + rl.rest : '') : '', old ? 'as of ' + CS.clockLabel(w.fetched_at) : ''].filter(Boolean).join(' · '); }
     return '<a class="H_wxstrip' + (ra ? ' rain' : '') + '" href="#weather" aria-label="Weather, open the forecast"><span class="l1">' + ICON(ra ? 'alert' : ok ? CS.weatherIcon(c.description) : 'cloud', 's16') + '<span>' + esc(ok ? CS.H_weatherShort(c.temp, c.description, (window.innerWidth || 360) < 340) : 'Weather') + '</span></span><span class="l2">' + esc(l2 || 'Tap for the forecast') + '</span></a>';
   }
   // The photo header: wordmark, the pill, refresh, greeting, date and weather (as of HH:MM when the weather is old). Drawn before the first answer too.
@@ -230,6 +233,7 @@
   // s96 SPEC-47: the rain row sits under the photo (text on a photo has unpredictable contrast). Only when rain is likely; the body opens with a grid-rows slide (styles.css, H_rain).
   function H_wxAlert(p) {
     var ra = CS.rainAlert(p, A_notices()); if (!ra) return '';
+    if (state.wxOpen === undefined) state.wxOpen = true; // known at load: drawn open, no motion; closing it is remembered across redraws
     var open = !!state.wxOpen, rng = ra.hi != null && ra.lo != null ? 'High ' + ra.hi + '°, low ' + ra.lo + '°. ' : '';
     return '<details class="H_wxalert' + (open ? ' on' : '') + '"' + (open ? ' open' : '') + '><summary data-act="wx-toggle">' + ICON('alert', 's16') + '<span class="H_wxt">Rain likely ' + esc(ra.window) + ' · bring towels in</span>' + ICON('chevdown', 's16') + '</summary>' +
       '<div class="H_rain"><div><p>' + (ra.pct != null ? 'Peak chance ' + ra.pct + '%' + (ra.peakAt ? ' around ' + esc(ra.peakAt) : '') + '. ' : '') + rng + '</p><a class="btn btn-secondary btn-sm" href="#weather">Open the forecast</a></div></div></details>';
@@ -243,7 +247,7 @@
   function A_heroPut(el, rest) {
     var h = el.firstElementChild;
     if (h && h.classList && h.classList.contains('A_hero') && h.querySelector) {
-      var t = document.createElement('div'); t.innerHTML = A_hero(); var n = t.firstChild;
+      var t = document.createElement('template'); t.innerHTML = A_hero(); var n = t.content.firstElementChild; // inert: the photo is not fetched or decoded again
       ['.A_greet', '.A_herorow'].forEach(function (q) { var a = h.querySelector(q), b = n.querySelector(q); if (a && b && a.innerHTML !== b.innerHTML) a.innerHTML = b.innerHTML; });
       while (h.nextSibling) el.removeChild(h.nextSibling);
       h.insertAdjacentHTML('afterend', rest);
@@ -509,7 +513,7 @@
     var tp = tierP(g, false), src = CS.sourceLabel(g.source), earlier = CS.earlierLine(g), withLine = CS.canSeeGuestContact(state.access && state.access.role) ? CS.companionsLine(g) : null; // D-319: owner/admin only, even if the server sent it
     var tint = kind === 'house' ? 'G_stay' : 'G_in'; // s93: arriving = green, in the house = blue (the house guest always checks out after today, so no third tint)
     var info = '<div class="card glass ' + tint + '" id="' + (kind === 'house' ? 'house' : 'next') + '"><div class="row-between"><span class="cap up">' + label + '</span>' + st + '</div>' +
-      '<div class="T_namerow T_gap"><h3 class="ttl">' + esc(g.guest_name || 'Guest') + '</h3>' + tp.chip + '</div>' + tp.line + (CS.notableLine(g) ? '<p class="help T_ask">' + esc(CS.notableLine(g)) + '</p>' : '') + (withLine ? '<p class="sub" style="margin:2px 0 0">' + esc(withLine) + '</p>' : '') +
+      '<div class="T_namerow T_gap"><h3 class="ttl">' + esc(g.guest_name || 'Guest') + '</h3>' + tp.chip + '</div>' + tp.line + (CS.notableLine(g) ? '<p class="help T_ask">' + esc(CS.notableLine(g)) + '</p>' : '') + (withLine ? '<p class="sub T_with">' + esc(withLine) + '</p>' : '') +
       '<div class="row-wrap" style="margin-top:6px">' + tp.ret + (src ? '<span class="pill p-neutral">' + esc(src) + '</span>' : '') + '</div>' +
       '<p class="sub num" style="margin:8px 0 0">' + esc(datesLine(g)) + '</p>' + (earlier ? '<p class="help num" style="margin:2px 0 0">' + esc(earlier) + '</p>' : '') + contactBlock(g) +
       H_readyBlock(g.arrival_ready, g, true) + (canAddDetails() && g.uid ? '<a class="btn btn-secondary btn-sm" href="./guest/#' + encodeURIComponent(g.uid) + '" style="margin-top:12px">' + ICON('idcard', 's16') + 'Add guest details</a>' : '') +
@@ -628,7 +632,7 @@
   // Rotate: +90 each tap. Owner/admin also save it (set_guest_photo_rotation_v1) so it sticks for everyone; other roles turn it for this session only.
   function H_idRotate() {
     var ro = $('H_idfull'), rs = ro && ro.getAttribute('data-src'), ri = ro && ro.querySelector('img'); if (!rs || !ri) return;
-    var d = state.rot[rs] = (H_idRot(rs) + 90) % 360; ri.className = 'r' + d; var path0 = H_pathOf(rs); if (path0 && document.querySelectorAll) Array.prototype.forEach.call(document.querySelectorAll('[data-idpath]'), function (bx) { if (bx.getAttribute('data-idpath') === path0) H_turnBox(bx, d); }); // the card's small picture follows
+    var d = state.rot[rs] = (H_idRot(rs) + 90) % 360; ri.className = 'r' + d; Array.prototype.forEach.call(document.querySelectorAll('[data-facepath] img'), function (fi) { if (fi.src === rs) A_faceTurn(fi, d); }); // the Today face follows var path0 = H_pathOf(rs); if (path0 && document.querySelectorAll) Array.prototype.forEach.call(document.querySelectorAll('[data-idpath]'), function (bx) { if (bx.getAttribute('data-idpath') === path0) H_turnBox(bx, d); }); // the card's small picture follows
     var path = H_pathOf(rs); if (!path || !CS.canSeeGuestContact(role()) || !sb) return;
     // Debounced: three quick taps send one write of the last value, so the server cannot commit them out of order.
     var st = ro.querySelector('.H_idst'), gen = state.photoGen, seq = state.rotSeq = (state.rotSeq || 0) + 1;
@@ -2165,6 +2169,8 @@
     state.cleanDone = { id: /^[\w-]{1,64}$/.test(String(d.session_id)) ? String(d.session_id) : '', startedAt: String(d.started_at || ''), finishedAt: String(d.finished_at || ''), issues: n(d.issues), photos: n(d.photos), at: Date.now() };
     location.hash = '#home'; route();
   });
+  // The rain row can also be opened without a click (find in page, assistive tech): keep the slide class and the remembered state in step with details.open.
+  document.addEventListener('toggle', function (ev) { var d = ev.target; if (d && d.classList && d.classList.contains('H_wxalert')) { state.wxOpen = !!d.open; d.classList.toggle('on', !!d.open); } }, true);
   document.addEventListener('click', function (ev) {
     var t = ev.target.closest('[data-act],[data-theme],[data-day],[data-warn],[data-nfilter],[data-tfilter]'); if (!t) return;
     var a = t.getAttribute('data-act');
