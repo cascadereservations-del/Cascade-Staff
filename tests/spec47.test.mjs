@@ -1,4 +1,4 @@
-// SPEC-47 (Staff 3.4.12): tier colours, important notes, asked-about line, rain row, face, key time. Pure helpers in lib.js plus the real Home render through the app harness.
+// SPEC-47 (Staff 3.4.13): tier colours, important notes, asked-about line, rain row, face, key time. Pure helpers in lib.js plus the real Home render through the app harness.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { CS, el, read, boot, HOMEWITH, baseHandlers, stayRow, TODAY, NOTICES_RAW } from './_a_harness.mjs';
@@ -115,8 +115,8 @@ test('Home redraw: the hero is built once (the photo is not rebuilt) and the fre
   assert.ok(tpl.length >= 1 && tpl[0].startsWith('<div class="A_hero"'), 'the fresh hero is parsed in a <template>'); assert.ok(kids.length >= 1, 'the rest is inserted after the hero');
 });
 
-test('face crop: every turn maps the 22% / 45% face point back to the file axes; the Today face follows Rotate', () => {
-  const src = read('app.js'); assert.match(src, /var A_FACE_POS = \{ 0: '22% 45%', 90: '45% 78%', 180: '78% 55%', 270: '55% 22%' \}/);
+test('face crop: every turn goes through CS.faceFrame; the Today face follows Rotate', () => {
+  const src = read('app.js'); assert.match(src, /function A_faceTurn\(img, d\)[\s\S]{0,400}CS\.faceFrame\(/, 'the turn is the pure CS.faceFrame (SPEC-47b)');
   assert.match(src, /querySelectorAll\('\[data-facepath\] img'\)[\s\S]{0,120}A_faceTurn\(fi, d\)/);
   assert.match(src, /href="#calendar\/' \+ \(st\.kind === 'house' \? 'house' : 'next'\)/, 'links go to #house or #next, the ids the calendar card has');
   assert.doesNotMatch(/function todayCard[\s\S]*?\n  \}\n/.exec(src)[0], /style="/, 'no inline style left in the Today card markup');
@@ -129,8 +129,8 @@ test('ID card and contact: no status tint on the ID card, one copy control per v
   assert.match(read('styles.css'), /\.idphoto\.empty\.err \{ aspect-ratio: 8 \/ 5/);
 });
 
-test('release: 3.4.12, cache v37, tier and key-note tokens in all three theme blocks, reduced motion covers the skeleton and the rain row', () => {
-  assert.equal(JSON.parse(read('package.json')).version, '3.4.12'); assert.match(read('app.js'), /version: '3\.4\.12'/); assert.match(read('sw.js'), /CACHE_NAME = 'cs-shell-v37'/);
+test('release: 3.4.13, cache v38, tier and key-note tokens in all three theme blocks, reduced motion covers the skeleton and the rain row', () => {
+  assert.equal(JSON.parse(read('package.json')).version, '3.4.13'); assert.match(read('app.js'), /version: '3.4.13'/); assert.match(read('sw.js'), /CACHE_NAME = 'cs-shell-v38'/);
   const tk = read('tokens.css');
   for (const k of ['returning', 'regular', 'vip']) for (const s of ['t', 'w']) assert.equal(tk.split('--v5-tier-' + k + '-' + s + ':').length - 1, 3, k + s);
   assert.equal(tk.split('--v5-note-key-w:').length - 1, 3);

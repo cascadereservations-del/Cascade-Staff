@@ -20,7 +20,7 @@
     url: 'https://qkgfhsdppslwunarczeq.supabase.co',
     key: 'sb_publishable_JFuRYZ9csmQULcMRmHXDSg_Abo9UeCj',
     propertyId: '6ae230f4-c189-4547-84b1-cb6e0b2cc9bd',
-    version: '3.4.12'
+    version: '3.4.13'
   };
   var LINKS = {
     checklist: 'https://cascadereservations-del.github.io/CH-Cleaners-Checklist/',
@@ -159,22 +159,29 @@
     var g = st.guest, tp = tierP(st.guest, true), ht = A_houseT(), nl = CS.notableLine(g), kn = CS.keyNote(g.notes);
     var key = st.kind === 'house' ? 'Out ' + (CS.fmtTime(g.checkout_time) || ht.outLabel) : 'In ' + (CS.fmtTime(g.checkin_time) || ht.inLabel); // s96: the time that matters comes first
     return '<section class="card glass A_card F_span" aria-label="Today in the house"><div class="row-between"><span class="cap up">' + esc(st.label) + '</span>' + (st.pill ? pill(st.pill.tone, toneIcon(st.pill.tone), st.pill.text) : '') + '</div>' +
-      '<div class="T_who">' + A_face(g.id_photo_path) + '<div class="T_id"><div class="T_namerow"><h2 class="A_name">' + esc(g.guest_name || 'Guest') + '</h2>' + tp.chip + '</div>' + tp.line + (tp.ret ? '<div>' + tp.ret + '</div>' : '') +
-      (nl ? '<p class="help T_ask">' + esc(nl) + '</p>' : '') + '</div></div>' +
+      '<div class="T_who"><div class="T_id"><div class="T_namerow"><h2 class="A_name">' + esc(g.guest_name || 'Guest') + '</h2>' + tp.chip + '</div>' + tp.line + (tp.ret ? '<div>' + tp.ret + '</div>' : '') +
+      (nl ? '<p class="help T_ask">' + esc(nl) + '</p>' : '') + '</div>' + A_face(g.id_photo_path, g.id_face_box) + '</div>' +
       '<p class="A_key num">' + esc(key) + '</p>' +
       '<p class="sub num T_dates">' + esc(CS.dayLabel(g.checkin_date) + ' → ' + CS.dayLabel(g.checkout_date) + ' · ' + CS.plural(g.nights != null ? g.nights : CS.daysBetween(g.checkin_date, g.checkout_date), 'night')) + '</p>' +
       (kn ? '<div class="T_key note-key">' + ICON('alert', 's16') + '<span class="T_nt"><b>' + kn.word + '</b> ' + esc(kn.p) + '</span></div>' + (kn.more ? '<a class="T_more" href="#calendar/' + (st.kind === 'house' ? 'house' : 'next') + '">+' + kn.more + ' more ' + (kn.more === 1 ? 'note' : 'notes') + '</a>' : '') : '') +
       '<a class="A_more" href="#calendar/' + (st.kind === 'house' ? 'house' : 'next') + '">Open guest card' + ICON('chev', 's16') + '</a></section>';
   }
-  // s96 SPEC-47: the 56 px face on the Today card, cropped from the guest's ID photo while one exists (inside the 30-day window). Same in-memory photo as the Guest ID card:
-  // no download, copy or share control. Owner and admin tap it for the full ID (as on the guest card); everyone else sees it as a picture only.
-  function A_face(path) {
+  // s97 SPEC-47b: the face sits on the RIGHT of the guest header, an 88 px rounded square zoomed on the face box the server found (id_face_box, stored-frame 0-1; absent = a tight
+  // fallback crop). The space is reserved from the first paint. Same in-memory photo as the Guest ID card: no download, copy or share control. Owner and admin tap it
+  // for the full ID (as on the guest card); everyone else sees it as a picture only.
+  var A_FACE_PX = 88;
+  function A_face(path, box) {
     if (!path) return '';
-    return CS.canSeeGuestContact(role()) ? '<button class="T_face" type="button" data-act="id-full" data-facepath="' + esc(path) + '" aria-label="Show the ID photo full screen"></button>' : '<span class="T_face" data-facepath="' + esc(path) + '"></span>';
+    var bx = box && typeof box === 'object' ? ' data-facebox="' + esc(JSON.stringify([box.x, box.y, box.w, box.h, box.src === 'none' ? 'none' : 'v'])) + '"' : '';
+    return CS.canSeeGuestContact(role()) ? '<button class="T_face" type="button" data-act="id-full" data-facepath="' + esc(path) + '"' + bx + ' aria-label="Show the ID photo full screen"></button>' : '<span class="T_face" data-facepath="' + esc(path) + '"' + bx + '></span>';
   }
-  // The crop point (22% across, 45% down of the upright ID) is mapped back to the file's own axes for each turn, so a rotated photo still centres on the face.
-  var A_FACE_POS = { 0: '22% 45%', 90: '45% 78%', 180: '78% 55%', 270: '55% 22%' };
-  function A_faceTurn(img, d) { img.style.transform = d ? 'rotate(' + d + 'deg)' : ''; img.style.objectPosition = A_FACE_POS[d] || A_FACE_POS[0]; }
+  // Place the photo for turn d: the pure math is CS.faceFrame (lib.js); the box rides on the element so Rotate can redo it.
+  function A_faceTurn(img, d) {
+    if (!img.naturalWidth) return;
+    var raw = img.parentNode && img.parentNode.getAttribute && img.parentNode.getAttribute('data-facebox'), a = null; try { a = raw ? JSON.parse(raw) : null; } catch (e) { a = null; }
+    var f = CS.faceFrame(a ? { x: a[0], y: a[1], w: a[2], h: a[3], src: a[4] } : null, img.naturalWidth, img.naturalHeight, d, A_FACE_PX); if (!f) return;
+    img.style.width = f.w + 'px'; img.style.height = f.h + 'px'; img.style.left = f.left + 'px'; img.style.top = f.top + 'px'; img.style.transform = d ? 'rotate(' + d + 'deg)' : '';
+  }
   function A_loadFaces(root) {
     Array.prototype.forEach.call(root.querySelectorAll('[data-facepath]'), function (box) {
       var path = box.getAttribute('data-facepath'), g0 = state.photoGen, hit = state.photos[path];
@@ -184,7 +191,7 @@
         if (path && state.rot[url] === undefined && state.srot[path] !== undefined) state.rot[url] = state.srot[path];
         var turn = function () { A_faceTurn(img, state.rot[url] || 0); };
         img.addEventListener('load', function () { if (state.rot[url] === undefined && img.naturalWidth && img.naturalHeight > img.naturalWidth * 1.05) { state.rot[url] = 270; } turn(); });
-        img.addEventListener('contextmenu', function (e) { e.preventDefault(); });
+        img.addEventListener('contextmenu', function (e) { e.preventDefault(); }); box.addEventListener('contextmenu', function (e) { e.preventDefault(); });
         turn(); img.src = url; box.innerHTML = ''; box.appendChild(img);
       };
       if (hit && Date.now() - hit.at < 30 * 60000) { put(hit.url); return; }

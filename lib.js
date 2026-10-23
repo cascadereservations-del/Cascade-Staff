@@ -520,6 +520,22 @@
   }
   // s96 SPEC-47: topics a guest asked about (card key `notable`, topic keys only), in plain words; absent or empty gives null, max 3, the third after a dot
   var TOPIC_LABELS = { directions: 'directions', links: 'links', wifi: 'Wi-Fi', brownout: 'brownout', guest_count: 'guest count', early_checkin: 'early check-in', late_checkout: 'late check-out', parking: 'parking', pets: 'pets', id: 'ID', complaint: 'a concern' };
+  // s97 SPEC-47b: where to put the stored ID photo inside a square face frame so the face box fills it. box = {x,y,w,h} normalised 0-1 in the STORED
+  // (unrotated) frame; rot = clockwise degrees the photo is shown at. Returns the unrotated <img> size and top-left (px, in the frame) to be turned by
+  // CSS rotate(rot) about its own centre. No box (null, src 'none', bad numbers) = the fallback: 2.2x the cover scale around 22% / 45% of the UPRIGHT image.
+  function faceFrame(box, imgW, imgH, rot, frame) {
+    var W = Number(imgW), H = Number(imgH), F = Number(frame), d = ((Number(rot) || 0) % 360 + 360) % 360;
+    if (!(W > 0) || !(H > 0) || !(F > 0) || d % 90) return null;
+    var ok = box && box.src !== 'none' && ['x', 'y', 'w', 'h'].every(function (k) { return typeof box[k] === 'number' && isFinite(box[k]); }) && box.w > 0 && box.h > 0;
+    var tw = d === 90 || d === 270 ? H : W, th = d === 90 || d === 270 ? W : H, cover = F / Math.min(tw, th), s, cx, cy;
+    if (ok) {
+      var b = d === 90 ? { x: 1 - box.y - box.h, y: box.x, w: box.h, h: box.w } : d === 180 ? { x: 1 - box.x - box.w, y: 1 - box.y - box.h, w: box.w, h: box.h } : d === 270 ? { x: box.y, y: 1 - box.x - box.w, w: box.h, h: box.w } : box;
+      s = Math.max(F / Math.max(box.w * W, box.h * H), cover); cx = b.x + b.w / 2; cy = b.y + b.h / 2;
+    } else { s = 2.2 * cover; cx = 0.22; cy = 0.45; }
+    var ox = Math.min(0, Math.max(F - tw * s, F / 2 - cx * tw * s)), oy = Math.min(0, Math.max(F - th * s, F / 2 - cy * th * s)); // keep the frame covered
+    var w = W * s, h = H * s; // the turned image's box is (ox, oy, tw*s, th*s); the unturned one shares its centre
+    return { scale: s, w: w, h: h, left: ox + tw * s / 2 - w / 2, top: oy + th * s / 2 - h / 2, fallback: !ok };
+  }
   function notableLine(g) {
     var n = g && Array.isArray(g.notable) ? g.notable : [], seen = {}, l = [];
     n.forEach(function (x) { var k = x && x.topic; if (l.length < 3 && typeof k === 'string' && Object.prototype.hasOwnProperty.call(TOPIC_LABELS, k) && !seen[k]) { seen[k] = 1; l.push(TOPIC_LABELS[k]); } });
@@ -1434,7 +1450,7 @@
     fmtTime: fmtTime, fmt24: fmt24, ordinal: ordinal, plural: plural, agoLabel: agoLabel, clockLabel: clockLabel,
     monthGrid: monthGrid, dayState: dayState, dayStatus: dayStatus, mergeStays: mergeStays, sameGuest: sameGuest, dayMoves: dayMoves, blockWhy: blockWhy, flagName: flagName, FLAG_KINDS: FLAG_KINDS, blockedLines: blockedLines, blockedLineText: blockedLineText,
     canFlagDays: canFlagDays, guestContact: guestContact, canSeeGuestContact: canSeeGuestContact, MESSENGER_INBOX: MESSENGER_INBOX, rpcMissing: rpcMissing, tgLink: tgLink, warningInfo: warningInfo, findingKey: findingKey, initialOf: initialOf, sourceLabel: sourceLabel, stayDates: stayDates, monthInRange: monthInRange,
-    parseNotes: parseNotes, returningLabel: returningLabel, tierLabel: tierLabel, tierLine: tierLine, tierParts: tierParts, keyNote: keyNote, TOPIC_LABELS: TOPIC_LABELS, notableLine: notableLine, weatherIcon: weatherIcon, rainAlert: rainAlert, earlierLine: earlierLine, companionsLine: companionsLine, todayCardState: todayCardState,
+    faceFrame: faceFrame, parseNotes: parseNotes, returningLabel: returningLabel, tierLabel: tierLabel, tierLine: tierLine, tierParts: tierParts, keyNote: keyNote, TOPIC_LABELS: TOPIC_LABELS, notableLine: notableLine, weatherIcon: weatherIcon, rainAlert: rainAlert, earlierLine: earlierLine, companionsLine: companionsLine, todayCardState: todayCardState,
     orderWarnings: orderWarnings, brownoutText: brownoutText, lowStockText: lowStockText, warningSummary: warningSummary,
     weatherLine: weatherLine, rainLine: rainLine, weatherStale: weatherStale, WEATHER_STALE_MIN: WEATHER_STALE_MIN, esc: esc,
     A_HOUSE_FALLBACK: A_HOUSE_FALLBACK, A_houseTimes: A_houseTimes, A_turnoverClock: A_turnoverClock, A_turnoverLine: A_turnoverLine, A_hm: A_hm, A_NOTICE_TYPES: A_NOTICE_TYPES, A_noticesView: A_noticesView, A_noticeFilters: A_noticeFilters, A_dayMarks: A_dayMarks, A_noticeDay: A_noticeDay, A_guestMessage: A_guestMessage, A_CAL_TABS: A_CAL_TABS, A_calTab: A_calTab, A_stayShade: A_stayShade, A_hubGroups: A_hubGroups, A_hubNative: A_hubNative, A_hubRoutes: A_hubRoutes, A_hubRouteOk: A_hubRouteOk, A_hubDoorUrl: A_hubDoorUrl, A_whatsNew: A_whatsNew, A_shortTime: A_shortTime, A_PINNED: A_PINNED, A_noticeAddError: A_noticeAddError, A_NOTICE_HINT: A_NOTICE_HINT, A_flagDup: A_flagDup, A_facebookUrl: A_facebookUrl, A_fbPluginUrl: A_fbPluginUrl, A_noticeAddProblem: A_noticeAddProblem, A_noticeAddArgs: A_noticeAddArgs, A_plainRefusal: A_plainRefusal, A_hour12: A_hour12, A_timeRange: A_timeRange,

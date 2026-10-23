@@ -1148,10 +1148,11 @@ p.sub.T_line { margin: 2px 0 0; padding-left: 8px; border-left: 2px solid var(--
 .T_id { display: grid; gap: 4px; min-width: 0; flex: 1 1 auto; }
 .A_card p.help.T_ask, p.help.T_ask { margin: 2px 0 0; color: var(--v5-ink-2); }
 .A_key { margin: 0; font-weight: 600; color: var(--fg); font-size: var(--v5-t-body); }
-/* the face: a 56 px round crop of the ID photo; the ID itself is never cropped */
-.T_face { flex: none; display: block; width: 56px; height: 56px; aspect-ratio: 1; padding: 0; border: 0; border-radius: 50%; overflow: hidden; background: var(--v5-sunk); }
+/* the face (s97): an 88 px rounded square on the right of the guest header; the photo is a positioned <img> turned and scaled in app.js so the face box fills it */
+.T_face { position: relative; flex: none; display: block; width: 88px; height: 88px; aspect-ratio: 1; padding: 0; border: 0; border-radius: 12px; overflow: hidden; background: var(--v5-sunk); }
 .T_face:not(:focus-visible) { outline: 1px solid var(--v5-sep); outline-offset: -1px; }
-.T_face img { display: block; width: 100%; height: 100%; object-fit: cover; object-position: 22% 45%; -webkit-touch-callout: none; user-select: none; -webkit-user-select: none; }
+.T_face img { position: absolute; max-width: none; display: block; -webkit-touch-callout: none; user-select: none; -webkit-user-select: none; pointer-events: none; }
+.T_who { align-items: flex-start; }
 /* important notes: wash, left bar, glyph + word (Important: / Request:) */
 .notes li { font-size: var(--v5-t-body); line-height: 1.45; }
 .notes li.note-key, .T_key { background: var(--v5-note-key-w); border-left: 3px solid var(--v5-warn-t); border-radius: var(--r-sm); padding: 8px 10px; color: var(--fg); }
