@@ -214,7 +214,7 @@ test('A_ live mock: the turnover card walks out, clean, in against the frozen cl
   const h = app.els['v-home'].innerHTML;
   assert.match(h, /Guest out<\/span><b>12:00 noon/); assert.match(h, /Clean<\/span><b>Until 2 pm/); assert.match(h, /Guest in<\/span><b>2:00 pm/);
   const quiet = await boot({ role: 'cleaner', hash: '#home', handlers: base('cleaner', { staff_home_v1: () => HOME(guest({ checkout_date: '2026-10-17' }), guest({ uid: 'h', checkin_date: '2026-10-17', checkout_date: '2026-10-19' })) }) });
-  assert.match(quiet.els['v-home'].innerHTML, /No turnover today/); assert.doesNotMatch(quiet.els['v-home'].innerHTML, /Slide to start/);
+  assert.match(quiet.els['v-home'].innerHTML, /None today · next out 19 Oct, 12:00 noon/); assert.doesNotMatch(quiet.els['v-home'].innerHTML, /Slide to start/);
 });
 test('A_ live mock: a missing notices_v1 (PGRST202) hides the card and the tab, with no error shown', async () => {
   const gone = () => ({ error: { code: 'PGRST202', message: 'Could not find the function public.notices_v1' }, data: null });
@@ -292,7 +292,7 @@ test('A_ motion and accessibility floor: press 0.97 at 160 ms, sheets 300 ms wit
   assert.match(css, /\.A_tabs a \{ min-height: 44px/); assert.match(css, /\.chip \{ min-height: var\(--touch\)/); // F_: controls grow with the text size instead of clipping it
 });
 test('A_ service worker and manifest: new cache name, tokens + house photos precached and each photo is 60 KB or less, theme colours are the v5 backgrounds', () => {
-  const sw = read('sw.js'); assert.match(sw, /CACHE_NAME = 'cs-shell-v38'/);
+  const sw = read('sw.js'); assert.match(sw, /CACHE_NAME = 'cs-shell-v39'/);
   for (const u of ['./tokens.css', './img/house-hero.webp', './img/house-blur.webp', './fonts/dm-serif-display-400.woff2']) assert.ok(sw.includes("'" + u + "'") || sw.includes(u.replace('./', '').replace('fonts/', '')) , u);
   for (const f of ['img/house-hero.webp', 'img/house-blur.webp']) assert.ok(fs.statSync(path.join(root, f)).size <= 60 * 1024, f + ' is 60 KB or less');
   const man = JSON.parse(read('manifest.webmanifest')); assert.equal(man.theme_color, '#EEF1F4'); assert.equal(man.background_color, '#EEF1F4');

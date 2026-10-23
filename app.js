@@ -20,7 +20,7 @@
     url: 'https://qkgfhsdppslwunarczeq.supabase.co',
     key: 'sb_publishable_JFuRYZ9csmQULcMRmHXDSg_Abo9UeCj',
     propertyId: '6ae230f4-c189-4547-84b1-cb6e0b2cc9bd',
-    version: '3.4.13'
+    version: '3.4.14'
   };
   var LINKS = {
     checklist: 'https://cascadereservations-del.github.io/CH-Cleaners-Checklist/',
@@ -158,11 +158,10 @@
     if (!st.guest) return '<section class="card glass A_card F_span" aria-label="Today in the house"><span class="cap up">' + esc(st.label) + '</span><p class="sub">The house is free tonight. The next stay will show here.</p></section>';
     var g = st.guest, tp = tierP(st.guest, true), ht = A_houseT(), nl = CS.notableLine(g), kn = CS.keyNote(g.notes);
     var key = st.kind === 'house' ? 'Out ' + (CS.fmtTime(g.checkout_time) || ht.outLabel) : 'In ' + (CS.fmtTime(g.checkin_time) || ht.inLabel); // s96: the time that matters comes first
-    return '<section class="card glass A_card F_span" aria-label="Today in the house"><div class="row-between"><span class="cap up">' + esc(st.label) + '</span>' + (st.pill ? pill(st.pill.tone, toneIcon(st.pill.tone), st.pill.text) : '') + '</div>' +
-      '<div class="T_who"><div class="T_id"><div class="T_namerow"><h2 class="A_name">' + esc(g.guest_name || 'Guest') + '</h2>' + tp.chip + '</div>' + tp.line + (tp.ret ? '<div>' + tp.ret + '</div>' : '') +
-      (nl ? '<p class="help T_ask">' + esc(nl) + '</p>' : '') + '</div>' + A_face(g.id_photo_path, g.id_face_box) + '</div>' +
-      '<p class="A_key num">' + esc(key) + '</p>' +
-      '<p class="sub num T_dates">' + esc(CS.dayLabel(g.checkin_date) + ' → ' + CS.dayLabel(g.checkout_date) + ' · ' + CS.plural(g.nights != null ? g.nights : CS.daysBetween(g.checkin_date, g.checkout_date), 'night')) + '</p>' +
+    return '<section class="card glass A_card F_span T_card" aria-label="Today in the house"><div class="row-between"><span class="cap up">' + esc(st.label) + '</span>' + (st.pill ? pill(st.pill.tone, toneIcon(st.pill.tone), st.pill.text) : '') + '</div>' +
+      '<div class="T_who"><div class="T_id"><div class="T_namerow"><h2 class="A_name">' + esc(g.guest_name || 'Guest') + '</h2>' + tp.chip + '</div></div>' + A_face(g) + '</div>' + // s98 SPEC-47c: the face sits beside the name + chip only; everything under it spans the card
+      tp.line + (tp.ret ? '<div>' + tp.ret + '</div>' : '') + (nl ? '<p class="help T_ask">' + esc(nl) + '</p>' : '') +
+      '<p class="sub num T_when"><strong class="A_key">' + esc(key) + '</strong> · ' + esc(A_stayDates(g)) + '</p>' +
       (kn ? '<div class="T_key note-key">' + ICON('alert', 's16') + '<span class="T_nt"><b>' + kn.word + '</b> ' + esc(kn.p) + '</span></div>' + (kn.more ? '<a class="T_more" href="#calendar/' + (st.kind === 'house' ? 'house' : 'next') + '">+' + kn.more + ' more ' + (kn.more === 1 ? 'note' : 'notes') + '</a>' : '') : '') +
       '<a class="A_more" href="#calendar/' + (st.kind === 'house' ? 'house' : 'next') + '">Open guest card' + ICON('chev', 's16') + '</a></section>';
   }
@@ -170,8 +169,19 @@
   // fallback crop). The space is reserved from the first paint. Same in-memory photo as the Guest ID card: no download, copy or share control. Owner and admin tap it
   // for the full ID (as on the guest card); everyone else sees it as a picture only.
   var A_FACE_PX = 88;
-  function A_face(path, box) {
+  // "24 → 25 Oct · 1 night" (the month once when both days share it)
+  function A_stayDates(g) {
+    var a = CS.dayLabel(g.checkin_date), b = CS.dayLabel(g.checkout_date), n = g.nights != null ? g.nights : CS.daysBetween(g.checkin_date, g.checkout_date);
+    return (a.split(' ')[1] === b.split(' ')[1] ? a.split(' ')[0] : a) + ' → ' + b + ' · ' + CS.plural(n, 'night');
+  }
+  function A_face(g) {
+    var path = g.id_photo_path, box = g.id_face_box;
     if (!path) return '';
+    var fr = box && typeof box === 'object' ? CS.faceFrame(box, 1, 1, 0, 1) : null;
+    if (!fr || fr.fallback) { // s98: face not located yet (null box or src 'none'): the first initial on the tier colour, never the ID itself
+      var ini = Array.from(String(g.guest_name || 'Guest').trim())[0] || 'G';
+      return '<span class="T_face T_ph' + (CS.tierLabel(g.tier) ? ' T_' + g.tier : '') + '" aria-hidden="true">' + esc(ini.toUpperCase()) + '</span>';
+    }
     var bx = box && typeof box === 'object' ? ' data-facebox="' + esc(JSON.stringify([box.x, box.y, box.w, box.h, box.src === 'none' ? 'none' : 'v'])) + '"' : '';
     return CS.canSeeGuestContact(role()) ? '<button class="T_face" type="button" data-act="id-full" data-facepath="' + esc(path) + '"' + bx + ' aria-label="Show the ID photo full screen"></button>' : '<span class="T_face" data-facepath="' + esc(path) + '"' + bx + '></span>';
   }
@@ -291,8 +301,8 @@
     var p = state.payload, T = A_houseT(), clock = CS.A_turnoverClock(new Date(), T), ds = dayStatusOf(p.today), outToday = !!ds.out, inToday = !!ds.arrive;
     if (!outToday && !inToday) {
       var nx = staysOf().filter(function (st) { return st.checkout_date > p.today; })[0];
-      var nextOut = nx ? 'Next guest out ' + CS.dayLabel(nx.checkout_date) + ', ' + T.outLabel + '.' : 'Nothing is booked to leave soon.';
-      return '<section class="card glass A_card" aria-label="Turnover today"><span class="cap up">Turnover today</span><p class="sub" style="margin:0">No turnover today. ' + esc(nextOut) + '</p>' + A_primary(staff, false) + '</section>';
+      var nextOut = nx ? ' · next out ' + CS.dayLabel(nx.checkout_date) + ', ' + T.outLabel : ' · nothing booked to leave soon';
+      return '<section class="card glass A_card" aria-label="Turnover today"><span class="cap up">Turnover today</span><p class="sub" style="margin:0">' + esc('None today' + nextOut) + '</p>' + A_primary(staff, false) + '</section>';
     }
     var win = clock.phase === 'window', closed = clock.phase === 'after';
     if (!staff) { // F4: the verdict. Three check rows with a glyph and a word; a row whose data is absent is not drawn.

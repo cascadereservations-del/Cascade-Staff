@@ -1,4 +1,4 @@
-// SPEC-47 (Staff 3.4.13): tier colours, important notes, asked-about line, rain row, face, key time. Pure helpers in lib.js plus the real Home render through the app harness.
+// SPEC-47 (Staff 3.4.14): tier colours, important notes, asked-about line, rain row, face, key time. Pure helpers in lib.js plus the real Home render through the app harness.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { CS, el, read, boot, HOMEWITH, baseHandlers, stayRow, TODAY, NOTICES_RAW } from './_a_harness.mjs';
@@ -52,7 +52,7 @@ test('Today card (live path): key time first, tier chip + line, important note w
   const g = GUEST({ notable: [{ topic: 'directions', last_seen: '2026-10-14T01:00:00Z', source: 'airbnb' }, { topic: 'guest_count', last_seen: '2026-10-13T01:00:00Z', source: 'messenger' }] });
   const app = await boot({ role: 'cleaner', hash: '#home', handlers: baseHandlers('cleaner', { staff_home_v1: homeOf(g) }) });
   const h = html(app);
-  assert.match(h, /<p class="A_key num">Out 12:00 noon<\/p>/); assert.ok(h.indexOf('A_key') < h.indexOf('→'), 'the time comes before the dates');
+  assert.match(h, /<p class="sub num T_when"><strong class="A_key">Out 12:00 noon<\/strong> · 13 → 17 Oct · 4 nights<\/p>/); assert.ok(h.indexOf('A_key') < h.indexOf('→'), 'the time comes before the dates');
   assert.doesNotMatch(h, / · out /);
   assert.match(h, /class="pill p-tier-regular"/); assert.match(h, /<p class="sub T_line T_regular">Late check-out when free<\/p>/);
   assert.match(h, /<div class="T_key note-key">[\s\S]*<b>Important:<\/b> Reported a damage to the kettle/); assert.match(h, /href="#calendar\/house">\+3 more notes<\/a>/);
@@ -66,10 +66,12 @@ test('Today card (live path): key time first, tier chip + line, important note w
 
 test('Today card: arriving guest gets In time; the face shows only with a photo and is a button for owner/admin only', async () => {
   const arriving = await boot({ role: 'admin', hash: '#home', handlers: baseHandlers('admin', { staff_home_v1: () => HOMEWITH([], { next_guest: GUEST({ checkin_date: TODAY, id_photo_path: 'g/1.jpg' }) }) }) });
-  assert.match(html(arriving), /<p class="A_key num">In 2:00 pm<\/p>/);
-  assert.match(html(arriving), /<button class="T_face" type="button" data-act="id-full" data-facepath="g\/1.jpg" aria-label="Show the ID photo full screen"><\/button>/);
-  const cleaner = await boot({ role: 'cleaner', hash: '#home', handlers: baseHandlers('cleaner', { staff_home_v1: homeOf(GUEST({ id_photo_path: 'g/1.jpg' })) }) });
-  assert.match(html(cleaner), /<span class="T_face" data-facepath="g\/1.jpg"><\/span>/); assert.doesNotMatch(html(cleaner), /<button class="T_face"/);
+  assert.match(html(arriving), /<strong class="A_key">In 2:00 pm<\/strong>/);
+  assert.match(html(arriving), /<span class="T_face T_ph T_regular" aria-hidden="true">A<\/span>/, 'photo but no face box yet: the initial, not the ID');
+  const located = await boot({ role: 'admin', hash: '#home', handlers: baseHandlers('admin', { staff_home_v1: () => HOMEWITH([], { next_guest: GUEST({ checkin_date: TODAY, id_photo_path: 'g/1.jpg', id_face_box: { x: 0.1, y: 0.2, w: 0.2, h: 0.4, src: 'vision' } }) }) }) });
+  assert.match(html(located), /<button class="T_face" type="button" data-act="id-full" data-facepath="g\/1.jpg" data-facebox="[^"]*" aria-label="Show the ID photo full screen"><\/button>/);
+  const cleaner = await boot({ role: 'cleaner', hash: '#home', handlers: baseHandlers('cleaner', { staff_home_v1: homeOf(GUEST({ id_photo_path: 'g/1.jpg', id_face_box: { x: 0.1, y: 0.2, w: 0.2, h: 0.4, src: 'vision' } })) }) });
+  assert.match(html(cleaner), /<span class="T_face" data-facepath="g\/1.jpg" data-facebox="[^"]*"><\/span>/); assert.doesNotMatch(html(cleaner), /<button class="T_face"/);
   const src = read('app.js');
   assert.match(src, /img\.alt = 'Guest photo from ID'/); assert.match(src, /img\.draggable = false/);
   assert.doesNotMatch(/function A_loadFaces[\s\S]*?\n  \}\n/.exec(src)[0], /download|createElement\('a'\)|share|clipboard/i, 'no new download, copy or share control');
@@ -129,8 +131,8 @@ test('ID card and contact: no status tint on the ID card, one copy control per v
   assert.match(read('styles.css'), /\.idphoto\.empty\.err \{ aspect-ratio: 8 \/ 5/);
 });
 
-test('release: 3.4.13, cache v38, tier and key-note tokens in all three theme blocks, reduced motion covers the skeleton and the rain row', () => {
-  assert.equal(JSON.parse(read('package.json')).version, '3.4.13'); assert.match(read('app.js'), /version: '3.4.13'/); assert.match(read('sw.js'), /CACHE_NAME = 'cs-shell-v38'/);
+test('release: 3.4.14, cache v39, tier and key-note tokens in all three theme blocks, reduced motion covers the skeleton and the rain row', () => {
+  assert.equal(JSON.parse(read('package.json')).version, '3.4.14'); assert.match(read('app.js'), /version: '3.4.14'/); assert.match(read('sw.js'), /CACHE_NAME = 'cs-shell-v39'/);
   const tk = read('tokens.css');
   for (const k of ['returning', 'regular', 'vip']) for (const s of ['t', 'w']) assert.equal(tk.split('--v5-tier-' + k + '-' + s + ':').length - 1, 3, k + s);
   assert.equal(tk.split('--v5-note-key-w:').length - 1, 3);

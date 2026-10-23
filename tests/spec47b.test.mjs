@@ -31,13 +31,13 @@ test('faceFrame: a box at the very edge is clamped so no blank shows; unusable i
 
 const html = (app) => app.els['v-home'].innerHTML;
 const GUEST = (o) => Object.assign({ guest_name: 'Ana Reyes', checkin_date: TODAY, checkout_date: '2026-12-31', checkout_time: '12:00', checkin_time: '14:00', tier: 'regular', tier_line: null, notes: null, notable: [], id_photo_path: 'g/1.jpg' }, o || {});
-test('Today card: the face is the LAST child of the guest header (right side) and carries the box; absent box still reserves the square', async () => {
+test('Today card: the face is the LAST child of the guest header (right side) and carries the box; absent box (SPEC-47c) is the initial placeholder in the same 88 px slot', async () => {
   const withBox = await boot({ role: 'admin', hash: '#home', handlers: baseHandlers('admin', { staff_home_v1: () => HOMEWITH([], { next_guest: GUEST({ id_face_box: BOX }) }) }) });
-  const h = html(withBox); const who = /<div class="T_who">([\s\S]*?)<p class="A_key/.exec(h)[1];
+  const h = html(withBox); const who = /<div class="T_who">([\s\S]*?)<p class="sub num T_when/.exec(h)[1];
   assert.ok(who.indexOf('T_id') < who.indexOf('T_face'), 'name block first, face after it (right)');
   assert.match(who, /<button class="T_face" type="button" data-act="id-full" data-facepath="g\/1.jpg" data-facebox="\[0\.1,0\.2,0\.2,0\.4,&quot;v&quot;\]" aria-label="Show the ID photo full screen"><\/button><\/div>/);
-  const cl = await boot({ role: 'cleaner', hash: '#home', handlers: baseHandlers('cleaner', { staff_home_v1: () => HOMEWITH([], { next_guest: GUEST({}) }) }) });
-  assert.match(html(cl), /<span class="T_face" data-facepath="g\/1.jpg"><\/span><\/div>/); assert.doesNotMatch(html(cl), /<button class="T_face"/);
+  const cl = await boot({ role: 'cleaner', hash: '#home', handlers: baseHandlers('cleaner', { staff_home_v1: () => HOMEWITH([], { next_guest: GUEST({ id_face_box: BOX }) }) }) });
+  assert.match(html(cl), /<span class="T_face" data-facepath="g\/1.jpg" data-facebox="[^"]*"><\/span><\/div>/); assert.doesNotMatch(html(cl), /<button class="T_face"/);
   const none = await boot({ role: 'admin', hash: '#home', handlers: baseHandlers('admin', { staff_home_v1: () => HOMEWITH([], { next_guest: GUEST({ id_photo_path: null }) }) }) });
   assert.doesNotMatch(html(none), /T_face/);
 });
