@@ -159,20 +159,32 @@
     var g = st.guest, tp = tierP(st.guest, true), ht = A_houseT(), nl = CS.notableLine(g), kn = CS.keyNote(g.notes);
     var key = st.kind === 'house' ? 'Out ' + (CS.fmtTime(g.checkout_time) || ht.outLabel) : 'In ' + (CS.fmtTime(g.checkin_time) || ht.inLabel); // s96: the time that matters comes first
     return '<section class="card glass A_card F_span T_card" aria-label="Today in the house"><div class="row-between"><span class="cap up">' + esc(st.label) + '</span>' + (st.pill ? pill(st.pill.tone, toneIcon(st.pill.tone), st.pill.text) : '') + '</div>' +
-      '<div class="T_who"><div class="T_id"><div class="T_namerow"><h2 class="A_name">' + esc(g.guest_name || 'Guest') + '</h2>' + tp.chip + '</div></div>' + A_face(g) + '</div>' + // s98 SPEC-47c: the face sits beside the name + chip only; everything under it spans the card
-      tp.line + (tp.ret ? '<div>' + tp.ret + '</div>' : '') + (nl ? '<p class="help T_ask">' + esc(nl) + '</p>' : '') +
-      '<p class="sub num T_when"><strong class="A_key">' + esc(key) + '</strong> · ' + esc(A_stayDates(g)) + '</p>' +
+      '<div class="T_who"><div class="T_id"><div class="T_namerow"><h2 class="A_name">' + esc(g.guest_name || 'Guest') + '</h2>' + tp.chip + tp.ret + '</div></div>' + A_face(g) + '</div>' + // s98 SPEC-47c: the face sits beside the name + chip (or the older Returning pill) only; everything under it spans the card
+      tp.line + (nl ? '<p class="help T_ask">' + esc(nl) + '</p>' : '') +
+      '<p class="sub num T_when"><strong class="A_key">' + esc(A_nb(key)) + '</strong> · ' + esc(A_stayDates(g)) + '</p>' +
       (kn ? '<div class="T_key note-key">' + ICON('alert', 's16') + '<span class="T_nt"><b>' + kn.word + '</b> ' + esc(kn.p) + '</span></div>' + (kn.more ? '<a class="T_more" href="#calendar/' + (st.kind === 'house' ? 'house' : 'next') + '">+' + kn.more + ' more ' + (kn.more === 1 ? 'note' : 'notes') + '</a>' : '') : '') +
       '<a class="A_more" href="#calendar/' + (st.kind === 'house' ? 'house' : 'next') + '">Open guest card' + ICON('chev', 's16') + '</a></section>';
   }
-  // s97 SPEC-47b: the face sits on the RIGHT of the guest header, an 88 px rounded square zoomed on the face box the server found (id_face_box, stored-frame 0-1; absent = a tight
-  // fallback crop). The space is reserved from the first paint. Same in-memory photo as the Guest ID card: no download, copy or share control. Owner and admin tap it
-  // for the full ID (as on the guest card); everyone else sees it as a picture only.
+  // s97 SPEC-47b / s98 SPEC-47c: the face sits on the RIGHT of the guest header in an 88 px rounded square. Until the server has located the face (id_face_box, stored-frame 0-1)
+  // the square is the guest's first initial on the tier colour, never the ID; with a box it is the zoomed face. The space is reserved from the first paint. Same in-memory
+  // photo as the Guest ID card: no download, copy or share control. Owner and admin tap either one for the full ID (the placeholder loads the photo on that tap only,
+  // via data-idpath, which A_loadFaces never reads); everyone else sees a picture or the bare initial.
   var A_FACE_PX = 88;
+  // numbers stay joined to their unit (no break inside '3 nights', '12:00 noon', '2:00 pm'); the time line breaks only at ' · '
+  function A_nb(t) { return String(t).replace(/ /g, ' '); }
   // "24 → 25 Oct · 1 night" (the month once when both days share it)
   function A_stayDates(g) {
     var a = CS.dayLabel(g.checkin_date), b = CS.dayLabel(g.checkout_date), n = g.nights != null ? g.nights : CS.daysBetween(g.checkin_date, g.checkout_date);
-    return (a.split(' ')[1] === b.split(' ')[1] ? a.split(' ')[0] : a) + ' → ' + b + ' · ' + CS.plural(n, 'night');
+    return A_nb((a.split(' ')[1] === b.split(' ')[1] ? a.split(' ')[0] : a) + ' → ' + b) + ' · ' + A_nb(CS.plural(n, 'night'));
+  }
+  // Tap on the initial placeholder (owner/admin): fetch the photo through the shared one-request loader, then the same full-screen view.
+  function A_idOpen(path) {
+    var g0 = state.photoGen, hit = state.photos[path], rp = H_rotLoad([path]), req;
+    try { req = hit && Date.now() - hit.at < 30 * 60000 ? Promise.resolve(hit.url) : H_photoReq(path); } catch (e) { req = Promise.reject(e); }
+    req.then(function (url) {
+      if (!url || g0 !== state.photoGen) return;
+      return (rp || Promise.resolve()).then(function () { if (state.rot[url] === undefined && state.srot[path] !== undefined) state.rot[url] = state.srot[path]; H_idFull(url); });
+    }).catch(function () { toast('The photo could not be loaded.'); });
   }
   function A_face(g) {
     var path = g.id_photo_path, box = g.id_face_box;
@@ -180,9 +192,10 @@
     var fr = box && typeof box === 'object' ? CS.faceFrame(box, 1, 1, 0, 1) : null;
     if (!fr || fr.fallback) { // s98: face not located yet (null box or src 'none'): the first initial on the tier colour, never the ID itself
       var ini = Array.from(String(g.guest_name || 'Guest').trim())[0] || 'G';
-      return '<span class="T_face T_ph' + (CS.tierLabel(g.tier) ? ' T_' + g.tier : '') + '" aria-hidden="true">' + esc(ini.toUpperCase()) + '</span>';
+      var pc = 'T_face T_ph' + (CS.tierLabel(g.tier) ? ' T_' + g.tier : '');
+      return CS.canSeeGuestContact(role()) ? '<button class="' + pc + '" type="button" data-act="id-full" data-idpath="' + esc(path) + '" aria-label="Show the ID photo full screen">' + esc(ini.toUpperCase()) + '</button>' : '<span class="' + pc + '" aria-hidden="true">' + esc(ini.toUpperCase()) + '</span>';
     }
-    var bx = box && typeof box === 'object' ? ' data-facebox="' + esc(JSON.stringify([box.x, box.y, box.w, box.h, box.src === 'none' ? 'none' : 'v'])) + '"' : '';
+    var bx = box && typeof box === 'object' ? ' data-facebox="' + esc(JSON.stringify([box.x, box.y, box.w, box.h, 'v'])) + '"' : '';
     return CS.canSeeGuestContact(role()) ? '<button class="T_face" type="button" data-act="id-full" data-facepath="' + esc(path) + '"' + bx + ' aria-label="Show the ID photo full screen"></button>' : '<span class="T_face" data-facepath="' + esc(path) + '"' + bx + '></span>';
   }
   // Place the photo for turn d: the pure math is CS.faceFrame (lib.js); the box rides on the element so Rotate can redo it.
@@ -2239,7 +2252,7 @@
     else if (a === 'tour-open') { openSheet('tour', 'tour-open'); state.sheet.step = 0; drawSheet(); }
     else if (a === 'tour-next') { var TS = state.sheet; if (TS && TS.kind === 'tour') { if ((TS.step || 0) >= H_TOUR.length - 1) closeSheet(); else { TS.step = (TS.step || 0) + 1; drawSheet(); } } }
     else if (a === 'tour-skip') closeSheet();
-    else if (a === 'id-full') { var im = t.querySelector && t.querySelector('img'); if (im && CS.canSeeGuestContact(role())) H_idFull(im.src); }
+    else if (a === 'id-full') { var im = t.querySelector && t.querySelector('img'), ip = t.getAttribute && t.getAttribute('data-idpath'); if (CS.canSeeGuestContact(role())) { if (im) H_idFull(im.src); else if (ip) A_idOpen(ip); } }
     else if (a === 'wx-toggle') { ev.preventDefault(); H_wxToggle(t.closest('details')); }
     else if (a === 'id-rot') H_idRotate();
     else if (a === 'id-full-close') H_idClose();

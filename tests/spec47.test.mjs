@@ -52,7 +52,7 @@ test('Today card (live path): key time first, tier chip + line, important note w
   const g = GUEST({ notable: [{ topic: 'directions', last_seen: '2026-10-14T01:00:00Z', source: 'airbnb' }, { topic: 'guest_count', last_seen: '2026-10-13T01:00:00Z', source: 'messenger' }] });
   const app = await boot({ role: 'cleaner', hash: '#home', handlers: baseHandlers('cleaner', { staff_home_v1: homeOf(g) }) });
   const h = html(app);
-  assert.match(h, /<p class="sub num T_when"><strong class="A_key">Out 12:00 noon<\/strong> · 13 → 17 Oct · 4 nights<\/p>/); assert.ok(h.indexOf('A_key') < h.indexOf('→'), 'the time comes before the dates');
+  assert.match(h, /<p class="sub num T_when"><strong class="A_key">Out 12:00 noon<\/strong> · 13 → 17 Oct · 4 nights<\/p>/); assert.ok(h.indexOf('A_key') < h.indexOf('→'), 'the time comes before the dates');
   assert.doesNotMatch(h, / · out /);
   assert.match(h, /class="pill p-tier-regular"/); assert.match(h, /<p class="sub T_line T_regular">Late check-out when free<\/p>/);
   assert.match(h, /<div class="T_key note-key">[\s\S]*<b>Important:<\/b> Reported a damage to the kettle/); assert.match(h, /href="#calendar\/house">\+3 more notes<\/a>/);
@@ -66,8 +66,8 @@ test('Today card (live path): key time first, tier chip + line, important note w
 
 test('Today card: arriving guest gets In time; the face shows only with a photo and is a button for owner/admin only', async () => {
   const arriving = await boot({ role: 'admin', hash: '#home', handlers: baseHandlers('admin', { staff_home_v1: () => HOMEWITH([], { next_guest: GUEST({ checkin_date: TODAY, id_photo_path: 'g/1.jpg' }) }) }) });
-  assert.match(html(arriving), /<strong class="A_key">In 2:00 pm<\/strong>/);
-  assert.match(html(arriving), /<span class="T_face T_ph T_regular" aria-hidden="true">A<\/span>/, 'photo but no face box yet: the initial, not the ID');
+  assert.match(html(arriving), /<strong class="A_key">In 2:00 pm<\/strong>/);
+  assert.match(html(arriving), /<button class="T_face T_ph T_regular" type="button" data-act="id-full" data-idpath="g\/1.jpg" aria-label="Show the ID photo full screen">A<\/button>/, 'photo but no face box yet: the initial (tap loads the ID), not the ID');
   const located = await boot({ role: 'admin', hash: '#home', handlers: baseHandlers('admin', { staff_home_v1: () => HOMEWITH([], { next_guest: GUEST({ checkin_date: TODAY, id_photo_path: 'g/1.jpg', id_face_box: { x: 0.1, y: 0.2, w: 0.2, h: 0.4, src: 'vision' } }) }) }) });
   assert.match(html(located), /<button class="T_face" type="button" data-act="id-full" data-facepath="g\/1.jpg" data-facebox="[^"]*" aria-label="Show the ID photo full screen"><\/button>/);
   const cleaner = await boot({ role: 'cleaner', hash: '#home', handlers: baseHandlers('cleaner', { staff_home_v1: homeOf(GUEST({ id_photo_path: 'g/1.jpg', id_face_box: { x: 0.1, y: 0.2, w: 0.2, h: 0.4, src: 'vision' } })) }) });

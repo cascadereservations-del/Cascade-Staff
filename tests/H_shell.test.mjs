@@ -251,7 +251,7 @@ test('H_ reply: options draw as selectable draft cards each with its own Copy; t
 });
 
 test('H_ ID photo: owner and admin get a full-screen tap on the picture; the code is guarded by role and never downloads', () => {
-  const src = read('app.js'); assert.match(src, /if \(CS\.canSeeGuestContact\(role\(\)\)\) \{ var b = document\.createElement\('button'\)/); assert.match(src, /a === 'id-full'\) \{ var im = [^}]*CS\.canSeeGuestContact\(role\(\)\)\) H_idFull/);
+  const src = read('app.js'); assert.match(src, /if \(CS\.canSeeGuestContact\(role\(\)\)\) \{ var b = document\.createElement\('button'\)/); assert.match(src, /a === 'id-full'\) \{ var im = [^}]*CS\.canSeeGuestContact\(role\(\)\)\) \{ if \(im\) H_idFull/);
   assert.doesNotMatch(src.slice(src.indexOf('function H_idFull'), src.indexOf('function H_idClose')), /download|href=/);
 });
 

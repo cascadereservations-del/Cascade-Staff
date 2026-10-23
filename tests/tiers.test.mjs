@@ -28,8 +28,8 @@ test('tierLine: trimmed text only with a known tier; null and blank draw nothing
 test('app.js uses CS.tierParts in both cards, in the name row and under it', () => {
   const app = read('app.js');
   assert.match(app, /CS\.tierParts\(g, compact, pill\)/);
-  assert.match(app, /<h2 class="A_name">' \+ esc\(g\.guest_name \|\| 'Guest'\) \+ '<\/h2>' \+ tp\.chip \+ '<\/div><\/div>' \+ A_face\(g\)/); // s98: face beside name + chip, the benefits line full width under it
-  assert.match(app, /tp\.line \+ \(tp\.ret \?/);
+  assert.match(app, /<h2 class="A_name">' \+ esc\(g\.guest_name \|\| 'Guest'\) \+ '<\/h2>' \+ tp\.chip \+ tp\.ret \+ '<\/div><\/div>' \+ A_face\(g\)/); // s98: face beside name + chip, the benefits line full width under it
+  assert.match(app, /tp\.line \+ \(nl \?/);
   assert.match(app, /<h3 class="ttl">' \+ esc\(g\.guest_name \|\| 'Guest'\) \+ '<\/h3>' \+ tp\.chip \+ '<\/div>' \+ tp\.line/);
 });
 
