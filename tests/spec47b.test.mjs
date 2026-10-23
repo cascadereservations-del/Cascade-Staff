@@ -1,7 +1,7 @@
 // SPEC-47b (Staff 3.4.13): the face on the Today card is an 88 px rounded square on the RIGHT, zoomed on the server's face box. Hand-computed values.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { CS, read, boot, HOMEWITH, baseHandlers, TODAY } from './_a_harness.mjs';
+import { CS, el, read, boot, HOMEWITH, baseHandlers, TODAY } from './_a_harness.mjs';
 
 const near = (a, b, m) => assert.ok(Math.abs(a - b) < 0.01, (m || '') + ' ' + a + ' vs ' + b);
 const BOX = { x: 0.1, y: 0.2, w: 0.2, h: 0.4, src: 'vision' }; // 1000 x 600 stored photo: 200 x 240 px box, scale 88/240
@@ -46,4 +46,29 @@ test('css: 88 px rounded square, 12 px radius, positioned img, no object-fit; ap
   assert.match(rule, /width: 88px; height: 88px;/); assert.match(rule, /border-radius: 12px/); assert.match(rule, /overflow: hidden/); assert.doesNotMatch(rule, /50%/);
   assert.match(/\.T_face img \{[^}]*\}/.exec(css)[0], /position: absolute/); assert.doesNotMatch(/\.T_face img \{[^}]*\}/.exec(css)[0], /object-fit/);
   const src = read('app.js'); assert.match(src, /var A_FACE_PX = 88/); assert.match(src, /img\.alt = 'Guest photo from ID'/); assert.match(src, /box\.addEventListener\('contextmenu'/);
+});
+
+test('fix round 1: name row wraps (chip drops under a long name, no mid-word break); a failed photo keeps the square', () => {
+  const css = read('styles.css');
+  assert.match(/\.T_namerow \{[^}]*\}/.exec(css)[0], /flex-wrap: wrap; align-items: baseline; gap: 8px; row-gap: 4px/);
+  assert.match(css, /\.T_namerow > h2, \.T_namerow > h3 \{ min-width: 0; overflow-wrap: break-word; \}/); assert.doesNotMatch(/\.T_namerow > h2[^}]*\}/.exec(css)[0], /anywhere/);
+  assert.match(css, /\.T_face\[data-empty\] \{ background: var\(--v5-sunk\)/);
+  const loader = /function A_loadFaces[\s\S]*?\n  \}\n/.exec(read('app.js'))[0]; assert.match(loader, /setAttribute\('data-empty', '1'\)/); assert.doesNotMatch(loader, /removeChild/);
+});
+
+test('face placement in the real Home render: Image stub 1000x600 fires load, the style is the hand-computed frame; image is not draggable', async () => {
+  const imgs = [], v = el();
+  const fb = { attrs: { 'data-facepath': 'g/1.jpg', 'data-facebox': JSON.stringify([0.1, 0.2, 0.2, 0.4, 'v']) }, kids: [], parentNode: {}, innerHTML: '',
+    getAttribute: (k) => (k in fb.attrs ? fb.attrs[k] : null), setAttribute(k, x) { fb.attrs[k] = x; }, addEventListener() {}, appendChild(c) { fb.kids.push(c); c.parentNode = fb; } };
+  v.querySelectorAll = (q) => (q === '[data-facepath]' ? [fb] : []);
+  class I { constructor() { this.l = {}; this.style = {}; this.naturalWidth = 1000; this.naturalHeight = 600; imgs.push(this); } addEventListener(t, f) { (this.l[t] ||= []).push(f); }
+    set src(x) { this._s = x; setImmediate(() => (this.l.load || []).forEach((f) => f())); } get src() { return this._s; } }
+  class U extends URL { static createObjectURL() { return 'blob:f/1'; } static revokeObjectURL() {} }
+  const app = await boot({ role: 'admin', hash: '#home', els: { 'v-home': v }, ctxExtra: { Image: I, URL: U },
+    storage: { from: () => ({ createSignedUrl: () => Promise.resolve({ data: { signedUrl: 'https://signed.test/x' }, error: null }) }) },
+    foldFetch: (u) => Promise.resolve(/signed/.test(String(u)) ? { ok: true, blob: () => Promise.resolve({}) } : { ok: false }),
+    handlers: baseHandlers('admin', { staff_home_v1: () => HOMEWITH([], { next_guest: GUEST({ id_face_box: BOX }) }), staff_photo_rotation_v1: () => ({ error: null, data: [{ path: 'g/1.jpg', rotation: 0 }] }) }) });
+  await app.flush(); await new Promise((r) => setTimeout(r, 20));
+  const im = imgs[0]; assert.ok(im, 'an image was made'); assert.equal(im.draggable, false); assert.equal(im.alt, 'Guest photo from ID');
+  assert.equal(im.style.width, 1000 * S + 'px'); assert.equal(im.style.height, 600 * S + 'px'); assert.ok(Math.abs(parseFloat(im.style.left) + 29.3333) < 0.01, im.style.left); assert.equal(parseFloat(im.style.top), -44); assert.equal(im.style.transform, '');
 });

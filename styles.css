@@ -1140,8 +1140,8 @@ body { font-family: var(--v5-font-ui); }
 p.sub.T_line { margin: 2px 0 0; padding-left: 8px; border-left: 2px solid var(--tc, var(--v5-line-2)); }
 .T_returning { --tc: var(--v5-tier-returning-t); } .T_regular { --tc: var(--v5-tier-regular-t); } .T_vip { --tc: var(--v5-tier-vip-w); }
 /* one stable row: the name takes what is left (and wraps inside itself), the chip never moves */
-.T_namerow { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
-.T_namerow > h2, .T_namerow > h3 { min-width: 0; overflow-wrap: anywhere; }
+.T_namerow { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px; row-gap: 4px; min-width: 0; }
+.T_namerow > h2, .T_namerow > h3 { min-width: 0; overflow-wrap: break-word; }
 .T_namerow > .pill { flex: none; }
 .T_gap { margin-top: 8px; }
 .T_who { display: flex; align-items: center; gap: 12px; min-width: 0; }
@@ -1153,6 +1153,7 @@ p.sub.T_line { margin: 2px 0 0; padding-left: 8px; border-left: 2px solid var(--
 .T_face:not(:focus-visible) { outline: 1px solid var(--v5-sep); outline-offset: -1px; }
 .T_face img { position: absolute; max-width: none; display: block; -webkit-touch-callout: none; user-select: none; -webkit-user-select: none; pointer-events: none; }
 .T_who { align-items: flex-start; }
+.T_face[data-empty] { background: var(--v5-sunk); } /* photo did not load: the square stays, the header never re-flows */
 /* important notes: wash, left bar, glyph + word (Important: / Request:) */
 .notes li { font-size: var(--v5-t-body); line-height: 1.45; }
 .notes li.note-key, .T_key { background: var(--v5-note-key-w); border-left: 3px solid var(--v5-warn-t); border-radius: var(--r-sm); padding: 8px 10px; color: var(--fg); }

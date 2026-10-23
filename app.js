@@ -196,8 +196,8 @@
       };
       if (hit && Date.now() - hit.at < 30 * 60000) { put(hit.url); return; }
       var rp = H_rotLoad([path]), req;
-      try { req = H_photoReq(path); } catch (e) { req = Promise.reject(e); } // no client (demo) or no network: the circle simply goes
-      req.then(function (url) { if (!url) return; return rp ? rp.then(function () { put(url); }) : put(url); }).catch(function () { if (box.parentNode) box.parentNode.removeChild(box); });
+      try { req = H_photoReq(path); } catch (e) { req = Promise.reject(e); } // no client (demo) or no network: the empty square stays
+      req.then(function (url) { if (!url) return; return rp ? rp.then(function () { put(url); }) : put(url); }).catch(function () { if (box.setAttribute) box.setAttribute('data-empty', '1'); });
     });
   }
   // ---------------------------------------------------------------- the one notification pill (E_)
