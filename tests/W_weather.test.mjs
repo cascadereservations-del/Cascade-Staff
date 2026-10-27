@@ -252,16 +252,14 @@ test('7 days: a row opens to feels like, wind, gusts, UV, sunrise and sunset; a 
   assert.ok(!e2.innerHTML.includes('data-w-day'), 'a row with nothing to open is not a button');
 });
 
-test('the live map loads only after a tap; layers switch the overlay; the data line is there; two-decimal house point, no pin', async () => {
+test('the live map loads by itself, lazily; layers switch the overlay; two-decimal house point, no pin', async () => {
   const w = world({ invoke: ok(full()) }); const e = el();
   w.W.mount(e, { client: w.client }); await settle();
-  assert.ok(!e.innerHTML.includes('<iframe') && !e.innerHTML.includes('embed.windy.com'), 'no iframe before the tap');
-  assert.ok(e.innerHTML.includes('Load the live map') && e.innerHTML.includes('The live map uses mobile data.'));
+  assert.ok(/<iframe[^>]*loading="lazy"/.test(e.innerHTML), 'the map is there without a tap, and lazy');
+  assert.ok(!e.innerHTML.includes('Load the live map'));
   for (const l of ['rain', 'wind', 'temp']) assert.ok(e.innerHTML.includes(`data-w-layer="${l}"`));
   await click(e, { 'data-w-layer': 'wind' });
-  assert.ok(!e.innerHTML.includes('<iframe'), 'choosing a layer alone does not load the map');
-  await click(e, { 'data-w-map': '1' });
-  const m = /<iframe[^>]*src="([^"]+)"/.exec(e.innerHTML); assert.ok(m, 'iframe after the tap');
+  const m = /<iframe[^>]*src="([^"]+)"/.exec(e.innerHTML); assert.ok(m, 'iframe after choosing a layer');
   const u = new URL(m[1].replace(/&amp;/g, '&'));
   assert.ok(!u.searchParams.has('marker') && !u.searchParams.has('detailLat'), 'no pin');
   assert.equal(u.hostname, 'embed.windy.com'); assert.equal(u.pathname, '/embed2.html');

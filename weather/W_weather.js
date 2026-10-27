@@ -361,7 +361,7 @@
   function mount(el, opts) {
     opts = opts || {}; unmount();
     var S = W_S = { el: el, client: opts.client || null, demo: !!opts.demo, toast: opts.toast || null, houseTimes: opts.houseTimes || null, timeoutMs: opts.timeoutMs > 0 ? opts.timeoutMs : W_TIMEOUT_MS, raw: null, cacheAt: null, failed: false, busy: false,
-      open: {}, layer: 'rain', mapOn: false, dead: false, lastOk: 0, model: null, manual: false };
+      open: {}, layer: 'rain', mapOn: true /* Lloyd 2026-10-27: the map loads by itself; the iframe is lazy */, dead: false, lastOk: 0, model: null, manual: false };
     S.clickFn = W_click; el.addEventListener('click', S.clickFn);
     if (root.document && root.document.addEventListener) { S.visFn = W_visible; root.document.addEventListener('visibilitychange', S.visFn); }
     if (S.demo) { S.raw = W_sample(W_nowMs()); S.cacheAt = W_nowMs(); W_render(); return; } // the sample only: no network, no storage

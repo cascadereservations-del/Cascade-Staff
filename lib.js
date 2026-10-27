@@ -968,7 +968,7 @@
   // the server's refusal, said plainly (its own words when short and clean, else a calm default)
   var A_NOTICE_HINT = 'Put the date in the date field. No phone numbers, e-mails or amounts in the text.';
   var A_REFUSALS = [['type_not_allowed', 'Choose water, maintenance, deep cleaning or note.'], ['title_length', 'Keep the title between 1 and 80 characters.'], ['detail_length', 'Keep the detail to 200 characters.'],
-    ['contact_or_amount_not_allowed', A_NOTICE_HINT], ['date_out_of_range', 'Pick a date that is not too far from today.'], ['duration_out_of_range', 'Hours must be between 1 and 72.']];
+    ['contact_or_amount_not_allowed', 'A number in the text reads as a phone number or an amount (meter readings do too). Write it without those numbers.'], ['date_out_of_range', 'Pick a date that is not too far from today.'], ['duration_out_of_range', 'Hours must be between 1 and 72.']];
   // The server's refusal said plainly. Only a refusal (22023 / P0001) is echoed; a known code becomes a plain sentence; anything else is a connection problem.
   function A_noticeAddError(e) {
     var code = e && e.code, msg = String((e && e.message) || '');
