@@ -267,9 +267,7 @@
   }
   function W_mapBlock(S) {
     var btns = W_LAYERS.map(function (l) { return '<button type="button" class="chip W_layer" data-w-layer="' + l[0] + '" aria-pressed="' + (S.layer === l[0]) + '">' + l[1] + '</button>'; }).join('');
-    var body = S.mapOn
-      ? '<iframe class="W_map" title="Live weather map (Windy), ' + W_esc(S.layer) + '" src="' + W_esc(W_mapUrl(S.layer)) + '" loading="lazy" referrerpolicy="no-referrer" sandbox="allow-scripts allow-same-origin"></iframe>'
-      : '<button type="button" class="btn btn-secondary W_load" data-w-map="1">Load the live map</button><p class="help W_data">The live map uses mobile data.</p>';
+    var body = '<iframe class="W_map" title="Live weather map (Windy), ' + W_esc(S.layer) + '" src="' + W_esc(W_mapUrl(S.layer)) + '" loading="lazy" referrerpolicy="no-referrer" sandbox="allow-scripts allow-same-origin"></iframe>'; // Lloyd 2026-10-27: no tap; it reloads on each visit (accepted data cost)
     return W_section('Live map', '<div class="card glass W_mapcard"><div class="W_layers" role="group" aria-label="Map layer">' + btns + '</div>' + body + '</div>', 'W_t_map');
   }
 
@@ -339,7 +337,7 @@
 
   function W_click(ev) {
     var S = W_S; if (!S || S.dead || !ev || !ev.target || !ev.target.closest) return;
-    var t = ev.target.closest('[data-w-day],[data-w-layer],[data-w-map],[data-w-retry],[data-w-refresh]'); if (!t) return;
+    var t = ev.target.closest('[data-w-day],[data-w-layer],[data-w-retry],[data-w-refresh]'); if (!t) return;
     var v;
     if ((v = t.getAttribute('data-w-day')) != null) {
       var on = S.open[+v] = !S.open[+v], more = t.nextElementSibling;
@@ -347,7 +345,6 @@
       else W_render();
     }
     else if ((v = t.getAttribute('data-w-layer')) != null) { S.layer = v; S.focusSel = '[data-w-layer="' + v + '"]'; W_render(); }
-    else if (t.getAttribute('data-w-map') != null) { S.mapOn = true; W_render(); }
     else if (t.getAttribute('data-w-retry') != null) { S.failed = false; W_load(); }
     else if (t.getAttribute('data-w-refresh') != null) { S.manual = true; S.focusSel = '[data-w-refresh="1"]'; W_load(); }
   }
@@ -361,7 +358,7 @@
   function mount(el, opts) {
     opts = opts || {}; unmount();
     var S = W_S = { el: el, client: opts.client || null, demo: !!opts.demo, toast: opts.toast || null, houseTimes: opts.houseTimes || null, timeoutMs: opts.timeoutMs > 0 ? opts.timeoutMs : W_TIMEOUT_MS, raw: null, cacheAt: null, failed: false, busy: false,
-      open: {}, layer: 'rain', mapOn: true /* Lloyd 2026-10-27: the map loads by itself; the iframe is lazy */, dead: false, lastOk: 0, model: null, manual: false };
+      open: {}, layer: 'rain', dead: false, lastOk: 0, model: null, manual: false };
     S.clickFn = W_click; el.addEventListener('click', S.clickFn);
     if (root.document && root.document.addEventListener) { S.visFn = W_visible; root.document.addEventListener('visibilitychange', S.visFn); }
     if (S.demo) { S.raw = W_sample(W_nowMs()); S.cacheAt = W_nowMs(); W_render(); return; } // the sample only: no network, no storage

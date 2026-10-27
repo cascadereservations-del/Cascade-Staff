@@ -565,7 +565,8 @@ test('N charts: six monthly calls with the preset arguments, two at a time, in M
   let live = 0, peak = 0;
   const base = monthHandlers();
   const h = { get_hospitality_metrics_v1: (a) => { live++; peak = Math.max(peak, live); return new Promise((r) => setTimeout(() => { live--; r(base.get_hospitality_metrics_v1(a)); }, 3)); } };
-  const t = await boot({ sub: 'kpis', handlers: h }); await new Promise((r) => setTimeout(r, 80)); await tick();
+  const t = await boot({ sub: 'kpis', handlers: h });
+  for (let i = 0; i < 100 && t.series().length < 6; i++) { await new Promise((r) => setTimeout(r, 20)); await tick(); } // wait for the calls, not a fixed time (flaked under full-suite load)
   const m = t.series();
   assert.equal(m.length, 6); assert.ok(peak <= 2 + 2, 'bounded: ' + peak); // two period calls plus at most two month calls at once
   assert.deepEqual(m.map((c) => [c[1].p_start, c[1].p_end_exclusive]).sort(), MONTH_STARTS.map((s, i) => [s, MONTH_STARTS[i + 1] || '2026-10-01']).sort());

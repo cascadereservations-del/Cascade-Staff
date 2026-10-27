@@ -164,7 +164,7 @@ test('A_fix LOW: an invalid time gives no "NaN", the refusal sentences are plain
   const v = CS.A_noticesView({ weather: { temp_c: 28, hourly: [{ time: 'bad', rain_chance_pct: 10 }], rain_watch: { from: 'bad', to: 'worse', peak_pct: 50 } }, notices: [] }, 'cleaner', TODAY);
   assert.equal(v.weather.watch, null); assert.ok(!JSON.stringify(v).includes('NaN'));
   const e = (code, message) => CS.A_noticeAddError({ code, message });
-  assert.equal(e('22023', 'contact_or_amount_not_allowed'), 'A number in the text reads as a phone number or an amount (meter readings do too). Write it without those numbers.');
+  assert.equal(e('22023', 'contact_or_amount_not_allowed'), 'A number in the text reads as a phone number or an amount (meter readings do too), or there is an e-mail. Write it without those.');
   assert.equal(e('P0001', 'title_length'), 'Keep the title between 1 and 80 characters.'); assert.equal(e('22023', 'duration_out_of_range'), 'Hours must be between 1 and 72.');
   assert.equal(e('22023', 'type_not_allowed'), 'Choose water, maintenance, deep cleaning or note.'); assert.match(e('22023', 'date_out_of_range'), /date/); assert.match(e('22023', 'detail_length'), /200/);
   assert.equal(e('42501', 'denied'), 'Only an owner or admin can add a notice.');

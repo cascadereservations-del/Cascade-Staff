@@ -342,7 +342,6 @@ test('fix 1: a day row opens in place (attribute and hidden flip, no markup rewr
   await clickT(e, t); assert.deepEqual([t.attrs['aria-expanded'], sib.hidden], ['false', true]);
   await click(e, { 'data-w-day': '3' }); // a target that cannot be edited in place still works, by redraw
   assert.ok(/data-w-day="3" aria-expanded="true"/.test(e.innerHTML));
-  await click(e, { 'data-w-map': '1' });
   const mapW = e.parts.map.writes, alertW = e.parts.alerts.writes; assert.ok(mapW >= 1 && alertW >= 1);
   await click(e, { 'data-w-day': '1' });
   w.clock.t = NOW + 15 * 60000; w.docL.visibilitychange(); await settle(); await click(e, { 'data-w-refresh': '1' });
