@@ -7339,8 +7339,13 @@ async function fetchPrevReadings() {
   const row      = el('prev-readings-row');
   const seq      = ++prevReadingsSeq;
   // 2026-10-27: readings are compared by stay, so a late report gets the stays either side of its check-out date.
-  const co = state.cleaningType === 'mid_stay' ? '' : (el('checkOutDate')?.value || '').trim();
+  // Same stay date the server uses: the check-out, never later than the cleaning day; a mid-stay uses the cleaning day.
+  const day = (el('cleaningDate')?.value || todayManila()).trim();
+  const out = state.cleaningType === 'mid_stay' ? '' : (el('checkOutDate')?.value || '').trim();
+  const co  = /^\d{4}-\d{2}-\d{2}$/.test(out) && out < day ? out : day;
   const coParam = /^\d{4}-\d{2}-\d{2}$/.test(co) ? `&checkout_date=${co}` : '';
+  state.nextReading = null;   // never judge this stay by another date's later reading
+  if (el('prev-range')) el('prev-range').hidden = true;
 
   // Last report's meter photo hashes, so a re-used photo can be spotted.
   state.prevMeterFingerprints = lsJSON(METER_FP_KEY) || [null, null];
@@ -7397,7 +7402,7 @@ function renderPrevRange() {
   const nx = state.nextReading;
   if (!nx || (!(nx.electric > 0) && !(nx.water > 0))) { p.hidden = true; return; }
   const d = s => s ? new Date(s.slice(0, 10) + 'T00:00:00').toLocaleDateString('en-PH', { month: 'short', day: 'numeric' }) : '';
-  const part = (label, lo, hi, unit) => hi > 0 ? `${label} between ${lo > 0 ? lo : 'the stay before'} and ${hi} ${unit}` : '';
+  const part = (label, lo, hi, unit) => !(hi > 0) ? '' : lo > 0 ? `${label} between ${lo} and ${hi} ${unit}` : `${label} at most ${hi} ${unit}`;
   const parts = [part('electric', state.prevElectricReading, nx.electric, 'kWh'), part('water', state.prevWaterReading, nx.water, 'm³')].filter(Boolean);
   p.textContent = `A later stay (check-out ${d(nx.date)}) is already on file, so this stay's meters should read ${parts.join(', and ')}.`;
   p.hidden = false;
@@ -10408,7 +10413,9 @@ async function proceedWithSubmission() {
      reason as the block above: before anything is marked as submitting, so the
      draft is untouched. submit-cleaning refuses the same case with 409. The
      previous reading comes from last-readings, which skips rows flagged as wrong
-     numbers - that is how Lloyd unblocks a cleaner whose LAST reading was the typo. */
+     numbers - that is how Lloyd unblocks a cleaner whose LAST reading was the typo.
+     Refreshed here first, so the block never judges by a fetch for an older check-out date. */
+  await fetchPrevReadings().catch(() => {});
   const backwards = [
     { label: 'electric', unit: 'kWh', id: 'electricMeterReading', prev: state.prevElectricReading },
     { label: 'water',    unit: 'm³',  id: 'waterMeterReading',    prev: state.prevWaterReading },
@@ -11181,7 +11188,9 @@ function hasIncompleteExpense() {
 }
 
 function setCleaningType(type, opts = {}) {
+  const typeChanged = state.cleaningType !== type;
   state.cleaningType = type;
+  if (typeChanged && typeof fetchPrevReadings === 'function') fetchPrevReadings();   // mid-stay uses another stay date
   // Mid-stay and emergency do not require meter photos at all, so the
   // forgotten-photo offer has to appear and disappear with the type.
   if (typeof refreshMeterSkipAllowance === 'function') refreshMeterSkipAllowance();
