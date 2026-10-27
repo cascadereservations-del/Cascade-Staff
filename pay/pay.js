@@ -103,7 +103,7 @@
     var rs = (S.mine || S.cands.requests || []).slice(0, 5);
     var slot = '<div id="C_push-slot"></div>';
     if (!rs.length) return slot;
-    return '<div><div class="cap up" style="margin-bottom:6px">Your requests</div><div class="card list">' + rs.map(function (r) {
+    return '<div><h2 class="P_h">Your requests</h2><div class="card list">' + rs.map(function (r) {
       var ahead = (r.lines || []).filter(function (l) { return l && l.kind === 'advance'; }).map(function (l) { return '<span class="s C_ahead">' + esc(window.C_PaidText.advanceLine(l)) + '</span>'; }).join('');
       var bank = r.status === 'paid' && r.bank_reference ? ' · Bank ref ' + esc(window.C_PaidText.reference({ bank_reference: r.bank_reference })) : '';
       return '<div class="rowi" style="cursor:default"><span class="lead">' + ICON('cash') + '</span><span class="mid"><span class="t num">' + esc(P.peso(r.total)) + '</span><span class="s num C_ref">Ref ' + esc(String(r.ref || '').replace(/^CASCADE-/, '')) + (r.created_at ? ' · sent ' + esc(dm(r.created_at)) : '') + (r.status === 'paid' && r.paid_at ? ' · paid ' + esc(dm(r.paid_at)) : '') + bank + '</span>' + ahead + C_stepper(r.status) + (r.status === 'requested' || r.status === 'paying' ? '<span class="help P_expect">Usually paid the same day. You will see "You were paid" here.</span>' : '') + '</span></div>';
@@ -263,7 +263,7 @@
     if (t.hasAttribute('data-ses')) { var id = t.getAttribute('data-ses'); S.sel.sessions[id].on = !S.sel.sessions[id].on; render(); }
     else if (t.hasAttribute('data-clm')) { var cid = t.getAttribute('data-clm'); S.sel.claims[cid] = !S.sel.claims[cid]; render(); }
     else if (t.hasAttribute('data-sw')) { var sid = t.getAttribute('data-sw'); S.sel.sessions[sid].transport = !S.sel.sessions[sid].transport; render(); }
-    else if (t.hasAttribute('data-adv') || t.hasAttribute('data-advsw')) { var ad = t.getAttribute('data-adv') || t.getAttribute('data-advsw'), as = S.sel.advance[ad] || (S.sel.advance[ad] = { on: false, transport: false }); if (t.hasAttribute('data-adv')) as.on = !as.on; else as.transport = !as.transport; render(); }
+    else if (t.hasAttribute('data-adv') || t.hasAttribute('data-advsw')) { var ad = t.getAttribute('data-adv') || t.getAttribute('data-advsw'), as = S.sel.advance[ad] || (S.sel.advance[ad] = { on: false, transport: ((S.cands.advance || []).filter(function (a) { return a.checkout_date === ad; })[0] || {}).transport != null }); if (t.hasAttribute('data-adv')) as.on = !as.on; else as.transport = !as.transport; render(); }
     else if (t.hasAttribute('data-rmx')) { S.sel.extras.splice(+t.getAttribute('data-rmx'), 1); render(); }
     else if (a === 'openx') { S.draftOpen = true; render(); }
     else if (a === 'cancelx') { S.draftOpen = false; S.draft = { description: '', amount: '', file: null }; S.err = ''; render(); }

@@ -102,7 +102,8 @@ test('D-350: transport starts on for every clean and no-report row that has a ra
   assert.deepEqual(plain(sent[0].advance), [{ checkout_date: '2026-10-22', transport: false }]);
 });
 
-test('the sticky total is solid with a top border, and the list ends clear of it', () => {
+test('the sticky total is solid with a top border, and the unticked-row dim keeps AA contrast', () => {
   assert.match(css, /\.sticky\.P_bar \{[^}]*background: var\(--v5-surf\)[^}]*border-top: 1px solid var\(--v5-line\)[^}]*box-shadow: var\(--v5-shadow-card\)/);
-  assert.match(css, /\.P_pick \{ padding-bottom: 9rem; \}/);
+  assert.match(css, /\.P_pick \.payrow\.off \{ opacity: \.85; \}/);
+  assert.doesNotMatch(css, /\.P_pick \{ padding-bottom/);
 });
