@@ -5036,8 +5036,15 @@ html.K_folded .phase-header.K_hasimg .K_zone { background: rgba(22,13,6,0.74); b
       <div class="sus-loading" id="sus-loading" aria-live="polite">Loading supplies…</div>
     </div>
     <div class="sus-footer">
+      <div class="sus-note" id="sus-note" role="status" aria-live="polite" style="display:none"></div>
       <button class="sus-save-btn" id="sus-save-btn" type="button" aria-label="Save supply usage">
         Save Usage
+      </button>
+      <button class="sus-none-btn" id="sus-change-btn" type="button" style="display:none">
+        Change
+      </button>
+      <button class="sus-none-btn" id="sus-typical-btn" type="button">
+        Fill typical amounts
       </button>
       <button class="sus-none-btn" id="sus-none-btn" type="button" aria-label="Nothing used this session">
         Nothing used this session
@@ -6269,6 +6276,7 @@ const state = {
   precleanPhotos:     [],           // Feature 3: pre-clean photos (replaces Messenger)
   aftercleanPhotos:   [],           // Feature 3: after-clean photos (replaces Messenger)
   supplyLogSaved:     false,        // v6.8: compulsory supply log gate
+  supplySaved:        null,         // s99g: {sid, rows:{item_id:units}} once this report's usage is saved; never re-sent
   cleaningType:       'turnover',   // v7.8: 'turnover' | 'mid_stay' | 'deep_clean' | 'emergency'
   cleaningDateStatus: 'unknown',    // 'valid' | 'blocked' | 'warn' | 'unknown' — set by calendar check
   midStayAutoApplied: false,        // true once occupied-unit auto-switch to mid-stay has fired
@@ -9491,6 +9499,7 @@ function saveDraft() {
     confirmItems:    { ...state.confirmItems },
     confirmNotes:    { ...state.confirmNotes },
     supplyLogSaved:  state.supplyLogSaved,
+    supplySaved:     state.supplySaved,
     cleaningType:    state.cleaningType || 'turnover',
     extraExpenses:   collectExtraExpenses(),
     sessionFolderId: state.sessionFolderId,
@@ -9572,6 +9581,8 @@ function applyDraft(draft) {
   state.submissionId      = draft.submissionId      || null; // same photo folder after a reload
   state.numberOfNights    = draft.numberOfNights || 0;
   state.supplyLogSaved    = draft.supplyLogSaved  || false;
+  // s99g: keep what was saved only while it belongs to this same report
+  state.supplySaved       = (draft.supplySaved && draft.supplySaved.sid === state.submissionId) ? draft.supplySaved : null;
   if (draft.cleaningType) setCleaningType(draft.cleaningType);
   // v7.8: restore additional expense lines
   if (Array.isArray(draft.extraExpenses) && draft.extraExpenses.length) {
@@ -10591,6 +10602,8 @@ function resetApp() {
   state.precleanPhotos   = [];
   state.aftercleanPhotos = [];
   state.supplyLogSaved   = false;
+  state.supplySaved      = null;
+  _susChanging           = false;
   state.cleaningType    = 'turnover';
   state.cleaningDateStatus = 'unknown';
   state.midStayAutoApplied = false;
@@ -10794,6 +10807,7 @@ function registerServiceWorker() {
 let _susItems = [];      // full item array from Supabase
 let _susLoaded = false;
 let _susOptionalOpen = false;
+let _susChanging = false;   // s99g: true while a saved log is being changed
 
 // v6.8: Hardcoded optional extra items shown in the "other" section
 const SUS_EXTRA_ITEMS = [
@@ -10860,17 +10874,13 @@ async function loadSupplyItems() {
         isLiquid,
         isQuick,
         isExtra: false,
-        // v6.8: ALL items pre-filled with typical consumption — cleaner adjusts if needed.
-        // Hidden optional items are still counted unless manually zeroed or "Nothing used" tapped.
-        usedQty: !isLiquid
-                 ? Math.max(0, defaultCpb)  // stepper items: typical qty
-                 : 0,
-        usedMl:  isLiquid
-                 ? Math.max(0, defaultCpb * LIQUID_ML_PER_UNIT)  // liquid: typical ml
-                 : 0,
+        // s99g (D-351): every item starts at 0; "Fill typical amounts" is the one-tap shortcut.
+        usedQty: 0,
+        usedMl:  0,
       };
     });
     _susLoaded = true;
+    if (_susChanging) susSeedFromSaved();
     renderSupplyList();
 
   } catch (err) {
@@ -10878,11 +10888,63 @@ async function loadSupplyItems() {
   }
 }
 
+// s99g: units one item will log (liquids round ml up to whole units, as before).
+function susUnits(i) {
+  if (i.isLiquid) return (i.usedMl || 0) > 0 ? Math.max(1, Math.ceil((i.usedMl || 0) / LIQUID_ML_PER_UNIT)) : 0;
+  return i.usedQty || 0;
+}
+function susSeedFromSaved() {
+  const rows = (state.supplySaved && state.supplySaved.rows) || {};
+  _susItems.forEach(i => {
+    const q = rows[i.id] || 0;
+    if (i.isLiquid) i.usedMl = q * LIQUID_ML_PER_UNIT; else i.usedQty = q;
+  });
+}
+function susTypical() {
+  _susItems.forEach(i => {
+    const c = typeof i.consumption_per_booking === 'number' ? Math.max(0, i.consumption_per_booking) : 1;
+    if (i.isLiquid) i.usedMl = c * LIQUID_ML_PER_UNIT; else i.usedQty = c;
+  });
+  renderSupplyList();
+}
+function susNote(text) { const n = el('sus-note'); if (n) { n.textContent = text || ''; n.style.display = text ? 'block' : 'none'; } }
+function susFooter(readOnly) {
+  const saved = !!state.supplySaved;
+  const show = (id, on) => { const b = el(id); if (b) b.style.display = on ? '' : 'none'; };
+  show('sus-save-btn', !readOnly); show('sus-typical-btn', !readOnly && !saved);
+  show('sus-none-btn', !readOnly && !saved); show('sus-change-btn', readOnly);
+}
+function renderSupplySavedView(listEl) {
+  const rows = state.supplySaved.rows || {};
+  const ids = Object.keys(rows).filter(k => rows[k] > 0);
+  listEl.innerHTML = '';
+  const head = document.createElement('div');
+  head.className = 'sus-section-label';
+  head.textContent = ids.length ? 'Saved for this report' : 'Saved: nothing used this report';
+  listEl.appendChild(head);
+  ids.forEach(id => {
+    const it = _susItems.find(x => String(x.id) === String(id));
+    const row = document.createElement('div');
+    row.className = 'sus-item';
+    row.innerHTML = `<div class="sus-item-info"><div class="sus-item-name">${esc(it ? it.name : 'Item')}</div></div><div class="sus-step-val">${rows[id]}</div>`;
+    listEl.appendChild(row);
+  });
+}
+function susStartChange() {
+  _susChanging = true;
+  susNote('');
+  susSeedFromSaved();
+  renderSupplyList();
+}
+
 function renderSupplyList() {
   const listEl    = el('sus-list');
   const loadingEl = el('sus-loading');
   if (!listEl) return;
   if (loadingEl) loadingEl.style.display = 'none';
+  const readOnly = !!state.supplySaved && !_susChanging;
+  susFooter(readOnly);
+  if (readOnly) { renderSupplySavedView(listEl); return; }
 
   if (_susItems.length === 0) {
     listEl.innerHTML = '<div class="sus-empty">No consumable items found.</div>';
@@ -11027,13 +11089,42 @@ function buildSusRow(item) {
 
 async function saveSupplyUsage() {
   const saveBtn = el('sus-save-btn');
-  const allArr  = [..._susItems, ...SUS_EXTRA_ITEMS];
-  // v6.8: all items counted — optional/liquid items still saved if usedMl/usedQty > 0
-  // (default consumption pre-filled; cleaner adjusts or taps "Nothing used" to reset)
-  const used = allArr.filter(i => {
-    if (i.isLiquid) return (i.usedMl || 0) > 0;
-    return (i.usedQty || 0) > 0;
+  const allArr  = [..._susItems, ...SUS_EXTRA_ITEMS].filter(i => !i.isExtra); // extras have no DB row
+  // s99g: one save per report. Only the extra amount over what is already saved is sent; a lower
+  // number cannot be undone from here (no negative rows).
+  const prior = (state.supplySaved && state.supplySaved.rows) || {};
+  const rows = [];
+  const newTotals = { ...prior };
+  let lowered = false, wanted = 0;
+  const sessionDate = el('cleaningDate')?.value || todayManila();
+  const loggedBy    = (el('cleanerName')?.value || '').trim() || 'cleaner';
+  allArr.forEach(i => {
+    const q = susUnits(i), was = prior[i.id] || 0;
+    if (q > 0) wanted++;
+    if (q > was) {
+      rows.push({
+        item_id:      i.id,
+        used_qty:     q - was,
+        session_date: sessionDate,
+        logged_by:    loggedBy,
+        property_id:  PROPERTY_ID,
+        submitted_by_user_id: staffSession.user.id,
+      });
+      newTotals[i.id] = q;
+    } else if (q < was) lowered = true;
   });
+
+  if (lowered) susNote('A lower number cannot be undone from here. Lloyd can correct it with a count (Cassy: count ...).');
+  else susNote('');
+
+  if (!state.supplySaved && wanted === 0) {
+    showToast('Choose what you used, or tap Nothing used', 'error', 4000); return;
+  }
+  if (rows.length === 0) {
+    // nothing more to send: never POST again
+    if (!lowered) { showToast('No change to save', 'success', 2500); _susChanging = false; renderSupplyList(); closeSupplyUsageSheet(); }
+    return;
+  }
 
   if (!navigator.onLine) {
     showToast('📵 No connection — usage not saved', 'error', 5000); return;
@@ -11041,50 +11132,33 @@ async function saveSupplyUsage() {
 
   if (saveBtn) { saveBtn.disabled = true; saveBtn.textContent = 'Saving…'; }
 
-  const sessionDate = el('cleaningDate')?.value || todayManila();
-  const loggedBy    = (el('cleanerName')?.value || '').trim() || 'cleaner';
-
-  const rows = used
-    .filter(i => !i.isExtra) // skip hardcoded extras (no DB row)
-    .map(item => ({
-      item_id:      item.id,
-      used_qty:     item.isLiquid
-                    ? Math.max(1, Math.ceil((item.usedMl || 0) / LIQUID_ML_PER_UNIT))
-                    : (item.usedQty || 1),
-      session_date: sessionDate,
-      logged_by:    loggedBy,
-      property_id:  PROPERTY_ID,
-      submitted_by_user_id: staffSession.user.id,
-    }));
-
   try {
-    if (rows.length > 0) {
-      const resp = await fetch(`${SUPABASE_URL}/rest/v1/inventory_usage`, {
-        method:  'POST',
-        headers: {
-          ...(await staffHeaders(true)), 'Prefer': 'return=minimal',
-        },
-        body: JSON.stringify(rows),
-      });
-      if (!resp.ok) throw new Error(await resp.text().catch(() => `HTTP ${resp.status}`));
-    }
+    const resp = await fetch(`${SUPABASE_URL}/rest/v1/inventory_usage`, {
+      method:  'POST',
+      headers: {
+        ...(await staffHeaders(true)), 'Prefer': 'return=minimal',
+      },
+      body: JSON.stringify(rows),
+    });
+    if (!resp.ok) throw new Error(await resp.text().catch(() => `HTTP ${resp.status}`));
 
-    // Mark supply log as saved (compulsory gate)
+    // Mark supply log as saved (compulsory gate) and remember it for this report
+    if (!state.submissionId) state.submissionId = uuid();
+    state.supplySaved = { sid: state.submissionId, rows: newTotals };
     state.supplyLogSaved = true;
+    _susChanging = false;
+    try { saveDraft(); } catch (e) {}
     const card = el('supply-usage-trigger-card');
     if (card) card.classList.add('sus-done');
     updateBottomBar();
 
-    const msg = used.length > 0
-      ? `✓ Usage saved for ${used.length} item${used.length !== 1 ? 's' : ''}`
-      : '✓ Usage logged — none used this session';
-    showToast(msg, 'success', 3500);
-    closeSupplyUsageSheet();
+    showToast(`✓ Usage saved for ${rows.length} item${rows.length !== 1 ? 's' : ''}`, 'success', 3500);
+    renderSupplyList();
+    if (!lowered) closeSupplyUsageSheet();
     _susLoaded = false; // re-fetch next open for updated stock
 
   } catch (err) {
     showToast(`⚠ Save failed: ${err.message || 'network error'}`, 'error', 5000);
-    if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = 'Save Usage'; }
   }
 
   if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = 'Save Usage'; }
@@ -11097,6 +11171,9 @@ function markSupplyLogNoneUsed() {
     item.usedMl  = 0;
   });
   state.supplyLogSaved = true;
+  if (!state.submissionId) state.submissionId = uuid();
+  state.supplySaved = { sid: state.submissionId, rows: {} };
+  try { saveDraft(); } catch (e) {}
   const card = el('supply-usage-trigger-card');
   if (card) card.classList.add('sus-done');
   updateBottomBar();
@@ -11110,6 +11187,8 @@ function initInventoryUsage() {
   el('sus-backdrop')?.addEventListener('click', closeSupplyUsageSheet);
   el('sus-save-btn')?.addEventListener('click', saveSupplyUsage);
   el('sus-none-btn')?.addEventListener('click', markSupplyLogNoneUsed);
+  el('sus-typical-btn')?.addEventListener('click', susTypical);
+  el('sus-change-btn')?.addEventListener('click', susStartChange);
 
   // Keyboard: close on Escape
   document.addEventListener('keydown', e => {
