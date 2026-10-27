@@ -1257,6 +1257,12 @@ textarea {
   font-variant-numeric: tabular-nums;
 }
 
+.prev-range {
+  margin: calc(-1 * var(--space-2)) 0 var(--space-4);
+  font-size: var(--font-size-sm);
+  color: var(--text-muted);
+}
+
 .prev-reading-chip .prc-date {
   font-size: var(--font-size-xs);
   color: var(--text-muted);
@@ -4524,6 +4530,7 @@ html.K_folded .phase-header.K_hasimg .K_zone { background: rgba(22,13,6,0.74); b
             <div class="prc-date" id="prev-water-date">—</div>
           </div>
         </div>
+        <p class="prev-range" id="prev-range" hidden></p>
       </div>
 
       <div class="field-row">
@@ -6243,6 +6250,7 @@ const state = {
   prevElectricReading: null,
   prevWaterReading:   null,
   prevReadingDate:    null,
+  nextReading:        null,   // the later stay's reading when this report is filed late (2026-10-27)
   meterPhotos:        [null, null], // [{data, url, fileId, name, uploaded}, ...]
   // The one-time "I could not take the meter photos" allowance (2026-09-13).
   // meterSkipAllowed is what the SERVER said; meterPhotosSkipped is what this
@@ -6769,6 +6777,7 @@ function initSetupForm() {
 
   el('checkInDate')?.addEventListener('change', calcNights);
   el('checkOutDate')?.addEventListener('change', calcNights);
+  el('checkOutDate')?.addEventListener('change', () => { fetchPrevReadings(); });
 
   // Weekend mandatory maintenance check on cleaning date change
   el('cleaningDate')?.addEventListener('change', () => {
@@ -7130,8 +7139,8 @@ async function photoFingerprint(photo) {
 
 function meterFindings() {
   const out  = [];
-  const date = (el('cleaningDate')?.value || todayManila());
-  const gap  = state.prevReadingDate ? daysBetween(state.prevReadingDate, date) : null;
+  const date = (el('checkOutDate')?.value || el('cleaningDate')?.value || todayManila());
+  const gap  = state.prevReadingDate ? daysBetween(state.prevReadingDate.slice(0, 10), date) : null;
 
   [
     { i: 0, label: 'Electric', unit: 'kWh', fieldId: 'electricMeterReading',
@@ -7163,7 +7172,12 @@ function meterFindings() {
     }
 
     if (val < m.prev) {
-      out.push(`${m.label}: ${val} ${m.unit} is lower than the last reading (${m.prev}). A meter does not run backwards — check the photo.`);
+      out.push(`${m.label}: ${val} ${m.unit} is lower than the reading for the stay before (${m.prev}). A meter does not run backwards — check the photo and the check-out date.`);
+      return;
+    }
+    const nextV = state.nextReading?.[m.i === 0 ? 'electric' : 'water'];
+    if (nextV > 0 && val > nextV) {
+      out.push(`${m.label}: ${val} ${m.unit} is higher than the reading for the later stay (${nextV}). Check the photo and the check-out date.`);
       return;
     }
     if (val > m.prev * DIGIT_SLIP_FACTOR && m.prev > 0) {
@@ -7319,19 +7333,26 @@ function updateWaterDecimalDisplay() {
 /* ═══════════════════════════════════════════════════════════════
    PREVIOUS READINGS FETCH
 ═══════════════════════════════════════════════════════════════ */
+let prevReadingsSeq = 0;
 async function fetchPrevReadings() {
   const skeleton = el('prev-skeleton');
   const row      = el('prev-readings-row');
+  const seq      = ++prevReadingsSeq;
+  // 2026-10-27: readings are compared by stay, so a late report gets the stays either side of its check-out date.
+  const co = state.cleaningType === 'mid_stay' ? '' : (el('checkOutDate')?.value || '').trim();
+  const coParam = /^\d{4}-\d{2}-\d{2}$/.test(co) ? `&checkout_date=${co}` : '';
 
   // Last report's meter photo hashes, so a re-used photo can be spotted.
   state.prevMeterFingerprints = lsJSON(METER_FP_KEY) || [null, null];
 
   try {
-    const resp = await fetch(`${EDGE_BASE}/last-readings?property_id=${encodeURIComponent(PROPERTY_ID)}`, {
+    const resp = await fetch(`${EDGE_BASE}/last-readings?property_id=${encodeURIComponent(PROPERTY_ID)}${coParam}`, {
       method: 'GET', headers: await staffHeaders(),
     });
     const data = await resp.json();
+    if (seq !== prevReadingsSeq) return;   // a newer check-out date asked since
     if (data.ok !== false && data.electric !== undefined) {
+      state.nextReading = data.next || null;
       state.prevElectricReading = data.electric !== null ? parseFloat(data.electric) : null;
       state.prevWaterReading    = data.water !== null ? parseFloat(data.water) : null;
       state.prevReadingDate     = data.date || null;
@@ -7349,10 +7370,12 @@ async function fetchPrevReadings() {
         : 'last reading';
       if (el('prev-elec-date'))  el('prev-elec-date').textContent  = dateLabel;
       if (el('prev-water-date')) el('prev-water-date').textContent = dateLabel;
+      renderPrevRange();
     } else {
       throw new Error('No data');
     }
   } catch (err) {
+    if (seq !== prevReadingsSeq) return;
     if (skeleton) skeleton.style.display = 'none';
     if (row) {
       row.style.display = 'flex';
@@ -7364,6 +7387,20 @@ async function fetchPrevReadings() {
       });
     }
   }
+}
+
+/* The report advisor (2026-10-27): when this stay is not the newest on file, say what range its numbers must
+   fall in, so a late report is typed against the right stays instead of being refused at the end. */
+function renderPrevRange() {
+  const p = el('prev-range');
+  if (!p) return;
+  const nx = state.nextReading;
+  if (!nx || (!(nx.electric > 0) && !(nx.water > 0))) { p.hidden = true; return; }
+  const d = s => s ? new Date(s.slice(0, 10) + 'T00:00:00').toLocaleDateString('en-PH', { month: 'short', day: 'numeric' }) : '';
+  const part = (label, lo, hi, unit) => hi > 0 ? `${label} between ${lo > 0 ? lo : 'the stay before'} and ${hi} ${unit}` : '';
+  const parts = [part('electric', state.prevElectricReading, nx.electric, 'kWh'), part('water', state.prevWaterReading, nx.water, 'm³')].filter(Boolean);
+  p.textContent = `A later stay (check-out ${d(nx.date)}) is already on file, so this stay's meters should read ${parts.join(', and ')}.`;
+  p.hidden = false;
 }
 
 /* ═══════════════════════════════════════════════════════════════
@@ -10377,14 +10414,18 @@ async function proceedWithSubmission() {
     { label: 'water',    unit: 'm³',  id: 'waterMeterReading',    prev: state.prevWaterReading },
   ].map(m => {
     const v = parseFloat((el(m.id)?.value || '').trim());
-    return (!isNaN(v) && m.prev !== null && m.prev !== undefined && m.prev > 0 && v < m.prev)
-      ? `${m.label} ${v} ${m.unit} is lower than the last reading (${m.prev})` : null;
+    const next = state.nextReading?.[m.label];
+    if (!isNaN(v) && m.prev !== null && m.prev !== undefined && m.prev > 0 && v < m.prev)
+      return `${m.label} ${v} ${m.unit} is lower than the reading for the stay before (${m.prev})`;
+    if (!isNaN(v) && next > 0 && v > next)
+      return `${m.label} ${v} ${m.unit} is higher than the reading for the later stay (${next})`;
+    return null;
   }).filter(Boolean);
   if (backwards.length) {
     const statusEl1 = el('submit-status');
     if (statusEl1) {
       statusEl1.className = 'visible error';
-      statusEl1.textContent = `The ${backwards.join(', and the ')}. A meter does not run backwards, so this report was not sent. Read the meter again and type the number exactly as it shows. If the meter really shows this number, take a photo of it and message Lloyd.`;
+      statusEl1.textContent = `The ${backwards.join(', and the ')}. A meter does not run backwards, so this report was not sent. Check the check-out date first, then read the photo again and type the number exactly as it shows. If both are right, message Lloyd.`;
     }
     el(backwards[0].startsWith('electric') ? 'electricMeterReading' : 'waterMeterReading')
       ?.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -11683,6 +11724,7 @@ function applyBookingAutofill(data) {
   state.checkInDate    = el('checkInDate')?.value  || '';
   state.checkOutDate   = el('checkOutDate')?.value || '';
   state.numberOfNights = nights || 0;
+  fetchPrevReadings();   // the meter neighbours depend on this stay's check-out date
 
   // Trigger calcNights so the DOM badge reflects the autofilled dates
   el('checkInDate')?.dispatchEvent(new Event('change'));
