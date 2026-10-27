@@ -9582,7 +9582,9 @@ function applyDraft(draft) {
   state.numberOfNights    = draft.numberOfNights || 0;
   state.supplyLogSaved    = draft.supplyLogSaved  || false;
   // s99g: keep what was saved only while it belongs to this same report
-  state.supplySaved       = (draft.supplySaved && draft.supplySaved.sid === state.submissionId) ? draft.supplySaved : null;
+  // legacy draft (saved before s99g, no record of totals): open read-only so it cannot double-log
+  state.supplySaved       = (draft.supplySaved && draft.supplySaved.sid === state.submissionId) ? draft.supplySaved
+                          : (state.supplyLogSaved ? { sid: state.submissionId, rows: {}, legacy: true } : null);
   if (draft.cleaningType) setCleaningType(draft.cleaningType);
   // v7.8: restore additional expense lines
   if (Array.isArray(draft.extraExpenses) && draft.extraExpenses.length) {
@@ -10833,6 +10835,7 @@ function openSupplyUsageSheet() {
   const sheet = el('supply-usage-sheet');
   if (!sheet) return;
   sheet.classList.add('open');
+  susFooter(!!state.supplySaved && !_susChanging); // before any fetch: offline/failed load must not show the unsaved footer
   if (!_susLoaded) {
     loadSupplyItems();
   } else {
@@ -10867,8 +10870,6 @@ async function loadSupplyItems() {
     _susItems = items.map(item => {
       const isLiquid = isLiquidItem(item.name, item.category);
       const isQuick  = isQuickItem(item.name);
-      const defaultCpb = typeof item.consumption_per_booking === 'number'
-                         ? item.consumption_per_booking : 1;
       return {
         ...item,
         isLiquid,
@@ -10901,7 +10902,7 @@ function susSeedFromSaved() {
   });
 }
 function susTypical() {
-  _susItems.forEach(i => {
+  _susItems.filter(i => i.isQuick).forEach(i => { // visible quick items only; optional items stay 0
     const c = typeof i.consumption_per_booking === 'number' ? Math.max(0, i.consumption_per_booking) : 1;
     if (i.isLiquid) i.usedMl = c * LIQUID_ML_PER_UNIT; else i.usedQty = c;
   });
@@ -10912,7 +10913,7 @@ function susFooter(readOnly) {
   const saved = !!state.supplySaved;
   const show = (id, on) => { const b = el(id); if (b) b.style.display = on ? '' : 'none'; };
   show('sus-save-btn', !readOnly); show('sus-typical-btn', !readOnly && !saved);
-  show('sus-none-btn', !readOnly && !saved); show('sus-change-btn', readOnly);
+  show('sus-none-btn', !readOnly && !saved); show('sus-change-btn', readOnly && !(state.supplySaved && state.supplySaved.legacy));
 }
 function renderSupplySavedView(listEl) {
   const rows = state.supplySaved.rows || {};
@@ -10920,12 +10921,14 @@ function renderSupplySavedView(listEl) {
   listEl.innerHTML = '';
   const head = document.createElement('div');
   head.className = 'sus-section-label';
-  head.textContent = ids.length ? 'Saved for this report' : 'Saved: nothing used this report';
+  head.textContent = state.supplySaved.legacy ? 'Usage for this report is already saved.'
+    : ids.length ? 'Saved for this report' : 'Saved: nothing used this report';
   listEl.appendChild(head);
   ids.forEach(id => {
     const it = _susItems.find(x => String(x.id) === String(id));
     const row = document.createElement('div');
     row.className = 'sus-item';
+    row.setAttribute('aria-label', `${it ? it.name : 'Item'}, ${rows[id]} used`);
     row.innerHTML = `<div class="sus-item-info"><div class="sus-item-name">${esc(it ? it.name : 'Item')}</div></div><div class="sus-step-val">${rows[id]}</div>`;
     listEl.appendChild(row);
   });
@@ -10935,6 +10938,7 @@ function susStartChange() {
   susNote('');
   susSeedFromSaved();
   renderSupplyList();
+  el('sus-save-btn')?.focus?.();
 }
 
 function renderSupplyList() {
@@ -11088,6 +11092,7 @@ function buildSusRow(item) {
 }
 
 async function saveSupplyUsage() {
+  if (state.supplySaved && !_susChanging) return; // read-only view (incl. legacy drafts): nothing to send
   const saveBtn = el('sus-save-btn');
   const allArr  = [..._susItems, ...SUS_EXTRA_ITEMS].filter(i => !i.isExtra); // extras have no DB row
   // s99g: one save per report. Only the extra amount over what is already saved is sent; a lower
@@ -11114,7 +11119,7 @@ async function saveSupplyUsage() {
     } else if (q < was) lowered = true;
   });
 
-  if (lowered) susNote('A lower number cannot be undone from here. Lloyd can correct it with a count (Cassy: count ...).');
+  if (lowered) susNote('A lower number cannot be undone here. Lloyd will correct it with a stock count.');
   else susNote('');
 
   if (!state.supplySaved && wanted === 0) {
@@ -11165,6 +11170,7 @@ async function saveSupplyUsage() {
 }
 
 function markSupplyLogNoneUsed() {
+  if (state.supplySaved) { closeSupplyUsageSheet(); return; } // never wipe saved totals
   // Zero out all items (quick + optional) so save() writes zeros / skips them
   [..._susItems, ...SUS_EXTRA_ITEMS].forEach(item => {
     item.usedQty = 0;
