@@ -7344,7 +7344,8 @@ async function fetchPrevReadings() {
   const out = state.cleaningType === 'mid_stay' ? '' : (el('checkOutDate')?.value || '').trim();
   const co  = /^\d{4}-\d{2}-\d{2}$/.test(out) && out < day ? out : day;
   const coParam = /^\d{4}-\d{2}-\d{2}$/.test(co) ? `&checkout_date=${co}` : '';
-  state.nextReading = null;   // never judge this stay by another date's later reading
+  // Never judge this stay by another date's readings: offline, the page judges nothing and the server decides.
+  state.nextReading = null; state.prevElectricReading = null; state.prevWaterReading = null; state.prevReadingDate = null;
   if (el('prev-range')) el('prev-range').hidden = true;
 
   // Last report's meter photo hashes, so a re-used photo can be spotted.
@@ -7352,7 +7353,7 @@ async function fetchPrevReadings() {
 
   try {
     const resp = await fetch(`${EDGE_BASE}/last-readings?property_id=${encodeURIComponent(PROPERTY_ID)}${coParam}`, {
-      method: 'GET', headers: await staffHeaders(),
+      method: 'GET', headers: await staffHeaders(), signal: AbortSignal.timeout(8000),   // Send must never hang on it
     });
     const data = await resp.json();
     if (seq !== prevReadingsSeq) return;   // a newer check-out date asked since
@@ -10466,9 +10467,7 @@ async function proceedWithSubmission() {
   // and use that folder instead of creating a new one. The field is already sent.
   await ensureSessionFolder().catch(() => {});
 
-  // Session 27: refresh "previous" right before building the payload - the page-load value is stale
-  // when another turnover was submitted since (16 Sep: two turnovers ten minutes apart).
-  await fetchPrevReadings().catch(() => {});
+  // Session 27: "previous" is refreshed right before the meter block above (s99), so it is current here too.
   const payload = buildPayload();
   payload.propertyId = PROPERTY_ID;
 
