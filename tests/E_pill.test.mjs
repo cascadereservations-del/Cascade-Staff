@@ -54,7 +54,7 @@ test('E_ pill: the strip, the warnings line and the Sign out button are gone fro
     const app = await boot({ role, hash: '#home', handlers: baseHandlers(role, { staff_home_v1: home({ warnings: [{ kind: 'inventory', title: 'Low stock: soap', detail: {} }] }), tasks_list_v1: tasksOf([T({})]) }) });
     const h = app.els['v-home'].innerHTML;
     assert.doesNotMatch(h, /A_strip|class="warnline|aria-label="Status"|Turnover on track|Nothing overdue|No clash days|No warnings today|data-act="signout"|Sign out/, role);
-    assert.match(h, /<div class="help F_span" style="text-align:center;margin-top:16px">Updated [^<]*· v3.4.16<\/div>/, role);
+    assert.match(h, /<div class="help F_span" style="text-align:center;margin-top:16px">Updated [^<]*· v3.4.17<\/div>/, role);
   }
   const src = read('app.js'); assert.doesNotMatch(src, /function warnLine|function A_statusStrip/); assert.doesNotMatch(css, /\.A_strip/);
 });

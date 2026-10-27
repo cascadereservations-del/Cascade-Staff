@@ -97,3 +97,16 @@ button.rowi.C_row, .rowi.P_tap { cursor: pointer; font: inherit; }
 .rowi.P_row .P_go { grid-column: 2; justify-self: end; min-width: 88px; min-height: var(--v5-touch); padding: 0 20px; display: inline-flex; align-items: center; justify-content: center; font: 600 var(--v5-t-2)/1 var(--v5-font-ui); }
 .rowi.P_row .P_go.btn-ghost { border: 1px solid var(--v5-line-2); color: var(--v5-act); }
 .rowi.P_row .P_go.btn-primary { background: var(--v5-act); color: var(--v5-act-fg); }
+
+/* ---- s99e (D-350): the Cleaning fee screen made plain ---- */
+.P_h { margin: 0 0 6px; font: 650 var(--v5-t-body)/clamp(1.5rem, 1.4023rem + 0.4337vw, 1.68rem) var(--v5-font-ui); color: var(--v5-ink); }
+.P_hh { margin: 0 0 6px; }
+.P_reports { padding: 14px 16px; display: grid; gap: 10px; }
+.P_reports .P_h { margin: 0; }
+.P_rl { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; font-size: var(--v5-t-2); color: var(--v5-ink-2); }
+/* the list ends clear of the sticky total: the bar is about 9 rem tall, so the last row never sits under it */
+.P_pick { padding-bottom: 9rem; }
+.sticky.P_bar { background: var(--v5-surf); border-top: 1px solid var(--v5-line); box-shadow: var(--v5-shadow-card); border-radius: var(--v5-r-card) var(--v5-r-card) 0 0; padding: 12px 16px; margin-left: -16px; margin-right: -16px; }
+.P_lbl { display: grid; font: 650 var(--v5-t-2)/1.3 var(--v5-font-ui); color: var(--v5-ink); }
+.P_cnt { font-weight: 400; color: var(--v5-ink-2); font-size: var(--v5-t-label); }
+.P_hint { margin: 0; text-align: center; }

@@ -133,25 +133,25 @@ function bootPay({ search = '', hash = '', mine, noSession = false } = {}) {
 }
 
 test('P_ Cleaning fee: the page is titled Cleaning fee with its sub-line, and the old phrase is gone', async () => {
-  const b = bootPay(); await until(() => /Not yet paid/.test(b.root.innerHTML), 'list');
-  assert.match(b.root.innerHTML, /<h1 class="ttl">Cleaning fee<\/h1>/); assert.match(b.root.innerHTML, /Ask for payment for your cleans and expenses/);
+  const b = bootPay(); await until(() => /Cleans to be paid/.test(b.root.innerHTML), 'list');
+  assert.match(b.root.innerHTML, /<h1 class="ttl">Cleaning fee<\/h1>/); assert.match(b.root.innerHTML, /Tick what you want to be paid for, then send/);
   assert.doesNotMatch(b.root.innerHTML, /Ask for your pay|>Your pay</);
   const nosess = bootPay({ noSession: true }); await until(() => /Sign in to the Staff app first/.test(nosess.root.innerHTML), 'signin state'); // the title tag is HTML, outside the fake browser: checked in a real browser
   assert.match(nosess.root.innerHTML, /then open Cleaning fee\./); assert.doesNotMatch(nosess.root.innerHTML, /Ask for your pay/);
-  assert.match(b.root.innerHTML, /Review request/);
+  assert.match(b.root.innerHTML, /Check and send/);
 });
 
 test('P_ ?clean=<session_id> ticks that clean only (expenses stay ticked); an unknown id changes nothing', async () => {
-  const b = bootPay({ search: '?clean=s-2' }); await until(() => /Not yet paid/.test(b.root.innerHTML), 'list');
+  const b = bootPay({ search: '?clean=s-2' }); await until(() => /Cleans to be paid/.test(b.root.innerHTML), 'list');
   const on = (id) => new RegExp('aria-checked="true" aria-label="[^"]*" data-ses="' + id + '"').test(b.root.innerHTML);
   assert.equal(on('s-2'), true); assert.equal(on('s-1'), false); assert.match(b.root.innerHTML, /aria-checked="true" aria-label="Gloves" data-clm="c-1"/);
-  const unk = bootPay({ search: '?clean=nope' }); await until(() => /Not yet paid/.test(unk.root.innerHTML), 'list');
+  const unk = bootPay({ search: '?clean=nope' }); await until(() => /Cleans to be paid/.test(unk.root.innerHTML), 'list');
   assert.match(unk.root.innerHTML, /aria-checked="true" aria-label="[^"]*" data-ses="s-1"/); assert.match(unk.root.innerHTML, /aria-checked="true" aria-label="[^"]*" data-ses="s-2"/);
 });
 
 test('P_ transport toggle is one row, label on the left and the switch on the right, with its own accessible name (H7)', async () => {
-  const b = bootPay(); await until(() => /Not yet paid/.test(b.root.innerHTML), 'list');
-  assert.match(b.root.innerHTML, /<button class="sw P_tr" type="button" role="switch" aria-checked="false" aria-label="Add ₱150 transport for Fri 2 Oct" data-sw="s-1"><span>Transport \+₱150<\/span><i aria-hidden="true"><\/i><\/button>/);
+  const b = bootPay(); await until(() => /Cleans to be paid/.test(b.root.innerHTML), 'list');
+  assert.match(b.root.innerHTML, /<button class="sw P_tr" type="button" role="switch" aria-checked="true" aria-label="I paid for transport \(\+₱150\) for Fri 2 Oct" data-sw="s-1"><span>I paid for transport \(\+₱150\)<\/span><i aria-hidden="true"><\/i><\/button>/);
   assert.doesNotMatch(b.root.innerHTML, /added for this clean/);
   // the 44 px height is a layout fact: measured in a real browser (258x44), not asserted from stylesheet text
 });
@@ -164,7 +164,7 @@ test('P_ expectation line sits under the stepper of an open request and not unde
 
 // ---------------------------------------------------------------- shared chrome
 test('P_ chrome: Today is current, badges come from the hash, Back is the app home unless the link came from the app', async () => {
-  const b = bootPay({ hash: '#tasks=2&cal=3' }); await until(() => /Not yet paid/.test(b.root.innerHTML), 'list');
+  const b = bootPay({ hash: '#tasks=2&cal=3' }); await until(() => /Cleans to be paid/.test(b.root.innerHTML), 'list');
   const h = b.root.innerHTML;
   assert.match(h, /<a class="tab" href="\.\.\/#home"><span/); assert.equal((h.match(/aria-current="page"/g) || []).length, 0, 'B3: a pay page marks no tab');
   assert.match(h, /<span class="badge" aria-label="3 warnings">3<\/span>/); assert.match(h, /<span class="badge" aria-label="2 due">2<\/span>/);
@@ -321,25 +321,25 @@ const btn = (a) => { const t = target(a), c = t.closest; t.closest = (sel) => c(
 const NOADV = { ...CANDS, sessions: [], claims: [] };
 
 test('s99d: cands.advance draws a "No report yet" group with date, base, transport switch only when the rate has one, and the help line', async () => {
-  const b = bootAdv({ ...CANDS, missing_reports: ['2026-10-19', '2026-10-22'], advance: ADV }, []); await until(() => /No report yet/.test(b.root.innerHTML), 'group');
+  const b = bootAdv({ ...CANDS, missing_reports: ['2026-10-19', '2026-10-22'], advance: ADV }, []); await until(() => /Cleans with no report yet/.test(b.root.innerHTML), 'group');
   const h = b.root.innerHTML;
   assert.match(h, /aria-label="Mon 19 Oct turnover, no report yet" data-adv="2026-10-19"/); assert.match(h, /aria-label="Thu 22 Oct turnover, no report yet" data-adv="2026-10-22"/);
   assert.match(h, /data-advsw="2026-10-19"/); assert.doesNotMatch(h, /data-advsw="2026-10-22"/, 'no transport rate, no switch');
-  assert.match(h, /You can include these now\. Please still send each report - the app will remind you\./);
-  assert.doesNotMatch(h, /Submit the cleaning checklist first/, 'the old note is replaced');
+  assert.match(h, /Please still send each report - the app will remind you\./);
+  assert.doesNotMatch(h, /send the cleaning report first, then you can ask for pay/, 'the old note is replaced');
   assert.doesNotMatch(h, /aria-checked="true" aria-label="Mon 19 Oct turnover/, 'not ticked by default');
 });
 
 test('s99d: an older server (no cands.advance) keeps the old note and no group', async () => {
-  const b = bootAdv({ ...CANDS, missing_reports: ['2026-10-19'] }, []); await until(() => /Not yet paid/.test(b.root.innerHTML), 'list');
-  assert.match(b.root.innerHTML, /Submit the cleaning checklist first/); assert.doesNotMatch(b.root.innerHTML, /data-adv=/);
+  const b = bootAdv({ ...CANDS, missing_reports: ['2026-10-19'] }, []); await until(() => /Cleans to be paid/.test(b.root.innerHTML), 'list');
+  assert.match(b.root.innerHTML, /send the cleaning report first, then you can ask for pay/); assert.doesNotMatch(b.root.innerHTML, /data-adv=/);
 });
 
 test('s99d: ticking rows adds them to the total (500 + 500 + 150 transport = 1150 on top of 1 clean) and the payload carries advance', async () => {
-  const sent = []; sent.reply = { ok: true, total: 1150, ref: 'CASCADE-AAAA0001' }; const b = bootAdv({ ...NOADV, advance: ADV }, sent); await until(() => /No report yet/.test(b.root.innerHTML), 'group');
+  const sent = []; sent.reply = { ok: true, total: 1150, ref: 'CASCADE-AAAA0001' }; const b = bootAdv({ ...NOADV, advance: ADV }, sent); await until(() => /Cleans with no report yet/.test(b.root.innerHTML), 'group');
   assert.match(b.root.innerHTML, /<button class="btn btn-primary btn-block" type="button" data-act="review" disabled>/);
-  await fire(b.root, 'click', { target: target({ 'data-adv': '2026-10-19' }) }); await fire(b.root, 'click', { target: target({ 'data-adv': '2026-10-22' }) }); await fire(b.root, 'click', { target: target({ 'data-advsw': '2026-10-19' }) });
-  assert.match(b.root.innerHTML, /Total to request<\/span><span class="amt num">₱1,150</);
+  await fire(b.root, 'click', { target: target({ 'data-adv': '2026-10-19' }) }); await fire(b.root, 'click', { target: target({ 'data-adv': '2026-10-22' }) }); 
+  assert.match(b.root.innerHTML, /class="amt num">₱1,150</);
   await fire(b.root, 'click', { target: btn({ 'data-act': 'review' }) });
   assert.match(plain(b.root.innerHTML), /no report yet/); assert.match(b.root.innerHTML, /Total: ₱1,150/);
   await fire(b.root, 'click', { target: btn({ 'data-act': 'send' }) }); await until(() => sent.length === 1, 'sent');
@@ -356,7 +356,7 @@ test('s99d: refusal reasons read as plain sentences; taken and not-owed refresh 
   assert.match(P.resultMessage({ ok: false, reason: 'no_rate' }).text, /no pay rate set yet/); assert.match(P.resultMessage({ ok: false, reason: 'transport_not_allowed' }).text, /Transport cannot be added/);
 });
 
-const tickAdv = async (b, sent) => { await until(() => /No report yet/.test(b.root.innerHTML), 'group'); await fire(b.root, 'click', { target: target({ 'data-adv': '2026-10-19' }) }); await fire(b.root, 'click', { target: btn({ 'data-act': 'review' }) }); await fire(b.root, 'click', { target: btn({ 'data-act': 'send' }) }); await until(() => sent.length >= 1, 'sent'); };
+const tickAdv = async (b, sent) => { await until(() => /Cleans with no report yet/.test(b.root.innerHTML), 'group'); await fire(b.root, 'click', { target: target({ 'data-adv': '2026-10-19' }) }); await fire(b.root, 'click', { target: btn({ 'data-act': 'review' }) }); await fire(b.root, 'click', { target: btn({ 'data-act': 'send' }) }); await until(() => sent.length >= 1, 'sent'); };
 
 test('s99d: an old server that drops advance (total 0 back for 500 asked) gets a calm partial notice and no report reminder', async () => {
   const sent = []; sent.reply = { ok: true, total: 0, ref: 'CASCADE-AAAA0002' };
@@ -366,7 +366,7 @@ test('s99d: an old server that drops advance (total 0 back for 500 asked) gets a
 });
 
 test('s99d: a matching total keeps the reminder and no partial notice', async () => {
-  const sent = []; sent.reply = { ok: true, total: 500, ref: 'CASCADE-AAAA0003' };
+  const sent = []; sent.reply = { ok: true, total: 650, ref: 'CASCADE-AAAA0003' };
   const b = bootAdv({ ...NOADV, advance: ADV }, sent); await tickAdv(b, sent);
   await until(() => /Send the cleaning report for 19 Oct when you can\./.test(b.root.innerHTML), 'reminder'); assert.doesNotMatch(b.root.innerHTML, /only part/);
 });
@@ -390,6 +390,6 @@ test('s99d: toggling an advance row transport gives a new idempotency key', () =
 
 test('s99d: the help line asks her to turn on notifications only when they are not on', async () => {
   const off = bootAdv({ ...NOADV, advance: ADV }, [], 'off'); await until(() => /Turn on notifications to get a reminder\./.test(off.root.innerHTML), 'off');
-  const on = bootAdv({ ...NOADV, advance: ADV }, [], 'on'); await until(() => /No report yet/.test(on.root.innerHTML), 'group'); await tick();
+  const on = bootAdv({ ...NOADV, advance: ADV }, [], 'on'); await until(() => /Cleans with no report yet/.test(on.root.innerHTML), 'group'); await tick();
   assert.doesNotMatch(on.root.innerHTML, /Turn on notifications/); assert.match(on.root.innerHTML, /the app will remind you\./);
 });

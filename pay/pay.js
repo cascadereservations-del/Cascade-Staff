@@ -21,11 +21,12 @@
   function ds(iso) { return CS.dayShort(String(iso).slice(0, 10)); } // "Fri 2 Oct"
   P.P_wireBack(window);
 
-  function freshSel(c) {
+  function freshSel(c) { // D-350: transport starts on wherever the rate has one
     var sel = { sessions: {}, claims: {}, extras: S.sel ? S.sel.extras : [], advance: {} };
     var only = S.clean && (c.sessions || []).some(function (s) { return s.id === S.clean; }) ? S.clean : null; // MF1: ?clean=<session_id> ticks that clean (and no other clean); an unknown id ticks all, as before
-    (c.sessions || []).forEach(function (s) { sel.sessions[s.id] = { on: !only || s.id === only, transport: false }; });
+    (c.sessions || []).forEach(function (s) { sel.sessions[s.id] = { on: !only || s.id === only, transport: s.transport != null }; });
     (c.claims || []).forEach(function (x) { sel.claims[x.id] = true; });
+    (c.advance || []).forEach(function (a) { sel.advance[a.checkout_date] = { on: false, transport: a.transport != null }; });
     return sel;
   }
   function load() {
@@ -43,30 +44,35 @@
   }
 
   // ---------------------------------------------------------------- pick
+  // s99e (D-350): the sub-line is the sum she is asking for; transport starts on wherever the rate has one.
+  function subLine(base, tr, on) { return P.peso(base) + ' cleaning' + (on && tr != null ? ' + ' + P.peso(tr) + ' transport' : ''); }
+  function trOpt(tr, on, attr, key, day) {
+    if (tr == null) return '';
+    var lbl = 'I paid for transport (+' + P.peso(tr) + ')';
+    return '<div class="opt"><button class="sw P_tr" type="button" role="switch" aria-checked="' + !!on + '" aria-label="' + esc(lbl + ' for ' + day) + '" ' + attr + '="' + esc(key) + '"><span>' + esc(lbl) + '</span><i aria-hidden="true"></i></button></div>';
+  }
   function advRow(a) {
-    var st = S.sel.advance[a.checkout_date] || { on: false, transport: false }, amt = P.sessionAmount({ base: a.base, transport: a.transport }, st.on && st.transport);
-    var opt = a.transport != null ? '<div class="opt"><button class="sw P_tr" type="button" role="switch" aria-checked="' + !!st.transport + '" aria-label="' + esc('Add ' + P.peso(a.transport) + ' transport for ' + ds(a.checkout_date)) + '" data-advsw="' + esc(a.checkout_date) + '"><span>Transport +' + esc(P.peso(a.transport)) + '</span><i aria-hidden="true"></i></button></div>' : '';
-    return '<div class="payrow"><button class="chk" type="button" role="checkbox" aria-checked="' + !!st.on + '" aria-label="' + esc(ds(a.checkout_date) + ' turnover, no report yet') + '" data-adv="' + esc(a.checkout_date) + '">' + ICON('check', 's16') + '</button>' +
-      '<div><div class="t"><span>' + esc(ds(a.checkout_date) + ' · Turnover') + '</span><span class="val">' + esc(P.peso(amt)) + '</span></div><span class="s">Base ' + esc(P.peso(a.base)) + ' · report owed</span>' + opt + '</div></div>';
+    var st = S.sel.advance[a.checkout_date] || { on: false, transport: a.transport != null }, amt = P.sessionAmount({ base: a.base, transport: a.transport }, st.transport);
+    return '<div class="payrow' + (st.on ? '' : ' off') + '"><button class="chk" type="button" role="checkbox" aria-checked="' + !!st.on + '" aria-label="' + esc(ds(a.checkout_date) + ' turnover, no report yet') + '" data-adv="' + esc(a.checkout_date) + '">' + ICON('check', 's16') + '</button>' +
+      '<div><div class="t"><span>' + esc(ds(a.checkout_date) + ' · Turnover') + '</span><span class="val">' + esc(P.peso(amt)) + '</span></div><span class="s">' + esc(subLine(a.base, a.transport, st.transport) + ' · report not sent') + '</span>' + trOpt(a.transport, st.transport, 'data-advsw', a.checkout_date, ds(a.checkout_date)) + '</div></div>';
   }
   function missingBlock() {
-    // s99d: a server that sends cands.advance lets her include check-outs with no report yet; an older one keeps the "send the checklist first" note
+    // s99d: a server that sends cands.advance lets her include check-outs with no report yet; an older one keeps the "send the report first" note
     if (Array.isArray(S.cands.advance)) {
       if (!S.cands.advance.length) return '';
-      return '<div><div class="cap up" style="margin-bottom:6px">No report yet</div><div class="card list">' + S.cands.advance.map(advRow).join('') + '</div><p class="help">You can include these now. Please still send each report - the app will remind you.' + (S.pushState && S.pushState !== 'on' && S.pushState !== 'hidden' ? ' Turn on notifications to get a reminder.' : '') + '</p></div>';
+      return '<div><h2 class="P_h">Cleans with no report yet</h2><p class="help P_hh">Not ticked yet. Tick to be paid now and send the report after.</p><div class="card list">' + S.cands.advance.map(advRow).join('') + '</div><p class="help">Please still send each report - the app will remind you.' + (S.pushState && S.pushState !== 'on' && S.pushState !== 'hidden' ? ' Turn on notifications to get a reminder.' : '') + '</p></div>';
     }
     var m = (S.cands.missing_reports || []);
     if (!m.length) return '';
-    return '<div class="infobox">' + ICON('clip') + '<span><b>' + esc(m.map(dm).join(', ')) + ' ' + (m.length === 1 ? 'check-out has' : 'check-outs have') + ' no report yet.</b> Submit the cleaning checklist first to request pay for ' + (m.length === 1 ? 'it' : 'them') + '.</span></div>';
+    return '<div class="infobox">' + ICON('clip') + '<span>' + esc(m.map(dm).join(', ')) + ': send the cleaning report first, then you can ask for pay.</span></div>';
   }
   function cleanRow(s) {
-    var st = S.sel.sessions[s.id] || { on: false, transport: false }, amt = P.sessionAmount(s, st.on && st.transport);
-    var opt = s.transport != null ? '<div class="opt"><button class="sw P_tr" type="button" role="switch" aria-checked="' + !!st.transport + '" aria-label="' + esc('Add ' + P.peso(s.transport) + ' transport for ' + ds(s.date)) + '" data-sw="' + esc(s.id) + '"><span>Transport +' + esc(P.peso(s.transport)) + '</span><i aria-hidden="true"></i></button></div>' : '';
-    return '<div class="payrow"><button class="chk" type="button" role="checkbox" aria-checked="' + !!st.on + '" aria-label="' + esc(ds(s.date) + ' clean') + '" data-ses="' + esc(s.id) + '">' + ICON('check', 's16') + '</button>' +
-      '<div><div class="t"><span>' + esc(ds(s.date) + ' · ' + P.typeLabel(s.type)) + '</span><span class="val">' + esc(P.peso(amt)) + '</span></div><span class="s">Base ' + esc(P.peso(s.base)) + (s.guest ? ' · ' + esc(s.guest) + ' checked out' : '') + '</span>' + opt + '</div></div>';
+    var st = S.sel.sessions[s.id] || { on: false, transport: false }, amt = P.sessionAmount(s, st.transport);
+    return '<div class="payrow' + (st.on ? '' : ' off') + '"><button class="chk" type="button" role="checkbox" aria-checked="' + !!st.on + '" aria-label="' + esc(ds(s.date) + ' clean') + '" data-ses="' + esc(s.id) + '">' + ICON('check', 's16') + '</button>' +
+      '<div><div class="t"><span>' + esc(ds(s.date) + ' · ' + P.typeLabel(s.type)) + '</span><span class="val">' + esc(P.peso(amt)) + '</span></div><span class="s">' + esc(subLine(s.base, s.transport, st.transport)) + (s.guest ? ' · ' + esc(s.guest) + ' checked out' : '') + '</span>' + trOpt(s.transport, st.transport, 'data-sw', s.id, ds(s.date)) + '</div></div>';
   }
   function claimRow(c) {
-    return '<div class="payrow"><button class="chk" type="button" role="checkbox" aria-checked="' + !!S.sel.claims[c.id] + '" aria-label="' + esc(c.description) + '" data-clm="' + esc(c.id) + '">' + ICON('check', 's16') + '</button>' +
+    return '<div class="payrow' + (S.sel.claims[c.id] ? '' : ' off') + '"><button class="chk" type="button" role="checkbox" aria-checked="' + !!S.sel.claims[c.id] + '" aria-label="' + esc(c.description) + '" data-clm="' + esc(c.id) + '">' + ICON('check', 's16') + '</button>' +
       '<div><div class="t"><span>' + esc(c.description) + '</span><span class="val">' + esc(P.peso(c.amount)) + '</span></div><span class="s">Expense · ' + esc(dm(c.date)) + '</span></div></div>';
   }
   function extraRow(e, i) {
@@ -103,25 +109,29 @@
       return '<div class="rowi" style="cursor:default"><span class="lead">' + ICON('cash') + '</span><span class="mid"><span class="t num">' + esc(P.peso(r.total)) + '</span><span class="s num C_ref">Ref ' + esc(String(r.ref || '').replace(/^CASCADE-/, '')) + (r.created_at ? ' · sent ' + esc(dm(r.created_at)) : '') + (r.status === 'paid' && r.paid_at ? ' · paid ' + esc(dm(r.paid_at)) : '') + bank + '</span>' + ahead + C_stepper(r.status) + (r.status === 'requested' || r.status === 'paying' ? '<span class="help P_expect">Usually paid the same day. You will see "You were paid" here.</span>' : '') + '</span></div>';
     }).join('') + '</div></div>' + slot;
   }
-  // s94: paid ahead for a turnover whose report is still owed
-  function owedBlock() {
-    var rows = ((S.cands && S.cands.reports_owed) || []).filter(function (r) { return r && r.date; }).sort(function (a, b) { return a.date < b.date ? -1 : 1; });
-    if (!rows.length || !window.C_PaidText) return '';
-    return '<div class="infobox">' + ICON('clip') + '<span><b>Reports still owed.</b> ' + esc(window.C_PaidText.owedText(rows)) + '</span></div><a class="btn btn-primary btn-block" href="../#door/checklist">Start the cleaning report</a>';
+  // s99e: one card for every report she still owes, paid ahead or not, with the one way to start it
+  function reportsCard() {
+    var by = {};
+    ((S.cands && S.cands.reports_owed) || []).forEach(function (r) { if (r && r.date) by[String(r.date).slice(0, 10)] = r.status === 'paid' ? 'already paid' : 'pay requested'; });
+    (Array.isArray(S.cands.advance) ? S.cands.advance : []).forEach(function (a) { var k = String(a.checkout_date).slice(0, 10); if (!by[k]) by[k] = 'not paid yet'; });
+    var ks = Object.keys(by).sort();
+    if (!ks.length) return '';
+    return '<div class="card P_reports"><h2 class="P_h">Reports to send</h2><ul class="P_rl">' + ks.map(function (k) { return '<li>' + esc(ds(k) + ' · ' + by[k]) + '</li>'; }).join('') + '</ul><a class="btn btn-secondary btn-block" href="../#door/checklist">Start a cleaning report</a></div>';
   }
   function renderPick() {
-    var c = S.cands, hasRows = (c.sessions || []).length || (c.claims || []).length, hasAdv = Array.isArray(c.advance) && c.advance.length;
-    var total = P.computeTotal(c, S.sel), lines = P.lineCount(c, S.sel), over = lines > P.MAX_LINES;
-    var inner = '<div class="stack"><p class="help P_sub">Ask for payment for your cleans and expenses</p>' +
-      (hasRows ? '<div><div class="cap up" style="margin-bottom:6px">Not yet paid</div><div class="card list">' + (c.sessions || []).map(cleanRow).join('') + (c.claims || []).map(claimRow).join('') + '</div></div>'
-        : hasAdv ? '' : '<div class="card empty"><div class="disc">' + ICON('checks') + '</div><h2 class="hd">Nothing waiting</h2><p>Cleans you have reported and not been paid for will show here.</p></div>') +
-      owedBlock() + missingBlock() +
-      '<div><div class="cap up" style="margin-bottom:6px">Other expenses</div><div class="card list">' + (S.sel.extras || []).map(extraRow).join('') +
-      (S.draftOpen ? draftForm() : '<div class="payrow single"><button class="btn btn-ghost" type="button" data-act="openx" style="justify-content:flex-start;padding:0;height:36px">' + ICON('plus') + 'Add other expense</button></div>') + '</div></div>' +
+    var c = S.cands, sess = c.sessions || [], claims = c.claims || [], hasAdv = Array.isArray(c.advance) && c.advance.length;
+    var total = P.computeTotal(c, S.sel), lines = P.lineCount(c, S.sel), over = lines > P.MAX_LINES, can = total > 0 && !over;
+    var inner = '<div class="stack P_pick"><p class="help P_sub">Tick what you want to be paid for, then send.</p>' + reportsCard() +
+      (sess.length ? '<div><h2 class="P_h">Cleans to be paid</h2><div class="card list">' + sess.map(cleanRow).join('') + '</div></div>' : '') +
+      missingBlock() +
+      (sess.length || claims.length || hasAdv ? '' : '<div class="card empty"><div class="disc">' + ICON('checks') + '</div><p>Nothing to be paid yet. Cleans and expenses show here after you send their report.</p></div>') +
+      '<div><h2 class="P_h">Expenses</h2><div class="card list">' + claims.map(claimRow).join('') + (S.sel.extras || []).map(extraRow).join('') +
+      (S.draftOpen ? draftForm() : '<div class="payrow single"><button class="btn btn-ghost" type="button" data-act="openx" style="justify-content:flex-start;padding:0;height:36px">' + ICON('plus') + 'Add an expense</button></div>') + '</div></div>' +
       history() + '</div>' +
-      '<div class="sticky"><div class="total"><span class="cap up">Total to request</span><span class="amt num">' + esc(P.peso(total)) + '</span></div>' +
+      '<div class="sticky P_bar"><div class="total"><span class="P_lbl">You will ask for<span class="P_cnt">' + esc(P.P_plural(lines, 'item')) + '</span></span><span class="amt num">' + esc(P.peso(total)) + '</span></div>' +
       (over ? '<div class="errbox">' + ICON('alert') + '<span>A request holds up to ' + P.MAX_LINES + ' lines. Untick some and send the rest in a second request.</span></div>' : '') +
-      '<button class="btn btn-primary btn-block" type="button" data-act="review"' + (total > 0 && !over ? '' : ' disabled') + '>Review request' + ICON('chev') + '</button></div>';
+      '<button class="btn btn-primary btn-block" type="button" data-act="review"' + (can ? '' : ' disabled') + '>Check and send' + ICON('chev') + '</button>' +
+      (can || over ? '' : '<p class="help P_hint">Tick at least one line.</p>') + '</div>';
     root.innerHTML = shell('Cleaning fee', inner) + '<input type="file" id="x-file" accept="image/*" capture="environment" hidden>';
   }
 
