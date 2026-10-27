@@ -22,7 +22,7 @@
   P.P_wireBack(window);
 
   function freshSel(c) {
-    var sel = { sessions: {}, claims: {}, extras: S.sel ? S.sel.extras : [] };
+    var sel = { sessions: {}, claims: {}, extras: S.sel ? S.sel.extras : [], advance: {} };
     var only = S.clean && (c.sessions || []).some(function (s) { return s.id === S.clean; }) ? S.clean : null; // MF1: ?clean=<session_id> ticks that clean (and no other clean); an unknown id ticks all, as before
     (c.sessions || []).forEach(function (s) { sel.sessions[s.id] = { on: !only || s.id === only, transport: false }; });
     (c.claims || []).forEach(function (x) { sel.claims[x.id] = true; });
@@ -43,7 +43,18 @@
   }
 
   // ---------------------------------------------------------------- pick
+  function advRow(a) {
+    var st = S.sel.advance[a.checkout_date] || { on: false, transport: false }, amt = P.sessionAmount({ base: a.base, transport: a.transport }, st.on && st.transport);
+    var opt = a.transport != null ? '<div class="opt"><button class="sw P_tr" type="button" role="switch" aria-checked="' + !!st.transport + '" aria-label="' + esc('Add ' + P.peso(a.transport) + ' transport for ' + ds(a.checkout_date)) + '" data-advsw="' + esc(a.checkout_date) + '"><span>Transport +' + esc(P.peso(a.transport)) + '</span><i aria-hidden="true"></i></button></div>' : '';
+    return '<div class="payrow"><button class="chk" type="button" role="checkbox" aria-checked="' + !!st.on + '" aria-label="' + esc(ds(a.checkout_date) + ' turnover, no report yet') + '" data-adv="' + esc(a.checkout_date) + '">' + ICON('check', 's16') + '</button>' +
+      '<div><div class="t"><span>' + esc(ds(a.checkout_date) + ' · Turnover') + '</span><span class="val">' + esc(P.peso(amt)) + '</span></div><span class="s">Base ' + esc(P.peso(a.base)) + ' · report owed</span>' + opt + '</div></div>';
+  }
   function missingBlock() {
+    // s99d: a server that sends cands.advance lets her include check-outs with no report yet; an older one keeps the "send the checklist first" note
+    if (Array.isArray(S.cands.advance)) {
+      if (!S.cands.advance.length) return '';
+      return '<div><div class="cap up" style="margin-bottom:6px">No report yet</div><div class="card list">' + S.cands.advance.map(advRow).join('') + '</div><p class="help">You can include these now. Please still send each report - the app will remind you.</p></div>';
+    }
     var m = (S.cands.missing_reports || []);
     if (!m.length) return '';
     return '<div class="infobox">' + ICON('clip') + '<span><b>' + esc(m.map(dm).join(', ')) + ' ' + (m.length === 1 ? 'check-out has' : 'check-outs have') + ' no report yet.</b> Submit the cleaning checklist first to request pay for ' + (m.length === 1 ? 'it' : 'them') + '.</span></div>';
@@ -99,11 +110,11 @@
     return '<div class="infobox">' + ICON('clip') + '<span><b>Reports still owed.</b> ' + esc(window.C_PaidText.owedText(rows)) + '</span></div><a class="btn btn-primary btn-block" href="../#door/checklist">Start the cleaning report</a>';
   }
   function renderPick() {
-    var c = S.cands, hasRows = (c.sessions || []).length || (c.claims || []).length;
+    var c = S.cands, hasRows = (c.sessions || []).length || (c.claims || []).length, hasAdv = Array.isArray(c.advance) && c.advance.length;
     var total = P.computeTotal(c, S.sel), lines = P.lineCount(c, S.sel), over = lines > P.MAX_LINES;
     var inner = '<div class="stack"><p class="help P_sub">Ask for payment for your cleans and expenses</p>' +
       (hasRows ? '<div><div class="cap up" style="margin-bottom:6px">Not yet paid</div><div class="card list">' + (c.sessions || []).map(cleanRow).join('') + (c.claims || []).map(claimRow).join('') + '</div></div>'
-        : '<div class="card empty"><div class="disc">' + ICON('checks') + '</div><h2 class="hd">Nothing waiting</h2><p>Cleans you have reported and not been paid for will show here.</p></div>') +
+        : hasAdv ? '' : '<div class="card empty"><div class="disc">' + ICON('checks') + '</div><h2 class="hd">Nothing waiting</h2><p>Cleans you have reported and not been paid for will show here.</p></div>') +
       owedBlock() + missingBlock() +
       '<div><div class="cap up" style="margin-bottom:6px">Other expenses</div><div class="card list">' + (S.sel.extras || []).map(extraRow).join('') +
       (S.draftOpen ? draftForm() : '<div class="payrow single"><button class="btn btn-ghost" type="button" data-act="openx" style="justify-content:flex-start;padding:0;height:36px">' + ICON('plus') + 'Add other expense</button></div>') + '</div></div>' +
@@ -175,7 +186,7 @@
     if (S.sending) return;
     if (noPhotoCount() && !S.askedOnce) { S.askedOnce = true; S.askOpen = true; renderReview(); return; }
     S.sending = true; S.err = ''; S.askOpen = false; renderReview();
-    var demoTotal = DEMO ? P.computeTotal(S.cands, S.sel) : 0;
+    var demoTotal = DEMO ? P.computeTotal(S.cands, S.sel) : 0, advDates = P.chosen(S.cands, S.sel).advance.map(function (x) { return x.a.checkout_date; });
     sb.auth.getSession().then(function (s) {
       var token = s.data && s.data.session && s.data.session.access_token; if (!token) throw new Error('signin');
       var failed = [], key = K.forSelection(S.cands, S.sel);
@@ -187,6 +198,7 @@
       });
     }).catch(function () { return { j: { ok: false, reason: 'offline' }, failed: [] }; }).then(function (o) {
       S.sending = false; var m = P.resultMessage(o.j); K.settle(o.j);
+      if (m.ok && advDates.length) m.text += ' Send the cleaning report for ' + advDates.map(dm).join(', ') + ' when you can.';
       if (m.ok) { F_tap(); S.result = m; S.note = o.failed.length ? 'The receipt photo for ' + o.failed.join(', ') + ' did not upload; tell Finance.' : ''; S.sel.extras = []; S.askedOnce = false; S.clean = ''; return load().then(function () { go('status'); }); }
       if (m.refresh) return load().then(function () { S.step = 'pick'; S.err = ''; render(); renderPickNotice(m.text); });
       S.err = m.text;
@@ -235,11 +247,12 @@
     if (ev.target.id === 'x-file' && ev.target.files && ev.target.files[0]) { S.draft.file = ev.target.files[0]; S.draftOpen = true; render(); }
   });
   root.addEventListener('click', function (ev) {
-    var t = ev.target.closest('button,[data-ses],[data-clm],[data-sw]'); if (!t) return;
+    var t = ev.target.closest('button,[data-ses],[data-clm],[data-sw],[data-adv],[data-advsw]'); if (!t) return;
     var a = t.getAttribute('data-act');
     if (t.hasAttribute('data-ses')) { var id = t.getAttribute('data-ses'); S.sel.sessions[id].on = !S.sel.sessions[id].on; render(); }
     else if (t.hasAttribute('data-clm')) { var cid = t.getAttribute('data-clm'); S.sel.claims[cid] = !S.sel.claims[cid]; render(); }
     else if (t.hasAttribute('data-sw')) { var sid = t.getAttribute('data-sw'); S.sel.sessions[sid].transport = !S.sel.sessions[sid].transport; render(); }
+    else if (t.hasAttribute('data-adv') || t.hasAttribute('data-advsw')) { var ad = t.getAttribute('data-adv') || t.getAttribute('data-advsw'), as = S.sel.advance[ad] || (S.sel.advance[ad] = { on: false, transport: false }); if (t.hasAttribute('data-adv')) as.on = !as.on; else as.transport = !as.transport; render(); }
     else if (t.hasAttribute('data-rmx')) { S.sel.extras.splice(+t.getAttribute('data-rmx'), 1); render(); }
     else if (a === 'openx') { S.draftOpen = true; render(); }
     else if (a === 'cancelx') { S.draftOpen = false; S.draft = { description: '', amount: '', file: null }; S.err = ''; render(); }

@@ -298,3 +298,60 @@ test('B3 r2: the filled Pay goes to the first row that has a Pay button; admin-l
   assert.equal((await import('../pay/C_admin-lib.js')).default.status({ status: 'paid', paid_at: '2026-10-09T04:00:00Z' }).label, 'Paid 9 Oct');
   assert.equal((await import('../pay/C_admin-lib.js')).default.lineText({ kind: 'clean', date: '2026-10-02', type: 'turnover', amount: 500 }).slice(0, 9), 'Fri 2 Oct');
 });
+
+// ---------------------------------------------------------------- s99d: cleaner pays ahead (D-348)
+const ADV = [{ checkout_date: '2026-10-19', base: 500, transport: 150 }, { checkout_date: '2026-10-22', base: 500, transport: null }];
+function bootAdv(cands, sent) {
+  const els = { pay: new FakeEl('pay'), 'C_push-slot': new FakeEl('C_push-slot') };
+  const ctx = {
+    console, setTimeout, setImmediate, Promise, JSON, Math, Object, Array, String, Number, Error, isNaN, parseInt, encodeURIComponent, crypto: globalThis.crypto,
+    URL: { createObjectURL: () => 'blob:x', revokeObjectURL() {} }, Image: class {}, File: class {}, navigator: { userAgent: 'test' }, sessionStorage: null, location: { search: '', hash: '' },
+    document: { getElementById: (id) => els[id] || null, querySelector: () => null, createElement: () => ({}) }, scrollY: 0, scrollTo() {},
+    fetch: async (u, o) => { sent.push(JSON.parse(o.body)); return { json: async () => (sent.reply || { ok: true, total: 500, ref: 'CASCADE-AAAA0001' }) }; },
+    supabase: { createClient: () => ({ auth: { getSession: async () => ({ data: { session: { access_token: 't' } } }) }, rpc: async (n) => (n === 'staff_pay_candidates_v1' ? { data: cands, error: null } : { data: null, error: { code: 'PGRST202' } }) }) },
+  };
+  ctx.self = ctx; ctx.window = ctx; ctx.addEventListener = () => {};
+  load(['icons.js', 'lib.js', 'pay/pay-lib.js', 'pay/C_paid-text.js'], ctx);
+  ctx.C_Push = { status: async () => ({ state: 'hidden' }) };
+  els.pay.querySelector = () => ({ addEventListener() {} }); // the review page wires its back arrow
+  load(['pay/pay.js'], ctx);
+  return { root: els.pay };
+}
+const btn = (a) => { const t = target(a), c = t.closest; t.closest = (sel) => c(sel) || (sel.includes('button') ? t : null); return t; }; // the harness knows [attr] selectors only; pay.js also matches plain buttons
+const NOADV = { ...CANDS, sessions: [], claims: [] };
+
+test('s99d: cands.advance draws a "No report yet" group with date, base, transport switch only when the rate has one, and the help line', async () => {
+  const b = bootAdv({ ...CANDS, missing_reports: ['2026-10-19', '2026-10-22'], advance: ADV }, []); await until(() => /No report yet/.test(b.root.innerHTML), 'group');
+  const h = b.root.innerHTML;
+  assert.match(h, /aria-label="Mon 19 Oct turnover, no report yet" data-adv="2026-10-19"/); assert.match(h, /aria-label="Thu 22 Oct turnover, no report yet" data-adv="2026-10-22"/);
+  assert.match(h, /data-advsw="2026-10-19"/); assert.doesNotMatch(h, /data-advsw="2026-10-22"/, 'no transport rate, no switch');
+  assert.match(h, /You can include these now\. Please still send each report - the app will remind you\./);
+  assert.doesNotMatch(h, /Submit the cleaning checklist first/, 'the old note is replaced');
+  assert.doesNotMatch(h, /aria-checked="true" aria-label="Mon 19 Oct turnover/, 'not ticked by default');
+});
+
+test('s99d: an older server (no cands.advance) keeps the old note and no group', async () => {
+  const b = bootAdv({ ...CANDS, missing_reports: ['2026-10-19'] }, []); await until(() => /Not yet paid/.test(b.root.innerHTML), 'list');
+  assert.match(b.root.innerHTML, /Submit the cleaning checklist first/); assert.doesNotMatch(b.root.innerHTML, /data-adv=/);
+});
+
+test('s99d: ticking rows adds them to the total (500 + 500 + 150 transport = 1150 on top of 1 clean) and the payload carries advance', async () => {
+  const sent = []; const b = bootAdv({ ...NOADV, advance: ADV }, sent); await until(() => /No report yet/.test(b.root.innerHTML), 'group');
+  assert.match(b.root.innerHTML, /<button class="btn btn-primary btn-block" type="button" data-act="review" disabled>/);
+  await fire(b.root, 'click', { target: target({ 'data-adv': '2026-10-19' }) }); await fire(b.root, 'click', { target: target({ 'data-adv': '2026-10-22' }) }); await fire(b.root, 'click', { target: target({ 'data-advsw': '2026-10-19' }) });
+  assert.match(b.root.innerHTML, /Total to request<\/span><span class="amt num">₱1,150</);
+  await fire(b.root, 'click', { target: btn({ 'data-act': 'review' }) });
+  assert.match(plain(b.root.innerHTML), /no report yet/); assert.match(b.root.innerHTML, /Total: ₱1,150/);
+  await fire(b.root, 'click', { target: btn({ 'data-act': 'send' }) }); await until(() => sent.length === 1, 'sent');
+  assert.deepEqual(plain(sent[0].advance), [{ checkout_date: '2026-10-19', transport: true }, { checkout_date: '2026-10-22', transport: false }]);
+  await until(() => /Send the cleaning report for 19 Oct, 22 Oct when you can\./.test(b.root.innerHTML), 'success text');
+});
+
+test('s99d: a request with no advance rows carries no advance key', () => {
+  assert.equal('advance' in P.buildPayload({ sessions: [], claims: [], advance: ADV }, { advance: {} }, 'k'), false);
+});
+
+test('s99d: refusal reasons read as plain sentences; taken and not-owed refresh the list', () => {
+  for (const r of ['advance_taken', 'advance_not_owed']) { const m = P.resultMessage({ ok: false, reason: r }); assert.equal(m.refresh, true); assert.doesNotMatch(m.text, new RegExp(r)); assert.doesNotMatch(m.text, /!/); }
+  assert.match(P.resultMessage({ ok: false, reason: 'no_rate' }).text, /no pay rate set yet/); assert.match(P.resultMessage({ ok: false, reason: 'transport_not_allowed' }).text, /Transport cannot be added/);
+});

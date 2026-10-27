@@ -60,7 +60,7 @@
   // The body of POST /functions/v1/notify-cleaner-payment (SPEC-37 5.2). receiptPaths maps extra index -> uploaded path.
   function buildPayload(cands, sel, key, receiptPaths) {
     var c = chosen(cands, sel);
-    return {
+    var body = {
       sessions: c.sessions.map(function (x) { return { id: x.s.id, transport: x.transport }; }),
       claim_ids: c.claims.map(function (x) { return x.id; }),
       extras: c.extras.map(function (x, i) {
@@ -69,18 +69,23 @@
         return o;
       }),
       idempotency_key: key
-    };
+    }, adv = advanceBody(c); // s99d: check-outs with no report yet; absent for an older server unless she ticked one
+    if (adv.length) body.advance = adv;
+    return body;
   }
 
   // Honey's own shape (SPEC-37 section 6): a heading, one line per clean, Other expenses, Total. Bare numbers, as in her message.
   function reviewBlock(cands, sel) {
     var c = chosen(cands, sel), lines = [], total = computeTotal(cands, sel);
-    if (c.sessions.length) {
+    if (c.sessions.length || c.advance.length) {
       lines.push('Cleaning services');
       c.sessions.forEach(function (x) {
         var guest = x.s.guest ? ' (' + x.s.guest + ')' : '';
         var tail = x.transport ? ' (' + plain(x.s.base) + ' + ' + plain(x.s.transport) + ' transport)' : '';
         lines.push(dateLabel(x.s.date) + guest + ' = ' + plain(x.amount) + tail);
+      });
+      c.advance.forEach(function (x) {
+        lines.push(dateLabel(x.a.checkout_date) + ' = ' + plain(x.amount) + (x.transport ? ' (' + plain(x.a.base) + ' + ' + plain(x.a.transport) + ' transport)' : '') + ' · no report yet');
       });
     }
     if (c.claims.length || c.extras.length) {
@@ -139,6 +144,10 @@
     if (res && res.ok) return { ok: true, refresh: false, text: 'Sent. Finance has your request for ' + peso(res.total) + ' (Ref ' + String(res.ref || '').replace(/^CASCADE-/, '') + '). You will see it in OPS when it is paid.' };
     var r = (res && res.reason) || 'unknown';
     if (r === 'session_taken' || r === 'claim_taken') return { ok: false, refresh: true, text: 'One of these was already sent or paid. The list is refreshed - check and send again.' };
+    if (r === 'advance_taken') return { ok: false, refresh: true, text: 'One of these check-outs is already in another request. The list is refreshed - check and send again.' };
+    if (r === 'advance_not_owed') return { ok: false, refresh: true, text: 'One of these check-outs is no longer waiting for a report. The list is refreshed - check and send again.' };
+    if (r === 'no_rate') return { ok: false, refresh: false, text: 'There is no pay rate set yet for one of these check-outs, so nothing was sent. Tell Lloyd.' };
+    if (r === 'transport_not_allowed') return { ok: false, refresh: false, text: 'Transport cannot be added to one of these check-outs. Switch it off and send again.' };
     if (r === 'card_failed') return { ok: false, refresh: false, text: 'Finance could not be reached, so nothing was sent. Try again in a few minutes.' };
     if (r === 'too_many_lines') return { ok: false, refresh: false, text: 'A request holds up to ' + MAX_LINES + ' lines. Send the older ones first, then make a second request.' };
     if (r === 'offline') return { ok: false, refresh: false, text: 'No connection, so nothing was sent. Try again when you have signal.' };
