@@ -301,7 +301,7 @@ test('B3 r2: the filled Pay goes to the first row that has a Pay button; admin-l
 
 // ---------------------------------------------------------------- s99d: cleaner pays ahead (D-348)
 const ADV = [{ checkout_date: '2026-10-19', base: 500, transport: 150 }, { checkout_date: '2026-10-22', base: 500, transport: null }];
-function bootAdv(cands, sent) {
+function bootAdv(cands, sent, pushState = 'hidden') {
   const els = { pay: new FakeEl('pay'), 'C_push-slot': new FakeEl('C_push-slot') };
   const ctx = {
     console, setTimeout, setImmediate, Promise, JSON, Math, Object, Array, String, Number, Error, isNaN, parseInt, encodeURIComponent, crypto: globalThis.crypto,
@@ -312,8 +312,8 @@ function bootAdv(cands, sent) {
   };
   ctx.self = ctx; ctx.window = ctx; ctx.addEventListener = () => {};
   load(['icons.js', 'lib.js', 'pay/pay-lib.js', 'pay/C_paid-text.js'], ctx);
-  ctx.C_Push = { status: async () => ({ state: 'hidden' }) };
-  els.pay.querySelector = () => ({ addEventListener() {} }); // the review page wires its back arrow
+  ctx.C_Push = { status: async () => ({ state: pushState }), words: (x) => x };
+  els.pay.querySelector = () => ({ addEventListener() {}, insertAdjacentHTML: (pos, h) => { els.pay._html = h + els.pay._html; } }); // the review page wires its back arrow
   load(['pay/pay.js'], ctx);
   return { root: els.pay };
 }
@@ -336,7 +336,7 @@ test('s99d: an older server (no cands.advance) keeps the old note and no group',
 });
 
 test('s99d: ticking rows adds them to the total (500 + 500 + 150 transport = 1150 on top of 1 clean) and the payload carries advance', async () => {
-  const sent = []; const b = bootAdv({ ...NOADV, advance: ADV }, sent); await until(() => /No report yet/.test(b.root.innerHTML), 'group');
+  const sent = []; sent.reply = { ok: true, total: 1150, ref: 'CASCADE-AAAA0001' }; const b = bootAdv({ ...NOADV, advance: ADV }, sent); await until(() => /No report yet/.test(b.root.innerHTML), 'group');
   assert.match(b.root.innerHTML, /<button class="btn btn-primary btn-block" type="button" data-act="review" disabled>/);
   await fire(b.root, 'click', { target: target({ 'data-adv': '2026-10-19' }) }); await fire(b.root, 'click', { target: target({ 'data-adv': '2026-10-22' }) }); await fire(b.root, 'click', { target: target({ 'data-advsw': '2026-10-19' }) });
   assert.match(b.root.innerHTML, /Total to request<\/span><span class="amt num">₱1,150</);
@@ -354,4 +354,42 @@ test('s99d: a request with no advance rows carries no advance key', () => {
 test('s99d: refusal reasons read as plain sentences; taken and not-owed refresh the list', () => {
   for (const r of ['advance_taken', 'advance_not_owed']) { const m = P.resultMessage({ ok: false, reason: r }); assert.equal(m.refresh, true); assert.doesNotMatch(m.text, new RegExp(r)); assert.doesNotMatch(m.text, /!/); }
   assert.match(P.resultMessage({ ok: false, reason: 'no_rate' }).text, /no pay rate set yet/); assert.match(P.resultMessage({ ok: false, reason: 'transport_not_allowed' }).text, /Transport cannot be added/);
+});
+
+const tickAdv = async (b, sent) => { await until(() => /No report yet/.test(b.root.innerHTML), 'group'); await fire(b.root, 'click', { target: target({ 'data-adv': '2026-10-19' }) }); await fire(b.root, 'click', { target: btn({ 'data-act': 'review' }) }); await fire(b.root, 'click', { target: btn({ 'data-act': 'send' }) }); await until(() => sent.length >= 1, 'sent'); };
+
+test('s99d: an old server that drops advance (total 0 back for 500 asked) gets a calm partial notice and no report reminder', async () => {
+  const sent = []; sent.reply = { ok: true, total: 0, ref: 'CASCADE-AAAA0002' };
+  const b = bootAdv({ ...NOADV, advance: ADV }, sent); await tickAdv(b, sent);
+  await until(() => /Finance received only part of this request\. Please tell Lloyd\./.test(b.root.innerHTML), 'notice');
+  assert.doesNotMatch(b.root.innerHTML, /Send the cleaning report for/); assert.doesNotMatch(plain(b.root.innerHTML), /!/);
+});
+
+test('s99d: a matching total keeps the reminder and no partial notice', async () => {
+  const sent = []; sent.reply = { ok: true, total: 500, ref: 'CASCADE-AAAA0003' };
+  const b = bootAdv({ ...NOADV, advance: ADV }, sent); await tickAdv(b, sent);
+  await until(() => /Send the cleaning report for 19 Oct when you can\./.test(b.root.innerHTML), 'reminder'); assert.doesNotMatch(b.root.innerHTML, /only part/);
+});
+
+test('s99d: advance_taken shows the notice, brings the rows back unticked, and the next payload has no advance key', async () => {
+  const sent = []; sent.reply = { ok: false, reason: 'advance_taken' };
+  const b = bootAdv({ ...CANDS, advance: ADV }, sent); await tickAdv(b, sent);
+  await until(() => /already in another request/.test(b.root.innerHTML), 'notice');
+  assert.match(b.root.innerHTML, /data-adv="2026-10-19"/); assert.doesNotMatch(b.root.innerHTML, /aria-checked="true" aria-label="[^"]*no report yet/, 'rows unticked');
+  sent.reply = { ok: true, total: 1340, ref: 'CASCADE-AAAA0004' };
+  await fire(b.root, 'click', { target: btn({ 'data-act': 'review' }) }); await fire(b.root, 'click', { target: btn({ 'data-act': 'send' }) }); await until(() => sent.length === 2, 'second send');
+  assert.equal('advance' in sent[1], false);
+});
+
+test('s99d: toggling an advance row transport gives a new idempotency key', () => {
+  const K = P.keyKeeper(globalThis.crypto, null), sel = { sessions: {}, claims: {}, extras: [], advance: { '2026-10-19': { on: true, transport: false } } };
+  const k1 = K.forSelection({ sessions: [], claims: [], advance: ADV }, sel); sel.advance['2026-10-19'].transport = true;
+  const k2 = K.forSelection({ sessions: [], claims: [], advance: ADV }, sel); assert.notEqual(k1, k2);
+  assert.equal(K.forSelection({ sessions: [], claims: [], advance: ADV }, sel), k2, 'same selection keeps its key');
+});
+
+test('s99d: the help line asks her to turn on notifications only when they are not on', async () => {
+  const off = bootAdv({ ...NOADV, advance: ADV }, [], 'off'); await until(() => /Turn on notifications to get a reminder\./.test(off.root.innerHTML), 'off');
+  const on = bootAdv({ ...NOADV, advance: ADV }, [], 'on'); await until(() => /No report yet/.test(on.root.innerHTML), 'group'); await tick();
+  assert.doesNotMatch(on.root.innerHTML, /Turn on notifications/); assert.match(on.root.innerHTML, /the app will remind you\./);
 });

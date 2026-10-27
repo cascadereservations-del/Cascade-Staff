@@ -53,7 +53,7 @@
     // s99d: a server that sends cands.advance lets her include check-outs with no report yet; an older one keeps the "send the checklist first" note
     if (Array.isArray(S.cands.advance)) {
       if (!S.cands.advance.length) return '';
-      return '<div><div class="cap up" style="margin-bottom:6px">No report yet</div><div class="card list">' + S.cands.advance.map(advRow).join('') + '</div><p class="help">You can include these now. Please still send each report - the app will remind you.</p></div>';
+      return '<div><div class="cap up" style="margin-bottom:6px">No report yet</div><div class="card list">' + S.cands.advance.map(advRow).join('') + '</div><p class="help">You can include these now. Please still send each report - the app will remind you.' + (S.pushState && S.pushState !== 'on' && S.pushState !== 'hidden' ? ' Turn on notifications to get a reminder.' : '') + '</p></div>';
     }
     var m = (S.cands.missing_reports || []);
     if (!m.length) return '';
@@ -186,7 +186,7 @@
     if (S.sending) return;
     if (noPhotoCount() && !S.askedOnce) { S.askedOnce = true; S.askOpen = true; renderReview(); return; }
     S.sending = true; S.err = ''; S.askOpen = false; renderReview();
-    var demoTotal = DEMO ? P.computeTotal(S.cands, S.sel) : 0, advDates = P.chosen(S.cands, S.sel).advance.map(function (x) { return x.a.checkout_date; });
+    var sentTotal = P.computeTotal(S.cands, S.sel), demoTotal = DEMO ? sentTotal : 0, advDates = P.chosen(S.cands, S.sel).advance.map(function (x) { return x.a.checkout_date; });
     sb.auth.getSession().then(function (s) {
       var token = s.data && s.data.session && s.data.session.access_token; if (!token) throw new Error('signin');
       var failed = [], key = K.forSelection(S.cands, S.sel);
@@ -198,7 +198,8 @@
       });
     }).catch(function () { return { j: { ok: false, reason: 'offline' }, failed: [] }; }).then(function (o) {
       S.sending = false; var m = P.resultMessage(o.j); K.settle(o.j);
-      if (m.ok && advDates.length) m.text += ' Send the cleaning report for ' + advDates.map(dm).join(', ') + ' when you can.';
+      // an old server drops the advance key: its total then differs from ours, so say so instead of promising lines it never took
+      if (m.ok && advDates.length) m.text += Math.abs(Number(o.j.total) - sentTotal) < 0.005 ? ' Send the cleaning report for ' + advDates.map(dm).join(', ') + ' when you can.' : ' Finance received only part of this request. Please tell Lloyd.';
       if (m.ok) { F_tap(); S.result = m; S.note = o.failed.length ? 'The receipt photo for ' + o.failed.join(', ') + ' did not upload; tell Finance.' : ''; S.sel.extras = []; S.askedOnce = false; S.clean = ''; return load().then(function () { go('status'); }); }
       if (m.refresh) return load().then(function () { S.step = 'pick'; S.err = ''; render(); renderPickNotice(m.text); });
       S.err = m.text;
@@ -229,7 +230,7 @@
   function C_pushRefresh() {
     if (DEMO || !window.C_Push || !$('C_push-slot')) return;
     if (S.pushState) { C_pushPaint(); return; } // already probed: just redraw the slot
-    window.C_Push.status({ client: sb }).then(function (r) { S.pushState = r.state; C_pushPaint(); }, function () { S.pushState = 'hidden'; });
+    window.C_Push.status({ client: sb }).then(function (r) { S.pushState = r.state; C_pushPaint(); if (S.step === 'pick' && S.pushState !== 'on' && S.pushState !== 'hidden' && S.cands && (S.cands.advance || []).length) render(); }, function () { S.pushState = 'hidden'; });
   }
   root.addEventListener('click', function (ev) {
     var b = ev.target.closest('[data-C-push]'); if (!b || DEMO || !window.C_Push) return;
