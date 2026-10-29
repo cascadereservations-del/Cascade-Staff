@@ -6985,7 +6985,8 @@ async function reportNoMeterPhoto() {
   const rows = (state.meterFollowups || []).slice();
   const foot = el('meter-followup-foot');
   const note = (el('mf-nophoto-why')?.value || '').trim();
-  if (note.length < 4) {
+  // Same rule as the server (parseMeterSkip): 4 characters with a letter or digit.
+  if (note.length < 4 || !/[\p{L}\p{N}]/u.test(note)) {
     if (foot) foot.textContent = 'Please say in a few words what happened.';
     el('mf-nophoto-why')?.focus();
     return;
@@ -7003,6 +7004,7 @@ async function reportNoMeterPhoto() {
       });
       const saved = rows.some(x => x !== r && !state.meterFollowups.includes(x));
       const stop = (msg) => { if (foot) foot.textContent = msg + (saved ? ' The other report was saved.' : ''); };
+      if (resp.status === 403) { stop('Only the cleaner who sent that report can say this. Tap one of the other answers or message Lloyd.'); return; }
       if (!resp.ok) { stop('That could not be saved. Please message Lloyd.'); return; }
       const out = await resp.json();
       const o = Array.isArray(out) ? out[0] : out;
@@ -7137,7 +7139,7 @@ async function refreshMeterSkipAllowance() {
 function applyMeterSkip() {
   if (!state.meterSkipAllowed) return;
   const reason = (el('meter-skip-why')?.value || '').trim();
-  if (reason.length < 4) {
+  if (reason.length < 4 || !/[\p{L}\p{N}]/u.test(reason)) {
     const note = el('meter-skip-note');
     if (note) note.textContent = 'Please say in a few words what happened — it goes in the report.';
     el('meter-skip-why')?.focus();
