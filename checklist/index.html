@@ -3930,6 +3930,7 @@ body.mode-quick .detail-text { display: none; }
 }
 #meter-skip-btn:active { transform: scale(.99); }
 #meter-skip-btn[hidden] { display: none !important; }
+#meter-skip-help { margin: 0 0 var(--space-2); font-size: .82rem; line-height: 1.45; color: var(--text-secondary); }
 #meter-skip-note {
   margin: var(--space-2) 0 0;
   font-size: .78rem; line-height: 1.45; color: var(--text-muted);
@@ -3944,6 +3945,8 @@ body.mode-quick .detail-text { display: none; }
   background: var(--warning-bg);
 }
 #meter-followup[hidden] { display: none !important; }
+#mf-nophoto-box[hidden] { display: none !important; }
+#mf-nophoto-why { width: 100%; min-height: 44px; box-sizing: border-box; padding: 10px 12px; margin: var(--space-2) 0; border: 1.5px solid var(--border); border-radius: var(--radius-sm); background: var(--surface-raised); color: var(--text-primary); font: 400 .92rem var(--font-body); }
 #meter-followup .mf-head {
   display: flex; align-items: center; gap: 8px;
   font-family: var(--font-display);
@@ -4338,6 +4341,12 @@ html.K_folded .phase-header.K_hasimg .K_zone { background: rgba(22,13,6,0.74); b
       <p class="mf-foot" id="meter-followup-foot">If you still have the photo, send it to Lloyd on Messenger. If not, photograph the meter as it is now and say so — a late reading is worth more than none.</p>
       <button type="button" class="mf-dismiss" data-mf-answer="I sent the photo to Lloyd">I sent the photo to Lloyd</button>
       <button type="button" class="mf-dismiss" data-mf-answer="I photographed the meter today">I photographed the meter today</button>
+      <button type="button" class="mf-dismiss" id="mf-nophoto-btn">No meter photo was taken</button>
+      <div id="mf-nophoto-box" hidden>
+        <input type="text" id="mf-nophoto-why" maxlength="200" aria-label="Why no meter photo was taken" placeholder="What happened? e.g. my phone lost the photos">
+        <p class="mf-foot">Tell the admin why. The readings you typed stay in the report.</p>
+        <button type="button" class="mf-dismiss" id="mf-nophoto-send">Send</button>
+      </div>
     </div>
 
     <!-- Zone: Cleaner -->
@@ -4622,7 +4631,8 @@ html.K_folded .phase-header.K_hasimg .K_zone { background: rgba(22,13,6,0.74); b
         <input type="text" id="meter-skip-why" maxlength="200"
                placeholder="What happened? e.g. meter room was locked"
                aria-label="Why the meter photos are missing">
-        <button type="button" id="meter-skip-btn" hidden>Submit without meter photos, just this once</button>
+        <p id="meter-skip-help">Tell the admin why. Still type both readings.</p>
+        <button type="button" id="meter-skip-btn" hidden>No meter photo was taken</button>
         <p id="meter-skip-note"></p>
       </div>
 
@@ -6444,6 +6454,7 @@ function initViewMode() {
 function goToPhase(newPhase, skipGate = false) {
   if (newPhase < 0 || newPhase >= PHASE_COUNT) return;
   if (!skipGate && newPhase > state.phase && !isPhaseValid(state.phase)) {
+    revealSkipIfPhotoMissing();
     showGateHint(state.phase);
     return;
   }
@@ -6955,6 +6966,53 @@ async function answerMeterFollowups(answer) {
   }
 }
 
+/* s100 (D-352): the third answer. No photo exists, so she says why; the server keeps the typed reading
+   as estimate_pending and tells the admins. Every raised report is answered, like the other two. */
+function showNoMeterPhotoBox() {
+  const box = el('mf-nophoto-box');
+  if (box) box.hidden = false;
+  el('mf-nophoto-why')?.focus();
+}
+
+async function reportNoMeterPhoto() {
+  const rows = state.meterFollowups || [];
+  const foot = el('meter-followup-foot');
+  const note = (el('mf-nophoto-why')?.value || '').trim();
+  if (note.length < 4) {
+    if (foot) foot.textContent = 'Please say in a few words what happened.';
+    el('mf-nophoto-why')?.focus();
+    return;
+  }
+  if (!rows.length) return;
+  const buttons = Array.from(document.querySelectorAll('#meter-followup button'));
+  buttons.forEach(b => { b.disabled = true; });
+  try {
+    for (const r of rows) {
+      if (!r.session_id) continue;
+      const resp = await fetch(`${SUPABASE_URL}/rest/v1/rpc/report_no_meter_photo_v1`, {
+        method: 'POST',
+        headers: { ...(await staffHeaders(true)) },
+        body: JSON.stringify({ p_session_id: r.session_id, p_note: note.slice(0, 300) }),
+      });
+      if (!resp.ok) throw new Error(String(resp.status));
+      const out = await resp.json();
+      const o = Array.isArray(out) ? out[0] : out;
+      if (!o || o.ok !== true) {
+        if (foot) foot.textContent = (o && o.message) || 'That could not be saved. Please message Lloyd.';
+        return;
+      }
+    }
+    state.meterFollowups = [];
+    state.meterBlocked = false;
+    const box = el('meter-followup');
+    if (box) box.hidden = true;
+  } catch {
+    if (foot) foot.textContent = 'That did not save — you may be offline. Try again when you have signal.';
+  } finally {
+    buttons.forEach(b => { b.disabled = false; });
+  }
+}
+
 /* The way out is hidden until it is needed (2026-09-13, Lloyd: "only show
    this if discrepancy is found in the initial photos uploaded").
 
@@ -6971,6 +7029,13 @@ async function answerMeterFollowups(answer) {
 
    Offering it before either has happened teaches the shortcut to someone who
    has not yet tried the long way. */
+// s100 (D-352): a Next that is refused while a meter photo slot is empty is the "no photo was taken" case.
+function revealSkipIfPhotoMissing() {
+  if (state.phase !== 1 || state.cleaningType === 'emergency' || state.cleaningType === 'mid_stay') return;
+  if (state.meterPhotosSkipped === true) return;
+  if (!state.meterPhotos[0] || !state.meterPhotos[1]) revealMeterSkipOffer('photos_missing');
+}
+
 function revealMeterSkipOffer(why) {
   if (state.meterSkipRevealed) return;
   state.meterSkipRevealed = true;
@@ -7006,11 +7071,15 @@ async function refreshMeterSkipAllowance() {
   }
   if (!navigator.onLine) { row.hidden = true; return; }
   try {
-    const resp = await fetch(`${SUPABASE_URL}/rest/v1/rpc/can_skip_meter_photos`, {
+    const co = (el('checkOutDate')?.value || '').trim();
+    const call = async (fn, body) => fetch(`${SUPABASE_URL}/rest/v1/rpc/${fn}`, {
       method: 'POST',
       headers: { ...(await staffHeaders(true)) },
-      body: JSON.stringify({ p_property_id: PROPERTY_ID }),
+      body: JSON.stringify(body),
     });
+    // s100 (D-352): v2 judges the neighbours by stay order from the check-out date; 404 = not applied yet, use v1.
+    let resp = await call('can_skip_meter_photos_v2', { p_property_id: PROPERTY_ID, p_checkout_date: /^\d{4}-\d{2}-\d{2}$/.test(co) ? co : null });
+    if (resp.status === 404) resp = await call('can_skip_meter_photos', { p_property_id: PROPERTY_ID });
     // The page can be ahead of the database, exactly as the stay picker can.
     // A 404 means the function is not applied yet: hide the offer, change
     // nothing else, and let the normal photo requirement stand.
@@ -7023,10 +7092,10 @@ async function refreshMeterSkipAllowance() {
     const note = el('meter-skip-note');
     if (state.meterSkipAllowed) {
       if (btn)  { btn.hidden = false; btn.disabled = false; }
-      if (note) note.textContent = 'Only if you truly cannot go back — the next report will not be allowed to skip them.';
+      if (note) note.textContent = 'Only if you truly cannot go back. The stay after this one will need its meter photos.';
     } else {
       if (btn)  btn.hidden = true;
-      if (note) note.textContent = 'The last report also had no meter photos, so this one needs them. Please photograph both meters.';
+      if (note) note.textContent = 'The stay next to this one also has no meter photo, so this one needs them. If you truly cannot, message Lloyd.';
     }
   } catch {
     row.hidden = true;
@@ -7965,7 +8034,7 @@ function S94_initCue() {
   // a disabled button swallows the tap (pointer-events:none), so the bar itself hears it
   el('bottom-bar')?.addEventListener('click', e => {
     if (e.target.closest('button:not(:disabled)')) return;
-    if (!isPhaseValid(state.phase)) S94_scrollToFirst();
+    if (!isPhaseValid(state.phase)) { revealSkipIfPhotoMissing(); S94_scrollToFirst(); }
   });
 }
 
@@ -11976,6 +12045,9 @@ async function init() {
   // Feature 4: Inventory usage log
   initInventoryUsage();
   el('meter-skip-btn')?.addEventListener('click', applyMeterSkip);
+  el('mf-nophoto-btn')?.addEventListener('click', showNoMeterPhotoBox);
+  el('mf-nophoto-send')?.addEventListener('click', reportNoMeterPhoto);
+  el('checkOutDate')?.addEventListener('change', () => { if (state.meterSkipRevealed) refreshMeterSkipAllowance(); });
   document.querySelectorAll('#meter-followup [data-mf-answer]').forEach(btn => {
     btn.addEventListener('click', () => answerMeterFollowups(btn.dataset.mfAnswer));
   });
