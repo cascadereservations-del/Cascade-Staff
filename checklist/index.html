@@ -6884,6 +6884,20 @@ const PHOTO_STALE_HOURS     = 12;  // older than this and it is not today's mete
    report that used the forgotten-photo allowance, gets raised here — at the
    START of the next visit, which is the only moment a cleaner is actually
    looking at this app and could still do something about it. */
+function paintMeterFollowupCopy() {
+  const head = el('meter-followup')?.querySelector('.mf-head');
+  const foot = el('meter-followup-foot');
+  if (head) {
+    head.innerHTML = state.meterBlocked
+      ? '<svg class="ch-ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-eye"/></svg> Answer this before the next report'
+      : '<svg class="ch-ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-eye"/></svg> A meter photo needs another look';
+  }
+  if (foot) {
+    foot.textContent = state.meterBlocked
+      ? 'This one has to be answered before the next turnover can be sent. If you still have the photo, send it to Lloyd on Messenger. If not, photograph the meter as it is now. Then tap what you did.'
+      : 'If you still have the photo, send it to Lloyd on Messenger. If not, photograph the meter as it is now and say so — a late reading is worth more than none.';
+  }
+}
 async function loadMeterFollowups() {
   const box = el('meter-followup');
   if (!box || !navigator.onLine) return;
@@ -6902,18 +6916,7 @@ async function loadMeterFollowups() {
        call, not a quiet change here. */
     state.meterBlocked = state.meterFollowups.some(r => r.vision_verdict === 'mismatch');
     if (!state.meterFollowups.length) { box.hidden = true; return; }
-    const head = box.querySelector('.mf-head');
-    const foot = el('meter-followup-foot');
-    if (head) {
-      head.innerHTML = state.meterBlocked
-        ? '<svg class="ch-ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-eye"/></svg> Answer this before the next report'
-        : '<svg class="ch-ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-eye"/></svg> A meter photo needs another look';
-    }
-    if (foot) {
-      foot.textContent = state.meterBlocked
-        ? 'This one has to be answered before the next turnover can be sent. If you still have the photo, send it to Lloyd on Messenger. If not, photograph the meter as it is now. Then tap what you did.'
-        : 'If you still have the photo, send it to Lloyd on Messenger. If not, photograph the meter as it is now and say so — a late reading is worth more than none.';
-    }
+    paintMeterFollowupCopy();
     renderMeterFollowupList();
     box.hidden = false;
   } catch { /* never let a follow-up notice break the page */ }
@@ -7008,16 +7011,20 @@ async function reportNoMeterPhoto() {
       state.meterFollowups = state.meterFollowups.filter(x => x !== r);
       state.meterBlocked = state.meterFollowups.some(x => x.vision_verdict === 'mismatch');
       renderMeterFollowupList();
+      paintMeterFollowupCopy();
     }
     state.meterFollowups = [];
     state.meterBlocked = false;
+    const why = el('mf-nophoto-why'); if (why) why.value = '';
+    const nb = el('mf-nophoto-box'); if (nb) nb.hidden = true;
     const box = el('meter-followup');
     if (box) box.hidden = true;
     // The card is gone, so focus would be lost with it: move it to this step's heading.
     const h = box?.closest('section')?.querySelector('h1');
     if (h) { h.tabIndex = -1; h.focus(); }
   } catch {
-    if (foot) foot.textContent = 'That did not save — you may be offline. Try again when you have signal.';
+    const savedEarlier = rows.some(x => !state.meterFollowups.includes(x));
+    if (foot) foot.textContent = 'That did not save — you may be offline. Try again when you have signal.' + (savedEarlier ? ' The other report was saved.' : '');
   } finally {
     buttons.forEach(b => { b.disabled = false; });
   }
@@ -7103,6 +7110,16 @@ async function refreshMeterSkipAllowance() {
     const btn  = el('meter-skip-btn');
     const note = el('meter-skip-note');
     const why = el('meter-skip-why'), help = el('meter-skip-help');
+    if (state.meterPhotosSkipped === true) {
+      if (state.meterSkipAllowed) {   // still allowed: keep it recorded, never bring the button back
+        if (btn) btn.hidden = true;
+        if (note) note.textContent = 'Recorded. Still type both readings. The stays next to this one will need their meter photos.';
+        return;
+      }
+      state.meterPhotosSkipped = false;   // the neighbour changed: the skip no longer holds
+      row.classList.remove('used');
+      updateBottomBar(); updatePhotoCounter(); saveDraft();
+    }
     if (why)  why.hidden  = !state.meterSkipAllowed;
     if (help) help.hidden = !state.meterSkipAllowed;
     if (state.meterSkipAllowed) {
@@ -7229,6 +7246,10 @@ async function photoFingerprint(photo) {
   } catch { return null; }
 }
 
+// s100 (D-352 point 4): with no photo the server keeps an out-of-order reading as estimate_pending, so it is a calm note, not a refusal.
+const METER_ORDER_NOTE = 'This number does not fit the readings before and after. It is kept for now and checked when the next meter photo comes in.';
+function meterOrderRefuses(list) { return list.length > 0 && state.meterPhotosSkipped !== true; }
+
 function meterFindings() {
   const out  = [];
   const date = (el('checkOutDate')?.value || el('cleaningDate')?.value || todayManila());
@@ -7263,11 +7284,19 @@ function meterFindings() {
       return;
     }
 
+    if (val < m.prev && state.meterPhotosSkipped === true) {
+      out.push(`${m.label}: ${METER_ORDER_NOTE}`);
+      return;
+    }
     if (val < m.prev) {
       out.push(`${m.label}: ${val} ${m.unit} is lower than the reading for the stay before (${m.prev}). A meter does not run backwards — check the photo and the check-out date.`);
       return;
     }
     const nextV = state.nextReading?.[m.i === 0 ? 'electric' : 'water'];
+    if (nextV > 0 && val > nextV && state.meterPhotosSkipped === true) {
+      out.push(`${m.label}: ${METER_ORDER_NOTE}`);
+      return;
+    }
     if (nextV > 0 && val > nextV) {
       out.push(`${m.label}: ${val} ${m.unit} is higher than the reading for the later stay (${nextV}). Check the photo and the check-out date.`);
       return;
@@ -10528,7 +10557,9 @@ async function proceedWithSubmission() {
       return `${m.label} ${v} ${m.unit} is higher than the reading for the later stay (${next})`;
     return null;
   }).filter(Boolean);
-  if (backwards.length) {
+  if (backwards.length && !meterOrderRefuses(backwards)) {
+    showToast(METER_ORDER_NOTE, '', 7000);   // declared no-photo report: kept as estimate_pending server side, so send it
+  } else if (backwards.length) {
     const statusEl1 = el('submit-status');
     if (statusEl1) {
       statusEl1.className = 'visible error';
@@ -10691,6 +10722,8 @@ function resetApp() {
   state.aftercleanPhotos = [];
   state.supplyLogSaved   = false;
   state.supplySaved      = null;
+  const skipWhy = el('meter-skip-why'); if (skipWhy) skipWhy.value = '';
+  const skipRow = el('meter-skip-row'); if (skipRow) { skipRow.hidden = true; skipRow.classList.remove('used'); }
   _susChanging           = false;
   state.cleaningType    = 'turnover';
   state.cleaningDateStatus = 'unknown';

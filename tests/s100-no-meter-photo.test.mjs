@@ -9,11 +9,12 @@ const html = readFileSync(new URL('../checklist/index.html', import.meta.url), '
 const cut = (from, to) => { const a = html.indexOf(from), b = html.indexOf(to, a); assert.ok(a > 0 && b > a, from); return html.slice(a, b); };
 const reveal = cut('// s100 (D-352): a Next that is refused', '// True when a missing meter photo is the only thing');
 const refresh = cut('async function refreshMeterSkipAllowance()', 'function applyMeterSkip()');
-const third = cut('function showNoMeterPhotoBox()', "/* The way out is hidden until it is needed");
+const third0 = cut('function showNoMeterPhotoBox()', "/* The way out is hidden until it is needed");
+const third = cut('function paintMeterFollowupCopy()', 'async function loadMeterFollowups()') + third0;
 
 function world({ fetchImpl, state: st = {}, checkout = '2026-10-29' } = {}) {
   const els = {}, calls = [];
-  const mk = () => ({ closest: () => ({ querySelector: () => ({ focus() {} }) }), hidden: false, disabled: false, value: '', textContent: '', classList: { add() {}, remove() {} }, focus() {}, scrollIntoView() {} });
+  const mk = () => ({ closest: () => ({ querySelector: () => ({ focus() {} }) }), querySelector: () => ({ innerHTML: '' }), hidden: false, disabled: false, value: '', textContent: '', classList: { add() {}, remove() {} }, focus() {}, scrollIntoView() {} });
   const E = (id) => (els[id] ||= mk());
   E('checkOutDate').value = checkout;
   const state = { phase: 1, cleaningType: 'turnover', meterPhotos: [null, null], meterPhotosSkipped: false, meterSkipRevealed: false, meterSkipAllowed: null, ...st };
@@ -109,7 +110,7 @@ test('markup and wiring: button text, help line, third button, reveal hooks, no 
   assert.match(html, /revealSkipIfPhotoMissing\(\);\n    showGateHint\(state\.phase\)/);
   assert.match(html, /\{ revealSkipIfPhotoMissing\(\); S94_scrollToFirst\(\); \}/);
   assert.match(html, /el\('mf-nophoto-send'\)\?\.addEventListener\('click', reportNoMeterPhoto\)/);
-  assert.doesNotMatch(html.slice(html.indexOf('id="mf-nophoto-btn"'), html.indexOf('id="mf-nophoto-send"')) + (third.match(/'[^']*'/g) || []).join(''), /!/);
+  assert.doesNotMatch(html.slice(html.indexOf('id="mf-nophoto-btn"'), html.indexOf('id="mf-nophoto-send"')) + (third0.replace(/\/\/.*$/gm, '').match(/'[^']*'/g) || []).join(''), /!/);
 });
 
 test('S1: two rows, first saved, second refused: only the unanswered row is left and a retry writes only that one', async () => {
@@ -162,4 +163,99 @@ test('S2, S4, S6 wiring: copy, autofill refresh, draft reason, 44px buttons, foc
   assert.match(html, /#meter-followup \.mf-dismiss \{\n  margin: [^\n]*min-height: 44px/);
   assert.ok(html.includes("box?.closest('section')?.querySelector('h1')"));
   assert.ok(html.includes('D-352 replaces the 2026-09-13 anomaly-only rule'));
+});
+
+// ── Fix round 2 ──
+const NOTE = 'This number does not fit the readings before and after. It is kept for now and checked when the next meter photo comes in.';
+const orderSrc = cut('const METER_ORDER_NOTE', 'function meterFindings()') + cut('function meterFindings()', '  // Photo provenance') + 'return out; }';
+function findingsWorld(skipped, elec) {
+  const vals = { electricMeterReading: String(elec), waterMeterReading: '', checkOutDate: '2026-10-29' };
+  const state = { meterPhotosSkipped: skipped, meterPhotos: [{}, {}], prevElectricReading: 100, prevWaterReading: 0, nextReading: { electric: 200, water: 0 }, prevReadingDate: '2026-10-25' };
+  const fn = new Function('state', 'el', 'todayManila', 'daysBetween', 'ELEC_KWH_PER_DAY_MAX', 'WATER_M3_PER_DAY_MAX', 'DIGIT_SLIP_FACTOR',
+    orderSrc + '\nreturn { meterFindings, meterOrderRefuses, METER_ORDER_NOTE };');
+  return fn(state, (id) => ({ value: vals[id] ?? '' }), () => '2026-10-29', () => 4, 99, 99, 50);
+}
+
+test('X1: a declared no-photo report with a reading below the earlier or above the later stay gets the calm note, not a refusal', () => {
+  for (const v of [90, 250]) {
+    const w = findingsWorld(true, v);
+    assert.equal(w.meterOrderRefuses(['x']), false, 'gate does not refuse');
+    assert.ok(w.meterFindings().includes('Electric: ' + NOTE), String(v));
+    assert.ok(!w.meterFindings().some((f) => /does not run backwards|read the photo again|lower than|higher than/.test(f)));
+  }
+});
+
+test('X1: with photos the same readings still refuse and the old wording stays', () => {
+  const lo = findingsWorld(false, 90), hi = findingsWorld(false, 250);
+  assert.equal(lo.meterOrderRefuses(['x']), true);
+  assert.equal(lo.meterOrderRefuses([]), false);
+  assert.match(lo.meterFindings()[0], /lower than the reading for the stay before \(100\)/);
+  assert.match(hi.meterFindings()[0], /higher than the reading for the later stay \(200\)/);
+});
+
+test('X1 wiring: the submit gate shows the note through showToast and only refuses when meterOrderRefuses says so', () => {
+  const gate = cut('const backwards = [', 'state.isSubmitting = true;');
+  assert.match(gate, /backwards\.length && !meterOrderRefuses\(backwards\)\) \{\s*showToast\(METER_ORDER_NOTE/);
+  assert.match(gate, /else if \(backwards\.length\) \{[\s\S]*A meter does not run backwards[\s\S]*return;/);
+});
+
+test('F4: a recorded skip keeps the button hidden and the Recorded note; a refusal clears the skip and says why', async () => {
+  const calls = [];
+  const mkw = (allowed) => {
+    const w = world({ state: { meterSkipRevealed: true, meterPhotosSkipped: true }, fetchImpl: () => ok([{ allowed }]) });
+    return w;
+  };
+  const stubs = '';
+  const run = async (allowed) => {
+    const els = {};
+    const mk = () => ({ hidden: false, textContent: '', value: '', classList: { add() { this.used = true; }, remove() { this.used = false; } } });
+    const E = (id) => (els[id] ||= mk());
+    E('checkOutDate').value = '2026-10-29';
+    const state = { cleaningType: 'turnover', meterSkipRevealed: true, meterPhotosSkipped: true };
+    let side = 0;
+    const f = new Function('state', 'el', 'navigator', 'PROPERTY_ID', 'SUPABASE_URL', 'staffHeaders', 'fetch', 'updateBottomBar', 'updatePhotoCounter', 'saveDraft',
+      refresh + '\nreturn refreshMeterSkipAllowance;')(state, E, { onLine: true }, 'p', 'https://x', async () => ({}), async () => ok([{ allowed }]), () => side++, () => side++, () => side++);
+    await f();
+    return { state, els, side };
+  };
+  const still = await run(true);
+  assert.equal(still.state.meterPhotosSkipped, true);
+  assert.equal(still.els['meter-skip-btn'].hidden, true);
+  assert.match(still.els['meter-skip-note'].textContent, /^Recorded\./);
+  const gone = await run(false);
+  assert.equal(gone.state.meterPhotosSkipped, false);
+  assert.equal(gone.els['meter-skip-btn'].hidden, true);
+  assert.equal(gone.els['meter-skip-note'].textContent, 'The stay next to this one also has no meter photo, so this one needs them. If you truly cannot, message Lloyd.');
+  assert.equal(gone.side, 3, 'bottom bar, photo counter and draft refreshed');
+});
+
+test('F2/F3/F1b: partial save repaints head and copy; a later offline failure says the other was saved; success clears the box', async () => {
+  const rows = [{ session_id: 's1', vision_verdict: 'mismatch' }, { session_id: 's2', vision_verdict: 'unreadable' }];
+  const build = (fetchImpl) => {
+    const els = {};
+    const mk = () => ({ hidden: false, disabled: false, value: '', textContent: '', innerHTML: '', closest: () => null, focus() {}, querySelector: () => els.head || (els.head = { innerHTML: '' }) });
+    const E = (id) => (els[id] ||= mk());
+    E('mf-nophoto-why').value = 'phone lost them';
+    const state = { meterFollowups: rows.slice(), meterBlocked: true };
+    const ctx = { state, el: E, escapeHtml: String, SUPABASE_URL: 'https://x', staffHeaders: async () => ({}), document: { querySelectorAll: () => [mk()] }, fetch: fetchImpl };
+    const src = third;
+    const api = new Function(...Object.keys(ctx), src + '\nreturn { reportNoMeterPhoto };')(...Object.values(ctx));
+    return { els, state, api };
+  };
+  let n = 0;
+  const w1 = build(async () => { if (n++ === 0) return ok([{ ok: true }]); throw new Error('offline'); });
+  await w1.api.reportNoMeterPhoto();
+  assert.match(w1.els['meter-followup-foot'].textContent, /you may be offline\. Try again when you have signal\. The other report was saved\.$/);
+  assert.match(w1.els.head.innerHTML, /A meter photo needs another look/, 'head follows the remaining row, which does not block');
+  const w2 = build(async () => ok([{ ok: true }]));
+  await w2.api.reportNoMeterPhoto();
+  assert.equal(w2.els['mf-nophoto-why'].value, '');
+  assert.equal(w2.els['mf-nophoto-box'].hidden, true);
+  assert.equal(w2.els['meter-followup'].hidden, true);
+});
+
+test('F1: resetApp clears the skip reason, hides the skip row and drops its used class', () => {
+  const reset = cut('function resetApp()', '  _susChanging');
+  assert.match(reset, /el\('meter-skip-why'\)[\s\S]*value = ''/);
+  assert.match(reset, /skipRow\.hidden = true; skipRow\.classList\.remove\('used'\)/);
 });
