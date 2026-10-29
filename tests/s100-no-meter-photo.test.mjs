@@ -13,13 +13,13 @@ const third = cut('function showNoMeterPhotoBox()', "/* The way out is hidden un
 
 function world({ fetchImpl, state: st = {}, checkout = '2026-10-29' } = {}) {
   const els = {}, calls = [];
-  const mk = () => ({ hidden: false, disabled: false, value: '', textContent: '', classList: { add() {}, remove() {} }, focus() {}, scrollIntoView() {} });
+  const mk = () => ({ closest: () => ({ querySelector: () => ({ focus() {} }) }), hidden: false, disabled: false, value: '', textContent: '', classList: { add() {}, remove() {} }, focus() {}, scrollIntoView() {} });
   const E = (id) => (els[id] ||= mk());
   E('checkOutDate').value = checkout;
   const state = { phase: 1, cleaningType: 'turnover', meterPhotos: [null, null], meterPhotosSkipped: false, meterSkipRevealed: false, meterSkipAllowed: null, ...st };
   const ctx = {
     state, el: E, calls, navigator: { onLine: true }, PROPERTY_ID: 'prop-1', SUPABASE_URL: 'https://x',
-    staffHeaders: async () => ({}), document: { querySelectorAll: () => ['a', 'b', 'c'].map(() => mk()) },
+    staffHeaders: async () => ({}), document: { querySelectorAll: () => ['a', 'b', 'c'].map(() => mk()), }, escapeHtml: (x) => String(x),
     fetch: async (url, o) => { const fn = String(url).split('/rpc/')[1]; const body = JSON.parse(o.body); calls.push({ fn, body }); return fetchImpl(fn, body); },
   };
   const api = new Function(...Object.keys(ctx), reveal + refresh + third +
@@ -110,4 +110,56 @@ test('markup and wiring: button text, help line, third button, reveal hooks, no 
   assert.match(html, /\{ revealSkipIfPhotoMissing\(\); S94_scrollToFirst\(\); \}/);
   assert.match(html, /el\('mf-nophoto-send'\)\?\.addEventListener\('click', reportNoMeterPhoto\)/);
   assert.doesNotMatch(html.slice(html.indexOf('id="mf-nophoto-btn"'), html.indexOf('id="mf-nophoto-send"')) + (third.match(/'[^']*'/g) || []).join(''), /!/);
+});
+
+test('S1: two rows, first saved, second refused: only the unanswered row is left and a retry writes only that one', async () => {
+  let n = 0;
+  const w = world({ fetchImpl: () => (++n === 1 ? ok({ ok: true }) : ok({ ok: false, message: 'The stay next to this one also has no meter photo.' })) });
+  w.state.meterFollowups = [{ session_id: 's1', vision_verdict: 'mismatch' }, { session_id: 's2' }];
+  w.state.meterBlocked = true;
+  w.els['mf-nophoto-why'] = { value: 'Phone lost the photos', focus() {} };
+  await w.api.reportNoMeterPhoto();
+  assert.deepEqual(w.state.meterFollowups, [{ session_id: 's2' }]);
+  assert.equal(w.state.meterBlocked, false);
+  assert.equal(w.els['meter-followup-foot'].textContent, 'The stay next to this one also has no meter photo. The other report was saved.');
+  assert.equal(w.els['meter-followup-list'].innerHTML.match(/<li>/g).length, 1);
+  assert.notEqual(w.els['meter-followup']?.hidden, true);
+  await w.api.reportNoMeterPhoto();
+  assert.deepEqual(w.calls.map((c) => c.body.p_session_id), ['s1', 's2', 's2']);
+});
+
+test('S5: any non-ok v2 answer falls back to v1; a non-2xx report answer is not the offline line', async () => {
+  const w = world({ state: { meterSkipRevealed: true }, fetchImpl: (fn) => (fn === 'can_skip_meter_photos_v2' ? ok({}, 500) : ok([{ allowed: true }])) });
+  await w.api.refreshMeterSkipAllowance();
+  assert.deepEqual(w.calls.map((c) => c.fn), ['can_skip_meter_photos_v2', 'can_skip_meter_photos']);
+  const r = world({ fetchImpl: () => ok({}, 500) });
+  r.state.meterFollowups = [{ session_id: 's1' }]; r.state.meterBlocked = true;
+  r.els['mf-nophoto-why'] = { value: 'Phone lost the photos', focus() {} };
+  await r.api.reportNoMeterPhoto();
+  assert.equal(r.els['meter-followup-foot'].textContent, 'That could not be saved. Please message Lloyd.');
+  assert.equal(r.state.meterBlocked, true);
+});
+
+test('S3: a refusal hides the reason box and its help line, an allowance shows them again', async () => {
+  let allowed = false;
+  const w = world({ state: { meterSkipRevealed: true }, fetchImpl: () => ok([{ allowed }]) });
+  await w.api.refreshMeterSkipAllowance();
+  assert.equal(w.els['meter-skip-why'].hidden, true);
+  assert.equal(w.els['meter-skip-help'].hidden, true);
+  allowed = true;
+  await w.api.refreshMeterSkipAllowance();
+  assert.equal(w.els['meter-skip-why'].hidden, false);
+  assert.equal(w.els['meter-skip-help'].hidden, false);
+});
+
+test('S2, S4, S6 wiring: copy, autofill refresh, draft reason, 44px buttons, focus after success', () => {
+  assert.ok(html.includes("'Recorded. Still type both readings. The stays next to this one will need their meter photos.'"));
+  assert.ok(html.includes("showToast('Noted. No meter photo for this stay.'"));
+  assert.match(html, /fetchPrevReadings\(\);[^\n]*\n  if \(state\.meterSkipRevealed\) refreshMeterSkipAllowance\(\);/);
+  assert.match(html, /meterSkipReason: el\('meter-skip-why'\)\?\.value/);
+  assert.match(html, /set\('meter-skip-why', draft\.meterSkipReason\)/);
+  assert.doesNotMatch(html, /draft\.meterPhotosSkipped/);
+  assert.match(html, /#meter-followup \.mf-dismiss \{\n  margin: [^\n]*min-height: 44px/);
+  assert.ok(html.includes("box?.closest('section')?.querySelector('h1')"));
+  assert.ok(html.includes('D-352 replaces the 2026-09-13 anomaly-only rule'));
 });

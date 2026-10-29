@@ -3958,7 +3958,7 @@ body.mode-quick .detail-text { display: none; }
 #meter-followup .mf-list li { margin-bottom: 5px; }
 #meter-followup .mf-foot { margin: 0; font-size: .8rem; color: var(--text-secondary); }
 #meter-followup .mf-dismiss {
-  margin: var(--space-3) var(--space-2) 0 0; min-height: 40px; padding: 0 var(--space-4);
+  margin: var(--space-3) var(--space-2) 0 0; min-height: 44px; padding: 0 var(--space-4);
   border: 1.5px solid var(--border-strong); border-radius: var(--radius-md);
   background: transparent; color: var(--text-secondary);
   font: 600 .82rem var(--font-body); cursor: pointer;
@@ -6914,19 +6914,7 @@ async function loadMeterFollowups() {
         ? 'This one has to be answered before the next turnover can be sent. If you still have the photo, send it to Lloyd on Messenger. If not, photograph the meter as it is now. Then tap what you did.'
         : 'If you still have the photo, send it to Lloyd on Messenger. If not, photograph the meter as it is now and say so — a late reading is worth more than none.';
     }
-    const list = el('meter-followup-list');
-    if (list) {
-      list.innerHTML = rows.slice(0, 3).map(r => {
-        const when = r.cleaned_at
-          ? new Date(r.cleaned_at).toLocaleDateString('en-PH',
-              { timeZone: 'Asia/Manila', month: 'short', day: 'numeric' })
-          : 'a recent report';
-        const detail = (r.vision_verdict === 'mismatch' && r.vision_electric != null)
-          ? ` (the photo looks like ${escapeHtml(String(r.vision_electric))}, the report says ${escapeHtml(String(r.typed_electric ?? '—'))})`
-          : '';
-        return `<li><strong>${escapeHtml(when)}</strong> — ${escapeHtml(r.reason || 'needs another look')}${detail}</li>`;
-      }).join('');
-    }
+    renderMeterFollowupList();
     box.hidden = false;
   } catch { /* never let a follow-up notice break the page */ }
 }
@@ -6974,8 +6962,24 @@ function showNoMeterPhotoBox() {
   el('mf-nophoto-why')?.focus();
 }
 
+/* The raised-report list under the card. Reads state.meterFollowups so a partly answered card shows only what is left. */
+function renderMeterFollowupList() {
+  const list = el('meter-followup-list');
+  if (!list) return;
+  list.innerHTML = (state.meterFollowups || []).slice(0, 3).map(r => {
+    const when = r.cleaned_at
+      ? new Date(r.cleaned_at).toLocaleDateString('en-PH',
+          { timeZone: 'Asia/Manila', month: 'short', day: 'numeric' })
+      : 'a recent report';
+    const detail = (r.vision_verdict === 'mismatch' && r.vision_electric != null)
+      ? ` (the photo looks like ${escapeHtml(String(r.vision_electric))}, the report says ${escapeHtml(String(r.typed_electric ?? '—'))})`
+      : '';
+    return `<li><strong>${escapeHtml(when)}</strong> — ${escapeHtml(r.reason || 'needs another look')}${detail}</li>`;
+  }).join('');
+}
+
 async function reportNoMeterPhoto() {
-  const rows = state.meterFollowups || [];
+  const rows = (state.meterFollowups || []).slice();
   const foot = el('meter-followup-foot');
   const note = (el('mf-nophoto-why')?.value || '').trim();
   if (note.length < 4) {
@@ -6994,18 +6998,24 @@ async function reportNoMeterPhoto() {
         headers: { ...(await staffHeaders(true)) },
         body: JSON.stringify({ p_session_id: r.session_id, p_note: note.slice(0, 300) }),
       });
-      if (!resp.ok) throw new Error(String(resp.status));
+      const saved = rows.some(x => x !== r && !state.meterFollowups.includes(x));
+      const stop = (msg) => { if (foot) foot.textContent = msg + (saved ? ' The other report was saved.' : ''); };
+      if (!resp.ok) { stop('That could not be saved. Please message Lloyd.'); return; }
       const out = await resp.json();
       const o = Array.isArray(out) ? out[0] : out;
-      if (!o || o.ok !== true) {
-        if (foot) foot.textContent = (o && o.message) || 'That could not be saved. Please message Lloyd.';
-        return;
-      }
+      if (!o || o.ok !== true) { stop((o && o.message) || 'That could not be saved. Please message Lloyd.'); return; }
+      // Answered: drop it now so a refusal on the next one leaves only the unanswered rows and a retry never repeats a write.
+      state.meterFollowups = state.meterFollowups.filter(x => x !== r);
+      state.meterBlocked = state.meterFollowups.some(x => x.vision_verdict === 'mismatch');
+      renderMeterFollowupList();
     }
     state.meterFollowups = [];
     state.meterBlocked = false;
     const box = el('meter-followup');
     if (box) box.hidden = true;
+    // The card is gone, so focus would be lost with it: move it to this step's heading.
+    const h = box?.closest('section')?.querySelector('h1');
+    if (h) { h.tabIndex = -1; h.focus(); }
   } catch {
     if (foot) foot.textContent = 'That did not save — you may be offline. Try again when you have signal.';
   } finally {
@@ -7030,6 +7040,7 @@ async function reportNoMeterPhoto() {
    Offering it before either has happened teaches the shortcut to someone who
    has not yet tried the long way. */
 // s100 (D-352): a Next that is refused while a meter photo slot is empty is the "no photo was taken" case.
+// D-352 replaces the 2026-09-13 anomaly-only rule above: the offer now follows an empty photo slot, not a finding.
 function revealSkipIfPhotoMissing() {
   if (state.phase !== 1 || state.cleaningType === 'emergency' || state.cleaningType === 'mid_stay') return;
   if (state.meterPhotosSkipped === true) return;
@@ -7046,7 +7057,8 @@ function revealMeterSkipOffer(why) {
 // True when a missing meter photo is the only thing holding Phase 1 back.
 // A cleaner who has not filled in the readings is not stuck on the camera.
 //
-// NO LONGER CALLED as of 2026-09-13: Lloyd asked for the skip offer to appear
+// NO LONGER CALLED as of 2026-09-13 (D-352 replaced the anomaly-only rule: the offer now
+// follows an empty photo slot via revealSkipIfPhotoMissing): Lloyd asked for the skip offer to appear
 // on an anomaly and nothing else. Kept because it is the exact predicate to
 // restore if the plain "I forgot the camera" case is ever wanted again — and
 // deleting it would mean rediscovering the "only" part, which is the subtle
@@ -7077,9 +7089,9 @@ async function refreshMeterSkipAllowance() {
       headers: { ...(await staffHeaders(true)) },
       body: JSON.stringify(body),
     });
-    // s100 (D-352): v2 judges the neighbours by stay order from the check-out date; 404 = not applied yet, use v1.
+    // s100 (D-352): v2 judges the neighbours by stay order from the check-out date; any non-ok answer (404 not applied yet, 5xx) falls back to v1.
     let resp = await call('can_skip_meter_photos_v2', { p_property_id: PROPERTY_ID, p_checkout_date: /^\d{4}-\d{2}-\d{2}$/.test(co) ? co : null });
-    if (resp.status === 404) resp = await call('can_skip_meter_photos', { p_property_id: PROPERTY_ID });
+    if (!resp.ok) resp = await call('can_skip_meter_photos', { p_property_id: PROPERTY_ID });
     // The page can be ahead of the database, exactly as the stay picker can.
     // A 404 means the function is not applied yet: hide the offer, change
     // nothing else, and let the normal photo requirement stand.
@@ -7090,6 +7102,9 @@ async function refreshMeterSkipAllowance() {
     row.hidden = false;
     const btn  = el('meter-skip-btn');
     const note = el('meter-skip-note');
+    const why = el('meter-skip-why'), help = el('meter-skip-help');
+    if (why)  why.hidden  = !state.meterSkipAllowed;
+    if (help) help.hidden = !state.meterSkipAllowed;
     if (state.meterSkipAllowed) {
       if (btn)  { btn.hidden = false; btn.disabled = false; }
       if (note) note.textContent = 'Only if you truly cannot go back. The stay after this one will need its meter photos.';
@@ -7118,8 +7133,8 @@ function applyMeterSkip() {
   const btn = el('meter-skip-btn');
   if (btn) { btn.hidden = true; }
   const note = el('meter-skip-note');
-  if (note) note.textContent = 'Recorded. The readings are still required, and the next report must include photos.';
-  showToast('Noted — meter photos skipped this once', '', 3200);
+  if (note) note.textContent = 'Recorded. Still type both readings. The stays next to this one will need their meter photos.';
+  showToast('Noted. No meter photo for this stay.', '', 3200);
   updateBottomBar(); updatePhotoCounter(); saveDraft();
 }
 
@@ -9562,6 +9577,7 @@ function saveDraft() {
     conditionStatus: state.conditionStatus,
     conditionNote:   state.conditionNote,
     meterVerified:   state.meterVerified,
+    meterSkipReason: el('meter-skip-why')?.value || state.meterSkipReason || '',   // pre-fills the reason box only; the skip itself is never restored
     isWeeklyIncluded: state.isWeeklyIncluded,
     checklist:       { ...state.checklist },
     issueFlags:      {},
@@ -9629,6 +9645,7 @@ function applyDraft(draft) {
   set('startTime',            draft.startTime);
   set('electricMeterReading', draft.electricReading);
   set('waterMeterReading',    draft.waterReading);
+  if (draft.meterSkipReason) { state.meterSkipReason = String(draft.meterSkipReason); set('meter-skip-why', draft.meterSkipReason); }
 
   // Restore state
   state.startTimestamp    = draft.startTimestamp || null;
@@ -11887,6 +11904,7 @@ function applyBookingAutofill(data) {
   state.checkOutDate   = el('checkOutDate')?.value || '';
   state.numberOfNights = nights || 0;
   fetchPrevReadings();   // the meter neighbours depend on this stay's check-out date
+  if (state.meterSkipRevealed) refreshMeterSkipAllowance();
 
   // Trigger calcNights so the DOM badge reflects the autofilled dates
   el('checkInDate')?.dispatchEvent(new Event('change'));
