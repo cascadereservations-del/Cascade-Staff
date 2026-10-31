@@ -38,7 +38,7 @@
   --shadow-sm: 0 8px 24px var(--v5-card-shadow); --shadow-md: 0 12px 32px var(--v5-shadow); --shadow-lg: 0 20px 48px var(--v5-shadow);
   /* motion: press 0.97 at 160 ms ease-out; sheets 300 ms; nothing animates on controls used many times a day */
   --motion-fast: var(--v5-press-ms); --motion-base: 200ms; --motion-slow: var(--v5-sheet-ms); --ease: var(--v5-ease-out);
-  --appbar-h: 56px; --tabbar-h: 72px; --touch: var(--v5-touch);
+  --appbar-h: 56px; --tabbar-h: 74px; --touch: var(--v5-touch);
 }
 
 body { background: var(--bg); color: var(--fg); font: 400 var(--v5-t-body)/clamp(1.5rem, 1.4023rem + 0.4337vw, 1.68rem) var(--font-ui); font-variant-numeric: lining-nums; }
@@ -537,7 +537,7 @@ html[data-plain="1"] .tabbar { background: var(--v5-panel); } html[data-plain="1
 .tabbar { left: 12px; right: 12px; bottom: calc(10px + env(safe-area-inset-bottom)); max-width: 456px; height: 64px; padding-bottom: 0; border: 1px solid var(--v5-glass-edge); border-radius: 28px; background: var(--v5-bar); color: var(--v5-bar-fg); box-shadow: 0 12px 32px var(--v5-shadow); }
 .tab { color: var(--v5-bar-fg); font-size: var(--v5-t-chrome); line-height: clamp(0.875rem, 0.818rem + 0.253vw, 0.98rem); font-weight: 600; min-height: var(--touch); border-radius: 24px; }
 .tab[aria-current="page"] { color: var(--v5-bar-on); } .tab[aria-current="page"] .ico { background: var(--v5-bar-on-bg); }
-.tab .badge { background: var(--v5-act); color: var(--v5-act-fg); font-size: var(--v5-t-chrome); top: 6px; }
+.tab .badge { background: var(--v5-gold); color: var(--v5-gold-fg); box-shadow: 0 0 0 2px var(--v5-bar); font-size: var(--v5-t-chrome); top: 6px; }
 .tab .badge.bad { background: var(--v5-danger); }
 .screen { padding-bottom: calc(var(--tabbar-h) + env(safe-area-inset-bottom) + 28px); }
 
@@ -585,7 +585,7 @@ button.A_chipglass { width: var(--touch); padding: 0; justify-content: center; c
 #v-home .A_greet { padding-bottom: 14px; }
 #v-home .A_greet h1 { font-size: clamp(1.625rem, 1.5rem + 0.5vw, 1.875rem); line-height: 1.15; }
 #v-home .A_greet .cap { margin-top: 2px; }
-#v-home .H_wxstrip { min-height: var(--touch); margin-top: 4px; flex-direction: row; align-items: center; flex-wrap: wrap; column-gap: 8px; }
+#v-home .H_wxstrip { min-height: var(--touch); margin-top: 4px; justify-content: flex-start; flex-direction: row; align-items: center; flex-wrap: wrap; column-gap: 8px; }
 .A_primary, .A_card .A_primary { min-height: 56px; font-size: var(--v5-t-body); }
 .A_slide { margin-top: 4px; }
 @media (min-width: 48rem) {
@@ -1018,7 +1018,7 @@ button.A_chipglass.E_pill { width: auto; min-width: 124px; max-width: 184px; hei
 .H_wxstrip { display: flex; flex-direction: column; justify-content: center; gap: 1px; min-width: 0; min-height: var(--touch); margin-top: 2px; color: var(--v5-photo-ink-2); text-decoration: none; text-shadow: 0 1px 8px var(--v5-photo-shadow); }
 .H_wxstrip .l1 { display: flex; align-items: center; gap: 6px; min-width: 0; color: var(--v5-photo-ink); font-size: var(--v5-t-2); font-weight: 600; line-height: 1.25; }
 .H_wxstrip .l1 > span, .H_wxstrip .l2 { min-width: 0; overflow-wrap: anywhere; } /* grows with the text size instead of clipping (F_ 200 percent rule) */
-.H_wxstrip .l2 { font-size: 0.8125rem; line-height: 1.25; }
+.H_wxstrip .l2 { font-size: var(--v5-t-min); line-height: 1.25; }
 .H_wxstrip:focus-visible { outline: 2px solid currentColor; outline-offset: 2px; border-radius: 8px; }
 
 /* s84 H round 2: the booked-nights line under the month title (owner and admin). The slot is always there, so the grid never moves when the figure arrives. */
@@ -1174,19 +1174,32 @@ a.T_more { justify-self: start; min-height: var(--touch); display: inline-flex; 
 .G_stay .help, .G_in .help { color: var(--v5-ink-2); }
 /* weather: rain likely is said in words, in the strip and in the row under the photo */
 .H_wxstrip.rain .l2 { font-weight: 600; }
-.H_wxalert { position: relative; z-index: 1; max-width: 60rem; margin: 0 auto; background: var(--v5-warn-w); color: var(--v5-warn-t); }
-.H_wxalert + .screen .A_body { margin-top: 0; }
-.H_wxalert > summary { display: flex; align-items: center; gap: 8px; min-height: var(--touch); padding: 8px var(--gutter); cursor: pointer; list-style: none; font: 600 var(--v5-t-2)/1.35 var(--font-ui); }
-.H_wxalert > summary::-webkit-details-marker { display: none; }
-.H_wxalert > summary .H_wxt { flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; }
-.H_wxalert > summary svg.i:last-child { transition: transform 240ms var(--v5-ease-out); }
-.H_wxalert.on > summary svg.i:last-child { transform: rotate(180deg); }
-.H_wxalert .H_rain { display: grid; grid-template-rows: 0fr; opacity: 0; transition: grid-template-rows 240ms var(--v5-ease-out), opacity 180ms var(--v5-ease-out); }
-.H_wxalert .H_rain > div { overflow: hidden; min-height: 0; padding-inline: var(--gutter); color: var(--fg); }
-.H_wxalert .H_rain p { margin: 4px 0 8px; font-size: var(--v5-t-body); }
-.H_wxalert .H_rain > div > :last-child { margin-bottom: 12px; }
-.H_wxalert.on .H_rain { grid-template-rows: 1fr; opacity: 1; }
-@media (prefers-reduced-motion: reduce) { .H_wxalert .H_rain { transition-property: opacity; } .H_wxalert > summary svg.i:last-child { transition: none; } }
+/* s105: the Weather card on Today and the Good to know block on the Today card. Bars carry no motion, so reduced motion needs no extra rule. */
+#v-home .A_hero::after { background: var(--v5-hero-scrim); }
+html { scroll-padding-bottom: calc(64px + 10px + env(safe-area-inset-bottom) + 16px); }
+.W_card > summary { display: flex; align-items: center; gap: 8px; min-height: var(--touch); cursor: pointer; list-style: none; }
+.W_card > summary::-webkit-details-marker { display: none; }
+.W_card > summary .W_now { flex: 1 1 auto; }
+.W_card > summary svg.i:last-child { flex: none; }
+.W_card[open] > summary svg.i:last-child { transform: rotate(180deg); }
+.W_body { display: grid; gap: 8px; padding-top: 4px; }
+.W_body > .btn { justify-self: start; }
+.T_card p.sub.T_line { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; font-size: var(--v5-t-2); }
+.W_now { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.W_temp { font: 600 1.75rem/1.1 var(--font-display, var(--font-ui)); }
+.W_cond { min-width: 0; overflow-wrap: anywhere; color: var(--v5-ink-2); font-size: var(--v5-t-body); }
+.W_card.W_rain { border-left: 3px solid var(--v5-warn-t); }
+.W_hrs { display: flex; align-items: flex-end; gap: 4px; height: 3.5rem; padding-bottom: 1rem; position: relative; }
+.W_h { flex: 1 1 0; min-width: 0; height: 100%; display: flex; align-items: flex-end; position: relative; }
+.W_h i { display: block; width: 100%; border-radius: 3px 3px 0 0; background: var(--v5-sep); }
+.W_h.pk i { background: var(--v5-warn-t); }
+.W_h b { position: absolute; left: 0; bottom: -1rem; font: 500 .6875rem/1 var(--font-ui); color: var(--v5-ink-2); }
+.W_act { display: flex; gap: 8px; align-items: flex-start; margin: 0; font-size: var(--v5-t-body); line-height: 1.45; }
+.W_act svg.i { margin-top: 2px; color: var(--v5-warn-t); flex: none; }
+.T_gtk { display: grid; gap: 8px; }
+.T_facts { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.T_facts .T_fact { display: inline-flex; align-items: center; gap: 4px; font-size: var(--v5-t-2); }
+a.T_call { min-height: var(--touch); display: inline-flex; align-items: center; font: 600 var(--v5-t-2)/1.4 var(--font-ui); color: var(--v5-act); text-decoration: none; }
 /* loading mirrors the real stack: Today card, Turnover card, two rows */
 .T_sk1, .T_sk2, .T_sk3 { border-radius: var(--v5-r-card); }
 .T_sk1 { height: 148px; } .T_sk2 { height: 200px; } .T_sk3 { height: 64px; }

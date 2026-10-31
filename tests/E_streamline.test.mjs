@@ -37,7 +37,7 @@ test('E_ admin home: one Admin group (dashboard, Pay staff, Pay rates, Inventory
 
 test('E_ counts are neutral: red only where something is late (the Tasks badge with an overdue task)', async () => {
   assert.match(css, /\.count \{ background: var\(--v5-act\); color: var\(--v5-act-fg\);/); assert.match(css, /\.count\.bad \{ background: var\(--v5-danger\); \}/);
-  assert.match(css, /\.tab \.badge \{ background: var\(--v5-act\);/); assert.match(css, /\.tab \.badge\.bad \{ background: var\(--v5-danger\); \}/);
+  assert.match(css, /\.tab \.badge \{ background: var\(--v5-gold\);/); assert.match(css, /\.tab \.badge\.bad \{ background: var\(--v5-danger\); \}/);
   const home = await boot({ role: 'admin', hash: '#home', handlers: baseHandlers('admin', { staff_home_v1: () => HOMEWITH([], { warnings: [{ kind: 'inventory', title: 'Low stock: soap', detail: {} }] }), tasks_list_v1: tasksOf([T({})], true) }) });
   const h = home.els['v-home'].innerHTML; assert.doesNotMatch(h, /class="count bad"/, 'no count on Home is an alarm');
   const tabs = home.els.tabbar.innerHTML;

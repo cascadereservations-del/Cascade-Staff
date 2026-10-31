@@ -86,7 +86,7 @@ test('3.2 sign-out: G_Guests.reset and X_Inbox.reset run, and a reset that throw
 
 // ------------------------------------------------------------------------------------------------ 3. service worker and push
 test('3.2 sw: version 3.2.1, cs-shell-v25, the four new files are precached best effort only, pay/bank.html is gone from the precache', () => {
-  const sw = read('sw.js'); assert.match(sw, /CACHE_NAME = 'cs-shell-v45'/); assert.equal(JSON.parse(read('package.json')).version, '3.4.20'); assert.match(read('app.js'), /version: '3.4.20'/);
+  const sw = read('sw.js'); assert.match(sw, /CACHE_NAME = 'cs-shell-v46'/); assert.equal(JSON.parse(read('package.json')).version, '3.4.21'); assert.match(read('app.js'), /version: '3.4.21'/);
   const ctx = vm.createContext({ self: { addEventListener() {}, location: { href: 'https://x/' } }, URL, Request: class {}, Promise });
   vm.runInContext(sw.replace(/^const /gm, 'var ').replace(/^if \(typeof module[^\n]*$/m, ''), ctx);
   const opt = [...vm.runInContext('OPTIONAL_URLS', ctx)], req = [...vm.runInContext('SHELL_URLS', ctx)];
@@ -125,16 +125,16 @@ test('3.2 Ask Cassy: a link row to the ChatGPT concierge in a new tab with rel n
 
 // ------------------------------------------------------------------------------------------------ 5. weather: Home strip and Work row
 test('3.2 weather strip: two lines under the greeting in every state, always one link to #weather, the same markup shape while loading, with a reading, and old; a Weather row opens the Work card', async () => {
-  const strip = (h) => { const m = /<a class="H_wxstrip" href="#weather"[^>]*>([^]*?)<\/a>/.exec(h); return m && m[0]; };
-  const lines = (s) => ({ l1: /<span class="l1">[^]*?<\/span><\/span>/.test(s), l2: /<span class="l2">[^<]*<\/span>/.test(s) });
+  const strip = (h) => { const m = /<div class="H_wxstrip">([^]*?)<\/span><\/div>/.exec(h); return m && m[0]; }; // s105: one line, no link; the Weather card owns the forecast link
+  const lines = (s) => ({ l1: /<span class="l1">[^]*?<\/span><\/span>/.test(s), l2: /class="l2"/.test(s) });
   const loading = await boot({ role: 'cleaner', hash: '#home', handlers: baseHandlers('cleaner', { staff_home_v1: () => new Promise(() => {}) }) }); const sl = strip(loading.els['v-home'].innerHTML);
-  assert.ok(sl, 'drawn before the first answer'); assert.deepEqual(lines(sl), { l1: true, l2: true });
-  const none = strip((await boot({ role: 'cleaner', hash: '#home', handlers: baseHandlers('cleaner') })).els['v-home'].innerHTML); assert.match(none, /Open the forecast/);
+  assert.ok(sl, 'drawn before the first answer'); assert.deepEqual(lines(sl), { l1: true, l2: false });
+  const none = strip((await boot({ role: 'cleaner', hash: '#home', handlers: baseHandlers('cleaner') })).els['v-home'].innerHTML); assert.match(none, /Weather/);
   const fresh = strip((await boot({ role: 'cleaner', hash: '#home', foldFetch: proxyBad([], 'bad'), handlers: baseHandlers('cleaner', { staff_home_v1: () => HOMEWITH([], { weather: WX_HOME(5) }) }) })).els['v-home'].innerHTML);
-  assert.match(fresh, /28° cloudy/); assert.match(fresh, /Rain 40% today · 26 to 32°/); assert.doesNotMatch(fresh, /as of/); assert.deepEqual(lines(fresh), { l1: true, l2: true });
+  assert.match(fresh, /28° cloudy/); assert.doesNotMatch(fresh, /Rain 40%|as of/); assert.deepEqual(lines(fresh), { l1: true, l2: false });
   const old = strip((await boot({ role: 'cleaner', hash: '#home', foldFetch: proxyBad([], 'bad'), handlers: baseHandlers('cleaner', { staff_home_v1: () => HOMEWITH([], { weather: WX_HOME(120) }) }) })).els['v-home'].innerHTML);
-  assert.match(old, /as of 10:30/, 'a reading older than 60 minutes says when it is from');
-  for (const h of [sl, none, fresh, old]) assert.equal((h.match(/href="#weather"/g) || []).length, 1);
+  assert.doesNotMatch(old, /as of/, 'the age moved to the Weather card');
+  for (const h of [sl, none, fresh, old]) assert.equal((h.match(/href="#weather"/g) || []).length, 0, 'the strip is not a link');
   for (const role of ['cleaner']) { const w = (await boot({ role, hash: '#home', handlers: baseHandlers(role) })).els['v-home'].innerHTML; const work = w.slice(w.indexOf('aria-label="Work"')); assert.ok(work.indexOf('href="#weather"') > 0 && work.indexOf('href="#weather"') < work.indexOf('Cleaning checklist'), 'Weather is the first row of Work, above the checklist'); }
   const css = read('styles.css'); assert.match(css, /\.H_wxstrip \{[^}]*min-height: var\(--touch\)/, 'a 44 px tap target');
 });

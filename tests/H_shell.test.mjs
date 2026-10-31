@@ -148,7 +148,7 @@ test('H_ home: pay links carry the badge counts in their hash, the cleaner home 
 test('H_ home: the admin Turnover card is a verdict (clean, arrival, house); rows with no data are not drawn; a cleaner gets the staff card', async () => {
   const handlers = (ready, prog) => baseHandlers('admin', { staff_home_v1: turnover(ready), cleaning_progress_v1: prog || (() => ({ error: { code: 'PGRST202', message: 'x' }, data: null })) });
   const a = await boot({ role: 'admin', hash: '#home', handlers: handlers({ id: true, paid: false, door_code: null }, () => ({ error: null, data: { ok: true, active: { step: 4, of: 9, cleaner_name: 'Honey Cruz', updated_at: '2026-10-15T04:20:00Z' } } })) });
-  const h = a.els['v-home'].innerHTML; assert.match(h, /Today · out 12:00 noon · in 2:00 pm/); assert.match(h, /<span class="k">Clean<\/span><b>Honey · step 4 of 9 · 12:20<\/b>/); assert.match(h, /<span class="k">Arrival<\/span><b>ID on file · balance due<\/b>/); assert.match(h, /<span class="k">House<\/span><b>Clear<\/b>/);
+  const h = a.els['v-home'].innerHTML; assert.match(h, /Today · out 12:00 noon · in 2:00 pm/); assert.match(h, /<span class="k">Clean<\/span><b>Honey · step 4 of 9 · 12:20<\/b>/); assert.match(h, /<span class="k">Arrival<\/span><b>Balance due<\/b>/); assert.match(h, /<span class="k">House<\/span><b>Clear<\/b>/);
   assert.match(h, /Open booking|Set the door code/, 'a missing item has its action'); assert.equal(a.calls.filter((c) => c[0] === 'cleaning_progress_v1').length, 1);
   const none = await boot({ role: 'admin', hash: '#home', handlers: handlers(null) }); const nh = none.els['v-home'].innerHTML;
   assert.doesNotMatch(nh, /<span class="k">Clean<\/span>/, 'the RPC is absent: no Clean row'); assert.doesNotMatch(nh, /<span class="k">Arrival<\/span>/, 'the field is absent: no Arrival row'); assert.match(nh, /<span class="k">House<\/span>/);
@@ -271,7 +271,7 @@ test('H_ guard: no duplicate top-level H_ names in app.js or lib.js, the files p
   }
   const html = read('index.html'); for (const id of ['v-search', 'v-weather', 'v-stock', 'v-manage', 'H_offline', 'door-done']) assert.ok(html.includes('id="' + id + '"'), id);
   assert.match(html, /Your name, as Lloyd wrote it/); assert.match(html, /placeholder="Honey"/);
-  assert.equal(JSON.parse(read('package.json')).version, '3.4.20'); assert.match(read('sw.js'), /CACHE_NAME = 'cs-shell-v45'/);
+  assert.equal(JSON.parse(read('package.json')).version, '3.4.21'); assert.match(read('sw.js'), /CACHE_NAME = 'cs-shell-v46'/);
 });
 
 // the bodies of the three theme rules: :root, :root:not([data-theme="light"]) inside the dark media query, :root[data-theme="dark"]

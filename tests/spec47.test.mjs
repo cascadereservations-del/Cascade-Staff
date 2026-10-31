@@ -52,10 +52,10 @@ test('Today card (live path): key time first, tier chip + line, important note w
   const g = GUEST({ notable: [{ topic: 'directions', last_seen: '2026-10-14T01:00:00Z', source: 'airbnb' }, { topic: 'guest_count', last_seen: '2026-10-13T01:00:00Z', source: 'messenger' }] });
   const app = await boot({ role: 'cleaner', hash: '#home', handlers: baseHandlers('cleaner', { staff_home_v1: homeOf(g) }) });
   const h = html(app);
-  assert.match(h, /<p class="sub num T_when"><strong class="A_key">Out 12:00 noon<\/strong> · 13 → 17 Oct · 4 nights<\/p>/); assert.ok(h.indexOf('A_key') < h.indexOf('→'), 'the time comes before the dates');
+  assert.match(h, /<p class="sub num T_when"><strong class="A_key">Out 17 Oct, 12:00 noon<\/strong> · 4 nights<\/p>/, "checks out later: the day is in the key, only the nights follow");
   assert.doesNotMatch(h, / · out /);
   assert.match(h, /class="pill p-tier-regular"/); assert.match(h, /<p class="sub T_line T_regular">Late check-out when free<\/p>/);
-  assert.match(h, /<div class="T_key note-key">[\s\S]*<b>Important:<\/b> Reported a damage to the kettle/); assert.match(h, /href="#calendar\/house">\+3 more notes<\/a>/);
+  assert.match(h, /<div class="T_key note-key">[\s\S]*<b>Important:<\/b> Reported a damage to the kettle/); assert.match(h, /href="#calendar\/house">\+2 more notes<\/a>/);
   assert.match(h, /<p class="help T_ask">Asked about: directions, guest count<\/p>/);
   assert.doesNotMatch(h, /T_face/, 'no photo, no face');
   const none = await boot({ role: 'cleaner', hash: '#home', handlers: baseHandlers('cleaner', { staff_home_v1: homeOf(GUEST({ notes: null, notable: [] })) }) });
@@ -78,29 +78,42 @@ test('Today card: arriving guest gets In time; the face shows only with a photo 
 });
 
 const WATCH = (role) => ({ error: null, data: NOTICES_RAW({ role, weather: { source: 'open-meteo', fetched_at: new Date(Date.now() - 300000).toISOString(), temp_c: 29, condition: 'Rain', code: 61, rain_chance_pct: 70, aqi: 42, hourly: [], rain_watch: { from: '2026-10-15T14:00:00+08:00', to: '2026-10-15T17:00:00+08:00', peak_pct: 80 } } }) });
-test('rain row: a sibling after the hero (not inside it), only when rain is likely, words and glyph, open the first time it is known', async () => {
+test('weather card: first on Today when rain is near, else after Turnover; shut by default; one forecast link; the hero says temperature and condition once', async () => {
   const g = GUEST();
   const wet = await boot({ role: 'cleaner', hash: '#home', handlers: baseHandlers('cleaner', { staff_home_v1: homeOf(g, { weather: WX(80) }) }) });
-  const h = html(wet), i = h.indexOf('<details class="H_wxalert'), hero = h.slice(0, i);
-  assert.ok(i > 0); assert.ok(hero.startsWith('<div class="A_hero"') && hero.endsWith('</div></div>'), 'the element after the hero is the details row');
-  assert.equal(hero.split('<div').length, hero.split('</div>').length, 'the hero is closed before the row starts'); assert.ok(!hero.includes('H_wxalert'), 'the hero holds no rain row');
-  assert.match(h, /<details class="H_wxalert on" open><summary data-act="wx-toggle">[\s\S]*Rain likely [^<]*· bring towels in/, 'rendered open, no motion, the first time');
-  assert.match(h, /class="H_wxstrip rain"/); assert.match(h, /Rain likely, 80% today/, 'the 60 percent path keeps the daily-chance wording');
-  assert.match(h, /High 32°, low 26°\./); assert.match(h, /href="#weather"/);
-  const dry = await boot({ role: 'cleaner', hash: '#home', handlers: baseHandlers('cleaner', { staff_home_v1: homeOf(g, { weather: WX(40) }) }) });
-  assert.doesNotMatch(html(dry), /H_wxalert|wxstrip rain/); assert.match(html(dry), /Rain 40% today/);
-  const watch = await boot({ role: 'cleaner', hash: '#home', handlers: baseHandlers('cleaner', { staff_home_v1: homeOf(g, { weather: WX(30) }), notices_v1: () => WATCH('cleaner') }) });
-  assert.match(html(watch), /H_wxalert/, 'an active rain-watch notice raises the row even under 60 percent');
-  assert.match(html(watch), /<span class="l2">Rain likely [^<]*, up to 80%[^<]*<\/span>/, 'under 60 percent the strip quotes the watch, not 30 percent today'); assert.doesNotMatch(html(watch), /30% today/);
+  const h = html(wet);
+  assert.match(h, /<details class="card glass A_card W_card W_rain"><summary aria-label="Weather today">/, 'shut by default');
+  assert.ok(h.indexOf('W_card') < h.indexOf('T_card'), 'rain near: the Weather card is the first card');
+  assert.match(h, /Rain likely<\/span>/); assert.match(h, /High 32°, low 26°/); assert.match(h, /Peak chance 80%/); assert.match(h, /Bring towels and mats in before the rain/);
+  const card = h.slice(h.indexOf('W_card'), h.indexOf('</details>')); assert.equal((card.match(/href="#weather"/g) || []).length, 1, 'the card owns the one forecast link'); assert.match(card, /btn btn-ghost btn-sm" href="#weather"/); assert.doesNotMatch(h, /H_wxalert|wxstrip rain/);
+  assert.match(h, /<div class="H_wxstrip"><span class="l1"><svg class="i s16" data-i="rain"><\/svg><span>29° [^<]*<\/span><\/span><\/div>/, 'hero: temperature, condition, the condition glyph');
+  const dry = html(await boot({ role: 'cleaner', hash: '#home', handlers: baseHandlers('cleaner', { staff_home_v1: homeOf(g, { weather: WX(40) }) }) }));
+  assert.ok(dry.indexOf('aria-label="Turnover today"') < dry.indexOf('W_card'), 'no rain: after the Turnover card'); assert.doesNotMatch(dry, /W_rain|Rain likely|Bring towels/); assert.match(dry, /Rain 40% today/);
+  const gone = html(await boot({ role: 'cleaner', hash: '#home', handlers: baseHandlers('cleaner', { staff_home_v1: homeOf(g, { weather: null }) }) }));
+  assert.match(gone, /The forecast is not available right now/);
+  const watch = html(await boot({ role: 'cleaner', hash: '#home', handlers: baseHandlers('cleaner', { staff_home_v1: homeOf(g, { weather: WX(30) }), notices_v1: () => WATCH('cleaner') }) }));
+  assert.match(watch, /W_card W_rain/, 'an active rain-watch notice raises the card even under 60 percent'); assert.match(watch, /Bring towels and mats in before 2 pm/);
 });
 
-test('rain row: a native toggle (find in page, assistive tech) syncs the slide class; closing is remembered across a redraw', async () => {
+test('weather card: opening it is remembered across a redraw; shut again on a fresh visit', async () => {
   const app = await boot({ role: 'cleaner', hash: '#home', handlers: baseHandlers('cleaner', { staff_home_v1: homeOf(GUEST(), { weather: WX(80) }) }) });
-  const calls = []; const d = { open: false, classList: { contains: (c) => c === 'H_wxalert', toggle: (c, on) => calls.push([c, on]) } };
-  for (const fn of app.listeners.toggle) fn({ target: d }); d.open = true; for (const fn of app.listeners.toggle) fn({ target: d });
-  assert.deepEqual(calls, [['on', false], ['on', true]]);
-  for (const fn of app.listeners.toggle) fn({ target: { open: false, classList: { contains: (c) => c === 'H_wxalert', toggle() {} } } }); // the user closed it
-  await app.click({ 'data-act': 'refresh' }); assert.match(html(app), /<details class="H_wxalert">/, 'redraw keeps it closed');
+  const cl = (c) => c === 'W_card'; for (const fn of app.listeners.toggle) fn({ target: { open: true, classList: { contains: cl } } });
+  await app.click({ 'data-act': 'refresh' }); assert.match(html(app), /<details class="card glass A_card W_card W_rain" open>/, 'redraw keeps it open');
+  for (const fn of app.listeners.toggle) fn({ target: { open: false, classList: { contains: cl } } });
+  await app.click({ 'data-act': 'refresh' }); assert.doesNotMatch(html(app), /W_card W_rain" open/);
+});
+
+test('CS.wxCard: start time from the watch window or the first 50 percent hour; soon = within 3 hours; no reading is null; old reading says when', () => {
+  const at = (iso) => Date.parse(iso);
+  const p = { weather: { fetched_at: new Date(at('2026-10-15T11:50:00+08:00')).toISOString(), current: { temp: 29.4, description: 'Light rain', rain_prob: 80, today_high: 32, today_low: 26 } } };
+  const v = { weather: { watch: { text: 'Rain watch, 2 to 5 pm', peak: 80 }, hours: [{ label: '1 pm', pct: 20 }, { label: '2 pm', pct: 70 }, { label: '3 pm', pct: 80 }] } };
+  const a = CS.wxCard(p, v, at('2026-10-15T12:00:00+08:00'));
+  assert.deepEqual([a.temp, a.hi, a.lo, a.window, a.pct, a.peakAt, a.action, a.soon, a.asOf, a.hours.length], [29, 32, 26, '2 to 5 pm', 80, '3 pm', 'Bring towels and mats in before 2 pm', true, '', 3]);
+  assert.equal(CS.wxCard(p, v, at('2026-10-15T08:00:00+08:00')).soon, false, 'six hours away'); assert.equal(CS.wxCard(p, v, at('2026-10-15T16:00:00+08:00')).soon, true, 'already raining');
+  const w = CS.wxCard(p, { weather: { hours: [{ label: '4 pm', pct: 55 }] } }, at('2026-10-15T12:00:00+08:00')); assert.equal(w.action, 'Bring towels and mats in before 4 pm', 'chance path: no watch window, the first hour at 50 percent or more');
+  assert.equal(CS.wxCard(p, { weather: { hours: [{ label: '4 pm', pct: 10 }] } }, at('2026-10-15T12:00:00+08:00')).action, 'Bring towels and mats in before the rain');
+  assert.equal(CS.wxCard({ weather: null }, null), null); assert.equal(CS.wxCard({ weather: { current: { temp: null } } }, null), null);
+  assert.equal(CS.wxCard(p, null, at('2026-10-15T14:00:00+08:00')).asOf, '11:50', 'older than 60 minutes: as of'); assert.equal(CS.wxCard(p, null, at('2026-10-15T14:00:00+08:00')).rain, false, 'a stale chance is not a warning');
 });
 
 test('Home redraw: the hero is built once (the photo is not rebuilt) and the fresh one is parsed in an inert template', async () => {
@@ -131,15 +144,15 @@ test('ID card and contact: no status tint on the ID card, one copy control per v
   assert.match(read('styles.css'), /\.idphoto\.empty\.err \{ aspect-ratio: 8 \/ 5/);
 });
 
-test('release: 3.4.20, cache v39, tier and key-note tokens in all three theme blocks, reduced motion covers the skeleton and the rain row', () => {
-  assert.equal(JSON.parse(read('package.json')).version, '3.4.20'); assert.match(read('app.js'), /version: '3.4.20'/); assert.match(read('sw.js'), /CACHE_NAME = 'cs-shell-v45'/);
+test('release: 3.4.21, cache v39, tier and key-note tokens in all three theme blocks, reduced motion covers the skeleton and the rain row', () => {
+  assert.equal(JSON.parse(read('package.json')).version, '3.4.21'); assert.match(read('app.js'), /version: '3.4.21'/); assert.match(read('sw.js'), /CACHE_NAME = 'cs-shell-v46'/);
   const tk = read('tokens.css');
   for (const k of ['returning', 'regular', 'vip']) for (const s of ['t', 'w']) assert.equal(tk.split('--v5-tier-' + k + '-' + s + ':').length - 1, 3, k + s);
   assert.equal(tk.split('--v5-note-key-w:').length - 1, 3);
   assert.match(tk, /--v5-tier-vip-t: #0F1B2A; --v5-tier-vip-w: #C9A063;/); assert.match(tk, /--v5-tier-vip-t: #0F1B2A; --v5-tier-vip-w: #E0B872;/);
   const css = read('styles.css');
-  assert.match(css, /animation-iteration-count: 1 !important; \} \.skel \{ animation: none;/); assert.match(css, /prefers-reduced-motion: reduce\) \{ \.H_wxalert \.H_rain \{ transition-property: opacity; \}/);
-  assert.match(css, /grid-template-rows: 0fr; opacity: 0; transition: grid-template-rows 240ms var\(--v5-ease-out\)/);
+  assert.match(css, /animation-iteration-count: 1 !important; \} \.skel \{ animation: none;/);
+  assert.doesNotMatch(css, /H_wxalert|W_h[^{]*\{[^}]*(transition|animation)/, 'the old banner is gone and the rain bars carry no motion');
   assert.doesNotMatch(css, /\n:focus-visible \{[^}]*border-radius/);
 });
 
@@ -149,4 +162,27 @@ test('H_idRotate still turns the ID card thumbnail (code not swallowed by a comm
   const code = body.split('\n').map((l) => l.replace(/\/\/.*$/, '')).join('\n');
   assert.match(code, /H_turnBox\(bx, d\)/);
   assert.match(code, /A_faceTurn\(fi, d\)/);
+});
+
+test('CS.goodToKnow: every unique important note and request (3 shown, strongest first, long ones cut), phone only when allowed, guests from a count or companions, ID state', () => {
+  const g = { notes: '2026-08-01: Likes extra towels | Reported a damage to the kettle | Special request: extra pillows || 2026-02-10: Brought a gift | Likes extra towels', phone: '0917 555 0100', companions: [{ name: 'Ben' }], id_photo_path: 'g/1.jpg' };
+  const a = CS.goodToKnow(g, true);
+  assert.deepEqual(a.notes.map((n) => [n.rank, n.p]), [[0, 'Reported a damage to the kettle'], [1, 'Special request: extra pillows']]);
+  assert.deepEqual([a.more, a.phone, a.tel, a.guests, a.id], [2, '0917 555 0100', 'tel:09175550100', 2, true]);
+  const c = CS.goodToKnow(g, false); assert.deepEqual([c.phone, c.tel], [null, null], 'a cleaner never gets the number'); assert.equal(c.guests, null, 'companions are owner/admin only');
+  assert.equal(CS.goodToKnow({ guest_count: 3, notes: null }, false).guests, 3); assert.equal(CS.goodToKnow({}, true).id, false);
+  const long = CS.goodToKnow({ notes: 'Special request: ' + 'late arrival '.repeat(15) }, false).notes[0].p; assert.ok(long.length <= 90 && long.endsWith('…'));
+  assert.equal(CS.goodToKnow({ notes: 'a: 1 | Special request: 1 | Special request: 2 | Special request: 3 | Special request: 4' }, false).notes.length, 3);
+});
+
+test('Good to know on the Today card: call link and guest count for admin, ID pill both ways, nothing personal for a cleaner; Turnover does not repeat the ID state', async () => {
+  const g = GUEST({ phone: '0917 555 0100', guest_count: 2, id_photo_path: 'g/1.jpg', checkin_date: TODAY, checkout_date: '2026-10-17', arrival_ready: { id: true, paid: false, door_code: true } });
+  const adm = html(await boot({ role: 'admin', hash: '#home', handlers: baseHandlers('admin', { staff_home_v1: () => HOMEWITH([stayRow('Ana Reyes', TODAY, '2026-10-17')], { current_guest: g }) }) }));
+  assert.match(adm, /class="T_gtk"[^>]*><span class="cap up">Good to know<\/span>/); assert.match(adm, /<a class="T_call num" href="tel:09175550100" aria-label="Call 0917 555 0100">Call 0917 555 0100<\/a>/);
+  assert.match(adm, /2 guests/); assert.match(adm, /ID on file/); assert.equal((adm.match(/ID on file/g) || []).length, 1, 'the ID state is said once on Today');
+  assert.match(adm, /Balance due/, 'the Turnover Arrival row keeps the other checks');
+  const none = html(await boot({ role: 'admin', hash: '#home', handlers: baseHandlers('admin', { staff_home_v1: homeOf(GUEST({ id_photo_path: null, arrival_ready: { id: false, paid: true, door_code: true } })) }) }));
+  assert.match(none, /p-warn[^>]*>[^]*?No ID yet/); assert.equal((none.match(/No ID yet/g) || []).length, 1);
+  const cl = html(await boot({ role: 'cleaner', hash: '#home', handlers: baseHandlers('cleaner', { staff_home_v1: homeOf(GUEST({ id_photo_path: null })) }) }));
+  assert.doesNotMatch(cl, /tel:|T_call/); assert.match(cl, /No ID yet/);
 });

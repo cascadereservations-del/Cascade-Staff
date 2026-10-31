@@ -54,6 +54,7 @@
   /* photo header, sign-in photo, live dots and the tab bar's active tab: the same in light and dark (they sit on a photo or on the dark bar) */
   --v5-scrim: rgba(10, 20, 32, 0.52);
   --v5-photo-ink: #FFFFFF; --v5-photo-ink-2: #EFE8DD; --v5-photo-edge: rgba(255, 255, 255, 0.18); --v5-photo-shadow: rgba(0, 0, 0, 0.45);
+  --v5-hero-scrim: linear-gradient(to bottom, rgba(15, 12, 9, 0.55) 0%, rgba(15, 12, 9, 0.42) 30%, rgba(15, 12, 9, 0.62) 55%, rgba(15, 12, 9, 0.92) 100%); /* s105: Today hero only */
   --v5-photo-fade: linear-gradient(to bottom, rgba(15, 12, 9, 0.5) 0%, rgba(15, 12, 9, 0.08) 30%, rgba(15, 12, 9, 0.5) 58%, rgba(15, 12, 9, 0.92) 100%);
   --v5-photo-fade-sign: linear-gradient(to bottom, rgba(15, 12, 9, 0.35), var(--v5-bg));
   --v5-live-ok: #7FD3A0; --v5-live-warn: #F0B866; --v5-live-bad: #F0646F; --v5-live-idle: #AEBCCB;
@@ -79,7 +80,7 @@
     --v5-act: #8FB4E0; --v5-act-fg: #0E1621; --v5-fill: rgba(143, 180, 224, 0.14);
     --v5-panel: #1A2B3F; --v5-panel-fg: #F2F5F8; --v5-panel-fg-2: #B9C6D3;
     --v5-gold-text: #E0B872; --v5-gold-soft: rgba(224, 184, 114, 0.16);
-    --v5-bar: rgba(22, 38, 58, 0.84);
+    --v5-bar: rgba(34, 54, 80, 0.92);
     --v5-glass: var(--v5-surf); --v5-glass-edge: rgba(255, 255, 255, 0.10); --v5-glass-dark: rgba(8, 14, 22, 0.45);
     --v5-card-glass: var(--v5-surf); --v5-card-edge: rgba(255, 255, 255, 0.10); --v5-card-hi: rgba(255, 255, 255, 0.08);
     --v5-card-shadow: transparent; --v5-shadow: rgba(0, 0, 0, 0.5); --v5-warn-glass: rgba(58, 42, 18, 0.62);
@@ -109,7 +110,7 @@
   --v5-act: #8FB4E0; --v5-act-fg: #0E1621; --v5-fill: rgba(143, 180, 224, 0.14);
   --v5-panel: #1A2B3F; --v5-panel-fg: #F2F5F8; --v5-panel-fg-2: #B9C6D3;
   --v5-gold-text: #E0B872; --v5-gold-soft: rgba(224, 184, 114, 0.16);
-  --v5-bar: rgba(22, 38, 58, 0.84);
+  --v5-bar: rgba(34, 54, 80, 0.92);
   --v5-glass: var(--v5-surf); --v5-glass-edge: rgba(255, 255, 255, 0.10); --v5-glass-dark: rgba(8, 14, 22, 0.45);
   --v5-card-glass: var(--v5-surf); --v5-card-edge: rgba(255, 255, 255, 0.10); --v5-card-hi: rgba(255, 255, 255, 0.08);
   --v5-card-shadow: transparent; --v5-shadow: rgba(0, 0, 0, 0.5); --v5-warn-glass: rgba(58, 42, 18, 0.62);

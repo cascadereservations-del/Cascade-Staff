@@ -20,7 +20,7 @@
     url: 'https://qkgfhsdppslwunarczeq.supabase.co',
     key: 'sb_publishable_JFuRYZ9csmQULcMRmHXDSg_Abo9UeCj',
     propertyId: '6ae230f4-c189-4547-84b1-cb6e0b2cc9bd',
-    version: '3.4.20'
+    version: '3.4.21'
   };
   var LINKS = {
     checklist: 'https://cascadereservations-del.github.io/CH-Cleaners-Checklist/',
@@ -156,13 +156,13 @@
   function todayCard() {
     var p = state.payload, st = CS.todayCardState(p, p.today);
     if (!st.guest) return '<section class="card glass A_card F_span" aria-label="Today in the house"><span class="cap up">' + esc(st.label) + '</span><p class="sub">The house is free tonight. The next stay will show here.</p></section>';
-    var g = st.guest, tp = tierP(st.guest, true), ht = A_houseT(), nl = CS.notableLine(g), kn = CS.keyNote(g.notes);
-    var key = st.kind === 'house' ? 'Out ' + (CS.fmtTime(g.checkout_time) || ht.outLabel) : 'In ' + (CS.fmtTime(g.checkin_time) || ht.inLabel); // s96: the time that matters comes first
+    var g = st.guest, tp = tierP(st.guest, true), ht = A_houseT(), nl = CS.notableLine(g);
+    var outLater = st.kind === 'house' && g.checkout_date && g.checkout_date !== p.today, outT = CS.fmtTime(g.checkout_time) || ht.outLabel;
+    var key = st.kind === 'house' ? (outLater ? 'Out ' + (g.checkout_date === CS.addDays(p.today, 1) ? 'tomorrow' : CS.dayLabel(g.checkout_date)) + (g.checkout_date === CS.addDays(p.today, 1) ? ' ' : ', ') + outT : 'Out ' + outT) : 'In ' + (CS.fmtTime(g.checkin_time) || ht.inLabel); // s96: the time that matters comes first
     return '<section class="card glass A_card F_span T_card" aria-label="Today in the house"><div class="row-between"><span class="cap up">' + esc(st.label) + '</span>' + (st.pill ? pill(st.pill.tone, toneIcon(st.pill.tone), st.pill.text) : '') + '</div>' +
       '<div class="T_who"><div class="T_id"><div class="T_namerow"><h2 class="A_name">' + esc(g.guest_name || 'Guest') + '</h2>' + tp.chip + tp.ret + '</div></div>' + A_face(g) + '</div>' + // s98 SPEC-47c: the face sits beside the name + chip (or the older Returning pill) only; everything under it spans the card
-      tp.line + (nl ? '<p class="help T_ask">' + esc(nl) + '</p>' : '') +
-      '<p class="sub num T_when"><strong class="A_key">' + esc(A_nb(key)) + '</strong> · ' + esc(A_stayDates(g)) + '</p>' +
-      (kn ? '<div class="T_key note-key">' + ICON('alert', 's16') + '<span class="T_nt"><b>' + kn.word + '</b> ' + esc(kn.p) + '</span></div>' + (kn.more ? '<a class="T_more" href="#calendar/' + (st.kind === 'house' ? 'house' : 'next') + '">+' + kn.more + ' more ' + (kn.more === 1 ? 'note' : 'notes') + '</a>' : '') : '') +
+      '<p class="sub num T_when"><strong class="A_key">' + esc(A_nb(key)) + '</strong> · ' + esc(outLater ? A_nb(CS.plural(g.nights != null ? g.nights : CS.daysBetween(g.checkin_date, g.checkout_date), 'night')) : A_stayDates(g)) + '</p>' +
+      A_goodToKnow(g, st.kind) + tp.line + (nl ? '<p class="help T_ask">' + esc(nl) + '</p>' : '') +
       '<a class="A_more" href="#calendar/' + (st.kind === 'house' ? 'house' : 'next') + '">Open guest card' + ICON('chev', 's16') + '</a></section>';
   }
   // s97 SPEC-47b / s98 SPEC-47c: the face sits on the RIGHT of the guest header in an 88 px rounded square. Until the server has located the face (id_face_box, stored-frame 0-1)
@@ -248,10 +248,9 @@
       '<span class="E_lbl">' + esc(P.text) + '</span><span class="E_cnt">' + esc(P.short) + '</span></button>';
   }
   // Two fixed lines under the greeting (temperature and condition; rain chance or how old the reading is). The slot is always drawn, with the same height, so nothing jumps when the reading lands.
-  function H_wxStrip(p) {
-    var w = p && p.weather, c = w && w.current, ok = !!c && c.temp != null, rl = ok ? CS.rainLine(w) : null, ra = ok ? CS.rainAlert(p, A_notices()) : null, l2 = 'Open the forecast';
-    if (ok) { var old = w.fetched_at && CS.weatherStale(w), rh = ra ? (ra.src === 'watch' ? 'Rain likely ' + ra.window + (ra.pct != null ? ', up to ' + ra.pct + '%' : '') : 'Rain likely' + (rl ? ', ' + rl.head.replace(/^Rain\s*/, '') : '')) : (rl ? rl.head : ''); l2 = [rh ? rh + (rl && rl.rest && !old ? ' · ' + rl.rest : '') : '', old ? 'as of ' + CS.clockLabel(w.fetched_at) : ''].filter(Boolean).join(' · '); }
-    return '<a class="H_wxstrip' + (ra ? ' rain' : '') + '" href="#weather" aria-label="Weather, open the forecast"><span class="l1">' + ICON(ra ? 'alert' : ok ? CS.weatherIcon(c.description) : 'cloud', 's16') + '<span>' + esc(ok ? CS.H_weatherShort(c.temp, c.description, (window.innerWidth || 360) < 340) : 'Weather') + '</span></span><span class="l2">' + esc(l2 || 'Tap for the forecast') + '</span></a>';
+  function H_wxStrip(p) { // s105: one line, temperature and condition, always the condition glyph; rain, range, age and the one forecast link live in the Weather card
+    var c = p && p.weather && p.weather.current, ok = !!c && c.temp != null;
+    return '<div class="H_wxstrip"><span class="l1">' + ICON(ok ? CS.weatherIcon(c.description) : 'cloud', 's16') + '<span>' + esc(ok ? CS.H_weatherShort(c.temp, c.description, (window.innerWidth || 360) < 340) : 'Weather') + '</span></span></div>';
   }
   // The photo header: wordmark, the pill, refresh, greeting, date and weather (as of HH:MM when the weather is old). Drawn before the first answer too.
   function A_hero() {
@@ -260,18 +259,29 @@
       '<button class="A_chipglass" type="button" data-act="refresh" aria-label="Refresh">' + ICON('refresh', 's24') + '</button></div></div>' +
       '<div class="A_greet"><h1>' + esc(CS.greeting() + (nm ? ', ' + nm : '')) + '</h1><div class="cap">' + esc(CS.dayLong(p ? p.today : CS.manilaToday())) + '</div>' + H_wxStrip(p) + '</div></div>';
   }
-  // s96 SPEC-47: the rain row sits under the photo (text on a photo has unpredictable contrast). Only when rain is likely; the body opens with a grid-rows slide (styles.css, H_rain).
-  function H_wxAlert(p) {
-    var ra = CS.rainAlert(p, A_notices()); if (!ra) return '';
-    if (state.wxOpen === undefined) state.wxOpen = true; // known at load: drawn open, no motion; closing it is remembered across redraws
-    var open = !!state.wxOpen, rng = ra.hi != null && ra.lo != null ? 'High ' + ra.hi + '°, low ' + ra.lo + '°. ' : '';
-    return '<details class="H_wxalert' + (open ? ' on' : '') + '"' + (open ? ' open' : '') + '><summary data-act="wx-toggle">' + ICON('alert', 's16') + '<span class="H_wxt">Rain likely ' + esc(ra.window) + ' · bring towels in</span>' + ICON('chevdown', 's16') + '</summary>' +
-      '<div class="H_rain"><div><p>' + (ra.pct != null ? 'Peak chance ' + ra.pct + '%' + (ra.peakAt ? ' around ' + esc(ra.peakAt) : '') + '. ' : '') + rng + '</p><a class="btn btn-secondary btn-sm" href="#weather">Open the forecast</a></div></div></details>';
+  // s105: the Weather card on Today (replaces the amber rain banner under the hero). Reading from CS.wxCard (lib.js); no reading: the same plain fallback as the Notices card (H_wxCard).
+  // First card when rain is likely, else after the house and turnover cards. The hourly bars come from notices_v1 hours; no motion in them, so reduced-motion needs nothing more.
+  function H_wxToday() {
+    var wx = CS.wxCard(state.payload, A_notices()); if (!wx) return H_wxCard();
+    var peak = wx.hours.reduce(function (m, h) { return Math.max(m, h.pct); }, 0), desc = wx.desc || 'Weather';
+    var range = [wx.hi != null && wx.lo != null ? 'High ' + wx.hi + '°, low ' + wx.lo + '°' : '', wx.head].filter(Boolean).join(' · ');
+    var strip = wx.hours.length ? '<div class="W_hrs" role="img" aria-label="' + esc('Chance of rain by hour: ' + wx.hours.map(function (h) { return h.label + ' ' + h.pct + '%'; }).join(', ')) + '">' + wx.hours.map(function (h, i) {
+      return '<span class="W_h' + (h.pct === peak ? ' pk' : '') + '"><i style="height:' + Math.max(4, h.pct) + '%"></i><b>' + (i % 3 === 0 ? esc(A_nb(h.label)) : '') + '</b></span>'; }).join('') + '</div>' : '';
+    return '<details class="card glass A_card W_card' + (wx.rain ? ' W_rain' : '') + '"' + (state.wxOpen ? ' open' : '') + '><summary aria-label="Weather today"><span class="W_now">' + ICON(CS.weatherIcon(desc), 's24') + '<span class="W_temp num">' + wx.temp + '°</span><span class="W_cond">' + esc(desc) + '</span></span>' + (wx.rain ? pill('warn', 'rain', 'Rain likely') : '') + ICON('chevdown', 's16') + '</summary>' +
+      '<div class="W_body">' + (range ? '<p class="sub num">' + esc(range) + '</p>' : '') +
+      (wx.rain ? '<p class="sub W_win">Rain likely ' + esc(wx.window) + (wx.pct != null ? '. Peak chance ' + wx.pct + '%' + (wx.peakAt ? ' around ' + esc(wx.peakAt) : '') : '') + '.</p>' : '') + strip +
+      (wx.action ? '<p class="W_act">' + ICON('check', 's16') + '<span>' + esc(wx.action) + '</span></p>' : '') + (wx.asOf ? '<p class="help">as of ' + esc(wx.asOf) + '</p>' : '') +
+      '<a class="btn btn-ghost btn-sm" href="#weather">Open the forecast</a></div></details>';
   }
-  function H_wxToggle(d) {
-    if (!d) return; var on = !d.classList.contains('on'); state.wxOpen = on;
-    if (on) { d.open = true; void d.offsetHeight; d.classList.add('on'); } // rendered at 0fr first, then slides to 1fr
-    else { d.classList.remove('on'); if (E_reduced()) d.open = false; else setTimeout(function () { if (!d.classList.contains('on')) d.open = false; }, 240); }
+  // s105: "Good to know" under the stay line of the Today card: the important notes and requests (CS.goodToKnow), the phone as a tap-to-call link (owner and admin only, like the guest card), the guest count when known, and the ID state.
+  function A_goodToKnow(g, kind) {
+    var gk = CS.goodToKnow(g, CS.canSeeGuestContact(role())), href = '#calendar/' + (kind === 'house' ? 'house' : 'next'), facts = [];
+    if (gk.tel) facts.push('<a class="T_call num" href="' + esc(gk.tel) + '" aria-label="' + esc('Call ' + gk.phone) + '">Call ' + esc(gk.phone) + '</a>');
+    if (gk.guests) facts.push('<span class="T_fact">' + ICON('users', 's16') + esc(CS.plural(gk.guests, 'guest')) + '</span>');
+    facts.push(gk.id ? pill('ok', 'idcard', 'ID on file') : pill('warn', 'alert', 'No ID yet'));
+    return '<div class="T_gtk" role="group" aria-label="Good to know"><span class="cap up">Good to know</span>' + gk.notes.map(function (n) {
+      return '<div class="T_key note-key">' + ICON('alert', 's16') + '<span class="T_nt"><b>' + (n.rank === 0 ? 'Important:' : 'Request:') + '</b> ' + esc(n.p) + '</span></div>'; }).join('') +
+      (gk.notes.length && gk.more > 0 ? '<a class="T_more" href="' + href + '">+' + gk.more + ' more ' + (gk.more === 1 ? 'note' : 'notes') + '</a>' : '') + '<div class="T_facts">' + facts.join('') + '</div></div>';
   }
   // The hero (photo, wordmark, pill, greeting) is built once; a redraw patches only the greeting and the buttons, so the photo is not decoded again and focus stays put.
   function A_heroPut(el, rest) {
@@ -319,12 +329,12 @@
     }
     var win = clock.phase === 'window', closed = clock.phase === 'after';
     if (!staff) { // F4: the verdict. Three check rows with a glyph and a word; a row whose data is absent is not drawn.
-      var rows = '', cl = CS.H_cleanLine(state.progress, clock), hl = CS.H_houseLine(A_notices(), p.today), raw = inToday ? H_readyRaw(ds.stay) : null, rd = CS.H_ready(raw, role());
+      var rows = '', cl = CS.H_cleanLine(state.progress, clock), hl = CS.H_houseLine(A_notices(), p.today), raw = inToday ? H_readyRaw(ds.stay) : null, tg = CS.todayCardState(p, p.today).guest, noId = !!(inToday && tg && ds.stay && tg.checkin_date === p.today && tg.guest_name === ds.stay.guest_name), rd = CS.H_ready(raw, role(), noId), rdFull = noId ? CS.H_ready(raw, role()) : rd; // s105: Good to know on the Today card owns the ID state
       if (cl) rows += H_check(cl.tone, 'Clean', cl.text);
       if (rd) rows += H_check(CS.H_readyOk(rd) ? 'ok' : 'warn', 'Arrival', CS.H_readyLine(rd));
       if (hl) rows += H_check(hl.tone, 'House', hl.text);
       return '<section class="card glass A_card" aria-label="Turnover today"><div class="row-between"><span class="cap up">Turnover today</span></div><p class="strong H_tline" style="margin:0">' + esc('Today · out ' + T.outLabel + ' · in ' + T.inLabel) + '</p>' +
-        (rows ? '<div class="H_checks">' + rows + '</div>' : '') + (rd && !CS.H_readyOk(rd) ? H_readyBlock(raw, ds.stay, true) : '') + A_primary(false, true) + '</section>';
+        (rows ? '<div class="H_checks">' + rows + '</div>' : '') + ((rd && !CS.H_readyOk(rd)) || (noId && rdFull && rdFull.id === false) ? H_readyBlock(raw, ds.stay, true, noId) : '') + A_primary(false, true) + '</section>';
     }
     var steps = '<div class="A_steps">' +
       '<div><span class="dot">' + ICON('logout', 's16') + '</span><span>Guest out</span><b>' + esc(outToday ? T.outLabel : 'None today') + '</b></div>' +
@@ -487,11 +497,11 @@
   function renderHome() {
     var el = $('v-home');
     if (!state.payload) { A_heroPut(el, '<div class="screen" style="min-height:0;padding-top:0"><div class="A_body">' + (state.error ? errBanner() : loadingBlock()) + '</div></div>'); return; }
-    var staff = state.layout === 'staff', n = warnCount(), v = A_notices();
+    var staff = state.layout === 'staff', n = warnCount(), v = A_notices(), wxTop = !!(CS.wxCard(state.payload, v) || {}).soon, wxCard = H_wxToday();
     var body;
     if (staff) {
       // Today, Turnover, the paid notice (under Turnover: Turnover and Slide to start never move when it lands), Notices, then the doors
-      body = '<div class="A_body">' + errBanner() + todayCard() + A_turnoverCard(true) + H_cleanDoneCard() + '<div id="slot-paid-notice" class="A_slot" hidden></div><div id="slot-owed" class="A_slot" hidden></div>' + H_alertsCard() + A_noticesCard() +
+      body = '<div class="A_body">' + errBanner() + (wxTop ? wxCard : '') + todayCard() + A_turnoverCard(true) + (wxTop ? '' : wxCard) + H_cleanDoneCard() + '<div id="slot-paid-notice" class="A_slot" hidden></div><div id="slot-owed" class="A_slot" hidden></div>' + H_alertsCard() + A_noticesCard() +
         A_navCard('Work', row({ icon: 'cloud', title: 'Weather', sub: 'Today and the next few hours', href: '#weather' }) + doorRow('checklist', 'clip', 'Start or continue today’s turnover') +
           (LINKS.pay ? row({ icon: 'cash', title: 'Cleaning fee', sub: state.payHint || 'Ask for payment for your cleans and expenses', href: H_payUrl(), subId: 'pay-sub' }) : '') +
           row({ icon: 'calendar', title: 'Calendar', sub: 'Who is staying, who is next', href: '#calendar', count: n || '' }) +
@@ -506,7 +516,7 @@
       // 3.2: the row opens the shell's own #inbox (which falls back to the dashboard's conversations page when the module is not shipped)
       var inboxShown = CS.canSeeGuestContact(role()) && !state.noticesAbsent && (v ? inbox != null : state.noticesLoading);
       var BD = B_build(); // the board sits above the Turnover card while something blocks an arrival or a guest is waiting; otherwise under it
-      body = '<div class="A_body">' + errBanner() + todayCard() + (BD.top ? BD.html : '') + A_turnoverCard(false) + H_cleanDoneCard() + H_alertsCard() + (BD.top ? '' : BD.html) +
+      body = '<div class="A_body">' + errBanner() + (wxTop ? wxCard : '') + todayCard() + (BD.top ? BD.html : '') + A_turnoverCard(false) + (wxTop ? '' : wxCard) + H_cleanDoneCard() + H_alertsCard() + (BD.top ? '' : BD.html) +
         A_navCard('Guests and bookings', (bk ? row({ icon: 'clip', title: 'Bookings to confirm', sub: 'Open the pending bookings', href: bk.href, external: bk.external, count: bk.count, countLabel: bk.n === 1 ? ' booking to confirm' : ' bookings to confirm' }) : '') +
           row({ icon: 'calendar', title: 'Calendar', sub: 'Stays, blocked nights, notices', href: '#calendar', count: n || '' }) +
           '<div id="slot-inbox"' + (inboxShown ? '' : ' hidden') + (inboxShown && !v ? ' style="min-height:64px"' : '') + '>' + (inboxShown && v ? row({ icon: 'chat', title: 'Inbox', sub: inbox ? inbox + ' open' : 'No open messages', href: '#inbox', count: inbox || '', countLabel: ' open messages' }) : '') + '</div>' +
@@ -522,7 +532,7 @@
     var keep = el.querySelector && el.querySelector('#slot-paid-notice'); if (keep && keep.parentNode) keep.parentNode.removeChild(keep);
     var keepOwed = el.querySelector && el.querySelector('#slot-owed'); if (keepOwed && keepOwed.parentNode) keepOwed.parentNode.removeChild(keepOwed);
     var keepSel = B_focusSel();
-    A_heroPut(el, H_wxAlert(state.payload) + '<div class="screen" style="min-height:0;padding-top:0">' + body + '</div>');
+    A_heroPut(el, '<div class="screen" style="min-height:0;padding-top:0">' + body + '</div>');
     B_refocus(keepSel); A_loadFaces(el);
     if (keep) { var fresh = el.querySelector('#slot-paid-notice'); if (fresh && fresh.parentNode) fresh.parentNode.replaceChild(keep, fresh); }
     if (keepOwed) { var freshOwed = el.querySelector('#slot-owed'); if (freshOwed && freshOwed.parentNode) freshOwed.parentNode.replaceChild(keepOwed, freshOwed); }
@@ -873,16 +883,16 @@
     return '<nav class="A_tabs card glass" aria-label="View">' + t.map(function (x) { return '<a href="' + x[1] + '" data-act="cal-tab" data-tab="' + x[0] + '"' + (x[0] === cur ? ' aria-current="page"' : '') + '>' + x[2] + '</a>'; }).join('') + '</nav>';
   }
   // MF2: three chips (glyph and word, never colour alone) and, where something is missing, one 44 px action beside it. Owner and admin only, and only when the server sent the field.
-  function H_readyBlock(raw, g, actions) {
+  function H_readyBlock(raw, g, actions, noId) {
     var r = CS.H_ready(raw, role()); if (!r) return '';
-    var chips = CS.H_readyChips(r).map(function (c) { return pill(c.ok ? 'ok' : 'warn', c.ok ? 'check' : 'clock', c.word); }).join(''), acts = '';
+    var chips = CS.H_readyChips(r).filter(function (c) { return !(noId && c.key === 'id'); }).map(function (c) { return pill(c.ok ? 'ok' : 'warn', c.ok ? 'check' : 'clock', c.word); }).join(''), acts = '';
     if (actions) {
       var bk = r.paid === false ? A_hubLink('bookings') : null;
       if (bk) acts += bk.external ? ext(bk.href, 'Open booking' + ICON('ext', 's16'), 'btn btn-ghost btn-sm') : '<a class="btn btn-ghost btn-sm" href="' + esc(bk.href) + '">Open booking</a>';
       if (r.id === false && g && g.uid && canAddDetails()) acts += '<a class="btn btn-ghost btn-sm" href="./guest/?for=id#' + encodeURIComponent(g.uid) + '">Add ID photo</a>';
       if (r.door_code === false) acts += tgA(LINKS.tgOps, ICON('chat', 's16') + 'Set the door code in Cassy', 'btn btn-ghost btn-sm');
     }
-    return '<div class="H_ready" role="group" aria-label="Arrival checklist"><div class="row-wrap">' + chips + '</div>' + (acts ? '<div class="row-wrap">' + acts + '</div>' : '') + '</div>';
+    return '<div class="H_ready" role="group" aria-label="Arrival checklist">' + (chips ? '<div class="row-wrap">' + chips + '</div>' : '') + (acts ? '<div class="row-wrap">' + acts + '</div>' : '') + '</div>';
   }
   function H_readyRaw(st) { // the merged stay, or one of the rows behind it, may carry arrival_ready
     if (!st) return null; if (st.arrival_ready) return st.arrival_ready;
@@ -2201,7 +2211,7 @@
     location.hash = '#home'; route();
   });
   // The rain row can also be opened without a click (find in page, assistive tech): keep the slide class and the remembered state in step with details.open.
-  document.addEventListener('toggle', function (ev) { var d = ev.target; if (d && d.classList && d.classList.contains('H_wxalert')) { state.wxOpen = !!d.open; d.classList.toggle('on', !!d.open); } }, true);
+  document.addEventListener('toggle', function (ev) { var d = ev.target; if (d && d.classList && d.classList.contains('W_card')) state.wxOpen = !!d.open; }, true); // s105: the Weather card stays open or shut across redraws; shut by default
   document.addEventListener('click', function (ev) {
     var t = ev.target.closest('[data-act],[data-theme],[data-day],[data-warn],[data-nfilter],[data-tfilter]'); if (!t) return;
     var a = t.getAttribute('data-act');
@@ -2253,7 +2263,6 @@
     else if (a === 'tour-next') { var TS = state.sheet; if (TS && TS.kind === 'tour') { if ((TS.step || 0) >= H_TOUR.length - 1) closeSheet(); else { TS.step = (TS.step || 0) + 1; drawSheet(); } } }
     else if (a === 'tour-skip') closeSheet();
     else if (a === 'id-full') { var im = t.querySelector && t.querySelector('img'), ip = t.getAttribute && t.getAttribute('data-idpath'); if (CS.canSeeGuestContact(role())) { if (im) H_idFull(im.src); else if (ip) A_idOpen(ip); } }
-    else if (a === 'wx-toggle') { ev.preventDefault(); H_wxToggle(t.closest('details')); }
     else if (a === 'id-rot') H_idRotate();
     else if (a === 'id-full-close') H_idClose();
     else if (a === 'attn-ack') H_attnAck(t.getAttribute('data-warn'));

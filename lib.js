@@ -625,13 +625,43 @@
   function weatherIcon(desc) { var d = String(desc || ''); return /rain|shower|drizzle|storm|thunder/i.test(d) ? 'rain' : /clear|sunny|fair/i.test(d) ? 'sun' : 'cloud'; }
   // s96 SPEC-47: rain is likely when the rain-watch notice is up, or the chance today is 60 percent or more on a reading under an hour old. Null otherwise.
   // view = the notices view (weather.watch, weather.hours); returns the window text, the peak hour and the day's range for the alert row.
-  function rainAlert(payload, view) {
+  function rainAlert(payload, view, now) {
     var w = payload && payload.weather, c = w && w.current, nw = view && view.weather, watch = nw && nw.watch ? nw.watch : null;
     var prob = c && c.rain_prob != null && c.rain_prob !== '' ? +c.rain_prob : null;
-    if (!watch && !(prob != null && prob >= 60 && !weatherStale(w))) return null;
+    if (!watch && !(prob != null && prob >= 60 && !weatherStale(w, now))) return null;
     var peak = null; ((nw && nw.hours) || []).forEach(function (h) { if (h && h.pct > 0 && (!peak || h.pct > peak.pct)) peak = h; });
     return { src: watch ? 'watch' : 'chance', window: watch ? String(watch.text || '').replace(/^Rain watch,?\s*/i, '') || 'today' : 'today', pct: watch && watch.peak != null ? watch.peak : (peak ? peak.pct : prob), peakAt: peak ? peak.label : '',
       hi: c && c.today_high != null ? Math.round(+c.today_high) : null, lo: c && c.today_low != null ? Math.round(+c.today_low) : null };
+  }
+  // s105: the Weather card on Today. Same inputs as rainAlert (payload.weather.current, notices view hours/watch), nothing new from the server. Null when there is no reading.
+  // action: when the rain starts, from the watch window ("2 to 5 pm" gives "2 pm") or else the first hour at 50 percent or more; asOf only when the reading is old.
+  function wxCard(payload, view, now) {
+    var w = payload && payload.weather, c = w && w.current; if (!c || c.temp == null) return null;
+    var ra = rainAlert(payload, view, now), rl = rainLine(w), nw = view && view.weather, old = !!(w.fetched_at && weatherStale(w, now));
+    var hours = ((nw && nw.hours) || []).slice(0, 12).filter(function (h) { return h && h.label; }).map(function (h) { return { label: String(h.label), pct: Math.max(0, Math.min(100, +h.pct || 0)) }; });
+    var when = null;
+    if (ra) {
+      var m = /(\d{1,2}(?::\d{2})?)(?:\s*(am|pm))?/i.exec(ra.window), sfx = m && (m[2] || (/\b(am|pm)\b/i.exec(ra.window) || [])[1]);
+      if (m && sfx) when = m[1] + ' ' + sfx.toLowerCase();
+      else { var f = hours.filter(function (h) { return h.pct >= 50; })[0]; if (f) when = f.label; }
+    }
+    // soon: rain starts within 3 hours, or already has; no readable start time counts as soon. shortcut: a window that ended earlier today still reads as soon until the watch clears.
+    var soon = !!ra, wm = when && /^(\d{1,2})(?::(\d{2}))?\s*(am|pm)$/i.exec(when);
+    if (ra && wm) { var np = manilaParts(now instanceof Date ? now : new Date(now == null ? Date.now() : now)); soon = ((+wm[1] % 12) + (/pm/i.test(wm[3]) ? 12 : 0)) * 60 + (+wm[2] || 0) - (np.h * 60 + np.min) <= 180; }
+    return { temp: Math.round(+c.temp), desc: c.description ? String(c.description) : '', hi: ra ? ra.hi : (c.today_high != null ? Math.round(+c.today_high) : null), lo: ra ? ra.lo : (c.today_low != null ? Math.round(+c.today_low) : null),
+      rain: !!ra, soon: soon, window: ra ? ra.window : '', pct: ra ? ra.pct : null, peakAt: ra ? ra.peakAt : '', head: rl ? rl.head : '', hours: hours.some(function (h) { return h.pct > 0; }) ? hours : [],
+      action: ra ? 'Bring towels and mats in before ' + (when || 'the rain') : '', asOf: old ? clockLabel(w.fetched_at) : '' };
+  }
+  // s105: the "Good to know" block of the Today card. Notes: every unique important (rank 0) and request (rank 1) point, strongest first, 3 shown, 90 characters each;
+  // `more` counts every other unique note. Phone and the companion count only when canContact (owner/admin); guests from a count the server sends, else 1 + companions. id: the photo path exists.
+  function goodToKnow(g, canContact) {
+    var key = [], seen = {}, total = 0, cut = function (t) { return t.length > 90 ? t.slice(0, 89).replace(/\s+\S*$/, '') + '…' : t; };
+    parseNotes(g && g.notes).forEach(function (gr) { gr.points.forEach(function (x) { var k = x.p.toLowerCase(); if (seen[k]) return; seen[k] = 1; total++; if (x.rank <= 1) key.push(x); }); });
+    key = key.map(function (x, i) { return { x: x, i: i }; }).sort(function (a, b) { return a.x.rank - b.x.rank || a.i - b.i; }).map(function (o) { return { p: cut(o.x.p), rank: o.x.rank }; });
+    var c = canContact ? guestContact(g) : null, n = null;
+    ['guest_count', 'num_guests', 'guests'].forEach(function (k) { if (n === null && g && typeof g[k] === 'number' && g[k] > 0) n = Math.round(g[k]); });
+    if (n === null && canContact && g && Array.isArray(g.companions) && g.companions.length) n = 1 + g.companions.length;
+    return { notes: key.slice(0, 3), more: total - Math.min(3, key.length), phone: c && c.phone && c.tel ? c.phone : null, tel: c && c.phone && c.tel ? c.tel : null, guests: n, id: !!(g && g.id_photo_path) };
   }
   // 60 minutes: the same age at which notices_v1 stops sending its weather (SQL: c_at > now() - interval '60 minutes'). Never higher than the server rule.
   var WEATHER_STALE_MIN = 60;
@@ -1245,7 +1275,11 @@
     return out.sort(function (a, b) { return a.day < b.day ? -1 : a.day > b.day ? 1 : String(a.st.guest_name || '') < String(b.st.guest_name || '') ? -1 : 1; });
   }
   // MF2: three booleans per stay, owner and admin only, and only when the server sent the field. Anything else is "no row".
-  function H_ready(raw, role) {
+  function H_ready(raw, role, noId) { // noId (s105): the Today card already owns the ID state; the chips and the line leave it out
+    var r0 = H_ready0(raw, role); if (!r0 || !noId) return r0;
+    r0.id = null; return r0.paid === null && r0.door_code === null ? null : r0;
+  }
+  function H_ready0(raw, role) {
     if (!canSeeGuestContact(role) || !raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
     // each of the three is true, false or null; null is "not known yet" and draws nothing at all (never as missing)
     var r = {}; ['id', 'paid', 'door_code'].forEach(function (k) { r[k] = typeof raw[k] === 'boolean' ? raw[k] : null; });
@@ -1450,7 +1484,7 @@
     fmtTime: fmtTime, fmt24: fmt24, ordinal: ordinal, plural: plural, agoLabel: agoLabel, clockLabel: clockLabel,
     monthGrid: monthGrid, dayState: dayState, dayStatus: dayStatus, mergeStays: mergeStays, sameGuest: sameGuest, dayMoves: dayMoves, blockWhy: blockWhy, flagName: flagName, FLAG_KINDS: FLAG_KINDS, blockedLines: blockedLines, blockedLineText: blockedLineText,
     canFlagDays: canFlagDays, guestContact: guestContact, canSeeGuestContact: canSeeGuestContact, MESSENGER_INBOX: MESSENGER_INBOX, rpcMissing: rpcMissing, tgLink: tgLink, warningInfo: warningInfo, findingKey: findingKey, initialOf: initialOf, sourceLabel: sourceLabel, stayDates: stayDates, monthInRange: monthInRange,
-    faceFrame: faceFrame, parseNotes: parseNotes, returningLabel: returningLabel, tierLabel: tierLabel, tierLine: tierLine, tierParts: tierParts, keyNote: keyNote, TOPIC_LABELS: TOPIC_LABELS, notableLine: notableLine, weatherIcon: weatherIcon, rainAlert: rainAlert, earlierLine: earlierLine, companionsLine: companionsLine, todayCardState: todayCardState,
+    faceFrame: faceFrame, parseNotes: parseNotes, returningLabel: returningLabel, tierLabel: tierLabel, tierLine: tierLine, tierParts: tierParts, keyNote: keyNote, TOPIC_LABELS: TOPIC_LABELS, notableLine: notableLine, weatherIcon: weatherIcon, rainAlert: rainAlert, wxCard: wxCard, goodToKnow: goodToKnow, earlierLine: earlierLine, companionsLine: companionsLine, todayCardState: todayCardState,
     orderWarnings: orderWarnings, brownoutText: brownoutText, lowStockText: lowStockText, warningSummary: warningSummary,
     weatherLine: weatherLine, rainLine: rainLine, weatherStale: weatherStale, WEATHER_STALE_MIN: WEATHER_STALE_MIN, esc: esc,
     A_HOUSE_FALLBACK: A_HOUSE_FALLBACK, A_houseTimes: A_houseTimes, A_turnoverClock: A_turnoverClock, A_turnoverLine: A_turnoverLine, A_hm: A_hm, A_NOTICE_TYPES: A_NOTICE_TYPES, A_noticesView: A_noticesView, A_noticeFilters: A_noticeFilters, A_dayMarks: A_dayMarks, A_noticeDay: A_noticeDay, A_guestMessage: A_guestMessage, A_CAL_TABS: A_CAL_TABS, A_calTab: A_calTab, A_stayShade: A_stayShade, A_hubGroups: A_hubGroups, A_hubNative: A_hubNative, A_hubRoutes: A_hubRoutes, A_hubRouteOk: A_hubRouteOk, A_hubDoorUrl: A_hubDoorUrl, A_whatsNew: A_whatsNew, A_shortTime: A_shortTime, A_PINNED: A_PINNED, A_noticeAddError: A_noticeAddError, A_NOTICE_HINT: A_NOTICE_HINT, A_flagDup: A_flagDup, A_facebookUrl: A_facebookUrl, A_fbPluginUrl: A_fbPluginUrl, A_noticeAddProblem: A_noticeAddProblem, A_noticeAddArgs: A_noticeAddArgs, A_plainRefusal: A_plainRefusal, A_hour12: A_hour12, A_timeRange: A_timeRange,
