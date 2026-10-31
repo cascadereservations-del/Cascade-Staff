@@ -41,7 +41,9 @@ test('I_guard css uses tokens only: no hex colour and no px font size under 13',
 });
 
 test('I_guard the script reads no localStorage and holds no secret-looking value', () => {
-  assert.doesNotMatch(js, /sessionStorage|indexedDB/);
+  assert.doesNotMatch(js, /indexedDB/);
+  for (const line of js.split(/\r?\n/).filter((l) => /sessionStorage/.test(l))) assert.match(line, /function ss(Get|Set)/, 'sessionStorage is read only in ssGet and ssSet: ' + line.trim().slice(0, 60)); // s107
+  for (const m of js.matchAll(/ss(?:Get|Set)\('([^']+)'/g)) assert.match(m[1], /^cs_I_(view|cart)$/, 'only the view and the in-cart ticks are kept for the visit');
   for (const line of js.split(/\r?\n/).filter((l) => /localStorage/.test(l))) assert.match(line, /cs_I_recent|I_pu_v1|puLoad|puSave/, 'localStorage is only for the recent-items key and the photo link cache: ' + line.trim().slice(0, 60));
   assert.doesNotMatch(js, /payout_qrph|service_role|eyJ[A-Za-z0-9_-]{20,}/);
 });

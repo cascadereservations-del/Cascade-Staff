@@ -98,7 +98,7 @@ test('I_count-walk Stop here goes to the summary with the rest unchanged', async
 
 test('I_count-walk the Needs a count chip lists consumables never counted or older than 30 days (frozen clock)', async () => {
   const e = await make(); await e.mount('');
-  assert.match(e.html(), /Needs a count/); assert.match(e.html(), /2 need a count/);
+  assert.match(e.html(), /To count/); assert.match(e.html(), /2 to count/);
   await e.act('chip', { 'data-k': 'need' });
   const h = e.html().slice(e.html().indexOf('I_list'));
   assert.match(h, /Hand soap/); assert.match(h, /Toilet paper/);

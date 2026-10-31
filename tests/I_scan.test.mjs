@@ -48,7 +48,7 @@ test('I_scan after a scan the right action comes first: owner Count it, finance 
   // a plain tap on a row is not a scan: the owner keeps Count it, finance keeps its order (price is not primary)
   const f = await make('finance');
   await f.mount(''); await f.open('i1');
-  assert.doesNotMatch(f.sheet(), /btn-primary btn-block" type="button" data-act="begin" data-kind="price"/);
+  assert.match(f.sheet(), /btn-primary btn-block" type="button" data-act="begin" data-kind="price"/); // s107 B6: price is finance's one primary on a plain open too
 });
 
 test('I_scan a cleaner can scan to read the card; a scan alone writes no count (the scanned card leads with Running low)', async () => {

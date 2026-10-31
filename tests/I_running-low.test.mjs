@@ -12,12 +12,15 @@ const raw = () => ({ items: [
 const make = (role, o = {}) => setup({ role, client: mockClient({ catalogue: raw(), shop: o.shop, rpc: { save_shopping_item_v1: () => ({ data: { ok: true, id: 'shop-9' }, error: null }), ...(o.rpc || {}) } }) });
 const kinds = (s) => [...s.matchAll(/data-kind="(\w+)"/g)].map((m) => m[1]);
 
-test('I_running-low it is the first button on the card for every role', async () => {
-  for (const role of ['cleaner', 'owner', 'admin', 'finance']) {
+test('I_running-low it is in the action bar of the card for every role: first for owner and admin (Add to list), beside Record use for the cleaner', async () => {
+  for (const role of ['owner', 'admin']) {
     const e = await make(role); await e.mount(''); await e.open('i1');
-    assert.equal(kinds(e.sheet())[0], 'low', role);
-    assert.match(e.sheet(), />Running low</);
+    assert.equal(kinds(e.sheet())[0], 'low', role); assert.match(e.sheet(), />Add to list</, role);
   }
+  const c = await make('cleaner'); await c.mount(''); await c.open('i1');
+  assert.deepEqual(kinds(c.sheet()).slice(0, 2), ['used', 'low']); assert.match(c.sheet(), />Running low</);
+  const f = await make('finance'); await f.mount(''); await f.open('i1');
+  assert.ok(kinds(f.sheet()).slice(0, 3).includes('low')); assert.match(f.sheet(), />Running low</);
 });
 
 test('I_running-low one confirm, then save_shopping_item_v1 with the packs to par and the reason', async () => {
@@ -46,7 +49,8 @@ test('I_running-low the default quantity: 2 x reorder level when there is no par
 test('I_running-low already on the list: a disabled "On the shopping list" and no way to send it twice', async () => {
   const shop = [{ id: 's1', item_id: 'i1', item_name: 'Toilet paper', quantity: 2, purchase_unit: 'pack', reason: null, status: 'proposed', proposed_by: 'x', proposed_at: '2026-10-12T02:00:00Z' }];
   const e = await make('cleaner', { shop }); await e.mount(''); await e.open('i1');
-  assert.match(e.sheet(), /disabled><svg[^>]*>.*?<\/svg> On the shopping list/);
+  assert.match(e.sheet(), /<p class="I_onlist"><svg[^>]*>.*?<\/svg> On the list, 2 packs<\/p>/); // s107 B6: one status line, no add button
+  assert.doesNotMatch(e.sheet(), /On the shopping list|Add to shopping list/);
   assert.ok(!kinds(e.sheet()).includes('low'));
   await e.begin('low'); // a hand-made click does nothing
   assert.doesNotMatch(e.sheet(), /Tell the owner/);

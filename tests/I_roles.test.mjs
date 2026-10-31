@@ -57,7 +57,8 @@ test('I_roles finance: the unit cost shows on the item sheet only, never in the 
   assert.match(e.sheet(), /Unit cost/); assert.match(e.sheet(), /₱7,391\.55/);
   await e.act('close');
   await e.act('tab', { 'data-to': 'shopping' });
-  assert.doesNotMatch(e.html(), COST_WORDS);
+  assert.doesNotMatch(e.html(), /7391|8888|unitCost|unit_cost|estimated_cost|Unit cost|Secret Supplier/i); // s107 B10: finance may see a shop subtotal, never a unit cost
+  assert.match(e.html(), /₱/);
   assert.doesNotMatch(JSON.stringify(e.lib.normalizeShop(SHOP, 'me-1')), /8888|Secret/);
 });
 for (const role of Object.keys(MATRIX)) {

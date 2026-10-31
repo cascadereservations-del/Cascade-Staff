@@ -15,9 +15,9 @@ const GLYPHS = /[✕▲✓○▥↶−✗✔]/;
 test('I_b2 unit plurals: 1 roll, 2 rolls, 1 bottle, 2 bottles on the list, the card and every confirm', async () => {
   const e = await make('owner');
   await e.mount('');
-  assert.match(e.html(), /1 roll[^s]/); assert.doesNotMatch(e.html(), /1 rolls/);
-  assert.match(e.html(), /2 bottles/); assert.doesNotMatch(e.html(), /2 bottle(?!s)/);
-  assert.match(e.html(), /0 pieces/); // zero is plural
+  assert.match(e.html(), /1 of 12 rolls/); assert.doesNotMatch(e.html(), /1 rolls/); // s107 B5: a low row reads 'Low · 1 of 12 rolls'
+  assert.match(e.html(), /2 of 3 bottles/); assert.doesNotMatch(e.html(), /2 bottle(?!s)/);
+  assert.match(e.html(), /0 of 10 pieces/); // zero is plural
   await e.open('i1');
   assert.match(e.sheet(), /1 roll[^s]/); assert.doesNotMatch(e.sheet(), /1 rolls/);
   await e.begin('recv'); await e.submit();
@@ -58,11 +58,12 @@ test('I_b2 filter chips are one nowrap scroll row with an edge fade; Scan is a c
   const e = await make('owner');
   await e.mount('');
   assert.match(e.html(), /class="I_chips" role="group"/); assert.doesNotMatch(e.html(), /row-wrap I_chips/);
-  assert.match(e.html(), /class="chip I_scanbtn"[^>]*data-act="scan"><svg/);
+  assert.match(e.html(), /class="chip I_scanbtn"[^>]*data-act="scan" aria-label="Scan a barcode"><svg/); // s107 B4: an icon button with a name
   const c = rule('.I_chips');
   assert.match(c, /flex-wrap: nowrap/); assert.match(c, /overflow-x: auto/); assert.match(c, /mask-image: linear-gradient/);
   assert.match(rule('.I_chips .chip'), /flex: none/);
-  assert.match(rule('.I_sum'), /display: grid/); assert.match(rule('.I_sum'), /grid-template-columns: 40px/);
+  assert.match(rule('.I_pills'), /flex-wrap: nowrap/); assert.match(rule('.I_pills'), /overflow-x: auto/); // s107 B3: the summary card is a pill row
+  assert.match(rule('.I_find'), /position: sticky/); assert.match(rule('.I_find'), /background: var\(--bg\)/); // B4
 });
 
 test('I_b2 segmented control: selected = surface + shadow, unselected = plain', () => {
@@ -92,10 +93,11 @@ test('I_b2 each row carries one quick action by role: owner adds low items to th
   assert.equal(qaOf(o.html(), 'i1'), 'count'); // low but already on the shopping list: Count
   assert.match(o.html(), /Add to list/);
   const c = await make('cleaner'); await c.mount('');
-  assert.equal(qaOf(c.html(), 'i1'), 'used'); assert.equal(qaOf(c.html(), 'i3'), 'used');
+  assert.equal(qaOf(c.html(), 'i1'), 'used'); // low but already on the list: Use
+  assert.equal(qaOf(c.html(), 'i3'), 'low'); assert.match(c.html(), /Running low, Bath towels/); // s107 B8: out and not listed: Running low
   const f = await make('finance'); await f.mount('');
   assert.doesNotMatch(f.html(), /data-kind="count"|data-kind="used"/); // finance neither counts nor records use
-  assert.match(o.html(), /<button class="rowi I_row" type="button" data-act="open" data-id="i1"/); // the open hook is unchanged
+  assert.match(o.html(), /<button class="rowi I_row I_irow" type="button" data-act="open" data-id="i1"/); // the open hook is unchanged
 });
 
 test('I_b2 the quick action opens the card straight on the form with the current amount filled in; nothing is sent until confirmed', async () => {
@@ -113,7 +115,7 @@ test('I_b2 the quick action opens the card straight on the form with the current
 
 test('I_b2 rows say what needs action and the summary says it in plain words', async () => {
   const o = await make('owner'); await o.mount('');
-  assert.match(o.html(), /I_tag I_tagl">On the list/);
-  assert.match(o.html(), /3 low/); assert.match(o.html(), /1 out · 2 on the shopping list/);
+  assert.match(o.html(), /I_tg I_tagl"><svg[^>]*>.*?<\/svg><span class="sr">On the list/);
+  assert.match(o.html(), /<svg[^>]*>.*?<\/svg> 3 low<\/button>/); assert.match(o.html(), /<svg[^>]*>.*?<\/svg> 1 out<\/button>/); assert.match(o.html(), /<svg[^>]*>.*?<\/svg> 2 on list<\/button>/); // s107 B3: glyph, number and word
   assert.doesNotMatch(o.html(), /\d items low/);
 });

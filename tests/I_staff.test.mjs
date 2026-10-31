@@ -45,7 +45,7 @@ test('I_staff Undo of a use sends inventory_undo_v1 with the movement and asks f
 test('I_staff the cleaner sees Count it and it sends reconcile_inventory_baseline_v1; Count a group and Needs a count show for her too', async () => {
   const e = await make('cleaner');
   await e.mount('');
-  assert.match(e.html(), /Count this group/); assert.match(e.html(), /need a count/);
+  assert.match(e.html(), /Count this group/); assert.match(e.html(), /to count/);
   await e.open('i1');
   assert.match(e.sheet(), /data-kind="count"/);
   await e.begin('count'); await e.input('I_f_qty', '9'); await e.submit();

@@ -139,9 +139,9 @@ test('I_photo only the paths not yet cached are asked for again; a missing objec
   const s = signs(e); assert.equal(s.length, 1); assert.deepEqual(s[0][2].paths, [P2]);
 });
 
-test('I_photo the card shows the photo with the item name as alt; on a scan result it comes first', async () => {
+test('I_photo the card shows the photo with the item name as alt; on a scan result it is inline too', async () => {
   const e = await make(); await e.mount(''); await e.open('i1');
-  assert.match(e.sheet(), new RegExp('<div class="I_photo"><img src="' + URL1.replace(/[?.]/g, '\\$&') + '" alt="Toilet paper" loading="lazy"'));
+  assert.match(e.sheet(), new RegExp('<div class="I_photo I_ph96"><img src="' + URL1.replace(/[?.]/g, '\\$&') + '" alt="Toilet paper" loading="lazy"'));
   assert.ok(e.sheet().indexOf('I_photo') > e.sheet().indexOf('id="I_sh_t"')); // after the title on a plain open
   const s = await make(); await s.mount('');
   s.win.I_Stock.lib; // scan flow: the right product first
@@ -152,7 +152,7 @@ test('I_photo the card shows the photo with the item name as alt; on a scan resu
   const cat = raw(); cat.items[0].codes = ['4800000000011'];
   const sc = await setup({ role: 'cleaner', doc: {}, client: mockClient({ catalogue: cat, fn: { 'upload-photo': upload } }) });
   await sc.mount(''); await sc.act('scan'); await sc.input('I_f_code', '4800000000011'); await sc.submit();
-  assert.ok(sc.sheet().indexOf('I_photo') < sc.sheet().indexOf('id="I_sh_t"'));
+  assert.ok(sc.sheet().indexOf('I_photo') > sc.sheet().indexOf('id="I_sh_t"')); // s107 B6: the photo is inline beside the level on a scan result too
 });
 
 test('I_photo probe-and-hide: R7 missing hides Add photo for the visit with a calm toast; upload-photo sign 404 leaves placeholders and no error', async () => {

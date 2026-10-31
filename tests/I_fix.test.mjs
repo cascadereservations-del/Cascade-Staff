@@ -21,7 +21,7 @@ for (const role of ['owner', 'admin', 'cleaner', 'finance']) {
     assert.doesNotMatch(e.sheet(), /Count Toilet paper|Used some Toilet paper|Record use: Toilet paper/);
     await e.submit();
     assert.equal(e.client.rpcCalls('reconcile_inventory_baseline_v1').length + e.client.rpcCalls('record_inventory_usage').length, 0);
-    assert.match(e.sheet(), /data-kind="shop"/); // everything else stays
+    assert.match(e.sheet(), /On the list, 2 packs/); // everything else stays: a listed item shows its status line instead of an add button (s107 B6)
   });
 }
 

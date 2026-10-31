@@ -1,23 +1,17 @@
 /* Native Inventory screen (lane I). Tokens only; the shell's card, rowi, btn, chip, field, input, sheet and scrim classes do the rest. */
-.I_wrap { display: grid; gap: 12px; min-width: 0; padding-top: 4px; }
+.I_wrap { display: flex; flex-direction: column; gap: 6px; min-width: 0; padding-top: 0; } /* a flex column, not a grid: the sticky search block then sticks against the whole list, not against its own grid row */
+.I_top { display: contents; }
 .I_wrap > * { min-width: 0; }
 /* s85 ui-b2: segmented control. Selected = raised surface with a shadow, unselected = plain text on the sunk track. */
-.I_tabs { gap: 4px; padding: 4px; border-radius: var(--r-md, 12px); background: var(--v5-sunk); }
-.I_tabs .btn { min-height: 44px; background: transparent; border-color: transparent; color: var(--fg-2); box-shadow: none; }
+.I_tabs { gap: 4px; padding: 2px; border-radius: var(--r-md, 12px); background: var(--v5-sunk); }
+.I_tabs .btn { min-height: 44px; padding: 0 6px; white-space: nowrap; background: transparent; border-color: transparent; color: var(--fg-2); box-shadow: none; }
 .I_tabs .btn[aria-pressed="true"] { background: var(--v5-surf); color: var(--fg); border-color: transparent; box-shadow: var(--shadow-sm); }
-.I_sum { display: grid; grid-template-columns: 40px minmax(0, 1fr); align-items: center; gap: 4px 12px; }
-.I_sumb { min-width: 0; }
-.I_sum .I_needbtn { grid-column: 2; justify-self: start; margin-left: -12px; }
-.I_g { display: inline-flex; align-items: center; justify-content: center; width: 40px; height: 40px; flex: none; border-radius: var(--r-full); font-size: var(--v5-t-body); font-weight: 700; }
-.I_sumok .I_g { background: var(--v5-ok-w); color: var(--v5-ok-t); }
-.I_sumlow .I_g { background: var(--v5-warn-w); color: var(--v5-warn-t); }
-.I_sumt { font: 650 var(--v5-t-body)/1.3 var(--font-ui); color: var(--fg); }
 /* s85 ui-b2: one horizontal row with a fade at the right edge, never wrapping */
 .I_chips { display: flex; flex-wrap: nowrap; gap: 8px; overflow-x: auto; scrollbar-width: none; padding: 2px 28px 4px 0; scroll-padding-inline: 16px; -webkit-mask-image: linear-gradient(90deg, black 88%, transparent); mask-image: linear-gradient(90deg, black 88%, transparent); }
 .I_chips::-webkit-scrollbar { display: none; }
 .I_chips .chip { flex: none; font-size: var(--v5-t-2); white-space: nowrap; }
 .I_list .I_row { align-items: center; }
-.I_row .t { overflow-wrap: anywhere; }
+.I_row .t { overflow-wrap: break-word; }
 .I_row .s { font-size: var(--v5-t-2); }
 div.I_row { cursor: default; }
 .I_lv { flex: none; display: inline-flex; align-items: center; gap: 4px; padding: 4px 10px; border-radius: var(--r-full); font: 600 var(--v5-t-2)/1.2 var(--font-ui); white-space: nowrap; }
@@ -53,11 +47,11 @@ div.I_row { cursor: default; }
 .I_wrap .input input, .I_sheet .input input { min-height: 44px; }
 .I_wrap .field label, .I_wrap .help, .I_wrap .field .lbl { font-size: max(0.8125rem, var(--v5-t-label)); }
 /* s84: grouped list, scan, report */
-.I_grp { display: grid; gap: 6px; min-width: 0; margin-bottom: 8px; }
-.I_gh { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 2px 12px; margin: 8px 4px 0; font: 650 var(--v5-t-body)/1.3 var(--font-ui); color: var(--fg); overflow-wrap: anywhere; }
+.I_grp { display: grid; gap: 4px; min-width: 0; margin-bottom: 8px; }
+.I_gh { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 2px 12px; margin: 0 4px; font: 650 var(--v5-t-body)/1.3 var(--font-ui); color: var(--fg); overflow-wrap: anywhere; }
 .I_ghn { font: 600 var(--v5-t-2)/1.3 var(--font-ui); color: var(--v5-warn-t); white-space: nowrap; }
-.I_srow { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; align-items: end; }
-.I_scanbtn { min-height: 44px; margin-bottom: 0; white-space: nowrap; }
+.I_srow { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; align-items: center; }
+.I_scanbtn { width: 44px; min-width: 44px; min-height: 44px; margin-bottom: 0; padding: 0; justify-content: center; }
 .I_repbtn { margin-top: 8px; }
 .I_cam { overflow: hidden; border-radius: var(--r-md, 12px); background: var(--v5-sunk); aspect-ratio: 4 / 3; max-height: 40vh; }
 .I_video { display: block; width: 100%; height: 100%; object-fit: cover; }
@@ -80,24 +74,22 @@ div.I_row { cursor: default; }
 /* s84 1b: count a group */
 .I_foot { display: flex; justify-content: flex-end; padding: 4px 8px; border-top: 1px solid var(--v5-sep); }
 .I_gcount { min-height: 44px; }
-.I_needbtn { min-height: 44px; margin-left: auto; color: var(--v5-warn-t); }
 .I_wname { margin: 8px 0 0; font: 650 var(--v5-t-section)/1.25 var(--font-ui); overflow-wrap: anywhere; }
 /* s84 1b: history */
 .I_hh { margin: 16px 0 4px; font: 650 var(--v5-t-body)/1.3 var(--font-ui); }
 .I_sugg { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; }
 /* s84 1b: recent */
-.I_recent { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; }
-.I_rl { font: 600 var(--v5-t-2)/1.3 var(--font-ui); color: var(--fg-2); }
-.I_rc { max-width: 100%; min-height: 44px; overflow-wrap: anywhere; }
+.I_recent { display: flex; flex-wrap: nowrap; align-items: center; gap: 8px; overflow-x: auto; scrollbar-width: none; margin-bottom: 8px; }
+.I_recent::-webkit-scrollbar { display: none; }
+.I_rl { flex: none; font: 600 var(--v5-t-2)/1.3 var(--font-ui); color: var(--fg-2); }
+.I_rc { flex: none; max-width: 14rem; min-height: 44px; white-space: nowrap; overflow: hidden; }
+.I_rn { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.I_rc svg { flex: none; }
 /* s85 ui-b2: a row is its main button plus one quick action; status tags say what needs doing */
-.I_it { display: block; border-bottom: 1px solid var(--v5-sep); }
+.I_it { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; border-bottom: 1px solid var(--v5-sep); }
 .I_it:last-child { border-bottom: 0; }
 .I_it .I_row { border-bottom: 0; }
-.I_foot2 { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 0 8px 6px 16px; margin-top: -6px; }
-.I_qa { flex: none; min-height: 44px; margin-left: auto; padding: 0 12px; white-space: nowrap; }
-.I_tags { display: flex; flex-wrap: wrap; gap: 4px 6px; }
-.I_tag { padding: 2px 8px; border-radius: var(--r-full); font: 600 var(--v5-t-2)/1.3 var(--font-ui); background: var(--v5-sunk); color: var(--fg-2); }
-.I_tagc { background: var(--v5-warn-w); color: var(--v5-warn-t); }
+.I_qa { flex: none; min-height: 44px; min-width: 44px; margin-left: auto; padding: 0 10px; white-space: nowrap; }
 /* s86: photos, where to buy, kept in, labels, tidy categories */
 .I_th { flex: none; display: inline-flex; align-items: center; justify-content: center; width: 48px; height: 48px; border-radius: var(--r-sm, 8px); overflow: hidden; background: var(--v5-sunk); color: var(--fg-2); } /* the box is reserved, so rows never jump when a picture arrives */
 .I_th img { display: block; width: 100%; height: 100%; object-fit: cover; }
@@ -107,12 +99,8 @@ div.I_row { cursor: default; }
 .I_whereb { display: block; min-height: 44px; padding: 4px 8px; text-align: right; font-weight: 600; white-space: normal; overflow-wrap: anywhere; }
 .I_filebtn { cursor: pointer; }
 .I_supbtn { min-height: 48px; justify-content: flex-start; text-align: left; overflow-wrap: anywhere; }
-.I_tidyrow { display: flex; justify-content: flex-start; margin-top: -6px; }
-.I_tidybtn { min-height: 44px; }
 .I_kept { margin: 0; }
 /* s106 shopping tools */
-.I_shopx { display: flex; flex-wrap: wrap; gap: 8px; }
-.I_shopx .btn { flex: 1 1 auto; min-height: 44px; }
 .I_albtn { min-height: 44px; }
 
 /* s106: Options (Shopsuki brand and size choices) on the item card */
@@ -129,3 +117,62 @@ div.I_row { cursor: default; }
 .I_pref svg { width: 12px; height: 12px; }
 .I_oos { color: var(--v5-warn-t); }
 .I_obt { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+
+/* s107: Inventory redesign. Header menu, status pills, sticky search, 72 px rows, the item card's action bar, the shopping list by shop. */
+.I_head { display: flex; align-items: center; gap: 8px; }
+.I_head .I_tabs { flex: 1; min-width: 0; }
+.I_menu { position: relative; flex: none; }
+.I_mbtn { list-style: none; width: 48px; height: 48px; padding: 0; justify-content: center; cursor: pointer; }
+.I_mbtn::-webkit-details-marker { display: none; }
+.I_menuin { position: absolute; right: 0; top: calc(100% + 4px); z-index: 5; display: grid; gap: 2px; min-width: 15rem; max-width: calc(100vw - 2 * var(--gutter, 16px)); padding: 6px; border-radius: var(--r-md, 12px); background: var(--v5-surf); border: 1px solid var(--v5-line); box-shadow: var(--shadow-md); }
+.I_mb { justify-content: flex-start; text-align: left; white-space: normal; }
+.I_pills { display: flex; flex-wrap: nowrap; gap: 6px; overflow-x: auto; scrollbar-width: none; padding: 0; }
+.I_pills::-webkit-scrollbar { display: none; }
+.I_pill { flex: none; white-space: nowrap; padding: 0 10px; font-size: var(--v5-t-2); border-color: transparent; }
+.I_pwarn { background: var(--v5-warn-w); color: var(--v5-warn-t); }
+.I_pbad { background: var(--v5-danger-w); color: var(--v5-danger-t); }
+.I_pinfo { background: var(--v5-info-w); color: var(--v5-info-t); }
+.I_pok { background: var(--v5-ok-w); color: var(--v5-ok-t); }
+.I_find { position: sticky; top: calc(var(--demo-h, 0px) + var(--appbar-h, 56px) + env(safe-area-inset-top, 0px)); z-index: 4; display: grid; gap: 4px; margin: 0 calc(var(--gutter, 16px) * -1); padding: 2px var(--gutter, 16px) 0; background: var(--bg); }
+.I_find .I_chips { padding-top: 0; padding-bottom: 2px; }
+.I_cn { font-variant-numeric: tabular-nums; opacity: .85; }
+.I_lbox { padding-bottom: calc(var(--tabbar-h, 0px) + 80px + env(safe-area-inset-bottom, 0px)); }
+.I_list .I_irow { min-height: 72px; padding: 8px 4px 8px 14px; gap: 12px; }
+.I_irow .mid { min-width: 0; flex: 1; }
+.I_irow .t { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; overflow-wrap: normal; }
+.I_s2 { display: flex; align-items: center; gap: 6px; }
+.I_s2t { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.I_lw { display: inline-flex; align-items: center; gap: 3px; font-weight: 650; vertical-align: bottom; }
+.I_lw.I_ok { background: none; color: var(--v5-ok-t); }
+.I_lw.I_low { background: none; color: var(--v5-warn-t); }
+.I_lw.I_out { background: none; color: var(--v5-danger-t); }
+.I_tg { flex: none; display: inline-flex; color: var(--fg-2); }
+.I_tg.I_tagc { color: var(--v5-warn-t); }
+.I_irow .I_bar { height: 4px; margin-top: 4px; }
+/* item card */
+.I_sheetm { padding-top: 0; }
+.I_sheetm::before { margin: 8px auto 4px; }
+.I_sheet .F_sheethead { touch-action: auto; }
+.I_hero { display: flex; gap: 12px; align-items: flex-start; }
+.I_herob { min-width: 0; flex: 1; display: grid; gap: 4px; }
+.I_herob p { margin: 0; }
+.I_sheet .I_lvline { margin: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; }
+.I_onlist { display: inline-flex; align-items: center; gap: 6px; font-weight: 650; font-size: var(--v5-t-2); color: var(--v5-ok-t); }
+.I_ph96 { flex: none; width: 96px; height: 96px; max-width: none; aspect-ratio: 1; margin: 0; }
+.I_actbar { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 12px 0; }
+.I_actbar .btn-primary { grid-column: 1 / -1; }
+.I_actbar .btn:nth-child(2):last-child { grid-column: 1 / -1; }
+.I_det { margin: 12px 0; }
+.I_det summary, .I_other summary { min-height: 44px; display: flex; align-items: center; cursor: pointer; font: 650 var(--v5-t-body)/1.3 var(--font-ui); }
+.I_det .I_dl { margin: 0; }
+.I_moreb { margin-top: 12px; }
+.I_moreb .I_hh { margin-top: 0; }
+.I_grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.I_grid2 .btn { width: 100%; white-space: normal; text-align: center; }
+/* shopping list */
+.I_sact { display: flex; align-items: center; padding-right: 4px; }
+.I_shopa, .I_cart { width: 44px; min-width: 44px; padding: 0; justify-content: center; }
+.I_cart svg { box-sizing: content-box; padding: 4px; border: 2px solid var(--fg-2); border-radius: var(--r-full); color: transparent; }
+.I_cart[aria-pressed="true"] svg { color: var(--v5-ok-t); border-color: var(--v5-ok-t); background: var(--v5-ok-w); }
+.I_incart .t { text-decoration: line-through; color: var(--fg-2); }
+.I_shrow { min-width: 0; }
