@@ -176,3 +176,15 @@ div.I_row { cursor: default; }
 .I_cart[aria-pressed="true"] svg { color: var(--v5-ok-t); border-color: var(--v5-ok-t); background: var(--v5-ok-w); }
 .I_incart .t { text-decoration: line-through; color: var(--fg-2); }
 .I_shrow { min-width: 0; }
+/* s108: product requests (add, change, remove; approvals). Tokens only, 44 px targets. */
+.I_o8add { margin-top: 4px; min-height: 44px; }
+.I_wait { display: grid; gap: 8px; margin-top: 8px; padding-top: 10px; border-top: 1px solid var(--v5-sep); }
+.I_wrow { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.I_wt { margin: 0; font-size: var(--v5-t-2); overflow-wrap: anywhere; }
+.I_reqs { display: grid; gap: 12px; margin: 12px 0; }
+.I_req { display: grid; gap: 8px; padding: 12px; border: 1px solid var(--v5-sep); border-radius: var(--r-md, 12px); background: var(--v5-surf); }
+.I_req .I_ot { margin: 0; font-weight: 650; overflow-wrap: anywhere; }
+.I_req .I_dl { margin: 0; }
+.I_req .btn { min-height: 44px; }
+.I_req form { display: grid; gap: 12px; }
+.I_rth { width: 56px; height: 56px; object-fit: cover; border-radius: var(--r-sm, 8px); background: var(--v5-sunk); }

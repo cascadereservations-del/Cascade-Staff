@@ -240,6 +240,7 @@
     if (root.document && root.document.addEventListener) root.document.addEventListener('visibilitychange', M.vis);
     if (M.demo) { K.items = demoItems().map(function (r) { return normalize(r, M.role); }); K.shop = normalizeShop(demoShop(), null); K.v84 = true; K.hasCounted = true; }
     else if (M.client && M.client.auth && M.client.auth.getSession) { try { M.client.auth.getSession().then(function (r) { var s = r && r.data && r.data.session; M.uid = s && s.user ? s.user.id : null; }, function () {}); } catch (e) { /* no uid: rows read "Asked by staff" */ } }
+    if (M.demo) o8Demo();
     var goShop = false;
     if (!K.viewInit) { K.viewInit = true; var vw = ssGet('cs_I_view'); if (vw && vw.role === K.role) { if (/^(low|need|all|cons|out|c:.{1,80})$/.test(String(vw.chip))) K.chip = vw.chip; if (vw.tab === 'shopping' && !M.sub) { M.sub = 'shopping'; goShop = true; } } } // s107 B14: the last tab and chip come back once per visit
     ensureSuppliers(); draw();
@@ -277,7 +278,7 @@
     }, function (e) {
       if (me.dead) return;
       if (K.items) me.offlineStale = true; else me.loadErr = errKind(e, online()) === 'offline' ? 'offline' : 'unavailable';
-    }).then(function () { if (me.dead) return; me.loading = false; draw(); loadShop(); signPhotos(); });
+    }).then(function () { if (me.dead) return; me.loading = false; draw(); loadShop(); signPhotos(); o8Reqs(); });
   }
   function loadShopSoon() { var me = M; if (me && !K.shop) loadShop(); }
   function loadShop() {
@@ -384,7 +385,7 @@
     return (Array.isArray(list) ? list : []).filter(function (o) { return o && o.id && o.title; }).map(function (o) {
       return { id: String(o.id), supplier: String(o.supplier || ''), title: String(o.title), brand: o.brand ? String(o.brand) : '', packLabel: o.pack_label ? String(o.pack_label) : '',
         image: /^https:\/\/[^\s"'<>]+$/i.test(String(o.image_url || '')) ? String(o.image_url) : '', link: /^https:\/\/[^\s"'<>]+$/i.test(String(o.source_url || '')) ? String(o.source_url) : '',
-        usual: !!o.usual, preferred: o.preferred === true, available: o.available === false ? false : o.available === true ? true : null, price: num(o.price) };
+        supplierId: o.supplier_id ? String(o.supplier_id) : '', packSize: num(o.pack_size), usual: !!o.usual, preferred: o.preferred === true, available: o.available === false ? false : o.available === true ? true : null, price: num(o.price) };
     });
   }
   function demoOptions(id) {
@@ -393,7 +394,7 @@
     return d.map(function (x, n) { return { id: x[0], supplier: x[1], title: x[2], brand: x[3], packLabel: '', image: '', link: '', usual: n === 0, preferred: x[0] === 'o2', available: x[5], price: canPrice(M.role) ? x[4] : null }; });
   }
   function loadOptions(id) {
-    var me = M, c0 = K.opt[id]; if (!me || (c0 && nowMs() - c0.at < 60000) || K.denied.inventory_item_options_v1) return Promise.resolve(); // kept across mounts (the shell re-mounts on every sub-route change), read again after a minute
+    o8Reqs(); var me = M, c0 = K.opt[id]; if (!me || (c0 && nowMs() - c0.at < 60000) || K.denied.inventory_item_options_v1) return Promise.resolve(); // kept across mounts (the shell re-mounts on every sub-route change), read again after a minute
     if (me.demo) { K.opt[id] = { list: demoOptions(id), at: nowMs() }; redrawMenu(id); return Promise.resolve(); }
     if (!me.client || !online()) return Promise.resolve();
     K.opt[id] = { list: null, at: nowMs() };
@@ -408,9 +409,9 @@
   }
   function redrawMenu(id) { if (M && M.act && M.act.kind === 'menu' && M.act.itemId === id) drawLayer(); }
   function optById(itemId, id) { var st = M && K.opt[itemId]; return st && st.list ? st.list.filter(function (o) { return o.id === id; })[0] || null : null; }
-  function onImgErr(ev) { var t = ev && ev.target; if (M && t && t.getAttribute && t.getAttribute('data-oimg')) { K.badImg[t.getAttribute('src')] = 1; if (M.act && M.act.kind === 'menu') drawLayer(); } }
+  function onImgErr(ev) { var t = ev && ev.target; if (M && t && t.getAttribute && t.getAttribute('data-oimg')) { K.badImg[t.getAttribute('src')] = 1; if (M.act && (M.act.kind === 'menu' || M.act.kind === 'o8list')) drawLayer(); } }
   function optionsBlock(it) {
-    var st = K.opt[it.id]; if (!st || !st.list || !st.list.length) return '';
+    var st = K.opt[it.id]; if (!st || !st.list) return ''; var ed = o8On(); if (!st.list.length && !ed) return '';
     var money = canPrice(M.role), mng = canManage(M.role), sorted = optSort(st.list, money), main = sorted.filter(function (o) { return o.usual; }), rest = sorted.filter(function (o) { return !o.usual; });
     var btn = function (act, id, text) { return '<button class="btn btn-ghost I_undobtn" type="button" data-act="' + act + '" data-id="' + esc(id) + '">' + text + '</button>'; };
     var one = function (o, other) {
@@ -419,14 +420,286 @@
         '<div class="I_ob"><p class="I_ot">' + esc(o.title) + (o.usual ? ' <span class="I_usual">Usual</span>' : '') + (o.preferred ? ' <span class="I_pref">' + gi('star', 's16') + 'Preferred</span>' : '') + '</p>' + (sub ? '<p class="help">' + esc(sub) + '</p>' : '') +
         (money && o.price != null ? '<p class="help num">' + esc(peso(o.price)) + '</p>' : '') + (o.available === false ? '<p class="help I_oos">Out of stock</p>' : '') +
         '<div class="I_obt">' + (o.link ? '<a class="btn btn-ghost I_undobtn" href="' + esc(o.link) + '" target="_blank" rel="noopener noreferrer">View on ' + esc(siteOf(o.link)) + '</a>' : '') +
-        (other && mng && !o.usual && allowed('optusual') ? btn('opt-usual', o.id, 'Make usual') : '') + (other && mng && o.image && allowed('photo') ? btn('opt-photo', o.id, 'Use as item photo') : '') + '</div></div></div>';
+        (other && mng && !o.usual && allowed('optusual') ? btn('opt-usual', o.id, 'Make usual') : '') + (other && mng && o.image && allowed('photo') ? btn('opt-photo', o.id, 'Use as item photo') : '') +
+        (ed ? '<button class="btn btn-ghost I_undobtn" type="button" data-act="o8-edit" data-id="' + esc(o.id) + '" aria-label="Edit ' + esc(o.title) + '">Edit</button><button class="btn btn-ghost I_undobtn" type="button" data-act="o8-del" data-id="' + esc(o.id) + '" aria-label="Remove ' + esc(o.title) + '">Remove</button>' : '') + '</div></div></div>';
     };
     return '<div class="I_opts" role="group" aria-label="Options"><h3 class="I_opth">Options</h3>' + main.map(function (o) { return one(o, false); }).join('') +
-      (rest.length ? '<details class="I_other"' + (main.length ? '' : ' open') + '><summary>Other options (' + rest.length + ')</summary>' + rest.map(function (o) { return one(o, true); }).join('') + '</details>' : '') + '</div>';
+      (rest.length ? '<details class="I_other"' + (main.length ? '' : ' open') + '><summary>Other options (' + rest.length + ')</summary>' + rest.map(function (o) { return one(o, true); }).join('') + '</details>' : '') +
+      (ed ? '<button class="btn btn-secondary btn-block I_o8add" type="button" data-act="o8-add">' + gi('plus', 's16') + ' Add a product</button>' + o8Wait(it) : '') + '</div>';
   }
   function renderOptUsual(a, it) {
     var o = optById(a.itemId, a.optId); if (!o) return null;
     return head('Make this the usual for ' + it.name + '?') + '<form data-i-form><p class="I_conf">' + esc(o.title) + (o.supplier ? ' from ' + esc(o.supplier) : '') + (canPrice(M.role) && o.price != null ? ' at ' + esc(peso(o.price)) : '') + '. Shopping lists and Add low items will use it.</p>' + actions(a, 'Yes, make it usual') + '</form>';
+  }
+  /* ---- s108 product requests: any staff user can add, change or remove a product under an item; owner and admin apply at once or approve.
+     Server: inventory_option_request_v1 / _requests_v1 / _decide_v1 / _cancel_v1. A missing RPC (PGRST202 or 404) hides every control here for the visit (K.denied.o8). */
+  var O8_WORD = { add: 'New product', edit: 'Change', delete: 'Remove' };
+  var O8_LBL = [['title', 'Name'], ['brand', 'Brand'], ['pack_label', 'Pack'], ['pack_size', 'Pieces per pack'], ['supplier_id', 'Shop'], ['price', 'Price'], ['source_url', 'Link'], ['image_url', 'Photo'], ['available', 'In stock']];
+  function o8On() { return !!M && !M.denied.o8 && (M.demo || !!M.client); }
+  function o8T(s) { return String(s == null ? '' : s).trim(); }
+  // A link on one of the allowed hosts, https only. Shopee links lose their query (tracking); the host is lower-cased. Returns null when it is not allowed.
+  function o8Url(s, hosts) {
+    var m = /^https:\/\/([A-Za-z0-9.-]+)(\/[^?#\s"'<>]*)?(\?[^#\s"'<>]*)?(#\S*)?$/.exec(o8T(s)); if (!m) return null;
+    var host = m[1].toLowerCase(); if (hosts.indexOf(host) < 0) return null;
+    var out = 'https://' + host + (m[2] || '/') + (host === 'shopee.ph' ? '' : m[3] || '');
+    return out.length <= 500 ? out : null;
+  }
+  var O8_LINK = ['shopsuki.ph', 'shopee.ph'], O8_PIC = ['cdn.shopify.com', 'down-ph.img.susercontent.com'];
+  function o8Link(s) { return o8Url(s, O8_LINK); }
+  function o8Pic(s) { return o8Url(s, O8_PIC); }
+  function o8Reqlist() { return K.req && M && K.req.role === M.role ? K.req.list : []; }
+  function o8Pending() { return o8Reqlist().filter(function (r) { return r.status === 'pending'; }); } // the one selector for the badge, the pill and the list
+  function o8Count() { return o8On() && canManage(M.role) ? o8Pending().length : 0; }
+  function o8Mine(itemId) { return o8Pending().filter(function (r) { return r.mine && r.itemId === itemId; }); }
+  function o8ReqBy(id) { return o8Reqlist().filter(function (r) { return r.id === id; })[0] || null; }
+  function normReqs(list) {
+    return (Array.isArray(list) ? list : []).filter(function (r) { return r && r.id; }).map(function (r) {
+      return { id: String(r.id), itemId: String(r.item_id || ''), item: String(r.item || ''), optionId: r.option_id ? String(r.option_id) : null, optionTitle: r.option_title ? String(r.option_title) : '', action: String(r.action || ''),
+        payload: r.payload && typeof r.payload === 'object' ? r.payload : {}, status: String(r.status || 'pending'), note: r.note ? String(r.note) : '', requester: r.requester ? String(r.requester) : '', mine: r.mine === true,
+        at: r.requested_at ? String(r.requested_at) : '', current: r.current && typeof r.current === 'object' ? r.current : null };
+    });
+  }
+  function o8Demo() {
+    var own = canManage(M.role);
+    K.req = { role: M.role, ok: true, at: nowMs(), busy: false, list: own ? [{ id: 'dq1', itemId: 'd1', item: 'Toilet paper', optionId: null, optionTitle: '', action: 'add', status: 'pending', note: 'Cheaper per roll', requester: 'Demo staff', mine: false, at: '2026-10-30T02:00:00Z', current: null,
+      payload: { title: 'Plush Bath Tissue 12 rolls', brand: 'Plush', pack_label: '12 rolls', pack_size: 12, price: 175, source_url: 'https://shopsuki.ph/products/plush-12', supplier_id: 'demo-sup', available: true } }] : [] };
+    K.o8sup = { pid: M.pid, at: nowMs(), rows: [{ id: 'demo-sup', name: 'Demo Mart', active: true }] };
+  }
+  function o8Redraw() {
+    if (!M) return;
+    var top = q('[data-i-top]'); if (top) top.innerHTML = renderTop(route());
+    var a = M.act; if (a && !a.sending && (a.kind === 'menu' || (a.kind === 'o8list' && !a.dec))) drawLayer();
+  }
+  // Reads the pending requests (all of them for owner/admin, the caller's own for everyone else). A failure with "missing" is the probe that hides the feature.
+  function o8Reqs(force) {
+    var me = M; if (!me || me.demo || !me.client || me.denied.o8 || !online()) return Promise.resolve();
+    var s0 = K.req && K.req.role === me.role ? K.req : null;
+    if (s0 && (s0.busy || (!force && nowMs() - s0.at < 30000))) return Promise.resolve();
+    var s = K.req = { role: me.role, list: s0 ? s0.list : [], at: nowMs(), busy: true, ok: !!(s0 && s0.ok) };
+    return Promise.resolve().then(function () { return me.client.rpc('inventory_option_requests_v1', { p_property_id: me.pid, p_status: 'pending' }); }).then(function (r) {
+      if (r && r.error) throw r.error;
+      if (!r || !r.data || r.data.ok === false) throw { message: 'failed' };
+      s.list = normReqs(r.data.requests); s.ok = true; s.busy = false; s.at = nowMs(); if (M === me) o8Redraw();
+    }).catch(function (e) {
+      s.busy = false; s.at = nowMs();
+      var k = errKind(e, online()); if (k === 'missing' || k === 'refused') me.denied.o8 = true; // the SQL release is not applied yet (or no access): no controls, no message
+      if (M === me) o8Redraw();
+    });
+  }
+  function o8Sups() {
+    var me = M, c = K.o8sup; if (!me) return Promise.resolve(null);
+    if (c && c.pid === me.pid && c.rows && (me.demo || nowMs() - c.at < 300000)) return Promise.resolve(c.rows);
+    if (me.demo || !me.client) return Promise.resolve(null);
+    return Promise.resolve().then(function () { return me.client.rpc('inventory_supplier_list_v1', { p_property_id: me.pid }); }).then(function (r) {
+      if (r && r.error) throw r.error;
+      var l = r && r.data && Array.isArray(r.data.suppliers) ? r.data.suppliers : null; if (!l) throw { message: 'failed' };
+      K.o8sup = { pid: me.pid, at: nowMs(), rows: l.filter(function (x) { return x && x.id && x.name; }).map(function (x) { return { id: String(x.id), name: String(x.name), active: x.active !== false }; }) };
+      var a = M && M.act; if (M === me && a && (a.kind === 'o8form' || a.kind === 'o8list')) drawLayer();
+      return K.o8sup.rows;
+    }).catch(function () { K.o8sup = { pid: me.pid, at: nowMs(), rows: null, bad: true }; var a = M && M.act; if (M === me && a && a.kind === 'o8form') drawLayer(); return null; });
+  }
+  function o8SupName(id) {
+    var rows = K.o8sup && K.o8sup.rows || [], f = rows.filter(function (x) { return x.id === id; })[0]; if (f) return f.name;
+    var n = ''; Object.keys(K.opt).some(function (k) { var l = K.opt[k] && K.opt[k].list; return l && l.some(function (o) { if (o.supplierId === id) { n = o.supplier; return true; } return false; }); });
+    return n || 'another shop';
+  }
+  function o8Val(k, v) {
+    if (v == null || v === '') return 'none';
+    if (k === 'supplier_id') return o8SupName(String(v));
+    if (k === 'available') return v === false || v === 'false' ? 'Out of stock' : 'In stock';
+    if (k === 'price') return peso(v);
+    if (k === 'pack_size') return fmt(v);
+    if (k === 'source_url') return siteOf(String(v));
+    if (k === 'image_url') return 'Photo link';
+    return String(v);
+  }
+  function o8Diff(r) {
+    var p = r.payload || {}, c = r.current || {}, rows = [];
+    if (r.action === 'delete') return '<dl class="I_dl">' + row('Product', esc(r.optionTitle || c.title || 'This product')) + '</dl>';
+    O8_LBL.forEach(function (L) {
+      var k = L[0]; if (!(k in p)) return;
+      var nv = o8Val(k, p[k]);
+      if (k === 'source_url' && p[k] && /^https:\/\//i.test(String(p[k]))) nv = '<a href="' + esc(p[k]) + '" target="_blank" rel="noopener noreferrer">View on ' + esc(siteOf(String(p[k]))) + '</a>'; else nv = esc(nv);
+      rows.push(row(L[1], r.action === 'edit' ? esc(o8Val(k, c[k])) + ' → ' + nv : nv));
+    });
+    return rows.length ? '<dl class="I_dl">' + rows.join('') + '</dl>' : '';
+  }
+  function o8Thumb(r) {
+    var u = r.action === 'delete' ? (r.current || {}).image_url : r.payload.image_url;
+    return u && /^https:\/\/[^\s"'<>]+$/i.test(String(u)) && !K.badImg[u] ? '<img class="I_rth" src="' + esc(u) + '" alt="" width="56" height="56" loading="lazy" decoding="async" referrerpolicy="no-referrer" data-oimg="1">' : '';
+  }
+  // The text of an error from the server: the codes the SQL names, in plain words.
+  function o8Why(e) {
+    var m = String(e && e.message || ''), k = errKind(e, online());
+    if (k === 'missing' || k === 'refused' || k === 'offline') return { err: k };
+    if (/usual_option/.test(m)) return { err: 'o8', msg: 'The usual product cannot be removed. Make another product the usual one first.' };
+    if (/duplicate_option/.test(m)) return { err: 'o8', msg: 'That product is already in the list.' };
+    if (/option_gone/.test(m)) return { err: 'o8', msg: 'That product is no longer there. The list is refreshed.', refresh: true };
+    if (/not_pending/.test(m)) return { err: 'o8', msg: 'That request was already handled. The list is refreshed.', refresh: true };
+    if (/price_not_allowed/.test(m)) return { err: 'o8', msg: 'Prices are for the owner and finance only.' };
+    if (e && e.code === 'P0002') return { err: 'o8', msg: 'That item or request is no longer there. The list is refreshed.', refresh: true };
+    if (e && e.code === '22023' && m && m.length < 140) return { err: 'o8', msg: m.charAt(0).toUpperCase() + m.slice(1).replace(/\.?$/, '.') };
+    return { err: 'other' };
+  }
+  function o8FormVals(o) {
+    if (!o) return { title: '', brand: '', packLabel: '', packSize: '', supplierId: '', link: '', photo: '', price: '', avail: '1', note: '' };
+    return { title: o.title, brand: o.brand, packLabel: o.packLabel, packSize: o.packSize != null ? fmt(o.packSize) : '', supplierId: o.supplierId || '', link: o.link, photo: o.image,
+      price: canPrice(M.role) && o.price != null ? fmt(o.price) : '', avail: o.available === false ? '0' : '1', note: '' };
+  }
+  // The payload of a form: every field checked the way the server checks it; an edit sends only what changed (a cleared optional field is null). A price key exists only for owner/admin/finance.
+  function o8Payload(a) {
+    var v = a.vals, o = a.orig, add = a.action === 'add', p = {}, money = canPrice(M.role);
+    var diff = function (k) { return add ? o8T(v[k]) !== '' : o8T(v[k]) !== o8T(o[k]); };
+    var title = o8T(v.title); if (!title || title.length > 160) return { msg: 'Add a product name of up to 160 characters.' };
+    if (add || diff('title')) p.title = title;
+    if (o8T(v.brand).length > 60) return { msg: 'The brand can be up to 60 characters.' };
+    if (diff('brand')) p.brand = o8T(v.brand) || null;
+    if (o8T(v.packLabel).length > 40) return { msg: 'The size can be up to 40 characters.' };
+    if (diff('packLabel')) p.pack_label = o8T(v.packLabel) || null;
+    if (o8T(v.packSize) !== '') { var ps = parseQty(v.packSize); if (ps == null || ps >= 100000) return { msg: 'Pieces per pack must be a number above 0.' }; }
+    if (diff('packSize')) p.pack_size = o8T(v.packSize) === '' ? null : parseQty(v.packSize);
+    if (!o8T(v.supplierId)) return { msg: 'Choose the shop it is sold at.' };
+    if (add || diff('supplierId')) p.supplier_id = o8T(v.supplierId);
+    var lk = o8Link(v.link); if (!lk) return { msg: 'Add the product link. It must be an https link from shopsuki.ph or shopee.ph.' };
+    var olk = add ? '' : o8Link(o.link) || o8T(o.link);
+    if (add || lk !== olk) p.source_url = lk;
+    if (o8T(v.photo) !== '') { var pu = o8Pic(v.photo); if (!pu) return { msg: 'The photo link must be an https image on cdn.shopify.com or down-ph.img.susercontent.com.' }; var opu = add ? '' : o8Pic(o.photo) || o8T(o.photo); if (add || pu !== opu) p.image_url = pu; }
+    else if (!add && o8T(o.photo) !== '') p.image_url = null;
+    if (money && o8T(v.price) !== '' && parseQty(v.price) == null) return { msg: 'The price must be a number above 0.' };
+    if (money && diff('price')) p.price = o8T(v.price) === '' ? null : parseQty(v.price);
+    if (add || v.avail !== o.avail) p.available = v.avail === '1';
+    if (!add && !Object.keys(p).length) return { msg: 'Nothing has changed yet.' };
+    return { payload: p };
+  }
+  function o8Render(a) {
+    if (a.kind === 'o8list') return o8RenderList(a);
+    var it = itemById(a.itemId); if (!it) return null;
+    var mng = canManage(M.role), v = a.vals || {};
+    if (a.kind === 'o8del') return head('Remove ' + a.title + '?', it.name) + '<form data-i-form><p class="I_conf">' + (mng ? 'It is taken off the options of this item.' : 'An admin will check the request before it is removed.') + '</p>' + actions(a, mng ? 'Yes, remove it' : 'Yes, ask to remove it') + '</form>';
+    var rows = K.o8sup && K.o8sup.rows, sel;
+    if (rows) sel = selectField('supplierId', 'Shop', [['', 'Choose a shop']].concat(rows.filter(function (x) { return x.active || x.id === v.supplierId; }).map(function (x) { return [x.id, x.name]; })), v.supplierId);
+    else sel = '<div class="field"><span class="lbl">Shop</span><p class="help">' + (K.o8sup && K.o8sup.bad ? 'The shops could not be loaded. Close this and open it again.' : 'Loading the shops…') + '</p></div>';
+    return head(a.action === 'add' ? 'Add a product' : 'Edit product', it.name) + '<form data-i-form novalidate>' +
+      textField('title', 'Product name', v.title, 'maxlength="160"') + textField('brand', 'Brand', v.brand, 'maxlength="60"') + textField('packLabel', 'Size or pack label', v.packLabel, 'maxlength="40"') +
+      textField('packSize', 'Pieces per pack (optional)', v.packSize, 'inputmode="decimal"') + sel +
+      textField('link', 'Product link', v.link, 'inputmode="url" autocapitalize="off" maxlength="500"') + '<p class="help">A link from shopsuki.ph or shopee.ph.</p>' +
+      textField('photo', 'Photo link (optional)', v.photo, 'inputmode="url" autocapitalize="off" maxlength="500"') +
+      (canPrice(M.role) ? textField('price', 'Price in PHP (optional)', v.price, 'inputmode="decimal"') : '') +
+      '<div class="field"><button class="chip I_choice" type="button" data-act="o8-avail" aria-pressed="' + (v.avail === '1') + '">' + (v.avail === '1' ? gi('check', 's16') + ' ' : '') + 'In stock</button></div>' +
+      textField('note', 'Note (optional)', v.note, 'maxlength="500"') + actions(a, mng ? 'Save' : 'Send for approval') + '</form>';
+  }
+  function o8Card(a, r) {
+    var d = a.dec && a.dec.id === r.id ? a.dec : null, h = '<div class="I_req"><p class="I_ot">' + esc(O8_WORD[r.action] || 'Change') + ' · ' + esc(r.item) + '</p><p class="help">' + esc((r.requester || 'Staff') + (dateLabel(r.at) ? ' · ' + dateLabel(r.at) : '')) + '</p>' +
+      (r.note ? '<p class="help">' + esc(r.note) + '</p>' : '') + o8Thumb(r) + o8Diff(r);
+    if (!d) return h + '<div class="I_obt"><button class="btn btn-primary" type="button" data-act="o8-approve" data-id="' + esc(r.id) + '">Approve</button><button class="btn btn-secondary" type="button" data-act="o8-reject" data-id="' + esc(r.id) + '">Reject</button></div></div>';
+    return h + '<form data-i-form>' + (d.mode === 'approve' ? (r.action !== 'delete' && canPrice(M.role) ? textField('dprice', 'Price in PHP (optional)', a.vals.dprice, 'inputmode="decimal"') + '<p class="help">Keep it, or change it before you approve.</p>' : '') : textField('dnote', 'Note for the requester (optional)', a.vals.dnote, 'maxlength="500"')) +
+      actions(a, d.mode === 'approve' ? 'Approve' : 'Reject') + '</form></div>';
+  }
+  function o8RenderList(a) {
+    var l = o8Pending();
+    return head('Requests', l.length ? l.length + ' waiting for you' : 'Nothing is waiting for approval.') + (a.dec ? '' : errBox(a)) +
+      '<div class="I_reqs">' + l.map(function (r) { return o8Card(a, r); }).join('') + '</div><div class="I_btns"><button class="btn btn-ghost btn-block" type="button" data-act="close">Close</button></div>';
+  }
+  function o8Menu(itemId) { M.act = newMenu(itemId); drawLayer(); }
+  function o8Back(a) {
+    if (a.kind === 'o8list') { if (a.dec) { a.dec = null; a.err = null; drawLayer(); return; } return closeSheet(); }
+    o8Menu(a.itemId);
+  }
+  function o8Click(act, t, a) {
+    if (a && a.sending) return;
+    var id = attr(t, 'data-id');
+    if (act === 'back') return o8Back(a);
+    if (act === 'o8-reqs') { if (!o8On() || !canManage(M.role) || M.act) return; M.act = { kind: 'o8list', vals: { dprice: '', dnote: '' }, dec: null }; drawLayer(); o8Sups(); o8Reqs(true); return; }
+    if (act === 'o8-cancel') return o8Cancel(id);
+    if (!a) return;
+    if (a.kind === 'menu' && a.itemId && o8On()) {
+      if (act === 'o8-add') { M.act = { kind: 'o8form', itemId: a.itemId, action: 'add', optId: null, orig: null, vals: o8FormVals(null) }; drawLayer(); o8Sups(); return; }
+      if (act === 'o8-edit') { var o = optById(a.itemId, id); if (!o) return; var fv = o8FormVals(o); M.act = { kind: 'o8form', itemId: a.itemId, action: 'edit', optId: o.id, orig: Object.assign({}, fv), vals: fv }; drawLayer(); o8Sups(); return; }
+      if (act === 'o8-del') { var od = optById(a.itemId, id); if (!od) return; M.act = { kind: 'o8del', itemId: a.itemId, optId: od.id, title: od.title }; drawLayer(); return; }
+    }
+    if (a.kind === 'o8form' && act === 'o8-avail') { a.vals.avail = a.vals.avail === '1' ? '0' : '1'; a.err = null; drawLayer(); return; }
+    if (a.kind === 'o8list' && (act === 'o8-approve' || act === 'o8-reject')) {
+      var r = o8ReqBy(id); if (!r) return; var pp = r.payload.price;
+      a.dec = { id: r.id, mode: act === 'o8-approve' ? 'approve' : 'reject' }; a.vals = { dprice: pp != null ? fmt(pp) : '', dnote: '' }; a.err = null; a.focused = true; drawLayer(); return;
+    }
+  }
+  function o8Submit(a) {
+    if (a.kind === 'o8list') return a.dec ? o8Decide(a) : undefined;
+    var action = a.kind === 'o8del' ? 'delete' : a.action, payload = {}, note = a.kind === 'o8form' ? o8T(a.vals.note) : '';
+    if (a.kind === 'o8form') { var c = o8Payload(a); if (!c.payload) { a.err = 'o8'; a.msg = c.msg; return drawLayer(); } payload = c.payload; }
+    var me = M;
+    if (me.demo) { toast(DEMO_NOTE); return o8Menu(a.itemId); }
+    if (!online()) { a.err = 'offline'; return drawLayer(); }
+    if (!me.client) { a.err = 'missing'; return drawLayer(); }
+    var sig = JSON.stringify(['o8', action, a.itemId, a.optId || null, payload, note]), ke = K.keys[sig]; // one key per set of values, kept across a retry; a changed form gets a new one
+    if (!ke || nowMs() - ke.at > 600000) ke = K.keys[sig] = { key: newKey('opt'), at: nowMs() };
+    a.sending = true; a.err = null; drawLayer();
+    Promise.resolve().then(function () { return me.client.rpc('inventory_option_request_v1', { p_item_id: a.itemId, p_action: action, p_option_id: a.optId || null, p_payload: payload, p_note: note || null, p_idempotency_key: ke.key }); }).then(function (r) {
+      if (me.dead) return;
+      if (r && r.error) throw r.error;
+      if (!r || !r.data || r.data.ok === false) throw { message: 'failed' };
+      a.sending = false; delete K.keys[sig];
+      var applied = r.data.applied === true;
+      toast(applied ? 'Saved.' : 'Sent for approval. An admin will check it.');
+      if (me.opts.haptic) { try { me.opts.haptic('success'); } catch (e) { /* no haptics */ } }
+      if (applied) { delete K.opt[a.itemId]; K.usual = null; K.usualAt = 0; }
+      o8Menu(a.itemId); if (applied) loadOptions(a.itemId); o8Reqs(true);
+    }).catch(function (e) {
+      if (me.dead) return;
+      a.sending = false; var w = o8Why(e);
+      if (w.err === 'missing' || w.err === 'refused') { me.denied.o8 = true; toast(ERR[w.err]); o8Menu(a.itemId); return o8Redraw(); }
+      a.err = w.err; a.msg = w.msg || '';
+      if (w.refresh) { delete K.opt[a.itemId]; loadOptions(a.itemId); o8Reqs(true); }
+      drawLayer();
+    });
+  }
+  function o8Decide(a) {
+    var r = o8ReqBy(a.dec.id), me = M; if (!r) { a.dec = null; return drawLayer(); }
+    var approve = a.dec.mode === 'approve', ov = null;
+    if (approve && r.action !== 'delete' && canPrice(M.role) && o8T(a.vals.dprice) !== '') {
+      var n = parseQty(a.vals.dprice); if (n == null) { a.err = 'o8'; a.msg = 'The price must be a number above 0.'; return drawLayer(); }
+      if (r.payload.price == null || n !== Number(r.payload.price)) ov = { price: n };
+    }
+    if (me.demo) { toast(DEMO_NOTE); a.dec = null; return drawLayer(); }
+    if (!online()) { a.err = 'offline'; return drawLayer(); }
+    a.sending = true; a.err = null; drawLayer();
+    Promise.resolve().then(function () { return me.client.rpc('inventory_option_request_decide_v1', { p_request_id: r.id, p_decision: approve ? 'approve' : 'reject', p_payload_override: ov, p_note: approve ? null : o8T(a.vals.dnote) || null }); }).then(function (res) {
+      if (me.dead) return;
+      if (res && res.error) throw res.error;
+      if (!res || !res.data || res.data.ok === false) throw { message: 'failed' };
+      a.sending = false; a.dec = null; a.err = null;
+      K.req.list = K.req.list.filter(function (x) { return x.id !== r.id; }); delete K.opt[r.itemId]; K.usual = null; K.usualAt = 0;
+      toast(approve ? 'Approved.' : 'Rejected.');
+      if (me.opts.haptic) { try { me.opts.haptic('success'); } catch (e) { /* no haptics */ } }
+      o8Redraw(); drawLayer(); o8Reqs(true);
+    }).catch(function (e) {
+      if (me.dead) return;
+      a.sending = false; var w = o8Why(e);
+      if (w.err === 'missing' || w.err === 'refused') { me.denied.o8 = true; toast(ERR[w.err]); M.act = null; draw(); return; }
+      a.err = w.err; a.msg = w.msg || ''; if (w.refresh) { a.dec = null; o8Reqs(true); }
+      drawLayer();
+    });
+  }
+  function o8Cancel(id) {
+    var me = M, r = o8ReqBy(id); if (!me || !r || !r.mine || (K.o8busy && K.o8busy[id])) return;
+    if (me.demo) { toast(DEMO_NOTE); return; }
+    if (!online()) { toast(ERR.offline); return; }
+    K.o8busy = K.o8busy || {}; K.o8busy[id] = 1;
+    Promise.resolve().then(function () { return me.client.rpc('inventory_option_request_cancel_v1', { p_request_id: id }); }).then(function (res) {
+      if (res && res.error) throw res.error;
+      if (!res || !res.data || res.data.ok === false) throw { message: 'failed' };
+      toast('Request cancelled.');
+    }).catch(function (e) {
+      var w = o8Why(e); if (w.err === 'missing' || w.err === 'refused') me.denied.o8 = true;
+      toast(w.err === 'o8' ? w.msg : ERR[w.err] || ERR.other);
+    }).then(function () { delete K.o8busy[id]; return o8Reqs(true); }).then(function () { if (M === me) o8Redraw(); });
+  }
+  function o8Wait(it) {
+    var wl = o8Mine(it.id); if (!wl.length) return '';
+    return '<div class="I_wait" role="group" aria-label="Waiting for approval"><h3 class="I_opth">Waiting for approval</h3>' + wl.map(function (r) {
+      var nm = r.action === 'add' ? r.payload.title : r.optionTitle;
+      return '<div class="I_wrow"><p class="I_wt">' + esc(O8_WORD[r.action] + (nm ? ': ' + nm : '')) + '</p><button class="btn btn-ghost I_undobtn" type="button" data-act="o8-cancel" data-id="' + esc(r.id) + '" aria-label="Cancel the request: ' + esc(O8_WORD[r.action] + (nm ? ' ' + nm : '')) + '">Cancel</button></div>';
+    }).join('') + '</div>';
   }
   function relPrev(a) { if (a && a.prev && root.URL && root.URL.revokeObjectURL) { try { root.URL.revokeObjectURL(a.prev); } catch (e) { /* gone already */ } } if (a) a.prev = null; }
   // Cross-origin read of an option picture; anything that goes wrong is one plain line.
@@ -523,6 +796,7 @@
     var bs = [], b = function (act, text, extra) { bs.push('<button class="btn btn-ghost I_mb" type="button" data-act="' + act + '"' + (extra || '') + '>' + text + '</button>'); };
     if (rt.shopping) { if (K.shop && K.shop.length) { b('shop-share', 'Share as text'); b('shop-image', 'Save as image'); if (allowed('report')) b('report', 'PDF to Telegram', ' data-k="order"'); } }
     else if (K.items) { if (addLowCount()) b('addlow-open', 'Add low items to the shopping list'); if (allowed('tidy')) b('tidy', 'Tidy categories'); if (!M.denied.report) b('report', 'Send a report'); if (allowed('labels')) b('labels', 'Print QR labels'); }
+    if (canManage(M.role) && o8On()) b('o8-reqs', 'Requests' + (o8Count() ? ' ' + o8Count() : ''));
     return bs.length ? '<details class="I_menu"><summary class="btn btn-ghost I_mbtn" aria-label="More inventory actions">' + gi('more') + '</summary><div class="I_menuin">' + bs.join('') + '</div></details>' : '';
   }
   function renderTop(rt) {
@@ -541,6 +815,7 @@
     if (needN) pills += pl('chip', 'need', 'note', needN + ' to count', 'I_pinfo');
     if (!s.low && !needN) pills = '<span class="chip I_pill I_pok">' + gi('check', 's16') + ' Stock is fine</span>' + pills;
     if (n) pills += pl('tab', 'shopping', 'bag', n + ' on list', 'I_pinfo');
+    if (o8Count()) pills += pl('o8-reqs', 'x', 'note', o8Count() + (o8Count() === 1 ? ' request' : ' requests'), 'I_pinfo');
     h += '<div class="I_pills" role="group" aria-label="Stock status">' + pills + '</div>';
     // s107 B4: the search and the filter chips stay under the app bar while the list scrolls
     h += '<div class="I_find"><div class="I_srow"><div class="field"><label class="sr" for="I_q">Search items</label><div class="input"><input id="I_q" type="search" autocomplete="off" enterkeyhint="search" value="' + esc(K.q) + '" placeholder="Search items"></div></div>' +
@@ -677,7 +952,7 @@
   function row(label, val) { return '<div class="I_kv"><dt>' + label + '</dt><dd>' + val + '</dd></div>'; }
   function errBox(a) {
     if (!a.err) return '';
-    var t = a.err === 'taken' ? 'That code is already linked to ' + (a.takenName || 'another item') + '.' : ERR[a.err] || ERR.other;
+    var t = a.err === 'taken' ? 'That code is already linked to ' + (a.takenName || 'another item') + '.' : a.err === 'o8' ? a.msg : ERR[a.err] || ERR.other;
     return '<div class="errbox" role="alert">' + gi('alert') + '<span>' + esc(t) + '</span></div>' +
       (a.takenId ? '<button class="btn btn-secondary btn-block" type="button" data-act="open-taken" data-id="' + esc(a.takenId) + '">Open ' + esc(a.takenName || 'it') + '</button>' : '');
   }
@@ -710,6 +985,7 @@
     if (a.kind === 'addlow') return renderAddLow(a);
     if (a.kind === 'copytext') return renderCopy(a);
     if (a.kind === 'create') return renderCreate(a);
+    if (/^o8/.test(a.kind)) return o8Render(a);
     var it = itemOf(a); if (!it) return null;
     var v = a.vals || {}, m = M.role, h;
     if (a.kind === 'history') return renderHistory(a, it);
@@ -1013,6 +1289,7 @@
     var a = M.act;
     if (act === 'close') return closeSheet();
     if (act === 'undo') { var ue = undoById(attr(t, 'data-id')); if (!ue || (a && a.sending) || K.denied[ue.call.fn]) return; M.act = { kind: 'undo', entry: ue, step: 'confirm' }; drawLayer(); return; }
+    if (act.indexOf('o8-') === 0 || (a && act === 'back' && /^o8/.test(a.kind))) return o8Click(act, t, a);
     if (!a) return;
     if (a.sending) return; // nothing, not even Close, while a write is in flight
     if (act === 'al-tick') { if (a.kind !== 'addlow') return; var tl = a.lines.filter(function (l) { return l.itemId === attr(t, 'data-id'); })[0]; if (tl && !tl.ok) { tl.on = !tl.on; if (!tl.on) tl.fail = false; a.bad = false; drawLayer(); } return; }
@@ -1134,6 +1411,7 @@
     var a = M && M.act; if (!a || a.sending || a.kind === 'menu') return;
     if (a.kind === 'undo' && a.err === 'tooLate') return closeSheet();
     if (a.kind === 'cconfirm') return cconfirmDone(a, true);
+    if (/^o8/.test(a.kind)) return o8Submit(a);
     if (a.kind === 'tidy' || (a.kind === 'photo' && a.step !== 'confirm')) return;
     if (a.kind === 'walk') return walkSubmit(a);
     if (a.kind === 'bought') return boughtSubmit(a);
@@ -1806,7 +2084,7 @@
     newKey: newKey, errKind: errKind, ERR: ERR, countCall: countCall, usageCall: usageCall, receiptCall: receiptCall, shopAddCall: shopAddCall, shopSetCall: shopSetCall, normalizeShop: normalizeShop,
     fitSize: fitSize, phpText: phpText, photoSetCall: photoSetCall, recatCall: recatCall, mintCall: mintCall, labelsCall: labelsCall,
     manilaToday: manilaToday, demoItems: demoItems, PROPERTY_ID: PROPERTY_ID, canManage: canManage, canUse: canUse,
-    normOpts: normOpts, setUsualCall: setUsualCall, optSort: optSort, chipsFor: chipsFor,
+    normOpts: normOpts, normReqs: normReqs, o8Link: o8Link, o8Pic: o8Pic, setUsualCall: setUsualCall, optSort: optSort, chipsFor: chipsFor,
     lowItems: lowItems, shopLines: shopLines, shopText: shopText, shopLayout: shopLayout, unitPrice: unitPrice, wrapText: wrapText, longDate: longDate
   } };
 })(typeof window !== 'undefined' ? window : this);

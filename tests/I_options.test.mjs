@@ -60,14 +60,14 @@ test('I_options role gating: owner and admin get Make usual and Use as item phot
   assert.doesNotMatch(w.sheet(), /₱/);
 });
 
-test('I_options PGRST202 hides the section silently for the visit; an empty list shows nothing', async () => {
+test('I_options PGRST202 hides the section silently for the visit; an empty list shows no option rows', async () => {
   const e = await make('owner', { rpc: { inventory_item_options_v1: () => ({ data: null, error: { code: 'PGRST202', message: 'Could not find the function' } }) } });
   await e.mount(''); await e.open('i1');
   assert.doesNotMatch(e.sheet(), /Options/); assert.equal(e.toasts.length, 0); assert.doesNotMatch(e.sheet(), /role="alert"/);
   await e.act('close'); await e.open('i2');
   assert.equal(calls(e, 'inventory_item_options_v1').length, 1, 'not asked again this visit');
   const z = await make('owner', { rpc: { inventory_item_options_v1: () => ({ data: { ok: true, item_id: 'i1', options: [] }, error: null }) } });
-  await z.mount(''); await z.open('i1'); assert.doesNotMatch(z.sheet(), /Options/);
+  await z.mount(''); await z.open('i1'); assert.doesNotMatch(z.sheet(), /class="I_opt"/); assert.match(z.sheet(), /Add a product/); // s108: an empty list still offers Add a product
 });
 
 test('I_options Make usual: confirm first, then inventory_item_option_set_usual_v1 {p_option_id}; the list redraws and Undo sets the previous usual back', async () => {

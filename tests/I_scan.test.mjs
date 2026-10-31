@@ -75,7 +75,7 @@ test('I_scan an unknown code: a cleaner and finance are told to ask the owner an
     await e.act('scan-pick'); await e.act('scan-new'); await e.act('pick', { 'data-id': 'i2' }); // hand-made clicks
     assert.doesNotMatch(e.sheet(), /which item|Counted now|Link code/, role);
     await e.submit();
-    assert.equal(e.client.calls.filter((c) => c[0] === 'rpc' && c[1] !== 'get_inventory_catalogue_v1').length, 0, role);
+    assert.equal(e.client.calls.filter((c) => c[0] === 'rpc' && c[1] !== 'get_inventory_catalogue_v1' && c[1] !== 'inventory_option_requests_v1').length, 0, role); // s108: the pending-requests read is not a write
   }
 });
 
