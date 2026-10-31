@@ -12,9 +12,9 @@ test('last-readings is asked for this stay\'s check-out date, and a newer ask wi
   assert.match(html, /addEventListener\('change', \(\) => \{ fetchPrevReadings\(\); \}\)/);
 });
 
-test('submit refuses a reading above the later stay as well as below the stay before', () => {
-  assert.match(html, /is higher than the reading for the later stay \(\$\{next\}\)/);
-  assert.match(html, /is lower than the reading for the stay before \(\$\{m\.prev\}\)/);
+test('submit asks about a reading above the later stay as well as below the stay before (never refuses)', () => {
+  assert.match(html, /is higher than the next stay \(\$\{m\.next\}\)\. Is the number right\?/);
+  assert.match(html, /is lower than the last stay \(\$\{m\.prev\}\)\. Is the number right\?/);
   assert.doesNotMatch(html, /is lower than the last reading/);
 });
 

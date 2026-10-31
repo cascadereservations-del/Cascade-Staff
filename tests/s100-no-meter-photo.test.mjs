@@ -182,15 +182,22 @@ test('X1: a declared no-photo report with a reading below the earlier or above t
 test('s104: with photos the same readings only get a gentle note and never refuse', () => {
   const lo = findingsWorld(false, 90), hi = findingsWorld(false, 250);
   assert.equal(lo.meterOrderRefuses(['x']), false);
-  assert.equal(lo.meterFindings()[0], "Electric: 90 kWh is lower than the last stay's (100). Please check it - the report will still be sent.");
-  assert.equal(hi.meterFindings()[0], "Electric: 250 kWh is higher than the later stay's (200). Please check it - the report will still be sent.");
+  assert.equal(lo.meterFindings()[0], 'Electric: Last stay was 100 kWh, so this should be 100 or more. Please check the photo.');
+  assert.equal(hi.meterFindings()[0], 'Electric: The next stay was 200 kWh, so this should be 200 or less. Please check the photo.');
 });
 
-test('s104 wiring: the submit gate only toasts a note and never returns early; no D-219 refusal text remains', () => {
+test('s104 wiring: submit asks once in an in-app sheet, keyed on the readings; Yes always sends; no toast-only path, no window.confirm', () => {
   const gate = cut('const backwards = [', 'state.isSubmitting = true;');
-  assert.match(gate, /if \(backwards\.length\) \{\s*showToast\(/);
-  assert.doesNotMatch(gate, /return;|did not run backwards|not sent/);
-  assert.doesNotMatch(html, /A meter does not run backwards/);
+  assert.match(gate, /state\.meterOrderConfirmedKey !== orderKey\) \{\s*openMeterOrderSheet\(backwards, orderKey\);\s*return;/);
+  assert.match(gate, /\$\{m\.label\} \$\{v\} is lower than the last stay \(\$\{m\.prev\}\)\. Is the number right\?/);
+  assert.doesNotMatch(gate, /showToast|confirm\(/);
+  const sheet = cut('function openMeterOrderSheet', 'function meterFindings()');
+  assert.match(sheet, /meter-order-send[\s\S]*meterOrderConfirmedKey = modal\.dataset\.key[\s\S]*proceedWithSubmission\(\)/);
+  assert.match(sheet, /meter-order-fix[\s\S]*focus\(\)/);
+  assert.doesNotMatch(sheet, /window\.confirm/);
+  assert.match(html, /id="meter-order-fix"[^>]*>Fix the number</);
+  assert.match(html, /id="meter-order-send"[^>]*>Yes, send it</);
+  assert.match(html, /id="meter-order-modal" role="dialog" aria-modal="true"/);
 });
 
 test('s104: a follow-up row with resend_requested_at says Lloyd asked for a new photo', () => {

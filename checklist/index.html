@@ -4997,6 +4997,17 @@ html.K_folded .phase-header.K_hasimg .K_zone { background: rgba(22,13,6,0.74); b
   </section><!-- /phase-6 -->
 
 <!-- Date confirmation dialog — shown when cleaning date has no clear calendar context -->
+<div class="modal-overlay" id="meter-order-modal" role="dialog" aria-modal="true" aria-labelledby="meter-order-title">
+  <div class="modal-box">
+    <div class="modal-title" id="meter-order-title">Check the meter number</div>
+    <div class="modal-body" id="meter-order-body"></div>
+    <div class="modal-actions">
+      <button class="modal-btn secondary" id="meter-order-fix" type="button">Fix the number</button>
+      <button class="modal-btn primary" id="meter-order-send" type="button">Yes, send it</button>
+    </div>
+  </div>
+</div>
+
 <div class="modal-overlay" id="date-confirm-modal" role="dialog"
      aria-modal="true" aria-labelledby="date-confirm-title">
   <div class="modal-box">
@@ -7248,6 +7259,27 @@ async function photoFingerprint(photo) {
 const METER_ORDER_NOTE = 'This number does not fit the readings before and after. It is kept for now and checked when the next meter photo comes in.';
 // s104: nothing blocks a report. An out-of-order number is a gentle note; the server saves the report and flags the reading for the admin.
 function meterOrderRefuses() { return false; }
+/* s104: the one-time question when a reading is still out of order at submit. A small sheet in the page, no window.confirm; works offline. */
+function openMeterOrderSheet(items, key) {
+  const modal = el('meter-order-modal'), body = el('meter-order-body');
+  if (!modal || !body) return;
+  body.innerHTML = items.map(b => `<p>${escapeHtml(b.text)}</p>`).join('');
+  modal.dataset.key = key; modal.dataset.field = items[0].id;
+  modal.classList.add('open');
+  el('meter-order-fix')?.focus();
+}
+function initMeterOrderSheet() {
+  const modal = el('meter-order-modal');
+  const close = () => modal?.classList.remove('open');
+  const fix = () => { const f = modal?.dataset.field; close(); const fe = f && el(f); fe?.scrollIntoView({ behavior: 'smooth', block: 'center' }); fe?.focus(); };
+  el('meter-order-fix')?.addEventListener('click', fix);
+  el('meter-order-send')?.addEventListener('click', () => {
+    state.meterOrderConfirmedKey = modal.dataset.key || '';
+    close();
+    proceedWithSubmission();
+  });
+  modal?.addEventListener('keydown', e => { if (e.key === 'Escape') fix(); });
+}
 
 function meterFindings() {
   const out  = [];
@@ -7288,7 +7320,7 @@ function meterFindings() {
       return;
     }
     if (val < m.prev) {
-      out.push(`${m.label}: ${val} ${m.unit} is lower than the last stay's (${m.prev}). Please check it - the report will still be sent.`);
+      out.push(`${m.label}: Last stay was ${m.prev} ${m.unit}, so this should be ${m.prev} or more. Please check the photo.`);
       return;
     }
     const nextV = state.nextReading?.[m.i === 0 ? 'electric' : 'water'];
@@ -7297,7 +7329,7 @@ function meterFindings() {
       return;
     }
     if (nextV > 0 && val > nextV) {
-      out.push(`${m.label}: ${val} ${m.unit} is higher than the later stay's (${nextV}). Please check it - the report will still be sent.`);
+      out.push(`${m.label}: The next stay was ${nextV} ${m.unit}, so this should be ${nextV} or less. Please check the photo.`);
       return;
     }
     if (val > m.prev * DIGIT_SLIP_FACTOR && m.prev > 0) {
@@ -10563,20 +10595,21 @@ async function proceedWithSubmission() {
      submit-cleaning saves the report and flags the reading for the admin to reinstate, edit or ask for a new photo. */
   await fetchPrevReadings().catch(() => {});
   const backwards = [
-    { label: 'electric', unit: 'kWh', id: 'electricMeterReading', prev: state.prevElectricReading },
-    { label: 'water',    unit: 'm³',  id: 'waterMeterReading',    prev: state.prevWaterReading },
+    { label: 'Electric', unit: 'kWh', id: 'electricMeterReading', prev: state.prevElectricReading, next: state.nextReading?.electric },
+    { label: 'Water',    unit: 'm³',  id: 'waterMeterReading',    prev: state.prevWaterReading,    next: state.nextReading?.water },
   ].map(m => {
     const v = parseFloat((el(m.id)?.value || '').trim());
-    const next = state.nextReading?.[m.label];
     if (!isNaN(v) && m.prev !== null && m.prev !== undefined && m.prev > 0 && v < m.prev)
-      return `${m.label} ${v} ${m.unit} is lower than the reading for the stay before (${m.prev})`;
-    if (!isNaN(v) && next > 0 && v > next)
-      return `${m.label} ${v} ${m.unit} is higher than the reading for the later stay (${next})`;
+      return { id: m.id, text: `${m.label} ${v} is lower than the last stay (${m.prev}). Is the number right?`, key: `${m.id}:${v}<${m.prev}` };
+    if (!isNaN(v) && m.next > 0 && v > m.next)
+      return { id: m.id, text: `${m.label} ${v} is higher than the next stay (${m.next}). Is the number right?`, key: `${m.id}:${v}>${m.next}` };
     return null;
   }).filter(Boolean);
-  if (backwards.length) {
-    showToast(state.meterPhotosSkipped === true ? METER_ORDER_NOTE
-      : `The ${backwards.join(', and the ')}. Please check it - the report will still be sent.`, '', 7000);
+  // Ask once per set of readings; "Yes, send it" always sends (it never blocks).
+  const orderKey = backwards.map(b => b.key).join('|');
+  if (backwards.length && state.meterOrderConfirmedKey !== orderKey) {
+    openMeterOrderSheet(backwards, orderKey);
+    return;
   }
 
   state.isSubmitting = true;
@@ -11592,6 +11625,7 @@ function showDateConfirmDialog(dateStr, upcoming, daysToNext) {
 }
 
 function initDateConfirmModal() {
+  initMeterOrderSheet();
   el('date-confirm-cancel')?.addEventListener('click', () => {
     el('date-confirm-modal')?.classList.remove('open');
     // Cleaner chose to change date — clear it so they must re-enter
