@@ -271,9 +271,9 @@
   }
   function loadShopSoon() { var me = M; if (me && !K.shop) loadShop(); }
   function loadShop() {
-    var me = M; if (!me || me.demo || !me.client || me.loadErr) return;
+    var me = M; if (!me || me.demo || !me.client || me.loadErr) return Promise.resolve();
     var run = function () { return me.client.from('inventory_shopping_list').select('id,item_id,item_name,quantity,purchase_unit,reason,status,proposed_by,proposed_at').eq('property_id', me.pid).in('status', ['proposed', 'approved']).order('proposed_at', { ascending: false }).limit(100); };
-    Promise.resolve().then(run).then(function (r) {
+    return Promise.resolve().then(run).then(function (r) {
       if (me.dead) return;
       if (r && !r.error) { K.shop = normalizeShop(r.data, me.uid); me.shopErr = null; } else me.shopErr = true;
       draw();
@@ -1073,21 +1073,25 @@
   function nav() { return typeof navigator !== 'undefined' ? navigator : (root.navigator || null); }
   function longDate(iso) { var a = String(iso || '').slice(0, 10).split('-'); return a.length === 3 && +a[1] ? +a[2] + ' ' + MONTHS[+a[1] - 1] + ' ' + a[0] : ''; }
   function packOf(it, opt) { var s = opt ? num(opt.packSize) : null; return s != null && s > 0 ? s : (it.perPack || 1); }
-  // PHP for one pack: the quoted pack price, else a unit price x pack; null when nothing is priced. Only roles that already hold prices ever have an opt or a lastPrice/cost.
-  function packPrice(it, opt, pack) {
-    if (opt && num(opt.quoted) != null) return num(opt.quoted);
+  // PHP for one of the item's own purchase units (what a list quantity is counted in): the quoted pack price spread over the pack, else a unit price x units per purchase; null when nothing is priced. Only roles that already hold prices ever have an opt or a lastPrice/cost.
+  function unitPrice(it, opt) {
+    var per = it.perPack || 1, qd = opt ? num(opt.quoted) : null;
+    if (qd != null && qd > 0) return qd * per / packOf(it, opt);
     var u = opt && num(opt.lastUnit) != null ? num(opt.lastUnit) : it.lastPrice != null ? it.lastPrice : it.cost != null ? it.cost : null;
-    return u == null ? null : Math.round(u * pack * 100) / 100;
+    return u == null ? null : u * per;
   }
   function packLabel(opt) { return opt ? (opt.label || (num(opt.packSize) > 1 ? 'pack of ' + fmt(opt.packSize) : '')) : ''; }
-  // Low and Out items that are not on the open list yet, each with the amount to buy back up to Buy-up-to in whole packs (the Usual option's pack when known, else the item's own pack).
-  // No Buy-up-to (or no count): the Running low rule, lowQty. Out first, then by name.
+  // Low and Out items that are not on the open list yet, each with the amount to buy back up to Buy-up-to: rounded up to whole Usual packs (else the item's own pack), then counted in the item's own purchase units, which is what save_shopping_item_v1 takes.
+  // No Buy-up-to (or no count), or packs that are not a whole number of purchase units: the Running low rule, lowQty. Out first, then by name.
   function lowItems(items, shop, usual) {
     var on = {}; (shop || []).forEach(function (r) { if (r.itemId) on[r.itemId] = 1; });
     return (items || []).filter(function (i) { return level(i) !== 'ok' && !on[i.id]; }).sort(function (a, b) { return (level(a) === 'out' ? 0 : 1) - (level(b) === 'out' ? 0 : 1) || a.name.localeCompare(b.name); }).map(function (i) {
-      var opt = usual && usual[i.id] || null, par = i.par != null && i.qty != null, pack = par ? packOf(i, opt) : (i.perPack || 1);
-      var qty = par ? Math.max(1, Math.ceil(Math.round(Math.max(i.par - i.qty, 0) * 100) / 100 / pack)) : lowQty(i);
-      return { itemId: i.id, name: i.name, qty: qty, unit: i.purchaseUnit || (pack > 1 ? 'pack' : unitOf(i)), opt: opt, price: packPrice(i, opt, pack) };
+      var opt = usual && usual[i.id] || null, qty = lowQty(i);
+      if (i.par != null && i.qty != null) {
+        var per = i.perPack || 1, ps = packOf(i, opt), need = Math.round(Math.max(i.par - i.qty, 0) * 100) / 100, q = Math.round(Math.max(1, Math.ceil(need / ps)) * ps / per * 100) / 100;
+        if (q % 1 === 0) qty = q;
+      }
+      return { itemId: i.id, name: i.name, qty: qty, unit: i.purchaseUnit || unitOf(i), pu: i.purchaseUnit || null, opt: opt, price: unitPrice(i, opt) };
     });
   }
   // The shopping list as text: title, one line per open row, a total for the roles that see prices. rows are normalizeShop rows.
@@ -1096,26 +1100,32 @@
     (rows || []).forEach(function (r) {
       var it = (o.items || []).filter(function (i) { return i.id === r.itemId; })[0] || null, opt = it && o.usual && o.usual[it.id] || null, u = r.unit || (it && it.unit) || '', paren = '', p = null;
       if (money && it) {
-        p = packPrice(it, opt, packOf(it, opt));
-        var lb = packLabel(opt) || (opt && opt.supplier) || '';
-        paren = lb && p != null ? lb + ' @ PHP ' + pesoNum(p) : lb || (p != null ? 'PHP ' + pesoNum(p) : '');
+        p = unitPrice(it, opt);
+        var lb = packLabel(opt) || (opt && opt.supplier) || '', at = p != null ? 'PHP ' + pesoNum(p) + (u ? ' a ' + unitWord(1, u) : '') : '';
+        paren = lb && at ? lb + ' @ ' + at : lb || at;
       }
       if (money) { if (r.qty != null && p != null) tot += r.qty * p; else unk = true; }
       list.push(r.name + (r.qty != null ? ' — ' + uq(r.qty, u).trim() : '') + (paren ? ' (' + paren + ')' : ''));
     });
-    return { title: 'Cascade shopping list · ' + longDate(o.today), rows: list, total: money && list.length ? (unk ? 'Total: some prices unknown' : 'Total: PHP ' + pesoNum(tot)) : '' };
+    return { title: 'Cascade shopping list · ' + longDate(o.today), rows: list, total: money && list.length ? (unk ? 'Total: some prices unknown' : 'Total: PHP ' + pesoNum(Math.round(tot * 100) / 100)) : '' };
   }
   function shopText(rows, o) { var d = shopLines(rows, o); return [d.title, ''].concat(d.rows.map(function (s) { return '☐ ' + s; }), d.total ? ['', d.total] : []).join('\n'); }
+  // A word wider than the line is cut into pieces that fit (a long title or product name never runs off the picture).
   function wrapText(measure, font, text, maxW) {
-    var words = String(text).split(' '), out = [], cur = '';
-    words.forEach(function (w) { var t = cur ? cur + ' ' + w : w; if (cur && measure(font, t) > maxW) { out.push(cur); cur = w; } else cur = t; });
+    var out = [], cur = '';
+    function cut(w) { while (w.length > 1 && measure(font, w) > maxW) { var n = w.length - 1; while (n > 1 && measure(font, w.slice(0, n)) > maxW) n--; out.push(w.slice(0, n)); w = w.slice(n); } return w; }
+    String(text).split(' ').forEach(function (w) {
+      var t = cur ? cur + ' ' + w : w;
+      if (cur && measure(font, t) > maxW) { out.push(cur); t = w; }
+      cur = measure(font, t) > maxW ? cut(t) : t;
+    });
     if (cur) out.push(cur);
     return out;
   }
   // The picture: positions only, so it can be tested without a canvas. measure(font, text) gives a width in px.
   function shopLayout(measure, d, W) {
     var pad = 56, box = 32, gap = 20, f1 = '700 44px ' + SYSFONT, f2 = '600 34px ' + SYSFONT, f3 = '700 36px ' + SYSFONT, ops = [], y = pad + 44;
-    ops.push({ t: 'text', s: d.title, x: pad, y: y, font: f1, c: PNG_INK });
+    wrapText(measure, f1, d.title, W - 2 * pad).forEach(function (l, n) { y = pad + 44 + n * 54; ops.push({ t: 'text', s: l, x: pad, y: y, font: f1, c: PNG_INK }); });
     y += 28; ops.push({ t: 'rule', x: pad, y: y, w: W - 2 * pad, c: PNG_LINE }); y += 36;
     d.rows.forEach(function (s) {
       var ls = wrapText(measure, f2, s, W - 2 * pad - box - gap);
@@ -1140,7 +1150,7 @@
     });
     c.toBlob(function (b) { cb(b ? null : new Error('no picture'), b); }, 'image/png');
   }
-  // A phone that can share files gets the share sheet; anything else gets a download. Resolves 'shared', 'cancelled' or 'downloaded'.
+  // A phone that can share files gets the share sheet; anything else gets a download. Resolves 'shared', 'cancelled', 'failed' (the share sheet itself broke: the caller shows the picture to press and hold) or 'downloaded'.
   function shopImageOut(blob, name) {
     var n = nav(), F = root.File, file = null, doc = root.document;
     try { file = F ? new F([blob], name, { type: 'image/png' }) : null; } catch (e) { file = null; }
@@ -1151,7 +1161,7 @@
       return 'downloaded';
     }
     if (file && n && typeof n.canShare === 'function' && typeof n.share === 'function' && n.canShare({ files: [file] })) {
-      return Promise.resolve(n.share({ files: [file], title: 'Cascade shopping list' })).then(function () { return 'shared'; }, function (e) { return e && e.name === 'AbortError' ? 'cancelled' : download(); });
+      return Promise.resolve(n.share({ files: [file], title: 'Cascade shopping list' })).then(function () { return 'shared'; }, function (e) { return e && e.name === 'AbortError' ? 'cancelled' : 'failed'; });
     }
     return Promise.resolve(download());
   }
@@ -1164,7 +1174,7 @@
     if (K.usualP) return K.usualP;
     var me = M;
     if (!wantUsual() || !me.client || !supOK() || !root.I_Suppliers.usualMap || !online()) return Promise.resolve({});
-    K.usualP = Promise.resolve().then(function () { return root.I_Suppliers.usualMap(supCtx()); }).then(function (m) { K.usual = m || {}; K.usualAt = nowMs(); K.usualP = null; return K.usual; }, function () { K.usualP = null; return {}; });
+    K.usualP = Promise.resolve().then(function () { return root.I_Suppliers.usualMap(supCtx()); }).then(function (m) { K.usual = m || {}; K.usualAt = nowMs(); K.usualP = null; return K.usual; }, function () { K.usualP = null; K.usual = {}; K.usualAt = nowMs() - 240000; return {}; }); // a failed read is retried after a minute, not on every redraw
     return K.usualP;
   }
   function addLowCount() { return allowed('addlow') ? lowItems(K.items, K.shop, M.demo ? demoUsual() : K.usual).length : 0; }
@@ -1196,7 +1206,11 @@
       var d = shopLines(K.shop, shopCtx(usual)), name = 'cascade-shopping-' + manilaToday(nowMs()) + '.png';
       shopImageBlob(d, function (err, blob) {
         if (err || !M) { if (M) toast('The picture could not be made. Try again.'); return; }
-        shopImageOut(blob, name).then(function (how) { if (M && how === 'downloaded') toast('Picture saved to your downloads.'); }, function () { if (M) toast('The picture could not be saved. Try again.'); });
+        shopImageOut(blob, name).then(function (how) {
+          if (!M) return;
+          if (how === 'downloaded') toast('Picture saved to your downloads.');
+          else if (how === 'failed') { M.act = { kind: 'copytext', img: root.URL.createObjectURL(blob) }; drawLayer(); } // the object URL lives until the page closes
+        }, function () { if (M) toast('The picture could not be saved. Try again.'); });
       });
     });
   }
@@ -1204,16 +1218,18 @@
     if (!allowed('addlow') || (M.act && M.act.sending)) return;
     var a = M.act = { kind: 'addlow', step: 'load', lines: [], vals: {} };
     drawLayer();
-    usualP().then(function (usual) {
+    Promise.all([usualP(), loadShop()]).then(function (got) { // the list is read again first: a row added since the last read must not be added twice
       if (!M || M.act !== a) return;
-      a.lines = lowItems(K.items, K.shop, usual).map(function (l) { l.on = true; l.key = newKey('low'); return l; });
+      a.lines = lowItems(K.items, K.shop, got[0]).map(function (l) { l.on = true; l.key = addLowKey(l); return l; });
       a.step = 'pick'; drawLayer();
     });
   }
+  // One key per item and amount, kept across sheet reopens, dropped on that line's success and forgotten after 10 minutes (as the other write keys).
+  function addLowKey(l) { var k = 'addlow|' + l.itemId + '|' + l.qty, ke = K.keys[k]; if (!ke || nowMs() - ke.at > 600000) ke = K.keys[k] = { key: newKey('low'), at: nowMs() }; return ke.key; }
   function alLine(l, money) {
     var bits = [uq(l.qty, l.unit)];
     if (l.opt) bits.push([l.opt.supplier, packLabel(l.opt)].filter(Boolean).join(' · '));
-    if (money && l.price != null) bits.push('PHP ' + pesoNum(l.price) + ' a ' + (l.unit || 'pack'));
+    if (money && l.price != null) bits.push('PHP ' + pesoNum(l.price) + ' a ' + unitWord(1, l.unit || 'pack'));
     return bits.filter(Boolean).join(' · ');
   }
   function renderAddLow(a) {
@@ -1238,11 +1254,11 @@
     var chain = Promise.resolve(), kinds = [];
     rows.forEach(function (l) {
       chain = chain.then(function () {
-        var it = itemById(l.itemId), c = shopAddCall(me.pid, it, { qty: fmt(l.qty), note: 'Running low (from the staff app)' }, l.key);
+        var c = shopAddCall(me.pid, { id: l.itemId, name: l.name, purchaseUnit: l.pu }, { qty: fmt(l.qty), note: 'Running low (from the staff app)' }, l.key); // from the line itself: an item dropped from the catalogue since must not freeze the sheet
         return Promise.resolve(me.client.rpc(c.fn, c.args)).then(function (r) {
           if (r && r.error) throw r.error;
           if (r && r.data && (r.data.ok === false || r.data.error)) throw { message: 'failed', data: r.data };
-          l.ok = r && r.data || {}; l.fail = false;
+          l.ok = r && r.data || {}; l.fail = false; delete K.keys['addlow|' + l.itemId + '|' + l.qty];
         }).then(null, function (e) { l.fail = true; kinds.push(errKind(e, online())); });
       });
     });
@@ -1251,9 +1267,10 @@
       a.sending = false;
       var okRows = a.lines.filter(function (l) { return l.ok; }), left = a.lines.filter(function (l) { return !l.ok && l.on; });
       if (okRows.length) setBatchUndo(a, okRows);
-      if (!left.length) { if (!a.undo) toast('Added ' + okRows.length + (okRows.length === 1 ? ' item' : ' items') + ' to the shopping list.'); if (me.opts.haptic) { try { me.opts.haptic('success'); } catch (x) { /* no haptics */ } } closeSheet(); load(); return; }
+      load(); // always: a write that landed (even on a failed call) shows in the list
+      if (!left.length) { if (!a.undo) toast('Added ' + okRows.length + (okRows.length === 1 ? ' item' : ' items') + ' to the shopping list.'); if (me.opts.haptic) { try { me.opts.haptic('success'); } catch (x) { /* no haptics */ } } closeSheet(); return; }
       if (!okRows.length && (kinds[0] === 'refused' || kinds[0] === 'missing')) { me.denied.shop = true; me.act = null; toast(ERR[kinds[0]]); drawLayer(); draw(); return; }
-      if (okRows.length) load(); else a.err = kinds[0] === 'offline' ? 'offline' : 'other';
+      if (!okRows.length) a.err = kinds[0] === 'offline' ? 'offline' : 'other';
       drawLayer();
     });
   }
@@ -1266,6 +1283,7 @@
     pushUndoEntry(a.undo);
   }
   function renderCopy(a) {
+    if (a.img) return head('Save the picture', 'Press and hold the picture to save it.') + '<div class="field"><img src="' + esc(a.img) + '" alt="Shopping list picture" style="width:100%;height:auto"></div><div class="I_btns"><button class="btn btn-primary btn-block" type="button" data-act="close">Close</button></div>';
     return head('Copy the list', 'Press and hold the text, then choose Copy.') + '<div class="field"><label for="I_copy">Shopping list</label><div class="input"><textarea id="I_copy" rows="8" readonly>' + esc(a.text) + '</textarea></div></div><div class="I_btns"><button class="btn btn-primary btn-block" type="button" data-act="close">Close</button></div>';
   }
 
@@ -1617,6 +1635,6 @@
     newKey: newKey, errKind: errKind, ERR: ERR, countCall: countCall, usageCall: usageCall, receiptCall: receiptCall, shopAddCall: shopAddCall, shopSetCall: shopSetCall, normalizeShop: normalizeShop,
     fitSize: fitSize, phpText: phpText, photoSetCall: photoSetCall, recatCall: recatCall, mintCall: mintCall, labelsCall: labelsCall,
     manilaToday: manilaToday, demoItems: demoItems, PROPERTY_ID: PROPERTY_ID, canManage: canManage, canUse: canUse,
-    lowItems: lowItems, shopLines: shopLines, shopText: shopText, shopLayout: shopLayout, packPrice: packPrice, longDate: longDate
+    lowItems: lowItems, shopLines: shopLines, shopText: shopText, shopLayout: shopLayout, unitPrice: unitPrice, wrapText: wrapText, longDate: longDate
   } };
 })(typeof window !== 'undefined' ? window : this);

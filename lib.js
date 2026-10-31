@@ -402,8 +402,9 @@
   function guestContact(g) {
     if (!g) return null;
     var phone = String(g.phone == null ? '' : g.phone).trim(), email = String(g.email == null ? '' : g.email).trim();
-    var m = g.messenger && typeof g.messenger === 'object' ? g.messenger : null, tel = phone.replace(/[^\d+]/g, '');
-    var out = { phone: phone || null, tel: tel.replace(/\D/g, '').length >= 5 ? 'tel:' + tel : null, email: email || null,
+    var m = g.messenger && typeof g.messenger === 'object' ? g.messenger : null;
+    var run = /\+?\(?\d[\d\s().-]{5,}\d/.exec(phone), dial = run ? run[0].replace(/[\s().-]/g, '') : ''; // only the first phone-like run is dialled: two numbers or a note around one never join into one
+    var out = { phone: phone || null, tel: /^\+?[0-9]{7,15}$/.test(dial) ? 'tel:' + dial : null, email: email || null,
       messenger: m ? (/^https:\/\/[^\s"'<>]+$/i.test(String(m.thread_url || '')) ? m.thread_url : MESSENGER_INBOX) : null };
     return out.phone || out.email || out.messenger ? out : null;
   }
@@ -705,7 +706,7 @@
     var c = canContact ? guestContact(g) : null, n = null;
     ['guest_count', 'num_guests', 'guests'].forEach(function (k) { if (n === null && g && typeof g[k] === 'number' && g[k] > 0) n = Math.round(g[k]); });
     if (n === null && canContact && g && Array.isArray(g.companions)) { var me = String(g.guest_name || '').trim().toLowerCase(), others = g.companions.filter(function (x) { return x && String(x.name || '').trim().toLowerCase() !== me; }); if (others.length) n = 1 + others.length; } // guest_companions holds the main guest's own row too
-    return { notes: key.slice(0, 3), more: total - Math.min(3, key.length), phone: c && c.phone && c.tel ? c.phone : null, tel: c && c.phone && c.tel ? c.tel : null, guests: n, id: !!(g && g.id_photo_path) || !!(g && g.arrival_ready && g.arrival_ready.id === true), idKnown: !!(g && (g.id_photo_path || (g.arrival_ready && typeof g.arrival_ready.id === 'boolean') || g.guest_id !== null)) }; // idKnown false: no ID photo and the stay is not linked to a guest record (guest_id null), so the pill says nothing rather than No ID yet
+    return { notes: key.slice(0, 3), more: total - Math.min(3, key.length), phone: c && c.phone ? c.phone : null, tel: c && c.tel ? c.tel : null, guests: n, id: !!(g && g.id_photo_path) || !!(g && g.arrival_ready && g.arrival_ready.id === true), idKnown: !!(g && (g.id_photo_path || (g.arrival_ready && typeof g.arrival_ready.id === 'boolean') || g.guest_id !== null)) }; // idKnown false: no ID photo and the stay is not linked to a guest record (guest_id null), so the pill says nothing rather than No ID yet
   }
   // 60 minutes: the same age at which notices_v1 stops sending its weather (SQL: c_at > now() - interval '60 minutes'). Never higher than the server rule.
   var WEATHER_STALE_MIN = 60;

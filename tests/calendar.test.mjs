@@ -180,3 +180,15 @@ test('a merge never hides a turnover or a clash', () => {
   const mirror = [oneChannel[0], { ...oneChannel[1], uid: 'e', source: 'direct', guest_name: 'Mia Santos' }];
   assert.equal(CS.mergeStays(mirror).length, 1, 'a direct booking and its Airbnb copy are one stay');
 });
+
+test('s106 guestContact dials only the first phone-like run; goodToKnow still shows a phone without tel', () => {
+  const t = (phone) => CS.guestContact({ phone }).tel;
+  assert.equal(t('0946-441-0188 / 0917 123 4567'), 'tel:09464410188');
+  assert.equal(t('call after 5pm 0946 4410188'), 'tel:09464410188');
+  assert.equal(t('+63 946 441 0188'), 'tel:+639464410188');
+  assert.equal(t('12345'), null);
+  assert.equal(t('1234567890123456'), null, '16 digits');
+  const c = CS.guestContact({ phone: 'ask at desk' }); assert.equal(c.phone, 'ask at desk'); assert.equal(c.tel, null);
+  const g = CS.goodToKnow({ phone: 'ask at desk' }, true); assert.deepEqual([g.phone, g.tel], ['ask at desk', null]);
+  assert.deepEqual([CS.goodToKnow({ phone: 'ask at desk' }, false).phone, CS.goodToKnow({ phone: '0917 555 0100' }, true).tel], [null, 'tel:09175550100']);
+});

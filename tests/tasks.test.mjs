@@ -292,7 +292,7 @@ test('guest card: owner/admin see phone (copy, Call), e-mail (copy) and Messenge
   const app = await boot({ role: 'admin', hash: '#calendar/stays', handlers: { current_staff_access: () => ACCESS('admin'), staff_home_v1: () => homeWith(g), tasks_list_v1: () => ({ error: null, data: ADMIN_TASKS }) } });
   const html = app.els['v-calendar'].innerHTML;
   assert.match(html, /data-act="copy" data-copy="\+63 917 &lt;123&gt; 4567"/);
-  assert.match(html, /href="tel:\+639171234567"/);
+  assert.doesNotMatch(html, /href="tel:/, "two unclosed fragments are not one dialable number (s106: only the first phone-like run is dialled)");
   assert.match(html, /data-copy="ana&quot;x@example.com"/);
   assert.match(html, /href="https:\/\/business\.facebook\.com\/latest\/inbox\/all\?selected_item_id=1" target="_blank" rel="noopener"/);
   assert.match(html, /Open in Messenger/);

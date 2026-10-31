@@ -12,7 +12,7 @@ const raw = () => ({ items: [
   item('i1', 'Toilet paper', 4, 12, { par: 36, unitCost: null }), // Usual pack of 12: need 32 -> 3 packs
   item('i2', 'Hand soap', 0, 3, { category: 'Kitchen', unit: 'bottles', purchaseUnit: null, unitsPerPurchase: 1, unitCost: null }), // no Buy up to: 2 x 3 = 6
   item('i3', 'Bath towels', 14, null, { category: 'Linen', consumable: false, unit: 'pieces' }), // not low
-  item('i4', 'Dish soap', 1, 2, { category: 'Kitchen', unit: 'bottles', par: 10, purchaseUnit: null, unitsPerPurchase: 1, unitCost: null }), // Usual pack of 6: need 9 -> 2 packs
+  item('i4', 'Dish soap', 1, 2, { category: 'Kitchen', unit: 'bottles', par: 10, purchaseUnit: null, unitsPerPurchase: 1, unitCost: null }), // Usual pack of 6: need 9 -> 2 packs = 12 bottles
   item('i5', 'Gas bottle', 2, 5, { category: 'Kitchen', unit: 'bottles', par: 7, purchaseUnit: null, unitsPerPurchase: 1, movementControlled: true, unitCost: null }), // controlled items are allowed: 7 - 2 = 5
   item('i6', 'Sponges', 1, 3, { category: 'Kitchen', unit: 'pieces', purchaseUnit: null, unitsPerPurchase: 1 }) // already on the list
 ] });
@@ -32,7 +32,7 @@ test('I_shop lowItems: Buy up to minus on hand in whole Usual packs, no-par rule
   const shop = L.normalizeShop(SHOP, null);
   const got = JSON.parse(JSON.stringify(L.lowItems(items, shop, USUAL))).map((x) => [x.itemId, x.qty, x.unit]);
   // out first (Hand soap), then by name: Dish soap, Gas bottle, Toilet paper
-  assert.deepEqual(got, [['i2', 6, 'bottles'], ['i4', 2, 'pack'], ['i5', 5, 'bottles'], ['i1', 3, 'pack']]);
+  assert.deepEqual(got, [['i2', 6, 'bottles'], ['i4', 12, 'bottles'], ['i5', 5, 'bottles'], ['i1', 3, 'pack']]);
   // without a Usual option the item's own pack (12) is used: 32 / 12 -> 3 as well; Dish soap 9 / 1 -> 9
   const plain = JSON.parse(JSON.stringify(L.lowItems(items, shop, {}))).map((x) => [x.itemId, x.qty]);
   assert.deepEqual(plain, [['i2', 6], ['i4', 9], ['i5', 5], ['i1', 3]]);
@@ -63,7 +63,7 @@ test('I_shop confirm sheet: nothing is sent before Confirm; lines show quantity,
   assert.deepEqual(names(e.sheet()), ['i2', 'i4', 'i5', 'i1']);
   const s = e.sheet();
   assert.match(s, /3 packs · SM Savemore · pack of 12 · PHP 210 a pack/);
-  assert.match(s, /2 packs · SM Savemore · Joy 6-pack · PHP 300 a pack/);
+  assert.match(s, /12 bottles · SM Savemore · Joy 6-pack · PHP 50 a bottle/);
   assert.match(s, /6 bottles/); assert.match(s, /5 bottles/);
   assert.doesNotMatch(s, /Sponges/); // already on the list
   assert.equal((s.match(/aria-pressed="true"/g) || []).length, 4); // all ticked
@@ -81,7 +81,7 @@ test('I_shop confirm sends exactly one save_shopping_item_v1 per ticked line wit
   assert.equal(new Set(c.map((x) => x[2].p_idempotency_key)).size, 3);
   assert.deepEqual(c.map((x) => ({ ...x[2].p_item })), [
     { item_id: 'i2', item_name: 'Hand soap', quantity: 6, purchase_unit: null, reason: REASON },
-    { item_id: 'i4', item_name: 'Dish soap', quantity: 2, purchase_unit: null, reason: REASON },
+    { item_id: 'i4', item_name: 'Dish soap', quantity: 12, purchase_unit: null, reason: REASON },
     { item_id: 'i1', item_name: 'Toilet paper', quantity: 3, purchase_unit: 'pack', reason: REASON }]);
   assert.equal(e.sheet(), ''); // the sheet closed
   assert.match(e.undo(), /Added 3 items to the shopping list/);
@@ -130,12 +130,12 @@ test('I_shop a refused write hides the button for the visit', async () => {
   assert.doesNotMatch(e.html(), /addlow-open/);
 });
 
-const PRICED = [onList('i1', 'Toilet paper', 3, 'pack'), onList('i4', 'Dish soap', 2, 'pack')];
+const PRICED = [onList('i1', 'Toilet paper', 3, 'pack'), onList('i4', 'Dish soap', 12, null)];
 test('I_shop share text for the owner: title, checklist lines with pack and price, a total', async () => {
   const e = await make('owner', { shop: PRICED }); await e.mount('shopping');
   const L = e.lib, shop = L.normalizeShop(PRICED, null), items = raw().items.map((r) => L.normalize(r, 'owner'));
   assert.equal(L.shopText(shop, { role: 'owner', items, usual: USUAL, today: '2026-10-15' }),
-    'Cascade shopping list · 15 Oct 2026\n\n☐ Toilet paper — 3 packs (pack of 12 @ PHP 210)\n☐ Dish soap — 2 packs (Joy 6-pack @ PHP 300)\n\nTotal: PHP 1,230');
+    'Cascade shopping list · 15 Oct 2026\n\n☐ Toilet paper — 3 packs (pack of 12 @ PHP 210 a pack)\n☐ Dish soap — 12 bottles (Joy 6-pack @ PHP 50 a bottle)\n\nTotal: PHP 1,230');
   // one row without a price: no invented total
   const mixed = L.normalizeShop([...PRICED, onList('i2', 'Hand soap', 6, null)], null);
   const t = L.shopText(mixed, { role: 'owner', items, usual: USUAL, today: '2026-10-15' });
@@ -146,7 +146,7 @@ test('I_shop share text for a cleaner has no money at all', async () => {
   const e = await make('cleaner', { shop: PRICED }); const L = e.lib;
   const items = raw().items.map((r) => L.normalize(r, 'cleaner'));
   const t = L.shopText(L.normalizeShop(PRICED, null), { role: 'cleaner', items, usual: USUAL, today: '2026-10-15' });
-  assert.equal(t, 'Cascade shopping list · 15 Oct 2026\n\n☐ Toilet paper — 3 packs\n☐ Dish soap — 2 packs');
+  assert.equal(t, 'Cascade shopping list · 15 Oct 2026\n\n☐ Toilet paper — 3 packs\n☐ Dish soap — 12 bottles');
   assert.doesNotMatch(t, /PHP|₱|Total|@/);
   // and through the button: the cleaner's shared text is that text
   const got = []; e.nav.share = async (o) => { got.push(o); };
@@ -249,4 +249,102 @@ test('I_shop the Usual options are read once for the owner, never for the cleane
   assert.equal(reads, 1);
   let cr = 0; const s2 = sup(); s2.usualMap = async () => { cr++; return USUAL; };
   const c = await make('cleaner', { sup: s2 }); await c.mount('shopping'); await c.act('shop-share'); assert.equal(cr, 0);
+});
+
+// ---- s106 fix round
+test('I_shop quantity is in the item purchase unit: a Usual pack of 6 on a 1-unit item is 12 bottles; a pack that is not a whole number of purchase units falls back to the Running low rule', async () => {
+  const e = await make('owner'); const L = e.lib;
+  const dish = L.normalize(raw().items[3], 'owner');
+  const w = JSON.parse(JSON.stringify(L.lowItems([dish], [], USUAL)))[0];
+  assert.deepEqual([w.qty, w.unit, w.pu], [12, 'bottles', null]);
+  // item bought by the box of 4, Usual pack 6, need 5 -> one pack of 6 = 1.5 boxes: not whole, so lowQty (ceil(5 / 4) = 2 boxes)
+  const box = L.normalize(item('bx', 'Soap bars', 3, 5, { par: 8, unit: 'bars', purchaseUnit: 'box', unitsPerPurchase: 4, unitCost: null }), 'owner');
+  const six = { bx: { itemId: 'bx', supplier: 'S', label: 'pack of 6', packSize: 6, quoted: 90, lastUnit: null } };
+  const b = JSON.parse(JSON.stringify(L.lowItems([box], [], six)))[0];
+  assert.deepEqual([b.qty, b.unit, b.pu], [2, 'box', 'box']);
+  // prices per purchase unit: 300 for 6 bottles of a 1-unit item = 50; box of 4 at a quoted 90 for 6 = 60 a box; last unit price x units per purchase
+  assert.equal(L.unitPrice(dish, USUAL.i4), 50);
+  assert.equal(L.unitPrice(box, six.bx), 60);
+  assert.equal(L.unitPrice(box, { packSize: 4, quoted: null, lastUnit: 5 }), 20);
+  assert.equal(L.unitPrice(box, { packSize: 4, quoted: 0, lastUnit: 5 }), 20, 'a zero quote is no quote');
+  assert.equal(L.unitPrice(L.normalize(item('z', 'Z', 1, 2, { unitCost: null }), 'owner'), null), null);
+});
+test('I_shop Add low then Bought adds the right units: 12 bottles asked, 12 bottles added to stock', async () => {
+  const e = await make('owner'); await e.mount('shopping'); await e.act('addlow-open'); await e.submit();
+  const q = saves(e).filter((x) => x[2].p_item.item_id === 'i4')[0][2].p_item.quantity;
+  const perPack = e.lib.normalize(raw().items[3], 'owner').perPack;
+  assert.equal(q * perPack, 12, 'Bought adds quantity x perPack, so the list quantity is in purchase units');
+  const t = e.lib.normalize(raw().items[0], 'owner');
+  assert.equal(saves(e).filter((x) => x[2].p_item.item_id === 'i1')[0][2].p_item.quantity * t.perPack, 36, 'Toilet paper: 3 packs x 12 rolls');
+});
+
+test('I_shop Add low: the shopping list is read again when the sheet opens', async () => {
+  const e = await make('owner'); await e.mount('shopping');
+  const reads = () => e.client.calls.filter((c) => c[0] === 'from' && c[1] === 'inventory_shopping_list').length;
+  const n0 = reads(); await e.act('addlow-open');
+  assert.equal(reads(), n0 + 1);
+});
+
+test('I_shop Add low: a failed line keeps its key for the retry from a reopened sheet, and the list is read again after a partial batch', async () => {
+  let fail = true;
+  const e = await make('owner', { rpc: (a) => (a.p_item.item_id === 'i4' && fail ? { data: null, error: { code: 'XX000', message: 'boom' } } : null) });
+  await e.mount('shopping'); await e.act('addlow-open');
+  const reads = () => e.client.calls.filter((c) => c[0] === 'from' && c[1] === 'inventory_shopping_list').length, n0 = reads();
+  await e.submit();
+  assert.ok(reads() > n0, 'a partial batch reloads the list');
+  const k1 = saves(e).filter((x) => x[2].p_item.item_id === 'i4')[0][2].p_idempotency_key;
+  const kOk = saves(e).filter((x) => x[2].p_item.item_id === 'i1')[0][2].p_idempotency_key;
+  await e.act('close'); await e.act('addlow-open'); fail = false; await e.submit();
+  const i4 = saves(e).filter((x) => x[2].p_item.item_id === 'i4');
+  assert.equal(i4[i4.length - 1][2].p_idempotency_key, k1, 'same item and amount, same key');
+  const i1 = saves(e).filter((x) => x[2].p_item.item_id === 'i1');
+  assert.equal(i1.length, 2); assert.notEqual(i1[1][2].p_idempotency_key, kOk, 'a landed line freed its key');
+});
+
+test('I_shop Add low: nothing landed and the batch failed -> the sheet shows the error, and the list is still read again', async () => {
+  const e = await make('owner', { rpc: () => ({ data: null, error: { code: 'XX000', message: 'boom' } }) });
+  await e.mount('shopping'); await e.act('addlow-open');
+  const reads = () => e.client.calls.filter((c) => c[0] === 'from' && c[1] === 'inventory_shopping_list').length, n0 = reads();
+  await e.submit();
+  assert.ok(reads() > n0); assert.match(e.sheet(), /role="alert"/);
+});
+
+test('I_shop Add low: an item dropped from the catalogue after the sheet opened does not freeze it; the line carries its own purchase unit', async () => {
+  let drop = false;
+  const e = await make('owner', { rpcs: { get_inventory_catalogue_v1: () => ({ data: { items: raw().items.filter((r) => !(drop && r.id === 'i1')) }, error: null }) } });
+  await e.mount('shopping'); await e.act('addlow-open');
+  drop = true; e.advance(70000);
+  await e.act('retry'); // the catalogue is read again without Toilet paper while the sheet stays open
+  await e.submit();
+  const t = saves(e).filter((x) => x[2].p_item.item_id === 'i1');
+  assert.equal(t.length, 1); assert.deepEqual([t[0][2].p_item.quantity, t[0][2].p_item.purchase_unit], [3, 'pack']);
+});
+
+test('I_shop a failed Usual read is retried after about a minute, not on every redraw', async () => {
+  let reads = 0; const s = sup(); s.usualMap = async () => { reads++; throw new Error('down'); };
+  const o = await make('owner', { sup: s }); await o.mount('shopping'); await o.act('addlow-open'); await o.act('close'); await o.act('addlow-open');
+  assert.equal(reads, 1, 'not re-read straight away');
+  o.advance(61000); await o.act('close'); await o.act('addlow-open');
+  assert.equal(reads, 2, 'read again after a minute');
+});
+
+test('I_shop wrapText cuts a single over-wide word and a long title wraps inside the picture', async () => {
+  const e = await make('owner'); const L = e.lib, measure = (f, s) => s.length * 14;
+  const lines = L.wrapText(measure, 'f', 'x'.repeat(200), 700);
+  assert.ok(lines.length >= 4 && lines.every((l) => measure('f', l) <= 700)); assert.equal(lines.join(''), 'x'.repeat(200));
+  assert.deepEqual([...L.wrapText(measure, 'f', 'aa bb', 700)], ['aa bb']);
+  const lay = L.shopLayout(measure, { title: 'Cascade shopping list · ' + 'Z'.repeat(120), rows: ['A'], total: '' }, 1080);
+  const titles = lay.ops.filter((o) => o.t === 'text' && /Z/.test(o.s)); assert.ok(titles.length >= 2);
+  lay.ops.filter((o) => o.t === 'text').forEach((o) => assert.ok(o.x + measure('', o.s) <= 1080 - 56 + 1, o.s));
+});
+
+test('I_shop Save as image: a share sheet that breaks (not cancelled) opens a press-and-hold picture sheet instead of a download', async () => {
+  const e = await make('owner', { shop: PRICED }); await e.mount('shopping');
+  const o = imgEnv(e, true); e.nav.share = async () => { const x = new Error('nope'); x.name = 'NotAllowedError'; throw x; };
+  await e.act('shop-image');
+  assert.equal(o.anchors.length, 0);
+  assert.match(e.sheet(), /<img src="blob:pic"/); assert.match(e.sheet(), /Press and hold the picture to save it/);
+  await e.act('close');
+  e.nav.share = async () => { const x = new Error('c'); x.name = 'AbortError'; throw x; };
+  await e.act('shop-image'); assert.equal(e.sheet(), '');
 });

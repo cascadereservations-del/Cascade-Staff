@@ -290,6 +290,7 @@
   // s105: "Good to know" under the stay line of the Today card: the important notes and requests (CS.goodToKnow), the phone as a tap-to-call link (owner and admin only, like the guest card), the guest count when known, and the ID state.
   function A_goodToKnow(g, kind) {
     var gk = CS.goodToKnow(g, CS.canSeeGuestContact(role())), href = '#calendar/' + (kind === 'house' ? 'house' : 'next'), facts = [];
+    if (gk.phone && !gk.tel) facts.push('<button class="T_call num" type="button" data-act="copy" data-copy="' + esc(gk.phone) + '" aria-label="' + esc('Copy phone ' + gk.phone) + '">' + esc(gk.phone) + ' · Copy</button>'); // no dialable number in it: show the text, Copy only
     if (gk.tel) facts.push('<a class="T_call num" href="' + esc(gk.tel) + '" aria-label="' + esc('Call ' + gk.phone) + '">Call ' + esc(gk.phone) + '</a>');
     if (gk.guests) facts.push('<span class="T_fact">' + ICON('users', 's16') + esc(CS.plural(gk.guests, 'guest')) + '</span>');
     if (!gk.notes.length && !facts.length) return '';
