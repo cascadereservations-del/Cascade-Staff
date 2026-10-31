@@ -30,7 +30,7 @@ test('I_options the Options section: 56 px lazy thumbnail with alt, title, brand
   assert.match(s, /<img src="https:\/\/cdn\.shopify\.com\/[^"]+4902430093767\.jpg" alt="Joy Dishwashing Liquid Kalamansi 375ml" width="56" height="56" loading="lazy"/);
   assert.match(s, /Joy · Shopsuki/); assert.match(s, /I_usual">Usual</); assert.equal((s.match(/I_usual">Usual</g) || []).length, 1);
   assert.match(s, /₱115\.65/); assert.match(s, /₱86\.85/); assert.match(s, /Out of stock/); assert.equal((s.match(/Out of stock/g) || []).length, 1);
-  assert.match(s, /<a class="btn btn-ghost I_undobtn" href="https:\/\/shopsuki\.ph\/products\/joy-375" target="_blank" rel="noopener">View on Shopsuki<\/a>/);
+  assert.match(s, /<a class="btn btn-ghost I_undobtn" href="https:\/\/shopsuki\.ph\/products\/joy-375" target="_blank" rel="noopener noreferrer">View on Shopsuki<\/a>/);
   assert.equal(calls(e, 'inventory_item_options_v1').length, 1); assert.deepEqual(calls(e, 'inventory_item_options_v1')[0][2], { p_item_id: 'i1' });
   // the option without a picture keeps the reserved box with the placeholder glyph
   assert.equal((s.match(/class="I_oth"/g) || []).length, 2); assert.equal((s.match(/<img src="https:\/\/cdn\.shopify/g) || []).length, 1);
@@ -81,7 +81,7 @@ test('I_options Make usual: confirm first, then inventory_item_option_set_usual_
   assert.match(e.sheet(), /Last change: changed the usual option/);
   const id = /data-act="undo" data-id="(u\d+)"/.exec(e.sheet())[1];
   await e.act('undo', { 'data-id': id });
-  assert.match(e.sheet(), /Make Joy Dishwashing Liquid Kalamansi 375ml the usual for Toilet paper again\?/);
+  assert.match(e.sheet(), /Make Joy Dishwashing Liquid Kalamansi 375ml usual again\?/);
   await e.submit();
   assert.equal(calls(e, 'inventory_item_option_set_usual_v1').length, 2); assert.deepEqual(calls(e, 'inventory_item_option_set_usual_v1')[1][2], { p_option_id: 'o1' });
   assert.equal(usual, 'o1');
@@ -143,4 +143,34 @@ test('I_options the page allows images from cdn.shopify.com: no CSP meta restric
   const sw = fs.readFileSync(path.join(here, '..', 'sw.js'), 'utf8');
   assert.match(sw, /url\.origin !== self\.location\.origin\) return;/, 'the service worker leaves cross-origin pictures to the browser');
   assert.doesNotMatch(sw, /shopify/);
+});
+
+const optsWith = (extra) => ({ ok: true, item_id: 'i1', options: [
+  { id: 'o1', supplier: 'Shopsuki', title: 'Joy 375ml', usual: true, preferred: true, available: true, image_url: null, source_url: null },
+  { id: 'o2', supplier: 'Shopsuki', title: 'Joy 250ml', usual: false, preferred: true, available: true, image_url: null, source_url: null },
+  { id: 'o3', supplier: 'Shopsuki', title: 'Joy 100ml', usual: false, available: true, image_url: null, source_url: null }, ...(extra || []) ] });
+
+test('I_options s107 Preferred tag: shown after Usual for preferred === true only, server order kept, preferred non-usual keeps Make usual, missing key = not preferred', async () => {
+  const e = await make('owner', { rpc: { inventory_item_options_v1: () => ({ data: optsWith(), error: null }) } }); await e.mount(''); await e.open('i1');
+  const s = e.sheet();
+  assert.equal((s.match(/class="I_pref"/g) || []).length, 2); assert.match(s, /I_usual">Usual<\/span> <span class="I_pref"><svg[^>]*>.*?<\/svg>Preferred<\/span>/);
+  assert.ok(s.indexOf('Joy 375ml') < s.indexOf('Joy 250ml') && s.indexOf('Joy 250ml') < s.indexOf('Joy 100ml'), 'server order kept');
+  assert.match(s, /data-act="opt-usual" data-id="o2"/); assert.doesNotMatch(s, /data-act="opt-usual" data-id="o1"/);
+  const old = await make('owner'); await old.mount(''); await old.open('i1'); assert.doesNotMatch(old.sheet(), /I_pref/, 'old server sends no preferred key');
+});
+
+test('I_options s107 normOpts accepts a Shopee susercontent image; hostile options are escaped or dropped', async () => {
+  const e = await make('owner'); const { normOpts } = e.win.I_Stock.lib;
+  const n = normOpts([{ id: 'a', title: 'x', image_url: 'https://down-ph.img.susercontent.com/file/abc', source_url: 'javascript:alert(1)' }, { id: 'b', title: 'y', image_url: 'http://evil.example/a.png', source_url: 'http://evil.example/' }, { id: 'c', title: 'z', preferred: 'yes' }]);
+  assert.equal(n[0].image, 'https://down-ph.img.susercontent.com/file/abc'); assert.equal(n[0].link, '');
+  assert.equal(n[1].image, ''); assert.equal(n[1].link, ''); assert.equal(n[2].preferred, false, 'only true counts');
+  const h = await make('owner', { rpc: { inventory_item_options_v1: () => ({ data: optsWith([{ id: 'o9', supplier: 'S', title: '<img src=x onerror=alert(1)>', usual: false, available: true, image_url: 'javascript:alert(1)', source_url: 'http:evil' }]), error: null }) } });
+  await h.mount(''); await h.open('i1');
+  assert.match(h.sheet(), /&lt;img src=x onerror=alert\(1\)&gt;/); assert.doesNotMatch(h.sheet(), /<img src=x/); assert.doesNotMatch(h.sheet(), /javascript:/);
+});
+
+test('I_options s107 Use as item photo works for a susercontent picture; the picture-fallback object URL is revoked on close; Add low says Preferred', () => {
+  const src = fs.readFileSync(path.join(here, '..', 'stock', 'I_stock.js'), 'utf8');
+  assert.match(src, /kind: 'copytext', img: iu, prev: iu/); assert.match(src, /function closeSheet\(\) \{[\s\S]*?relPrev\(M\.act\)/);
+  assert.match(src, /l\.opt\.preferred === true \? 'Preferred'/);
 });

@@ -377,13 +377,13 @@
     return (Array.isArray(list) ? list : []).filter(function (o) { return o && o.id && o.title; }).map(function (o) {
       return { id: String(o.id), supplier: String(o.supplier || ''), title: String(o.title), brand: o.brand ? String(o.brand) : '', packLabel: o.pack_label ? String(o.pack_label) : '',
         image: /^https:\/\/[^\s"'<>]+$/i.test(String(o.image_url || '')) ? String(o.image_url) : '', link: /^https:\/\/[^\s"'<>]+$/i.test(String(o.source_url || '')) ? String(o.source_url) : '',
-        usual: !!o.usual, available: o.available === false ? false : o.available === true ? true : null, price: num(o.price) };
+        usual: !!o.usual, preferred: o.preferred === true, available: o.available === false ? false : o.available === true ? true : null, price: num(o.price) };
     });
   }
   function demoOptions(id) {
     var d = { d1: [['o1', 'Demo Mart', 'Softly Bath Tissue 12 rolls', 'Softly', 210, true], ['o2', 'Demo Mart', 'Cloud Bath Tissue 12 rolls', 'Cloud', 195, true], ['o3', 'Demo Mart', 'Plush Bath Tissue 8 rolls', 'Plush', 160, false]],
       d5: [['o4', 'Demo Mart', 'Strong Trash Bags Large 10s', 'Strong', 230, true], ['o5', 'Demo Mart', 'Strong Trash Bags XL 10s', 'Strong', 260, true]] }[id] || [];
-    return d.map(function (x, n) { return { id: x[0], supplier: x[1], title: x[2], brand: x[3], packLabel: '', image: '', link: '', usual: n === 0, available: x[5], price: canPrice(M.role) ? x[4] : null }; });
+    return d.map(function (x, n) { return { id: x[0], supplier: x[1], title: x[2], brand: x[3], packLabel: '', image: '', link: '', usual: n === 0, preferred: x[0] === 'o2', available: x[5], price: canPrice(M.role) ? x[4] : null }; });
   }
   function loadOptions(id) {
     var me = M, c0 = K.opt[id]; if (!me || (c0 && nowMs() - c0.at < 60000) || K.denied.inventory_item_options_v1) return; // kept across mounts (the shell re-mounts on every sub-route change), read again after a minute
@@ -408,9 +408,9 @@
     return '<div class="I_opts" role="group" aria-label="Options"><h3 class="I_opth">Options</h3>' + st.list.map(function (o) {
       var sub = [o.brand, o.supplier, o.packLabel].filter(Boolean).join(' · ');
       return '<div class="I_opt"><span class="I_oth">' + (o.image && !K.badImg[o.image] ? '<img src="' + esc(o.image) + '" alt="' + esc(o.title) + '" width="56" height="56" loading="lazy" decoding="async" referrerpolicy="no-referrer" data-oimg="1">' : gi('image', 's16')) + '</span>' +
-        '<div class="I_ob"><p class="I_ot">' + esc(o.title) + (o.usual ? ' <span class="I_usual">Usual</span>' : '') + '</p>' + (sub ? '<p class="help">' + esc(sub) + '</p>' : '') +
+        '<div class="I_ob"><p class="I_ot">' + esc(o.title) + (o.usual ? ' <span class="I_usual">Usual</span>' : '') + (o.preferred ? ' <span class="I_pref">' + gi('star', 's16') + 'Preferred</span>' : '') + '</p>' + (sub ? '<p class="help">' + esc(sub) + '</p>' : '') +
         (money && o.price != null ? '<p class="help num">' + esc(peso(o.price)) + '</p>' : '') + (o.available === false ? '<p class="help I_oos">Out of stock</p>' : '') +
-        '<div class="I_obt">' + (o.link ? '<a class="btn btn-ghost I_undobtn" href="' + esc(o.link) + '" target="_blank" rel="noopener">View on ' + esc(siteOf(o.link)) + '</a>' : '') +
+        '<div class="I_obt">' + (o.link ? '<a class="btn btn-ghost I_undobtn" href="' + esc(o.link) + '" target="_blank" rel="noopener noreferrer">View on ' + esc(siteOf(o.link)) + '</a>' : '') +
         (mng && !o.usual && allowed('optusual') ? btn('opt-usual', o.id, 'Make usual') : '') + (mng && o.image && allowed('photo') ? btn('opt-photo', o.id, 'Use as item photo') : '') + '</div></div></div>';
     }).join('') + '</div>';
   }
@@ -1275,7 +1275,7 @@
         shopImageOut(blob, name).then(function (how) {
           if (!M) return;
           if (how === 'downloaded') toast('Picture saved to your downloads.');
-          else if (how === 'failed') { M.act = { kind: 'copytext', img: root.URL.createObjectURL(blob) }; drawLayer(); } // the object URL lives until the page closes
+          else if (how === 'failed') { var iu = root.URL.createObjectURL(blob); M.act = { kind: 'copytext', img: iu, prev: iu }; drawLayer(); } // relPrev revokes it when the sheet closes
         }, function () { if (M) toast('The picture could not be saved. Try again.'); });
       });
     });
@@ -1294,7 +1294,7 @@
   function addLowKey(l) { var k = 'addlow|' + l.itemId + '|' + l.qty, ke = K.keys[k]; if (!ke || nowMs() - ke.at > 600000) ke = K.keys[k] = { key: newKey('low'), at: nowMs() }; return ke.key; }
   function alLine(l, money) {
     var bits = [uq(l.qty, l.unit)];
-    if (l.opt) bits.push([l.opt.supplier, packLabel(l.opt)].filter(Boolean).join(' · '));
+    if (l.opt) bits.push([l.opt.supplier, packLabel(l.opt), l.opt.preferred === true ? 'Preferred' : ''].filter(Boolean).join(' · '));
     if (money && l.price != null) bits.push('PHP ' + pesoNum(l.price) + ' a ' + unitWord(1, l.unit || 'pack'));
     return bits.filter(Boolean).join(' · ');
   }
@@ -1570,7 +1570,7 @@
       e.confirm = pb == null ? 'Remove the new photo of ' + n + ' again?' : 'Put the old photo of ' + n + ' back?'; e.call = photoSetCall(it.id, pb);
     } else if (a.kind === 'optusual') {
       if (!a.prev) return null; // nothing was usual before: there is no call that clears it
-      e.say = 'Usual option saved for ' + n; e.line = 'changed the usual option'; e.confirm = 'Make ' + a.prev.title + ' the usual for ' + n + ' again?'; e.call = setUsualCall(a.prev.id);
+      e.say = 'Usual option saved for ' + n; e.line = 'changed the usual option'; e.confirm = 'Make ' + a.prev.title + ' usual again?'; e.call = setUsualCall(a.prev.id);
     } else if (a.kind === 'rename' && d.moved && d.moved.length) {
       var gr = groupBefore(d.moved); e.itemId = null; e.name = ''; e.say = 'Moved ' + d.moved.length + (d.moved.length === 1 ? ' item' : ' items') + ' into ' + (mergeTarget(a.from, v.to) || String(v.to).trim()); e.line = 'moved items';
       e.confirm = 'Put the ' + d.moved.length + (d.moved.length === 1 ? ' item' : ' items') + ' back in ' + (gr.length === 1 ? gr[0].before : 'their old categories') + '?';

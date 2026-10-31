@@ -125,5 +125,7 @@ div.I_row { cursor: default; }
 .I_ot { margin: 0; font-weight: 650; overflow-wrap: anywhere; }
 .I_ob .help { margin: 2px 0 0; }
 .I_usual { display: inline-block; padding: 1px 8px; border-radius: 999px; font-size: .75rem; font-weight: 650; background: var(--v5-ok-w, var(--v5-sunk)); color: var(--v5-ok-t, var(--fg-1)); }
+.I_pref { display: inline-flex; align-items: center; gap: 3px; padding: 1px 8px; border-radius: 999px; font-size: .75rem; font-weight: 650; background: var(--v5-info-w, var(--v5-sunk)); color: var(--v5-info-t, var(--fg-1)); }
+.I_pref svg { width: 12px; height: 12px; }
 .I_oos { color: var(--v5-warn-t); }
 .I_obt { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
