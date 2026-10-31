@@ -47,7 +47,7 @@ test('I_options role gating: owner and admin get Make usual and Use as item phot
   for (const role of ['owner', 'admin']) {
     const e = await make(role); await e.mount(''); await e.open('i1');
     assert.match(e.sheet(), /data-act="opt-usual" data-id="o2"/, role); assert.doesNotMatch(e.sheet(), /data-act="opt-usual" data-id="o1"/, role + ': the usual one has no Make usual');
-    assert.doesNotMatch(e.sheet(), /data-act="opt-photo" data-id="o1"/, role + ': s107 B7, the usual option has no photo button'); assert.doesNotMatch(e.sheet(), /data-act="opt-photo" data-id="o2"/, role + ': no picture, no photo button');
+    assert.match(e.sheet(), /data-act="opt-photo" data-id="o1"/, role + ': s107 review, the usual option keeps Use as item photo'); assert.doesNotMatch(e.sheet(), /data-act="opt-photo" data-id="o2"/, role + ': no picture, no photo button');
     assert.match(e.sheet(), /<details class="I_other"><summary>Other options \(1\)<\/summary>/, role);
   }
   const f = await make('finance'); await f.mount(''); await f.open('i1');

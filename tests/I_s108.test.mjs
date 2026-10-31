@@ -80,7 +80,8 @@ test('I_s108 shopee links lose their tracking query, a shopsuki link keeps its o
   assert.equal(L.o8Link('https://shopee.ph/Joy-i.123.456?sp_atk=abc&xptdk=x#top'), 'https://shopee.ph/Joy-i.123.456');
   assert.equal(L.o8Link('https://SHOPSUKI.ph/products/joy?variant=9'), 'https://shopsuki.ph/products/joy?variant=9');
   assert.equal(L.o8Link('https://shopee.ph'), 'https://shopee.ph/');
-  for (const bad of ['http://shopee.ph/x', 'https://example.com/x', 'https://shopee.ph.evil.com/x', 'https://evil.com/shopee.ph/x', 'javascript:alert(1)', 'https://www.shopee.ph/x', '']) assert.equal(L.o8Link(bad), null, bad);
+  for (const bad of ['http://shopee.ph/x', 'https://example.com/x', 'https://shopee.ph.evil.com/x', 'https://evil.com/shopee.ph/x', 'javascript:alert(1)', '']) assert.equal(L.o8Link(bad), null, bad);
+  assert.equal(L.o8Link('https://www.shopee.ph/x?ref=1'), 'https://shopee.ph/x', 'a www. link is accepted without www and without its tracking query');
   assert.equal(L.o8Pic('https://down-ph.img.susercontent.com/file/abc'), 'https://down-ph.img.susercontent.com/file/abc'); assert.equal(L.o8Pic('https://example.com/a.jpg'), null);
   const e = await make('owner'); await addForm(e);
   await fill(e, { title: 'X', supplierId: 's1', link: 'https://shopee.ph/Joy-i.123.456?sp_atk=abc&utm_source=x' }); await e.submit();
@@ -111,7 +112,7 @@ test('I_s108 Remove asks first, sends delete with an empty payload, and the usua
 test('I_s108 the form stays on screen when the server says duplicate; every option row has Edit and Remove with 44 px targets', async () => {
   const e = await make('owner', { rpc: { inventory_option_request_v1: () => ({ data: null, error: { code: '22023', message: 'duplicate_option' } }) } });
   await e.mount(''); await e.open('i1');
-  assert.equal((e.sheet().match(/data-act="o8-edit"/g) || []).length, 2); assert.equal((e.sheet().match(/data-act="o8-del"/g) || []).length, 2);
+  assert.equal((e.sheet().match(/data-act="o8-edit"/g) || []).length, 2); assert.equal((e.sheet().match(/data-act="o8-del"/g) || []).length, 1);
   await e.act('o8-edit', { 'data-id': 'o2' }); await e.input('I_f_title', 'Softly Bath Tissue 12 rolls'); await e.submit();
   assert.match(e.sheet(), /That product is already in the list\./); assert.match(e.sheet(), /Edit product/);
   const fs = await import('node:fs'); const css = fs.readFileSync(new URL('../stock/I_stock.css', import.meta.url), 'utf8');

@@ -384,7 +384,7 @@
   function normOpts(list) {
     return (Array.isArray(list) ? list : []).filter(function (o) { return o && o.id && o.title; }).map(function (o) {
       return { id: String(o.id), supplier: String(o.supplier || ''), title: String(o.title), brand: o.brand ? String(o.brand) : '', packLabel: o.pack_label ? String(o.pack_label) : '',
-        image: /^https:\/\/[^\s"'<>]+$/i.test(String(o.image_url || '')) ? String(o.image_url) : '', link: /^https:\/\/[^\s"'<>]+$/i.test(String(o.source_url || '')) ? String(o.source_url) : '',
+        image: o8Pic(o.image_url) || '', link: o8Link(o.source_url) || '',
         supplierId: o.supplier_id ? String(o.supplier_id) : '', packSize: num(o.pack_size), usual: !!o.usual, preferred: o.preferred === true, available: o.available === false ? false : o.available === true ? true : null, price: num(o.price) };
     });
   }
@@ -420,8 +420,8 @@
         '<div class="I_ob"><p class="I_ot">' + esc(o.title) + (o.usual ? ' <span class="I_usual">Usual</span>' : '') + (o.preferred ? ' <span class="I_pref">' + gi('star', 's16') + 'Preferred</span>' : '') + '</p>' + (sub ? '<p class="help">' + esc(sub) + '</p>' : '') +
         (money && o.price != null ? '<p class="help num">' + esc(peso(o.price)) + '</p>' : '') + (o.available === false ? '<p class="help I_oos">Out of stock</p>' : '') +
         '<div class="I_obt">' + (o.link ? '<a class="btn btn-ghost I_undobtn" href="' + esc(o.link) + '" target="_blank" rel="noopener noreferrer">View on ' + esc(siteOf(o.link)) + '</a>' : '') +
-        (other && mng && !o.usual && allowed('optusual') ? btn('opt-usual', o.id, 'Make usual') : '') + (other && mng && o.image && allowed('photo') ? btn('opt-photo', o.id, 'Use as item photo') : '') +
-        (ed ? '<button class="btn btn-ghost I_undobtn" type="button" data-act="o8-edit" data-id="' + esc(o.id) + '" aria-label="Edit ' + esc(o.title) + '">Edit</button><button class="btn btn-ghost I_undobtn" type="button" data-act="o8-del" data-id="' + esc(o.id) + '" aria-label="Remove ' + esc(o.title) + '">Remove</button>' : '') + '</div></div></div>';
+        (other && mng && !o.usual && allowed('optusual') ? btn('opt-usual', o.id, 'Make usual') : '') + (mng && o.image && allowed('photo') ? btn('opt-photo', o.id, 'Use as item photo') : '') +
+        (ed ? '<button class="btn btn-ghost I_undobtn" type="button" data-act="o8-edit" data-id="' + esc(o.id) + '" aria-label="Edit ' + esc(o.title) + '">Edit</button>' + (o.usual ? '' : '<button class="btn btn-ghost I_undobtn" type="button" data-act="o8-del" data-id="' + esc(o.id) + '" aria-label="Remove ' + esc(o.title) + '">Remove</button>') : '') + '</div></div></div>';
     };
     return '<div class="I_opts" role="group" aria-label="Options"><h3 class="I_opth">Options</h3>' + main.map(function (o) { return one(o, false); }).join('') +
       (rest.length ? '<details class="I_other"' + (main.length ? '' : ' open') + '><summary>Other options (' + rest.length + ')</summary>' + rest.map(function (o) { return one(o, true); }).join('') + '</details>' : '') +
@@ -440,7 +440,7 @@
   // A link on one of the allowed hosts, https only. Shopee links lose their query (tracking); the host is lower-cased. Returns null when it is not allowed.
   function o8Url(s, hosts) {
     var m = /^https:\/\/([A-Za-z0-9.-]+)(\/[^?#\s"'<>]*)?(\?[^#\s"'<>]*)?(#\S*)?$/.exec(o8T(s)); if (!m) return null;
-    var host = m[1].toLowerCase(); if (hosts.indexOf(host) < 0) return null;
+    var host = m[1].toLowerCase().replace(/^www\./, ''); if (hosts.indexOf(host) < 0) return null;
     var out = 'https://' + host + (m[2] || '/') + (host === 'shopee.ph' ? '' : m[3] || '');
     return out.length <= 500 ? out : null;
   }
@@ -526,7 +526,7 @@
   }
   function o8Thumb(r) {
     var u = r.action === 'delete' ? (r.current || {}).image_url : r.payload.image_url;
-    return u && /^https:\/\/[^\s"'<>]+$/i.test(String(u)) && !K.badImg[u] ? '<img class="I_rth" src="' + esc(u) + '" alt="" width="56" height="56" loading="lazy" decoding="async" referrerpolicy="no-referrer" data-oimg="1">' : '';
+    u = o8Pic(u); return u && !K.badImg[u] ? '<img class="I_rth" src="' + esc(u) + '" alt="" width="56" height="56" loading="lazy" decoding="async" referrerpolicy="no-referrer" data-oimg="1">' : '';
   }
   // The text of an error from the server: the codes the SQL names, in plain words.
   function o8Why(e) {

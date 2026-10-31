@@ -93,11 +93,11 @@ test('I_s107 B7 options sort: usual, preferred, in stock, then cheapest for pric
   assert.deepEqual(L.optSort(l, true).map((o) => o.id), ['o5', 'o2', 'o3', 'o1', 'o6', 'o4']);
   assert.deepEqual(L.optSort(l, false).map((o) => o.id), ['o5', 'o2', 'o6', 'o3', 'o1', 'o4']);
   const opts = { ok: true, item_id: 'a1', options: [
-    { id: 'o1', supplier: 'Shopsuki', title: 'Usual tissue', usual: true, available: true, image_url: 'https://x.example/a.jpg', source_url: 'https://shopsuki.ph/p/1', price: 200 },
-    { id: 'o2', supplier: 'Shopsuki', title: 'Other tissue', usual: false, available: true, image_url: 'https://x.example/b.jpg', source_url: null, price: 150 }] };
+    { id: 'o1', supplier: 'Shopsuki', title: 'Usual tissue', usual: true, available: true, image_url: 'https://cdn.shopify.com/a.jpg', source_url: 'https://shopsuki.ph/p/1', price: 200 },
+    { id: 'o2', supplier: 'Shopsuki', title: 'Other tissue', usual: false, available: true, image_url: 'https://cdn.shopify.com/b.jpg', source_url: null, price: 150 }] };
   const e = await make('owner', { rpc: { inventory_item_options_v1: () => ({ data: opts, error: null }) } }); await e.mount(''); await e.open('a1');
   const s = e.sheet(), main = s.slice(s.indexOf('I_opts'), s.indexOf('<details class="I_other"'));
-  assert.match(main, /Usual tissue/); assert.doesNotMatch(main, /opt-photo|opt-usual/);
+  assert.match(main, /Usual tissue/); assert.doesNotMatch(main, /opt-usual/); assert.match(main, /data-act="opt-photo" data-id="o1"/);
   assert.match(s, /<details class="I_other"><summary>Other options \(1\)<\/summary>[\s\S]*data-act="opt-usual" data-id="o2"[\s\S]*data-act="opt-photo" data-id="o2"/);
   assert.match(s, /btn btn-ghost I_undobtn" type="button" data-act="opt-usual"/); assert.doesNotMatch(s, /btn-secondary I_undobtn/);
 });
