@@ -596,8 +596,16 @@
     return sh;
   }
 
+  // s106: item id -> the usual supplier's pack option, for the shopping tools. Same two RPCs as the item card; a failed read gives {} (the caller then goes without pack details).
+  function usualMap(ctx) {
+    return loadList(ctx).then(function (sups) {
+      return Promise.all(sups.filter(function (sp) { return sp.active; }).map(function (sp) {
+        return call(ctx, 'inventory_supplier_detail_v1', { p_supplier_id: sp.id }).then(function (x) { return ((x && x.items) || []).filter(function (i) { return i.preferred; }).map(function (i) { return { itemId: i.item_id, supplier: sp.name, label: i.pack_label || '', packSize: num(i.pack_size), quoted: num(i.quoted_pack_price), lastUnit: num(i.last_unit_price) }; }); });
+      }));
+    }).then(function (parts) { var m = {}; [].concat.apply([], parts).forEach(function (o) { if (o.itemId && !m[o.itemId]) m[o.itemId] = o; }); return m; });
+  }
   root.I_Suppliers = {
-    mountList: mountList, pick: pick, openPriceHistory: openPriceHistory, openItemSuppliers: openItemSuppliers,
+    mountList: mountList, pick: pick, openPriceHistory: openPriceHistory, openItemSuppliers: openItemSuppliers, usualMap: usualMap,
     lib: { money: money, fmtDate: fmtDate, sparkPoints: sparkPoints, cheaperLast: cheaperLast, statsLine: statsLine, orderPicker: orderPicker, normSupplier: normSupplier, validate: validate, errKind: errKind, canPrice: canPrice, isManage: isManage, reset: function () { K.missing = false; K.cache = null; KEYS = {}; } }
   };
 })(typeof window !== 'undefined' ? window : this);

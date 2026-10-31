@@ -221,7 +221,7 @@
     unmount();
     opts = opts || {};
     var prevRole = K.role;
-    if (K.role !== opts.role) { K.role = opts.role; K.items = null; K.shop = null; K.q = ''; K.chip = 'low'; K.at = 0; K.keys = {}; K.v84 = false; K.lastCode = ''; K.cool = {}; K.scanned = null; K.denied = {}; K.noFinance = false; K.undos = []; K.hasCounted = false; K.sup = null; K.hasLoc = false; K.catAt = 0; if (prevRole !== null) recentClear(); } // a cached list is never shown to another role
+    if (K.role !== opts.role) { K.role = opts.role; K.items = null; K.shop = null; K.q = ''; K.chip = 'low'; K.at = 0; K.keys = {}; K.v84 = false; K.lastCode = ''; K.cool = {}; K.scanned = null; K.denied = {}; K.noFinance = false; K.undos = []; K.hasCounted = false; K.sup = null; K.hasLoc = false; K.catAt = 0; K.usual = null; K.usualP = null; if (prevRole !== null) recentClear(); } // a cached list is never shown to another role
     M = {
       el: el, opts: opts, role: opts.role, demo: !!opts.demo, client: opts.client || null, pid: opts.propertyId || PROPERTY_ID,
       sub: String(opts.sub || ''), act: null, hist: {}, denied: K.denied, uid: null, loadErr: null, shopErr: null, loading: false, offlineStale: false, itemInfo: {}, listeners: []
@@ -444,6 +444,7 @@
       var s = summary(K.items), needN = allowed('count') ? K.items.filter(needsCount).length : 0;
       h += '<section class="card glass I_sum ' + (s.low ? 'I_sumlow' : 'I_sumok') + '" aria-label="Stock summary"><span class="I_g" aria-hidden="true">' + gi(s.low ? LEVELS.low.glyph : LEVELS.ok.glyph) + '</span><div class="I_sumb"><div class="I_sumt">' +
         (function () { var parts = []; if (s.low) parts.push(s.low + ' low'); if (needN) parts.push(needN + ' need a count'); return parts.length ? parts.join(', ') : 'Stock is fine'; })() + '</div>' + (function () { var bits = []; if (s.out) bits.push(s.out + ' out'); if (K.shop && K.shop.length) bits.push(K.shop.length + ' on the shopping list'); return bits.length ? '<div class="help">' + bits.join(' · ') + '</div>' : ''; })() + '</div>' + (needN ? '<button class="btn btn-ghost I_needbtn" type="button" data-act="chip" data-k="need">' + gi('alert', 's16') + ' Show what to count</button>' : '') + '</section>';
+      h += addLowButton('I_albtn');
       h += renderRecent();
       h += '<div class="I_srow"><div class="field"><label for="I_q">Search items</label><div class="input"><input id="I_q" type="search" autocomplete="off" enterkeyhint="search" value="' + esc(K.q) + '" placeholder="Toilet paper"></div></div>' +
         (K.v84 ? '<button class="chip I_scanbtn" type="button" data-act="scan">' + gi('camera', 's16') + ' Scan</button>' : '') + '</div>';
@@ -455,7 +456,7 @@
   function drawList() {
     var box = q('[data-i-list]'); if (!box) return;
     var rt = route();
-    if (rt.shopping) { box.innerHTML = renderShop(); return; }
+    if (rt.shopping) { box.innerHTML = renderShop(); if (K.shop && K.shop.length && wantUsual()) usualP(); return; }
     if (!K.items) {
       box.innerHTML = M.loadErr ? renderFail(M.loadErr) : '<p class="help I_load" role="status">Loading the stock list…</p>';
       return;
@@ -503,7 +504,8 @@
     var h = '';
     if (M.shopErr && !K.shop) return '<div class="empty" role="alert"><p class="hd">The shopping list is not available right now</p><button class="btn btn-primary" type="button" data-act="retry">Try again</button></div>';
     if (!K.shop) return '<p class="help I_load" role="status">Loading the shopping list…</p>';
-    if (!K.shop.length) return '<div class="empty"><p>Nothing is on the shopping list.</p><p class="help">Open an item and choose Add to shopping list.</p></div>';
+    if (!K.shop.length) return addLowButton('') + '<div class="empty"><p>Nothing is on the shopping list.</p><p class="help">Open an item and choose Add to shopping list.</p></div>';
+    h += addLowButton('I_albtn') + shopTools();
     if (allowed('bought')) h += '<button class="btn btn-primary btn-block I_boughtbtn" type="button" data-act="bought-open">Bought some of these</button>';
     h += '<div class="card list I_list">' + K.shop.map(function (r) {
       var who = r.mine ? 'You asked' : 'Asked by staff', when = dateLabel(r.at);
@@ -563,6 +565,8 @@
     if (a.kind === 'bought') return renderBought(a);
     if (a.kind === 'scan') return renderScan(a);
     if (a.kind === 'report') return renderReport(a);
+    if (a.kind === 'addlow') return renderAddLow(a);
+    if (a.kind === 'copytext') return renderCopy(a);
     if (a.kind === 'create') return renderCreate(a);
     var it = itemOf(a); if (!it) return null;
     var v = a.vals || {}, m = M.role, h;
@@ -835,7 +839,10 @@
     if (act === 'bought-open') { if (!allowed('bought') || (M.act && M.act.sending)) return; M.act = { kind: 'bought', step: 'pick', sel: {}, vals: {}, keys: {}, done: {} }; drawLayer(); loadShop(); return; } // the list is re-read first: a row someone else bought drops out
     if (act === 'walk') { if (a0 && a0.sending) return; return walkStart(attr(t, 'data-cat')); }
     if (act === 'scan') { if (M.act && M.act.sending) return; return openScan(null); }
-    if (act === 'report') { if (!allowed('report') || (M.act && M.act.sending)) return; M.act = { kind: 'report', step: 'form', vals: { rkind: 'order', to: 'ops' } }; drawLayer(); return; }
+    if (act === 'report') { if (!allowed('report') || (M.act && M.act.sending)) return; var rk = attr(t, 'data-k'); M.act = { kind: 'report', step: 'form', vals: { rkind: REPORTS.some(function (r) { return r.k === rk; }) ? rk : 'order', to: 'ops' } }; drawLayer(); return; }
+    if (act === 'addlow-open') return addLowOpen();
+    if (act === 'shop-share') { if (M.act && M.act.sending) return; return shareText(); }
+    if (act === 'shop-image') { if (M.act && M.act.sending) return; return saveImage(); }
     if (act === 'tidy') { if (!allowed('tidy') || (M.act && M.act.sending)) return; M.act = { kind: 'tidy' }; drawLayer(); return; }
     if (act === 'labels') { if (!allowed('labels') || (M.act && M.act.sending)) return; var lsel = {}; (K.items || []).filter(noCode).forEach(function (i) { lsel[i.id] = 1; }); M.act = { kind: 'labels', step: 'form', sel: lsel, cat: '', withLabel: false }; drawLayer(); return; }
     if (act === 'retry') { M.loadErr = null; M.shopErr = null; M.loading = false; if (!K.items) draw(); load(); return; }
@@ -847,6 +854,7 @@
     if (act === 'undo') { var ue = undoById(attr(t, 'data-id')); if (!ue || (a && a.sending) || K.denied[ue.call.fn]) return; M.act = { kind: 'undo', entry: ue, step: 'confirm' }; drawLayer(); return; }
     if (!a) return;
     if (a.sending) return; // nothing, not even Close, while a write is in flight
+    if (act === 'al-tick') { if (a.kind !== 'addlow') return; var tl = a.lines.filter(function (l) { return l.itemId === attr(t, 'data-id'); })[0]; if (tl && !tl.ok) { tl.on = !tl.on; if (!tl.on) tl.fail = false; a.bad = false; drawLayer(); } return; }
     if (act === 'begin') return begin(attr(t, 'data-kind'));
     if (act === 'photo-remove') { if (a.kind === 'menu' && a.itemId && allowed('photo')) { M.act = { kind: 'photoremove', itemId: a.itemId, step: 'confirm' }; drawLayer(); } return; }
     if (act === 'pick-sup') { if (a.kind === 'recv' || a.kind === 'bought') pickSupplier(a); return; }
@@ -872,7 +880,7 @@
     if (act === 'pick') { if (a.phase !== 'pick' || !allowed('link')) return; M.act = { kind: 'link', step: 'confirm', pickId: attr(t, 'data-id'), code: a.code, format: a.format, mode: a.mode, fromPick: true }; drawLayer(); return; }
     if (act === 'rep-kind') { a.vals.rkind = attr(t, 'data-k'); a.bad = false; drawLayer(); return; }
     if (act === 'rep-to') { a.vals.to = attr(t, 'data-to') === 'finance' && canPrice(M.role) && !K.noFinance ? 'finance' : 'ops'; a.bad = false; drawLayer(); return; }
-    if (act === 'back') { if (/^(scan|link|create|report|undo|bought|unlink|history|photo|photoremove|cconfirm|labels|tidy|rename|sort)$/.test(a.kind)) return flowBack(a); if (a.kind === 'shopset') { a.kind = 'menu'; a.step = null; a.err = null; drawLayer(); } else if (a.fromShop && a.step !== 'confirm') { M.act = null; drawLayer(); } else if (a.step === 'confirm' && a.kind !== 'low') { a.step = 'form'; a.err = null; drawLayer(); } else if (a.shopId) { a.kind = 'menu'; a.err = null; drawLayer(); } else { a.kind = 'menu'; a.vals = null; a.step = null; a.err = null; a.bad = false; drawLayer(); } return; }
+    if (act === 'back') { if (/^(scan|link|create|report|undo|bought|unlink|history|photo|photoremove|cconfirm|labels|tidy|rename|sort|addlow|copytext)$/.test(a.kind)) return flowBack(a); if (a.kind === 'shopset') { a.kind = 'menu'; a.step = null; a.err = null; drawLayer(); } else if (a.fromShop && a.step !== 'confirm') { M.act = null; drawLayer(); } else if (a.step === 'confirm' && a.kind !== 'low') { a.step = 'form'; a.err = null; drawLayer(); } else if (a.shopId) { a.kind = 'menu'; a.err = null; drawLayer(); } else { a.kind = 'menu'; a.vals = null; a.step = null; a.err = null; a.bad = false; drawLayer(); } return; }
     if (act === 'step') { a.vals = a.vals || {}; var f = attr(t, 'data-f'); a.vals[f] = stepQty(a.vals[f], +attr(t, 'data-d'), attr(t, 'data-z') === '1'); a.err = null; drawLayer(); var nb = q('[data-act="step"][data-f="' + f + '"][data-d="' + attr(t, 'data-d') + '"]'); if (nb && nb.focus) nb.focus(); return; }
     if (act === 'shop-bought') { var r = (K.shop || []).filter(function (x) { return x.id === a.shopId; })[0]; if (!r || !r.itemId || !allowed('recv', itemById(r.itemId))) return; M.act = { kind: 'recv', itemId: r.itemId, step: 'form', vals: { packs: fmt(r.qty || 1), supplier: K.sup ? K.sup.name : '', supplierId: K.sup && K.sup.id || '', cost: '', shopId: r.id }, fromShop: true }; drawLayer(); return; }
     if (act === 'shop-do') { var rr = (K.shop || []).filter(function (x) { return x.id === a.shopId; })[0]; if (!rr) return; a.kind = 'shopset'; a.status = attr(t, 'data-do'); a.step = 'confirm'; a.rowName = rr.name; drawLayer(); return; }
@@ -904,6 +912,7 @@
     if (kind === 'used') return I_FLAGS.usage && canUse(m) && !M.denied.used;
     if (kind === 'recv') return canManage(m) && !M.denied.recv; // controlled items too since 1b: record_inventory_receipt_v1 writes their movement
     if (kind === 'bought') return canManage(m) && !M.denied.bought && K.shop && K.shop.length > 0;
+    if (kind === 'addlow') return canManage(m) && !M.denied.shop && !!K.items && !!K.shop; // owner and admin only, like the other shopping row actions
     if (kind === 'shop') return !M.denied.shop;
     if (kind === 'low') return !M.denied.low && !M.denied.shop && !(it && (K.shop || []).some(function (r) { return r.itemId === it.id; }));
     if (kind === 'price') return K.v84 && canPrice(m) && !M.denied.price;
@@ -959,6 +968,8 @@
     if (a.kind === 'tidy' || (a.kind === 'photo' && a.step !== 'confirm')) return;
     if (a.kind === 'walk') return walkSubmit(a);
     if (a.kind === 'bought') return boughtSubmit(a);
+    if (a.kind === 'addlow') return addLowSubmit(a);
+    if (a.kind === 'copytext') return closeSheet();
     if (a.kind === 'scan') { if (a.phase === 'look') handleCode((a.vals || {}).code, null); return; }
     if (a.step !== 'confirm') { if (!valid(a)) { a.bad = a.kind === 'levels' && optQty(a.vals.reorder) && optQty(a.vals.par) ? 'levels' : true; drawLayer(); return; } a.bad = false; a.step = 'confirm'; a.err = null; a.focused = false; drawLayer(); return; }
     commit(a);
@@ -1054,6 +1065,208 @@
       if (rep) drawList();
     }
     drawLayer();
+  }
+
+  /* ---- s106 shopping tools: Add low items, Share as text, Save as image, PDF to Telegram */
+  var SYSFONT = '-apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif';
+  var PNG_INK = '#14202E', PNG_INK2 = '#4A5563', PNG_LINE = '#E2DBD0', PNG_BG = '#FFFFFF'; // the light values of tokens.css (--v5-ink, --v5-ink-2, --v5-line, --v5-surf): a shared picture reads the same in either theme
+  function nav() { return typeof navigator !== 'undefined' ? navigator : (root.navigator || null); }
+  function longDate(iso) { var a = String(iso || '').slice(0, 10).split('-'); return a.length === 3 && +a[1] ? +a[2] + ' ' + MONTHS[+a[1] - 1] + ' ' + a[0] : ''; }
+  function packOf(it, opt) { var s = opt ? num(opt.packSize) : null; return s != null && s > 0 ? s : (it.perPack || 1); }
+  // PHP for one pack: the quoted pack price, else a unit price x pack; null when nothing is priced. Only roles that already hold prices ever have an opt or a lastPrice/cost.
+  function packPrice(it, opt, pack) {
+    if (opt && num(opt.quoted) != null) return num(opt.quoted);
+    var u = opt && num(opt.lastUnit) != null ? num(opt.lastUnit) : it.lastPrice != null ? it.lastPrice : it.cost != null ? it.cost : null;
+    return u == null ? null : Math.round(u * pack * 100) / 100;
+  }
+  function packLabel(opt) { return opt ? (opt.label || (num(opt.packSize) > 1 ? 'pack of ' + fmt(opt.packSize) : '')) : ''; }
+  // Low and Out items that are not on the open list yet, each with the amount to buy back up to Buy-up-to in whole packs (the Usual option's pack when known, else the item's own pack).
+  // No Buy-up-to (or no count): the Running low rule, lowQty. Out first, then by name.
+  function lowItems(items, shop, usual) {
+    var on = {}; (shop || []).forEach(function (r) { if (r.itemId) on[r.itemId] = 1; });
+    return (items || []).filter(function (i) { return level(i) !== 'ok' && !on[i.id]; }).sort(function (a, b) { return (level(a) === 'out' ? 0 : 1) - (level(b) === 'out' ? 0 : 1) || a.name.localeCompare(b.name); }).map(function (i) {
+      var opt = usual && usual[i.id] || null, par = i.par != null && i.qty != null, pack = par ? packOf(i, opt) : (i.perPack || 1);
+      var qty = par ? Math.max(1, Math.ceil(Math.round(Math.max(i.par - i.qty, 0) * 100) / 100 / pack)) : lowQty(i);
+      return { itemId: i.id, name: i.name, qty: qty, unit: i.purchaseUnit || (pack > 1 ? 'pack' : unitOf(i)), opt: opt, price: packPrice(i, opt, pack) };
+    });
+  }
+  // The shopping list as text: title, one line per open row, a total for the roles that see prices. rows are normalizeShop rows.
+  function shopLines(rows, o) {
+    var money = canPrice(o.role), tot = 0, unk = false, list = [];
+    (rows || []).forEach(function (r) {
+      var it = (o.items || []).filter(function (i) { return i.id === r.itemId; })[0] || null, opt = it && o.usual && o.usual[it.id] || null, u = r.unit || (it && it.unit) || '', paren = '', p = null;
+      if (money && it) {
+        p = packPrice(it, opt, packOf(it, opt));
+        var lb = packLabel(opt) || (opt && opt.supplier) || '';
+        paren = lb && p != null ? lb + ' @ PHP ' + pesoNum(p) : lb || (p != null ? 'PHP ' + pesoNum(p) : '');
+      }
+      if (money) { if (r.qty != null && p != null) tot += r.qty * p; else unk = true; }
+      list.push(r.name + (r.qty != null ? ' — ' + uq(r.qty, u).trim() : '') + (paren ? ' (' + paren + ')' : ''));
+    });
+    return { title: 'Cascade shopping list · ' + longDate(o.today), rows: list, total: money && list.length ? (unk ? 'Total: some prices unknown' : 'Total: PHP ' + pesoNum(tot)) : '' };
+  }
+  function shopText(rows, o) { var d = shopLines(rows, o); return [d.title, ''].concat(d.rows.map(function (s) { return '☐ ' + s; }), d.total ? ['', d.total] : []).join('\n'); }
+  function wrapText(measure, font, text, maxW) {
+    var words = String(text).split(' '), out = [], cur = '';
+    words.forEach(function (w) { var t = cur ? cur + ' ' + w : w; if (cur && measure(font, t) > maxW) { out.push(cur); cur = w; } else cur = t; });
+    if (cur) out.push(cur);
+    return out;
+  }
+  // The picture: positions only, so it can be tested without a canvas. measure(font, text) gives a width in px.
+  function shopLayout(measure, d, W) {
+    var pad = 56, box = 32, gap = 20, f1 = '700 44px ' + SYSFONT, f2 = '600 34px ' + SYSFONT, f3 = '700 36px ' + SYSFONT, ops = [], y = pad + 44;
+    ops.push({ t: 'text', s: d.title, x: pad, y: y, font: f1, c: PNG_INK });
+    y += 28; ops.push({ t: 'rule', x: pad, y: y, w: W - 2 * pad, c: PNG_LINE }); y += 36;
+    d.rows.forEach(function (s) {
+      var ls = wrapText(measure, f2, s, W - 2 * pad - box - gap);
+      ops.push({ t: 'box', x: pad, y: y + 2, size: box, c: PNG_INK2 });
+      ls.forEach(function (l, n) { ops.push({ t: 'text', s: l, x: pad + box + gap, y: y + 30 + n * 44, font: f2, c: PNG_INK }); });
+      y += ls.length * 44 + 22;
+    });
+    if (d.total) { y += 6; ops.push({ t: 'rule', x: pad, y: y, w: W - 2 * pad, c: PNG_LINE }); y += 52; ops.push({ t: 'text', s: d.total, x: pad, y: y, font: f3, c: PNG_INK }); y += 12; }
+    return { width: W, height: y + pad, ops: ops };
+  }
+  function shopImageBlob(d, cb) {
+    var doc = root.document, c = doc && doc.createElement ? doc.createElement('canvas') : null, g = c && c.getContext ? c.getContext('2d') : null;
+    if (!g) return cb(new Error('no canvas'));
+    c.width = 1080; c.height = 64;
+    var lay = shopLayout(function (font, s) { g.font = font; return g.measureText(s).width; }, d, 1080);
+    c.width = lay.width; c.height = lay.height; // sizing the canvas clears it; everything is drawn after
+    g.fillStyle = PNG_BG; g.fillRect(0, 0, lay.width, lay.height); g.textBaseline = 'alphabetic';
+    lay.ops.forEach(function (o) {
+      if (o.t === 'text') { g.font = o.font; g.fillStyle = o.c; g.fillText(o.s, o.x, o.y); }
+      else if (o.t === 'rule') { g.fillStyle = o.c; g.fillRect(o.x, o.y, o.w, 2); }
+      else { g.strokeStyle = o.c; g.lineWidth = 3; g.strokeRect(o.x, o.y, o.size, o.size); }
+    });
+    c.toBlob(function (b) { cb(b ? null : new Error('no picture'), b); }, 'image/png');
+  }
+  // A phone that can share files gets the share sheet; anything else gets a download. Resolves 'shared', 'cancelled' or 'downloaded'.
+  function shopImageOut(blob, name) {
+    var n = nav(), F = root.File, file = null, doc = root.document;
+    try { file = F ? new F([blob], name, { type: 'image/png' }) : null; } catch (e) { file = null; }
+    function download() {
+      var U = root.URL, a = doc.createElement('a'), url = U.createObjectURL(blob);
+      a.href = url; a.download = name; if (doc.body && doc.body.appendChild) doc.body.appendChild(a); a.click(); if (a.remove) a.remove();
+      if (root.setTimeout) root.setTimeout(function () { U.revokeObjectURL(url); }, 4000); else U.revokeObjectURL(url);
+      return 'downloaded';
+    }
+    if (file && n && typeof n.canShare === 'function' && typeof n.share === 'function' && n.canShare({ files: [file] })) {
+      return Promise.resolve(n.share({ files: [file], title: 'Cascade shopping list' })).then(function () { return 'shared'; }, function (e) { return e && e.name === 'AbortError' ? 'cancelled' : download(); });
+    }
+    return Promise.resolve(download());
+  }
+  function wantUsual() { return !!M && !M.demo && (canManage(M.role) || canPrice(M.role)); }
+  function demoUsual() { return { d5: { itemId: 'd5', supplier: 'Demo Mart', label: 'pack of 4', packSize: 4, quoted: 230, lastUnit: null }, d1: { itemId: 'd1', supplier: 'Demo Mart', label: 'pack of 12', packSize: 12, quoted: 210, lastUnit: null } }; }
+  // The Usual supplier options, read once and kept five minutes. Resolves {} when they cannot be read: the tools then go without pack details, never fail.
+  function usualP() {
+    if (M && M.demo) return Promise.resolve(demoUsual());
+    if (K.usual && nowMs() - K.usualAt < 300000) return Promise.resolve(K.usual);
+    if (K.usualP) return K.usualP;
+    var me = M;
+    if (!wantUsual() || !me.client || !supOK() || !root.I_Suppliers.usualMap || !online()) return Promise.resolve({});
+    K.usualP = Promise.resolve().then(function () { return root.I_Suppliers.usualMap(supCtx()); }).then(function (m) { K.usual = m || {}; K.usualAt = nowMs(); K.usualP = null; return K.usual; }, function () { K.usualP = null; return {}; });
+    return K.usualP;
+  }
+  function addLowCount() { return allowed('addlow') ? lowItems(K.items, K.shop, M.demo ? demoUsual() : K.usual).length : 0; }
+  function addLowButton(cls) { return addLowCount() ? '<button class="btn btn-secondary btn-block ' + cls + '" type="button" data-act="addlow-open">' + gi('plus', 's16') + ' Add low items to the shopping list</button>' : ''; }
+  function shopTools() {
+    return '<div class="I_shopx" role="group" aria-label="Share the shopping list"><button class="btn btn-secondary" type="button" data-act="shop-share">Share as text</button><button class="btn btn-secondary" type="button" data-act="shop-image">Save as image</button>' +
+      (allowed('report') ? '<button class="btn btn-secondary" type="button" data-act="report" data-k="order">PDF to Telegram</button>' : '') + '</div>';
+  }
+  function shopCtx(usual) { return { role: M.role, items: K.items || [], usual: usual || K.usual || {}, today: manilaToday(nowMs()) }; }
+  function shareText() {
+    if (!K.shop || !K.shop.length) return;
+    usualP().then(function (usual) {
+      if (!M) return;
+      var text = shopText(K.shop, shopCtx(usual)), n = nav();
+      if (n && typeof n.share === 'function') return Promise.resolve(n.share({ text: text })).then(null, function (e) { if (!(e && e.name === 'AbortError')) return copyText(text); });
+      return copyText(text);
+    });
+  }
+  function copyText(text) {
+    var n = nav();
+    if (n && n.clipboard && typeof n.clipboard.writeText === 'function') return Promise.resolve(n.clipboard.writeText(text)).then(function () { toast('Copied'); }, function () { showCopy(text); });
+    showCopy(text);
+  }
+  function showCopy(text) { if (!M) return; M.act = { kind: 'copytext', text: text }; drawLayer(); var t = q('#I_copy'); try { if (t && t.select) t.select(); } catch (e) { /* the person selects by hand */ } }
+  function saveImage() {
+    if (!K.shop || !K.shop.length) return;
+    usualP().then(function (usual) {
+      if (!M) return;
+      var d = shopLines(K.shop, shopCtx(usual)), name = 'cascade-shopping-' + manilaToday(nowMs()) + '.png';
+      shopImageBlob(d, function (err, blob) {
+        if (err || !M) { if (M) toast('The picture could not be made. Try again.'); return; }
+        shopImageOut(blob, name).then(function (how) { if (M && how === 'downloaded') toast('Picture saved to your downloads.'); }, function () { if (M) toast('The picture could not be saved. Try again.'); });
+      });
+    });
+  }
+  function addLowOpen() {
+    if (!allowed('addlow') || (M.act && M.act.sending)) return;
+    var a = M.act = { kind: 'addlow', step: 'load', lines: [], vals: {} };
+    drawLayer();
+    usualP().then(function (usual) {
+      if (!M || M.act !== a) return;
+      a.lines = lowItems(K.items, K.shop, usual).map(function (l) { l.on = true; l.key = newKey('low'); return l; });
+      a.step = 'pick'; drawLayer();
+    });
+  }
+  function alLine(l, money) {
+    var bits = [uq(l.qty, l.unit)];
+    if (l.opt) bits.push([l.opt.supplier, packLabel(l.opt)].filter(Boolean).join(' · '));
+    if (money && l.price != null) bits.push('PHP ' + pesoNum(l.price) + ' a ' + (l.unit || 'pack'));
+    return bits.filter(Boolean).join(' · ');
+  }
+  function renderAddLow(a) {
+    if (a.step === 'load') return head('Add low items to the shopping list?', 'Checking pack sizes…') + '<div class="I_btns"><button class="btn btn-secondary btn-block" type="button" data-act="back">Cancel</button></div>';
+    if (!a.lines.length) return head('Nothing to add', 'Every low item is already on the shopping list.') + '<div class="I_btns"><button class="btn btn-primary btn-block" type="button" data-act="close">Close</button></div>';
+    var money = canPrice(M.role), n = a.lines.filter(function (l) { return l.on && !l.ok; }).length, bad = a.lines.filter(function (l) { return l.fail; }), added = a.lines.filter(function (l) { return l.ok; }).length;
+    return head('Add low items to the shopping list?', 'Quantity is the Buy up to level less what is on hand, in whole packs.') + '<form data-i-form>' + a.lines.map(function (l) {
+      return '<div class="I_brow"><button class="btn btn-secondary btn-block I_tick" type="button" data-act="al-tick" data-id="' + esc(l.itemId) + '" aria-pressed="' + (!!l.on || !!l.ok) + '"' + (l.ok || a.sending ? ' disabled' : '') + '>' + gi(l.on || l.ok ? 'check' : 'plus', 's16') + ' ' + esc(l.name) + (l.ok ? ' <span class="help">Added</span>' : '') + '</button>' +
+        '<p class="help">' + esc(alLine(l, money)) + '</p></div>';
+    }).join('') + (bad.length ? '<div class="errbox" role="alert">' + gi('alert') + '<span>' + esc(added + ' added. Not added: ' + bad.map(function (l) { return l.name; }).join(', ') + '. Try again to send only those.') + '</span></div>' : errBox(a)) +
+      (a.bad ? '<div class="field"><span class="err">' + gi('alert', 's16') + ' Tick at least one item.</span></div>' : '') + actions(a, bad.length ? 'Try again' : 'Add ' + n + (n === 1 ? ' item' : ' items'), 'Cancel') + '</form>';
+  }
+  function addLowSubmit(a) {
+    if (a.sending || a.step === 'load' || !a.lines.length) return;
+    var me = M, rows = a.lines.filter(function (l) { return l.on && !l.ok; });
+    if (!rows.length) { a.bad = true; drawLayer(); return; }
+    a.bad = false;
+    if (me.demo) { toast(DEMO_NOTE); closeSheet(); return; }
+    if (!online()) { a.err = 'offline'; drawLayer(); return; }
+    if (!me.client) { a.err = 'missing'; drawLayer(); return; }
+    K.at = 0; a.sending = true; a.err = null; drawLayer();
+    var chain = Promise.resolve(), kinds = [];
+    rows.forEach(function (l) {
+      chain = chain.then(function () {
+        var it = itemById(l.itemId), c = shopAddCall(me.pid, it, { qty: fmt(l.qty), note: 'Running low (from the staff app)' }, l.key);
+        return Promise.resolve(me.client.rpc(c.fn, c.args)).then(function (r) {
+          if (r && r.error) throw r.error;
+          if (r && r.data && (r.data.ok === false || r.data.error)) throw { message: 'failed', data: r.data };
+          l.ok = r && r.data || {}; l.fail = false;
+        }).then(null, function (e) { l.fail = true; kinds.push(errKind(e, online())); });
+      });
+    });
+    chain.then(function () {
+      if (me.dead) return;
+      a.sending = false;
+      var okRows = a.lines.filter(function (l) { return l.ok; }), left = a.lines.filter(function (l) { return !l.ok && l.on; });
+      if (okRows.length) setBatchUndo(a, okRows);
+      if (!left.length) { if (!a.undo) toast('Added ' + okRows.length + (okRows.length === 1 ? ' item' : ' items') + ' to the shopping list.'); if (me.opts.haptic) { try { me.opts.haptic('success'); } catch (x) { /* no haptics */ } } closeSheet(); load(); return; }
+      if (!okRows.length && (kinds[0] === 'refused' || kinds[0] === 'missing')) { me.denied.shop = true; me.act = null; toast(ERR[kinds[0]]); drawLayer(); draw(); return; }
+      if (okRows.length) load(); else a.err = kinds[0] === 'offline' ? 'offline' : 'other';
+      drawLayer();
+    });
+  }
+  // One Undo for the whole batch: each created row is cancelled with the existing save_shopping_item_v1 shape, its own key.
+  function setBatchUndo(a, okRows) {
+    var ids = okRows.map(function (l) { return l.ok.id; }).filter(Boolean); if (!ids.length) return;
+    if (a.undo) K.undos = K.undos.filter(function (u) { return u !== a.undo; });
+    var calls = ids.map(function (id) { return { fn: 'save_shopping_item_v1', args: { p_property_id: M.pid, p_item: { id: id, status: 'cancelled' }, p_idempotency_key: newKey('undo') } }; }), n = ids.length;
+    a.undo = { id: 'u' + (++K.uidn), itemId: null, name: '', at: nowMs(), kind: 'addlow', say: 'Added ' + n + (n === 1 ? ' item' : ' items') + ' to the shopping list', line: 'added items to the shopping list', confirm: 'Take the ' + n + (n === 1 ? ' item' : ' items') + ' you just added off the shopping list?', call: calls[0], more: calls.slice(1) };
+    pushUndoEntry(a.undo);
+  }
+  function renderCopy(a) {
+    return head('Copy the list', 'Press and hold the text, then choose Copy.') + '<div class="field"><label for="I_copy">Shopping list</label><div class="input"><textarea id="I_copy" rows="8" readonly>' + esc(a.text) + '</textarea></div></div><div class="I_btns"><button class="btn btn-primary btn-block" type="button" data-act="close">Close</button></div>';
   }
 
   /* ---- Item history and a suggested Buy up to (s84 1b, Q3) */
@@ -1379,6 +1592,7 @@
     a.phase = 'unknown'; a.camState = undefined; a.focused = false; drawLayer();
   }
   function flowBack(a) {
+    if (a.kind === 'addlow' || a.kind === 'copytext') return closeSheet();
     if (a.kind === 'cconfirm') { cconfirmDone(a, false); return; }
     if (a.kind === 'photo' || a.kind === 'photoremove') { relPrev(a); M.act = newMenu(a.itemId); drawLayer(); return; }
     if (a.kind === 'labels') { if (a.step === 'confirm') { a.step = 'form'; a.err = null; drawLayer(); return; } return closeSheet(); }
@@ -1402,6 +1616,7 @@
     esc: esc, canPrice: canPrice, groupsFor: groupsFor, codeIndex: codeIndex, I_codeIndex: codeIndex, normCode: normCode, validCode: validCode, attachCall: attachCall, priceCall: priceCall, levelsCall: levelsCall, createCall: createCall, reportCall: reportCall, REPORTS: REPORTS, normalize: normalize, normalizeCatalogue: normalizeCatalogue, level: level, summary: summary, chipsFor: chipsFor, visible: visible, barPct: barPct, parseQty: parseQty, stepQty: stepQty,
     newKey: newKey, errKind: errKind, ERR: ERR, countCall: countCall, usageCall: usageCall, receiptCall: receiptCall, shopAddCall: shopAddCall, shopSetCall: shopSetCall, normalizeShop: normalizeShop,
     fitSize: fitSize, phpText: phpText, photoSetCall: photoSetCall, recatCall: recatCall, mintCall: mintCall, labelsCall: labelsCall,
-    manilaToday: manilaToday, demoItems: demoItems, PROPERTY_ID: PROPERTY_ID, canManage: canManage, canUse: canUse
+    manilaToday: manilaToday, demoItems: demoItems, PROPERTY_ID: PROPERTY_ID, canManage: canManage, canUse: canUse,
+    lowItems: lowItems, shopLines: shopLines, shopText: shopText, shopLayout: shopLayout, packPrice: packPrice, longDate: longDate
   } };
 })(typeof window !== 'undefined' ? window : this);

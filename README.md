@@ -85,7 +85,7 @@ This app is the only one people install. The sibling surfaces are published **in
 
 `CS.doorsForRole(role)` in `lib.js` is the one role-to-doors mapping; the router sends home for a door the role may not have, even if typed in the hash. The server stays the real gate, the client only hides. At start the app reads `fold-manifest.json` once (network-first, 404 = nothing folded): a folded surface opens from its relative path, an unfolded one falls back to its old github.io URL (the Admin guide has no fallback, so it simply is not offered). `?demo` shows the doors by role but opens none of them.
 
-The shell service worker (`cs-shell-v46`; the name is `CACHE_NAME` at the top of `sw.js`, bumped by hand in every release that changes a shell file, with the tests that pin it) passes `admin/`, `checklist/`, `manual/` and `guide/` straight to the network and never stores them (`swRoute` in `sw.js`).
+The shell service worker (`cs-shell-v47`; the name is `CACHE_NAME` at the top of `sw.js`, bumped by hand in every release that changes a shell file, with the tests that pin it) passes `admin/`, `checklist/`, `manual/` and `guide/` straight to the network and never stores them (`swRoute` in `sw.js`).
 
 **Fold in** (Node 20+, no dependencies; each flag optional, `--dry` writes nothing):
 

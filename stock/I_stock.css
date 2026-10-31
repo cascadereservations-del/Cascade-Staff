@@ -110,3 +110,7 @@ div.I_row { cursor: default; }
 .I_tidyrow { display: flex; justify-content: flex-start; margin-top: -6px; }
 .I_tidybtn { min-height: 44px; }
 .I_kept { margin: 0; }
+/* s106 shopping tools */
+.I_shopx { display: flex; flex-wrap: wrap; gap: 8px; }
+.I_shopx .btn { flex: 1 1 auto; min-height: 44px; }
+.I_albtn { min-height: 44px; }
