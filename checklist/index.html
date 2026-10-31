@@ -7385,14 +7385,15 @@ function reportTimingNotes(checkoutYmd, todayYmd, stayOptions) {
   if (earlier) out.push(`There is an earlier stay without a report (checkout ${ymdShort(earlier)}). If you can, send that one first so the meter readings stay in order.`);
   return out;
 }
-// The stamp burned into the picture: when it was TAKEN if the file says so, else now (a late report must not look fresh).
+// The stamp burned into the picture: the photo's own file time when it has one, else now (a late report must not look fresh).
+// Labelled 'Photo time', not 'Taken': a re-saved or downloaded file carries its save time, which the browser cannot tell apart.
 function photoStampText(file) {
   const fmt = ms => new Date(ms).toLocaleString('en-PH', {
     timeZone: 'Asia/Manila', year: 'numeric', month: '2-digit',
     day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false
   });
   const t = file && file.lastModified;
-  return t > 0 ? 'Taken ' + fmt(t) : fmt(Date.now());
+  return t > 0 && t <= Date.now() + 86400000 ? 'Photo time ' + fmt(t) : fmt(Date.now());   // a future clock falls back to now
 }
 
 function renderMeterNudge() {
@@ -10505,6 +10506,10 @@ function buildPayload() {
     // record the person who cares can actually read.
     meterPhotosSkipped: state.meterPhotosSkipped === true,
     meterPhotoSkipNote: state.meterPhotosSkipped ? state.meterSkipReason : null,
+    meterPhotoMeta: [0, 1].map(i => state.meterPhotos[i]).map((ph, i) => ph ? ({
+      fileId: ph.fileId || '', name: ph.name || '', meter: i === 0 ? 'electric' : 'water',
+      takenAt: ph.takenAt ? new Date(ph.takenAt).toISOString() : null,
+    }) : null).filter(Boolean),
     meterChecks: {
       findings: (typeof meterFindings === 'function' ? meterFindings() : []),
       provenance: [0, 1].map(i => state.meterPhotos[i]?.provenance || null),
@@ -10661,7 +10666,7 @@ async function proceedWithSubmission() {
         Object.values(state.issueFlags).filter(f => f && f.note).length + K_gatedAll().filter(i => state.confirmItems[i.id] === 'issue' && K_isUrgentIssue(i)).length,
         [...state.meterPhotos, ...state.precleanPhotos, ...state.aftercleanPhotos, ...state.bedroomPhotos, ...state.kitchenPhotos].filter(Boolean).length);
     } else {
-      // submit-cleaning returns `message` (the 409 meter block says what to do);
+      // submit-cleaning returns `message` (e.g. the D-219 meter-backwards refusal says what to do);
       // older paths return `msg`. Reading only `msg` showed her 'Server returned
       // an error' and nothing she could act on.
       throw new Error(data.message || data.msg || 'Server returned an error');
@@ -11951,6 +11956,7 @@ function applyBookingAutofill(data) {
   state.numberOfNights = nights || 0;
   fetchPrevReadings();   // the meter neighbours depend on this stay's check-out date
   if (state.meterSkipRevealed) refreshMeterSkipAllowance();
+  if (typeof renderMeterNudge === 'function') renderMeterNudge();   // checkout-day and late notes follow the picked stay
 
   // Trigger calcNights so the DOM badge reflects the autofilled dates
   el('checkInDate')?.dispatchEvent(new Event('change'));

@@ -291,10 +291,12 @@ test('S2-4: late and out-of-order are gentle notes; nothing for an on-time repor
   assert.deepEqual(r2.reportTimingNotes('', '2026-10-31', stays), []);
 });
 
-test('S2-1: the burned-in stamp says Taken <photo time>, and falls back to now only when unknown', () => {
-  assert.match(r2.photoStampText({ lastModified: at('2026-10-21', 9) }), /^Taken .*2026.*09:00:00$/);
-  assert.doesNotMatch(r2.photoStampText({}), /^Taken/);
-  assert.doesNotMatch(r2.photoStampText(null), /^Taken/);
+test('S2-1: the burned-in stamp says Photo time <file time>, and falls back to now when unknown or in the future', () => {
+  assert.match(r2.photoStampText({ lastModified: at('2026-10-21', 9) }), /^Photo time .*2026.*09:00:00$/);
+  assert.doesNotMatch(r2.photoStampText({}), /^Photo time/);
+  assert.doesNotMatch(r2.photoStampText(null), /^Photo time/);
+  assert.doesNotMatch(r2.photoStampText({ lastModified: Date.now() + 3 * 86400000 }), /^Photo time/);
+  assert.ok(html.includes("meterPhotoMeta: [0, 1].map(i => state.meterPhotos[i])") && html.includes("meter: i === 0 ? 'electric' : 'water'"), 'the report carries each meter photo time and slot');
   assert.ok(html.includes('stamp: photoStampText(file)') && html.includes('const stamp = photoStampText(file);'));
   assert.doesNotMatch(html, /photoTimestamp/);
 });
