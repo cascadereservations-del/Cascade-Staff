@@ -47,5 +47,5 @@ test('F_ sw: folded apps, Supabase, Telegram and the jsDelivr build are passed t
 test('F_ sw: activate deletes only old cs-shell-* caches and claims clients', async () => {
   const w = load(); let waited; w.handlers.activate({ waitUntil: (p) => { waited = p; } }); await waited;
   assert.deepEqual(w.deleted, ['cs-shell-v1', 'cs-shell-v23', 'cs-shell-v24', 'cs-shell-v25', 'cs-shell-v26', 'cs-shell-v27', 'cs-shell-v28', 'cs-shell-v29', 'cs-shell-v30'], 'ch-shell-* (the checklist) and everything else are left alone');
-  assert.match(SRC, /CACHE_NAME = 'cs-shell-v44'/);
+  assert.match(SRC, /CACHE_NAME = 'cs-shell-v45'/);
 });

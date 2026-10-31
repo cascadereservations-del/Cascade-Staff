@@ -262,6 +262,7 @@ test('s103 (D-354): a meter mismatch never blocks a report; the card is never wo
   assert.match(paint, /This is about an earlier report, not the one you are doing now\. You can still send today/);
   const list = cut('function renderMeterFollowupList()', 'async function reportNoMeterPhoto()');
   assert.match(list, /Report sent \$\{when\}/);
+  assert.match(list, /Checkout \$\{co\}/);
 });
 
 // ── s103 round 2 (D-354): photos are judged against the checkout day; late and out-of-order reports only get a gentle note ──

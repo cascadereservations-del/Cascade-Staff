@@ -6967,7 +6967,10 @@ function renderMeterFollowupList() {
       ? new Date(r.cleaned_at).toLocaleDateString('en-PH',
           { timeZone: 'Asia/Manila', month: 'short', day: 'numeric' })
       : 'a recent report';
-    const label = r.cleaned_at ? `Report sent ${when}` : when;
+    const co = r.checkout_date ? new Date(r.checkout_date + 'T12:00:00+08:00').toLocaleDateString('en-PH',
+      { timeZone: 'Asia/Manila', month: 'short', day: 'numeric' }) : '';
+    const label = co ? `Checkout ${co}${r.guest_name ? ' · ' + r.guest_name : ''}`
+      : (r.cleaned_at ? `Report sent ${when}` : when);
     const detail = (r.vision_verdict === 'mismatch' && r.vision_electric != null)
       ? ` (the photo looks like ${escapeHtml(String(r.vision_electric))}, the report says ${escapeHtml(String(r.typed_electric ?? '—'))})`
       : '';
