@@ -666,7 +666,7 @@
   // s105: the Weather card on Today. Same inputs as rainAlert (payload.weather.current, notices view hours/watch), nothing new from the server. Null when there is no reading.
   // action: when the rain starts, from the watch window ("2 to 5 pm" gives "2 pm") or else the first hour at 50 percent or more; asOf only when the reading is old.
   function wxCard(payload, view, now) {
-    var w = payload && payload.weather, c = w && w.current; if (!c || c.temp == null) return null;
+    var w = payload && payload.weather, c = w && w.current; if (!c || c.temp == null || !isFinite(+c.temp)) return null;
     var ra = rainAlert(payload, view, now), rl = rainLine(w), nw = view && view.weather, old = !!(w.fetched_at && weatherStale(w, now));
     var hours = ((nw && nw.hours) || []).slice(0, 12).filter(function (h) { return h && h.label; }).map(function (h) { return { label: String(h.label), pct: Math.max(0, Math.min(100, +h.pct || 0)) }; });
     var when = null;
@@ -675,12 +675,26 @@
       if (m && sfx) when = m[1] + ' ' + sfx.toLowerCase();
       else { var f = hours.filter(function (h) { return h.pct >= 50; })[0]; if (f) when = f.label; }
     }
-    // soon: rain starts within 3 hours, or already has; no readable start time counts as soon. shortcut: a window that ended earlier today still reads as soon until the watch clears.
-    var soon = !!ra, wm = when && /^(\d{1,2})(?::(\d{2}))?\s*(am|pm)$/i.exec(when);
-    if (ra && wm) { var np = manilaParts(now instanceof Date ? now : new Date(now == null ? Date.now() : now)); soon = ((+wm[1] % 12) + (/pm/i.test(wm[3]) ? 12 : 0)) * 60 + (+wm[2] || 0) - (np.h * 60 + np.min) <= 180; }
+    // soon: rain starts within 3 hours, or already has; no readable start time counts as soon. Start passed: the window end decides (end not passed = may start any time, end passed = over).
+    var soon = !!ra, wm = when && /^(\d{1,2})(?::(\d{2}))?\s*(am|pm)$/i.exec(when), ended = false, anyTime = false;
+    if (ra && wm) {
+      var np = manilaParts(now instanceof Date ? now : new Date(now == null ? Date.now() : now)), mins = function (m) { return ((+m[1] % 12) + (/pm/i.test(m[3]) ? 12 : 0)) * 60 + (+m[2] || 0); };
+      var nowMin = np.h * 60 + np.min, st = mins(wm) - nowMin; soon = st <= 180;
+      if (st < 0 && ra.src === 'watch') { // the window end ("2 to 5 pm"): the last clock time in the text; same am/pm as the end when the start has none
+        var all = []; String(ra.window).replace(/(\d{1,2})(?::(\d{2}))?\s*(am|pm)?/gi, function (x, h, mi, ap) { all.push([x, h, mi, ap]); return x; });
+        var e = all.length > 1 ? all[all.length - 1] : null, ep = e && (e[3] || (all[0][3]) || (wm[3]));
+        if (e && ep) { if (mins([0, e[1], e[2], ep]) <= nowMin) { soon = false; ended = true; } else anyTime = true; }
+      }
+    }
     return { temp: Math.round(+c.temp), desc: c.description ? String(c.description) : '', hi: ra ? ra.hi : (c.today_high != null ? Math.round(+c.today_high) : null), lo: ra ? ra.lo : (c.today_low != null ? Math.round(+c.today_low) : null),
       rain: !!ra, soon: soon, window: ra ? ra.window : '', pct: ra ? ra.pct : null, peakAt: ra ? ra.peakAt : '', head: rl && !(ra && (ra.src === 'watch' || ra.peakAt)) ? rl.head : '', hours: hours.some(function (h) { return h.pct > 0; }) ? hours : [],
-      action: ra ? 'Bring towels and mats in before ' + (when || 'the rain') : '', asOf: old ? clockLabel(w.fetched_at) : '' };
+      action: !ra || ended ? '' : anyTime ? 'Rain may start any time. Bring towels and mats in now.' : 'Bring towels and mats in before ' + (when || 'the rain'), asOf: old ? clockLabel(w.fetched_at) : '' };
+  }
+  // s105: while a guest is in the house, the next stay is a returning, regular or VIP guest arriving in 0 to 2 days: who, which day, the ribbon words and the arrival perks. Null otherwise (a first stay draws nothing).
+  function nextPrep(payload, today) {
+    var cur = payload && payload.current_guest, n = payload && payload.next_guest, r = cur && n ? tierRibbon(n) : null; if (!r) return null;
+    var d = daysBetween(today, n.checkin_date); if (!(d >= 0 && d <= 2)) return null;
+    return { name: n.guest_name || 'Guest', day: d === 0 ? 'today' : d === 1 ? 'tomorrow' : dayLabel(n.checkin_date), ribbon: r, perks: tierPerks(n.tier, { id: !!n.id_photo_path, phase: 'arrival' }) };
   }
   // s105: the "Good to know" block of the Today card. Notes: every unique important (rank 0) and request (rank 1) point, strongest first, 3 shown, 90 characters each;
   // `more` counts every other unique note. Phone and the companion count only when canContact (owner/admin); guests from a count the server sends, else 1 + companions. id: the photo path exists.
@@ -690,8 +704,8 @@
     key = key.map(function (x, i) { return { x: x, i: i }; }).sort(function (a, b) { return a.x.rank - b.x.rank || a.i - b.i; }).map(function (o) { return { p: cut(o.x.p), rank: o.x.rank }; });
     var c = canContact ? guestContact(g) : null, n = null;
     ['guest_count', 'num_guests', 'guests'].forEach(function (k) { if (n === null && g && typeof g[k] === 'number' && g[k] > 0) n = Math.round(g[k]); });
-    if (n === null && canContact && g && Array.isArray(g.companions) && g.companions.length) n = 1 + g.companions.length;
-    return { notes: key.slice(0, 3), more: total - Math.min(3, key.length), phone: c && c.phone && c.tel ? c.phone : null, tel: c && c.phone && c.tel ? c.tel : null, guests: n, id: !!(g && g.id_photo_path) };
+    if (n === null && canContact && g && Array.isArray(g.companions)) { var me = String(g.guest_name || '').trim().toLowerCase(), others = g.companions.filter(function (x) { return x && String(x.name || '').trim().toLowerCase() !== me; }); if (others.length) n = 1 + others.length; } // guest_companions holds the main guest's own row too
+    return { notes: key.slice(0, 3), more: total - Math.min(3, key.length), phone: c && c.phone && c.tel ? c.phone : null, tel: c && c.phone && c.tel ? c.tel : null, guests: n, id: !!(g && g.id_photo_path) || !!(g && g.arrival_ready && g.arrival_ready.id === true), idKnown: !!(g && (g.id_photo_path || (g.arrival_ready && typeof g.arrival_ready.id === 'boolean') || g.guest_id !== null)) }; // idKnown false: no ID photo and the stay is not linked to a guest record (guest_id null), so the pill says nothing rather than No ID yet
   }
   // 60 minutes: the same age at which notices_v1 stops sending its weather (SQL: c_at > now() - interval '60 minutes'). Never higher than the server rule.
   var WEATHER_STALE_MIN = 60;
@@ -1514,7 +1528,7 @@
     fmtTime: fmtTime, fmt24: fmt24, ordinal: ordinal, plural: plural, agoLabel: agoLabel, clockLabel: clockLabel,
     monthGrid: monthGrid, dayState: dayState, dayStatus: dayStatus, mergeStays: mergeStays, sameGuest: sameGuest, dayMoves: dayMoves, blockWhy: blockWhy, flagName: flagName, FLAG_KINDS: FLAG_KINDS, blockedLines: blockedLines, blockedLineText: blockedLineText,
     canFlagDays: canFlagDays, guestContact: guestContact, canSeeGuestContact: canSeeGuestContact, MESSENGER_INBOX: MESSENGER_INBOX, rpcMissing: rpcMissing, tgLink: tgLink, warningInfo: warningInfo, findingKey: findingKey, initialOf: initialOf, sourceLabel: sourceLabel, stayDates: stayDates, monthInRange: monthInRange,
-    tierRibbon: tierRibbon, tierPerks: tierPerks, faceFrame: faceFrame, parseNotes: parseNotes, returningLabel: returningLabel, tierLabel: tierLabel, tierLine: tierLine, tierParts: tierParts, keyNote: keyNote, TOPIC_LABELS: TOPIC_LABELS, notableLine: notableLine, weatherIcon: weatherIcon, rainAlert: rainAlert, wxCard: wxCard, goodToKnow: goodToKnow, earlierLine: earlierLine, companionsLine: companionsLine, todayCardState: todayCardState,
+    tierRibbon: tierRibbon, nextPrep: nextPrep, tierPerks: tierPerks, faceFrame: faceFrame, parseNotes: parseNotes, returningLabel: returningLabel, tierLabel: tierLabel, tierLine: tierLine, tierParts: tierParts, keyNote: keyNote, TOPIC_LABELS: TOPIC_LABELS, notableLine: notableLine, weatherIcon: weatherIcon, rainAlert: rainAlert, wxCard: wxCard, goodToKnow: goodToKnow, earlierLine: earlierLine, companionsLine: companionsLine, todayCardState: todayCardState,
     orderWarnings: orderWarnings, brownoutText: brownoutText, lowStockText: lowStockText, warningSummary: warningSummary,
     weatherLine: weatherLine, rainLine: rainLine, weatherStale: weatherStale, WEATHER_STALE_MIN: WEATHER_STALE_MIN, esc: esc,
     A_HOUSE_FALLBACK: A_HOUSE_FALLBACK, A_houseTimes: A_houseTimes, A_turnoverClock: A_turnoverClock, A_turnoverLine: A_turnoverLine, A_hm: A_hm, A_NOTICE_TYPES: A_NOTICE_TYPES, A_noticesView: A_noticesView, A_noticeFilters: A_noticeFilters, A_dayMarks: A_dayMarks, A_noticeDay: A_noticeDay, A_guestMessage: A_guestMessage, A_CAL_TABS: A_CAL_TABS, A_calTab: A_calTab, A_stayShade: A_stayShade, A_hubGroups: A_hubGroups, A_hubNative: A_hubNative, A_hubRoutes: A_hubRoutes, A_hubRouteOk: A_hubRouteOk, A_hubDoorUrl: A_hubDoorUrl, A_whatsNew: A_whatsNew, A_shortTime: A_shortTime, A_PINNED: A_PINNED, A_noticeAddError: A_noticeAddError, A_NOTICE_HINT: A_NOTICE_HINT, A_flagDup: A_flagDup, A_facebookUrl: A_facebookUrl, A_fbPluginUrl: A_fbPluginUrl, A_noticeAddProblem: A_noticeAddProblem, A_noticeAddArgs: A_noticeAddArgs, A_plainRefusal: A_plainRefusal, A_hour12: A_hour12, A_timeRange: A_timeRange,

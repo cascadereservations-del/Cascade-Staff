@@ -12,8 +12,9 @@ test('header: the face is inside the name row; the benefits line, the time line 
   const who = /<div class="T_who">([\s\S]*?)<\/div><button class="T_face"[^>]*><\/button><\/div>/.exec(h);
   assert.ok(who, 'T_who = name column then the face, then closes');
   assert.match(who[1], /^<div class="T_id"><div class="T_namerow"><h2 class="A_name">Ana Reyes<\/h2>/); assert.doesNotMatch(who[1], /T_line/);
+  assert.ok(who[1].indexOf('A_name') < who[1].indexOf('T_when') && who[1].indexOf('T_when') < who[1].indexOf('class="pill'), 'name, the time line, the ID pill: all beside the face (s105)');
   const after = h.slice(h.indexOf(who[0]) + who[0].length);
-  assert.ok(after.indexOf('T_when') >= 0 && after.indexOf('T_when') < after.indexOf('T_gtk') && after.indexOf('T_gtk') < after.indexOf('T_perks'), 'order: time line, Good to know, then the perks');
+  assert.ok(after.indexOf('T_gtk') < after.indexOf('T_perks'), 'order: Good to know, then the perks, full width under the face');
   assert.ok(after.indexOf('T_perks') < after.indexOf('A_more'));
 });
 test('one time line: key time strong, then the dates and nights; month said once; 2 months kept; Out for a guest in the house', async () => {
@@ -48,7 +49,7 @@ test('css: tier-coloured placeholder in the same 88 px slot, 10 px rhythm, name 
 
 test('untiered returning guest: the older Returning pill is inside the name row, not under the header', async () => {
   const h = await home(GUEST({ tier: null, tier_line: null, repeat: true, stay_count: 3, id_face_box: BOX }));
-  const row = /<div class="T_namerow">([\s\S]*?)<\/div><\/div><button class="T_face"/.exec(h); assert.ok(row, 'name row closes right before the face');
+  const row = /<div class="T_namerow">([\s\S]*?)<\/div><p class="sub num T_when/.exec(h); assert.ok(row, 'name row closes right before the time line');
   assert.match(row[1], /<h2 class="A_name">Ana Reyes<\/h2><span class="pill p-tier-returning">/); assert.match(row[1], /Returning · 3rd stay/);
   assert.equal((h.match(/Returning · 3rd stay/g) || []).length, 1, 'shown once');
 });

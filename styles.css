@@ -538,7 +538,7 @@ html[data-plain="1"] .tabbar { background: var(--v5-panel); } html[data-plain="1
 .tab { color: var(--v5-bar-fg); font-size: var(--v5-t-chrome); line-height: clamp(0.875rem, 0.818rem + 0.253vw, 0.98rem); font-weight: 600; min-height: var(--touch); border-radius: 24px; }
 .tab[aria-current="page"] { color: var(--v5-bar-on); } .tab[aria-current="page"] .ico { background: var(--v5-bar-on-bg); }
 .tab .badge { background: var(--v5-gold); color: var(--v5-gold-fg); box-shadow: 0 0 0 2px var(--v5-bar); font-size: var(--v5-t-chrome); top: 6px; }
-.tab .badge.bad { background: var(--v5-danger); }
+.tab .badge.bad { background: var(--v5-danger); color: var(--v5-act-fg); } /* light text on the danger fill; the gold pair is for the default badge only */
 .screen { padding-bottom: calc(var(--tabbar-h) + env(safe-area-inset-bottom) + 28px); }
 
 /* home: photo header, greeting, content sheet */
@@ -585,7 +585,7 @@ button.A_chipglass { width: var(--touch); padding: 0; justify-content: center; c
 #v-home .A_greet { padding-bottom: 14px; }
 #v-home .A_greet h1 { font-size: clamp(1.625rem, 1.5rem + 0.5vw, 1.875rem); line-height: 1.15; }
 #v-home .A_greet .cap { margin-top: 2px; }
-#v-home .H_wxstrip { min-height: var(--touch); margin-top: 4px; justify-content: flex-start; flex-direction: row; align-items: center; flex-wrap: wrap; column-gap: 8px; }
+#v-home .H_wxstrip { margin-top: 4px; justify-content: flex-start; flex-direction: row; align-items: center; flex-wrap: wrap; column-gap: 8px; }
 .A_primary, .A_card .A_primary { min-height: 56px; font-size: var(--v5-t-body); }
 .A_slide { margin-top: 4px; }
 @media (min-width: 48rem) {
@@ -1015,11 +1015,9 @@ button.A_chipglass.E_pill { width: auto; min-width: 124px; max-width: 184px; hei
 @media (min-width: 52.5rem) and (min-height: 40rem) { .H_calleft { position: sticky; top: calc(var(--appbar-h) + env(safe-area-inset-top, 0px) + 8px); } } /* the month stays in view while the long list beside it scrolls */
 
 /* s84 H: the weather strip under the greeting. Always drawn (a link to #weather), two fixed lines, so nothing moves when the reading lands. */
-.H_wxstrip { display: flex; flex-direction: column; justify-content: center; gap: 1px; min-width: 0; min-height: var(--touch); margin-top: 2px; color: var(--v5-photo-ink-2); text-decoration: none; text-shadow: 0 1px 8px var(--v5-photo-shadow); }
+.H_wxstrip { display: flex; flex-direction: column; justify-content: center; gap: 1px; min-width: 0; margin-top: 2px; color: var(--v5-photo-ink-2); text-decoration: none; text-shadow: 0 1px 8px var(--v5-photo-shadow); }
 .H_wxstrip .l1 { display: flex; align-items: center; gap: 6px; min-width: 0; color: var(--v5-photo-ink); font-size: var(--v5-t-2); font-weight: 600; line-height: 1.25; }
-.H_wxstrip .l1 > span, .H_wxstrip .l2 { min-width: 0; overflow-wrap: anywhere; } /* grows with the text size instead of clipping (F_ 200 percent rule) */
-.H_wxstrip .l2 { font-size: var(--v5-t-min); line-height: 1.25; }
-.H_wxstrip:focus-visible { outline: 2px solid currentColor; outline-offset: 2px; border-radius: 8px; }
+.H_wxstrip .l1 > span { min-width: 0; overflow-wrap: anywhere; } /* grows with the text size instead of clipping (F_ 200 percent rule) */
 
 /* s84 H round 2: the booked-nights line under the month title (owner and admin). The slot is always there, so the grid never moves when the figure arrives. */
 .H_booked { min-height: 1.5rem; margin: 0 0 4px; text-align: center; }
@@ -1146,7 +1144,11 @@ p.sub.T_line { margin: 2px 0 0; padding-left: 8px; border-left: 2px solid var(--
 .T_namerow > .pill { flex: none; }
 .T_gap { margin-top: 8px; }
 .T_who { display: flex; align-items: center; gap: 12px; min-width: 0; }
-.T_id { display: grid; gap: 4px; min-width: 0; flex: 1 1 auto; }
+.T_id { display: grid; gap: 4px; min-width: 0; flex: 1 1 auto; align-content: start; }
+.T_id > .pill { justify-self: start; } /* s105: name, the key day/time line and the ID state sit beside the face square, so its 88 px height is used */
+.T_id > .T_when { margin: 0; }
+.T_next { display: grid; gap: 8px; padding-top: 10px; border-top: 1px solid var(--v5-sep); }
+.T_next .T_ribbon { justify-self: start; }
 .A_card p.help.T_ask, p.help.T_ask { margin: 2px 0 0; color: var(--v5-ink-2); }
 /* the face (s97): an 88 px rounded square on the right of the guest header; the photo is a positioned <img> turned and scaled in app.js so the face box fills it */
 .T_face { position: relative; flex: none; display: block; width: 88px; height: 88px; aspect-ratio: 1; padding: 0; border: 0; border-radius: 12px; overflow: hidden; background: var(--v5-sunk); }
@@ -1172,8 +1174,6 @@ strong.A_key { font-weight: 500; color: var(--fg); font-size: var(--v5-t-2); }
 .T_nt { min-width: 0; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; overflow-wrap: anywhere; }
 a.T_more { justify-self: start; min-height: var(--touch); display: inline-flex; align-items: center; font: 600 var(--v5-t-2)/1.4 var(--font-ui); color: var(--v5-act); text-decoration: none; }
 .G_stay .help, .G_in .help { color: var(--v5-ink-2); }
-/* weather: rain likely is said in words, in the strip and in the row under the photo */
-.H_wxstrip.rain .l2 { font-weight: 600; }
 /* s105: the Weather card on Today and the Good to know block on the Today card. Bars carry no motion, so reduced motion needs no extra rule. */
 #v-home .A_hero::after { background: var(--v5-hero-scrim); }
 html { scroll-padding-bottom: calc(64px + 10px + env(safe-area-inset-bottom) + 16px); }
@@ -1196,7 +1196,11 @@ html { scroll-padding-bottom: calc(64px + 10px + env(safe-area-inset-bottom) + 1
 .W_h b { position: absolute; left: 0; bottom: -1rem; font: 500 .6875rem/1 var(--font-ui); color: var(--v5-ink-2); }
 .W_act { display: flex; gap: 8px; align-items: flex-start; margin: 0; font-size: var(--v5-t-body); line-height: 1.45; }
 .W_act svg.i { margin-top: 2px; color: var(--v5-warn-t); flex: none; }
-.T_ribbon { display: flex; align-items: center; gap: 8px; min-height: 2.25rem; padding: 6px 12px; border-radius: var(--r-sm); font: 600 var(--v5-t-2)/1.3 var(--font-ui); }
+.T_ribbon.p-tier-returning { background: var(--v5-rib-returning-bg); color: var(--v5-rib-returning-fg); border-left-color: var(--v5-rib-returning-bar); }
+.T_ribbon.p-tier-regular { background: var(--v5-rib-regular-bg); color: var(--v5-rib-regular-fg); border-left-color: var(--v5-rib-regular-bar); }
+.T_ribbon.p-tier-vip { background: var(--v5-rib-vip-bg); color: var(--v5-rib-vip-fg); border-left-color: var(--v5-rib-vip-bar); }
+.T_ribbon svg.i { flex: none; }
+.T_ribbon { border-left: 4px solid transparent; display: flex; align-items: center; gap: 8px; min-height: 2.25rem; padding: 6px 12px; border-radius: var(--r-sm); font: 600 var(--v5-t-2)/1.3 var(--font-ui); }
 .T_perks { display: grid; gap: 8px; }
 .T_perks ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
 .T_perks li { display: flex; gap: 8px; align-items: flex-start; font-size: var(--v5-t-2); line-height: 1.4; }

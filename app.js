@@ -157,12 +157,12 @@
     var p = state.payload, st = CS.todayCardState(p, p.today);
     if (!st.guest) return '<section class="card glass A_card F_span" aria-label="Today in the house"><span class="cap up">' + esc(st.label) + '</span><p class="sub">The house is free tonight. The next stay will show here.</p></section>';
     var g = st.guest, tp = tierP(st.guest, true), ht = A_houseT(), nl = CS.notableLine(g);
-    var outLater = st.kind === 'house' && g.checkout_date && g.checkout_date !== p.today, outT = CS.fmtTime(g.checkout_time) || ht.outLabel;
+    var outLater = st.kind === 'house' && g.checkout_date && g.checkout_date > p.today, outT = CS.fmtTime(g.checkout_time) || ht.outLabel; // s105: a past check-out date falls back to the old stay-dates line
     var key = st.kind === 'house' ? (outLater ? 'Out ' + (g.checkout_date === CS.addDays(p.today, 1) ? 'tomorrow' : CS.dayLabel(g.checkout_date)) + (g.checkout_date === CS.addDays(p.today, 1) ? ' ' : ', ') + outT : 'Out ' + outT) : 'In ' + (CS.fmtTime(g.checkin_time) || ht.inLabel); // s96: the time that matters comes first
     return '<section class="card glass A_card F_span T_card" aria-label="Today in the house">' + A_ribbon(g) + '<div class="row-between"><span class="cap up">' + esc(st.label) + '</span>' + (st.pill ? pill(st.pill.tone, toneIcon(st.pill.tone), st.pill.text) : '') + '</div>' +
-      '<div class="T_who"><div class="T_id"><div class="T_namerow"><h2 class="A_name">' + esc(g.guest_name || 'Guest') + '</h2>' + tp.ret + '</div></div>' + A_face(g) + '</div>' + // s98 SPEC-47c: the face sits beside the name + chip (or the older Returning pill) only; everything under it spans the card
-      '<p class="sub num T_when"><strong class="A_key">' + esc(A_nb(key)) + '</strong> · ' + esc(outLater ? A_nb(CS.plural(g.nights != null ? g.nights : CS.daysBetween(g.checkin_date, g.checkout_date), 'night')) : A_stayDates(g)) + '</p>' +
-      A_goodToKnow(g, st.kind) + A_perks(g, st.kind, tp) + (nl ? '<p class="help T_ask">' + esc(nl) + '</p>' : '') +
+      '<div class="T_who"><div class="T_id"><div class="T_namerow"><h2 class="A_name">' + esc(g.guest_name || 'Guest') + '</h2>' + tp.ret + '</div>' + // s105: name, the key day/time line and the ID state fill the height of the face square; Good to know, perks and the rest span the card
+      '<p class="sub num T_when"><strong class="A_key">' + esc(A_nb(key)) + '</strong> · ' + esc(outLater ? A_nb(CS.plural(g.nights != null ? g.nights : CS.daysBetween(g.checkin_date, g.checkout_date), 'night')) : A_stayDates(g)) + '</p>' + A_idPill(g) + '</div>' + A_face(g) + '</div>' +
+      A_goodToKnow(g, st.kind) + A_perks(g, st.kind, tp) + (nl ? '<p class="help T_ask">' + esc(nl) + '</p>' : '') + A_nextPrep() +
       '<a class="A_more" href="#calendar/' + (st.kind === 'house' ? 'house' : 'next') + '">Open guest card' + ICON('chev', 's16') + '</a></section>';
   }
   // s97 SPEC-47b / s98 SPEC-47c: the face sits on the RIGHT of the guest header in an 88 px rounded square. Until the server has located the face (id_face_box, stored-frame 0-1)
@@ -247,7 +247,6 @@
     return '<button class="A_chipglass E_pill" type="button" data-act="attn-open" aria-haspopup="dialog" aria-label="' + esc(P.aria) + '"><i class="E_dot E_' + P.dot + '"></i>' + ICON(P.glyph, 's16') +
       '<span class="E_lbl">' + esc(P.text) + '</span><span class="E_cnt">' + esc(P.short) + '</span></button>';
   }
-  // Two fixed lines under the greeting (temperature and condition; rain chance or how old the reading is). The slot is always drawn, with the same height, so nothing jumps when the reading lands.
   function H_wxStrip(p) { // s105: one line, temperature and condition, always the condition glyph; rain, range, age and the one forecast link live in the Weather card
     var c = p && p.weather && p.weather.current, ok = !!c && c.temp != null;
     return '<div class="H_wxstrip"><span class="l1">' + ICON(ok ? CS.weatherIcon(c.description) : 'cloud', 's16') + '<span>' + esc(ok ? CS.H_weatherShort(c.temp, c.description, (window.innerWidth || 360) < 340) : 'Weather') + '</span></span></div>';
@@ -259,15 +258,15 @@
       '<button class="A_chipglass" type="button" data-act="refresh" aria-label="Refresh">' + ICON('refresh', 's24') + '</button></div></div>' +
       '<div class="A_greet"><h1>' + esc(CS.greeting() + (nm ? ', ' + nm : '')) + '</h1><div class="cap">' + esc(CS.dayLong(p ? p.today : CS.manilaToday())) + '</div>' + H_wxStrip(p) + '</div></div>';
   }
-  // s105: the Weather card on Today (replaces the amber rain banner under the hero). Reading from CS.wxCard (lib.js); no reading: the same plain fallback as the Notices card (H_wxCard).
+  // s105: the Weather card on Today (replaces the amber rain banner under the hero). Reading from CS.wxCard (lib.js); no reading: nothing is drawn.
   // First card when rain is likely, else after the house and turnover cards. The hourly bars come from notices_v1 hours; no motion in them, so reduced-motion needs nothing more.
   function H_wxToday() {
-    var wx = CS.wxCard(state.payload, A_notices()); if (!wx) return H_wxCard();
+    var wx = CS.wxCard(state.payload, A_notices()); if (!wx) return ''; // no reading: nothing on Today (the Notices card still says so)
     var peak = wx.hours.reduce(function (m, h) { return Math.max(m, h.pct); }, 0), desc = wx.desc || 'Weather';
     var range = [wx.hi != null && wx.lo != null ? 'High ' + wx.hi + '°, low ' + wx.lo + '°' : '', wx.head].filter(Boolean).join(' · ');
     var strip = wx.hours.length ? '<div class="W_hrs" role="img" aria-label="' + esc('Chance of rain by hour: ' + wx.hours.map(function (h) { return h.label + ' ' + h.pct + '%'; }).join(', ')) + '">' + wx.hours.map(function (h, i) {
       return '<span class="W_h' + (h.pct === peak ? ' pk' : '') + '"><i style="height:' + Math.max(4, h.pct) + '%"></i><b>' + (i % 3 === 0 ? esc(A_nb(h.label)) : '') + '</b></span>'; }).join('') + '</div>' : '';
-    return '<details class="card glass A_card W_card' + (wx.rain ? ' W_rain' : '') + '"' + (state.wxOpen ? ' open' : '') + '><summary aria-label="Weather today"><span class="W_now">' + ICON(CS.weatherIcon(desc), 's24') + '<span class="W_temp num">' + wx.temp + '°</span><span class="W_cond">' + esc(desc) + '</span></span>' + (wx.rain ? pill('warn', 'rain', 'Rain likely') : '') + ICON('chevdown', 's16') + '</summary>' +
+    return '<details class="card glass A_card W_card' + (wx.rain ? ' W_rain' : '') + '"' + ((state.wxOpen === undefined ? wx.soon : state.wxOpen) ? ' open' : '') + ' data-def="' + (wx.soon ? 1 : 0) + '"><summary aria-label="Weather today"><span class="W_now">' + ICON(CS.weatherIcon(desc), 's24') + '<span class="W_temp num">' + wx.temp + '°</span><span class="W_cond">' + esc(desc) + '</span></span>' + (wx.rain ? pill('warn', 'rain', 'Rain likely') : '') + ICON('chevdown', 's16') + '</summary>' +
       '<div class="W_body">' + (range ? '<p class="sub num">' + esc(range) + '</p>' : '') +
       (wx.rain ? '<p class="sub W_win">Rain likely ' + esc(wx.window) + (wx.pct != null ? '. Peak chance ' + wx.pct + '%' + (wx.peakAt ? ' around ' + esc(wx.peakAt) : '') : '') + '.</p>' : '') + strip +
       (wx.action ? '<p class="W_act">' + ICON('check', 's16') + '<span>' + esc(wx.action) + '</span></p>' : '') + (wx.asOf ? '<p class="help">as of ' + esc(wx.asOf) + '</p>' : '') +
@@ -281,12 +280,19 @@
     var title = kind === 'house' ? 'Perks to give' : 'Prepare before arrival';
     return '<div class="T_perks" role="group" aria-label="' + title + '"><span class="cap up">' + title + '</span><ul>' + perks.map(function (x) { return '<li>' + ICON('check', 's16') + '<span>' + esc(x) + '</span></li>'; }).join('') + '</ul></div>';
   }
+  // s105: the ID state beside the name (it moved out of Good to know); nothing when the stay is not linked to a guest record and has no photo.
+  function A_idPill(g) { var gk = CS.goodToKnow(g, false); return !gk.idKnown ? '' : gk.id ? pill('ok', 'idcard', 'ID on file') : pill('warn', 'alert', 'No ID yet'); }
+  // s105: the next arrival as a small block at the bottom of the in-house card: a returning, regular or VIP guest within 2 days (CS.nextPrep). No contact data, so every role sees it.
+  function A_nextPrep() {
+    var p = state.payload, np = CS.nextPrep(p, p.today); if (!np) return '';
+    return '<div class="T_next" role="group" aria-label="Next arrival"><span class="cap up">' + esc('Next arrival · ' + np.name + ' · ' + np.day) + '</span><div class="T_ribbon p-tier-' + np.ribbon.tier + '" role="note">' + ICON(np.ribbon.icon, 's16') + '<span>' + esc(np.ribbon.text) + '</span></div>' + A_perks(p.next_guest, 'arriving', { line: '' }) + '</div>';
+  }
   // s105: "Good to know" under the stay line of the Today card: the important notes and requests (CS.goodToKnow), the phone as a tap-to-call link (owner and admin only, like the guest card), the guest count when known, and the ID state.
   function A_goodToKnow(g, kind) {
     var gk = CS.goodToKnow(g, CS.canSeeGuestContact(role())), href = '#calendar/' + (kind === 'house' ? 'house' : 'next'), facts = [];
     if (gk.tel) facts.push('<a class="T_call num" href="' + esc(gk.tel) + '" aria-label="' + esc('Call ' + gk.phone) + '">Call ' + esc(gk.phone) + '</a>');
     if (gk.guests) facts.push('<span class="T_fact">' + ICON('users', 's16') + esc(CS.plural(gk.guests, 'guest')) + '</span>');
-    facts.push(gk.id ? pill('ok', 'idcard', 'ID on file') : pill('warn', 'alert', 'No ID yet'));
+    if (!gk.notes.length && !facts.length) return '';
     return '<div class="T_gtk" role="group" aria-label="Good to know"><span class="cap up">Good to know</span>' + gk.notes.map(function (n) {
       return '<div class="T_key note-key">' + ICON('alert', 's16') + '<span class="T_nt"><b>' + (n.rank === 0 ? 'Important:' : 'Request:') + '</b> ' + esc(n.p) + '</span></div>'; }).join('') +
       (gk.notes.length && gk.more > 0 ? '<a class="T_more" href="' + href + '">+' + gk.more + ' more ' + (gk.more === 1 ? 'note' : 'notes') + '</a>' : '') + '<div class="T_facts">' + facts.join('') + '</div></div>';
@@ -337,7 +343,7 @@
     }
     var win = clock.phase === 'window', closed = clock.phase === 'after';
     if (!staff) { // F4: the verdict. Three check rows with a glyph and a word; a row whose data is absent is not drawn.
-      var rows = '', cl = CS.H_cleanLine(state.progress, clock), hl = CS.H_houseLine(A_notices(), p.today), raw = inToday ? H_readyRaw(ds.stay) : null, tg = CS.todayCardState(p, p.today).guest, noId = !!(inToday && tg && ds.stay && tg.checkin_date === p.today && tg.guest_name === ds.stay.guest_name), rd = CS.H_ready(raw, role(), noId), rdFull = noId ? CS.H_ready(raw, role()) : rd; // s105: Good to know on the Today card owns the ID state
+      var rows = '', cl = CS.H_cleanLine(state.progress, clock), hl = CS.H_houseLine(A_notices(), p.today), raw = inToday ? H_readyRaw(ds.stay) : null, tg = CS.todayCardState(p, p.today).guest, noId = !!(inToday && tg && ds.stay && tg.checkin_date === p.today && (tg.uid && ds.stay.uid ? tg.uid === ds.stay.uid : tg.guest_name === ds.stay.guest_name)), rd = CS.H_ready(raw, role(), noId), rdFull = noId ? CS.H_ready(raw, role()) : rd; // s105: Good to know on the Today card owns the ID state
       if (cl) rows += H_check(cl.tone, 'Clean', cl.text);
       if (rd) rows += H_check(CS.H_readyOk(rd) ? 'ok' : 'warn', 'Arrival', CS.H_readyLine(rd));
       if (hl) rows += H_check(hl.tone, 'House', hl.text);
@@ -2218,8 +2224,8 @@
     state.cleanDone = { id: /^[\w-]{1,64}$/.test(String(d.session_id)) ? String(d.session_id) : '', startedAt: String(d.started_at || ''), finishedAt: String(d.finished_at || ''), issues: n(d.issues), photos: n(d.photos), at: Date.now() };
     location.hash = '#home'; route();
   });
-  // The rain row can also be opened without a click (find in page, assistive tech): keep the slide class and the remembered state in step with details.open.
-  document.addEventListener('toggle', function (ev) { var d = ev.target; if (d && d.classList && d.classList.contains('W_card')) state.wxOpen = !!d.open; }, true); // s105: the Weather card stays open or shut across redraws; shut by default
+  // The rain row can also be opened without a click (find in page, assistive tech): keep the remembered state in step with details.open.
+  document.addEventListener('toggle', function (ev) { var d = ev.target; if (d && d.classList && d.classList.contains('W_card') && !(state.wxOpen === undefined && !!d.open === (d.getAttribute('data-def') === '1'))) state.wxOpen = !!d.open; }, true); // s105: the Weather card stays open or shut across redraws; open by default only when rain is soon (the draw itself is not a choice)
   document.addEventListener('click', function (ev) {
     var t = ev.target.closest('[data-act],[data-theme],[data-day],[data-warn],[data-nfilter],[data-tfilter]'); if (!t) return;
     var a = t.getAttribute('data-act');

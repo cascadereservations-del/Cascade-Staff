@@ -136,7 +136,7 @@ test('3.2 weather strip: two lines under the greeting in every state, always one
   assert.doesNotMatch(old, /as of/, 'the age moved to the Weather card');
   for (const h of [sl, none, fresh, old]) assert.equal((h.match(/href="#weather"/g) || []).length, 0, 'the strip is not a link');
   for (const role of ['cleaner']) { const w = (await boot({ role, hash: '#home', handlers: baseHandlers(role) })).els['v-home'].innerHTML; const work = w.slice(w.indexOf('aria-label="Work"')); assert.ok(work.indexOf('href="#weather"') > 0 && work.indexOf('href="#weather"') < work.indexOf('Cleaning checklist'), 'Weather is the first row of Work, above the checklist'); }
-  const css = read('styles.css'); assert.match(css, /\.H_wxstrip \{[^}]*min-height: var\(--touch\)/, 'a 44 px tap target');
+  const css = read('styles.css'); assert.doesNotMatch(css, /\.H_wxstrip \{[^}]*min-height: var\(--touch\)/, 'the strip is a plain line, not a control: no 44 px tap target'); assert.doesNotMatch(css, /\.H_wxstrip[^{]*\.l2|\.H_wxstrip:focus-visible/, 'no rules for a second line or a focus ring');
 });
 
 // ------------------------------------------------------------------------------------------------ 6. weather: the Notices card (diagnosis 5(a), tests 1-7)

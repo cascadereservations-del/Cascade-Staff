@@ -66,7 +66,7 @@
   --v5-press-scale: 0.97; --v5-press-ms: 160ms; --v5-sheet-ms: 300ms; --v5-sheet-ease: cubic-bezier(0.32, 0.72, 0, 1);
   /* s96 SPEC-47: tier chips (text / wash; VIP is solid gold), key-note wash, stronger ease-out */
   --v5-tier-returning-t: #3B4756; --v5-tier-returning-w: #E9EDF1; --v5-tier-regular-t: #5A2A75; --v5-tier-regular-w: #F1E6F7; --v5-tier-vip-t: #0F1B2A; --v5-tier-vip-w: #C9A063;
-  --v5-note-key-w: #FBF1DE; --v5-ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --v5-note-key-w: #FBF1DE; --v5-rib-returning-bg: #DDF1EC; --v5-rib-returning-fg: #0B4F44; --v5-rib-returning-bar: #1B8C74; --v5-rib-regular-bg: #E1ECFB; --v5-rib-regular-fg: #173F7A; --v5-rib-regular-bar: #2F6FD0; --v5-rib-vip-bg: #F6E4BC; --v5-rib-vip-fg: #5C3A00; --v5-rib-vip-bar: #B8862B; --v5-ease-out: cubic-bezier(0.23, 1, 0.32, 1);
   color-scheme: light;
   --v5-field-line: #7B8998; --v5-gold-wash: #EBE3D5; --v5-sidebar-hover: #223A55; --v5-turn-stripe: #B9CCEB; --v5-ok-wash: #DEF3E8; /* lane D (dashboard) */
 }
@@ -96,7 +96,7 @@
     --v5-water-solid: #4FC3C7; --v5-rain-solid: #B3A8EA; --v5-deep-solid: #7FD1AE;
     --v5-blocked: #2A3A4E; --v5-blocked-hatch: rgba(200, 220, 240, 0.14); --v5-blocked-fg: #C9D3DE;
     --v5-clash: #F0646F; --v5-note-dot: #E0B872; --v5-house-tile: #B8C4D2;
-    --v5-tier-returning-t: #C9D3DE; --v5-tier-returning-w: #253243; --v5-tier-regular-t: #DCC2EE; --v5-tier-regular-w: #3A2748; --v5-tier-vip-t: #0F1B2A; --v5-tier-vip-w: #E0B872; --v5-note-key-w: #2B2416;
+    --v5-tier-returning-t: #C9D3DE; --v5-tier-returning-w: #253243; --v5-tier-regular-t: #DCC2EE; --v5-tier-regular-w: #3A2748; --v5-tier-vip-t: #0F1B2A; --v5-tier-vip-w: #E0B872; --v5-note-key-w: #2B2416; --v5-rib-returning-bg: #0F4A40; --v5-rib-returning-fg: #D5F5EC; --v5-rib-returning-bar: #4FC3A8; --v5-rib-regular-bg: #1B3F78; --v5-rib-regular-fg: #DCE8FF; --v5-rib-regular-bar: #6FA3F5; --v5-rib-vip-bg: #5C4210; --v5-rib-vip-fg: #FBE9C0; --v5-rib-vip-bar: #E0B872;
     color-scheme: dark;
     --v5-field-line: #6A7E94; --v5-gold-wash: #2A2F33; --v5-sidebar-hover: #1A2B3F; --v5-turn-stripe: #24406E; --v5-ok-wash: #163628;
   }
@@ -126,7 +126,7 @@
   --v5-water-solid: #4FC3C7; --v5-rain-solid: #B3A8EA; --v5-deep-solid: #7FD1AE;
   --v5-blocked: #2A3A4E; --v5-blocked-hatch: rgba(200, 220, 240, 0.14); --v5-blocked-fg: #C9D3DE;
   --v5-clash: #F0646F; --v5-note-dot: #E0B872; --v5-house-tile: #B8C4D2;
-  --v5-tier-returning-t: #C9D3DE; --v5-tier-returning-w: #253243; --v5-tier-regular-t: #DCC2EE; --v5-tier-regular-w: #3A2748; --v5-tier-vip-t: #0F1B2A; --v5-tier-vip-w: #E0B872; --v5-note-key-w: #2B2416;
+  --v5-tier-returning-t: #C9D3DE; --v5-tier-returning-w: #253243; --v5-tier-regular-t: #DCC2EE; --v5-tier-regular-w: #3A2748; --v5-tier-vip-t: #0F1B2A; --v5-tier-vip-w: #E0B872; --v5-note-key-w: #2B2416; --v5-rib-returning-bg: #0F4A40; --v5-rib-returning-fg: #D5F5EC; --v5-rib-returning-bar: #4FC3A8; --v5-rib-regular-bg: #1B3F78; --v5-rib-regular-fg: #DCE8FF; --v5-rib-regular-bar: #6FA3F5; --v5-rib-vip-bg: #5C4210; --v5-rib-vip-fg: #FBE9C0; --v5-rib-vip-bar: #E0B872;
   color-scheme: dark;
   --v5-field-line: #6A7E94; --v5-gold-wash: #2A2F33; --v5-sidebar-hover: #1A2B3F; --v5-turn-stripe: #24406E; --v5-ok-wash: #163628;
 }

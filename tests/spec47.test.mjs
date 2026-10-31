@@ -82,7 +82,7 @@ test('weather card: first on Today when rain is near, else after Turnover; shut 
   const g = GUEST();
   const wet = await boot({ role: 'cleaner', hash: '#home', handlers: baseHandlers('cleaner', { staff_home_v1: homeOf(g, { weather: WX(80) }) }) });
   const h = html(wet);
-  assert.match(h, /<details class="card glass A_card W_card W_rain"><summary aria-label="Weather today">/, 'shut by default');
+  assert.match(h, /<details class="card glass A_card W_card W_rain" open data-def="1"><summary aria-label="Weather today">/, 'rain within 3 hours: drawn open until the user chooses');
   assert.ok(h.indexOf('W_card') < h.indexOf('T_card'), 'rain near: the Weather card is the first card');
   assert.match(h, /Rain likely<\/span>/); assert.match(h, /High 32°, low 26°/); assert.match(h, /Peak chance 80%/); assert.match(h, /Bring towels and mats in before the rain/);
   const card = h.slice(h.indexOf('W_card'), h.indexOf('</details>')); assert.equal((card.match(/href="#weather"/g) || []).length, 1, 'the card owns the one forecast link'); assert.match(card, /btn btn-ghost btn-sm" href="#weather"/); assert.doesNotMatch(h, /H_wxalert|wxstrip rain/);
@@ -90,17 +90,17 @@ test('weather card: first on Today when rain is near, else after Turnover; shut 
   const dry = html(await boot({ role: 'cleaner', hash: '#home', handlers: baseHandlers('cleaner', { staff_home_v1: homeOf(g, { weather: WX(40) }) }) }));
   assert.ok(dry.indexOf('aria-label="Turnover today"') < dry.indexOf('W_card'), 'no rain: after the Turnover card'); assert.doesNotMatch(dry, /W_rain|Rain likely|Bring towels/); assert.match(dry, /Rain 40% today/);
   const gone = html(await boot({ role: 'cleaner', hash: '#home', handlers: baseHandlers('cleaner', { staff_home_v1: homeOf(g, { weather: null }) }) }));
-  assert.match(gone, /The forecast is not available right now/);
+  assert.doesNotMatch(gone, /W_card|The forecast is not available/, 'no reading: nothing drawn on Today');
   const watch = html(await boot({ role: 'cleaner', hash: '#home', handlers: baseHandlers('cleaner', { staff_home_v1: homeOf(g, { weather: WX(30) }), notices_v1: () => WATCH('cleaner') }) }));
-  assert.match(watch, /W_card W_rain/, 'an active rain-watch notice raises the card even under 60 percent'); assert.match(watch, /Bring towels and mats in before 2 pm/);
+  assert.match(watch, /W_card W_rain/, 'an active rain-watch notice raises the card even under 60 percent'); // the action wording depends on the clock; CS.wxCard tests pin it with a fixed one
 });
 
 test('weather card: opening it is remembered across a redraw; shut again on a fresh visit', async () => {
   const app = await boot({ role: 'cleaner', hash: '#home', handlers: baseHandlers('cleaner', { staff_home_v1: homeOf(GUEST(), { weather: WX(80) }) }) });
-  const cl = (c) => c === 'W_card'; for (const fn of app.listeners.toggle) fn({ target: { open: true, classList: { contains: cl } } });
-  await app.click({ 'data-act': 'refresh' }); assert.match(html(app), /<details class="card glass A_card W_card W_rain" open>/, 'redraw keeps it open');
-  for (const fn of app.listeners.toggle) fn({ target: { open: false, classList: { contains: cl } } });
-  await app.click({ 'data-act': 'refresh' }); assert.doesNotMatch(html(app), /W_card W_rain" open/);
+  const cl = (c) => c === 'W_card', ga = (n) => (n === 'data-def' ? '1' : null); for (const fn of app.listeners.toggle) fn({ target: { open: true, getAttribute: ga, classList: { contains: cl } } });
+  await app.click({ 'data-act': 'refresh' }); assert.match(html(app), /<details class="card glass A_card W_card W_rain" open data-def="1">/, 'redraw keeps it open');
+  for (const fn of app.listeners.toggle) fn({ target: { open: false, getAttribute: ga, classList: { contains: cl } } });
+  await app.click({ 'data-act': 'refresh' }); assert.doesNotMatch(html(app), /W_card W_rain" open/, 'closed by the user: stays shut although rain is soon');
 });
 
 test('CS.wxCard: start time from the watch window or the first 50 percent hour; soon = within 3 hours; no reading is null; old reading says when', () => {
