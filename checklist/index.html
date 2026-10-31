@@ -6797,6 +6797,7 @@ function initSetupForm() {
   el('checkInDate')?.addEventListener('change', calcNights);
   el('checkOutDate')?.addEventListener('change', calcNights);
   el('checkOutDate')?.addEventListener('change', () => { fetchPrevReadings(); });
+  el('checkOutDate')?.addEventListener('change', () => { renderMeterNudge(); });
 
   // Weekend mandatory maintenance check on cleaning date change
   el('cleaningDate')?.addEventListener('change', () => {
@@ -7322,8 +7323,11 @@ function meterFindings() {
     const label = i === 0 ? 'Electric' : 'Water';
     if (!photo) return;
     if (photo.takenAt) {
+      const dateNote = photoDateNote(label, photo.takenAt, (el('checkOutDate')?.value || '').trim());
       const ageHours = (Date.now() - photo.takenAt) / 3600000;
-      if (ageHours > PHOTO_STALE_HOURS) {
+      if (dateNote !== undefined) {
+        if (dateNote) out.push(dateNote);   // checkout known: judged against that day, never against the day the report is sent
+      } else if (ageHours > PHOTO_STALE_HOURS) {
         const when = new Date(photo.takenAt).toLocaleDateString('en-PH',
           { month: 'short', day: 'numeric' });
         out.push(`${label}: that picture was taken on ${when}, not today. Is it the right one?`);
@@ -7356,6 +7360,41 @@ function meterFindings() {
   return out;
 }
 
+/* s103 round 2 (D-354): photos are judged against the CHECKOUT day, never the day the report is sent, so a late report is fine.
+   All pure; every note is a gentle line and none of them blocks. */
+const YMD_RE = /^\d{4}-\d{2}-\d{2}$/;
+const ymdNum = s => { const [y, m, d] = s.split('-').map(Number); return Date.UTC(y, m - 1, d) / 86400000; };
+const manilaYmd = ms => new Date(ms).toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' });
+const ymdShort = s => new Date(s + 'T00:00:00').toLocaleDateString('en-PH', { month: 'short', day: 'numeric' });
+// undefined = checkout unknown (keep the old "taken today" rule); '' = inside checkout day -1..+1; else the note.
+function photoDateNote(label, takenAt, checkoutYmd) {
+  if (!takenAt || !YMD_RE.test(checkoutYmd || '')) return undefined;
+  const taken = manilaYmd(takenAt);
+  if (Math.abs(ymdNum(taken) - ymdNum(checkoutYmd)) <= 1) return '';
+  return `${label}: this photo was taken on ${ymdShort(taken)}, but the checkout was ${ymdShort(checkoutYmd)}. Please use the photo you took on the checkout day.`;
+}
+// Timing nudges: late (checkout before yesterday) and out of order (an earlier stay the app knows has no report yet).
+function reportTimingNotes(checkoutYmd, todayYmd, stayOptions) {
+  if (!YMD_RE.test(checkoutYmd || '') || !YMD_RE.test(todayYmd || '')) return [];
+  const out = [];
+  if (ymdNum(checkoutYmd) < ymdNum(todayYmd) - 1) {
+    out.push('Thank you for sending this. When you can, please send the report on the checkout day - it keeps the meter readings easy to check.');
+  }
+  const earlier = (stayOptions || []).filter(b => b && b.kind === 'checkout' && YMD_RE.test(b.checkout_date || '') && b.checkout_date < checkoutYmd)
+    .map(b => b.checkout_date).sort()[0];
+  if (earlier) out.push(`There is an earlier stay without a report (checkout ${ymdShort(earlier)}). If you can, send that one first so the meter readings stay in order.`);
+  return out;
+}
+// The stamp burned into the picture: when it was TAKEN if the file says so, else now (a late report must not look fresh).
+function photoStampText(file) {
+  const fmt = ms => new Date(ms).toLocaleString('en-PH', {
+    timeZone: 'Asia/Manila', year: 'numeric', month: '2-digit',
+    day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false
+  });
+  const t = file && file.lastModified;
+  return t > 0 ? 'Taken ' + fmt(t) : fmt(Date.now());
+}
+
 function renderMeterNudge() {
   const box  = el('meter-nudge');
   const list = el('meter-nudge-list');
@@ -7365,11 +7404,12 @@ function renderMeterNudge() {
     return;
   }
   const findings = meterFindings();
-  if (!findings.length) { box.hidden = true; return; }
+  const notes = reportTimingNotes((el('checkOutDate')?.value || '').trim(), todayManila(), (() => { try { return _stayOptions; } catch { return []; } })());
+  if (!findings.length && !notes.length) { box.hidden = true; return; }
   // A discrepancy in what was uploaded is exactly when a way out earns its
-  // place on the screen.
-  revealMeterSkipOffer('meter photo findings');
-  list.innerHTML = findings.map(f => `<li>${escapeHtml(f)}</li>`).join('');
+  // place on the screen. The timing notes are only a nudge and do not open it.
+  if (findings.length) revealMeterSkipOffer('meter photo findings');
+  list.innerHTML = findings.concat(notes).map(f => `<li>${escapeHtml(f)}</li>`).join('');
   box.hidden = false;
 }
 
@@ -7541,10 +7581,7 @@ function compressImage(file) {
         canvas.width = w; canvas.height = h;
         const ctx = canvas.getContext('2d');
         ctx.drawImage(img, 0, 0, w, h);
-        const stamp = new Date().toLocaleString('en-PH', {
-          timeZone: 'Asia/Manila', year: 'numeric', month: '2-digit',
-          day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false
-        });
+        const stamp = photoStampText(file);
         const fSize = Math.max(13, Math.round(w * 0.022));
         ctx.font = `bold ${fSize}px "Courier New", monospace`;
         const tw  = ctx.measureText(stamp).width;
@@ -7647,12 +7684,6 @@ function getPhotoWorker() {
   return _photoWorker;
 }
 
-function photoTimestamp() {
-  return new Date().toLocaleString('en-PH', {
-    timeZone: 'Asia/Manila', year: 'numeric', month: '2-digit',
-    day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false
-  });
-}
 
 function dataURLtoBlob(dataUrl) {
   const [meta, b64] = dataUrl.split(',');
@@ -7685,7 +7716,7 @@ async function processPhoto(file) {
         const result = await new Promise((resolve, reject) => {
           _photoWorkerPending.set(id, resolve);
           worker.postMessage({
-            id, file, maxDim: MAX, quality: QUALITY, stamp: photoTimestamp(),
+            id, file, maxDim: MAX, quality: QUALITY, stamp: photoStampText(file),
             blurThreshold: BLUR_THRESHOLD, minBytes: MIN_PHOTO_BYTES,
           });
           setTimeout(() => {
@@ -7852,6 +7883,7 @@ function photoMeta(p) {
   return {
     name: p.name, url: p.url || '', fileId: p.fileId || '', uploaded: p.uploaded || false,
     status: p.status || (p.uploaded ? 'done' : 'queued'), idbId: p.idbId || null, slot: p.slot || null,
+    takenAt: p.takenAt ? new Date(p.takenAt).toISOString() : null,
   };
 }
 
@@ -7861,7 +7893,7 @@ function photoMeta(p) {
 // half of the contract (the other half is the `online` listener below).
 async function restorePhotoFromMeta(meta) {
   if (!meta) return null;
-  const photo = { name: meta.name, url: meta.url || null, fileId: meta.fileId || null, uploaded: meta.uploaded, data: null, idbId: null, objectUrl: null, status: meta.uploaded ? 'done' : 'queued', slot: meta.slot || null };
+  const photo = { name: meta.name, url: meta.url || null, fileId: meta.fileId || null, uploaded: meta.uploaded, data: null, idbId: null, objectUrl: null, status: meta.uploaded ? 'done' : 'queued', slot: meta.slot || null, takenAt: meta.takenAt ? Date.parse(meta.takenAt) || null : null };
   if (!meta.uploaded) {
     // _blob only ever lived in memory, so a page reload always loses it —
     // idbId is the only thing that can survive to be restored from.
@@ -11713,6 +11745,7 @@ async function loadCleanableBookings(dateStr) {
     });
     const stayGroups = K_groupStays(reportable, todayManila(), rows);
     _stayOptions = [...stayGroups.missed, ...stayGroups.today, ...stayGroups.mid, ...stayGroups.block];
+    renderMeterNudge();   // the out-of-order note reads these stays
     const notYet = unreported.length - _stayOptions.length;
 
     sel.innerHTML = K_stayOptionsHtml(stayGroups, stayLabel);

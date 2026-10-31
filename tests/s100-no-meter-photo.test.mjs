@@ -263,3 +263,45 @@ test('s103 (D-354): a meter mismatch never blocks a report; the card is never wo
   const list = cut('function renderMeterFollowupList()', 'async function reportNoMeterPhoto()');
   assert.match(list, /Report sent \$\{when\}/);
 });
+
+// ── s103 round 2 (D-354): photos are judged against the checkout day; late and out-of-order reports only get a gentle note ──
+const r2 = new Function(cut('const YMD_RE =', 'function renderMeterNudge()') + '\nreturn { photoDateNote, reportTimingNotes, photoStampText, manilaYmd };')();
+const at = (ymd, hh = 12) => Date.parse(`${ymd}T${String(hh).padStart(2, '0')}:00:00+08:00`);
+
+test('S2-2: a photo is judged against the checkout day (-1..+1 Manila), not the day it is sent', () => {
+  assert.equal(r2.photoDateNote('Electric', at('2026-10-23'), '2026-10-21'), 'Electric: this photo was taken on Oct 23, but the checkout was Oct 21. Please use the photo you took on the checkout day.');
+  assert.equal(r2.photoDateNote('Water', at('2026-10-20'), '2026-10-21'), '');
+  assert.equal(r2.photoDateNote('Water', at('2026-10-21'), '2026-10-21'), '');
+  assert.equal(r2.photoDateNote('Water', at('2026-10-22'), '2026-10-21'), '');
+  assert.match(r2.photoDateNote('Water', at('2026-10-19'), '2026-10-21'), /taken on Oct 19/);
+  assert.equal(r2.photoDateNote('Water', Date.parse('2026-10-22T20:30:00Z'), '2026-10-21') !== '', true, '04:30 Manila on the 23rd is outside');
+  assert.equal(r2.photoDateNote('Water', at('2026-10-23'), ''), undefined, 'no checkout: the old rule applies');
+  assert.equal(r2.photoDateNote('Water', null, '2026-10-21'), undefined);
+});
+
+test('S2-4: late and out-of-order are gentle notes; nothing for an on-time report', () => {
+  assert.deepEqual(r2.reportTimingNotes('2026-10-30', '2026-10-31', []), []);
+  assert.deepEqual(r2.reportTimingNotes('2026-10-31', '2026-10-31', []), []);
+  const late = r2.reportTimingNotes('2026-10-29', '2026-10-31', []);
+  assert.deepEqual(late, ['Thank you for sending this. When you can, please send the report on the checkout day - it keeps the meter readings easy to check.']);
+  const stays = [{ kind: 'checkout', checkout_date: '2026-10-22' }, { kind: 'checkout', checkout_date: '2026-10-25' }, { kind: 'mid_stay', checkout_date: '2026-10-20' }];
+  const both = r2.reportTimingNotes('2026-10-29', '2026-10-31', stays);
+  assert.equal(both[1], 'There is an earlier stay without a report (checkout Oct 22). If you can, send that one first so the meter readings stay in order.');
+  assert.deepEqual(r2.reportTimingNotes('2026-10-22', '2026-10-22', stays), [], 'the stay itself and later stays are not "earlier"');
+  assert.deepEqual(r2.reportTimingNotes('', '2026-10-31', stays), []);
+});
+
+test('S2-1: the burned-in stamp says Taken <photo time>, and falls back to now only when unknown', () => {
+  assert.match(r2.photoStampText({ lastModified: at('2026-10-21', 9) }), /^Taken .*2026.*09:00:00$/);
+  assert.doesNotMatch(r2.photoStampText({}), /^Taken/);
+  assert.doesNotMatch(r2.photoStampText(null), /^Taken/);
+  assert.ok(html.includes('stamp: photoStampText(file)') && html.includes('const stamp = photoStampText(file);'));
+  assert.doesNotMatch(html, /photoTimestamp/);
+});
+
+test('S2-3: the draft keeps takenAt and the nudge shows the notes without opening the skip offer', () => {
+  assert.match(html, /takenAt: p\.takenAt \? new Date\(p\.takenAt\)\.toISOString\(\) : null,/);
+  assert.match(html, /takenAt: meta\.takenAt \? Date\.parse\(meta\.takenAt\) \|\| null : null/);
+  assert.match(html, /if \(findings\.length\) revealMeterSkipOffer\('meter photo findings'\);/);
+  assert.match(html, /renderMeterNudge\(\);   \/\/ the out-of-order note reads these stays/);
+});
