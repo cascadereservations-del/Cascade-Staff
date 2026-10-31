@@ -13,8 +13,8 @@ test('header: the face is inside the name row; the benefits line, the time line 
   assert.ok(who, 'T_who = name column then the face, then closes');
   assert.match(who[1], /^<div class="T_id"><div class="T_namerow"><h2 class="A_name">Ana Reyes<\/h2>/); assert.doesNotMatch(who[1], /T_line/);
   const after = h.slice(h.indexOf(who[0]) + who[0].length);
-  assert.ok(after.indexOf('T_when') >= 0 && after.indexOf('T_when') < after.indexOf('T_gtk') && after.indexOf('T_gtk') < after.indexOf('T_line'), 'order: time line, Good to know, then the benefits line');
-  assert.ok(after.indexOf('T_line') < after.indexOf('A_more'));
+  assert.ok(after.indexOf('T_when') >= 0 && after.indexOf('T_when') < after.indexOf('T_gtk') && after.indexOf('T_gtk') < after.indexOf('T_perks'), 'order: time line, Good to know, then the perks');
+  assert.ok(after.indexOf('T_perks') < after.indexOf('A_more'));
 });
 test('one time line: key time strong, then the dates and nights; month said once; 2 months kept; Out for a guest in the house', async () => {
   assert.match(await home(GUEST()), /<p class="sub num T_when"><strong class="A_key">In 2:00 pm<\/strong> · 15 → 16 Oct · 1 night<\/p>/);

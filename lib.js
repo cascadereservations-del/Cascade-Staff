@@ -513,6 +513,36 @@
     var l = tierLabel(g && g.tier), line = tierLine(g), ret = l || line ? null : returningLabel(g, compact);
     return { chip: l ? pill('tier-' + g.tier, g.tier === 'vip' ? 'star' : 'repeat', l) : '', line: line ? '<p class="sub T_line T_' + g.tier + '">' + esc(line) + '</p>' : '', ret: ret ? pill('tier-returning', 'repeat', ret) : '' };
   }
+  // s105 SPEC-46: the ribbon at the top of a Today card for a returning, regular or VIP guest; null for a first stay or an unknown tier. One map (tier -> words, glyph); the stay ordinal is optional.
+  var RIBBON = { returning: ['Welcome back', 'repeat'], regular: ['Regular guest', 'sparkles'], vip: ['VIP guest', 'star'] };
+  function tierRibbon(g) {
+    var t = g && g.tier, r = Object.prototype.hasOwnProperty.call(RIBBON, t) ? RIBBON[t] : null; if (!r) return null;
+    var n = g.stay_count > 0 ? Math.round(+g.stay_count) : 0;
+    return { tier: t, icon: r[1], text: r[0] + (n > 1 ? ' · ' + ordinal(n) + ' stay' : '') };
+  }
+  // s105 SPEC-46 section 1: perks to give, from ONE map, cumulative by tier. phase 'arrival' = prepare before arrival, 'house' = what to give during the stay. opts.id: an ID is on file (the no-ID-again line needs it).
+  // At most 4 lines: over that, the ID line goes first, then the last ones. No prices, no discounts, no exclamation marks.
+  var PERKS = {
+    id: ['No need to ask for ID again, one is on file', 'returning', 'arrival'],
+    treat: ['Welcome treat: local coffee sachets and a snack', 'returning', 'arrival'],
+    early1: ['First hour of early check-in or late check-out free, if the calendar allows', 'returning', 'both', 'regular'],
+    early2: ['Up to 2 hours early or late free, if the calendar allows', 'regular', 'both'],
+    prefs: ['Set saved preferences before arrival (pillows, AC temperature)', 'regular', 'arrival'],
+    note: ['Handwritten welcome note', 'vip', 'arrival'],
+    refresh: ['Mid-stay refresh, any stay length', 'vip', 'house'],
+    first: ['First call on the dates they ask about', 'vip', 'house']
+  };
+  var TIER_RANK = { returning: 1, regular: 2, vip: 3 };
+  function tierPerks(tier, opts) {
+    var rk = TIER_RANK[tier]; if (!rk) return []; opts = opts || {};
+    var phase = opts.phase === 'house' ? 'house' : 'arrival', out = [];
+    Object.keys(PERKS).forEach(function (k) {
+      var p = PERKS[k], from = TIER_RANK[p[1]], upto = p[3] ? TIER_RANK[p[3]] : 9, ph = p[2];
+      if (rk >= from && rk < upto && (ph === 'both' || ph === phase) && (k !== 'id' || opts.id)) out.push({ k: k, text: p[0] });
+    });
+    while (out.length > 4) { var i = out.map(function (x) { return x.k; }).indexOf('id'); out.splice(i >= 0 ? i : out.length - 1, 1); }
+    return out.map(function (x) { return x.text; });
+  }
   // s96 SPEC-47: the notes that matter (rank 0 incident/complaint, 1 special request): the strongest one first, and how many other notes there are.
   function keyNote(text) {
     var all = [], key = null; parseNotes(text).forEach(function (g) { g.points.forEach(function (x) { all.push(x); if (x.rank <= 1 && (!key || x.rank < key.rank)) key = x; }); });
@@ -649,7 +679,7 @@
     var soon = !!ra, wm = when && /^(\d{1,2})(?::(\d{2}))?\s*(am|pm)$/i.exec(when);
     if (ra && wm) { var np = manilaParts(now instanceof Date ? now : new Date(now == null ? Date.now() : now)); soon = ((+wm[1] % 12) + (/pm/i.test(wm[3]) ? 12 : 0)) * 60 + (+wm[2] || 0) - (np.h * 60 + np.min) <= 180; }
     return { temp: Math.round(+c.temp), desc: c.description ? String(c.description) : '', hi: ra ? ra.hi : (c.today_high != null ? Math.round(+c.today_high) : null), lo: ra ? ra.lo : (c.today_low != null ? Math.round(+c.today_low) : null),
-      rain: !!ra, soon: soon, window: ra ? ra.window : '', pct: ra ? ra.pct : null, peakAt: ra ? ra.peakAt : '', head: rl ? rl.head : '', hours: hours.some(function (h) { return h.pct > 0; }) ? hours : [],
+      rain: !!ra, soon: soon, window: ra ? ra.window : '', pct: ra ? ra.pct : null, peakAt: ra ? ra.peakAt : '', head: rl && !(ra && (ra.src === 'watch' || ra.peakAt)) ? rl.head : '', hours: hours.some(function (h) { return h.pct > 0; }) ? hours : [],
       action: ra ? 'Bring towels and mats in before ' + (when || 'the rain') : '', asOf: old ? clockLabel(w.fetched_at) : '' };
   }
   // s105: the "Good to know" block of the Today card. Notes: every unique important (rank 0) and request (rank 1) point, strongest first, 3 shown, 90 characters each;
@@ -1484,7 +1514,7 @@
     fmtTime: fmtTime, fmt24: fmt24, ordinal: ordinal, plural: plural, agoLabel: agoLabel, clockLabel: clockLabel,
     monthGrid: monthGrid, dayState: dayState, dayStatus: dayStatus, mergeStays: mergeStays, sameGuest: sameGuest, dayMoves: dayMoves, blockWhy: blockWhy, flagName: flagName, FLAG_KINDS: FLAG_KINDS, blockedLines: blockedLines, blockedLineText: blockedLineText,
     canFlagDays: canFlagDays, guestContact: guestContact, canSeeGuestContact: canSeeGuestContact, MESSENGER_INBOX: MESSENGER_INBOX, rpcMissing: rpcMissing, tgLink: tgLink, warningInfo: warningInfo, findingKey: findingKey, initialOf: initialOf, sourceLabel: sourceLabel, stayDates: stayDates, monthInRange: monthInRange,
-    faceFrame: faceFrame, parseNotes: parseNotes, returningLabel: returningLabel, tierLabel: tierLabel, tierLine: tierLine, tierParts: tierParts, keyNote: keyNote, TOPIC_LABELS: TOPIC_LABELS, notableLine: notableLine, weatherIcon: weatherIcon, rainAlert: rainAlert, wxCard: wxCard, goodToKnow: goodToKnow, earlierLine: earlierLine, companionsLine: companionsLine, todayCardState: todayCardState,
+    tierRibbon: tierRibbon, tierPerks: tierPerks, faceFrame: faceFrame, parseNotes: parseNotes, returningLabel: returningLabel, tierLabel: tierLabel, tierLine: tierLine, tierParts: tierParts, keyNote: keyNote, TOPIC_LABELS: TOPIC_LABELS, notableLine: notableLine, weatherIcon: weatherIcon, rainAlert: rainAlert, wxCard: wxCard, goodToKnow: goodToKnow, earlierLine: earlierLine, companionsLine: companionsLine, todayCardState: todayCardState,
     orderWarnings: orderWarnings, brownoutText: brownoutText, lowStockText: lowStockText, warningSummary: warningSummary,
     weatherLine: weatherLine, rainLine: rainLine, weatherStale: weatherStale, WEATHER_STALE_MIN: WEATHER_STALE_MIN, esc: esc,
     A_HOUSE_FALLBACK: A_HOUSE_FALLBACK, A_houseTimes: A_houseTimes, A_turnoverClock: A_turnoverClock, A_turnoverLine: A_turnoverLine, A_hm: A_hm, A_NOTICE_TYPES: A_NOTICE_TYPES, A_noticesView: A_noticesView, A_noticeFilters: A_noticeFilters, A_dayMarks: A_dayMarks, A_noticeDay: A_noticeDay, A_guestMessage: A_guestMessage, A_CAL_TABS: A_CAL_TABS, A_calTab: A_calTab, A_stayShade: A_stayShade, A_hubGroups: A_hubGroups, A_hubNative: A_hubNative, A_hubRoutes: A_hubRoutes, A_hubRouteOk: A_hubRouteOk, A_hubDoorUrl: A_hubDoorUrl, A_whatsNew: A_whatsNew, A_shortTime: A_shortTime, A_PINNED: A_PINNED, A_noticeAddError: A_noticeAddError, A_NOTICE_HINT: A_NOTICE_HINT, A_flagDup: A_flagDup, A_facebookUrl: A_facebookUrl, A_fbPluginUrl: A_fbPluginUrl, A_noticeAddProblem: A_noticeAddProblem, A_noticeAddArgs: A_noticeAddArgs, A_plainRefusal: A_plainRefusal, A_hour12: A_hour12, A_timeRange: A_timeRange,

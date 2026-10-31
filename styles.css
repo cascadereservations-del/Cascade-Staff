@@ -1196,6 +1196,11 @@ html { scroll-padding-bottom: calc(64px + 10px + env(safe-area-inset-bottom) + 1
 .W_h b { position: absolute; left: 0; bottom: -1rem; font: 500 .6875rem/1 var(--font-ui); color: var(--v5-ink-2); }
 .W_act { display: flex; gap: 8px; align-items: flex-start; margin: 0; font-size: var(--v5-t-body); line-height: 1.45; }
 .W_act svg.i { margin-top: 2px; color: var(--v5-warn-t); flex: none; }
+.T_ribbon { display: flex; align-items: center; gap: 8px; min-height: 2.25rem; padding: 6px 12px; border-radius: var(--r-sm); font: 600 var(--v5-t-2)/1.3 var(--font-ui); }
+.T_perks { display: grid; gap: 8px; }
+.T_perks ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+.T_perks li { display: flex; gap: 8px; align-items: flex-start; font-size: var(--v5-t-2); line-height: 1.4; }
+.T_perks li svg.i { margin-top: 2px; flex: none; color: var(--v5-tier-regular-t); }
 .T_gtk { display: grid; gap: 8px; }
 .T_facts { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .T_facts .T_fact { display: inline-flex; align-items: center; gap: 4px; font-size: var(--v5-t-2); }

@@ -159,10 +159,10 @@
     var g = st.guest, tp = tierP(st.guest, true), ht = A_houseT(), nl = CS.notableLine(g);
     var outLater = st.kind === 'house' && g.checkout_date && g.checkout_date !== p.today, outT = CS.fmtTime(g.checkout_time) || ht.outLabel;
     var key = st.kind === 'house' ? (outLater ? 'Out ' + (g.checkout_date === CS.addDays(p.today, 1) ? 'tomorrow' : CS.dayLabel(g.checkout_date)) + (g.checkout_date === CS.addDays(p.today, 1) ? ' ' : ', ') + outT : 'Out ' + outT) : 'In ' + (CS.fmtTime(g.checkin_time) || ht.inLabel); // s96: the time that matters comes first
-    return '<section class="card glass A_card F_span T_card" aria-label="Today in the house"><div class="row-between"><span class="cap up">' + esc(st.label) + '</span>' + (st.pill ? pill(st.pill.tone, toneIcon(st.pill.tone), st.pill.text) : '') + '</div>' +
-      '<div class="T_who"><div class="T_id"><div class="T_namerow"><h2 class="A_name">' + esc(g.guest_name || 'Guest') + '</h2>' + tp.chip + tp.ret + '</div></div>' + A_face(g) + '</div>' + // s98 SPEC-47c: the face sits beside the name + chip (or the older Returning pill) only; everything under it spans the card
+    return '<section class="card glass A_card F_span T_card" aria-label="Today in the house">' + A_ribbon(g) + '<div class="row-between"><span class="cap up">' + esc(st.label) + '</span>' + (st.pill ? pill(st.pill.tone, toneIcon(st.pill.tone), st.pill.text) : '') + '</div>' +
+      '<div class="T_who"><div class="T_id"><div class="T_namerow"><h2 class="A_name">' + esc(g.guest_name || 'Guest') + '</h2>' + tp.ret + '</div></div>' + A_face(g) + '</div>' + // s98 SPEC-47c: the face sits beside the name + chip (or the older Returning pill) only; everything under it spans the card
       '<p class="sub num T_when"><strong class="A_key">' + esc(A_nb(key)) + '</strong> · ' + esc(outLater ? A_nb(CS.plural(g.nights != null ? g.nights : CS.daysBetween(g.checkin_date, g.checkout_date), 'night')) : A_stayDates(g)) + '</p>' +
-      A_goodToKnow(g, st.kind) + tp.line + (nl ? '<p class="help T_ask">' + esc(nl) + '</p>' : '') +
+      A_goodToKnow(g, st.kind) + A_perks(g, st.kind, tp) + (nl ? '<p class="help T_ask">' + esc(nl) + '</p>' : '') +
       '<a class="A_more" href="#calendar/' + (st.kind === 'house' ? 'house' : 'next') + '">Open guest card' + ICON('chev', 's16') + '</a></section>';
   }
   // s97 SPEC-47b / s98 SPEC-47c: the face sits on the RIGHT of the guest header in an 88 px rounded square. Until the server has located the face (id_face_box, stored-frame 0-1)
@@ -272,6 +272,14 @@
       (wx.rain ? '<p class="sub W_win">Rain likely ' + esc(wx.window) + (wx.pct != null ? '. Peak chance ' + wx.pct + '%' + (wx.peakAt ? ' around ' + esc(wx.peakAt) : '') : '') + '.</p>' : '') + strip +
       (wx.action ? '<p class="W_act">' + ICON('check', 's16') + '<span>' + esc(wx.action) + '</span></p>' : '') + (wx.asOf ? '<p class="help">as of ' + esc(wx.asOf) + '</p>' : '') +
       '<a class="btn btn-ghost btn-sm" href="#weather">Open the forecast</a></div></details>';
+  }
+  // s105 SPEC-46: the tier ribbon at the top of the Today card (first stays get none; it replaces the small chip beside the name) and the perks checklist (CS.tierPerks); both are for every role, they are not contact data.
+  function A_ribbon(g) { var r = CS.tierRibbon(g); return r ? '<div class="T_ribbon p-tier-' + r.tier + '" role="note">' + ICON(r.icon, 's16') + '<span>' + esc(r.text) + '</span></div>' : ''; }
+  function A_perks(g, kind, tp) {
+    var perks = CS.tierPerks(g.tier, { id: !!g.id_photo_path, phase: kind === 'house' ? 'house' : 'arrival' });
+    if (!perks.length) return tp.line; // the server's benefits line is only the fallback
+    var title = kind === 'house' ? 'Perks to give' : 'Prepare before arrival';
+    return '<div class="T_perks" role="group" aria-label="' + title + '"><span class="cap up">' + title + '</span><ul>' + perks.map(function (x) { return '<li>' + ICON('check', 's16') + '<span>' + esc(x) + '</span></li>'; }).join('') + '</ul></div>';
   }
   // s105: "Good to know" under the stay line of the Today card: the important notes and requests (CS.goodToKnow), the phone as a tap-to-call link (owner and admin only, like the guest card), the guest count when known, and the ID state.
   function A_goodToKnow(g, kind) {
