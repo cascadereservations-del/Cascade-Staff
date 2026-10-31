@@ -143,6 +143,7 @@
     already: 'Someone already marked this as bought. The list is refreshed.',
     photofail: 'That photo could not be prepared. Try another one.',
     photobig: 'That photo is too large to send. Try one taken a little further away.',
+    optfetch: 'The picture could not be fetched. Try again, or take a photo yourself.',
     wait: 'Cassy has just sorted. Please wait half a minute and try again.',
     labelsend: 'The label sheet was not sent. Try again. No new codes will be made.'
   };
@@ -175,6 +176,7 @@
     return { fn: 'inventory_item_update_v1', args: { p_item_id: it.id, p_patch: patch } };
   }
   // s86 4.4 / 4.5 / 4.6 / 9.5: exact RPC names and keys from SPEC-inventory-db 2.7 and 3.2.
+  function setUsualCall(optId) { return { fn: 'inventory_item_option_set_usual_v1', args: { p_option_id: optId } }; }
   function photoSetCall(itemId, path) { return { fn: 'inventory_item_photo_set_v1', args: { p_item_id: itemId, p_path: path } }; }
   function recatCall(pid, ids, cat) { return { fn: 'inventory_items_recategorize_v1', args: { p_property_id: pid, p_item_ids: ids, p_category: cat } }; }
   function mintCall(pid, ids) { return { fn: 'inventory_code_mint_v1', args: { p_property_id: pid, p_item_ids: ids } }; }
@@ -214,14 +216,14 @@
   function demoShop() { return [{ id: 's1', item_id: 'd3', item_name: 'Hand soap', quantity: 6, purchase_unit: 'bottles', reason: 'Last one used today', status: 'proposed', proposed_at: '2026-10-12T02:00:00Z', proposed_by: 'someone' }, { id: 's2', item_id: 'd1', item_name: 'Toilet paper', quantity: 2, purchase_unit: 'pack', reason: '', status: 'approved', proposed_at: '2026-10-11T02:00:00Z', proposed_by: 'someone' }]; }
 
   /* ------------------------------------------------------------------ screen */
-  var K = { items: null, shop: null, q: '', chip: 'low', role: null, at: 0, keys: {}, v84: false, lastCode: '', cool: {}, scanned: null, denied: {}, noFinance: false, undos: [], uidn: 0, hasCounted: false, quick: null, pu: {}, sm: null, sup: null, catAt: 0, hasLoc: false }; // denied: actions the server refused or lacks, hidden for the whole visit (a re-mount keeps them) // survives unmount: the list shows at once while it refreshes
+  var K = { items: null, shop: null, q: '', chip: 'low', role: null, at: 0, keys: {}, v84: false, lastCode: '', cool: {}, scanned: null, denied: {}, noFinance: false, undos: [], uidn: 0, hasCounted: false, quick: null, pu: {}, opt: {}, badImg: {}, sm: null, sup: null, catAt: 0, hasLoc: false }; // denied: actions the server refused or lacks, hidden for the whole visit (a re-mount keeps them) // survives unmount: the list shows at once while it refreshes
   var M = null; // the live mount
 
   function mount(el, opts) {
     unmount();
     opts = opts || {};
     var prevRole = K.role;
-    if (K.role !== opts.role) { K.role = opts.role; K.items = null; K.shop = null; K.q = ''; K.chip = 'low'; K.at = 0; K.keys = {}; K.v84 = false; K.lastCode = ''; K.cool = {}; K.scanned = null; K.denied = {}; K.noFinance = false; K.undos = []; K.hasCounted = false; K.sup = null; K.hasLoc = false; K.catAt = 0; K.usual = null; K.usualP = null; if (prevRole !== null) recentClear(); } // a cached list is never shown to another role
+    if (K.role !== opts.role) { K.role = opts.role; K.items = null; K.shop = null; K.q = ''; K.chip = 'low'; K.at = 0; K.keys = {}; K.v84 = false; K.lastCode = ''; K.cool = {}; K.scanned = null; K.denied = {}; K.noFinance = false; K.undos = []; K.hasCounted = false; K.sup = null; K.hasLoc = false; K.catAt = 0; K.usual = null; K.usualP = null; K.opt = {}; K.badImg = {}; if (prevRole !== null) recentClear(); } // a cached list is never shown to another role
     M = {
       el: el, opts: opts, role: opts.role, demo: !!opts.demo, client: opts.client || null, pid: opts.propertyId || PROPERTY_ID,
       sub: String(opts.sub || ''), act: null, hist: {}, denied: K.denied, uid: null, loadErr: null, shopErr: null, loading: false, offlineStale: false, itemInfo: {}, listeners: []
@@ -229,6 +231,7 @@
     el.innerHTML = '<div class="I_wrap"><div data-i-top></div><div data-i-list></div><div data-i-undo class="I_undoslot"></div><div data-i-layer></div><div class="I_live sr" role="status" aria-live="polite" data-i-live></div></div>';
     var on = function (type, fn) { el.addEventListener(type, fn); M.listeners.push([type, fn]); };
     on('click', onClick); on('change', onChange); on('input', onInput); on('submit', onSubmit); on('keydown', onKey); on('focusin', onFocus); on('focusout', onBlur);
+    M.el.addEventListener('error', onImgErr, true); M.listeners.push(['error', onImgErr, true]); // a picture that will not load is replaced by the placeholder (error does not bubble: capture)
     M.vis = function () { if (M && root.document && root.document.hidden && M.cam) pauseCam(); };
     if (root.document && root.document.addEventListener) root.document.addEventListener('visibilitychange', M.vis);
     if (M.demo) { K.items = demoItems().map(function (r) { return normalize(r, M.role); }); K.shop = normalizeShop(demoShop(), null); K.v84 = true; K.hasCounted = true; }
@@ -240,7 +243,7 @@
   }
   function unmount() {
     if (!M) return;
-    M.listeners.forEach(function (l) { M.el.removeEventListener && M.el.removeEventListener(l[0], l[1]); });
+    M.listeners.forEach(function (l) { M.el.removeEventListener && M.el.removeEventListener(l[0], l[1], l[2]); });
     if (M.undoT && root.clearTimeout) root.clearTimeout(M.undoT);
     stopCam(); if (root.document && root.document.removeEventListener && M.vis) root.document.removeEventListener('visibilitychange', M.vis);
     M.dead = true; M = null;
@@ -357,14 +360,70 @@
   function photoPicked(ev) {
     var t = ev.target, f = t && t.files && t.files[0]; if (!M || !f) return;
     var it = itemById(M.act && M.act.itemId); if (!it || (M.act && M.act.sending)) return;
+    photoRun(it, function () { return f; });
+    try { t.value = ''; } catch (x) { /* the same file can be chosen again */ }
+  }
+  // The one add-photo path: get a file (picked, or fetched from an option), resize it, ask for confirmation. Upload and R7 happen only on Yes (uploadAndSet).
+  function photoRun(it, getFile) {
     var a = M.act = { kind: 'photo', itemId: it.id, step: 'prep' }; drawLayer();
-    resizePhoto(f).then(function (b) {
+    Promise.resolve().then(getFile).then(resizePhoto).then(function (b) {
       if (!M || M.act !== a) return;
       a.blob = b; a.step = 'confirm'; a.prev = root.URL && root.URL.createObjectURL ? root.URL.createObjectURL(b) : null; a.focused = false; drawLayer();
     }, function (e) { if (!M || M.act !== a) return; a.step = 'bad'; a.err = e && e.photo || 'photofail'; drawLayer(); });
-    try { t.value = ''; } catch (x) { /* the same file can be chosen again */ }
+  }
+  /* ---- s106 item options (Shopsuki): brand/size choices for one item, read from inventory_item_options_v1; hidden when the SQL is not there yet */
+  function siteOf(u) { var h = /^https:\/\/([^\/]+)/i.exec(u || ''); h = h ? h[1].replace(/^www\./, '') : ''; return h === 'shopsuki.ph' ? 'Shopsuki' : h === 'shopee.ph' ? 'Shopee' : h || 'the shop'; }
+  function normOpts(list) {
+    return (Array.isArray(list) ? list : []).filter(function (o) { return o && o.id && o.title; }).map(function (o) {
+      return { id: String(o.id), supplier: String(o.supplier || ''), title: String(o.title), brand: o.brand ? String(o.brand) : '', packLabel: o.pack_label ? String(o.pack_label) : '',
+        image: /^https:\/\/[^\s"'<>]+$/i.test(String(o.image_url || '')) ? String(o.image_url) : '', link: /^https:\/\/[^\s"'<>]+$/i.test(String(o.source_url || '')) ? String(o.source_url) : '',
+        usual: !!o.usual, available: o.available === false ? false : o.available === true ? true : null, price: num(o.price) };
+    });
+  }
+  function demoOptions(id) {
+    var d = { d1: [['o1', 'Demo Mart', 'Softly Bath Tissue 12 rolls', 'Softly', 210, true], ['o2', 'Demo Mart', 'Cloud Bath Tissue 12 rolls', 'Cloud', 195, true], ['o3', 'Demo Mart', 'Plush Bath Tissue 8 rolls', 'Plush', 160, false]],
+      d5: [['o4', 'Demo Mart', 'Strong Trash Bags Large 10s', 'Strong', 230, true], ['o5', 'Demo Mart', 'Strong Trash Bags XL 10s', 'Strong', 260, true]] }[id] || [];
+    return d.map(function (x, n) { return { id: x[0], supplier: x[1], title: x[2], brand: x[3], packLabel: '', image: '', link: '', usual: n === 0, available: x[5], price: canPrice(M.role) ? x[4] : null }; });
+  }
+  function loadOptions(id) {
+    var me = M, c0 = K.opt[id]; if (!me || (c0 && nowMs() - c0.at < 60000) || K.denied.inventory_item_options_v1) return; // kept across mounts (the shell re-mounts on every sub-route change), read again after a minute
+    if (me.demo) { K.opt[id] = { list: demoOptions(id), at: nowMs() }; redrawMenu(id); return; }
+    if (!me.client || !online()) return;
+    K.opt[id] = { list: null, at: nowMs() };
+    Promise.resolve().then(function () { return me.client.rpc('inventory_item_options_v1', { p_item_id: id }); }).then(function (r) {
+      if (r && r.error) throw r.error;
+      if (!r || !r.data || r.data.ok === false) throw { message: 'failed' };
+      K.opt[id] = { list: normOpts(r.data.options), at: nowMs() }; redrawMenu(id);
+    }).catch(function (e) {
+      delete K.opt[id]; // read again the next time the card opens
+      if (errKind(e, online()) === 'missing') K.denied.inventory_item_options_v1 = true; // the SQL release is not applied yet: no section, no message
+    });
+  }
+  function redrawMenu(id) { if (M && M.act && M.act.kind === 'menu' && M.act.itemId === id) drawLayer(); }
+  function optById(itemId, id) { var st = M && K.opt[itemId]; return st && st.list ? st.list.filter(function (o) { return o.id === id; })[0] || null : null; }
+  function onImgErr(ev) { var t = ev && ev.target; if (M && t && t.getAttribute && t.getAttribute('data-oimg')) { K.badImg[t.getAttribute('src')] = 1; if (M.act && M.act.kind === 'menu') drawLayer(); } }
+  function optionsBlock(it) {
+    var st = K.opt[it.id]; if (!st || !st.list || !st.list.length) return '';
+    var money = canPrice(M.role), mng = canManage(M.role), btn = function (act, id, text) { return '<button class="btn btn-secondary I_undobtn" type="button" data-act="' + act + '" data-id="' + esc(id) + '">' + text + '</button>'; };
+    return '<div class="I_opts" role="group" aria-label="Options"><h3 class="I_opth">Options</h3>' + st.list.map(function (o) {
+      var sub = [o.brand, o.supplier, o.packLabel].filter(Boolean).join(' · ');
+      return '<div class="I_opt"><span class="I_oth">' + (o.image && !K.badImg[o.image] ? '<img src="' + esc(o.image) + '" alt="' + esc(o.title) + '" width="56" height="56" loading="lazy" decoding="async" referrerpolicy="no-referrer" data-oimg="1">' : gi('image', 's16')) + '</span>' +
+        '<div class="I_ob"><p class="I_ot">' + esc(o.title) + (o.usual ? ' <span class="I_usual">Usual</span>' : '') + '</p>' + (sub ? '<p class="help">' + esc(sub) + '</p>' : '') +
+        (money && o.price != null ? '<p class="help num">' + esc(peso(o.price)) + '</p>' : '') + (o.available === false ? '<p class="help I_oos">Out of stock</p>' : '') +
+        '<div class="I_obt">' + (o.link ? '<a class="btn btn-ghost I_undobtn" href="' + esc(o.link) + '" target="_blank" rel="noopener">View on ' + esc(siteOf(o.link)) + '</a>' : '') +
+        (mng && !o.usual && allowed('optusual') ? btn('opt-usual', o.id, 'Make usual') : '') + (mng && o.image && allowed('photo') ? btn('opt-photo', o.id, 'Use as item photo') : '') + '</div></div></div>';
+    }).join('') + '</div>';
+  }
+  function renderOptUsual(a, it) {
+    var o = optById(a.itemId, a.optId); if (!o) return null;
+    return head('Make this the usual for ' + it.name + '?') + '<form data-i-form><p class="I_conf">' + esc(o.title) + (o.supplier ? ' from ' + esc(o.supplier) : '') + (canPrice(M.role) && o.price != null ? ' at ' + esc(peso(o.price)) : '') + '. Shopping lists and Add low items will use it.</p>' + actions(a, 'Yes, make it usual') + '</form>';
   }
   function relPrev(a) { if (a && a.prev && root.URL && root.URL.revokeObjectURL) { try { root.URL.revokeObjectURL(a.prev); } catch (e) { /* gone already */ } } if (a) a.prev = null; }
+  // Cross-origin read of an option picture; anything that goes wrong is one plain line.
+  function fetchPicture(url) {
+    if (typeof root.fetch !== 'function') throw { photo: 'optfetch' };
+    return Promise.resolve().then(function () { return root.fetch(url, { mode: 'cors', credentials: 'omit', referrerPolicy: 'no-referrer' }); }).then(function (r) { if (!r || !r.ok) throw 0; return r.blob(); }).then(null, function () { throw { photo: 'optfetch' }; });
+  }
   function onChange(ev) { var t = ev.target; if (M && t && t.id === 'I_photo_in') photoPicked(ev); }
 
   /* ---- suppliers module (lane D-client-sup): loaded once, hidden for the visit when it is missing */
@@ -430,7 +489,7 @@
     top.innerHTML = renderTop(rt);
     drawList();
     // an item route opens its sheet once the catalogue is here
-    if (rt.itemId && K.items && (!M.act || (M.act.itemId !== rt.itemId && M.act.kind !== 'undo'))) { var it = itemById(rt.itemId); if (it) { M.act = newMenu(rt.itemId); loadLastCount(rt.itemId); applyQuick(); } }
+    if (rt.itemId && K.items && (!M.act || (M.act.itemId !== rt.itemId && M.act.kind !== 'undo'))) { var it = itemById(rt.itemId); if (it) { M.act = newMenu(rt.itemId); loadLastCount(rt.itemId); loadOptions(rt.itemId); applyQuick(); } }
     if (!rt.itemId && M.act && M.act.itemId) M.act = null;
     drawLayer(); drawUndo();
   }
@@ -572,6 +631,7 @@
     var v = a.vals || {}, m = M.role, h;
     if (a.kind === 'history') return renderHistory(a, it);
     if (a.kind === 'photo' || a.kind === 'photoremove') return renderPhoto(a, it);
+    if (a.kind === 'optusual') return renderOptUsual(a, it);
     if (a.kind === 'unlink') return head('Unlink code ' + shortCode(a.code) + ' from ' + it.name + '?') + '<form data-i-form><p class="I_conf">Scanning this code will no longer open ' + esc(it.name) + '.</p>' + actions(a, 'Yes, unlink it') + '</form>';
     if (a.kind === 'low') return head(canManage(M.role) ? 'Add ' + it.name + ' to the shopping list?' : 'Tell the owner ' + it.name + ' is running low?') + '<form data-i-form><p class="I_conf">It goes on the shopping list for ' + esc(uq(lowQty(it), it.purchaseUnit || unitOf(it))) + '.</p>' + actions(a, canManage(M.role) ? 'Yes, add it' : 'Yes, tell them') + '</form>';
     if (a.kind === 'link') return head('Link code ' + shortCode(a.code) + ' to ' + it.name + '?') + '<form data-i-form><p class="I_conf">Scanning this code will open ' + esc(it.name) + '.</p>' + actions(a, 'Yes, link it') + '</form>';
@@ -582,7 +642,7 @@
         (K.v84 && (it.consumable || it.par != null) ? row('Buy up to', it.par != null ? esc(uq(it.par, it.unit)) : it.reorder != null ? esc('2 x reorder level (' + fmt(it.reorder * 2) + ')') : 'Not set') : '') +
         (K.v84 && canManage(m) ? row('Barcodes', it.codes.length ? it.codes.length + ' linked' : 'None linked') + (allowed('unlink') ? it.codes.map(function (c) { return row('Code', esc(c) + ' <button class="btn btn-ghost I_undobtn" type="button" data-act="unlink" data-code="' + esc(c) + '" aria-label="Unlink code ' + esc(c) + '">Unlink</button>'); }).join('') : '') : '') +
         (canManage(m) && info && info.done ? row('Last counted', info.lastCounted ? esc(dateLabel(info.lastCounted)) : 'Not counted in the app yet') : '') +
-        (cover ? row('Lasts', esc(cover)) : '') + (canPrice(m) && it.cost != null ? row('Unit cost', esc(peso(it.cost))) : '') + '</dl>' +
+        (cover ? row('Lasts', esc(cover)) : '') + (canPrice(m) && it.cost != null ? row('Unit cost', esc(peso(it.cost))) : '') + '</dl>' + optionsBlock(it) +
         lastChange(it) + (M.denied.shop ? '' : shopN ? '<p class="help">Already on the shopping list.</p>' : '') + (a.note ? '<div class="okbox" role="status"><span>' + esc(a.note) + '</span></div>' : '') + errBox(a) +
         '<div class="I_btns">' + menuButtons(it, a) +
         '<button class="btn btn-ghost btn-block" type="button" data-act="close">Close</button></div>' +
@@ -856,6 +916,8 @@
     if (a.sending) return; // nothing, not even Close, while a write is in flight
     if (act === 'al-tick') { if (a.kind !== 'addlow') return; var tl = a.lines.filter(function (l) { return l.itemId === attr(t, 'data-id'); })[0]; if (tl && !tl.ok) { tl.on = !tl.on; if (!tl.on) tl.fail = false; a.bad = false; drawLayer(); } return; }
     if (act === 'begin') return begin(attr(t, 'data-kind'));
+    if (act === 'opt-usual') { var ou = a.kind === 'menu' && a.itemId ? optById(a.itemId, attr(t, 'data-id')) : null; if (ou && !ou.usual && canManage(M.role) && allowed('optusual')) { var pu0 = (K.opt[a.itemId].list || []).filter(function (x) { return x.usual; })[0] || null; M.act = { kind: 'optusual', itemId: a.itemId, optId: ou.id, prev: pu0 ? { id: pu0.id, title: pu0.title } : null, step: 'confirm' }; drawLayer(); } return; }
+    if (act === 'opt-photo') { var op = a.kind === 'menu' && a.itemId ? optById(a.itemId, attr(t, 'data-id')) : null, oit = itemById(a.itemId); if (op && op.image && oit && canManage(M.role) && allowed('photo')) photoRun(oit, function () { return fetchPicture(op.image); }); return; }
     if (act === 'photo-remove') { if (a.kind === 'menu' && a.itemId && allowed('photo')) { M.act = { kind: 'photoremove', itemId: a.itemId, step: 'confirm' }; drawLayer(); } return; }
     if (act === 'pick-sup') { if (a.kind === 'recv' || a.kind === 'bought') pickSupplier(a); return; }
     if (act === 'pricehist' || act === 'item-sup') { var sit = a.kind === 'menu' ? itemById(a.itemId) : null, fnm = act === 'pricehist' ? 'openPriceHistory' : 'openItemSuppliers'; if (sit && supOK() && root.I_Suppliers[fnm]) { try { root.I_Suppliers[fnm](supCtx(), sit); } catch (e) { toast(ERR.missing); } } return; }
@@ -880,7 +942,7 @@
     if (act === 'pick') { if (a.phase !== 'pick' || !allowed('link')) return; M.act = { kind: 'link', step: 'confirm', pickId: attr(t, 'data-id'), code: a.code, format: a.format, mode: a.mode, fromPick: true }; drawLayer(); return; }
     if (act === 'rep-kind') { a.vals.rkind = attr(t, 'data-k'); a.bad = false; drawLayer(); return; }
     if (act === 'rep-to') { a.vals.to = attr(t, 'data-to') === 'finance' && canPrice(M.role) && !K.noFinance ? 'finance' : 'ops'; a.bad = false; drawLayer(); return; }
-    if (act === 'back') { if (/^(scan|link|create|report|undo|bought|unlink|history|photo|photoremove|cconfirm|labels|tidy|rename|sort|addlow|copytext)$/.test(a.kind)) return flowBack(a); if (a.kind === 'shopset') { a.kind = 'menu'; a.step = null; a.err = null; drawLayer(); } else if (a.fromShop && a.step !== 'confirm') { M.act = null; drawLayer(); } else if (a.step === 'confirm' && a.kind !== 'low') { a.step = 'form'; a.err = null; drawLayer(); } else if (a.shopId) { a.kind = 'menu'; a.err = null; drawLayer(); } else { a.kind = 'menu'; a.vals = null; a.step = null; a.err = null; a.bad = false; drawLayer(); } return; }
+    if (act === 'back') { if (/^(scan|link|create|report|undo|bought|unlink|history|photo|photoremove|optusual|cconfirm|labels|tidy|rename|sort|addlow|copytext)$/.test(a.kind)) return flowBack(a); if (a.kind === 'shopset') { a.kind = 'menu'; a.step = null; a.err = null; drawLayer(); } else if (a.fromShop && a.step !== 'confirm') { M.act = null; drawLayer(); } else if (a.step === 'confirm' && a.kind !== 'low') { a.step = 'form'; a.err = null; drawLayer(); } else if (a.shopId) { a.kind = 'menu'; a.err = null; drawLayer(); } else { a.kind = 'menu'; a.vals = null; a.step = null; a.err = null; a.bad = false; drawLayer(); } return; }
     if (act === 'step') { a.vals = a.vals || {}; var f = attr(t, 'data-f'); a.vals[f] = stepQty(a.vals[f], +attr(t, 'data-d'), attr(t, 'data-z') === '1'); a.err = null; drawLayer(); var nb = q('[data-act="step"][data-f="' + f + '"][data-d="' + attr(t, 'data-d') + '"]'); if (nb && nb.focus) nb.focus(); return; }
     if (act === 'shop-bought') { var r = (K.shop || []).filter(function (x) { return x.id === a.shopId; })[0]; if (!r || !r.itemId || !allowed('recv', itemById(r.itemId))) return; M.act = { kind: 'recv', itemId: r.itemId, step: 'form', vals: { packs: fmt(r.qty || 1), supplier: K.sup ? K.sup.name : '', supplierId: K.sup && K.sup.id || '', cost: '', shopId: r.id }, fromShop: true }; drawLayer(); return; }
     if (act === 'shop-do') { var rr = (K.shop || []).filter(function (x) { return x.id === a.shopId; })[0]; if (!rr) return; a.kind = 'shopset'; a.status = attr(t, 'data-do'); a.step = 'confirm'; a.rowName = rr.name; drawLayer(); return; }
@@ -893,7 +955,7 @@
   function go(hash, sub, itemId) {
     M.sub = sub; M.act = itemId ? newMenu(itemId) : null;
     if (M.opts.navigate) M.opts.navigate(hash);
-    if (M) { draw(); if (itemId) loadLastCount(itemId); }
+    if (M) { draw(); if (itemId) { loadLastCount(itemId); loadOptions(itemId); } }
   }
   function closeSheet() {
     if (!M || (M.act && M.act.sending)) return;
@@ -922,6 +984,7 @@
     if (kind === 'unlink') return K.v84 && canManage(m) && !M.denied.unlink;
     if (kind === 'create') return K.v84 && canManage(m) && !M.denied.create;
     if (kind === 'report') return !M.denied.report;
+    if (kind === 'optusual') return canManage(m) && !M.denied.optusual;
     if (kind === 'photo') return !M.denied.photo; // every role (D-330 answer 1); the server decides
     if (kind === 'labels') return canManage(m) && !M.denied.labels && !!K.items;
     if (kind === 'sort') return canManage(m) && !M.denied.sort && !M.denied.cat;
@@ -995,6 +1058,7 @@
     if (a.kind === 'report') return reportCall(a.vals);
     if (a.kind === 'photo') return { exec: function () { return uploadAndSet(a); } };
     if (a.kind === 'photoremove') return photoSetCall(a.itemId, null);
+    if (a.kind === 'optusual') return setUsualCall(a.optId);
     if (a.kind === 'rename') return recatCall(M.pid, (K.items || []).filter(function (i) { return i.category === a.from; }).map(function (i) { return i.id; }).concat(Object.keys(K.inactiveCat || {}).filter(function (id) { return K.inactiveCat[id] === a.from; })), mergeTarget(a.from, a.vals.to) || String(a.vals.to).trim());
     if (a.kind === 'labels') return { exec: function () { return labelsExec(a); } };
     if (a.kind === 'sort') return { invoke: 'inventory-categorise', body: { all: true } };
@@ -1004,11 +1068,11 @@
   var DONE = { count: function (it) { return 'Counted. ' + it.name + ' is saved.'; }, used: function () { return 'Logged. Thank you.'; }, recv: function (it) { return 'Stock received for ' + it.name + '.'; }, shop: function () { return 'Added to the shopping list.'; }, shopset: function (it, a) { return a.status === 'approved' ? 'Approved.' : 'Removed from the list.'; },
     undo: function () { return 'Undone.'; }, unlink: function () { return 'Unlinked.'; }, low: function () { return 'Passed on. Thank you.'; }, link: function (it) { return 'Linked. Scanning it now opens ' + it.name + '.'; }, price: function (it) { return 'Price saved for ' + it.name + '.'; }, levels: function (it, a) { return (detailsChanges(it, a.vals || {}) ? 'Details' : 'Levels') + ' saved for ' + it.name + '.'; },
     create: function (it, a) { return 'Added ' + String(a.vals.name).trim() + '.'; }, report: function (it, a) { return 'Sent to the ' + (a.vals.to === 'finance' ? 'Finance' : 'OPS') + ' group.'; },
-    photo: function (it) { return 'Photo saved for ' + it.name + '.'; }, photoremove: function (it) { return 'Photo removed from ' + it.name + '.'; }, labels: function () { return 'Label sheet sent to the Finance group.'; },
+    photo: function (it) { return 'Photo saved for ' + it.name + '.'; }, photoremove: function (it) { return 'Photo removed from ' + it.name + '.'; }, optusual: function (it) { return 'Usual option saved for ' + it.name + '.'; }, labels: function () { return 'Label sheet sent to the Finance group.'; },
     rename: function (it, a) { var n = (a.res && a.res.moved || []).length; return 'Moved ' + n + (n === 1 ? ' item' : ' items') + ' into ' + (mergeTarget(a.from, a.vals.to) || String(a.vals.to).trim()) + '.'; },
     sort: function (it, a) { var n = (a.res && a.res.results || []).length, more = a.res && a.res.remaining > 0 ? ' ' + a.res.remaining + ' more are waiting. Sort again in a moment.' : ''; return (n ? 'Cassy sorted ' + n + (n === 1 ? ' item.' : ' items.') : 'Nothing was moved. Anything Cassy was unsure about stays in Uncategorised.') + more; } };
   function bodyOf(e) { try { return e && e.context && typeof e.context.json === 'function' ? Promise.resolve(e.context.json()).catch(function () { return null; }) : null; } catch (x) { return null; } }
-  var NEWK = { used: 1, unlink: 1, low: 1, link: 1, price: 1, levels: 1, create: 1, report: 1, undo: 1, photo: 1, photoremove: 1, labels: 1, rename: 1, sort: 1 }; // actions that hide for the visit when the server says "not here"
+  var NEWK = { used: 1, unlink: 1, low: 1, link: 1, price: 1, levels: 1, create: 1, report: 1, undo: 1, photo: 1, photoremove: 1, optusual: 1, labels: 1, rename: 1, sort: 1 }; // actions that hide for the visit when the server says "not here"
   function commit(a) {
     var me = M, it = itemOf(a) || { name: a.rowName || (a.entry && a.entry.name) || '' }, call = build(a), rep = a.kind === 'report', snap = it && { qty: it.qty, cost: it.cost, reorder: it.reorder, par: it.par, controlled: it.controlled, location: it.location, unit: it.unit, category: it.category, photo: it.photo };
     if (me.demo) { toast(rep ? 'Demo only, nothing was sent.' : DEMO_NOTE); finish(); return; }
@@ -1029,6 +1093,8 @@
       a.sending = false; delete K.keys[a.sig]; a.res = r && r.data || {};
       if (rep) K.cool[a.vals.rkind + '|' + a.vals.to] = nowMs();
       if (a.kind === 'photo' || a.kind === 'photoremove') { var pit = itemById(a.itemId); if (pit) pit.photo = a.kind === 'photo' ? a.newPath || pit.photo : null; relPrev(a); }
+      var od = r && r.data, oid = a.kind === 'undo' ? a.entry.itemId : a.itemId;
+      if (od && Array.isArray(od.options) && oid) { K.opt[oid] = { list: normOpts(od.options), at: nowMs() }; K.usual = null; K.usualAt = 0; } // the usual option moved: the list redraws, and the Usual supplier map is read again
       if (a.kind === 'recv') rememberSupplier(a.vals);
       if (a.kind === 'create' && a.vals.category === CASSY && a.res.item_id) cassyOne(a.res.item_id);
       var msg = DONE[a.kind](it, a);
@@ -1502,6 +1568,9 @@
       if (a.kind === 'photoremove' && pb == null) return null;
       e.say = a.kind === 'photo' ? 'Photo saved for ' + n : 'Photo removed from ' + n; e.line = a.kind === 'photo' ? 'changed the photo' : 'removed the photo';
       e.confirm = pb == null ? 'Remove the new photo of ' + n + ' again?' : 'Put the old photo of ' + n + ' back?'; e.call = photoSetCall(it.id, pb);
+    } else if (a.kind === 'optusual') {
+      if (!a.prev) return null; // nothing was usual before: there is no call that clears it
+      e.say = 'Usual option saved for ' + n; e.line = 'changed the usual option'; e.confirm = 'Make ' + a.prev.title + ' the usual for ' + n + ' again?'; e.call = setUsualCall(a.prev.id);
     } else if (a.kind === 'rename' && d.moved && d.moved.length) {
       var gr = groupBefore(d.moved); e.itemId = null; e.name = ''; e.say = 'Moved ' + d.moved.length + (d.moved.length === 1 ? ' item' : ' items') + ' into ' + (mergeTarget(a.from, v.to) || String(v.to).trim()); e.line = 'moved items';
       e.confirm = 'Put the ' + d.moved.length + (d.moved.length === 1 ? ' item' : ' items') + ' back in ' + (gr.length === 1 ? gr[0].before : 'their old categories') + '?';
@@ -1617,7 +1686,7 @@
     if (a.kind === 'rename') { if (a.step === 'confirm') { a.step = 'form'; a.err = null; drawLayer(); return; } M.act = { kind: 'tidy' }; drawLayer(); return; }
     if (a.kind === 'sort') { M.act = { kind: 'tidy' }; drawLayer(); return; }
     if (a.kind === 'tidy') return closeSheet();
-    if (a.kind === 'unlink' || a.kind === 'history') { M.act = newMenu(a.itemId); drawLayer(); return; }
+    if (a.kind === 'unlink' || a.kind === 'history' || a.kind === 'optusual') { M.act = newMenu(a.itemId); drawLayer(); return; }
     if (a.kind === 'bought') { if (a.step === 'confirm') { a.step = 'pick'; a.rows = null; a.err = null; drawLayer(); return; } if (a.step === 'undoconfirm') { a.step = 'done'; a.err = null; drawLayer(); return; } return closeSheet(); }
     if (a.kind === 'undo') { M.act = route().itemId ? newMenu(route().itemId) : null; drawLayer(); return; }
     if (a.kind === 'report') { if (a.step === 'confirm') { a.step = 'form'; a.err = null; drawLayer(); return; } return closeSheet(); }
@@ -1628,13 +1697,14 @@
     return closeSheet();
   }
   function toast(msg) { say(msg); if (M && M.opts.toast) M.opts.toast(msg); }
-  function finish() { if (!M) return; var fromShop = M.act && (M.act.shopId || M.act.fromShop); if (fromShop) { M.act = null; drawLayer(); draw(); } else closeSheet(); }
+  function finish() { if (!M) return; if (M.act && M.act.kind === 'optusual') { M.act = newMenu(M.act.itemId); drawLayer(); drawUndo(); return; } var fromShop = M.act && (M.act.shopId || M.act.fromShop); if (fromShop) { M.act = null; drawLayer(); draw(); } else closeSheet(); }
 
   root.I_Stock = { mount: mount, unmount: unmount, lib: {
     esc: esc, canPrice: canPrice, groupsFor: groupsFor, codeIndex: codeIndex, I_codeIndex: codeIndex, normCode: normCode, validCode: validCode, attachCall: attachCall, priceCall: priceCall, levelsCall: levelsCall, createCall: createCall, reportCall: reportCall, REPORTS: REPORTS, normalize: normalize, normalizeCatalogue: normalizeCatalogue, level: level, summary: summary, chipsFor: chipsFor, visible: visible, barPct: barPct, parseQty: parseQty, stepQty: stepQty,
     newKey: newKey, errKind: errKind, ERR: ERR, countCall: countCall, usageCall: usageCall, receiptCall: receiptCall, shopAddCall: shopAddCall, shopSetCall: shopSetCall, normalizeShop: normalizeShop,
     fitSize: fitSize, phpText: phpText, photoSetCall: photoSetCall, recatCall: recatCall, mintCall: mintCall, labelsCall: labelsCall,
     manilaToday: manilaToday, demoItems: demoItems, PROPERTY_ID: PROPERTY_ID, canManage: canManage, canUse: canUse,
+    normOpts: normOpts, setUsualCall: setUsualCall,
     lowItems: lowItems, shopLines: shopLines, shopText: shopText, shopLayout: shopLayout, unitPrice: unitPrice, wrapText: wrapText, longDate: longDate
   } };
 })(typeof window !== 'undefined' ? window : this);

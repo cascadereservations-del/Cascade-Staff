@@ -114,3 +114,16 @@ div.I_row { cursor: default; }
 .I_shopx { display: flex; flex-wrap: wrap; gap: 8px; }
 .I_shopx .btn { flex: 1 1 auto; min-height: 44px; }
 .I_albtn { min-height: 44px; }
+
+/* s106: Options (Shopsuki brand and size choices) on the item card */
+.I_opts { margin: 12px 0; display: grid; gap: 10px; }
+.I_opth { margin: 0; font-size: 1rem; }
+.I_opt { display: flex; gap: 12px; align-items: flex-start; }
+.I_oth { flex: none; display: inline-flex; align-items: center; justify-content: center; width: 56px; height: 56px; border-radius: var(--r-sm, 8px); overflow: hidden; background: var(--v5-sunk); color: var(--fg-2); } /* reserved box: rows never jump when a picture arrives */
+.I_oth img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.I_ob { min-width: 0; flex: 1; }
+.I_ot { margin: 0; font-weight: 650; overflow-wrap: anywhere; }
+.I_ob .help { margin: 2px 0 0; }
+.I_usual { display: inline-block; padding: 1px 8px; border-radius: 999px; font-size: .75rem; font-weight: 650; background: var(--v5-ok-w, var(--v5-sunk)); color: var(--v5-ok-t, var(--fg-1)); }
+.I_oos { color: var(--v5-warn-t); }
+.I_obt { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
