@@ -6885,17 +6885,14 @@ const PHOTO_STALE_HOURS     = 12;  // older than this and it is not today's mete
    START of the next visit, which is the only moment a cleaner is actually
    looking at this app and could still do something about it. */
 function paintMeterFollowupCopy() {
+  /* s103 (D-354): a mismatch never blocks a report, so the card has one voice and says plainly that it is about an earlier report. */
   const head = el('meter-followup')?.querySelector('.mf-head');
   const foot = el('meter-followup-foot');
   if (head) {
-    head.innerHTML = state.meterBlocked
-      ? '<svg class="ch-ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-eye"/></svg> Answer this before the next report'
-      : '<svg class="ch-ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-eye"/></svg> A meter photo needs another look';
+    head.innerHTML = '<svg class="ch-ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-eye"/></svg> A meter photo needs another look';
   }
   if (foot) {
-    foot.textContent = state.meterBlocked
-      ? 'This one has to be answered before the next turnover can be sent. If you still have the photo, send it to Lloyd on Messenger. If not, photograph the meter as it is now. Then tap what you did.'
-      : 'If you still have the photo, send it to Lloyd on Messenger. If not, photograph the meter as it is now and say so — a late reading is worth more than none.';
+    foot.textContent = 'This is about an earlier report, not the one you are doing now. You can still send today\'s report. If you still have that photo, send it to Lloyd on Messenger; if not, take a new photo of the meter and tap what you did.';
   }
 }
 async function loadMeterFollowups() {
@@ -6910,11 +6907,7 @@ async function loadMeterFollowups() {
     if (!resp.ok) return;                 // not applied yet — say nothing
     const rows = await resp.json();
     state.meterFollowups = Array.isArray(rows) ? rows : [];
-    /* Only a 'mismatch' blocks. A photo that could not be read is not a fault
-       and a forgotten photo is already handled by the one-time allowance; both
-       still ask, neither stops the next turnover. Widening this is Lloyd's
-       call, not a quiet change here. */
-    state.meterBlocked = state.meterFollowups.some(r => r.vision_verdict === 'mismatch');
+    // s103 (D-354): nothing here blocks a report any more; the card only asks.
     if (!state.meterFollowups.length) { box.hidden = true; return; }
     paintMeterFollowupCopy();
     renderMeterFollowupList();
@@ -6946,7 +6939,6 @@ async function answerMeterFollowups(answer) {
       if (!resp.ok) throw new Error(String(resp.status));
     }
     state.meterFollowups = [];
-    state.meterBlocked = false;
     const box = el('meter-followup');
     if (box) box.hidden = true;
   } catch {
@@ -6974,10 +6966,11 @@ function renderMeterFollowupList() {
       ? new Date(r.cleaned_at).toLocaleDateString('en-PH',
           { timeZone: 'Asia/Manila', month: 'short', day: 'numeric' })
       : 'a recent report';
+    const label = r.cleaned_at ? `Report sent ${when}` : when;
     const detail = (r.vision_verdict === 'mismatch' && r.vision_electric != null)
       ? ` (the photo looks like ${escapeHtml(String(r.vision_electric))}, the report says ${escapeHtml(String(r.typed_electric ?? '—'))})`
       : '';
-    return `<li><strong>${escapeHtml(when)}</strong> — ${escapeHtml(r.reason || 'needs another look')}${detail}</li>`;
+    return `<li><strong>${escapeHtml(label)}</strong> — ${escapeHtml(r.reason || 'needs another look')}${detail}</li>`;
   }).join('');
 }
 
@@ -7011,12 +7004,10 @@ async function reportNoMeterPhoto() {
       if (!o || o.ok !== true) { stop((o && o.message) || 'That could not be saved. Please message Lloyd.'); return; }
       // Answered: drop it now so a refusal on the next one leaves only the unanswered rows and a retry never repeats a write.
       state.meterFollowups = state.meterFollowups.filter(x => x !== r);
-      state.meterBlocked = state.meterFollowups.some(x => x.vision_verdict === 'mismatch');
       renderMeterFollowupList();
       paintMeterFollowupCopy();
     }
     state.meterFollowups = [];
-    state.meterBlocked = false;
     const why = el('mf-nophoto-why'); if (why) why.value = '';
     const nb = el('mf-nophoto-box'); if (nb) nb.hidden = true;
     const box = el('meter-followup');
@@ -10523,21 +10514,8 @@ function buildPayload() {
 async function proceedWithSubmission() {
   if (state.isSubmitting) return;
 
-  /* The graduated meter-mismatch alert (2026-09-21). An unresolved mismatch on
-     an earlier report stops the next turnover. She was told at sign-in and can
-     clear it in one tap, so this is the reminder, not the discovery - and it
-     fires BEFORE anything is marked as submitting, so the draft is untouched
-     and the report is not lost. submit-cleaning refuses the same case with 409,
-     which is what makes this a rule rather than a suggestion. */
-  if (state.meterBlocked && ['turnover', 'deep_clean'].includes(state.cleaningType)) {
-    const statusEl0 = el('submit-status');
-    if (statusEl0) {
-      statusEl0.className = 'visible error';
-      statusEl0.textContent = 'A meter photo from an earlier report still needs an answer. Scroll to the notice at the top and tap what you did about it, then send this report.';
-    }
-    el('meter-followup')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    return;
-  }
+  /* s103 (D-354): the meter-mismatch gate that stood here is gone. A mismatch on an earlier report flags that report
+     for the admin and never stops this one; submit-cleaning no longer refuses it either. */
 
   /* D-219 (Lloyd 2026-09-23): a meter does not run backwards, so a reading below
      the last one is refused here, not just warned about. Same place and same

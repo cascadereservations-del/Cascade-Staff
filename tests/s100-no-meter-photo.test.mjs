@@ -67,14 +67,13 @@ test('a missing check-out date sends null to v2', async () => {
   assert.equal(w.calls[0].body.p_checkout_date, null);
 });
 
-test('third follow-up answer: short reason is held back, each raised row is reported, ok hides the card and lifts the block', async () => {
+test('third follow-up answer: short reason is held back, each raised row is reported, ok hides the card', async () => {
   const w = world({ fetchImpl: () => ok({ ok: true }) });
   w.state.meterFollowups = [{ session_id: 's1' }, { session_id: 's2' }];
-  w.state.meterBlocked = true;
+ 
   w.els['mf-nophoto-why'] = { value: 'abc', focus() {} };
   await w.api.reportNoMeterPhoto();
   assert.equal(w.calls.length, 0);
-  assert.equal(w.state.meterBlocked, true);
   w.els['mf-nophoto-why'].value = '  Phone lost the photos  ';
   await w.api.reportNoMeterPhoto();
   assert.deepEqual(w.calls, [
@@ -82,23 +81,20 @@ test('third follow-up answer: short reason is held back, each raised row is repo
     { fn: 'report_no_meter_photo_v1', body: { p_session_id: 's2', p_note: 'Phone lost the photos' } },
   ]);
   assert.equal(w.els['meter-followup'].hidden, true);
-  assert.equal(w.state.meterBlocked, false);
   assert.deepEqual(w.state.meterFollowups, []);
 });
 
-test('third follow-up answer: a refusal shows its message and keeps the block; offline shows the did-not-save line', async () => {
+test('third follow-up answer: a refusal shows its message; offline shows the did-not-save line', async () => {
   const w = world({ fetchImpl: () => ok({ ok: false, reason: 'neighbour_skipped', message: 'The stay next to this one also has no meter photo.' }) });
-  w.state.meterFollowups = [{ session_id: 's1' }]; w.state.meterBlocked = true;
+  w.state.meterFollowups = [{ session_id: 's1' }];
   w.els['mf-nophoto-why'] = { value: 'Phone lost the photos', focus() {} };
   await w.api.reportNoMeterPhoto();
   assert.equal(w.els['meter-followup-foot'].textContent, 'The stay next to this one also has no meter photo.');
-  assert.equal(w.state.meterBlocked, true);
   const off = world({ fetchImpl: () => { throw new TypeError('offline'); } });
-  off.state.meterFollowups = [{ session_id: 's1' }]; off.state.meterBlocked = true;
+  off.state.meterFollowups = [{ session_id: 's1' }];
   off.els['mf-nophoto-why'] = { value: 'Phone lost the photos', focus() {} };
   await off.api.reportNoMeterPhoto();
   assert.match(off.els['meter-followup-foot'].textContent, /^That did not save/);
-  assert.equal(off.state.meterBlocked, true);
 });
 
 test('markup and wiring: button text, help line, third button, reveal hooks, no exclamation marks', () => {
@@ -117,11 +113,10 @@ test('S1: two rows, first saved, second refused: only the unanswered row is left
   let n = 0;
   const w = world({ fetchImpl: () => (++n === 1 ? ok({ ok: true }) : ok({ ok: false, message: 'The stay next to this one also has no meter photo.' })) });
   w.state.meterFollowups = [{ session_id: 's1', vision_verdict: 'mismatch' }, { session_id: 's2' }];
-  w.state.meterBlocked = true;
+ 
   w.els['mf-nophoto-why'] = { value: 'Phone lost the photos', focus() {} };
   await w.api.reportNoMeterPhoto();
   assert.deepEqual(w.state.meterFollowups, [{ session_id: 's2' }]);
-  assert.equal(w.state.meterBlocked, false);
   assert.equal(w.els['meter-followup-foot'].textContent, 'The stay next to this one also has no meter photo. The other report was saved.');
   assert.equal(w.els['meter-followup-list'].innerHTML.match(/<li>/g).length, 1);
   assert.notEqual(w.els['meter-followup']?.hidden, true);
@@ -134,11 +129,10 @@ test('S5: any non-ok v2 answer falls back to v1; a non-2xx report answer is not 
   await w.api.refreshMeterSkipAllowance();
   assert.deepEqual(w.calls.map((c) => c.fn), ['can_skip_meter_photos_v2', 'can_skip_meter_photos']);
   const r = world({ fetchImpl: () => ok({}, 500) });
-  r.state.meterFollowups = [{ session_id: 's1' }]; r.state.meterBlocked = true;
+  r.state.meterFollowups = [{ session_id: 's1' }];
   r.els['mf-nophoto-why'] = { value: 'Phone lost the photos', focus() {} };
   await r.api.reportNoMeterPhoto();
   assert.equal(r.els['meter-followup-foot'].textContent, 'That could not be saved. Please message Lloyd.');
-  assert.equal(r.state.meterBlocked, true);
 });
 
 test('S3: a refusal hides the reason box and its help line, an allowance shows them again', async () => {
@@ -236,7 +230,7 @@ test('F2/F3/F1b: partial save repaints head and copy; a later offline failure sa
     const mk = () => ({ hidden: false, disabled: false, value: '', textContent: '', innerHTML: '', closest: () => null, focus() {}, querySelector: () => els.head || (els.head = { innerHTML: '' }) });
     const E = (id) => (els[id] ||= mk());
     E('mf-nophoto-why').value = 'phone lost them';
-    const state = { meterFollowups: rows.slice(), meterBlocked: true };
+    const state = { meterFollowups: rows.slice() };
     const ctx = { state, el: E, escapeHtml: String, SUPABASE_URL: 'https://x', staffHeaders: async () => ({}), document: { querySelectorAll: () => [mk()] }, fetch: fetchImpl };
     const src = third;
     const api = new Function(...Object.keys(ctx), src + '\nreturn { reportNoMeterPhoto };')(...Object.values(ctx));
@@ -258,4 +252,14 @@ test('F1: resetApp clears the skip reason, hides the skip row and drops its used
   const reset = cut('function resetApp()', '  _susChanging');
   assert.match(reset, /el\('meter-skip-why'\)[\s\S]*value = ''/);
   assert.match(reset, /skipRow\.hidden = true; skipRow\.classList\.remove\('used'\)/);
+});
+
+test('s103 (D-354): a meter mismatch never blocks a report; the card is never worded as blocking and names the report', () => {
+  assert.doesNotMatch(html, /meterBlocked/);
+  assert.doesNotMatch(html, /Answer this before the next report|has to be answered before the next turnover/);
+  const paint = cut('function paintMeterFollowupCopy()', 'async function loadMeterFollowups()');
+  assert.match(paint, /A meter photo needs another look/);
+  assert.match(paint, /This is about an earlier report, not the one you are doing now\. You can still send today/);
+  const list = cut('function renderMeterFollowupList()', 'async function reportNoMeterPhoto()');
+  assert.match(list, /Report sent \$\{when\}/);
 });

@@ -91,7 +91,7 @@ test('sw: activate deletes only old cs-shell caches, never a foreign cache', () 
   const sandbox = { self: { addEventListener() {}, location: { href: 'https://x.github.io/Cascade-Staff/sw.js' } }, module: { exports: {} }, URL, caches: {}, fetch() {}, setTimeout };
   vm.runInNewContext(fs.readFileSync(path.join(HERE, '..', 'sw.js'), 'utf8'), sandbox);
   const { staleShellCache } = sandbox.module.exports;
-  assert.equal(staleShellCache('cs-shell-v16'), true); assert.equal(staleShellCache('cs-shell-v22'), true); assert.equal(staleShellCache('cs-shell-v23'), true); assert.equal(staleShellCache('cs-shell-v24'), true); assert.equal(staleShellCache('cs-shell-v27'), true); assert.equal(staleShellCache('cs-shell-v30'), true); assert.equal(staleShellCache('cs-shell-v32'), true); assert.equal(staleShellCache('cs-shell-v33'), true); assert.equal(staleShellCache('cs-shell-v34'), true); assert.equal(staleShellCache('cs-shell-v35'), true); assert.equal(staleShellCache('cs-shell-v36'), true); assert.equal(staleShellCache('cs-shell-v37'), true); assert.equal(staleShellCache('cs-shell-v38'), true); assert.equal(staleShellCache('cs-shell-v39'), true); assert.equal(staleShellCache('cs-shell-v40'), true); assert.equal(staleShellCache('cs-shell-v41'), true); assert.equal(staleShellCache('cs-shell-v43'), false);
+  assert.equal(staleShellCache('cs-shell-v16'), true); assert.equal(staleShellCache('cs-shell-v22'), true); assert.equal(staleShellCache('cs-shell-v23'), true); assert.equal(staleShellCache('cs-shell-v24'), true); assert.equal(staleShellCache('cs-shell-v27'), true); assert.equal(staleShellCache('cs-shell-v30'), true); assert.equal(staleShellCache('cs-shell-v32'), true); assert.equal(staleShellCache('cs-shell-v33'), true); assert.equal(staleShellCache('cs-shell-v34'), true); assert.equal(staleShellCache('cs-shell-v35'), true); assert.equal(staleShellCache('cs-shell-v36'), true); assert.equal(staleShellCache('cs-shell-v37'), true); assert.equal(staleShellCache('cs-shell-v38'), true); assert.equal(staleShellCache('cs-shell-v39'), true); assert.equal(staleShellCache('cs-shell-v40'), true); assert.equal(staleShellCache('cs-shell-v41'), true); assert.equal(staleShellCache('cs-shell-v43'), true); assert.equal(staleShellCache('cs-shell-v44'), false);
   for (const k of ['ch-shell-v3', 'ch-data', 'workbox-x']) assert.equal(staleShellCache(k), false, k);
 });
 
@@ -129,7 +129,7 @@ test('sw: folded apps go straight to the network, the shell stays cached, the ca
   const sandbox = { self: { addEventListener() {}, location: { href: 'https://x.github.io/Cascade-Staff/sw.js' } }, module: { exports: {} }, URL, caches: {}, fetch() {}, setTimeout };
   vm.runInNewContext(fs.readFileSync(path.join(HERE, '..', 'sw.js'), 'utf8'), sandbox);
   const { swRoute, CACHE_NAME } = sandbox.module.exports, B = '/Cascade-Staff/';
-  assert.equal(CACHE_NAME, 'cs-shell-v43');
+  assert.equal(CACHE_NAME, 'cs-shell-v44');
   for (const p of ['admin/', 'admin/assets/a.js', 'checklist/', 'checklist/sw.js', 'manual/img/x.png', 'guide/staff/', 'guide/admin/index.html', 'admin', '%61dmin/x', 'adm%ZZ/']) assert.equal(swRoute(B + p, B), 'network', p);
   for (const p of ['', 'index.html', 'app.js', 'pay/', 'quick/', 'install/', 'adminx/', 'icons/icon-192.png', 'fold-manifest.json']) assert.equal(swRoute(B + p, B), 'shell', p);
   assert.equal(swRoute('/other/admin/', B), 'shell');
