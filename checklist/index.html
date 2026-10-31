@@ -6974,7 +6974,8 @@ function renderMeterFollowupList() {
     const detail = (r.vision_verdict === 'mismatch' && r.vision_electric != null)
       ? ` (the photo looks like ${escapeHtml(String(r.vision_electric))}, the report says ${escapeHtml(String(r.typed_electric ?? '—'))})`
       : '';
-    return `<li><strong>${escapeHtml(label)}</strong> — ${escapeHtml(r.reason || 'needs another look')}${detail}</li>`;
+    const why = r.resend_requested_at ? 'Lloyd asked for a new photo of this meter' : (r.reason || 'needs another look');
+    return `<li><strong>${escapeHtml(label)}</strong> — ${escapeHtml(why)}${r.resend_requested_at ? '' : detail}</li>`;
   }).join('');
 }
 
@@ -7245,7 +7246,8 @@ async function photoFingerprint(photo) {
 
 // s100 (D-352 point 4): with no photo the server keeps an out-of-order reading as estimate_pending, so it is a calm note, not a refusal.
 const METER_ORDER_NOTE = 'This number does not fit the readings before and after. It is kept for now and checked when the next meter photo comes in.';
-function meterOrderRefuses(list) { return list.length > 0 && state.meterPhotosSkipped !== true; }
+// s104: nothing blocks a report. An out-of-order number is a gentle note; the server saves the report and flags the reading for the admin.
+function meterOrderRefuses() { return false; }
 
 function meterFindings() {
   const out  = [];
@@ -7286,7 +7288,7 @@ function meterFindings() {
       return;
     }
     if (val < m.prev) {
-      out.push(`${m.label}: ${val} ${m.unit} is lower than the reading for the stay before (${m.prev}). A meter does not run backwards — check the photo and the check-out date.`);
+      out.push(`${m.label}: ${val} ${m.unit} is lower than the last stay's (${m.prev}). Please check it - the report will still be sent.`);
       return;
     }
     const nextV = state.nextReading?.[m.i === 0 ? 'electric' : 'water'];
@@ -7295,7 +7297,7 @@ function meterFindings() {
       return;
     }
     if (nextV > 0 && val > nextV) {
-      out.push(`${m.label}: ${val} ${m.unit} is higher than the reading for the later stay (${nextV}). Check the photo and the check-out date.`);
+      out.push(`${m.label}: ${val} ${m.unit} is higher than the later stay's (${nextV}). Please check it - the report will still be sent.`);
       return;
     }
     if (val > m.prev * DIGIT_SLIP_FACTOR && m.prev > 0) {
@@ -10557,13 +10559,8 @@ async function proceedWithSubmission() {
   /* s103 (D-354): the meter-mismatch gate that stood here is gone. A mismatch on an earlier report flags that report
      for the admin and never stops this one; submit-cleaning no longer refuses it either. */
 
-  /* D-219 (Lloyd 2026-09-23): a meter does not run backwards, so a reading below
-     the last one is refused here, not just warned about. Same place and same
-     reason as the block above: before anything is marked as submitting, so the
-     draft is untouched. submit-cleaning refuses the same case with 409. The
-     previous reading comes from last-readings, which skips rows flagged as wrong
-     numbers - that is how Lloyd unblocks a cleaner whose LAST reading was the typo.
-     Refreshed here first, so the block never judges by a fetch for an older check-out date. */
+  /* s104 (Lloyd 2026-10-31): the D-219 refusal is gone. A reading out of order with the stays around it is only a note here;
+     submit-cleaning saves the report and flags the reading for the admin to reinstate, edit or ask for a new photo. */
   await fetchPrevReadings().catch(() => {});
   const backwards = [
     { label: 'electric', unit: 'kWh', id: 'electricMeterReading', prev: state.prevElectricReading },
@@ -10577,17 +10574,9 @@ async function proceedWithSubmission() {
       return `${m.label} ${v} ${m.unit} is higher than the reading for the later stay (${next})`;
     return null;
   }).filter(Boolean);
-  if (backwards.length && !meterOrderRefuses(backwards)) {
-    showToast(METER_ORDER_NOTE, '', 7000);   // declared no-photo report: kept as estimate_pending server side, so send it
-  } else if (backwards.length) {
-    const statusEl1 = el('submit-status');
-    if (statusEl1) {
-      statusEl1.className = 'visible error';
-      statusEl1.textContent = `The ${backwards.join(', and the ')}. A meter does not run backwards, so this report was not sent. Check the check-out date first, then read the photo again and type the number exactly as it shows. If both are right, message Lloyd.`;
-    }
-    el(backwards[0].startsWith('electric') ? 'electricMeterReading' : 'waterMeterReading')
-      ?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    return;
+  if (backwards.length) {
+    showToast(state.meterPhotosSkipped === true ? METER_ORDER_NOTE
+      : `The ${backwards.join(', and the ')}. Please check it - the report will still be sent.`, '', 7000);
   }
 
   state.isSubmitting = true;
@@ -10669,7 +10658,7 @@ async function proceedWithSubmission() {
         Object.values(state.issueFlags).filter(f => f && f.note).length + K_gatedAll().filter(i => state.confirmItems[i.id] === 'issue' && K_isUrgentIssue(i)).length,
         [...state.meterPhotos, ...state.precleanPhotos, ...state.aftercleanPhotos, ...state.bedroomPhotos, ...state.kitchenPhotos].filter(Boolean).length);
     } else {
-      // submit-cleaning returns `message` (e.g. the D-219 meter-backwards refusal says what to do);
+      // submit-cleaning returns `message` (e.g. a security refusal says what to do);
       // older paths return `msg`. Reading only `msg` showed her 'Server returned
       // an error' and nothing she could act on.
       throw new Error(data.message || data.msg || 'Server returned an error');

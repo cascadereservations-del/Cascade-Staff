@@ -179,18 +179,23 @@ test('X1: a declared no-photo report with a reading below the earlier or above t
   }
 });
 
-test('X1: with photos the same readings still refuse and the old wording stays', () => {
+test('s104: with photos the same readings only get a gentle note and never refuse', () => {
   const lo = findingsWorld(false, 90), hi = findingsWorld(false, 250);
-  assert.equal(lo.meterOrderRefuses(['x']), true);
-  assert.equal(lo.meterOrderRefuses([]), false);
-  assert.match(lo.meterFindings()[0], /lower than the reading for the stay before \(100\)/);
-  assert.match(hi.meterFindings()[0], /higher than the reading for the later stay \(200\)/);
+  assert.equal(lo.meterOrderRefuses(['x']), false);
+  assert.equal(lo.meterFindings()[0], "Electric: 90 kWh is lower than the last stay's (100). Please check it - the report will still be sent.");
+  assert.equal(hi.meterFindings()[0], "Electric: 250 kWh is higher than the later stay's (200). Please check it - the report will still be sent.");
 });
 
-test('X1 wiring: the submit gate shows the note through showToast and only refuses when meterOrderRefuses says so', () => {
+test('s104 wiring: the submit gate only toasts a note and never returns early; no D-219 refusal text remains', () => {
   const gate = cut('const backwards = [', 'state.isSubmitting = true;');
-  assert.match(gate, /backwards\.length && !meterOrderRefuses\(backwards\)\) \{\s*showToast\(METER_ORDER_NOTE/);
-  assert.match(gate, /else if \(backwards\.length\) \{[\s\S]*A meter does not run backwards[\s\S]*return;/);
+  assert.match(gate, /if \(backwards\.length\) \{\s*showToast\(/);
+  assert.doesNotMatch(gate, /return;|did not run backwards|not sent/);
+  assert.doesNotMatch(html, /A meter does not run backwards/);
+});
+
+test('s104: a follow-up row with resend_requested_at says Lloyd asked for a new photo', () => {
+  const list = cut('function renderMeterFollowupList()', 'async function reportNoMeterPhoto()');
+  assert.match(list, /r\.resend_requested_at \? 'Lloyd asked for a new photo of this meter'/);
 });
 
 test('F4: a recorded skip keeps the button hidden and the Recorded note; a refusal clears the skip and says why', async () => {
