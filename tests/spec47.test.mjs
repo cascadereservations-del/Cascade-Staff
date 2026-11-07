@@ -144,8 +144,8 @@ test('ID card and contact: no status tint on the ID card, one copy control per v
   assert.match(read('styles.css'), /\.idphoto\.empty\.err \{ aspect-ratio: 8 \/ 5/);
 });
 
-test('release: 3.4.23, cache v39, tier and key-note tokens in all three theme blocks, reduced motion covers the skeleton and the rain row', () => {
-  assert.equal(JSON.parse(read('package.json')).version, '3.4.23'); assert.match(read('app.js'), /version: '3.4.23'/); assert.match(read('sw.js'), /CACHE_NAME = 'cs-shell-v48'/);
+test('release: 3.4.24, cache v39, tier and key-note tokens in all three theme blocks, reduced motion covers the skeleton and the rain row', () => {
+  assert.equal(JSON.parse(read('package.json')).version, '3.4.24'); assert.match(read('app.js'), /version: '3.4.24'/); assert.match(read('sw.js'), /CACHE_NAME = 'cs-shell-v49'/);
   const tk = read('tokens.css');
   for (const k of ['returning', 'regular', 'vip']) for (const s of ['t', 'w']) assert.equal(tk.split('--v5-tier-' + k + '-' + s + ':').length - 1, 3, k + s);
   assert.equal(tk.split('--v5-note-key-w:').length - 1, 3);
@@ -178,7 +178,7 @@ test('CS.goodToKnow: every unique important note and request (3 shown, strongest
 test('Good to know on the Today card: call link and guest count for admin, ID pill both ways, nothing personal for a cleaner; Turnover does not repeat the ID state', async () => {
   const g = GUEST({ phone: '0917 555 0100', guest_count: 2, id_photo_path: 'g/1.jpg', checkin_date: TODAY, checkout_date: '2026-10-17', arrival_ready: { id: true, paid: false, door_code: true } });
   const adm = html(await boot({ role: 'admin', hash: '#home', handlers: baseHandlers('admin', { staff_home_v1: () => HOMEWITH([stayRow('Ana Reyes', TODAY, '2026-10-17')], { current_guest: g }) }) }));
-  assert.match(adm, /class="T_gtk"[^>]*><span class="cap up">Good to know<\/span>/); assert.match(adm, /<a class="T_call num" href="tel:09175550100" aria-label="Call 0917 555 0100">Call 0917 555 0100<\/a>/);
+  assert.match(adm, /<div class="T_tile"><span class="T_tk">Call<\/span><span class="T_tv num"><a class="T_call" href="tel:09175550100" aria-label="Call 0917 555 0100">0917 555 0100<\/a>/); // s109: phone and guest count are fact-grid tiles
   assert.match(adm, /2 guests/); assert.match(adm, /ID on file/); assert.equal((adm.match(/ID on file/g) || []).length, 1, 'the ID state is said once on Today');
   assert.match(adm, /Balance due/, 'the Turnover Arrival row keeps the other checks');
   const none = html(await boot({ role: 'admin', hash: '#home', handlers: baseHandlers('admin', { staff_home_v1: homeOf(GUEST({ id_photo_path: null, arrival_ready: { id: false, paid: true, door_code: true } })) }) }));

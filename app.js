@@ -20,7 +20,7 @@
     url: 'https://qkgfhsdppslwunarczeq.supabase.co',
     key: 'sb_publishable_JFuRYZ9csmQULcMRmHXDSg_Abo9UeCj',
     propertyId: '6ae230f4-c189-4547-84b1-cb6e0b2cc9bd',
-    version: '3.4.23'
+    version: '3.4.24'
   };
   var LINKS = {
     checklist: 'https://cascadereservations-del.github.io/CH-Cleaners-Checklist/',
@@ -159,10 +159,11 @@
     var g = st.guest, tp = tierP(st.guest, true), ht = A_houseT(), nl = CS.notableLine(g);
     var outLater = st.kind === 'house' && g.checkout_date && g.checkout_date > p.today, outT = CS.fmtTime(g.checkout_time) || ht.outLabel; // s105: a past check-out date falls back to the old stay-dates line
     var key = st.kind === 'house' ? (outLater ? 'Out ' + (g.checkout_date === CS.addDays(p.today, 1) ? 'tomorrow' : CS.dayLabel(g.checkout_date)) + (g.checkout_date === CS.addDays(p.today, 1) ? ' ' : ', ') + outT : 'Out ' + outT) : 'In ' + (CS.fmtTime(g.checkin_time) || ht.inLabel); // s96: the time that matters comes first
-    return '<section class="card glass A_card F_span T_card" aria-label="Today in the house">' + A_ribbon(g) + '<div class="row-between"><span class="cap up">' + esc(st.label) + '</span>' + (st.pill ? pill(st.pill.tone, toneIcon(st.pill.tone), st.pill.text) : '') + '</div>' +
+    var tcls = ' T_tier-' + (CS.tierLabel(g.tier) ? g.tier : 'first') + (st.kind === 'house' ? ' T_now' : ' T_arr'); // s109: tier colour on the whole card; the guest in the house leads
+    return '<section class="card glass A_card F_span T_card' + tcls + '" aria-label="Today in the house">' + A_ribbon(g) + '<div class="row-between"><span class="cap up T_lbl">' + esc(st.kind === 'house' ? 'Now · in the house' : st.label) + '</span>' + (st.pill ? pill(st.pill.tone, toneIcon(st.pill.tone), st.pill.text) : '') + '</div>' +
       '<div class="T_who"><div class="T_id"><div class="T_namerow"><h2 class="A_name">' + esc(g.guest_name || 'Guest') + '</h2>' + tp.ret + '</div>' + // s105: name, the key day/time line and the ID state fill the height of the face square; Good to know, perks and the rest span the card
       '<p class="sub num T_when"><strong class="A_key">' + esc(A_nb(key)) + '</strong> · ' + esc(outLater ? A_nb(CS.plural(g.nights != null ? g.nights : CS.daysBetween(g.checkin_date, g.checkout_date), 'night')) : A_stayDates(g)) + '</p>' + A_idPill(g) + '</div>' + A_face(g) + '</div>' +
-      A_goodToKnow(g, st.kind) + A_perks(g, st.kind, tp) + (nl ? '<p class="help T_ask">' + esc(nl) + '</p>' : '') + A_nextPrep() +
+      A_grid(g, st.kind) + A_goodToKnow(g, st.kind) + A_perks(g, st.kind, tp) + (nl ? '<p class="help T_ask">' + esc(nl) + '</p>' : '') +
       '<a class="A_more" href="#calendar/' + (st.kind === 'house' ? 'house' : 'next') + '">Open guest card' + ICON('chev', 's16') + '</a></section>';
   }
   // s97 SPEC-47b / s98 SPEC-47c: the face sits on the RIGHT of the guest header in an 88 px rounded square. Until the server has located the face (id_face_box, stored-frame 0-1)
@@ -282,21 +283,55 @@
   }
   // s105: the ID state beside the name (it moved out of Good to know); nothing when the stay is not linked to a guest record and has no photo.
   function A_idPill(g) { var gk = CS.goodToKnow(g, false); return !gk.idKnown ? '' : gk.id ? pill('ok', 'idcard', 'ID on file') : pill('warn', 'alert', 'No ID yet'); }
-  // s105: the next arrival as a small block at the bottom of the in-house card: a returning, regular or VIP guest within 2 days (CS.nextPrep). No contact data, so every role sees it.
-  function A_nextPrep() {
-    var p = state.payload, np = CS.nextPrep(p, p.today); if (!np) return '';
-    return '<div class="T_next" role="group" aria-label="Next arrival"><span class="cap up">' + esc('Next arrival · ' + np.name + ' · ' + np.day) + '</span><div class="T_ribbon p-tier-' + np.ribbon.tier + '" role="note">' + ICON(np.ribbon.icon, 's16') + '<span>' + esc(np.ribbon.text) + '</span></div>' + A_perks(p.next_guest, 'arriving', { line: '' }) + '</div>';
+  // s109: the incoming guest is its own, quieter card under the in-house one (CS.nextPrep: any tier, within 14 days). Contact data only through A_grid's role check.
+  function nextCard() {
+    var p = state.payload, np = p && CS.nextPrep(p, p.today); if (!np) return '';
+    var n = np.guest, tier = CS.tierLabel(n.tier) ? n.tier : 'first', when = 'Arrives ' + np.day + ' ' + (CS.fmtTime(n.checkin_time) || A_houseT().inLabel);
+    return '<section class="card A_card F_span T_card T_upnext T_tier-' + tier + '" aria-label="Next arrival"><div class="row-between"><span class="cap up T_lbl">Up next · incoming</span>' + pill('info', 'clock', when) + '</div>' +
+      '<div class="T_namerow"><h3 class="T_nname">' + esc(np.name) + '</h3>' + (np.ribbon ? pill('tier-' + np.ribbon.tier, np.ribbon.icon, np.ribbon.text) : pill('neutral', 'user', 'First stay')) + '</div>' +
+      A_grid(n, 'next') + A_perks(n, 'arriving', { line: '' }) + '<a class="A_more" href="#calendar/next">Open guest card' + ICON('chev', 's16') + '</a></section>';
   }
+  // s109: the facts of a stay as a compact 2-column grid (dates, guests, ID, phone for owner/admin, channel), so the card uses its width.
+  function A_grid(g, kind) {
+    var gk = CS.goodToKnow(g, CS.canSeeGuestContact(role())), src = CS.sourceLabel(g.source), t = [];
+    var tile = function (k, v, cls) { return '<div class="T_tile' + (cls ? ' ' + cls : '') + '"><span class="T_tk">' + k + '</span><span class="T_tv num">' + v + '</span></div>'; };
+    t.push(tile('Stay', esc(kind === 'house' ? A_stayDates(g).split(' · ')[0] : A_stayDates(g)))); // the house card already says the nights in its key line
+    if (gk.guests) t.push(tile('Guests', '<span class="T_fact">' + ICON('users', 's16') + esc(CS.plural(gk.guests, 'guest')) + '</span>'));
+    if (kind === 'next' && gk.idKnown) t.push(tile('ID', gk.id ? 'On file' : 'Not yet', gk.id ? 'T_ok' : 'T_warn'));
+    if (gk.tel) t.push(tile('Call', '<a class="T_call" href="' + esc(gk.tel) + '" aria-label="' + esc('Call ' + gk.phone) + '">' + esc(gk.phone) + '</a>'));
+    else if (gk.phone) t.push(tile('Phone', '<button class="T_call" type="button" data-act="copy" data-copy="' + esc(gk.phone) + '" aria-label="' + esc('Copy phone ' + gk.phone) + '">' + esc(gk.phone) + ' · Copy</button>'));
+    if (src) t.push(tile('Booked via', esc(src)));
+    return '<div class="T_grid">' + t.join('') + '</div>';
+  }
+  // s109: brownouts, water cuts and internet outages today or tomorrow, each in its own colour, on top of Today (CS.utilAlerts).
+  function A_utilBar() {
+    var u = state.payload ? CS.utilAlerts(A_notices(), state.payload.today) : []; if (!u.length) return '';
+    var ic = { power: 'zapoff', water: 'drop', internet: 'wifioff' };
+    return '<section class="U_bar F_span" aria-label="Utility interruptions">' + u.map(function (x) {
+      return '<a class="U_row U_' + x.type + '" href="#calendar/notices">' + ICON(ic[x.type], 's24') + '<span class="U_txt"><b>' + esc(x.word) + '</b><span class="num">' + esc(x.when + (x.source ? ' · ' + x.source : '')) + '</span></span>' + ICON('chev', 's16') + '</a>';
+    }).join('') + '</section>';
+  }
+  // s109: owner/admin/finance: a payment request a staff member has sent stands out at the top of Today until it is paid.
+  function A_peso(x) { return '₱' + (Number(x) || 0).toLocaleString('en-PH', { maximumFractionDigits: 2 }); }
+  function A_sent(iso) { var d = new Date(iso); if (isNaN(d.getTime())) return ''; var day = d.toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' }); return 'sent ' + (state.payload && day === state.payload.today ? 'today' : CS.dayLabel(day)) + ' ' + CS.H_clock12(iso); }
+  function A_payBanner() {
+    var q = state.payReqs; if (!LINKS.pay || !q || !q.length || !/^(owner|admin|finance)$/.test(role() || '')) return '';
+    var tot = q.reduce(function (s, r) { return s + (Number(r.total) || 0); }, 0);
+    return '<section class="card A_card F_span P_alert" role="status" aria-label="Payment requests waiting"><div class="P_alhead"><span class="P_alic">' + ICON('wallet', 's24') + '</span><div><span class="cap up">Payment request sent</span><h2 class="hd">' +
+      esc(q.length === 1 ? (q[0].payee_name || 'Staff') + ' is waiting to be paid' : q.length + ' requests waiting · ' + A_peso(tot)) + '</h2></div></div><ul class="P_allist">' + q.slice(0, 3).map(function (r) {
+        return '<li><span>' + esc(r.payee_name || 'Staff') + (r.created_at ? ' · ' + esc(A_sent(r.created_at)) : '') + '</span><b class="num">' + esc(A_peso(r.total)) + '</b></li>'; }).join('') + '</ul>' +
+      '<a class="btn btn-primary btn-block" href="' + esc(H_payUrl('admin.html')) + '">' + ICON('wallet', 's16') + 'Pay now</a></section>';
+  }
+  // s109: a quiet labelled divider between the groups of Today.
+  function S_sec(t) { return '<h2 class="S_sec F_span"><span>' + esc(t) + '</span></h2>'; }
   // s105: "Good to know" under the stay line of the Today card: the important notes and requests (CS.goodToKnow), the phone as a tap-to-call link (owner and admin only, like the guest card), the guest count when known, and the ID state.
   function A_goodToKnow(g, kind) {
     var gk = CS.goodToKnow(g, CS.canSeeGuestContact(role())), href = '#calendar/' + (kind === 'house' ? 'house' : 'next'), facts = [];
-    if (gk.phone && !gk.tel) facts.push('<button class="T_call num" type="button" data-act="copy" data-copy="' + esc(gk.phone) + '" aria-label="' + esc('Copy phone ' + gk.phone) + '">' + esc(gk.phone) + ' · Copy</button>'); // no dialable number in it: show the text, Copy only
-    if (gk.tel) facts.push('<a class="T_call num" href="' + esc(gk.tel) + '" aria-label="' + esc('Call ' + gk.phone) + '">Call ' + esc(gk.phone) + '</a>');
-    if (gk.guests) facts.push('<span class="T_fact">' + ICON('users', 's16') + esc(CS.plural(gk.guests, 'guest')) + '</span>');
+    // s109: the phone and the guest count moved to the fact grid (A_grid); Good to know keeps the notes
     if (!gk.notes.length && !facts.length) return '';
     return '<div class="T_gtk" role="group" aria-label="Good to know"><span class="cap up">Good to know</span>' + gk.notes.map(function (n) {
       return '<div class="T_key note-key">' + ICON('alert', 's16') + '<span class="T_nt"><b>' + (n.rank === 0 ? 'Important:' : 'Request:') + '</b> ' + esc(n.p) + '</span></div>'; }).join('') +
-      (gk.notes.length && gk.more > 0 ? '<a class="T_more" href="' + href + '">+' + gk.more + ' more ' + (gk.more === 1 ? 'note' : 'notes') + '</a>' : '') + '<div class="T_facts">' + facts.join('') + '</div></div>';
+      (gk.notes.length && gk.more > 0 ? '<a class="T_more" href="' + href + '">+' + gk.more + ' more ' + (gk.more === 1 ? 'note' : 'notes') + '</a>' : '') + (facts.length ? '<div class="T_facts">' + facts.join('') + '</div>' : '') + '</div>';
   }
   // The hero (photo, wordmark, pill, greeting) is built once; a redraw patches only the greeting and the buttons, so the photo is not decoded again and focus stays put.
   function A_heroPut(el, rest) {
@@ -516,7 +551,7 @@
     var body;
     if (staff) {
       // Today, Turnover, the paid notice (under Turnover: Turnover and Slide to start never move when it lands), Notices, then the doors
-      body = '<div class="A_body">' + errBanner() + (wxTop ? wxCard : '') + todayCard() + A_turnoverCard(true) + (wxTop ? '' : wxCard) + H_cleanDoneCard() + '<div id="slot-paid-notice" class="A_slot" hidden></div><div id="slot-owed" class="A_slot" hidden></div>' + H_alertsCard() + A_noticesCard() +
+      body = '<div class="A_body">' + errBanner() + A_utilBar() + (wxTop ? wxCard : '') + S_sec('Guests') + todayCard() + nextCard() + S_sec('Turnover') + A_turnoverCard(true) + (wxTop ? '' : wxCard) + H_cleanDoneCard() + '<div id="slot-paid-notice" class="A_slot" hidden></div><div id="slot-owed" class="A_slot" hidden></div>' + H_alertsCard() + A_noticesCard() + S_sec('Shortcuts') +
         A_navCard('Work', row({ icon: 'cloud', title: 'Weather', sub: 'Today and the next few hours', href: '#weather' }) + doorRow('checklist', 'clip', 'Start or continue today’s turnover') +
           (LINKS.pay ? row({ icon: 'cash', title: 'Cleaning fee', sub: state.payHint || 'Ask for payment for your cleans and expenses', href: H_payUrl(), subId: 'pay-sub' }) : '') +
           row({ icon: 'calendar', title: 'Calendar', sub: 'Who is staying, who is next', href: '#calendar', count: n || '' }) +
@@ -531,7 +566,7 @@
       // 3.2: the row opens the shell's own #inbox (which falls back to the dashboard's conversations page when the module is not shipped)
       var inboxShown = CS.canSeeGuestContact(role()) && !state.noticesAbsent && (v ? inbox != null : state.noticesLoading);
       var BD = B_build(); // the board sits above the Turnover card while something blocks an arrival or a guest is waiting; otherwise under it
-      body = '<div class="A_body">' + errBanner() + (wxTop ? wxCard : '') + todayCard() + (BD.top ? BD.html : '') + A_turnoverCard(false) + (wxTop ? '' : wxCard) + H_cleanDoneCard() + H_alertsCard() + (BD.top ? '' : BD.html) +
+      body = '<div class="A_body">' + errBanner() + A_payBanner() + A_utilBar() + (wxTop ? wxCard : '') + S_sec('Guests') + todayCard() + nextCard() + (BD.top ? BD.html : '') + S_sec('Turnover') + A_turnoverCard(false) + (wxTop ? '' : wxCard) + H_cleanDoneCard() + H_alertsCard() + (BD.top ? '' : BD.html) + S_sec('Shortcuts') +
         A_navCard('Guests and bookings', (bk ? row({ icon: 'clip', title: 'Bookings to confirm', sub: 'Open the pending bookings', href: bk.href, external: bk.external, count: bk.count, countLabel: bk.n === 1 ? ' booking to confirm' : ' bookings to confirm' }) : '') +
           row({ icon: 'calendar', title: 'Calendar', sub: 'Stays, blocked nights, notices', href: '#calendar', count: n || '' }) +
           '<div id="slot-inbox"' + (inboxShown ? '' : ' hidden') + (inboxShown && !v ? ' style="min-height:64px"' : '') + '>' + (inboxShown && v ? row({ icon: 'chat', title: 'Inbox', sub: inbox ? inbox + ' open' : 'No open messages', href: '#inbox', count: inbox || '', countLabel: ' open messages' }) : '') + '</div>' +
@@ -568,7 +603,7 @@
     var tp = tierP(g, false), src = CS.sourceLabel(g.source), earlier = CS.earlierLine(g), withLine = CS.canSeeGuestContact(state.access && state.access.role) ? CS.companionsLine(g) : null; // D-319: owner/admin only, even if the server sent it
     var tint = kind === 'house' ? 'G_stay' : 'G_in'; // s93: arriving = green, in the house = blue (the house guest always checks out after today, so no third tint)
     var info = '<div class="card glass ' + tint + '" id="' + (kind === 'house' ? 'house' : 'next') + '"><div class="row-between"><span class="cap up">' + label + '</span>' + st + '</div>' +
-      '<div class="T_namerow T_gap"><h3 class="ttl">' + esc(g.guest_name || 'Guest') + '</h3>' + tp.chip + '</div>' + tp.line + (CS.notableLine(g) ? '<p class="help T_ask">' + esc(CS.notableLine(g)) + '</p>' : '') + (withLine ? '<p class="sub T_with">' + esc(withLine) + '</p>' : '') +
+      '<div class="T_namerow T_gap"><h3 class="ttl">' + esc(g.guest_name || 'Guest') + '</h3>' + tp.chip + '</div>' + A_perks(g, kind === 'house' ? 'house' : 'arriving', tp) + (CS.notableLine(g) ? '<p class="help T_ask">' + esc(CS.notableLine(g)) + '</p>' : '') + (withLine ? '<p class="sub T_with">' + esc(withLine) + '</p>' : '') +
       '<div class="row-wrap" style="margin-top:6px">' + tp.ret + (src ? '<span class="pill p-neutral">' + esc(src) + '</span>' : '') + '</div>' +
       '<p class="sub num" style="margin:8px 0 0">' + esc(datesLine(g)) + '</p>' + (earlier ? '<p class="help num" style="margin:2px 0 0">' + esc(earlier) + '</p>' : '') + contactBlock(g) +
       H_readyBlock(g.arrival_ready, g, true) + (canAddDetails() && g.uid ? '<a class="btn btn-secondary btn-sm" href="./guest/#' + encodeURIComponent(g.uid) + '" style="margin-top:12px">' + ICON('idcard', 's16') + 'Add guest details</a>' : '') +
@@ -1307,9 +1342,23 @@
     return '<div class="E_swipewrap" style="--E-w:' + uw + 'px"><div class="E_under ' + (done ? 'E_undo' : 'E_done') + '"><button class="E_underbtn" type="button" data-act="' + act + '" data-task="' + esc(key) + '" aria-label="' + esc(ul + ': ' + t.title) + '">' + ICON('check', 's24') + esc(ul) + '</button></div>' +
       '<div class="payrow taskrow' + (done ? ' off' : '') + '" data-E-swipe="' + act + '" data-E-verifier="' + (ver ? '1' : '') + '" data-E-w="' + uw + '" data-task="' + esc(key) + '"><button class="chk" type="button" role="checkbox" aria-checked="' + done + '" aria-label="' + esc((done ? 'Done: ' : 'Mark done: ') + t.title) + '" data-act="' + act + '" data-task="' + esc(key) + '">' + ICON('check', 's16') + '</button>' +
       '<div><div class="t"><span' + (done ? ' style="text-decoration:line-through;color:var(--fg-2)"' : '') + '>' + esc(t.title) + '</span></div>' +
-      (t.detail ? '<span class="s dt" style="white-space:pre-line">' + esc(t.detail) + '</span>' + (String(t.detail).length > 120 ? '<button class="btn btn-ghost btn-sm dtmore" type="button" data-act="task-more" aria-expanded="false" style="margin-left:-12px">More</button>' : '') : '') +
+      T_context(t) + (t.detail ? '<span class="s dt" style="white-space:pre-line">' + esc(t.detail) + '</span>' + (String(t.detail).length > 120 ? '<button class="btn btn-ghost btn-sm dtmore" type="button" data-act="task-more" aria-expanded="false" style="margin-left:-12px">More</button>' : '') : '') +
       '<span class="s' + (due === 'overdue' && !done ? ' c-danger' : '') + '">' + esc(meta.join(' · ')) + '</span>' + (state.H_offKey === key ? '<span class="s c-danger H_noconn" role="status">No connection</span>' : '') +
       (flags ? '<div class="row-wrap" style="margin-top:6px">' + flags + '</div>' : '') + '</div></div></div>';
+  }
+  // s109: a system check row says what it means, the safe facts (guest, booking, dates), and offers the ways to fix it: open the day, go to the page that fixes it, Mark handled.
+  function T_context(t) {
+    if (t.status === 'done') return '';
+    if (t.source === 'verifier_findings') {
+      var tasks = state.tasks && state.tasks.tasks, w = ((state.payload && state.payload.warnings) || []).filter(function (x) { return x && x.kind === 'verifier' && CS.findingKey(x, tasks) === t.id; })[0] || { kind: 'verifier', title: t.title, detail: { check_id: String(t.id).split(':')[0] } };
+      var info = CS.warningInfo(w, role()), f = w.facts || {}, acts = '', lines = info.details.slice(1);
+      if (/^\d{4}-\d{2}-\d{2}$/.test(String(f.from || ''))) acts += '<button class="btn btn-secondary btn-sm" type="button" data-act="notice-cal" data-date="' + esc(f.from) + '">' + ICON('calendar', 's16') + 'Open ' + esc(CS.dayLabel(f.from)) + '</button>';
+      if (info.go) acts += info.go.external ? ext(info.go.href, esc(info.go.label) + ICON('ext', 's16'), 'btn btn-secondary btn-sm') : '<a class="btn btn-secondary btn-sm" href="' + esc(info.go.href) + '">' + esc(info.go.label) + '</a>';
+      acts += '<button class="btn btn-primary btn-sm" type="button" data-act="task-done" data-task="' + esc(t.source + ':' + t.id) + '">' + ICON('check', 's16') + 'Mark handled</button>';
+      return '<div class="T_ctx"><p class="T_why">' + esc(info.meaning) + '</p>' + (lines.length ? '<ul class="T_ctxl">' + lines.map(function (l) { return '<li>' + esc(l) + '</li>'; }).join('') + '</ul>' : '') + '<div class="row-wrap T_acts">' + acts + '</div></div>';
+    }
+    if (/^restock\b/i.test(t.title || '')) return '<div class="row-wrap T_acts"><a class="btn btn-secondary btn-sm" href="#stock">' + ICON('box', 's16') + 'Open Inventory</a></div>';
+    return '';
   }
   function addReminderCard() {
     var a = state.add, opts = '<option value="">Anyone / nobody yet</option>' + (state.assignees || []).map(function (u) { return '<option value="' + esc(u.user_id) + '"' + (a.who === u.user_id ? ' selected' : '') + '>' + esc(u.label + ' (' + u.role + ')') + '</option>'; }).join('');
@@ -1538,8 +1587,8 @@
         '<p class="help" style="margin:0">Cassy writes the drafts in her own voice. You copy one and send it yourself.</p>' +
         '<section class="card glass H_how" aria-label="How it goes"><h2 class="hd">How it goes</h2><ol class="H_steps"><li>Paste, or screenshot, the guest’s message.</li><li>Pick a draft.</li><li>Copy it, then paste it in Messenger.</li></ol></section>' +
         '<section class="card glass" aria-label="Common links"><h2 class="hd">Common links</h2><div class="stack" style="margin-top:8px">' + CS.COMMON_LINKS.map(function (l) {
-          return '<div class="H_recent"><p class="sub" style="margin:0"><b>' + esc(l.label) + '</b><br><span class="num">' + esc(CS.clampText(l.url.replace(/^https:\/\/(www\.)?/, ''), 40)) + '</span></p><button class="btn btn-ghost btn-sm" type="button" data-act="copy" data-copy="' + esc(l.url) + '" aria-label="' + esc('Copy ' + l.label + ' link') + '">Copy</button></div>';
-        }).join('') + '</div><p class="help" style="margin:8px 0 0">Copy a link, then paste it into your reply.</p></section>' +
+          return '<div class="H_recent"><p class="sub" style="margin:0"><b>' + esc(l.label) + '</b><br><span class="num">' + esc(l.info ? l.url : CS.clampText(l.url.replace(/^https:\/\/(www\.)?/, ''), 40)) + '</span></p><button class="btn btn-ghost btn-sm" type="button" data-act="copy" data-copy="' + esc(l.url) + '" aria-label="' + esc('Copy ' + l.label + (l.info ? '' : ' link')) + '">Copy</button></div>';
+        }).join('') + '</div><p class="help" style="margin:8px 0 0">Copy a link or a detail, then paste it into your reply. Wi-Fi and the full address are for booked guests only.</p></section>' +
         ((state.replyRecent || []).length ? '<section class="card glass" aria-label="Recent drafts"><h2 class="hd">Recent</h2><div class="stack" style="margin-top:8px">' + state.replyRecent.map(function (r, i) {
           return '<div class="H_recent"><p class="sub" style="margin:0"><b>' + esc(r.who) + '</b> · ' + esc(CS.clampText(r.text, 90)) + '</p><button class="btn btn-ghost btn-sm" type="button" data-act="reply-copy-recent" data-i="' + i + '">Copy</button></div>';
         }).join('') + '</div><p class="help" style="margin:8px 0 0">Kept on this screen only, until you leave the app.</p></section>' : '');
@@ -1976,7 +2025,7 @@
     });
   }
   function signOutTo(msg) {
-    clearTimeout(H_rpT); state.H_q = ''; state.H_offKey = ''; H_unmount(); H_resetModules(); H_histGen++; H_calReset(); H_alReset(); closeSheet(); dropPhotos(); state.replyRecent = []; state.cleanDone = null; state.payWait = 0; state.reviewN = 0; B_gone = {}; state.bheads = false; state.bookingsOldest = ''; state.bconfirm = ''; state.bmsg = ''; state.progress = null; state.progressAbsent = false; H_idClose(); state.reply = null; var rb = $('rp-body'); if (rb) rb.innerHTML = ''; rpLive(''); state.payload = null; state.bookings = null; state.bookingsDone = false; state.noticesDone = false; state.notices = null; state.noticesAbsent = false; state.nadd = null; state.fbOpen = false; state.tasks = null; state.access = null; state.layout = null; state.month = null; state.error = '';
+    clearTimeout(H_rpT); state.H_q = ''; state.H_offKey = ''; H_unmount(); H_resetModules(); H_histGen++; H_calReset(); H_alReset(); closeSheet(); dropPhotos(); state.replyRecent = []; state.cleanDone = null; state.payWait = 0; state.payReqs = null; state.reviewN = 0; B_gone = {}; state.bheads = false; state.bookingsOldest = ''; state.bconfirm = ''; state.bmsg = ''; state.progress = null; state.progressAbsent = false; H_idClose(); state.reply = null; var rb = $('rp-body'); if (rb) rb.innerHTML = ''; rpLive(''); state.payload = null; state.bookings = null; state.bookingsDone = false; state.noticesDone = false; state.notices = null; state.noticesAbsent = false; state.nadd = null; state.fbOpen = false; state.tasks = null; state.access = null; state.layout = null; state.month = null; state.error = '';
     return sb.auth.signOut().catch(function () {}).then(function () { showSignin(msg); });
   }
   function showSignin(msg) {
@@ -2036,7 +2085,7 @@
   // Payment Request sub-line: how many cleans are ready. SPEC-37's RPC; silent while it is not deployed.
   function loadPayHint() {
     if (state.layout === 'admin' && LINKS.pay && /^(owner|admin|finance)$/.test(role() || '')) { // B1: how many pay requests wait for the owner (the primary button on Today)
-      sb.rpc('staff_pay_admin_list_v1').then(function (r) { var d = r.data; if (r.error || !d || d.ok === false) return; state.payWait = (d.requests || []).filter(function (q) { return q.status === 'requested'; }).length; if (current === 'home' && state.layout) renderHome(); }).catch(function () {});
+      sb.rpc('staff_pay_admin_list_v1').then(function (r) { var d = r.data; if (r.error || !d || d.ok === false) return; state.payReqs = (d.requests || []).filter(function (q) { return q.status === 'requested'; }); state.payWait = state.payReqs.length; if (current === 'home' && state.layout) renderHome(); }).catch(function () {});
       return;
     }
     if (state.layout !== 'staff' || !LINKS.pay) return;

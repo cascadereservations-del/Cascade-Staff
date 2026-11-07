@@ -39,16 +39,19 @@ test('ribbon tokens: defined in light and both dark blocks, text 4.5:1 on its ow
   }
 });
 
-test('next arrival prep: a returning, regular or VIP next guest within 2 days shows under the in-house card for every role; a first stay or a later arrival shows nothing', async () => {
+test('s109 up next: the incoming guest is its own card under the in-house one for every role, first stays too, within 14 days; nothing when nobody is in the house', async () => {
   const nx = (o) => GUEST(Object.assign({ guest_name: 'Ben Cruz', checkin_date: plus(1), checkout_date: plus(3), tier: 'regular', id_photo_path: null }, o));
   const cur = GUEST({ checkin_date: plus(-1), checkout_date: plus(1), tier: null, repeat: false });
   for (const role of ['admin', 'cleaner']) {
     const h = await house(cur, { next_guest: nx() }, role);
-    assert.match(h, /<div class="T_next" role="group" aria-label="Next arrival"><span class="cap up">Next arrival · Ben Cruz · tomorrow<\/span><div class="T_ribbon p-tier-regular" role="note">[\s\S]*?Regular guest/);
-    assert.match(h.slice(h.indexOf('T_next')), /Prepare before arrival[\s\S]*Set saved preferences/);
+    assert.match(h, /<section class="card A_card F_span T_card T_upnext T_tier-regular" aria-label="Next arrival"><div class="row-between"><span class="cap up T_lbl">Up next · incoming<\/span>[\s\S]*?Arrives tomorrow[\s\S]*?<h3 class="T_nname">Ben Cruz<\/h3>[\s\S]*?Regular guest/);
+    assert.match(h.slice(h.indexOf('T_upnext')), /Prepare before arrival[\s\S]*Standard freebie: 2 Kit Kats or an extra bottle of water[\s\S]*Set saved preferences/);
+    assert.ok(h.indexOf('T_now') < h.indexOf('T_upnext'), 'the guest in the house comes first');
+    if (role === 'cleaner') assert.doesNotMatch(h.slice(h.indexOf('T_upnext')), /tel:|T_call/);
   }
-  assert.doesNotMatch(await house(cur, { next_guest: nx({ tier: null, repeat: false }) }), /T_next/, 'first stay');
-  assert.doesNotMatch(await house(cur, { next_guest: nx({ checkin_date: plus(3), checkout_date: plus(5) }) }), /T_next/, 'three days away');
+  assert.match(await house(cur, { next_guest: nx({ tier: null, repeat: false }) }), /T_upnext T_tier-first[\s\S]*?First stay[\s\S]*?Standard freebie/, 'first stay');
+  assert.match(await house(cur, { next_guest: nx({ checkin_date: plus(3), checkout_date: plus(5) }) }), /T_upnext/, 'three days away');
+  assert.doesNotMatch(await house(cur, { next_guest: nx({ checkin_date: plus(15), checkout_date: plus(17) }) }), /T_upnext/, 'over 14 days away');
   assert.equal(CS.nextPrep({ current_guest: null, next_guest: nx() }, TODAY), null, 'nobody in the house: the Today card is already the arrival card');
 });
 

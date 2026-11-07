@@ -8,8 +8,8 @@ const GUEST = (o) => Object.assign({ guest_name: 'Ana Reyes', checkin_date: '202
 const home = async (role, extra) => (await boot({ role, hash: '#home', handlers: baseHandlers(role, { staff_home_v1: () => HOMEWITH([stayRow('Ana Reyes', '2026-10-13', '2026-10-17')], extra) }) })).els['v-home'].innerHTML;
 
 test('CS.tierPerks: null and unknown tiers give none; each tier is cumulative, capped at 4, ID line only with an ID', () => {
-  const T = 'Welcome treat: local coffee sachets and a snack', E1 = 'First hour of early check-in or late check-out free, if the calendar allows', E2 = 'Up to 2 hours early or late free, if the calendar allows', P = 'Set saved preferences before arrival (pillows, AC temperature)', ID = 'No need to ask for ID again, one is on file';
-  assert.deepEqual(CS.tierPerks(null), []); assert.deepEqual(CS.tierPerks('gold', { id: true }), []);
+  const T = 'Standard freebie: 2 Kit Kats or an extra bottle of water', E1 = 'First hour of early check-in or late check-out free, if the calendar allows', E2 = 'Up to 2 hours early or late free, if the calendar allows', P = 'Set saved preferences before arrival (pillows, AC temperature)', ID = 'No need to ask for ID again, one is on file';
+  assert.deepEqual(CS.tierPerks(null), [T], 's109: every guest gets the standard freebie'); assert.deepEqual(CS.tierPerks('gold', { id: true }), [T]); assert.deepEqual(CS.tierPerks('first', { phase: 'house' }), []);
   assert.deepEqual(CS.tierPerks('returning', { id: false }), [T, E1], 'no ID on file: the ID line is skipped');
   assert.deepEqual(CS.tierPerks('returning', { id: true }), [ID, T, E1]);
   assert.deepEqual(CS.tierPerks('regular', { id: true }), [ID, T, E2, P], 'the 2 hour line replaces the 1 hour line');

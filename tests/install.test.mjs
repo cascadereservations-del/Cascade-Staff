@@ -84,9 +84,9 @@ test('the install page, the manifest and the service worker agree', () => {
   assert.deepEqual(m.related_applications, [{ platform: 'webapp', url: 'https://cascadereservations-del.github.io/Cascade-Staff/manifest.webmanifest' }]);
   assert.equal(m.scope, '/Cascade-Staff/');
   const sw = read('sw.js');
-  assert.match(sw, /CACHE_NAME = 'cs-shell-v48'/);
+  assert.match(sw, /CACHE_NAME = 'cs-shell-v49'/);
   for (const f of ['./install/', './install/index.html', './install/install.js', './demo.js']) assert.ok(sw.includes("'" + f + "'"), f + ' is precached');
-  assert.match(read('app.js'), /version: '3.4.23'/);
+  assert.match(read('app.js'), /version: '3.4.24'/);
 });
 
 test('the in-app install card links to the install page when there is no prompt and no iPhone', () => {
@@ -109,7 +109,11 @@ test('the install page runs in a stub browser for each state without throwing', 
 });
 
 test('3.4.3: common links live in lib.js and the Cassy pick screen copies them; pageLink keeps ?team= and drops the fragment', () => {
-  assert.deepEqual(CS.COMMON_LINKS.map((l) => l.url), ['https://tinyurl.com/WelcomeToCascade', 'https://tinyurl.com/Stay-at-Cascade', 'https://www.google.com/maps/dir/?api=1&destination=6.1545469,125.1852321&travelmode=driving', 'https://www.facebook.com/profile.php?id=61578158229299']);
+  assert.deepEqual(CS.COMMON_LINKS.filter((l) => !l.info).map((l) => l.url), ['https://tinyurl.com/WelcomeToCascade', 'https://tinyurl.com/Stay-at-Cascade', 'https://www.google.com/maps/dir/?api=1&destination=6.1545469,125.1852321&travelmode=driving', 'https://www.facebook.com/profile.php?id=61578158229299']);
+  // s109: Wi-Fi, address, location and times are info rows (text, copied as is, added to a draft as "Label: text")
+  assert.deepEqual(CS.COMMON_LINKS.filter((l) => l.info).map((l) => l.id), ['wifi', 'address', 'area', 'times']);
+  assert.match(CS.withLinks('Hi.', ['wifi']), /^Hi\.\n\nWi-Fi: Network WelcomeToCascade-5G, password EnjoyYourStay@CH$/);
+  for (const l of CS.COMMON_LINKS.filter((x) => x.info)) assert.doesNotMatch(l.url, /^https?:/, l.id);
   assert.match(read('app.js'), /aria-label="Common links"[^]*CS\.COMMON_LINKS[^]*data-act="copy" data-copy=/);
   assert.equal(CS.pageLink({ href: 'https://x.test/Cascade-Staff/?team=staff#home' }), 'https://x.test/Cascade-Staff/?team=staff');
   assert.equal(CS.openInBrowserLink('Mozilla/5.0 (iPhone) FBAN/Messenger', CS.pageLink({ href: 'https://x.test/a/?team=staff#h' })).href, 'x-safari-https://x.test/a/?team=staff');

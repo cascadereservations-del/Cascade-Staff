@@ -1217,3 +1217,60 @@ a.T_call { min-height: var(--touch); display: inline-flex; align-items: center; 
 .idphoto.empty.err { aspect-ratio: 8 / 5; min-height: 0; }
 .idphoto img { border-radius: 8px; }
 .T_with { margin: 0; margin-top: 2px; }
+
+/* ---- s109: Today redesign. Section dividers, tier-coloured guest cards (now > up next), fact grid, utility strip, payment request highlight, task context ---- */
+.S_sec { display: flex; align-items: center; gap: 12px; margin: 18px 4px 0; font: 600 var(--v5-t-min)/1 var(--font-ui); letter-spacing: .16em; text-transform: uppercase; color: var(--v5-ink-2, var(--fg-2)); }
+.S_sec::after { content: ""; flex: 1; height: 1px; background: linear-gradient(90deg, var(--v5-line), transparent); }
+.A_body > .S_sec:first-child, .U_bar + .S_sec, .P_alert + .S_sec { margin-top: 6px; }
+.T_tier-first { --tbar: var(--v5-line-2); --tbg: var(--v5-surf-2); --tink: var(--v5-ink-2, var(--fg-2)); }
+.T_tier-returning { --tbar: var(--v5-rib-returning-bar); --tbg: var(--v5-rib-returning-bg); --tink: var(--v5-rib-returning-fg); }
+.T_tier-regular { --tbar: var(--v5-rib-regular-bar); --tbg: var(--v5-rib-regular-bg); --tink: var(--v5-rib-regular-fg); }
+.T_tier-vip { --tbar: var(--v5-rib-vip-bar); --tbg: var(--v5-rib-vip-bg); --tink: var(--v5-rib-vip-fg); }
+/* the guest in the house: tier bar on top, a soft wash of the tier colour, the biggest name on the screen */
+.card.glass.T_card.T_now, .card.glass.T_card.T_arr { border-top: 4px solid var(--tbar); background-image: linear-gradient(180deg, color-mix(in oklab, var(--tbg) 60%, transparent), transparent 9rem); }
+.T_card .T_lbl { color: var(--tink); letter-spacing: .14em; }
+.T_now .T_lbl::before { content: ""; display: inline-block; width: 8px; height: 8px; margin: 0 8px 2px 0; border-radius: 50%; background: var(--v5-ok-t); box-shadow: 0 0 0 3px color-mix(in srgb, var(--v5-ok-t) 22%, transparent); vertical-align: middle; }
+.A_card.T_card.T_now .A_name { font: 400 var(--v5-t-section)/1.12 var(--v5-font-display); letter-spacing: -.005em; }
+.T_now .A_key, .T_arr .A_key { font: 400 var(--v5-t-body)/1.3 var(--font-display); color: var(--v5-ink, var(--fg)); }
+/* stay facts: a 2-column grid of small tiles, hairline gaps */
+.T_grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px; }
+.T_tile { display: grid; gap: 4px; align-content: start; min-width: 0; padding: 8px 12px; border-radius: 8px; background: var(--v5-surf-2); box-shadow: inset 0 0 0 1px var(--v5-sep); }
+.T_tile:last-child:nth-child(odd) { grid-column: 1 / -1; }
+.T_tk { font: 600 var(--v5-t-min)/1.2 var(--font-ui); letter-spacing: .1em; text-transform: uppercase; color: var(--fg-3); }
+.T_tv { font: 600 var(--v5-t-2)/1.35 var(--font-ui); color: var(--v5-ink, var(--fg)); overflow-wrap: anywhere; }
+.T_tv .T_fact { display: inline-flex; align-items: center; gap: 4px; }
+.T_tv .T_call { font: inherit; color: var(--accent-text, var(--v5-info-t)); text-decoration: none; background: none; border: 0; padding: 0; min-height: 24px; cursor: pointer; text-align: left; }
+.T_tile.T_ok .T_tv { color: var(--v5-ok-t); } .T_tile.T_warn .T_tv { color: var(--v5-warn-t); }
+/* the incoming guest: quieter, outlined, tier bar on the left, a smaller name */
+.card.T_card.T_upnext { display: grid; row-gap: 10px; background: var(--v5-surf-2); border: 1px dashed var(--v5-line-2); border-left: 4px solid var(--tbar); box-shadow: none; }
+.T_upnext .T_nname { margin: 0; font: 400 var(--v5-t-num)/1.2 var(--font-display); color: var(--v5-ink, var(--fg)); }
+.T_upnext .T_tile { background: var(--v5-surf); }
+.T_upnext .T_perks li svg.i { color: var(--tbar); }
+/* brownout, water and internet interruptions: one colour each */
+.U_bar { display: grid; gap: 8px; }
+.U_row { display: flex; align-items: center; gap: 12px; min-height: var(--touch, 44px); padding: 10px 14px; border-radius: 14px; border: 1px solid color-mix(in srgb, currentColor 22%, transparent); border-left: 4px solid currentColor; text-decoration: none; }
+.U_row svg.i { flex: none; }
+.U_txt { display: grid; flex: 1; min-width: 0; }
+.U_txt b { font: 600 var(--v5-t-2)/1.3 var(--font-ui); }
+.U_txt span { font: 400 var(--v5-t-label)/1.3 var(--font-ui); opacity: .9; }
+.U_power { background: var(--v5-warn-w); color: var(--v5-warn-t); }
+.U_water { background: var(--v5-info-w); color: var(--v5-info-t); }
+.U_internet { background: var(--v5-tier-regular-w); color: var(--v5-tier-regular-t); }
+/* owner/admin: a staff payment request waiting */
+.card.P_alert { display: grid; gap: 12px; border: 1px solid var(--v5-rib-vip-bar); background: linear-gradient(135deg, var(--v5-rib-vip-bg), var(--v5-surf) 75%); box-shadow: 0 0 0 3px color-mix(in srgb, var(--v5-rib-vip-bar) 20%, transparent), 0 8px 24px var(--v5-card-shadow); }
+.P_alhead { display: flex; align-items: center; gap: 12px; }
+.P_alhead .hd { margin: 2px 0 0; color: var(--v5-rib-vip-fg); }
+.P_alhead .cap.up { color: var(--v5-rib-vip-fg); }
+.P_alic { position: relative; flex: none; display: grid; place-items: center; width: 44px; height: 44px; border-radius: 50%; background: var(--v5-rib-vip-bar); color: var(--v5-tier-vip-t); }
+.P_alic::after { content: ""; position: absolute; inset: -4px; border-radius: 50%; border: 2px solid var(--v5-rib-vip-bar); animation: P_ping 2.4s var(--v5-ease-out, ease-out) infinite; }
+@keyframes P_ping { 0% { opacity: .7; transform: scale(.9); } 80%, 100% { opacity: 0; transform: scale(1.35); } }
+@media (prefers-reduced-motion: reduce) { .P_alic::after { animation: none; opacity: .4; } }
+.P_allist { list-style: none; margin: 0; padding: 0; display: grid; }
+.P_allist li { display: flex; justify-content: space-between; gap: 12px; padding: 6px 0; border-top: 1px solid var(--v5-sep); font-size: var(--v5-t-2); }
+.P_allist li:first-child { border-top: 0; }
+/* Tasks: what a system check means and how to fix it */
+.T_ctx { display: grid; gap: 8px; margin: 6px 0 4px; padding: 10px 12px; border-radius: 10px; background: var(--v5-sunk); }
+.T_why { margin: 0; font: 400 var(--v5-t-label)/1.45 var(--font-ui); color: var(--fg-2); }
+.T_ctxl { margin: 0; padding-left: 18px; font: 400 var(--v5-t-label)/1.4 var(--font-ui); color: var(--fg); }
+.T_acts { gap: 8px; margin-top: 2px; }
+.taskrow .T_acts { margin: 6px 0 2px; }

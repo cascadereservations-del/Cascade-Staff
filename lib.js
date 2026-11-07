@@ -525,7 +525,7 @@
   // At most 4 lines: over that, the ID line goes first, then the last ones. No prices, no discounts, no exclamation marks.
   var PERKS = {
     id: ['No need to ask for ID again, one is on file', 'returning', 'arrival'],
-    treat: ['Welcome treat: local coffee sachets and a snack', 'returning', 'arrival'],
+    std: ['Standard freebie: 2 Kit Kats or an extra bottle of water', 'first', 'arrival'], // s109: Lloyd's default freebie, every guest
     early1: ['First hour of early check-in or late check-out free, if the calendar allows', 'returning', 'both', 'regular'],
     early2: ['Up to 2 hours early or late free, if the calendar allows', 'regular', 'both'],
     prefs: ['Set saved preferences before arrival (pillows, AC temperature)', 'regular', 'arrival'],
@@ -533,13 +533,13 @@
     refresh: ['Mid-stay refresh, any stay length', 'vip', 'house'],
     first: ['First call on the dates they ask about', 'vip', 'house']
   };
-  var TIER_RANK = { returning: 1, regular: 2, vip: 3 };
+  var TIER_RANK = { first: 0, returning: 1, regular: 2, vip: 3 };
   function tierPerks(tier, opts) {
-    var rk = TIER_RANK[tier]; if (!rk) return []; opts = opts || {};
+    var rk = TIER_RANK[tier] || 0; opts = opts || {}; // s109: a first stay or an unknown tier still gets the standard freebie
     var phase = opts.phase === 'house' ? 'house' : 'arrival', out = [];
     Object.keys(PERKS).forEach(function (k) {
       var p = PERKS[k], from = TIER_RANK[p[1]], upto = p[3] ? TIER_RANK[p[3]] : 9, ph = p[2];
-      if (rk >= from && rk < upto && (ph === 'both' || ph === phase) && (k !== 'id' || opts.id)) out.push({ k: k, text: p[0] });
+      if (rk >= (from || 0) && rk < upto && (ph === 'both' || ph === phase) && (k !== 'id' || opts.id)) out.push({ k: k, text: p[0] });
     });
     while (out.length > 4) { var i = out.map(function (x) { return x.k; }).indexOf('id'); out.splice(i >= 0 ? i : out.length - 1, 1); }
     return out.map(function (x) { return x.text; });
@@ -692,10 +692,11 @@
       action: !ra || ended ? '' : anyTime ? 'Rain may start any time. Bring towels and mats in now.' : 'Bring towels and mats in before ' + (when || 'the rain'), asOf: old ? clockLabel(w.fetched_at) : '' };
   }
   // s105: while a guest is in the house, the next stay is a returning, regular or VIP guest arriving in 0 to 2 days: who, which day, the ribbon words and the arrival perks. Null otherwise (a first stay draws nothing).
+  // s109: the incoming guest as its own card under the in-house one, every tier (first stays too), within 14 days; ribbon is null for a first stay.
   function nextPrep(payload, today) {
-    var cur = payload && payload.current_guest, n = payload && payload.next_guest, r = cur && n ? tierRibbon(n) : null; if (!r) return null;
-    var d = daysBetween(today, n.checkin_date); if (!(d >= 0 && d <= 2)) return null;
-    return { name: n.guest_name || 'Guest', day: d === 0 ? 'today' : d === 1 ? 'tomorrow' : dayLabel(n.checkin_date), ribbon: r, perks: tierPerks(n.tier, { id: !!n.id_photo_path, phase: 'arrival' }) };
+    var cur = payload && payload.current_guest, n = payload && payload.next_guest; if (!cur || !n || !n.checkin_date) return null;
+    var d = daysBetween(today, n.checkin_date); if (!(d >= 0 && d <= 14)) return null;
+    return { name: n.guest_name || 'Guest', day: d === 0 ? 'today' : d === 1 ? 'tomorrow' : dayLabel(n.checkin_date), ribbon: tierRibbon(n), perks: tierPerks(n.tier, { id: !!n.id_photo_path, phase: 'arrival' }), guest: n };
   }
   // s105: the "Good to know" block of the Today card. Notes: every unique important (rank 0) and request (rank 1) point, strongest first, 3 shown, 90 characters each;
   // `more` counts every other unique note. Phone and the companion count only when canContact (owner/admin); guests from a count the server sends, else 1 + companions. id: the photo path exists.
@@ -899,11 +900,17 @@
   var INSTALL_URL = 'https://cascadereservations-del.github.io/Cascade-Staff/install/';
   // The links staff paste into guest replies most often (3.4.3; directions and Facebook 3.4.10). Add a row here and the Cassy reply
   // screen lists it with a Copy button and an "Add to the reply" switch. guest = the words the guest sees in front of the link.
+  // s109: info rows (info: true) are text, not a link: Wi-Fi and the address are deliberately guest-readable (D-010, the guest guide shows them).
+  // shortcut: the times line is the house fallback (2:00 pm / 12:00 noon), not notices_v1.house_times; edit it here if the house times change.
   var COMMON_LINKS = [
     { id: 'guide', label: 'Welcome guide', guest: 'Our welcome guide', url: 'https://tinyurl.com/WelcomeToCascade' },
     { id: 'site', label: 'Direct booking site', guest: 'Book direct with us', url: 'https://tinyurl.com/Stay-at-Cascade' },
     { id: 'nav', label: 'Turn-by-turn directions', guest: 'Directions to Cascade (Google Maps)', url: 'https://www.google.com/maps/dir/?api=1&destination=6.1545469,125.1852321&travelmode=driving' },
-    { id: 'facebook', label: 'Facebook page', guest: 'Our Facebook page', url: 'https://www.facebook.com/profile.php?id=61578158229299' }
+    { id: 'facebook', label: 'Facebook page', guest: 'Our Facebook page', url: 'https://www.facebook.com/profile.php?id=61578158229299' },
+    { id: 'wifi', info: true, label: 'Wi-Fi details (booked guests)', guest: 'Wi-Fi', url: 'Network WelcomeToCascade-5G, password EnjoyYourStay@CH' },
+    { id: 'address', info: true, label: 'Full address (booked guests)', guest: 'Address', url: 'Block 47 Lot 39, Bria Homes, Conel Road, Barangay San Isidro, General Santos City' },
+    { id: 'area', info: true, label: 'Location (before booking)', guest: 'Location', url: 'Inside Bria Homes, Conel Road, Barangay San Isidro, General Santos City' },
+    { id: 'times', info: true, label: 'Check-in and check-out', guest: 'Check-in and check-out', url: 'Check-in from 2:00 pm, check-out by 12:00 noon' }
   ];
   // Only known link ids survive (a stored list may be stale), in COMMON_LINKS order, no repeats.
   function replyLinkIds(raw) { var want = Array.isArray(raw) ? raw : []; return COMMON_LINKS.filter(function (l) { return want.indexOf(l.id) >= 0; }).map(function (l) { return l.id; }); }
@@ -941,7 +948,7 @@
   }
 
   // ---- notices_v1 (Lane B builds the RPC; the client reads it and trusts nothing) ----
-  var A_NOTICE_TYPES = { power: { icon: 'zap', word: 'Power' }, water: { icon: 'drop', word: 'Water' }, rain: { icon: 'rain', word: 'Rain' },
+  var A_NOTICE_TYPES = { power: { icon: 'zap', word: 'Power' }, water: { icon: 'drop', word: 'Water' }, internet: { icon: 'wifioff', word: 'Internet' }, rain: { icon: 'rain', word: 'Rain' },
     deep_clean: { icon: 'sparkles', word: 'Deep clean' }, blocked: { icon: 'lock', word: 'Blocked' }, note: { icon: 'note', word: 'Note' } };
   var A_NOTICE_SOURCE = { socoteco: 'SOCOTECO II', gscwd: 'GSCWD', manual: 'Added by hand', system: 'System' };
   var A_WEATHER_SOURCE = { pirate: 'Pirate Weather', google: 'Google Weather', 'open-meteo': 'Open-Meteo' };
@@ -951,6 +958,19 @@
   function A_titleHasTime(t) { return /\d{1,2}(:\d{2})? ?(am|pm)\b/i.test(String(t || '')); } // E_: the title already says the time, so the sub does not
   function A_timeRange(s, e) { var a = fmtTime(A_hhmm(s, null)), b = fmtTime(A_hhmm(e, null)); return a && b ? a + ' to ' + b : a || ''; }
   // The server filters by role; this filters again. A cleaner (any staff layout) never gets `house` or `inbox_open`, even if the payload carries them.
+  // s109: the server has no internet notice type (notice_type check); a note or maintenance notice that names the internet is shown as one.
+  // shortcut: matched on words, upgrade to a real 'internet' notice_type when one is added server side.
+  var INTERNET_RE = /\b(internet|wi-?fi|fib(er|re)|pldt|converge|globe ?at ?home|sky ?fiber|dito|modem|router)\b/i;
+  // s109: today's and tomorrow's brownouts, water cuts and internet outages, as the coloured strip on top of Today.
+  var UTIL_WORD = { power: 'Brownout', water: 'Water interruption', internet: 'Internet interruption' };
+  function utilAlerts(view, today) {
+    if (!view || !today) return [];
+    var tm = addDays(today, 1);
+    return (view.list || []).filter(function (n) { return n && UTIL_WORD[n.type] && (n.date === today || n.date === tm); }).map(function (n) {
+      var t = A_timeRange(n.start, n.end);
+      return { key: n.key, type: n.type, word: UTIL_WORD[n.type], when: (n.date === today ? 'Today' : 'Tomorrow') + (t ? ' · ' + t : ''), title: n.title, source: n.source || '' };
+    });
+  }
   function A_noticesView(raw, role, today) {
     if (!raw || typeof raw !== 'object' || raw.ok === false || Array.isArray(raw)) return null;
     var mgr = canSeeGuestContact(role), times = A_houseTimes(raw.house_times);
@@ -968,7 +988,8 @@
       date: today || null, detail: 'Close the windows and bring in the laundry before the rain.', source: weather.source, tell: false });
     (Array.isArray(raw.notices) ? raw.notices : []).forEach(function (n) {
       if (!n || typeof n !== 'object' || !n.id || !n.title) return;
-      var type = A_NOTICE_TYPES[n.type] ? n.type : 'note', date = /^\d{4}-\d{2}-\d{2}$/.test(String(n.date || '')) ? n.date : null;
+      var type = A_NOTICE_TYPES[n.type] ? n.type : 'note'; if (type !== 'power' && type !== 'water' && INTERNET_RE.test(n.title + ' ' + (n.detail || ''))) type = 'internet';
+      var date = /^\d{4}-\d{2}-\d{2}$/.test(String(n.date || '')) ? n.date : null;
       if (today && date && date < today) return;
       var src = A_NOTICE_SOURCE[n.source] || '';
       list.push({ key: 'n:' + n.id, id: String(n.id), type: type, group: type === 'power' || type === 'water' ? type : 'other', title: String(n.title), date: date, start: n.start_time || null, end: n.end_time || null,
@@ -1360,10 +1381,10 @@
   }
   function H_houseLine(view, today) {
     if (!view) return null;
-    var n = (view.list || []).filter(function (x) { return x.date === today && (x.type === 'power' || x.type === 'water') && x.key !== 'rain-watch'; })[0];
+    var n = (view.list || []).filter(function (x) { return x.date === today && (x.type === 'power' || x.type === 'water' || x.type === 'internet') && x.key !== 'rain-watch'; })[0];
     if (!n) return { tone: 'ok', text: 'Clear' };
     var t = A_timeRange(n.start, n.end);
-    return { tone: 'warn', text: (n.type === 'power' ? 'Brownout' : 'Water off') + (t ? ' ' + t : '') };
+    return { tone: 'warn', text: (n.type === 'power' ? 'Brownout' : n.type === 'water' ? 'Water off' : 'Internet down') + (t ? ' ' + t : '') };
   }
   // F16: what the staff Turnover card says under the three steps.
   function H_untilLine(clock, arrivesToday) {
@@ -1529,7 +1550,7 @@
     fmtTime: fmtTime, fmt24: fmt24, ordinal: ordinal, plural: plural, agoLabel: agoLabel, clockLabel: clockLabel,
     monthGrid: monthGrid, dayState: dayState, dayStatus: dayStatus, mergeStays: mergeStays, sameGuest: sameGuest, dayMoves: dayMoves, blockWhy: blockWhy, flagName: flagName, FLAG_KINDS: FLAG_KINDS, blockedLines: blockedLines, blockedLineText: blockedLineText,
     canFlagDays: canFlagDays, guestContact: guestContact, canSeeGuestContact: canSeeGuestContact, MESSENGER_INBOX: MESSENGER_INBOX, rpcMissing: rpcMissing, tgLink: tgLink, warningInfo: warningInfo, findingKey: findingKey, initialOf: initialOf, sourceLabel: sourceLabel, stayDates: stayDates, monthInRange: monthInRange,
-    tierRibbon: tierRibbon, nextPrep: nextPrep, tierPerks: tierPerks, faceFrame: faceFrame, parseNotes: parseNotes, returningLabel: returningLabel, tierLabel: tierLabel, tierLine: tierLine, tierParts: tierParts, keyNote: keyNote, TOPIC_LABELS: TOPIC_LABELS, notableLine: notableLine, weatherIcon: weatherIcon, rainAlert: rainAlert, wxCard: wxCard, goodToKnow: goodToKnow, earlierLine: earlierLine, companionsLine: companionsLine, todayCardState: todayCardState,
+    tierRibbon: tierRibbon, nextPrep: nextPrep, utilAlerts: utilAlerts, INTERNET_RE: INTERNET_RE, tierPerks: tierPerks, faceFrame: faceFrame, parseNotes: parseNotes, returningLabel: returningLabel, tierLabel: tierLabel, tierLine: tierLine, tierParts: tierParts, keyNote: keyNote, TOPIC_LABELS: TOPIC_LABELS, notableLine: notableLine, weatherIcon: weatherIcon, rainAlert: rainAlert, wxCard: wxCard, goodToKnow: goodToKnow, earlierLine: earlierLine, companionsLine: companionsLine, todayCardState: todayCardState,
     orderWarnings: orderWarnings, brownoutText: brownoutText, lowStockText: lowStockText, warningSummary: warningSummary,
     weatherLine: weatherLine, rainLine: rainLine, weatherStale: weatherStale, WEATHER_STALE_MIN: WEATHER_STALE_MIN, esc: esc,
     A_HOUSE_FALLBACK: A_HOUSE_FALLBACK, A_houseTimes: A_houseTimes, A_turnoverClock: A_turnoverClock, A_turnoverLine: A_turnoverLine, A_hm: A_hm, A_NOTICE_TYPES: A_NOTICE_TYPES, A_noticesView: A_noticesView, A_noticeFilters: A_noticeFilters, A_dayMarks: A_dayMarks, A_noticeDay: A_noticeDay, A_guestMessage: A_guestMessage, A_CAL_TABS: A_CAL_TABS, A_calTab: A_calTab, A_stayShade: A_stayShade, A_hubGroups: A_hubGroups, A_hubNative: A_hubNative, A_hubRoutes: A_hubRoutes, A_hubRouteOk: A_hubRouteOk, A_hubDoorUrl: A_hubDoorUrl, A_whatsNew: A_whatsNew, A_shortTime: A_shortTime, A_PINNED: A_PINNED, A_noticeAddError: A_noticeAddError, A_NOTICE_HINT: A_NOTICE_HINT, A_flagDup: A_flagDup, A_facebookUrl: A_facebookUrl, A_fbPluginUrl: A_fbPluginUrl, A_noticeAddProblem: A_noticeAddProblem, A_noticeAddArgs: A_noticeAddArgs, A_plainRefusal: A_plainRefusal, A_hour12: A_hour12, A_timeRange: A_timeRange,
