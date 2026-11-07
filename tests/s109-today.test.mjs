@@ -6,12 +6,14 @@ import { CS, read, boot, HOMEWITH, NOTICES_RAW, baseHandlers, TODAY } from './_a
 const NOTICE = (o) => Object.assign({ id: 'x', type: 'note', title: 'Note', date: TODAY, start_time: null, end_time: null, source: 'manual', detail: null }, o);
 const view = (list) => CS.A_noticesView(NOTICES_RAW({ notices: list }), 'admin', TODAY);
 
-test('s109 notices: a note or maintenance notice naming the internet is an internet notice; power and water keep their type; a plain note stays a note', () => {
-  const v = view([NOTICE({ id: 'a', title: 'PLDT fiber maintenance, no internet' }), NOTICE({ id: 'b', type: 'maintenance', title: 'Wi-Fi router replaced' }), NOTICE({ id: 'c', title: 'Buy towels' }), NOTICE({ id: 'd', type: 'power', title: 'Brownout, router off' })]);
+test('s109 notices: a plain note that names the internet AND an outage is an internet notice; other types and everyday mentions stay as they are', () => {
+  const v = view([NOTICE({ id: 'a', title: 'PLDT fiber maintenance, no internet' }), NOTICE({ id: 'b', type: 'maintenance', title: 'Converge outage 1 to 3 pm' }), NOTICE({ id: 'c', title: 'Buy towels' }), NOTICE({ id: 'd', type: 'power', title: 'Brownout, router off' }),
+    NOTICE({ id: 'e', type: 'blocked', title: 'Blocked, PLDT down' }), NOTICE({ id: 'f', title: 'Wi-Fi password changed' })]);
   const t = Object.fromEntries(v.list.filter((n) => n.id).map((n) => [n.id, n.type]));
-  assert.deepEqual(t, { a: 'internet', b: 'internet', c: 'note', d: 'power' });
+  assert.deepEqual(t, { a: 'internet', b: 'internet', c: 'note', d: 'power', e: 'blocked', f: 'note' });
   assert.equal(CS.A_NOTICE_TYPES.internet.icon, 'wifioff');
-  assert.equal(CS.INTERNET_RE.test('the internet is down'), true); assert.equal(CS.INTERNET_RE.test('Clean the international flag'), false, 'whole words only');
+  for (const s of ['Ilagay ang susi dito', 'Dito na lang ang laundry', 'Reset the router if slow', 'Wi-Fi password changed', 'Deep clean, dust the router', 'Clean the international flag']) assert.equal(CS.isInternetNotice(s), false, s);
+  for (const s of ['the internet is down', 'Walang internet hanggang 5 pm', 'Wi-Fi offline', 'PLDT repair visit, internet interrupted']) assert.equal(CS.isInternetNotice(s), true, s);
 });
 
 test('s109 utility strip: today and tomorrow only, one word per kind, time range when known', () => {
@@ -50,10 +52,11 @@ test('s109 tasks: a system check says what it means, the safe facts, and offers 
   assert.match(h, /href="#stock">[\s\S]*?Open Inventory<\/a>/);
 });
 
-test('s109 tasks: with no matching warning the check still explains itself from its title', async () => {
+test('s109 tasks: with no matching warning the check still explains itself from its title, without the check id', async () => {
   const app = await boot({ role: 'admin', hash: '#tasks', handlers: baseHandlers('admin', { tasks_list_v1: tasksOf([T({ id: 'V7:z', title: 'Checkout with no cleaning logged' })]) }) });
   const h = app.els['v-tasks'].innerHTML;
-  assert.match(h, /T_why">A guest has checked out and no cleaning is logged/); assert.match(h, /Go to Operations/); assert.doesNotMatch(h, /notice-cal/);
+  assert.match(h, /T_why">A guest has checked out and no cleaning is logged/); assert.match(h, /Go to Operations/); assert.doesNotMatch(h, /notice-cal/); assert.doesNotMatch(h, /<li>Check /);
+  assert.equal(CS.warningInfo({ kind: 'verifier', title: 'x', detail: { check_id: 'V7' } }, 'finance').resolvable, false, 'only owner and admin get the Mark handled button');
 });
 
 test('s109 payment request: owner/admin see who is waiting, how much and when it was sent, with Pay now; nothing when none waits', async () => {

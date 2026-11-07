@@ -288,7 +288,7 @@
     var p = state.payload, np = p && CS.nextPrep(p, p.today); if (!np) return '';
     var n = np.guest, tier = CS.tierLabel(n.tier) ? n.tier : 'first', when = 'Arrives ' + np.day + ' ' + (CS.fmtTime(n.checkin_time) || A_houseT().inLabel);
     return '<section class="card A_card F_span T_card T_upnext T_tier-' + tier + '" aria-label="Next arrival"><div class="row-between"><span class="cap up T_lbl">Up next · incoming</span>' + pill('info', 'clock', when) + '</div>' +
-      '<div class="T_namerow"><h3 class="T_nname">' + esc(np.name) + '</h3>' + (np.ribbon ? pill('tier-' + np.ribbon.tier, np.ribbon.icon, np.ribbon.text) : pill('neutral', 'user', 'First stay')) + '</div>' +
+      '<div class="T_namerow"><h3 class="T_nname">' + esc(np.name) + '</h3>' + (np.ribbon ? pill('tier-' + np.ribbon.tier, np.ribbon.icon, np.ribbon.text) : n.repeat === false ? pill('neutral', 'user', 'First stay') : '') + '</div>' +
       A_grid(n, 'next') + A_perks(n, 'arriving', { line: '' }) + '<a class="A_more" href="#calendar/next">Open guest card' + ICON('chev', 's16') + '</a></section>';
   }
   // s109: the facts of a stay as a compact 2-column grid (dates, guests, ID, phone for owner/admin, channel), so the card uses its width.
@@ -1351,10 +1351,10 @@
     if (t.status === 'done') return '';
     if (t.source === 'verifier_findings') {
       var tasks = state.tasks && state.tasks.tasks, w = ((state.payload && state.payload.warnings) || []).filter(function (x) { return x && x.kind === 'verifier' && CS.findingKey(x, tasks) === t.id; })[0] || { kind: 'verifier', title: t.title, detail: { check_id: String(t.id).split(':')[0] } };
-      var info = CS.warningInfo(w, role()), f = w.facts || {}, acts = '', lines = info.details.slice(1);
+      var info = CS.warningInfo(w, role()), f = w.facts || {}, acts = '', lines = info.details.slice(1).filter(function (l) { return !/^Check /.test(l); }); // the check id is jargon to staff
       if (/^\d{4}-\d{2}-\d{2}$/.test(String(f.from || ''))) acts += '<button class="btn btn-secondary btn-sm" type="button" data-act="notice-cal" data-date="' + esc(f.from) + '">' + ICON('calendar', 's16') + 'Open ' + esc(CS.dayLabel(f.from)) + '</button>';
       if (info.go) acts += info.go.external ? ext(info.go.href, esc(info.go.label) + ICON('ext', 's16'), 'btn btn-secondary btn-sm') : '<a class="btn btn-secondary btn-sm" href="' + esc(info.go.href) + '">' + esc(info.go.label) + '</a>';
-      acts += '<button class="btn btn-primary btn-sm" type="button" data-act="task-done" data-task="' + esc(t.source + ':' + t.id) + '">' + ICON('check', 's16') + 'Mark handled</button>';
+      if (info.resolvable) acts += '<button class="btn btn-primary btn-sm" type="button" data-act="task-done" data-task="' + esc(t.source + ':' + t.id) + '">' + ICON('check', 's16') + 'Mark handled</button>'; // owner and admin only, like the warning sheet
       return '<div class="T_ctx"><p class="T_why">' + esc(info.meaning) + '</p>' + (lines.length ? '<ul class="T_ctxl">' + lines.map(function (l) { return '<li>' + esc(l) + '</li>'; }).join('') + '</ul>' : '') + '<div class="row-wrap T_acts">' + acts + '</div></div>';
     }
     if (/^restock\b/i.test(t.title || '')) return '<div class="row-wrap T_acts"><a class="btn btn-secondary btn-sm" href="#stock">' + ICON('box', 's16') + 'Open Inventory</a></div>';

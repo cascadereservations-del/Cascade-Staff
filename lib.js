@@ -959,8 +959,11 @@
   function A_timeRange(s, e) { var a = fmtTime(A_hhmm(s, null)), b = fmtTime(A_hhmm(e, null)); return a && b ? a + ' to ' + b : a || ''; }
   // The server filters by role; this filters again. A cleaner (any staff layout) never gets `house` or `inbox_open`, even if the payload carries them.
   // s109: the server has no internet notice type (notice_type check); a note or maintenance notice that names the internet is shown as one.
+  // It needs BOTH an internet word and an outage word ("Reset the router if slow" or "Wi-Fi password changed" is not an outage), and only a plain note is re-typed.
   // shortcut: matched on words, upgrade to a real 'internet' notice_type when one is added server side.
-  var INTERNET_RE = /\b(internet|wi-?fi|fib(er|re)|pldt|converge|globe ?at ?home|sky ?fiber|dito|modem|router)\b/i;
+  var INTERNET_RE = /\b(internet|wi-?fi|fib(er|re)|pldt|converge|globe ?at ?home|sky ?fiber|modem|router)\b/i;
+  var OUTAGE_RE = /\b(no|down|outage|interrupt\w*|offline|maintenance|repair\w*|cut|walang|wala|mawawala|disconnect\w*)\b/i;
+  function isInternetNotice(text) { var t = String(text == null ? '' : text); return INTERNET_RE.test(t) && OUTAGE_RE.test(t); }
   // s109: today's and tomorrow's brownouts, water cuts and internet outages, as the coloured strip on top of Today.
   var UTIL_WORD = { power: 'Brownout', water: 'Water interruption', internet: 'Internet interruption' };
   function utilAlerts(view, today) {
@@ -988,7 +991,7 @@
       date: today || null, detail: 'Close the windows and bring in the laundry before the rain.', source: weather.source, tell: false });
     (Array.isArray(raw.notices) ? raw.notices : []).forEach(function (n) {
       if (!n || typeof n !== 'object' || !n.id || !n.title) return;
-      var type = A_NOTICE_TYPES[n.type] ? n.type : 'note'; if (type !== 'power' && type !== 'water' && INTERNET_RE.test(n.title + ' ' + (n.detail || ''))) type = 'internet';
+      var type = A_NOTICE_TYPES[n.type] ? n.type : 'note'; if (type === 'note' && isInternetNotice(n.title + ' ' + (n.detail || ''))) type = 'internet';
       var date = /^\d{4}-\d{2}-\d{2}$/.test(String(n.date || '')) ? n.date : null;
       if (today && date && date < today) return;
       var src = A_NOTICE_SOURCE[n.source] || '';
@@ -1550,7 +1553,7 @@
     fmtTime: fmtTime, fmt24: fmt24, ordinal: ordinal, plural: plural, agoLabel: agoLabel, clockLabel: clockLabel,
     monthGrid: monthGrid, dayState: dayState, dayStatus: dayStatus, mergeStays: mergeStays, sameGuest: sameGuest, dayMoves: dayMoves, blockWhy: blockWhy, flagName: flagName, FLAG_KINDS: FLAG_KINDS, blockedLines: blockedLines, blockedLineText: blockedLineText,
     canFlagDays: canFlagDays, guestContact: guestContact, canSeeGuestContact: canSeeGuestContact, MESSENGER_INBOX: MESSENGER_INBOX, rpcMissing: rpcMissing, tgLink: tgLink, warningInfo: warningInfo, findingKey: findingKey, initialOf: initialOf, sourceLabel: sourceLabel, stayDates: stayDates, monthInRange: monthInRange,
-    tierRibbon: tierRibbon, nextPrep: nextPrep, utilAlerts: utilAlerts, INTERNET_RE: INTERNET_RE, tierPerks: tierPerks, faceFrame: faceFrame, parseNotes: parseNotes, returningLabel: returningLabel, tierLabel: tierLabel, tierLine: tierLine, tierParts: tierParts, keyNote: keyNote, TOPIC_LABELS: TOPIC_LABELS, notableLine: notableLine, weatherIcon: weatherIcon, rainAlert: rainAlert, wxCard: wxCard, goodToKnow: goodToKnow, earlierLine: earlierLine, companionsLine: companionsLine, todayCardState: todayCardState,
+    tierRibbon: tierRibbon, nextPrep: nextPrep, utilAlerts: utilAlerts, isInternetNotice: isInternetNotice, tierPerks: tierPerks, faceFrame: faceFrame, parseNotes: parseNotes, returningLabel: returningLabel, tierLabel: tierLabel, tierLine: tierLine, tierParts: tierParts, keyNote: keyNote, TOPIC_LABELS: TOPIC_LABELS, notableLine: notableLine, weatherIcon: weatherIcon, rainAlert: rainAlert, wxCard: wxCard, goodToKnow: goodToKnow, earlierLine: earlierLine, companionsLine: companionsLine, todayCardState: todayCardState,
     orderWarnings: orderWarnings, brownoutText: brownoutText, lowStockText: lowStockText, warningSummary: warningSummary,
     weatherLine: weatherLine, rainLine: rainLine, weatherStale: weatherStale, WEATHER_STALE_MIN: WEATHER_STALE_MIN, esc: esc,
     A_HOUSE_FALLBACK: A_HOUSE_FALLBACK, A_houseTimes: A_houseTimes, A_turnoverClock: A_turnoverClock, A_turnoverLine: A_turnoverLine, A_hm: A_hm, A_NOTICE_TYPES: A_NOTICE_TYPES, A_noticesView: A_noticesView, A_noticeFilters: A_noticeFilters, A_dayMarks: A_dayMarks, A_noticeDay: A_noticeDay, A_guestMessage: A_guestMessage, A_CAL_TABS: A_CAL_TABS, A_calTab: A_calTab, A_stayShade: A_stayShade, A_hubGroups: A_hubGroups, A_hubNative: A_hubNative, A_hubRoutes: A_hubRoutes, A_hubRouteOk: A_hubRouteOk, A_hubDoorUrl: A_hubDoorUrl, A_whatsNew: A_whatsNew, A_shortTime: A_shortTime, A_PINNED: A_PINNED, A_noticeAddError: A_noticeAddError, A_NOTICE_HINT: A_NOTICE_HINT, A_flagDup: A_flagDup, A_facebookUrl: A_facebookUrl, A_fbPluginUrl: A_fbPluginUrl, A_noticeAddProblem: A_noticeAddProblem, A_noticeAddArgs: A_noticeAddArgs, A_plainRefusal: A_plainRefusal, A_hour12: A_hour12, A_timeRange: A_timeRange,
