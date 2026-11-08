@@ -1,4 +1,4 @@
-// s113 (Staff 3.4.28). Lloyd 2026-11-08 on live 3.4.27: "i dont understand this visualization and graphs shown. improve and overhaul it"; the Phone check sheet was
+// s113 (Staff 3.4.29). Lloyd 2026-11-08 on live 3.4.27: "i dont understand this visualization and graphs shown. improve and overhaul it"; the Phone check sheet was
 // translucent; make Phone check a permanent Settings feature; and (orchestrator item) the guest tier guide: badges open it, a progress line, one place for the thresholds.
 // Hand-computed expectations throughout. Contract: docs/s113/contract.md.
 import test from 'node:test';
@@ -177,22 +177,25 @@ test('s113 tier badges: on the Now and Up next cards (and the Calendar guest car
   assert.match(cal, /<button class="T_badge p-tier-regular" type="button" data-act="tiers-open" data-tier="regular">/);
   const css = read('styles.css'); assert.match(css, /button\.T_ribbon, button\.T_badge \{[^}]*cursor: pointer;/); assert.match(css, /button\.T_badge::after \{ content: ""; position: absolute; inset: -8px -4px; \}/);
 });
-test('s113 Today guide card: "Guest tiers: how many stays for each", open the first time on this phone, closed once the person closes it (storage may fail), a compact table', async () => {
-  const ls = lsWith(); const app = await boot({ role: 'laundry', hash: '#home', ls, handlers: baseHandlers('laundry') });
-  const h = app.els['v-home'].innerHTML, m = /<details class="card glass A_card F_span T_tiers" id="T_tiers" open>[\s\S]*?<\/details>/.exec(h); assert.ok(m, 'open the first time');
+test('s114 Today guide card: "Guest tiers: how many stays for each", closed by default on every phone, open after a tap, auto-closes after 5 minutes; the Weather card auto-closes too unless rain is near or a warning is up', async () => {
+  const app = await boot({ role: 'laundry', hash: '#home', handlers: baseHandlers('laundry') });
+  const h = app.els['v-home'].innerHTML, m = /<details class="card glass A_card F_span T_tiers" id="T_tiers">[\s\S]*?<\/details>/.exec(h); assert.ok(m, 'closed by default');
   assert.match(m[0], /<span>Guest tiers: how many stays for each<\/span>/); assert.match(m[0], /<table class="T_ttab">/); assert.equal((m[0].match(/<tr class="T_tr"/g) || []).length, 4);
   assert.match(m[0], /<span class="T_badge p-tier-vip"><svg[^>]*><\/svg><span>VIP<\/span><\/span><\/th><td>7 stays or 20 nights<\/td><td><ul class="T_tperks">[\s\S]*Handwritten welcome note[\s\S]*Mid-stay refresh/, 'arrival and house perks together');
   assert.match(m[0], /<td>1st stay<\/td><td>The standard amenities<\/td>/);
-  for (const f of app.listeners.toggle) f({ target: { classList: { contains: (c) => c === 'T_tiers' }, open: false } });
-  assert.equal(ls.m.cs_tiers_seen, '1', 'closing it is remembered on this phone');
-  const again = (await boot({ role: 'laundry', hash: '#home', ls, handlers: baseHandlers('laundry') })).els['v-home'].innerHTML; assert.match(again, /id="T_tiers"><summary/, 'closed from then on');
-  const broken = { getItem: (k) => { if (k === 'cs_tiers_seen') throw new Error('denied'); return k === 'cs_seen_v3' ? '1' : null; }, setItem: () => { throw new Error('denied'); }, removeItem() {} };
-  const b = await boot({ role: 'cleaner', hash: '#home', ls: broken, handlers: baseHandlers('cleaner') }); assert.match(b.els['v-home'].innerHTML, /id="T_tiers" open>/, 'no storage: it opens, nothing throws');
-  for (const f of b.listeners.toggle) f({ target: { classList: { contains: (c) => c === 'T_tiers' }, open: false } });
+  for (const f of app.listeners.toggle) f({ target: { id: 'T_tiers', classList: { contains: (c) => c === 'T_tiers' }, open: true } });
+  await app.click({ 'data-act': 'refresh' }).catch(() => {}); await app.flush();
+  const src = read('app.js');
+  assert.match(src, /var AUTO_CLOSE_MS = 5 \* 60 \* 1000/, 'five minutes');
+  assert.match(src, /A_autoClose\('tiers', d, function \(\) \{ state\.tiersOpen = undefined; \}\)/, 'the tiers card closes itself after a tap opened it');
+  assert.match(src, /if \(def\) \{ clearTimeout\(autoClose\.wx\); autoClose\.wx = 0; return; \}/, 'rain near or a warning up: no auto-close');
+  assert.match(src, /A_autoClose\('wx', d, function \(\) \{ state\.wxOpen = undefined; \}\)/, 'otherwise the weather card closes itself too');
+  assert.ok(src.includes(`? 1 : 0) + '" id="W_card">`), 'the weather card has an id, so the timer finds the live card after a redraw');
+  assert.doesNotMatch(src, /cs_tiers_seen/, 'no open-the-first-time memory any more');
 });
 
 // ---------------------------------------------------------------------------------------------- release
-test('s113 release: 3.4.28, cs-shell-v53 in sw.js and PC_SHELL, the new test file is the contract name', () => {
-  assert.equal(JSON.parse(read('package.json')).version, '3.4.28'); assert.match(read('app.js'), /version: '3\.4\.28'/);
-  assert.match(read('sw.js'), /CACHE_NAME = 'cs-shell-v53'/); assert.match(read('app.js'), /var PC_SHELL = 'cs-shell-v53';/);
+test('s113 release: 3.4.29, cs-shell-v54 in sw.js and PC_SHELL, the new test file is the contract name', () => {
+  assert.equal(JSON.parse(read('package.json')).version, '3.4.29'); assert.match(read('app.js'), /version: '3\.4\.29'/);
+  assert.match(read('sw.js'), /CACHE_NAME = 'cs-shell-v54'/); assert.match(read('app.js'), /var PC_SHELL = 'cs-shell-v54';/);
 });

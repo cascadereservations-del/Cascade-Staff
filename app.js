@@ -20,7 +20,7 @@
     url: 'https://qkgfhsdppslwunarczeq.supabase.co',
     key: 'sb_publishable_JFuRYZ9csmQULcMRmHXDSg_Abo9UeCj',
     propertyId: '6ae230f4-c189-4547-84b1-cb6e0b2cc9bd',
-    version: '3.4.28'
+    version: '3.4.29'
   };
   var LINKS = {
     checklist: 'https://cascadereservations-del.github.io/CH-Cleaners-Checklist/',
@@ -271,7 +271,7 @@
       return '<li class="HF_h' + (h.pct != null && h.pct >= 50 ? ' wet' : '') + '"><span class="HF_t num">' + esc(A_nb(h.label)) + '</span>' + ICON(h.icon, 's16') + '<span class="HF_d num">' + (h.temp != null ? h.temp + '°' : '&nbsp;') + '</span><span class="HF_r num">' + (h.pct != null ? h.pct + '%' : '&nbsp;') + '</span></li>'; }).join('') + '</ul>' : '';
     var hz = wx.hazards.length ? '<ul class="HZ_list" aria-label="Weather warnings">' + wx.hazards.map(function (x) {
       return '<li class="HZ_' + x.kind + '">' + ICON(x.icon, 's16') + '<span><b>' + esc(x.word) + '</b>' + (x.detail ? ' <span class="num">' + esc(x.detail) + '</span>' : '') + '<br>' + esc(x.advice) + '</span></li>'; }).join('') + '</ul>' : '', hzOpen = wx.hazards.some(function (x) { return x.strip; });
-    return '<details class="card glass A_card W_card' + (wx.rain ? ' W_rain' : '') + '"' + ((state.wxOpen === undefined ? wx.soon || hzOpen : state.wxOpen) ? ' open' : '') + ' data-def="' + (wx.soon || hzOpen ? 1 : 0) + '"><summary aria-label="Weather today"><span class="W_now">' + ICON(CS.weatherIcon(desc), 's24') + '<span class="W_temp num">' + wx.temp + '°</span><span class="W_cond">' + esc(desc) + '</span></span>' + (wx.rain ? pill('warn', 'rain', 'Rain likely') : wx.hazards.length && wx.hazards[0].level >= 2 ? pill('warn', wx.hazards[0].icon, wx.hazards[0].word) : '') + ICON('chevdown', 's16') + '</summary>' +
+    return '<details class="card glass A_card W_card' + (wx.rain ? ' W_rain' : '') + '"' + ((state.wxOpen === undefined ? wx.soon || hzOpen : state.wxOpen) ? ' open' : '') + ' data-def="' + (wx.soon || hzOpen ? 1 : 0) + '" id="W_card"><summary aria-label="Weather today"><span class="W_now">' + ICON(CS.weatherIcon(desc), 's24') + '<span class="W_temp num">' + wx.temp + '°</span><span class="W_cond">' + esc(desc) + '</span></span>' + (wx.rain ? pill('warn', 'rain', 'Rain likely') : wx.hazards.length && wx.hazards[0].level >= 2 ? pill('warn', wx.hazards[0].icon, wx.hazards[0].word) : '') + ICON('chevdown', 's16') + '</summary>' +
       '<div class="W_body">' + (range ? '<p class="sub num">' + esc(range) + '</p>' : '') +
       (wx.rain ? '<p class="sub W_win">Rain likely ' + esc(wx.window) + (wx.pct != null ? '. Peak chance ' + wx.pct + '%' + (wx.peakAt ? ' around ' + esc(wx.peakAt) : '') : '') + '.</p>' : '') + hz + strip +
       (wx.action ? '<p class="W_act">' + ICON('check', 's16') + '<span>' + esc(wx.action) + '</span></p>' : '') + (wx.asOf ? '<p class="help">as of ' + esc(wx.asOf) + '</p>' : '') +
@@ -300,11 +300,8 @@
       '<div class="T_namerow"><h3 class="T_nname">' + esc(np.name) + '</h3>' + A_badge(n) + '</div>' + A_prog(n) +
       A_grid(n, 'next') + A_perks(n, 'arriving', { line: '' }) + '<a class="A_more" href="#calendar/next">Open guest card' + ICON('chev', 's16') + '</a></section>';
   }
-  // s113: "Guest tiers: how many stays for each". Open the first time on this phone; closed from then on once the person closes it (cs_tiers_seen, try/catch storage).
+  // s113: "Guest tiers: how many stays for each". s114: closed until tapped; closes itself 5 minutes after a tap opened it (A_autoClose).
   // A compact table: tier (glyph and colour) | when | what they get (CS.tierPerks, arrival and house). The same table is the tier guide sheet, with the guest's row marked.
-  var T_SEEN = 'cs_tiers_seen';
-  function T_seen() { try { var ls = store('localStorage'); return !!(ls && ls.getItem(T_SEEN)); } catch (e) { return false; } }
-  function T_seenSet() { try { var ls = store('localStorage'); if (ls) ls.setItem(T_SEEN, '1'); } catch (e) { /* private mode: it opens again next time */ } }
   function A_tierTable(cur, ids) {
     return '<table class="T_ttab"><thead><tr><th scope="col">Tier</th><th scope="col">When</th><th scope="col">What they get</th></tr></thead><tbody>' + CS.tierGuide().map(function (t) {
       return '<tr class="T_tr' + (t.tier === cur ? ' T_tcur' : '') + '"' + (ids ? ' id="tg-' + t.tier + '" tabindex="-1"' : '') + (t.tier === cur ? ' aria-current="true"' : '') + '><th scope="row"><span class="T_badge p-tier-' + t.tier + '">' + ICON(t.icon, 's16') + '<span>' + esc(t.word) + '</span></span></th>' +
@@ -312,7 +309,7 @@
     }).join('') + '</tbody></table>';
   }
   function A_tierGuide() {
-    var open = state.tiersOpen === undefined ? !T_seen() : state.tiersOpen;
+    var open = state.tiersOpen === true; // s114 (Lloyd): closed by default; opens only on a tap and closes itself after 5 minutes
     return '<details class="card glass A_card F_span T_tiers" id="T_tiers"' + (open ? ' open' : '') + '><summary class="T_tsum">' + ICON('info', 's16') + '<span>Guest tiers: how many stays for each</span>' + ICON('chev', 's16') + '</summary><div class="T_tbody">' + A_tierTable(null, false) + '</div></details>';
   }
   function A_tierSheet(S) {
@@ -2077,7 +2074,7 @@
   // Runs once per device after sign-in (CS.phoneCheckDue, key cs_phone_check) and from More > This phone > Check this phone. Every row comes from a real probe
   // (CS.phoneCheckRows); Fix all runs the fixers in order from the one tap (CS.phoneFixPlan: alerts first, so the permission prompt rides the tap), then probes again.
   // The camera is opened only when its permission is 'prompt', and every track is stopped at once. Nothing changes Trust this device.
-  var PC_SHELL = 'cs-shell-v53'; // the service worker's cache for this version (sw.js CACHE_NAME; a test keeps them equal)
+  var PC_SHELL = 'cs-shell-v54'; // the service worker's cache for this version (sw.js CACHE_NAME; a test keeps them equal)
   var PC = { open: false, busy: false, rows: null, msg: '', camPerm: null };
   function PC_ls() { return store('localStorage'); }
   function PC_cameraPerm() {
@@ -2490,8 +2487,22 @@
     location.hash = '#home'; route();
   });
   // The rain row can also be opened without a click (find in page, assistive tech): keep the remembered state in step with details.open.
-  document.addEventListener('toggle', function (ev) { var d = ev.target; if (d && d.classList && d.classList.contains('T_tiers')) { state.tiersOpen = !!d.open; if (!d.open) T_seenSet(); } }, true); // s113: closed once = closed on this phone
-  document.addEventListener('toggle', function (ev) { var d = ev.target; if (d && d.classList && d.classList.contains('W_card') && !(state.wxOpen === undefined && !!d.open === (d.getAttribute('data-def') === '1'))) state.wxOpen = !!d.open; }, true); // s105: the Weather card stays open or shut across redraws; open by default only when rain is soon (the draw itself is not a choice)
+  // s114 (Lloyd): a card opened by hand closes itself after 5 minutes. The Guest tiers card is always closed until tapped; the Weather card is
+  // open by default only when rain is near or a weather warning is up (data-def="1"), and after the auto-close it goes back to that rule.
+  var AUTO_CLOSE_MS = 5 * 60 * 1000, autoClose = {};
+  function A_autoClose(key, d, after) {
+    clearTimeout(autoClose[key]); autoClose[key] = 0;
+    if (!d.open) return;
+    autoClose[key] = setTimeout(function () { autoClose[key] = 0; after(); var el = document.getElementById(d.id) || d; if (el && el.open) el.open = false; }, AUTO_CLOSE_MS);
+  }
+  document.addEventListener('toggle', function (ev) { var d = ev.target; if (d && d.classList && d.classList.contains('T_tiers')) { state.tiersOpen = !!d.open; A_autoClose('tiers', d, function () { state.tiersOpen = undefined; }); } }, true);
+  document.addEventListener('toggle', function (ev) {
+    var d = ev.target; if (!(d && d.classList && d.classList.contains('W_card'))) return;
+    var def = d.getAttribute('data-def') === '1';
+    if (!(state.wxOpen === undefined && !!d.open === def)) state.wxOpen = !!d.open;
+    if (def) { clearTimeout(autoClose.wx); autoClose.wx = 0; return; } // rain near or a warning up: it stays as the person left it
+    A_autoClose('wx', d, function () { state.wxOpen = undefined; });
+  }, true); // s105: the Weather card stays open or shut across redraws; open by default only when rain is soon (the draw itself is not a choice)
   document.addEventListener('click', function (ev) {
     var t = ev.target.closest('[data-act],[data-theme],[data-day],[data-warn],[data-nfilter],[data-tfilter]'); if (!t) return;
     var a = t.getAttribute('data-act');

@@ -1,4 +1,4 @@
-// s111 (Staff 3.4.28) rev 2. Lloyd 2026-11-08: "kwh per night is absurd ... make the graphs standard"; a Target card; zoom on photos; a Guest tiers card on Today.
+// s111 (Staff 3.4.29) rev 2. Lloyd 2026-11-08: "kwh per night is absurd ... make the graphs standard"; a Target card; zoom on photos; a Guest tiers card on Today.
 // Hand-computed expectations throughout. KPI module runs in a vm with a fake client; the shell parts run through the lane A harness (frozen clock).
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -164,10 +164,10 @@ test('s111 Guest tiers: thresholds, glyphs, every perk per tier (arrival and hou
   assert.deepEqual(g[3].perks, ['Returning-guest freebie: 2 Kit Kats or an extra bottle of water', 'Up to 2 hours early or late free, if the calendar allows', 'Set saved preferences before arrival (pillows, AC temperature)', 'Handwritten welcome note', 'Mid-stay refresh, any stay length', 'First call on the dates they ask about']);
   assert.doesNotMatch(JSON.stringify(g), /₱|PHP|price|discount|!|No need to ask for ID/);
 });
-test('s111 Guest tiers (s113 shape): a card after the guest cards on Today, open the first time, the same for every role, with the tier badge styles', async () => {
+test('s111 Guest tiers (s114 shape): a card after the guest cards on Today, closed until tapped, the same for every role, with the tier badge styles', async () => {
   for (const role of ['cleaner', 'laundry', 'owner']) {
     const h = (await boot({ role, hash: '#home', handlers: baseHandlers(role) })).els['v-home'].innerHTML;
-    const m = /<details class="card glass A_card F_span T_tiers" id="T_tiers" open><summary class="T_tsum">[\s\S]*?<span>Guest tiers: how many stays for each<\/span>[\s\S]*?<\/details>/.exec(h); assert.ok(m, role);
+    const m = /<details class="card glass A_card F_span T_tiers" id="T_tiers"><summary class="T_tsum">[\s\S]*?<span>Guest tiers: how many stays for each<\/span>[\s\S]*?<\/details>/.exec(h); assert.ok(m, role + ' closed by default');
     for (const t of ['first', 'returning', 'regular', 'vip']) assert.match(m[0], new RegExp('<span class="T_badge p-tier-' + t + '"><svg[^>]*data-i="[a-z]+"'), role + ' ' + t);
     assert.match(m[0], /7 stays or 20 nights[\s\S]*Handwritten welcome note/); assert.doesNotMatch(m[0], /₱/);
     assert.ok(h.indexOf('T_tiers') > h.indexOf("S_sec") && (h.indexOf('Turnover') < 0 || h.indexOf('T_tiers') < h.indexOf('>Turnover<')), 'right after the guest cards');
@@ -175,7 +175,7 @@ test('s111 Guest tiers (s113 shape): a card after the guest cards on Today, open
 });
 
 test('s111 release pins and tokens: version unchanged, chart tokens in all three theme blocks, no raw colours or px type in the new CSS', () => {
-  assert.equal(JSON.parse(read('package.json')).version, '3.4.28'); assert.match(read('sw.js'), /CACHE_NAME = 'cs-shell-v53'/);
+  assert.equal(JSON.parse(read('package.json')).version, '3.4.29'); assert.match(read('sw.js'), /CACHE_NAME = 'cs-shell-v54'/);
   const tok = read('tokens.css'); for (const k of ['chart-line', 'chart-area', 'chart-band', 'chart-grid', 'chart-axis', 'chart-avg']) assert.equal((tok.match(new RegExp('--v5-' + k + ':', 'g')) || []).length, 3, k);
   const css = read('kpi/K_kpi.css'); const s111 = css.slice(css.indexOf('s113, the chart standard'), css.indexOf('/* supply and consumption'));
   assert.doesNotMatch(s111, /#[0-9a-f]{3,6}\b|rgb\(|nowrap|font-size:\s*\d+px|font:[^;]*\d+px/i);

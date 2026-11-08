@@ -82,7 +82,7 @@ test('weather card: first on Today when rain is near, else after Turnover; shut 
   const g = GUEST();
   const wet = await boot({ role: 'cleaner', hash: '#home', handlers: baseHandlers('cleaner', { staff_home_v1: homeOf(g, { weather: WX(80) }) }) });
   const h = html(wet);
-  assert.match(h, /<details class="card glass A_card W_card W_rain" open data-def="1"><summary aria-label="Weather today">/, 'rain within 3 hours: drawn open until the user chooses');
+  assert.match(h, /<details class="card glass A_card W_card W_rain" open data-def="1" id="W_card"><summary aria-label="Weather today">/, 'rain within 3 hours: drawn open until the user chooses');
   assert.ok(h.indexOf('W_card') < h.indexOf('T_card'), 'rain near: the Weather card is the first card');
   assert.match(h, /Rain likely<\/span>/); assert.match(h, /High 32°, low 26°/); assert.match(h, /Peak chance 80%/); assert.match(h, /Bring towels and mats in before the rain/);
   const card = h.slice(h.indexOf('W_card'), h.indexOf('</details>')); assert.equal((card.match(/href="#weather"/g) || []).length, 1, 'the card owns the one forecast link'); assert.match(card, /btn btn-ghost btn-sm" href="#weather"/); assert.doesNotMatch(h, /H_wxalert|wxstrip rain/);
@@ -98,7 +98,7 @@ test('weather card: first on Today when rain is near, else after Turnover; shut 
 test('weather card: opening it is remembered across a redraw; shut again on a fresh visit', async () => {
   const app = await boot({ role: 'cleaner', hash: '#home', handlers: baseHandlers('cleaner', { staff_home_v1: homeOf(GUEST(), { weather: WX(80) }) }) });
   const cl = (c) => c === 'W_card', ga = (n) => (n === 'data-def' ? '1' : null); for (const fn of app.listeners.toggle) fn({ target: { open: true, getAttribute: ga, classList: { contains: cl } } });
-  await app.click({ 'data-act': 'refresh' }); assert.match(html(app), /<details class="card glass A_card W_card W_rain" open data-def="1">/, 'redraw keeps it open');
+  await app.click({ 'data-act': 'refresh' }); assert.match(html(app), /<details class="card glass A_card W_card W_rain" open data-def="1" id="W_card">/, 'redraw keeps it open');
   for (const fn of app.listeners.toggle) fn({ target: { open: false, getAttribute: ga, classList: { contains: cl } } });
   await app.click({ 'data-act': 'refresh' }); assert.doesNotMatch(html(app), /W_card W_rain" open/, 'closed by the user: stays shut although rain is soon');
 });
@@ -144,8 +144,8 @@ test('ID card and contact: no status tint on the ID card, one copy control per v
   assert.match(read('styles.css'), /\.idphoto\.empty\.err \{ aspect-ratio: 8 \/ 5/);
 });
 
-test('release: 3.4.28, cache v39, tier and key-note tokens in all three theme blocks, reduced motion covers the skeleton and the rain row', () => {
-  assert.equal(JSON.parse(read('package.json')).version, '3.4.28'); assert.match(read('app.js'), /version: '3.4.28'/); assert.match(read('sw.js'), /CACHE_NAME = 'cs-shell-v53'/);
+test('release: 3.4.29, cache v39, tier and key-note tokens in all three theme blocks, reduced motion covers the skeleton and the rain row', () => {
+  assert.equal(JSON.parse(read('package.json')).version, '3.4.29'); assert.match(read('app.js'), /version: '3.4.29'/); assert.match(read('sw.js'), /CACHE_NAME = 'cs-shell-v54'/);
   const tk = read('tokens.css');
   for (const k of ['returning', 'regular', 'vip']) for (const s of ['t', 'w']) assert.equal(tk.split('--v5-tier-' + k + '-' + s + ':').length - 1, 3, k + s);
   assert.equal(tk.split('--v5-note-key-w:').length - 1, 3);
