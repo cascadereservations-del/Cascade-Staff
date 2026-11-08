@@ -28,9 +28,9 @@ test('tierLine: trimmed text only with a known tier; null and blank draw nothing
 test('app.js uses CS.tierParts in both cards, in the name row and under it', () => {
   const app = read('app.js');
   assert.match(app, /CS\.tierParts\(g, compact, pill\)/);
-  assert.match(app, /<h2 class="A_name">' \+ esc\(g\.guest_name \|\| 'Guest'\) \+ '<\/h2>' \+ tp\.ret \+ '<\/div>' \+ [^\n]*\n[^\n]*A_idPill\(g\) \+ '<\/div>' \+ A_face\(g\)/); // s105: name, key line and ID pill beside the face, the rest full width under it
+  assert.match(app, /<h2 class="A_name">' \+ esc\(g\.guest_name \|\| 'Guest'\) \+ '<\/h2><\/div>' \+ [^\n]*\n[^\n]*A_idPill\(g\) \+ '<\/div>' \+ A_face\(g\)/); // s105: name, key line and ID pill beside the face, the rest full width under it
   assert.match(app, /A_grid\(g, st\.kind\) \+ A_goodToKnow\(g, st\.kind\) \+ A_perks\(g, st\.kind, tp\) \+ \(nl \?/); // s109: the fact grid sits above Good to know // s105: the perks checklist replaces the grey benefits line on the Today card
-  assert.match(app, /<h3 class="ttl">' \+ esc\(g\.guest_name \|\| 'Guest'\) \+ '<\/h3>' \+ tp\.chip \+ '<\/div>' \+ A_perks\(g, kind === 'house' \? 'house' : 'arriving', tp\)/); // s109: the guest card lists the perks (server sentence only as the fallback)
+  assert.match(app, /<h3 class="ttl">' \+ esc\(g\.guest_name \|\| 'Guest'\) \+ '<\/h3>' \+ A_badge\(g\) \+ '<\/div>' \+ A_perks\(g, kind === 'house' \? 'house' : 'arriving', tp\)/); // s109: the guest card lists the perks (server sentence only as the fallback)
 });
 
 const pill = (tone, icon, text) => '<span class="pill p-' + tone + '">' + icon + CS.esc(text) + '</span>';

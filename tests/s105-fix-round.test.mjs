@@ -19,11 +19,11 @@ test('layout: the name, the key day/time line and the ID pill are inside .T_id b
   assert.match(/<div class="T_id">([\s\S]*?)<\/div><\/div>/.exec(none)[1], /No ID yet/);
 });
 
-test('ribbon: one colour class per tier, none for a first stay', async () => {
-  for (const [t, words] of [['returning', 'Welcome back'], ['regular', 'Regular guest'], ['vip', 'VIP guest']]) {
+test('ribbon: one colour class per tier, a first stay gets its own tag (s110)', async () => {
+  for (const [t, words] of [['returning', 'Returning'], ['regular', 'Regular'], ['vip', 'VIP']]) {
     const h = await house(GUEST({ tier: t })); assert.match(h, new RegExp('<div class="T_ribbon p-tier-' + t + '" role="note">[\\s\\S]*?' + words));
   }
-  assert.doesNotMatch(await house(GUEST({ tier: null, repeat: false })), /T_ribbon/);
+  assert.match(await house(GUEST({ tier: null, repeat: false, stay_count: 1 })), /<div class="T_ribbon p-tier-first" role="note">[\s\S]*?First stay/);
 });
 
 const lum = (h) => { const c = [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16) / 255).map((v) => (v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4)); return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]; };
@@ -44,13 +44,13 @@ test('s109 up next: the incoming guest is its own card under the in-house one fo
   const cur = GUEST({ checkin_date: plus(-1), checkout_date: plus(1), tier: null, repeat: false });
   for (const role of ['admin', 'cleaner']) {
     const h = await house(cur, { next_guest: nx() }, role);
-    assert.match(h, /<section class="card A_card F_span T_card T_upnext T_tier-regular" aria-label="Next arrival"><div class="row-between"><span class="cap up T_lbl">Up next · incoming<\/span>[\s\S]*?Arrives tomorrow[\s\S]*?<h3 class="T_nname">Ben Cruz<\/h3>[\s\S]*?Regular guest/);
+    assert.match(h, /<section class="card A_card F_span T_card T_upnext T_tier-regular" aria-label="Next arrival"><div class="row-between"><span class="cap up T_lbl">Up next · incoming<\/span>[\s\S]*?Arrives tomorrow[\s\S]*?<h3 class="T_nname">Ben Cruz<\/h3>[\s\S]*?Regular/);
     assert.match(h.slice(h.indexOf('T_upnext')), /Prepare before arrival[\s\S]*Standard freebie: 2 Kit Kats or an extra bottle of water[\s\S]*Set saved preferences/);
     assert.ok(h.indexOf('T_now') < h.indexOf('T_upnext'), 'the guest in the house comes first');
     if (role === 'cleaner') assert.doesNotMatch(h.slice(h.indexOf('T_upnext')), /tel:|T_call/);
   }
   assert.match(await house(cur, { next_guest: nx({ tier: null, repeat: false }) }), /T_upnext T_tier-first[\s\S]*?First stay[\s\S]*?Standard freebie/, 'first stay');
-  assert.doesNotMatch(await house(cur, { next_guest: nx({ tier: null, repeat: undefined }) }), /First stay/, 'an unknown tier is not called a first stay');
+  { const h = await house(cur, { next_guest: nx({ tier: null, repeat: undefined, stay_count: undefined }) }); assert.doesNotMatch(h.slice(h.indexOf('T_upnext')), /First stay|T_badge/, 'an unknown tier is not called a first stay (the guest in the house has its own tag)'); }
   assert.match(await house(cur, { next_guest: nx({ checkin_date: plus(3), checkout_date: plus(5) }) }), /T_upnext/, 'three days away');
   assert.doesNotMatch(await house(cur, { next_guest: nx({ checkin_date: plus(15), checkout_date: plus(17) }) }), /T_upnext/, 'over 14 days away');
   assert.equal(CS.nextPrep({ current_guest: null, next_guest: nx() }, TODAY), null, 'nobody in the house: the Today card is already the arrival card');

@@ -80,7 +80,12 @@
     var block = function (a, b, why, label) { return { guest_name: null, checkin_date: d(a), checkout_date: d(b), status: 'blocked', source: 'manual', block_reason: why, block_label: label }; };
     var home = {
       today: today, generated_at: stamp,
-      weather: { fetched_at: stamp, current: { temp: 29, emoji: '', description: 'Partly cloudy', rain_prob: 40, today_high: 32, today_low: 26, humidity: 70, uv_label: 'High' } },
+      weather: { fetched_at: stamp, current: { temp: 29, emoji: '', description: 'Partly cloudy', rain_prob: 40, today_high: 32, today_low: 26, humidity: 70, uv_label: 'High', feels_like: 39, code: 2, wind_gust_kph: 36, uv_index: 9 }, aqi: 112,
+        hourly: (function () { // s110: sample hours for the Today strip and warnings (feels-like 39 is a caution only, UV 9 and air quality 112 raise the haze row)
+          var t0 = Math.ceil((now instanceof Date ? now : new Date()).getTime() / 3600000) * 3600000, out = [], i;
+          for (i = 0; i < 14; i++) { var wet = i >= 4 && i <= 6; out.push({ time: new Date(t0 + i * 3600000).toISOString(), rain_chance_pct: wet ? 60 + i * 3 : 10 + (i % 4) * 5, temp: 30 - (i > 6 ? i - 6 : 0), code: wet ? 61 : 2, mm: wet ? 1.4 : 0 }); }
+          return out;
+        })() },
       current_guest: g1, next_guest: g2,
       calendar: [row('Demo Guest Zero', -8, -5, 'airbnb'), row('Demo Guest One', -1, 2, 'airbnb'), row('Demo Guest Two', 2, 5, 'direct'),
         row('Demo Guest Three', 9, 12, 'airbnb'), row('Demo Guest Four', 10, 13, 'direct'), row('Demo Guest Six', 18, 20, 'direct'), row('Demo Guest Six', 20, 22, 'direct'),

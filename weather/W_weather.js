@@ -221,7 +221,7 @@
     var items = m.hours.map(function (h, i) {
       var g = W_group(h.code != null ? h.code : m.code, 0, 0);
       return '<li class="W_h"><span class="W_ht">' + (i === 0 && h.ms <= m.nowMs ? 'Now' : W_hourWord(h.ms)) + '</span>' + W_svg(g, !W_isDayHour(h.ms), '', W_groupWord(g)) + (h.temp != null ? '<span class="W_hd">' + h.temp + '°</span>' : '') +
-        '<span class="W_hr">' + (h.pct != null && h.pct >= 20 ? h.pct + '%' : '&nbsp;') + '</span></li>';
+        '<span class="W_hr' + (h.pct != null && h.pct >= 50 ? ' wet' : '') + '">' + (h.pct != null ? h.pct + '%' : '&nbsp;') + '</span></li>'; // s110: the chance of rain on every hour, not only from 20 percent
     }).join('');
     return W_section('Next 24 hours', '<div class="card glass W_stripcard"><ul class="W_strip" role="list" tabindex="0" aria-label="Next 24 hours, scroll sideways">' + items + '</ul></div>', 'W_t_hours');
   }

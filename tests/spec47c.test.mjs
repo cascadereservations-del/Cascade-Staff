@@ -47,11 +47,11 @@ test('css: tier-coloured placeholder in the same 88 px slot, 10 px rhythm, name 
   assert.match(css, /strong\.A_key \{ font-weight: 500;/);
 });
 
-test('untiered returning guest: the older Returning pill is inside the name row, not under the header', async () => {
+test('untiered returning guest: the tag says it once at the top (s110), the name row holds only the name', async () => {
   const h = await home(GUEST({ tier: null, tier_line: null, repeat: true, stay_count: 3, id_face_box: BOX }));
   const row = /<div class="T_namerow">([\s\S]*?)<\/div><p class="sub num T_when/.exec(h); assert.ok(row, 'name row closes right before the time line');
-  assert.match(row[1], /<h2 class="A_name">Ana Reyes<\/h2><span class="pill p-tier-returning">/); assert.match(row[1], /Returning · 3rd stay/);
-  assert.equal((h.match(/Returning · 3rd stay/g) || []).length, 1, 'shown once');
+  assert.equal(row[1], '<h2 class="A_name">Ana Reyes</h2>'); assert.doesNotMatch(row[1], /pill/);
+  assert.equal((h.match(/Returning · 3 stays/g) || []).length, 1, 'shown once');
 });
 test('owner tap on the initial loads the photo once and opens the full view; the cleaner gets a bare span', async () => {
   let signs = 0; const full = el(), attrs = {}; full.setAttribute = (k, x) => { attrs[k] = x; }; full.getAttribute = (k) => attrs[k] || null; full.querySelector = () => ({ className: '', textContent: '' });

@@ -20,7 +20,7 @@
     url: 'https://qkgfhsdppslwunarczeq.supabase.co',
     key: 'sb_publishable_JFuRYZ9csmQULcMRmHXDSg_Abo9UeCj',
     propertyId: '6ae230f4-c189-4547-84b1-cb6e0b2cc9bd',
-    version: '3.4.24'
+    version: '3.4.25'
   };
   var LINKS = {
     checklist: 'https://cascadereservations-del.github.io/CH-Cleaners-Checklist/',
@@ -161,7 +161,7 @@
     var key = st.kind === 'house' ? (outLater ? 'Out ' + (g.checkout_date === CS.addDays(p.today, 1) ? 'tomorrow' : CS.dayLabel(g.checkout_date)) + (g.checkout_date === CS.addDays(p.today, 1) ? ' ' : ', ') + outT : 'Out ' + outT) : 'In ' + (CS.fmtTime(g.checkin_time) || ht.inLabel); // s96: the time that matters comes first
     var tcls = ' T_tier-' + (CS.tierLabel(g.tier) ? g.tier : 'first') + (st.kind === 'house' ? ' T_now' : ' T_arr'); // s109: tier colour on the whole card; the guest in the house leads
     return '<section class="card glass A_card F_span T_card' + tcls + '" aria-label="Today in the house">' + A_ribbon(g) + '<div class="row-between"><span class="cap up T_lbl">' + esc(st.kind === 'house' ? 'Now · in the house' : st.label) + '</span>' + (st.pill ? pill(st.pill.tone, toneIcon(st.pill.tone), st.pill.text) : '') + '</div>' +
-      '<div class="T_who"><div class="T_id"><div class="T_namerow"><h2 class="A_name">' + esc(g.guest_name || 'Guest') + '</h2>' + tp.ret + '</div>' + // s105: name, the key day/time line and the ID state fill the height of the face square; Good to know, perks and the rest span the card
+      '<div class="T_who"><div class="T_id"><div class="T_namerow"><h2 class="A_name">' + esc(g.guest_name || 'Guest') + '</h2></div>' + // s105: name, the key day/time line and the ID state fill the height of the face square; Good to know, perks and the rest span the card
       '<p class="sub num T_when"><strong class="A_key">' + esc(A_nb(key)) + '</strong> · ' + esc(outLater ? A_nb(CS.plural(g.nights != null ? g.nights : CS.daysBetween(g.checkin_date, g.checkout_date), 'night')) : A_stayDates(g)) + '</p>' + A_idPill(g) + '</div>' + A_face(g) + '</div>' +
       A_grid(g, st.kind) + A_goodToKnow(g, st.kind) + A_perks(g, st.kind, tp) + (nl ? '<p class="help T_ask">' + esc(nl) + '</p>' : '') +
       '<a class="A_more" href="#calendar/' + (st.kind === 'house' ? 'house' : 'next') + '">Open guest card' + ICON('chev', 's16') + '</a></section>';
@@ -263,18 +263,23 @@
   // First card when rain is likely, else after the house and turnover cards. The hourly bars come from notices_v1 hours; no motion in them, so reduced-motion needs nothing more.
   function H_wxToday() {
     var wx = CS.wxCard(state.payload, A_notices()); if (!wx) return ''; // no reading: nothing on Today (the Notices card still says so)
-    var peak = wx.hours.reduce(function (m, h) { return Math.max(m, h.pct); }, 0), desc = wx.desc || 'Weather';
+    var desc = wx.desc || 'Weather';
     var range = [wx.hi != null && wx.lo != null ? 'High ' + wx.hi + '°, low ' + wx.lo + '°' : '', wx.head].filter(Boolean).join(' · ');
-    var strip = wx.hours.length ? '<div class="W_hrs" role="img" aria-label="' + esc('Chance of rain by hour: ' + wx.hours.map(function (h) { return h.label + ' ' + h.pct + '%'; }).join(', ')) + '">' + wx.hours.map(function (h, i) {
-      return '<span class="W_h' + (h.pct === peak ? ' pk' : '') + '"><i style="height:' + Math.max(4, h.pct) + '%"></i><b>' + (i % 3 === 0 ? esc(A_nb(h.label)) : '') + '</b></span>'; }).join('') + '</div>' : '';
-    return '<details class="card glass A_card W_card' + (wx.rain ? ' W_rain' : '') + '"' + ((state.wxOpen === undefined ? wx.soon : state.wxOpen) ? ' open' : '') + ' data-def="' + (wx.soon ? 1 : 0) + '"><summary aria-label="Weather today"><span class="W_now">' + ICON(CS.weatherIcon(desc), 's24') + '<span class="W_temp num">' + wx.temp + '°</span><span class="W_cond">' + esc(desc) + '</span></span>' + (wx.rain ? pill('warn', 'rain', 'Rain likely') : '') + ICON('chevdown', 's16') + '</summary>' +
+    // s110: the next ~12 hours as a sideways strip: time, glyph, temperature when known, chance of rain (CS.wxCard hourly: weather-proxy hours the Home already loaded, else the notices hours)
+    var strip = wx.hourly.length ? '<ul class="HF_strip" role="list" tabindex="0" aria-label="Next hours, chance of rain, scroll sideways">' + wx.hourly.map(function (h) {
+      return '<li class="HF_h' + (h.pct != null && h.pct >= 50 ? ' wet' : '') + '"><span class="HF_t num">' + esc(A_nb(h.label)) + '</span>' + ICON(h.icon, 's16') + '<span class="HF_d num">' + (h.temp != null ? h.temp + '°' : '&nbsp;') + '</span><span class="HF_r num">' + (h.pct != null ? h.pct + '%' : '&nbsp;') + '</span></li>'; }).join('') + '</ul>' : '';
+    var hz = wx.hazards.length ? '<ul class="HZ_list" aria-label="Weather warnings">' + wx.hazards.map(function (x) {
+      return '<li class="HZ_' + x.kind + '">' + ICON(x.icon, 's16') + '<span><b>' + esc(x.word) + '</b>' + (x.detail ? ' <span class="num">' + esc(x.detail) + '</span>' : '') + '<br>' + esc(x.advice) + '</span></li>'; }).join('') + '</ul>' : '', hzOpen = wx.hazards.some(function (x) { return x.strip; });
+    return '<details class="card glass A_card W_card' + (wx.rain ? ' W_rain' : '') + '"' + ((state.wxOpen === undefined ? wx.soon || hzOpen : state.wxOpen) ? ' open' : '') + ' data-def="' + (wx.soon || hzOpen ? 1 : 0) + '"><summary aria-label="Weather today"><span class="W_now">' + ICON(CS.weatherIcon(desc), 's24') + '<span class="W_temp num">' + wx.temp + '°</span><span class="W_cond">' + esc(desc) + '</span></span>' + (wx.rain ? pill('warn', 'rain', 'Rain likely') : wx.hazards.length ? pill('warn', wx.hazards[0].icon, wx.hazards[0].word) : '') + ICON('chevdown', 's16') + '</summary>' +
       '<div class="W_body">' + (range ? '<p class="sub num">' + esc(range) + '</p>' : '') +
-      (wx.rain ? '<p class="sub W_win">Rain likely ' + esc(wx.window) + (wx.pct != null ? '. Peak chance ' + wx.pct + '%' + (wx.peakAt ? ' around ' + esc(wx.peakAt) : '') : '') + '.</p>' : '') + strip +
+      (wx.rain ? '<p class="sub W_win">Rain likely ' + esc(wx.window) + (wx.pct != null ? '. Peak chance ' + wx.pct + '%' + (wx.peakAt ? ' around ' + esc(wx.peakAt) : '') : '') + '.</p>' : '') + hz + strip +
       (wx.action ? '<p class="W_act">' + ICON('check', 's16') + '<span>' + esc(wx.action) + '</span></p>' : '') + (wx.asOf ? '<p class="help">as of ' + esc(wx.asOf) + '</p>' : '') +
       '<a class="btn btn-ghost btn-sm" href="#weather">Open the forecast</a></div></details>';
   }
   // s105 SPEC-46: the tier ribbon at the top of the Today card (first stays get none; it replaces the small chip beside the name) and the perks checklist (CS.tierPerks); both are for every role, they are not contact data.
-  function A_ribbon(g) { var r = CS.tierRibbon(g); return r ? '<div class="T_ribbon p-tier-' + r.tier + '" role="note">' + ICON(r.icon, 's16') + '<span>' + esc(r.text) + '</span></div>' : ''; }
+  // s110: the ribbon and the compact tag both come from CS.tierBadge (glyph per tier, "Returning · 2 stays", "First stay"), so the stay count is said once.
+  function A_ribbon(g) { var r = CS.tierBadge(g); return r ? '<div class="T_ribbon p-tier-' + r.tier + '" role="note">' + ICON(r.icon, 's16') + '<span>' + esc(r.text) + '</span></div>' : ''; }
+  function A_badge(g) { var r = CS.tierBadge(g); return r ? '<span class="T_badge p-tier-' + r.tier + '" role="note">' + ICON(r.icon, 's16') + '<span>' + esc(r.text) + '</span></span>' : ''; }
   function A_perks(g, kind, tp) {
     var perks = CS.tierPerks(g.tier, { id: !!g.id_photo_path, phase: kind === 'house' ? 'house' : 'arrival' });
     if (!perks.length) return tp.line; // the server's benefits line is only the fallback
@@ -288,7 +293,7 @@
     var p = state.payload, np = p && CS.nextPrep(p, p.today); if (!np) return '';
     var n = np.guest, tier = CS.tierLabel(n.tier) ? n.tier : 'first', when = 'Arrives ' + np.day + ' ' + (CS.fmtTime(n.checkin_time) || A_houseT().inLabel);
     return '<section class="card A_card F_span T_card T_upnext T_tier-' + tier + '" aria-label="Next arrival"><div class="row-between"><span class="cap up T_lbl">Up next · incoming</span>' + pill('info', 'clock', when) + '</div>' +
-      '<div class="T_namerow"><h3 class="T_nname">' + esc(np.name) + '</h3>' + (np.ribbon ? pill('tier-' + np.ribbon.tier, np.ribbon.icon, np.ribbon.text) : n.repeat === false ? pill('neutral', 'user', 'First stay') : '') + '</div>' +
+      '<div class="T_namerow"><h3 class="T_nname">' + esc(np.name) + '</h3>' + A_badge(n) + '</div>' +
       A_grid(n, 'next') + A_perks(n, 'arriving', { line: '' }) + '<a class="A_more" href="#calendar/next">Open guest card' + ICON('chev', 's16') + '</a></section>';
   }
   // s109: the facts of a stay as a compact 2-column grid (dates, guests, ID, phone for owner/admin, channel), so the card uses its width.
@@ -304,11 +309,14 @@
     return '<div class="T_grid">' + t.join('') + '</div>';
   }
   // s109: brownouts, water cuts and internet outages today or tomorrow, each in its own colour, on top of Today (CS.utilAlerts).
+  // s110: weather warnings (thunder, strong wind, heavy rain, extreme heat, haze) join the strip with their own colour; the milder ones stay in the Weather card.
   function A_utilBar() {
-    var u = state.payload ? CS.utilAlerts(A_notices(), state.payload.today) : []; if (!u.length) return '';
+    var u = state.payload ? CS.utilAlerts(A_notices(), state.payload.today) : [], hz = ((CS.wxCard(state.payload, A_notices()) || {}).hazards || []).filter(function (x) { return x.strip; }); if (!u.length && !hz.length) return '';
     var ic = { power: 'zapoff', water: 'drop', internet: 'wifioff' };
-    return '<section class="U_bar F_span" aria-label="Utility interruptions">' + u.map(function (x) {
+    return '<section class="U_bar F_span" aria-label="Utility interruptions and weather warnings">' + u.map(function (x) {
       return '<a class="U_row U_' + x.type + '" href="#calendar/notices">' + ICON(ic[x.type], 's24') + '<span class="U_txt"><b>' + esc(x.word) + '</b><span class="num">' + esc(x.when + (x.source ? ' · ' + x.source : '')) + '</span></span>' + ICON('chev', 's16') + '</a>';
+    }).join('') + hz.map(function (x) {
+      return '<a class="U_row U_hz U_' + x.kind + '" href="#weather">' + ICON(x.icon, 's24') + '<span class="U_txt"><b>' + esc(x.word) + '</b><span>' + esc((x.detail ? x.detail + '. ' : '') + x.advice) + '</span></span>' + ICON('chev', 's16') + '</a>';
     }).join('') + '</section>';
   }
   // s109: owner/admin/finance: a payment request a staff member has sent stands out at the top of Today until it is paid.
@@ -370,6 +378,13 @@
     if (att.phase === 'items' && att.top) return '<button class="' + (atRisk ? 'btn btn-ghost btn-block A_primary' : cls) + '" type="button" data-primary="attention" data-act="attn-open" aria-haspopup="dialog">' + esc(/^\d/.test(att.top) ? att.top : 'Review ' + att.top.toLowerCase()) + '</button>';
     return '<a class="' + cls + '" data-primary="calendar" href="#calendar">Open the calendar</a>';
   }
+  // s110: after check-out and before the clean, the first walk-through: every issue found (damage, stains, missing or broken items) is reported before cleaning, in the checklist.
+  // The cleaner screen cannot tell if the clean has started (progress is for managers), so it shows through the clean window until the clean-done card arrives.
+  function S110_walkNudge() {
+    var d = doorDef('checklist'), ok = d && CS.doorAllowed('checklist', role()), dl = ok ? CS.doorLink('checklist', d.url, location.origin, trustOn) : null;
+    return '<div class="S_walk" role="note"><span class="S_walkic">' + ICON('clip', 's24') + '</span><div><b>Walk through first</b><p>Before cleaning, a look around the room helps. Every issue found goes in the checklist: damage, stains, missing or broken items.</p>' +
+      (dl ? '<a class="btn btn-secondary btn-sm" href="' + esc(dl.href) + '"' + (dl.external ? ' target="_blank" rel="noopener"' : '') + '>' + ICON('alert', 's16') + 'Report issues in the checklist</a>' : '') + '</div></div>';
+  }
   function A_turnoverCard(staff) {
     var p = state.payload, T = A_houseT(), clock = CS.A_turnoverClock(new Date(), T), ds = dayStatusOf(p.today), outToday = !!ds.out, inToday = !!ds.arrive;
     if (!outToday && !inToday) {
@@ -386,13 +401,14 @@
       return '<section class="card glass A_card" aria-label="Turnover today"><div class="row-between"><span class="cap up">Turnover today</span></div><p class="strong H_tline" style="margin:0">' + esc('Today · out ' + T.outLabel + ' · in ' + T.inLabel) + '</p>' +
         (rows ? '<div class="H_checks">' + rows + '</div>' : '') + ((rd && !CS.H_readyOk(rd)) || (noId && rdFull && rdFull.id === false) ? H_readyBlock(raw, ds.stay, true, noId) : '') + A_primary(false, true) + '</section>';
     }
+    var nudge = outToday && clock.phase === 'window' && !state.cleanDone ? S110_walkNudge() : '';
     var steps = '<div class="A_steps">' +
       '<div><span class="dot">' + ICON('logout', 's16') + '</span><span>Guest out</span><b>' + esc(outToday ? T.outLabel : 'None today') + '</b></div>' +
       '<div class="' + (win ? 'now' : '') + '"><span class="dot">' + ICON('sparkles', 's16') + '</span><span>Clean</span><b>' + esc(closed ? 'Closed' : win ? 'Until ' + CS.A_shortTime(T.check_in) : 'From ' + CS.A_shortTime(T.check_out)) + '</b></div>' +
       '<div><span class="dot">' + ICON('user', 's16') + '</span><span>Guest in</span><b>' + esc(inToday ? T.inLabel : 'None today') + '</b></div></div>';
     var title = [outToday ? 'Guest out ' + T.outLabel : '', inToday ? (ds.stay.guest_name || 'Guest') + ' in ' + T.inLabel : ''].filter(Boolean).join(' · ');
     return '<section class="card glass A_card" aria-label="Turnover today"><div class="row-between"><span class="cap up">Turnover today</span></div><p class="strong H_tline" style="margin:0">' + esc(title) + '</p>' +
-      steps + '<p class="num H_until" style="margin:0">' + esc(CS.H_untilLine(clock, inToday)) + '</p>' + A_primary(true, true) + '</section>';
+      steps + '<p class="num H_until" style="margin:0">' + esc(CS.H_untilLine(clock, inToday)) + '</p>' + nudge + A_primary(true, true) + '</section>';
   }
   // MF1: the clean-done card (the checklist posts cs-clean-done). Primary leads straight into the pay request for that clean.
   function H_cleanDoneCard() {
@@ -400,7 +416,9 @@
     if (Date.now() - c.at > 86400000) { state.cleanDone = null; return ''; }
     var ms = c.finishedAt && c.startedAt ? new Date(c.finishedAt).getTime() - new Date(c.startedAt).getTime() : NaN, mins = isFinite(ms) && ms > 0 ? Math.round(ms / 60000) : 0;
     var took = mins ? (mins >= 60 ? Math.floor(mins / 60) + ' h ' + (mins % 60) + ' min' : mins + ' min') : '', ds = state.payload ? dayStatusOf(state.payload.today) : null, T = A_houseT();
-    return '<section class="card glass A_card H_cleandone" id="H_cleandone" aria-label="Clean done"><h2 class="hd">' + esc('Clean done' + (took ? ' · ' + took : '')) + '</h2>' +
+    var first = String(state.name || '').split(/\s+/)[0], arr = ds && ds.arrive ? String(ds.stay.guest_name || '').trim().split(/\s+/)[0] : '';
+    var thanks = state.layout === 'staff' ? '<p class="S_thanks" role="status">' + ICON('sparkles', 's16') + '<span>' + esc('Thank you' + (first ? ', ' + first : '') + '. The house is ready' + (arr ? ' for ' + arr : '') + '.' + (c.issues ? ' Thank you also for reporting ' + CS.plural(c.issues, 'issue') + '. It helps us look after the house.' : '')) + '</span></p>' : '';
+    return '<section class="card glass A_card H_cleandone" id="H_cleandone" aria-label="Clean done"><h2 class="hd">' + esc('Clean done' + (took ? ' · ' + took : '')) + '</h2>' + thanks +
       (ds && ds.arrive ? '<p class="sub" style="margin:0">' + esc((ds.stay.guest_name || 'Guest') + ' in at ' + T.inLabel) + '</p>' : '') +
       '<p class="sub" style="margin:0">' + esc((c.issues ? CS.plural(c.issues, 'issue') + ' logged' : 'No issues logged') + ' · ' + CS.plural(c.photos, 'photo')) + '</p>' +
       '<a class="btn btn-primary btn-block" href="' + esc(H_payUrl('', c.id ? '?clean=' + encodeURIComponent(c.id) : '')) + '">Ask for the cleaning fee</a>' +
@@ -603,8 +621,8 @@
     var tp = tierP(g, false), src = CS.sourceLabel(g.source), earlier = CS.earlierLine(g), withLine = CS.canSeeGuestContact(state.access && state.access.role) ? CS.companionsLine(g) : null; // D-319: owner/admin only, even if the server sent it
     var tint = kind === 'house' ? 'G_stay' : 'G_in'; // s93: arriving = green, in the house = blue (the house guest always checks out after today, so no third tint)
     var info = '<div class="card glass ' + tint + '" id="' + (kind === 'house' ? 'house' : 'next') + '"><div class="row-between"><span class="cap up">' + label + '</span>' + st + '</div>' +
-      '<div class="T_namerow T_gap"><h3 class="ttl">' + esc(g.guest_name || 'Guest') + '</h3>' + tp.chip + '</div>' + A_perks(g, kind === 'house' ? 'house' : 'arriving', tp) + (CS.notableLine(g) ? '<p class="help T_ask">' + esc(CS.notableLine(g)) + '</p>' : '') + (withLine ? '<p class="sub T_with">' + esc(withLine) + '</p>' : '') +
-      '<div class="row-wrap" style="margin-top:6px">' + tp.ret + (src ? '<span class="pill p-neutral">' + esc(src) + '</span>' : '') + '</div>' +
+      '<div class="T_namerow T_gap"><h3 class="ttl">' + esc(g.guest_name || 'Guest') + '</h3>' + A_badge(g) + '</div>' + A_perks(g, kind === 'house' ? 'house' : 'arriving', tp) + (CS.notableLine(g) ? '<p class="help T_ask">' + esc(CS.notableLine(g)) + '</p>' : '') + (withLine ? '<p class="sub T_with">' + esc(withLine) + '</p>' : '') +
+      '<div class="row-wrap" style="margin-top:6px">' + (src ? '<span class="pill p-neutral">' + esc(src) + '</span>' : '') + '</div>' +
       '<p class="sub num" style="margin:8px 0 0">' + esc(datesLine(g)) + '</p>' + (earlier ? '<p class="help num" style="margin:2px 0 0">' + esc(earlier) + '</p>' : '') + contactBlock(g) +
       H_readyBlock(g.arrival_ready, g, true) + (canAddDetails() && g.uid ? '<a class="btn btn-secondary btn-sm" href="./guest/#' + encodeURIComponent(g.uid) + '" style="margin-top:12px">' + ICON('idcard', 's16') + 'Add guest details</a>' : '') +
       (CS.canSeeGuestContact(role()) && /^[\w-]{1,64}$/.test(String(g.guest_id || '')) ? '<a class="btn btn-ghost btn-sm" href="#guests/' + encodeURIComponent(g.guest_id) + '" style="margin-top:12px">' + ICON('user', 's16') + 'Open guest</a>' : '') + '</div>'; // 3.2: when the payload carries the guest id
@@ -2073,7 +2091,9 @@
           if (!(j && j.current && j.current.temp != null)) return null;
           if (state.payload) {
             var c = j.current;
-            state.payload.weather = { source: j.source || null, fetched_at: j.fetched_at || new Date().toISOString(), current: { temp: c.temp, emoji: c.emoji, description: c.description, rain_prob: c.rain_prob, today_high: c.today_high, today_low: c.today_low, humidity: c.humidity, uv_label: c.uv_label } };
+            state.payload.weather = { source: j.source || null, fetched_at: j.fetched_at || new Date().toISOString(), current: { temp: c.temp, emoji: c.emoji, description: c.description, rain_prob: c.rain_prob, today_high: c.today_high, today_low: c.today_low, humidity: c.humidity, uv_label: c.uv_label,
+              feels_like: c.feels_like, code: c.code != null ? c.code : j.code, wind_gust_kph: c.wind_gust_kph, uv_index: c.uv_index }, aqi: j.aqi,
+              hourly: (Array.isArray(j.hourly) ? j.hourly : []).slice(0, 14).map(function (h) { return { time: h.time, rain_chance_pct: h.rain_chance_pct, temp: h.temp, code: h.code, mm: h.mm }; }) }; // s110: hours, feels-like, gusts, UV and air quality ride the same answer
             render();
           }
           return j;

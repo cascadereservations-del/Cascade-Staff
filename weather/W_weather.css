@@ -50,6 +50,7 @@
 .W_ht { font: 400 max(0.8125rem, var(--v5-t-label)) var(--v5-font-ui); color: var(--v5-ink-2); white-space: nowrap; }
 .W_hd { font: 700 var(--v5-t-2) var(--v5-font-ui); color: var(--v5-ink); }
 .W_hr { font: 600 max(0.8125rem, var(--v5-t-label)) var(--v5-font-ui); color: var(--v5-info-t); min-height: 1.2em; }
+.W_hr.wet { color: var(--v5-warn-t); }
 
 /* the 7 days */
 .W_dcard { padding: 2px 0; }

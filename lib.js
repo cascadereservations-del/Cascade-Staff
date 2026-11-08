@@ -521,6 +521,23 @@
     var n = g.stay_count > 0 ? Math.round(+g.stay_count) : 0;
     return { tier: t, icon: r[1], text: r[0] + (n > 1 ? ' · ' + ordinal(n) + ' stay' : '') };
   }
+  // s110: one tag per guest tier with its own glyph and the total stays (stay_count includes the current stay). First stay only when the data says so
+  // (tier first, repeat false, or one stay); an unknown tier with no count and no repeat flag gives null, never a guessed label.
+  var BADGE = { first: ['First stay', 'sprout'], returning: ['Returning', 'repeat'], regular: ['Regular', 'sparkles'], vip: ['VIP', 'crown'] };
+  function tierBadge(g) {
+    if (!g) return null;
+    var n = Math.round(+g.stay_count); n = n > 0 ? n : 0;
+    var t = Object.prototype.hasOwnProperty.call(BADGE, g.tier) ? g.tier : null;
+    if (t === 'first' && n > 1) t = null; // the count wins over a stale tier
+    if (!t) {
+      if (g.repeat === false) t = 'first';
+      else if (n > 1 || (g.repeat === true && !n)) t = 'returning';
+      else if ((n === 1 && g.repeat !== true) || g.tier === 'first') t = 'first';
+      else return null;
+    }
+    var first = t === 'first', c = first ? 1 : n;
+    return { tier: t, icon: BADGE[t][1], word: BADGE[t][0], count: c || null, text: first ? 'First stay' : BADGE[t][0] + (c ? ' · ' + plural(c, 'stay') : '') };
+  }
   // s105 SPEC-46 section 1: perks to give, from ONE map, cumulative by tier. phase 'arrival' = prepare before arrival, 'house' = what to give during the stay. opts.id: an ID is on file (the no-ID-again line needs it).
   // At most 4 lines: over that, the ID line goes first, then the last ones. No prices, no discounts, no exclamation marks.
   var PERKS = {
@@ -689,7 +706,56 @@
     }
     return { temp: Math.round(+c.temp), desc: c.description ? String(c.description) : '', hi: ra ? ra.hi : (c.today_high != null ? Math.round(+c.today_high) : null), lo: ra ? ra.lo : (c.today_low != null ? Math.round(+c.today_low) : null),
       rain: !!ra, soon: soon, window: ra ? ra.window : '', pct: ra ? ra.pct : null, peakAt: ra ? ra.peakAt : '', head: rl && !(ra && (ra.src === 'watch' || ra.peakAt)) ? rl.head : '', hours: hours.some(function (h) { return h.pct > 0; }) ? hours : [],
-      action: !ra || ended ? '' : anyTime ? 'Rain may start any time. Bring towels and mats in now.' : 'Bring towels and mats in before ' + (when || 'the rain'), asOf: old ? clockLabel(w.fetched_at) : '' };
+      action: !ra || ended ? '' : anyTime ? 'Rain may start any time. Bring towels and mats in now.' : 'Bring towels and mats in before ' + (when || 'the rain'), asOf: old ? clockLabel(w.fetched_at) : '', hourly: wxHourly(payload, view, now), hazards: wxHazards(payload, view, now) };
+  }
+  // s110: the next 12 hours for the Today strip. Prefers the weather-proxy hours the Home already fetched (time, rain chance, temperature, condition code);
+  // else the notices_v1 hours (time and rain chance only). icon: condition code, else the rain chance. A missing temperature stays null.
+  function wxNum(v) { return v == null || v === '' || !isFinite(+v) ? null : +v; }
+  function wxIcon(code, pct, h) {
+    var night = h != null && (h < 6 || h >= 18);
+    if (code != null) return code >= 95 ? 'zap' : (code >= 51 && code <= 67) || (code >= 80 && code <= 82) ? 'rain' : code <= 1 ? (night ? 'moon' : 'sun') : 'cloud';
+    return pct >= 50 ? 'rain' : 'cloud';
+  }
+  function wxHourly(payload, view, now) {
+    var ms0 = now instanceof Date ? now.getTime() : (now == null ? Date.now() : now), rows = payload && payload.weather && payload.weather.hourly, nw = view && view.weather, out = [];
+    (Array.isArray(rows) ? rows : []).forEach(function (r) {
+      var t = r && Date.parse(r.time); if (!isFinite(t) || t + 3600000 <= ms0) return;
+      var pct = wxNum(r.rain_chance_pct), tp = wxNum(r.temp), code = wxNum(r.code), h = manilaParts(new Date(t)).h;
+      out.push({ ms: t, label: A_hour12(r.time), pct: pct == null ? null : Math.max(0, Math.min(100, Math.round(pct))), temp: tp == null ? null : Math.round(tp), icon: wxIcon(code, pct, h) });
+    });
+    out.sort(function (a, b) { return a.ms - b.ms; }); out = out.slice(0, 12);
+    if (!out.length) ((nw && nw.hours) || []).slice(0, 12).forEach(function (x) {
+      var m = /^(\d{1,2}) (am|pm)$/.exec(String(x && x.label)), h = m ? (+m[1] % 12) + (m[2] === 'pm' ? 12 : 0) : null;
+      if (m) out.push({ ms: 0, label: x.label, pct: Math.max(0, Math.min(100, Math.round(+x.pct || 0))), temp: null, icon: wxIcon(null, +x.pct || 0, h) });
+    });
+    return out.map(function (x) { return { label: x.label, pct: x.pct, temp: x.temp, icon: x.icon }; });
+  }
+  // s110: weather warnings beyond rain, ordered by kind (thunder, wind, heavy rain, heat, haze, UV). Real fields only: description / condition and code, wind_gust_kph, feels_like,
+  // aqi, uv_index or uv_label, hourly code and mm. staff_home_v1 alone carries the description and uv_label; the weather-proxy reading the Home loads adds the rest.
+  // A reading over an hour old says nothing about the sky now. A missing field gives no warning. strip: worth the coloured strip on top of Today (the milder ones stay in the Weather card).
+  // Heat follows PAGASA heat index bands on the feels-like value: 33 to 41 extreme caution, 42 to 51 danger, 52 and over extreme danger.
+  function wxHazards(payload, view, now) {
+    var w = payload && payload.weather, nw = view && view.weather, cur = w && w.current && !weatherStale(w, now) ? w.current : null, out = [];
+    if (!cur && !nw) return out;
+    var desc = String((cur && cur.description) || (nw && nw.condition) || ''), code = wxNum(cur && cur.code != null ? cur.code : nw && nw.code), gust = wxNum(cur && cur.wind_gust_kph), feels = wxNum(cur && cur.feels_like);
+    var aqi = wxNum(cur && w.aqi != null ? w.aqi : (nw ? nw.aqi : null)), uv = wxNum(cur && cur.uv_index), uvl = String((cur && cur.uv_label) || '');
+    var ms0 = now instanceof Date ? now.getTime() : (now == null ? Date.now() : now), soon = [], mm = 0;
+    (cur && Array.isArray(w.hourly) ? w.hourly : []).forEach(function (r) { var t = r && Date.parse(r.time); if (isFinite(t) && t + 3600000 > ms0 && t < ms0 + 6 * 3600000) soon.push(r); });
+    soon.forEach(function (r) { mm = Math.max(mm, wxNum(r.mm) || 0); });
+    ((nw && nw.hours) || []).slice(0, 6).forEach(function (r) { mm = Math.max(mm, wxNum(r && r.mm) || 0); });
+    var add = function (kind, level, word, detail, advice, icon) { out.push({ kind: kind, level: level, word: word, detail: detail, advice: advice, icon: icon, strip: level >= 2 || kind === 'haze' }); };
+    var thunderNow = (code != null && code >= 95) || /thunder|storm/i.test(desc), thunderSoon = soon.some(function (r) { return wxNum(r.code) != null && wxNum(r.code) >= 95; });
+    if (thunderNow) add('storm', 3, 'Thunderstorm', '', 'It is best to close the windows, unplug sensitive devices and keep the EcoFlow charged.', 'zap');
+    else if (thunderSoon) add('storm', 2, 'Thunderstorm possible', 'In the next few hours', 'It is best to close the windows and keep the EcoFlow charged.', 'zap');
+    if (gust != null && gust >= 50) add('wind', gust >= 70 ? 3 : 2, 'Strong wind', 'Gusts to ' + Math.round(gust) + ' km/h', 'Keeping the windows shut and light items inside helps.', 'wind');
+    if ((code != null && (code === 65 || code === 67 || code === 82)) || /heavy rain|torrential|downpour/i.test(desc) || mm >= 7.6) add('rain', 2, 'Heavy rain', '', 'It is best to keep the windows shut and check the entrance for water.', 'rain');
+    if (feels != null && feels >= 33) {
+      var lv = feels >= 52 ? 3 : feels >= 42 ? 2 : 1;
+      add('heat', lv, 'Extreme heat', 'Feels like ' + Math.round(feels) + '°, ' + (lv === 3 ? 'extreme danger' : lv === 2 ? 'danger' : 'extreme caution'), 'Setting the AC early before an arrival and keeping cold water ready helps.', 'thermo');
+    }
+    if (aqi != null && aqi >= 101) add('haze', 1, aqi >= 151 ? 'Haze, poor air' : 'Hazy air', 'Air quality ' + Math.round(aqi), 'Keeping the windows shut and the AC on keeps the air in the house clean.', 'haze');
+    if ((uv != null && uv >= 8) || /^(very high|extreme)$/i.test(uvl)) add('uv', 1, 'Very high UV', uv != null ? 'UV ' + Math.round(uv) : '', 'Closing the curtains on the sunny side helps the AC keep up.', 'sun');
+    return out;
   }
   // s105: while a guest is in the house, the next stay is a returning, regular or VIP guest arriving in 0 to 2 days: who, which day, the ribbon words and the arrival perks. Null otherwise (a first stay draws nothing).
   // s109: the incoming guest as its own card under the in-house one, every tier (first stays too), within 14 days; ribbon is null for a first stay.
@@ -979,7 +1045,7 @@
     var mgr = canSeeGuestContact(role), times = A_houseTimes(raw.house_times);
     var w = raw.weather && typeof raw.weather === 'object' ? raw.weather : null, weather = null;
     if (w && typeof w.temp_c === 'number') {
-      weather = { source: A_WEATHER_SOURCE[w.source] || '', temp: Math.round(w.temp_c), condition: String(w.condition || ''), rain: typeof w.rain_chance_pct === 'number' ? Math.round(w.rain_chance_pct) : null,
+      weather = { source: A_WEATHER_SOURCE[w.source] || '', temp: Math.round(w.temp_c), condition: String(w.condition || ''), code: typeof w.code === 'number' ? w.code : null, rain: typeof w.rain_chance_pct === 'number' ? Math.round(w.rain_chance_pct) : null,
         aqi: typeof w.aqi === 'number' ? Math.round(w.aqi) : null, fetched_at: w.fetched_at || null,
         hours: (Array.isArray(w.hourly) ? w.hourly : []).slice(0, 12).filter(function (h) { return h && h.time; }).map(function (h) { return { label: A_hour12(h.time), pct: typeof h.rain_chance_pct === 'number' ? Math.round(h.rain_chance_pct) : 0, mm: typeof h.mm === 'number' ? h.mm : 0 }; }),
         watch: null };
@@ -1553,7 +1619,7 @@
     fmtTime: fmtTime, fmt24: fmt24, ordinal: ordinal, plural: plural, agoLabel: agoLabel, clockLabel: clockLabel,
     monthGrid: monthGrid, dayState: dayState, dayStatus: dayStatus, mergeStays: mergeStays, sameGuest: sameGuest, dayMoves: dayMoves, blockWhy: blockWhy, flagName: flagName, FLAG_KINDS: FLAG_KINDS, blockedLines: blockedLines, blockedLineText: blockedLineText,
     canFlagDays: canFlagDays, guestContact: guestContact, canSeeGuestContact: canSeeGuestContact, MESSENGER_INBOX: MESSENGER_INBOX, rpcMissing: rpcMissing, tgLink: tgLink, warningInfo: warningInfo, findingKey: findingKey, initialOf: initialOf, sourceLabel: sourceLabel, stayDates: stayDates, monthInRange: monthInRange,
-    tierRibbon: tierRibbon, nextPrep: nextPrep, utilAlerts: utilAlerts, isInternetNotice: isInternetNotice, tierPerks: tierPerks, faceFrame: faceFrame, parseNotes: parseNotes, returningLabel: returningLabel, tierLabel: tierLabel, tierLine: tierLine, tierParts: tierParts, keyNote: keyNote, TOPIC_LABELS: TOPIC_LABELS, notableLine: notableLine, weatherIcon: weatherIcon, rainAlert: rainAlert, wxCard: wxCard, goodToKnow: goodToKnow, earlierLine: earlierLine, companionsLine: companionsLine, todayCardState: todayCardState,
+    tierRibbon: tierRibbon, tierBadge: tierBadge, wxHazards: wxHazards, wxHourly: wxHourly, nextPrep: nextPrep, utilAlerts: utilAlerts, isInternetNotice: isInternetNotice, tierPerks: tierPerks, faceFrame: faceFrame, parseNotes: parseNotes, returningLabel: returningLabel, tierLabel: tierLabel, tierLine: tierLine, tierParts: tierParts, keyNote: keyNote, TOPIC_LABELS: TOPIC_LABELS, notableLine: notableLine, weatherIcon: weatherIcon, rainAlert: rainAlert, wxCard: wxCard, goodToKnow: goodToKnow, earlierLine: earlierLine, companionsLine: companionsLine, todayCardState: todayCardState,
     orderWarnings: orderWarnings, brownoutText: brownoutText, lowStockText: lowStockText, warningSummary: warningSummary,
     weatherLine: weatherLine, rainLine: rainLine, weatherStale: weatherStale, WEATHER_STALE_MIN: WEATHER_STALE_MIN, esc: esc,
     A_HOUSE_FALLBACK: A_HOUSE_FALLBACK, A_houseTimes: A_houseTimes, A_turnoverClock: A_turnoverClock, A_turnoverLine: A_turnoverLine, A_hm: A_hm, A_NOTICE_TYPES: A_NOTICE_TYPES, A_noticesView: A_noticesView, A_noticeFilters: A_noticeFilters, A_dayMarks: A_dayMarks, A_noticeDay: A_noticeDay, A_guestMessage: A_guestMessage, A_CAL_TABS: A_CAL_TABS, A_calTab: A_calTab, A_stayShade: A_stayShade, A_hubGroups: A_hubGroups, A_hubNative: A_hubNative, A_hubRoutes: A_hubRoutes, A_hubRouteOk: A_hubRouteOk, A_hubDoorUrl: A_hubDoorUrl, A_whatsNew: A_whatsNew, A_shortTime: A_shortTime, A_PINNED: A_PINNED, A_noticeAddError: A_noticeAddError, A_NOTICE_HINT: A_NOTICE_HINT, A_flagDup: A_flagDup, A_facebookUrl: A_facebookUrl, A_fbPluginUrl: A_fbPluginUrl, A_noticeAddProblem: A_noticeAddProblem, A_noticeAddArgs: A_noticeAddArgs, A_plainRefusal: A_plainRefusal, A_hour12: A_hour12, A_timeRange: A_timeRange,
