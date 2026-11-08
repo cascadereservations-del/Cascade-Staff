@@ -96,7 +96,7 @@
     if (!m.n) return h + '<p class="K_sub">' + esc(o.empty || 'No readings yet.') + '</p>' + (o.foot || '') + '</div>';
     var svg = '<svg class="KU_svg" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true" focusable="false">' +
       m.ticks.map(function (t) { var y = r2(yOf(t, m.max)); return '<line class="' + (t === 0 ? 'KU_base' : 'KU_grid') + '" x1="0" x2="100" y1="' + y + '" y2="' + y + '"' + VE + '></line>'; }).join('') +
-      (m.band ? '<rect class="KU_band" x="0" width="100" y="' + m.band.y1 + '" height="' + r2(Math.max(0.6, m.band.y0 - m.band.y1)) + '"></rect>' : '') +
+      (m.band ? '<rect class="KU_band"' + VE + ' x="0" width="100" y="' + m.band.y1 + '" height="' + r2(Math.max(0.6, m.band.y0 - m.band.y1)) + '"></rect>' : '') +
       (m.typical ? '<line class="KU_typ" x1="0" x2="100" y1="' + m.typical.y + '" y2="' + m.typical.y + '"' + VE + '></line>' : '') +
       m.segs.filter(function (s) { return s.length > 1; }).map(function (s) { return (o.area === false ? '' : '<path class="KU_area" d="' + areaOf(s) + '"></path>') + '<polyline class="KU_line" points="' + pathOf(s) + '"' + VE + '></polyline>'; }).join('') + '</svg>';
     var dots = m.pts.filter(function (p) { return p.v != null; }).map(function (p) {

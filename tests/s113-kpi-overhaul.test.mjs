@@ -64,7 +64,7 @@ test('s113 chart B: Use per day, last 8 readings, a line with an area, a usual b
   assert.match(c, /<b>Use per day, last 8 readings, kWh<\/b>/); assert.match(c, /data-kact="day" data-day="kwh" aria-selected="true">Electricity/);
   assert.match(c, /<svg class="KU_svg" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true" focusable="false">/); assert.match(c, /<polyline class="KU_line" points="4,80 /); assert.match(c, /<path class="KU_area" d="M4,100 L4,80 /);
   // sorted 8, 8.3, 9, 10, 10, 10, 10, 42: 25th = 8.3 + 0.7 x 0.75 = 8.825, 75th = 10 -> band from y 80 to y 82.35
-  assert.match(c, /<rect class="KU_band" x="0" width="100" y="80" height="2.35"><\/rect>/); assert.match(c, /<i class="KU_kband"><\/i>usual 8\.8 to 10 kWh/);
+  assert.match(c, /<rect class="KU_band" vector-effect="non-scaling-stroke" x="0" width="100" y="80" height="2.35"><\/rect>/); assert.match(c, /<i class="KU_kband"><\/i>usual 8\.8 to 10 kWh/);
   assert.doesNotMatch(c, /avg|average|KU_typ/i, 'no average line: one outlier moves an average');
   assert.equal((c.match(/role="img"/g) || []).length, 8, 'a dot with an aria-label for every reading');
   assert.match(c, /aria-label="27 Oct: 8\.3 kWh a day over 3 days, latest reading"/); assert.match(c, /aria-label="26 Oct: 42 kWh a day over 3 days, highest"/);
@@ -153,10 +153,10 @@ test('s113 tier rules: one place (CS.TIER_RULES), the boundaries by stays and by
   for (const [s, t] of [[1, 'first'], [2, 'returning'], [3, 'returning'], [4, 'regular'], [6, 'regular'], [7, 'vip']]) assert.equal(CS.tierFromCounts(s), t, s + ' stays');
   assert.equal(CS.tierFromCounts(2, 9), 'returning'); assert.equal(CS.tierFromCounts(2, 10), 'regular'); assert.equal(CS.tierFromCounts(5, 19), 'regular'); assert.equal(CS.tierFromCounts(5, 20), 'vip');
   const P = (s, n) => CS.tierProgress({ tier: CS.tierFromCounts(s, n), stay_count: s, total_nights: n });
-  assert.equal(P(1), 'First stay · Returning from the 2nd stay'); assert.equal(P(2), 'Returning · 2 more stays to Regular (4 stays or 10 nights)'); assert.equal(P(3), 'Returning · 1 more stay to Regular (4 stays or 10 nights)');
-  assert.equal(P(4), 'Regular · 3 more stays to VIP (7 stays or 20 nights)'); assert.equal(P(6), 'Regular · 1 more stay to VIP (7 stays or 20 nights)'); assert.equal(P(7), 'VIP · top tier');
-  assert.equal(P(2, 9), 'Returning · 2 more stays or 1 more night to Regular (4 stays or 10 nights)'); assert.equal(P(5, 19), 'Regular · 2 more stays or 1 more night to VIP (7 stays or 20 nights)');
-  assert.equal(CS.tierProgress({ tier: 'vip' }), 'VIP · top tier'); assert.equal(CS.tierProgress(null), null); assert.equal(CS.tierProgress({ tier: 'gold' }), null);
+  assert.equal(P(1), 'Returning from the 2nd stay'); assert.equal(P(2), '2 more stays to Regular (4 stays or 10 nights)'); assert.equal(P(3), '1 more stay to Regular (4 stays or 10 nights)');
+  assert.equal(P(4), '3 more stays to VIP (7 stays or 20 nights)'); assert.equal(P(6), '1 more stay to VIP (7 stays or 20 nights)'); assert.equal(P(7), 'Top tier');
+  assert.equal(P(2, 9), '2 more stays or 1 more night to Regular (4 stays or 10 nights)'); assert.equal(P(5, 19), '2 more stays or 1 more night to VIP (7 stays or 20 nights)');
+  assert.equal(CS.tierProgress({ tier: 'vip' }), 'Top tier'); assert.equal(CS.tierProgress(null), null); assert.equal(CS.tierProgress({ tier: 'returning', repeat: true }), 'Next: Regular (4 stays or 10 nights)', 'no stay count: never guess how many are left'); assert.equal(CS.tierProgress({ tier: 'gold' }), null);
   assert.deepEqual(CS.tierGuide().map((t) => [t.tier, t.when, t.rule]), [['first', '1st stay', '1st stay. The standard amenities.'], ['returning', 'from the 2nd stay', 'From the 2nd stay.'], ['regular', '4 stays or 10 nights', '4 or more stays, or 10 or more nights.'], ['vip', '7 stays or 20 nights', '7 or more stays, or 20 or more nights.']]);
   assert.doesNotMatch(read('app.js'), /[^.]\b(?:4 or more stays|7 or more stays|10 or more nights)/, 'no copy of the thresholds in the shell');
 });
@@ -165,8 +165,8 @@ test('s113 tier badges: on the Now and Up next cards (and the Calendar guest car
   let focused = ''; const rowEl = (t) => Object.assign(el(), { focus() { focused = t; } });
   const app = await boot({ role: 'cleaner', hash: '#home', els: { 'tg-vip': rowEl('vip'), 'tg-returning': rowEl('returning') }, handlers: baseHandlers('cleaner', { staff_home_v1: () => HOMEWITH([stayRow('Ana Reyes', '2026-10-13', '2026-10-17')], { current_guest: cur, next_guest: nxt }) }) });
   const h = app.els['v-home'].innerHTML;
-  assert.match(h, /<button class="T_ribbon p-tier-vip" type="button" data-act="tiers-open" data-tier="vip"><svg[^>]*><\/svg><span>VIP · 8 stays<\/span><span class="sr">, open the guest tiers guide<\/span><\/button><p class="sub T_prog">VIP · top tier<\/p>/);
-  assert.match(h, /T_upnext[\s\S]*?<button class="T_badge p-tier-returning" type="button" data-act="tiers-open" data-tier="returning">[\s\S]*?<\/button><\/div><p class="sub T_prog">Returning · 2 more stays to Regular \(4 stays or 10 nights\)<\/p>/);
+  assert.match(h, /<button class="T_ribbon p-tier-vip" type="button" data-act="tiers-open" data-tier="vip"><svg[^>]*><\/svg><span>VIP · 8 stays<\/span><span class="sr">, open the guest tiers guide<\/span><\/button><p class="sub T_prog">Top tier<\/p>/);
+  assert.match(h, /T_upnext[\s\S]*?<button class="T_badge p-tier-returning" type="button" data-act="tiers-open" data-tier="returning">[\s\S]*?<\/button><\/div><p class="sub T_prog">2 more stays to Regular \(4 stays or 10 nights\)<\/p>/);
   await app.click({ 'data-act': 'tiers-open', 'data-tier': 'vip' }); await app.flush();
   const b = app.els['cs-body'].innerHTML; assert.equal(app.els['cal-sheet'].getAttribute('aria-hidden'), 'false'); assert.equal(focused, 'vip', 'focus on the guest’s own tier row');
   assert.match(b, /<h2 class="ttl" id="cs-h" tabindex="-1">Guest tiers: how many stays for each<\/h2>/); assert.match(b, /<tr class="T_tr T_tcur" id="tg-vip" tabindex="-1" aria-current="true">/); assert.equal((b.match(/aria-current/g) || []).length, 1);

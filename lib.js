@@ -605,10 +605,12 @@
   function tierProgress(g) {
     var b = tierBadge(g); if (!b) return null;
     var t = b.tier, s = Math.round(+(g && g.stay_count)) || (t === 'first' ? 1 : 0), n = g && g.total_nights != null && isFinite(+g.total_nights) ? Math.round(+g.total_nights) : null;
-    if (t === 'vip') return 'VIP · top tier';
-    if (t === 'first') return 'First stay · Returning from the ' + ordinal(TIER_RULES.returning.stays) + ' stay';
+    // the badge right above already names the tier, so the line starts with what comes next
+    if (t === 'vip') return 'Top tier';
+    if (t === 'first') return 'Returning from the ' + ordinal(TIER_RULES.returning.stays) + ' stay';
     var next = TIER_ORDER[TIER_ORDER.indexOf(t) + 1], r = TIER_RULES[next], left = Math.max(1, r.stays - s), nl = n != null && r.nights ? Math.max(1, r.nights - n) : null;
-    return TIER_WORD[t] + ' · ' + left + ' more ' + (left === 1 ? 'stay' : 'stays') + (nl != null ? ' or ' + nl + ' more ' + (nl === 1 ? 'night' : 'nights') : '') + ' to ' + TIER_WORD[next] + ' (' + tierWhen(next) + ')';
+    if (!s) return 'Next: ' + TIER_WORD[next] + ' (' + tierWhen(next) + ')'; // no stay count sent: never guess how many are left
+    return left + ' more ' + (left === 1 ? 'stay' : 'stays') + (nl != null ? ' or ' + nl + ' more ' + (nl === 1 ? 'night' : 'nights') : '') + ' to ' + TIER_WORD[next] + ' (' + tierWhen(next) + ')';
   }
   function tierGuide() {
     return ['first', 'returning', 'regular', 'vip'].map(function (t) {
