@@ -551,7 +551,7 @@
   // At most 4 lines: over that, the ID line goes first, then the last ones. No prices, no discounts, no exclamation marks.
   var PERKS = {
     id: ['No need to ask for ID again, one is on file', 'returning', 'arrival'],
-    std: ['Standard freebie: 2 Kit Kats or an extra bottle of water', 'first', 'arrival'], // s109: Lloyd's default freebie, every guest
+    std: ['Returning-guest freebie: 2 Kit Kats or an extra bottle of water', 'returning', 'arrival'], // D-360 (Lloyd 2026-11-08): returning, regular and VIP guests only; a first stay gets the standard amenities, no freebie
     early1: ['First hour of early check-in or late check-out free, if the calendar allows', 'returning', 'both', 'regular'],
     early2: ['Up to 2 hours early or late free, if the calendar allows', 'regular', 'both'],
     prefs: ['Set saved preferences before arrival (pillows, AC temperature)', 'regular', 'arrival'],
@@ -561,7 +561,7 @@
   };
   var TIER_RANK = { first: 0, returning: 1, regular: 2, vip: 3 };
   function tierPerks(tier, opts) {
-    var rk = TIER_RANK[tier] || 0; opts = opts || {}; // s109: a first stay or an unknown tier still gets the standard freebie
+    var rk = TIER_RANK[tier] || 0; opts = opts || {}; // a first stay or an unknown tier gets no perk lines (D-360)
     var phase = opts.phase === 'house' ? 'house' : 'arrival', out = [];
     Object.keys(PERKS).forEach(function (k) {
       var p = PERKS[k], from = TIER_RANK[p[1]], upto = p[3] ? TIER_RANK[p[3]] : 9, ph = p[2];

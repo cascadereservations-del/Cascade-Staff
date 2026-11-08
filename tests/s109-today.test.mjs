@@ -25,9 +25,11 @@ test('s109 utility strip: today and tomorrow only, one word per kind, time range
   assert.equal(CS.H_houseLine(view([NOTICE({ title: 'No internet today' })]), TODAY).text, 'Internet down');
 });
 
-test('s109 standard freebie: every guest, first stay included, before arrival; none during the stay of a first stay', () => {
-  const F = 'Standard freebie: 2 Kit Kats or an extra bottle of water';
-  for (const t of [null, 'first', 'returning', 'regular', 'vip']) assert.ok(CS.tierPerks(t, { phase: 'arrival' }).includes(F), String(t));
+test('D-360 freebie: returning, regular and VIP guests only, before arrival; a first stay or an unknown tier gets none', () => {
+  const F = 'Returning-guest freebie: 2 Kit Kats or an extra bottle of water';
+  for (const t of ['returning', 'regular', 'vip']) assert.ok(CS.tierPerks(t, { phase: 'arrival' }).includes(F), String(t));
+  for (const t of [null, 'first', 'gold']) assert.ok(!CS.tierPerks(t, { phase: 'arrival' }).includes(F), String(t));
+  assert.doesNotMatch(read('lib.js'), /Standard freebie/);
   assert.deepEqual(CS.tierPerks(null, { phase: 'house' }), []);
   assert.doesNotMatch(read('lib.js'), /coffee sachets/);
 });

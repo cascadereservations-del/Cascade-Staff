@@ -45,11 +45,11 @@ test('s109 up next: the incoming guest is its own card under the in-house one fo
   for (const role of ['admin', 'cleaner']) {
     const h = await house(cur, { next_guest: nx() }, role);
     assert.match(h, /<section class="card A_card F_span T_card T_upnext T_tier-regular" aria-label="Next arrival"><div class="row-between"><span class="cap up T_lbl">Up next · incoming<\/span>[\s\S]*?Arrives tomorrow[\s\S]*?<h3 class="T_nname">Ben Cruz<\/h3>[\s\S]*?Regular/);
-    assert.match(h.slice(h.indexOf('T_upnext')), /Prepare before arrival[\s\S]*Standard freebie: 2 Kit Kats or an extra bottle of water[\s\S]*Set saved preferences/);
+    assert.match(h.slice(h.indexOf('T_upnext')), /Prepare before arrival[\s\S]*Returning-guest freebie: 2 Kit Kats or an extra bottle of water[\s\S]*Set saved preferences/);
     assert.ok(h.indexOf('T_now') < h.indexOf('T_upnext'), 'the guest in the house comes first');
     if (role === 'cleaner') assert.doesNotMatch(h.slice(h.indexOf('T_upnext')), /tel:|T_call/);
   }
-  assert.match(await house(cur, { next_guest: nx({ tier: null, repeat: false }) }), /T_upnext T_tier-first[\s\S]*?First stay[\s\S]*?Standard freebie/, 'first stay');
+  { const fs1 = await house(cur, { next_guest: nx({ tier: null, repeat: false }) }); assert.match(fs1, /T_upnext T_tier-first[\s\S]*?First stay/, 'first stay'); assert.doesNotMatch(fs1.slice(fs1.indexOf('T_upnext')), /freebie|Kit Kat/, 'D-360: no freebie for a first stay'); }
   { const h = await house(cur, { next_guest: nx({ tier: null, repeat: undefined, stay_count: undefined }) }); assert.doesNotMatch(h.slice(h.indexOf('T_upnext')), /First stay|T_badge/, 'an unknown tier is not called a first stay (the guest in the house has its own tag)'); }
   assert.match(await house(cur, { next_guest: nx({ checkin_date: plus(3), checkout_date: plus(5) }) }), /T_upnext/, 'three days away');
   assert.doesNotMatch(await house(cur, { next_guest: nx({ checkin_date: plus(15), checkout_date: plus(17) }) }), /T_upnext/, 'over 14 days away');
