@@ -736,6 +736,7 @@
   // Heat follows PAGASA heat index bands on the feels-like value: 33 to 41 extreme caution, 42 to 51 danger, 52 and over extreme danger.
   function wxHazards(payload, view, now) {
     var w = payload && payload.weather, nw = view && view.weather, cur = w && w.current && !weatherStale(w, now) ? w.current : null, out = [];
+    if (nw && weatherStale(nw, now)) nw = null; // the notices reading ages out too: an old storm or haze row must not show hours later
     if (!cur && !nw) return out;
     var desc = String((cur && cur.description) || (nw && nw.condition) || ''), code = wxNum(cur && cur.code != null ? cur.code : nw && nw.code), gust = wxNum(cur && cur.wind_gust_kph), feels = wxNum(cur && cur.feels_like);
     var aqi = wxNum(cur && w.aqi != null ? w.aqi : (nw ? nw.aqi : null)), uv = wxNum(cur && cur.uv_index), uvl = String((cur && cur.uv_label) || '');
@@ -751,10 +752,11 @@
     if ((code != null && (code === 65 || code === 67 || code === 82)) || /heavy rain|torrential|downpour/i.test(desc) || mm >= 7.6) add('rain', 2, 'Heavy rain', '', 'It is best to keep the windows shut and check the entrance for water.', 'rain');
     if (feels != null && feels >= 33) {
       var lv = feels >= 52 ? 3 : feels >= 42 ? 2 : 1;
-      add('heat', lv, 'Extreme heat', 'Feels like ' + Math.round(feels) + '°, ' + (lv === 3 ? 'extreme danger' : lv === 2 ? 'danger' : 'extreme caution'), 'Setting the AC early before an arrival and keeping cold water ready helps.', 'thermo');
+      add('heat', lv, lv === 3 ? 'Extreme heat' : lv === 2 ? 'Dangerous heat' : 'Hot today', 'Feels like ' + Math.round(feels) + '°, ' + (lv === 3 ? 'extreme danger' : lv === 2 ? 'danger' : 'extreme caution'), 'Setting the AC early before an arrival and keeping cold water ready helps.', 'thermo');
     }
     if (aqi != null && aqi >= 101) add('haze', 1, aqi >= 151 ? 'Haze, poor air' : 'Hazy air', 'Air quality ' + Math.round(aqi), 'Keeping the windows shut and the AC on keeps the air in the house clean.', 'haze');
-    if ((uv != null && uv >= 8) || /^(very high|extreme)$/i.test(uvl)) add('uv', 1, 'Very high UV', uv != null ? 'UV ' + Math.round(uv) : '', 'Closing the curtains on the sunny side helps the AC keep up.', 'sun');
+    var hr = manilaParts(ms0).h; // the Open-Meteo fallback gives the day's peak UV, so only in daylight
+    if (hr >= 8 && hr <= 16 && ((uv != null && uv >= 8) || /^(very high|extreme)$/i.test(uvl))) add('uv', 1, 'Very high UV', uv != null ? 'UV ' + Math.round(uv) : '', 'Closing the curtains on the sunny side helps the AC keep up.', 'sun');
     return out;
   }
   // s105: while a guest is in the house, the next stay is a returning, regular or VIP guest arriving in 0 to 2 days: who, which day, the ribbon words and the arrival perks. Null otherwise (a first stay draws nothing).

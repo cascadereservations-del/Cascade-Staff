@@ -53,12 +53,15 @@ test('s110 CS.wxHazards: each kind from the real fields, ordered; PAGASA bands f
   assert.equal(heat(32), undefined); assert.deepEqual([heat(33).level, heat(33).detail, heat(33).strip], [1, 'Feels like 33°, extreme caution', false], 'a caution stays in the Weather card');
   assert.deepEqual([heat(41).level, heat(42).level, heat(42).strip, heat(51).level, heat(52).level, heat(52).detail], [1, 2, true, 2, 3, 'Feels like 52°, extreme danger']);
   assert.deepEqual(kinds(WX({}, { aqi: 100 })), []); assert.equal(CS.wxHazards(WX({}, { aqi: 101 }), null, NOW)[0].word, 'Hazy air'); assert.equal(CS.wxHazards(WX({}, { aqi: 151 }), null, NOW)[0].word, 'Haze, poor air');
-  assert.deepEqual(kinds(WX(), { weather: { aqi: 130, hours: [], condition: 'Partly cloudy' } }), ['haze'], 'air quality from notices_v1 when Home has none');
+  assert.deepEqual(kinds(WX(), { weather: { fetched_at: FRESH, aqi: 130, hours: [], condition: 'Partly cloudy' } }), ['haze'], 'air quality from notices_v1 when Home has none');
+  assert.deepEqual(kinds(WX(), { weather: { fetched_at: '2026-10-15T01:00:00Z', aqi: 130, hours: [], condition: 'Thunderstorm' } }), [], 'an old notices reading says nothing either');
   assert.deepEqual(kinds(WX({ uv_index: 7 })), []); assert.deepEqual(kinds(WX({ uv_index: 8 })), ['uv']); assert.deepEqual(kinds(WX({ uv_label: 'Very high' })), ['uv']); assert.equal(CS.wxHazards(WX({ uv_index: 9 }), null, NOW)[0].strip, false);
   assert.deepEqual(kinds(WX({ description: 'Thunderstorm', wind_gust_kph: 80, feels_like: 45, uv_index: 10 }, { aqi: 160 })), ['storm', 'wind', 'heat', 'haze', 'uv'], 'storm, wind, heavy rain, heat, haze, UV');
   assert.deepEqual(kinds({ weather: { fetched_at: '2026-10-15T01:00:00Z', current: { temp: 29, description: 'Thunderstorm', feels_like: 50 } } }), [], 'an old reading says nothing about the sky now');
   assert.deepEqual(kinds({ weather: null }), []); assert.deepEqual(kinds(null), []);
-  assert.deepEqual(kinds({ weather: null }, { weather: { condition: 'Thunderstorm', code: 95, hours: [] } }), ['storm'], 'notices_v1 alone can raise a storm');
+  assert.deepEqual(kinds({ weather: null }, { weather: { fetched_at: FRESH, condition: 'Thunderstorm', code: 95, hours: [] } }), ['storm'], 'notices_v1 alone can raise a storm');
+  assert.deepEqual([heat(33).word, heat(42).word, heat(52).word], ['Hot today', 'Dangerous heat', 'Extreme heat'], 'the caution band is not called extreme');
+  assert.deepEqual(CS.wxHazards(WX({ uv_index: 10 }), null, new Date('2026-10-15T13:00:00Z')).map((x) => x.kind), [], 'no UV warning at 9 pm (the fallback gives the day peak)');
   for (const x of CS.wxHazards(WX({ description: 'Thunderstorm', wind_gust_kph: 80, feels_like: 45, uv_index: 10 }, { aqi: 160 }), null, NOW)) assert.doesNotMatch(x.advice + x.word + x.detail, /!/, 'no exclamation marks');
 });
 
@@ -78,7 +81,7 @@ test('s110 Today: a warning gets its own coloured row on top, the Weather card l
   const weather = Object.assign(WX({ description: 'Partly cloudy', feels_like: 44, wind_gust_kph: 55, uv_index: 9 }, { aqi: 120, hourly: [RH(0, { rain_chance_pct: 70, code: 61 }), RH(1, { rain_chance_pct: 20, temp: 31 }), RH(2)] }).weather, { fetched_at: new Date(real).toISOString() });
   const h = await homeHtml('admin', { weather });
   const bar = /<section class="U_bar F_span"[^>]*>([\s\S]*?)<\/section>/.exec(h); assert.ok(bar, 'strip drawn');
-  assert.match(bar[1], /<a class="U_row U_hz U_wind" href="#weather">[\s\S]*?Strong wind[\s\S]*?Gusts to 55 km\/h/); assert.match(bar[1], /U_hz U_heat[\s\S]*?Extreme heat[\s\S]*?Feels like 44°, danger/); assert.match(bar[1], /U_hz U_haze[\s\S]*?Hazy air/);
+  assert.match(bar[1], /<a class="U_row U_hz U_wind" href="#weather">[\s\S]*?Strong wind[\s\S]*?Gusts to 55 km\/h/); assert.match(bar[1], /U_hz U_heat[\s\S]*?Dangerous heat[\s\S]*?Feels like 44°, danger/); assert.match(bar[1], /U_hz U_haze[\s\S]*?Hazy air/);
   assert.doesNotMatch(bar[1], /U_uv/, 'UV stays in the Weather card');
   const card = /<details class="card glass A_card W_card[\s\S]*?<\/details>/.exec(h)[0];
   assert.match(card, /<ul class="HZ_list"[\s\S]*?HZ_wind[\s\S]*?HZ_heat[\s\S]*?HZ_haze[\s\S]*?HZ_uv/); assert.match(card, / open /, 'a warning that is on the strip opens the card');
@@ -98,11 +101,11 @@ test('s110 Weather screen: the chance of rain is shown on every hour, a wet hour
 const turnover = () => HOMEWITH([stayRow('Ana', '2026-10-12', TODAY), stayRow('Bianca Lim', TODAY, '2026-10-18')]);
 const FOLD = { schema: 1, surfaces: { admin: { files: 84 }, checklist: { files: 8 }, manual: { files: 16 }, guide: { files: 48, adminGuide: true } } };
 
-test('s110 cleaner: after check-out and before the clean, the walk-through nudge opens the checklist door; no phone, no money; admin gets none', async () => {
+test('s110 cleaner: after check-out and before the clean, the walk-through nudge points to Slide to start (one way into the checklist); no phone, no money; admin gets none', async () => {
   const h = await homeHtml('cleaner', {}, { staff_home_v1: turnover });
   const n = /<div class="S_walk" role="note">[\s\S]*?<\/div><\/div>/.exec(h); assert.ok(n, 'the nudge is drawn in the window');
-  assert.match(n[0], /Walk through first/); assert.match(n[0], /Every issue found goes in the checklist: damage, stains, missing or broken items/);
-  assert.match(n[0], /<a class="btn btn-secondary btn-sm" href="[^"]*(CH-Cleaners-Checklist|door\/checklist)[^"]*"[^>]*>[\s\S]*?Report issues in the checklist/);
+  assert.match(n[0], /Walk through first/); assert.match(n[0], /Slide to start below, then note each issue in the checklist: damage, stains, missing or broken items/);
+  assert.doesNotMatch(n[0], /<a |<button/, 'no second button beside Slide to start');
   assert.doesNotMatch(n[0], /!/); assert.doesNotMatch(h, /tel:|T_call|₱|PHP/, 'a cleaner screen carries no phone and no money');
   assert.doesNotMatch(await homeHtml('admin', {}, { staff_home_v1: turnover }), /S_walk/, 'the cleaner nudge is for the staff layout');
   const day2 = await homeHtml('cleaner', {}, { staff_home_v1: () => HOMEWITH([stayRow('Ana', '2026-10-10', '2026-10-14')]) }); assert.doesNotMatch(day2, /S_walk/, 'nobody leaves today: no nudge');
