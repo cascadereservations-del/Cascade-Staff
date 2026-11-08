@@ -9,9 +9,12 @@
   var W_FRESH_MS = 15 * 60000;          // refetch on return to the screen after this long
   var W_OLD_MS = 3 * 3600000;           // older than this shows "offline copy"
   var W_GUST_KPH = 62, W_RAIN_PCT = 70, W_HOURS_SHOWN = 24, W_LOOKAHEAD = 6;
-  var W_LAT = 6.12, W_LNG = 125.17;     // the house to two decimals (the server asks for 6.1164, 125.1716); no pin is sent to Windy
+  var W_LAT = 6.15, W_LNG = 125.19;     // the house to two decimals (s112: the server's default is Cascade, 6.1545, 125.1852); no pin is sent to Windy, never the phone's place
   var W_TIMEOUT_MS = 15000;             // a call that has not answered by then counts as failed
-  var W_PARTS = ['hero', 'alerts', 'hours', 'days', 'sun', 'map', 'src'];
+  var W_TAB_KEY = 'cs_w_tab';           // s112: only the last tab choice is kept; coordinates are never stored
+  var W_GEO = { enableHighAccuracy: false, timeout: 10000, maximumAge: 600000 };
+  var W_WHERE = { cascade: 'Cascade, Bria Homes', here: 'Near you (about 1 km)' };
+  var W_PARTS = ['tabs', 'hero','alerts', 'hours', 'days', 'sun', 'map', 'src'];
   var W_HOUSE = { out: 12 * 60, inn: 14 * 60 }; // fallback turnover window, noon to 2:00 pm; the shell may pass opts.houseTimes
   var W_LAYERS = [['rain', 'Rain'], ['wind', 'Wind'], ['temp', 'Temp']];
   var W_SOURCES = { pirate_weather: 'PirateWeather', google_weather: 'Google Weather', open_meteo: 'Open-Meteo', google: 'Google Weather', demo: 'Sample data' };
@@ -91,6 +94,7 @@
       pressure: W_round(c.pressure_mb), visibility: W_num(c.visibility), aqi: W_round(raw.aqi), hi: W_round(c.today_high), lo: W_round(c.today_low),
       sunrise: c.sunrise ? String(c.sunrise) : null, sunset: c.sunset ? String(c.sunset) : null, rainNow: W_round(c.rain_prob),
       source: raw.source ? String(raw.source) : null, hourlySource: raw.hourly_source ? String(raw.hourly_source) : null };
+    m.here = !!(raw.place && raw.place.kind === 'here'); m.note = raw.note ? String(raw.note) : null; // s112: which place the server answered for
     m.code = W_num(c.code); if (m.code == null) m.code = W_num(raw.code); if (m.code == null) m.code = W_textToCode(m.desc);
     var fetched = Date.parse(raw.fetched_at || ''); m.fetchedMs = isFinite(fetched) ? fetched : (W_num(cacheAt) || nowMs);
     m.ageMs = Math.max(0, nowMs - m.fetchedMs); m.offlineCopy = m.ageMs > W_OLD_MS;
@@ -140,7 +144,7 @@
   }
 
   // ---------- the built-in sample (demo mode only): relative to the clock it is given, so it never looks old ----------
-  function W_sample(nowMs) {
+  function W_sample(nowMs, here) {
     var base = Math.floor(nowMs / 3600000) * 3600000, hours = [], i;
     for (i = 0; i < 30; i++) {
       var ms = base + i * 3600000, h = W_manila(ms).h, wet = i >= 5 && i <= 7;
@@ -154,6 +158,7 @@
     }
     var rows = hours.slice(0, 24), wetRows = rows.filter(function (r) { return r.rain_chance_pct >= W_RAIN_PCT; });
     return { source: 'demo', hourly_source: 'demo', fetched_at: new Date(nowMs).toISOString(), code: 2, aqi: 42, location: 'General Santos City, PH',
+      place: here ? { label: 'Near you', lat: here.lat, lon: here.lon, kind: 'here' } : { label: 'Cascade, Bria Homes, General Santos', lat: 6.1545, lon: 125.1852, kind: 'cascade' },
       current: { temp: 29, feels_like: 34, description: 'Partly cloudy', code: 2, is_day: W_isDayHour(nowMs), humidity: 78, wind_kph: 14, wind_gust_kph: 28, wind_dir: 70, uv_index: 7, uv_label: 'High', pressure_mb: 1009, visibility: 9.5,
         sunrise: '5:47 AM', sunset: '5:51 PM', today_high: 32, today_low: 25, rain_prob: 40 },
       hourly: hours, forecast: fc,
@@ -199,9 +204,10 @@
     var hl = m.hi != null && m.lo != null ? '<span class="W_hl">High ' + m.hi + '° · Low ' + m.lo + '°</span>' : '';
     return '<section class="card glass W_hero" data-tone="' + tone + '" data-group="' + g + '" aria-label="Weather now">' +
       '<div class="W_scene" aria-hidden="true">' + W_svg(g, !m.isDay, 'W_big') + '</div>' +
-      '<div class="W_head"><span class="W_place">General Santos</span><span class="W_asof">' + W_esc(asOf) + '</span></div>' +
+      '<div class="W_head"><span class="W_place">' + (m.here ? 'Near you' : 'Cascade') + '</span><span class="W_asof">' + W_esc(asOf) + '</span></div>' +
       '<div class="W_main"><span class="W_temp">' + m.temp + '°</span><span class="W_cond">' + W_esc(cond) + '</span>' + hl + '</div>' +
       (S.failed ? '<p class="W_note">Could not refresh. Showing the saved forecast.</p>' : '') +
+      (S.tab === 'here' && !m.here ? '<p class="W_note">' + (m.note === 'here_limit' ? 'Near-you weather is used up for today; showing Cascade.' : 'The forecast near you is not available right now. Showing Cascade.') + '</p>' : '') +
       (chips.length ? '<div class="W_chips">' + chips.join('') + '</div>' : '') + '</section>';
   }
 
@@ -279,9 +285,24 @@
       (S.demo ? '' : '<button type="button" class="btn btn-ghost" data-w-refresh="1"' + (S.busy ? ' disabled' : '') + '>' + (S.busy ? 'Refreshing' : 'Refresh') + '</button>') + '</div>';
   }
 
+  /** s112: the two places, Cascade (the house, the default) and Here (the phone, asked only on a tap), and a line that says where. */
+  function W_tabsBlock(S) {
+    var where = S.model ? (S.model.here ? 'here' : 'cascade') : S.tab;
+    return '<div class="W_tabs" role="tablist" aria-label="Forecast place">' + [['cascade', 'Cascade'], ['here', 'Here']].map(function (t) {
+      return '<button type="button" class="W_tab" role="tab" data-w-tab="' + t[0] + '" aria-selected="' + (S.tab === t[0]) + '">' + t[1] + '</button>'; }).join('') +
+      '</div><p class="W_where help">' + W_esc(W_WHERE[where]) + '</p>';
+  }
+
   /** The screen in named parts. Each part is rewritten only when its markup changed, so the map, the focus and the announced alerts stay put. */
   function W_parts(S) {
     var m = S.model, o = {}, n; for (n = 0; n < W_PARTS.length; n++) o[W_PARTS[n]] = '';
+    o.tabs = W_tabsBlock(S);
+    if (S.tab === 'here' && (S.geoErr || S.locating) && !m) {
+      o.hero = S.locating ? '<div class="card glass W_empty" role="status"><p class="sub">Finding your location.</p></div>'
+        : '<div class="card glass W_empty" role="status"><p class="sub">' + ({ denied: 'Location is off for this app, so the forecast near you cannot be shown.', area: 'Near-you weather works inside the Philippines.' }[S.geoErr] || 'Your location could not be found just now.') +
+          '</p><button type="button" class="btn btn-primary" data-w-tab="cascade">Use Cascade</button></div>';
+      return o;
+    }
     if (!m) {
       o.hero = S.busy && !S.failed ? '<div class="card glass W_empty" role="status"><p class="sub">Loading the forecast.</p></div>'
         : '<div class="card glass W_empty" role="status"><p class="W_big2">No connection</p><p class="sub">The weather did not load. Check your connection and try again.</p><button type="button" class="btn btn-primary" data-w-retry="1">Try again</button></div>';
@@ -318,28 +339,30 @@
     if (S.busy) return;
     S.busy = true; W_render();
     var tok = S.req = (S.req || 0) + 1, timer = null;
-    var done = function (ok, data) {
+    var done = function (ok, data, status) {
       if (W_S !== S || S.dead || S.req !== tok) return;
       S.req = tok + 1; if (timer) clearTimeout(timer);
       S.busy = false; S.lastTry = W_nowMs();
       if (ok && W_parse(data, W_nowMs())) {
         S.raw = typeof data === 'string' ? JSON.parse(data) : data; S.cacheAt = W_nowMs(); S.failed = false; S.lastOk = S.cacheAt;
-        W_store(function (ls) { ls.setItem(W_KEY, JSON.stringify({ at: S.cacheAt, j: S.raw })); });
-      } else S.failed = true;
+        if (S.tab === 'cascade') W_store(function (ls) { ls.setItem(W_KEY, JSON.stringify({ at: S.cacheAt, j: S.raw })); }); // a Here answer stays in memory only
+      } else { S.failed = true; if (S.tab === 'here' && status === 400 && !S.raw) S.geoErr = 'area'; }
       W_render();
       if (S.failed && S.raw && S.manual && S.toast) S.toast('Could not refresh. Showing the saved forecast.');
       S.manual = false;
     };
-    var p; try { p = Promise.resolve(S.client.functions.invoke('weather-proxy')); } catch (e) { p = Promise.reject(e); }
+    var here = S.tab === 'here' && S.coords; // the rounded coordinates go only in this request body
+    var p; try { p = Promise.resolve(here ? S.client.functions.invoke('weather-proxy', { body: { lat: S.coords.lat, lon: S.coords.lon } }) : S.client.functions.invoke('weather-proxy')); } catch (e) { p = Promise.reject(e); }
     timer = S.timer = setTimeout(function () { done(false); }, S.timeoutMs);
-    p.then(function (r) { done(!!(r && !r.error && r.data), r && r.data); }, function () { done(false); });
+    p.then(function (r) { var cx = r && r.error && r.error.context; done(!!(r && !r.error && r.data), r && r.data, cx && cx.status); }, function () { done(false); });
   }
 
   function W_click(ev) {
     var S = W_S; if (!S || S.dead || !ev || !ev.target || !ev.target.closest) return;
-    var t = ev.target.closest('[data-w-day],[data-w-layer],[data-w-retry],[data-w-refresh]'); if (!t) return;
+    var t = ev.target.closest('[data-w-day],[data-w-layer],[data-w-retry],[data-w-refresh],[data-w-tab]'); if (!t) return;
     var v;
-    if ((v = t.getAttribute('data-w-day')) != null) {
+    if ((v = t.getAttribute('data-w-tab')) != null) { S.focusSel = '[data-w-tab="' + v + '"]'; W_setTab(v === 'here' ? 'here' : 'cascade'); }
+    else if ((v = t.getAttribute('data-w-day')) != null) {
       var on = S.open[+v] = !S.open[+v], more = t.nextElementSibling;
       if (t.setAttribute && more) { t.setAttribute('aria-expanded', String(on)); more.hidden = !on; S.last.days = W_daysBlock(S.model, S.open); } // in place: focus and scroll stay
       else W_render();
@@ -349,8 +372,47 @@
     else if (t.getAttribute('data-w-refresh') != null) { S.manual = true; S.focusSel = '[data-w-refresh="1"]'; W_load(); }
   }
 
+  function W_keepTab(v) { if (W_S && !W_S.demo) W_store(function (ls) { ls.setItem(W_TAB_KEY, v); }); } // the demo stores nothing
+
+  /** s112: switch place. Each tab keeps its own answer in memory; an answer still on its way for the other tab is dropped. */
+  function W_setTab(tab) {
+    var S = W_S; if (!S || S.tab === tab) { if (S && tab === 'here' && S.geoErr) W_locate(); return; }
+    S.keep[S.tab] = { raw: S.raw, cacheAt: S.cacheAt, lastOk: S.lastOk, failed: S.failed };
+    S.req = (S.req || 0) + 1; if (S.timer) clearTimeout(S.timer); S.busy = false; S.geoErr = null; S.locating = false; S.geoTok = (S.geoTok || 0) + 1;
+    var k = S.keep[tab] || {}; S.tab = tab; S.raw = k.raw || null; S.cacheAt = k.cacheAt || null; S.lastOk = k.lastOk || 0; S.failed = !!k.failed;
+    if (tab === 'cascade') { W_keepTab('cascade'); W_render(); if (!S.demo && (!S.lastOk || W_nowMs() - S.lastOk >= W_FRESH_MS)) W_load(); return; }
+    W_locate();
+  }
+  /** Ask the phone where it is (only after a tap on Here, or when Here was the last choice and worked). Two decimals before anything else sees it. */
+  function W_locate() {
+    var S = W_S; if (!S || S.dead) return;
+    var geo = S.geo, tok = S.geoTok = (S.geoTok || 0) + 1;
+    S.geoErr = null;
+    if (!geo || typeof geo.getCurrentPosition !== 'function') { S.geoErr = 'unavailable'; W_render(); return; }
+    S.locating = true; W_render();
+    var live = function () { return W_S === S && !S.dead && S.geoTok === tok && S.tab === 'here'; };
+    try {
+      geo.getCurrentPosition(function (pos) {
+        if (!live()) return;
+        var c = pos && pos.coords, lat = c && W_num(c.latitude), lon = c && W_num(c.longitude);
+        S.locating = false;
+        if (lat == null || lon == null) { S.geoErr = 'unavailable'; W_render(); return; }
+        S.coords = { lat: Math.round(lat * 100) / 100, lon: Math.round(lon * 100) / 100 };
+        W_keepTab('here');
+        if (S.demo) { S.raw = W_sample(W_nowMs(), S.coords); S.cacheAt = W_nowMs(); W_render(); return; }
+        W_load();
+      }, function (err) {
+        if (!live()) return;
+        S.locating = false; S.geoErr = err && err.code === 1 ? 'denied' : 'unavailable'; // 2 unavailable, 3 timeout
+        W_keepTab('cascade');
+        W_render();
+      }, W_GEO);
+    } catch (e) { S.locating = false; S.geoErr = 'unavailable'; W_render(); }
+  }
+
   function W_visible() {
     var S = W_S; if (!S || S.dead || S.demo || (root.document && root.document.hidden)) return;
+    if (S.tab === 'here' && !S.coords) return; // no place yet: nothing to refresh, and never a silent location prompt
     if (!S.lastOk || W_nowMs() - S.lastOk >= W_FRESH_MS) W_load();
     else W_render(); // the clock moves: "as of", the hours still ahead
   }
@@ -358,13 +420,16 @@
   function mount(el, opts) {
     opts = opts || {}; unmount();
     var S = W_S = { el: el, client: opts.client || null, demo: !!opts.demo, toast: opts.toast || null, houseTimes: opts.houseTimes || null, timeoutMs: opts.timeoutMs > 0 ? opts.timeoutMs : W_TIMEOUT_MS, raw: null, cacheAt: null, failed: false, busy: false,
-      open: {}, layer: 'rain', dead: false, lastOk: 0, model: null, manual: false };
+      open: {}, layer: 'rain', dead: false, lastOk: 0, model: null, manual: false, tab: 'cascade', keep: {}, coords: null, geoErr: null, locating: false };
+    // the demo has no real GPS: CSDemo.geo answers with a made-up spot near the house
+    S.geo = opts.geo || (S.demo ? root.CSDemo && root.CSDemo.geo : root.navigator && root.navigator.geolocation) || null;
     S.clickFn = W_click; el.addEventListener('click', S.clickFn);
     if (root.document && root.document.addEventListener) { S.visFn = W_visible; root.document.addEventListener('visibilitychange', S.visFn); }
     if (S.demo) { S.raw = W_sample(W_nowMs()); S.cacheAt = W_nowMs(); W_render(); return; } // the sample only: no network, no storage
     var c = W_store(function (ls) { return JSON.parse(ls.getItem(W_KEY) || 'null'); });
     if (c && c.j && W_parse(c.j, W_nowMs(), c.at)) { S.raw = c.j; S.cacheAt = W_num(c.at); }
-    W_render(); W_load();
+    var here = W_store(function (ls) { return ls.getItem(W_TAB_KEY); }) === 'here'; // Here worked last time: the browser already has the answer, no new prompt
+    W_render(); if (here) W_setTab('here'); else W_load();
   }
   function unmount() {
     var S = W_S; if (!S) return;
@@ -374,7 +439,7 @@
   }
 
   var api = { mount: mount, unmount: unmount, lib: { parse: W_parse, alerts: W_alerts, sample: W_sample, group: W_group, aqiWord: W_aqiWord, uvWord: W_uvWord, textToCode: W_textToCode,
-    compass: W_compass, inTurnover: W_inTurnover, mapUrl: W_mapUrl, page: W_page, KEY: W_KEY, GUST: W_GUST_KPH, RAIN: W_RAIN_PCT } };
+    compass: W_compass, inTurnover: W_inTurnover, mapUrl: W_mapUrl, page: W_page, KEY: W_KEY, TAB_KEY: W_TAB_KEY, GEO: W_GEO, GUST: W_GUST_KPH, RAIN: W_RAIN_PCT } };
   root.W_Weather = api;
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this);

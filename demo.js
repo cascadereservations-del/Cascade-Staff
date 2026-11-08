@@ -242,9 +242,16 @@
     if (name === 'notify-cleaner-payment') { toast(NOTE); return reply(200, { ok: true, total: 0, ref: 'CASCADE-DEMO0001' }); }
     if (name === 'upload-photo') return reply(200, { ok: true, path: 'demo/receipt.jpg' });
     if (/manual\/index\.json/.test(url)) return reply(200, [{ title: 'Aircon does not cool', id: 'aircon' }, { title: 'Hot water heater', id: 'heater' }, { title: 'Brownout: what to do', id: 'brownout' }]);
-    if (name === 'weather-proxy') return reply(200, { source: 'demo', fetched_at: new Date().toISOString(), current: X.home.weather.current });
+    if (name === 'weather-proxy') {
+      var lat = Number(body && body.lat), lon = Number(body && body.lon), here = !!body && body.lat != null && isFinite(lat) && isFinite(lon); // "Here" is a POST body, never a query string
+      return reply(200, { source: 'demo', fetched_at: new Date().toISOString(), current: X.home.weather.current, // s112: the same answer, labelled with the place it is for
+        place: here ? { label: 'Near you', lat: Math.round(lat * 100) / 100, lon: Math.round(lon * 100) / 100, kind: 'here' } : { label: 'Cascade, Bria Homes, General Santos', lat: 6.1545, lon: 125.1852, kind: 'cascade' } });
+    }
     return reply(404, { error: 'not part of the demo' });
   }
+
+  // ---- s112: the demo has no real GPS. The Weather "Here" tab asks this instead: a made-up spot about 3 km from the house, answered after a short pause.
+  var geo = { getCurrentPosition: function (ok) { setTimeout(function () { ok({ coords: { latitude: 6.13187, longitude: 125.16422, accuracy: 40 }, timestamp: Date.now() }); }, 300); } };
 
   // ---- the page furniture: a "Demo data" pill and a role switcher on every screen -------------------------------------------------
   var STYLE = '.demo-bar{position:sticky;top:0;z-index:40;display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:4px;padding:2px 8px;background:var(--card);border-bottom:1px solid var(--border-strong)}' +
@@ -273,6 +280,6 @@
 
   return {
     active: active, ROLES: ROLES, VIEWS: VIEWS, NOTE: NOTE, WRITES: WRITES, isDemo: isDemo, roleFrom: roleFrom, role: function () { return roleFrom(root.location && root.location.search); },
-    onNote: function (fn) { hook = fn; }, demoHref: demoHref, switchUrl: switchUrl, barHtml: barHtml, build: build, client: client, fetch: demoFetch, toast: toast, idPlaceholder: idPlaceholder
+    onNote: function (fn) { hook = fn; }, demoHref: demoHref, switchUrl: switchUrl, barHtml: barHtml, build: build, client: client, fetch: demoFetch, toast: toast, idPlaceholder: idPlaceholder, geo: geo
   };
 });

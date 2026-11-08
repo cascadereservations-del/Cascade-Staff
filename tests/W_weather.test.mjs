@@ -76,7 +76,7 @@ test('mount with a full payload: every section, the server was asked for weather
   w.W.mount(e, { client: w.client, demo: false, role: 'owner' }); await settle();
   assert.deepEqual(w.calls, [['weather-proxy']]);
   const h = e.innerHTML;
-  for (const need of ['General Santos', 'as of 15:59', '29°', 'Partly cloudy', 'Feels like', 'Humidity', 'Gusts', 'Rain next 6 h', 'UV today', 'Air quality', 'Next 24 hours', '7 days', 'Sun and air', 'Live map', 'Forecast: PirateWeather', 'hourly: Open-Meteo'])
+  for (const need of ['Cascade, Bria Homes', 'as of 15:59', '29°', 'Partly cloudy', 'Feels like', 'Humidity', 'Gusts', 'Rain next 6 h', 'UV today', 'Air quality', 'Next 24 hours', '7 days', 'Sun and air', 'Live map', 'Forecast: PirateWeather', 'hourly: Open-Meteo'])
     assert.ok(h.includes(need), 'missing: ' + need);
   assert.equal((h.match(/class="W_h"/g) || []).length, 24, '24 hours');
   assert.equal((h.match(/class="W_dli"/g) || []).length, 7, '7 days');
@@ -263,14 +263,14 @@ test('the live map loads by itself, lazily; layers switch the overlay; two-decim
   const u = new URL(m[1].replace(/&amp;/g, '&'));
   assert.ok(!u.searchParams.has('marker') && !u.searchParams.has('detailLat'), 'no pin');
   assert.equal(u.hostname, 'embed.windy.com'); assert.equal(u.pathname, '/embed2.html');
-  assert.deepEqual([u.searchParams.get('lat'), u.searchParams.get('lon'), u.searchParams.get('overlay')], ['6.12', '125.17', 'wind']);
+  assert.deepEqual([u.searchParams.get('lat'), u.searchParams.get('lon'), u.searchParams.get('overlay')], ['6.15', '125.19', 'wind']);
   await click(e, { 'data-w-layer': 'temp' });
   assert.equal(new URL(/<iframe[^>]*src="([^"]+)"/.exec(e.innerHTML)[1].replace(/&amp;/g, '&')).searchParams.get('overlay'), 'temp');
   assert.ok(/referrerpolicy="no-referrer"/.test(e.innerHTML) && /title="Live weather map/.test(e.innerHTML));
   assert.equal(w.calls.length, 1, 'the map is the only thing that leaves the page, and it is an iframe, not a call from the script');
   // The server copy lives in the waves repo; s89 moved this off a deleted s82 worktree onto the long-lived waves clone, and skips when absent (CI).
   const proxy = path.join(root, '..', 'direct-booking-waves-0-1-sol', 'supabase', 'functions', 'weather-proxy', 'index.ts');
-  if (fs.existsSync(proxy)) { const server = fs.readFileSync(proxy, 'utf8'); assert.ok(server.includes('GEN_SAN_LAT    = 6.1164') && server.includes('GEN_SAN_LNG    = 125.1716')); }
+  if (fs.existsSync(proxy)) { const server = fs.readFileSync(proxy, 'utf8'); assert.ok(server.includes('6.1545') || (server.includes('GEN_SAN_LAT    = 6.1164') && server.includes('GEN_SAN_LNG    = 125.1716')), 's112: the server default is Cascade (the waves lane may not have landed yet)'); }
 });
 
 test('return to the screen: no refetch inside 15 minutes, a refetch after; hidden pages do nothing; the clock-dependent text moves', async () => {
@@ -303,9 +303,9 @@ test('text is escaped: a hostile condition sentence cannot add markup', async ()
   assert.ok(!e.innerHTML.includes('<img') && !e.innerHTML.includes('"><b>'));
 });
 
-test('no money, no contact, no key is read or written: only cs_w_wx is ever touched', async () => {
+test('no money, no contact, no key is read or written: only cs_w_wx and the tab choice cs_w_tab are ever touched', async () => {
   const w = world({ invoke: ok(full()) }); const e = el(); w.W.mount(e, { client: w.client }); await settle();
-  assert.deepEqual([...new Set(w.touched.map((t) => t[1]))], ['cs_w_wx']);
+  assert.deepEqual([...new Set(w.touched.map((t) => t[1]))], ['cs_w_wx', 'cs_w_tab']);
   assert.ok(!/payout|phone|e-?mail|messenger|income|₱/i.test(e.innerHTML));
 });
 
@@ -424,4 +424,101 @@ test('3.1.1: a first load that fails (error answer, thrown error, or no answer i
     assert.ok(h.includes('The weather did not load. Check your connection and try again.') && h.includes('data-w-retry="1"') && h.includes('Try again'), name);
     assert.ok(!h.includes('W_dli') && !h.includes('Partly cloudy'), name + ': no sample rows');
   }
+});
+
+// ---------------------------------------------------------------------------------------------- s112: Cascade | Here tabs
+// A fake geolocation: answers with a position, or an error code (1 denied, 2 unavailable, 3 timeout), and records the options it was asked with.
+function fakeGeo(answer) { const g = { asked: [] }; g.getCurrentPosition = (ok, err, o) => { g.asked.push(o); setImmediate(() => (typeof answer === 'number' ? err({ code: answer }) : ok({ coords: answer }))); }; return g; }
+const HERE_POS = { latitude: 6.123456, longitude: 125.167891, accuracy: 30 };
+const hereAnswer = (over = {}) => full(NOW, { place: { label: 'Near you', lat: 6.12, lon: 125.17, kind: 'here' }, ...over });
+const route = (cas, here) => (name, o) => Promise.resolve({ data: o && o.body ? here : cas, error: null });
+
+test('s112 tabs: Cascade is the default, says where, and the phone is not asked on mount', async () => {
+  const geo = fakeGeo(HERE_POS); const w = world({ invoke: ok(full()) }); const e = el();
+  w.W.mount(e, { client: w.client, geo }); await settle();
+  const h = e.innerHTML;
+  assert.match(h, /role="tablist" aria-label="Forecast place"/);
+  assert.match(h, /data-w-tab="cascade" aria-selected="true">Cascade</); assert.match(h, /data-w-tab="here" aria-selected="false">Here</);
+  assert.ok(h.includes('<p class="W_where help">Cascade, Bria Homes</p>')); assert.ok(h.includes('<span class="W_place">Cascade</span>'));
+  assert.deepEqual(geo.asked, [], 'no location prompt until Here is tapped');
+  assert.deepEqual(w.calls, [['weather-proxy']], 'Cascade sends no coordinates');
+});
+
+test('s112 Here: a tap asks once (low accuracy, 10 s, 10 min), sends a JSON body rounded to 2 decimals (never a query string), shows "Near you", stores no coordinates', async () => {
+  const geo = fakeGeo(HERE_POS); const w = world({ invoke: route(full(), hereAnswer()) }); const e = el();
+  w.W.mount(e, { client: w.client, geo }); await settle();
+  const casCopy = w.store.cs_w_wx;
+  await click(e, { 'data-w-tab': 'here' });
+  assert.deepEqual(JSON.parse(JSON.stringify(geo.asked)), [{ enableHighAccuracy: false, timeout: 10000, maximumAge: 600000 }]);
+  assert.deepEqual(JSON.parse(JSON.stringify(w.calls[1])), ['weather-proxy', { body: { lat: 6.12, lon: 125.17 } }], 'two decimals in the body (functions.invoke posts it as JSON with the session token), nothing else');
+  assert.ok(!/[?&]lat=/.test(String(w.calls[1][0])), 'no query string');
+  const h = e.innerHTML;
+  assert.match(h, /data-w-tab="here" aria-selected="true"/); assert.ok(h.includes('Near you (about 1 km)')); assert.ok(h.includes('<span class="W_place">Near you</span>'));
+  assert.ok(h.includes('as of 15:59'), 'the time read'); assert.ok(h.includes('Next 24 hours') && h.includes('7 days'), 'the same full layout');
+  assert.equal(w.store.cs_w_wx, casCopy, 'a Here answer never overwrites the Cascade copy');
+  assert.equal(w.store.cs_w_tab, 'here');
+  for (const v of Object.values(w.store)) assert.ok(!/6\.12|125\.1[67]|"kind":"here"/.test(v), 'no coordinates in storage');
+  await click(e, { 'data-w-tab': 'cascade' });
+  assert.ok(e.innerHTML.includes('<p class="W_where help">Cascade, Bria Homes</p>')); assert.equal(w.store.cs_w_tab, 'cascade');
+  assert.equal(w.calls.length, 2, 'the Cascade answer is still fresh: no new call');
+});
+
+test('s112 Here: denied gives one calm line and "Use Cascade"; timeout, unavailable and no geolocation say it could not be found', async () => {
+  const w = world({ invoke: ok(full()) }); const e = el();
+  w.W.mount(e, { client: w.client, geo: fakeGeo(1) }); await settle();
+  await click(e, { 'data-w-tab': 'here' });
+  const h = e.innerHTML;
+  assert.ok(h.includes('Location is off for this app, so the forecast near you cannot be shown.')); assert.match(h, /<button type="button" class="btn btn-primary" data-w-tab="cascade">Use Cascade<\/button>/);
+  assert.ok(!h.includes('!'), 'calm, no exclamation'); assert.equal(w.calls.length, 1, 'nothing is asked of the server without a place');
+  w.docL.visibilitychange(); await settle(); assert.equal(w.calls.length, 1, 'returning to the screen asks nothing either');
+  await click(e, { 'data-w-tab': 'cascade' }); assert.match(e.innerHTML, /data-w-tab="cascade" aria-selected="true"/); assert.equal(w.store.cs_w_tab, 'cascade');
+  for (const geo of [fakeGeo(3), fakeGeo(2), null]) {
+    const w2 = world({ invoke: ok(full()) }); const e2 = el(); w2.W.mount(e2, { client: w2.client, geo }); await settle();
+    await click(e2, { 'data-w-tab': 'here' }); assert.ok(e2.innerHTML.includes('Your location could not be found just now.')); assert.ok(e2.innerHTML.includes('Use Cascade'));
+  }
+});
+
+test('s112 Here: the daily limit answers for Cascade and the screen says so; a 400 (out_of_area or invalid_coords) gives the Philippines line and Use Cascade', async () => {
+  const lim = full(NOW, { place: { label: 'Cascade, Bria Homes, General Santos', lat: 6.1545, lon: 125.1852, kind: 'cascade' }, note: 'here_limit' });
+  const w = world({ invoke: route(full(), lim) }); const e = el(); w.W.mount(e, { client: w.client, geo: fakeGeo(HERE_POS) }); await settle();
+  await click(e, { 'data-w-tab': 'here' });
+  assert.ok(e.innerHTML.includes('Near-you weather is used up for today; showing Cascade.')); assert.ok(e.innerHTML.includes('<p class="W_where help">Cascade, Bria Homes</p>'));
+  for (const code of ['out_of_area', 'invalid_coords']) {
+    const w2 = world({ invoke: (n, o) => Promise.resolve(o ? { data: null, error: { message: code, context: { status: 400 } } } : { data: full(), error: null }) }); const e2 = el();
+    w2.W.mount(e2, { client: w2.client, geo: fakeGeo(HERE_POS) }); await settle(); await click(e2, { 'data-w-tab': 'here' });
+    assert.ok(e2.innerHTML.includes('Near-you weather works inside the Philippines.')); assert.ok(e2.innerHTML.includes('Use Cascade'));
+  }
+});
+
+test('s112 Here: the last choice is remembered; Here locates on mount with no Cascade call, and a late answer for the other tab is dropped', async () => {
+  const geo = fakeGeo(HERE_POS); const w = world({ store: { cs_w_tab: 'here' }, invoke: route(full(), hereAnswer()) }); const e = el();
+  w.W.mount(e, { client: w.client, geo }); await settle();
+  assert.equal(geo.asked.length, 1); assert.equal(w.calls.length, 1); assert.ok(w.calls[0][1] && w.calls[0][1].body, 'only the Here call');
+  assert.ok(e.innerHTML.includes('Near you (about 1 km)'));
+  const w0 = world({ store: { cs_w_tab: 'junk' }, invoke: ok(full()) }); const g0 = fakeGeo(HERE_POS); w0.W.mount(el(), { client: w0.client, geo: g0 }); await settle(); assert.equal(g0.asked.length, 0, 'anything else is Cascade');
+  let release; const slow = new Promise((r) => { release = r; });
+  const w2 = world({ invoke: (n, o) => (o ? slow : Promise.resolve({ data: full(), error: null })) }); const e2 = el();
+  w2.W.mount(e2, { client: w2.client, geo: fakeGeo(HERE_POS) }); await settle();
+  await click(e2, { 'data-w-tab': 'here' }); await click(e2, { 'data-w-tab': 'cascade' });
+  release({ data: hereAnswer(), error: null }); await settle();
+  assert.ok(e2.innerHTML.includes('<p class="W_where help">Cascade, Bria Homes</p>') && !e2.innerHTML.includes('Near you'), 'the late Here answer is ignored');
+});
+
+test('s112 demo: Here uses the demo GPS, draws the sample near you, and touches no server and no storage', async () => {
+  const w = world({ invoke: ok(full()) }); w.ctx.CSDemo = { geo: fakeGeo({ latitude: 6.13187, longitude: 125.16422 }) }; const e = el();
+  w.W.mount(e, { client: null, demo: true }); await settle();
+  await click(e, { 'data-w-tab': 'here' });
+  assert.ok(e.innerHTML.includes('Near you (about 1 km)') && e.innerHTML.includes('Next 24 hours')); assert.equal(w.ctx.CSDemo.geo.asked.length, 1);
+  assert.deepEqual(w.calls, []); assert.deepEqual(w.touched, []);
+  const L = w.W.lib; assert.equal(L.sample(NOW, { lat: 6.13, lon: 125.16 }).place.kind, 'here'); assert.equal(L.sample(NOW).place.kind, 'cascade');
+});
+
+test('s112 Today card: says "At Cascade" and still reads the default (Cascade) answer, never coordinates; the tab CSS is tokens only', () => {
+  const app = fs.readFileSync(path.join(root, 'app.js'), 'utf8');
+  const today = /function H_wxToday\(\) \{[\s\S]*?\n  \}/.exec(app)[0], fetchFn = /function H_wxFetch\(\) \{[\s\S]*?\n  \}/.exec(app)[0];
+  assert.match(today, /'At Cascade'/);
+  assert.match(fetchFn, /'\/functions\/v1\/weather-proxy', \{/); assert.doesNotMatch(fetchFn, /lat|lon|geolocation/);
+  assert.doesNotMatch(app, /geolocation/, 'the shell never asks for the phone place');
+  const css = fs.readFileSync(path.join(root, 'weather', 'W_weather.css'), 'utf8'), tabs = css.slice(css.indexOf('/* s112'));
+  assert.doesNotMatch(tabs, /#[0-9a-f]{3,8}\b|rgba?\(|font-size:\s*\d+px|nowrap/i);
 });
