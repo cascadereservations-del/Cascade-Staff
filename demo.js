@@ -147,6 +147,9 @@
     var k = { ok: true, month: today.slice(0, 7) + '-01',
       utility: { kwh_month: 412, nights_month: 22, kwh_per_night: 18.7, last_reading: { recorded_at: today + 'T02:00:00Z', delta_kwh: 38.2, nights: 2, kwh_per_night: 19.1, flag: null },
         per_stay: [14.2, 18.4, 12.6, 24.1, 16, 13.3, 15.1, 13.8].map(function (v, i) { return { checkout_date: CS.addDays(today, -3 * (8 - i)), kwh_per_night: v }; }),
+        m3_month: 13.2, m3_per_night: 0.6,
+        per_month: [[19, 0.5, 4], [22, 0.6, 5], [17, 0.4, 3], [0, 0, 0], [24, 0.7, 6], [20, 0.5, 4], [26, 0.8, 5], [18, 0.5, 4], [0, 0, 0], [23, 0.6, 5], [19, 0.5, 4], [21, 0.6, 5]]
+          .map(function (v, i, all) { var m = new Date(Date.UTC(+today.slice(0, 4), +today.slice(5, 7) - 1 - (all.length - 1 - i), 1)); return { month: m.toISOString().slice(0, 7), stays: v[2], kwh_per_stay: v[0] || null, m3_per_stay: v[1] || null, kwh_per_night: null, m3_per_night: null }; }),
         brownouts: { count: 2, hours: 9 }, water_cuts: { count: 1, hours: 5 }, internet_cuts: { count: 1, hours: 2 } },
       inventory: { low_now: 5, restocks_month: 3, turnovers_month: 9,
         per_turnover: [{ item_id: 'd1', name: 'Toilet paper', used_per_turnover: 2.1, usual: 2 }, { item_id: 'd3', name: 'Water bottles', used_per_turnover: 4.6, usual: 4 }, { item_id: 'd4', name: 'Coffee sachets', used_per_turnover: 3, usual: 4 }],

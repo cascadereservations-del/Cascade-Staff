@@ -34,6 +34,13 @@
     var scale = Math.max.apply(null, list.map(function (r) { return Math.max(r.used, r.usual || 0); }).concat([0]));
     return list.map(function (r) { r.pct = scale > 0 ? Math.max(4, Math.round(r.used / scale * 100)) : 4; r.over = r.usual != null && r.usual > 0 && r.used > r.usual * 1.1; r.overPct = r.usual > 0 ? Math.round((r.used / r.usual - 1) * 100) : 0; return r; });
   }
+  // s111: Average per stay, last 12 months. A month with no figure is a gap (null), never a zero bar. `cur` marks the selected month.
+  function monthBars(rows, key, cur) {
+    var max = Math.max.apply(null, (rows || []).map(function (r) { return r[key] == null ? 0 : r[key]; }).concat([0]));
+    return (rows || []).map(function (r) { var v = r[key]; return { month: r.month, stays: r.stays, value: v, gap: v == null, cur: r.month === cur, pct: v == null ? 0 : max > 0 ? Math.max(8, Math.round(v / max * 100)) : 8 }; });
+  }
+  function monthShort(m) { var p = monthParts(m); return p && p.m >= 1 && p.m <= 12 ? MONTHS[p.m - 1].slice(0, 3) + ' ' + p.y : ''; }
+  function barLabel(b, unit) { var n = monthShort(b.month); return b.gap ? n + ': no stays' : n + ': ' + fmt(b.value, unit === 'kWh' ? 1 : 2) + ' ' + unit + ' per stay, ' + plural(b.stays, 'stay'); }
   function daysTone(d) { return d != null && d <= 5 ? 'bad' : d != null && d <= 10 ? 'warn' : 'ok'; }
   function rateCost(kwh, rate) { var k = num(kwh), r = num(rate); return k != null && r != null ? k * r : null; }
 
@@ -45,6 +52,8 @@
       month: String(raw.month || ''),
       utility: { kwh: num(u.kwh_month), nights: num(u.nights_month), perNight: num(u.kwh_per_night),
         last: lr ? { at: lr.recorded_at || null, delta: num(lr.delta_kwh), nights: num(lr.nights), perNight: num(lr.kwh_per_night), flag: lr.flag ? String(lr.flag) : '' } : null,
+        m3: num(u.m3_month), m3PerNight: num(u.m3_per_night),
+        perMonth: (Array.isArray(u.per_month) ? u.per_month : []).filter(function (r) { return r && monthParts(r.month); }).map(function (r) { return { month: String(r.month).slice(0, 7), stays: num(r.stays) || 0, kwh: num(r.kwh_per_stay), m3: num(r.m3_per_stay) }; }).slice(-12),
         stays: barHeights((u.per_stay || []).map(function (s) { return s && s.kwh_per_night; })),
         stayDates: (u.per_stay || []).map(function (s) { return s && s.checkout_date ? String(s.checkout_date) : ''; }),
         brownouts: { count: num(u.brownouts && u.brownouts.count) || 0, hours: num(u.brownouts && u.brownouts.hours) || 0 },
@@ -101,7 +110,7 @@
 
   /* ---------------------------------------------------------------- the screen */
   var S = null; // the live mount
-  var memory = { seg: 'utility' }; // the segment survives a re-mount in the same visit
+  var memory = { seg: 'utility', avg: 'kwh' }; // the segment survives a re-mount in the same visit
 
   function manilaToday() { return new Date(Date.now() + 8 * 3600000).toISOString().slice(0, 10); }
   function mount(el, opts) {
@@ -115,7 +124,7 @@
     return S;
   }
   function unmount() { if (!S) return; S.listeners.forEach(function (l) { try { S.el.removeEventListener(l[0], l[1]); } catch (e) { /* gone already */ } }); S.dead = true; S = null; }
-  function reset() { memory.seg = 'utility'; }
+  function reset() { memory.seg = 'utility'; memory.avg = 'kwh'; }
 
   function load() {
     var me = S; if (!me || !me.client) { if (me) { me.state = 'missing'; draw(); } return; }
@@ -155,10 +164,26 @@
   function lineRow(icon, tone, title, sub, big, small) {
     return '<div class="K_line"><span class="K_ic K_ic-' + tone + '" aria-hidden="true">' + gi(icon, 's16') + '</span><span class="K_mid"><b>' + esc(title) + '</b><span>' + esc(sub) + '</span></span><span class="K_end"><b>' + esc(big) + '</b><span>' + esc(small) + '</span></span></div>';
   }
+  function avgCard(u, month) {
+    var rows = u.perMonth; if (!rows.length) return '';
+    var hasW = rows.some(function (r) { return r.m3 != null; }), kind = hasW && memory.avg === 'm3' ? 'm3' : 'kwh', unit = kind === 'm3' ? 'm\u00b3' : 'kWh', cur = String(month).slice(0, 7);
+    if (!rows.some(function (r) { return r.month === cur; })) cur = rows[rows.length - 1].month;
+    var bars = monthBars(rows, kind, cur), now = rows.filter(function (r) { return r.month === cur; })[0], bits = [];
+    if (now.kwh != null) bits.push(fmt(now.kwh, 1) + ' kWh');
+    if (now.m3 != null) bits.push(fmt(now.m3, 1) + ' m\u00b3');
+    var sum = now.stays && bits.length ? 'This month: ' + bits.join(' and ') + ' per stay over ' + plural(now.stays, 'stay') + '.' : 'No stay has been read this month yet.';
+    var tabs = hasW ? '<div class="K_seg" role="tablist" aria-label="Average per stay">' + [['kwh', 'Electricity'], ['m3', 'Water']].map(function (s) { return '<button class="K_seg-b" type="button" role="tab" data-kact="avg" data-avg="' + s[0] + '" aria-selected="' + (kind === s[0]) + '">' + s[1] + '</button>'; }).join('') + '</div>' : '';
+    return '<div class="card glass K_chart" id="K_avg"><div class="K_chart-h"><b>Average per stay, ' + (kind === 'm3' ? 'water' : 'electricity') + '</b><span class="K_sub">' + unit + ' per stay</span></div>' + tabs +
+      '<div class="K_bars K_bars-m" role="group" aria-label="' + esc('Average ' + unit + ' per stay, last ' + bars.length + ' months') + '">' +
+      bars.map(function (b) { return '<span class="K_bar' + (b.gap ? ' K_bar-gap' : b.cur ? ' K_bar-cur' : '') + '" role="img" aria-label="' + esc(barLabel(b, unit)) + '"' + (b.gap ? '' : ' style="height:' + b.pct + '%"') + '></span>'; }).join('') + '</div>' +
+      '<div class="K_bars-l" aria-hidden="true">' + bars.map(function (b) { return '<span' + (b.cur ? ' class="K_cur"' : '') + '>' + esc(monthShort(b.month).charAt(0)) + '</span>'; }).join('') + '</div>' +
+      '<p class="K_sub" id="K_avg-sum">' + esc(sum) + '</p></div>';
+  }
   function utilityPanel(d) {
     var u = d.utility, days = daysIn(d.month), full = u.nights != null ? Math.round(u.nights / days * 100) : null, h = '';
     h += '<h2 class="K_h">Utility · this month</h2><div class="K_grid2">' +
       stat('Electricity', u.kwh != null ? fmt(u.kwh, 0) + ' kWh' : 'No reading yet', u.perNight != null ? fmt(u.perNight) + ' kWh per night' : 'Per night once a stay is read') +
+      (u.m3 != null ? stat('Water', fmt(u.m3, 1) + ' m\u00b3', u.m3PerNight != null ? fmt(u.m3PerNight, 2) + ' m\u00b3 per night' : 'Per night once a stay is read') : '') +
       stat('Nights booked', u.nights != null ? String(u.nights) : 'None yet', u.nights != null ? 'of ' + days + ' · ' + full + '% full' : '') + '</div>';
     if (u.last) {
       var l = u.last, bits = [];
@@ -168,11 +193,11 @@
     }
     if (u.stays.length) {
       var hi = u.stays.filter(function (b) { return b.hi; }).sort(function (a, b) { return b.value - a.value; })[0];
-      h += '<div class="card glass K_chart" id="K_stays"><div class="K_chart-h"><b>kWh per night, last ' + u.stays.length + ' stays</b></div><div class="K_bars" role="img" aria-label="' + esc('kWh per night for the last ' + u.stays.length + ' stays: ' + u.stays.map(function (b) { return fmt(b.value); }).join(', ')) + '">' +
-        u.stays.map(function (b) { return '<span class="K_bar' + (b.hi ? ' K_bar-hi' : '') + '" style="height:' + b.pct + '%"></span>'; }).join('') + '</div>' +
+      h += '<div class="card glass K_chart" id="K_stays"><div class="K_chart-h"><b>kWh per night, last ' + u.stays.length + ' stays</b></div><div class="K_bars" role="group" aria-label="kWh per night, last ' + u.stays.length + ' stays">' +
+        u.stays.map(function (b, i) { var dt = u.stayDates[i] ? dateLabel(u.stayDates[i]) + ': ' : 'Stay ' + (i + 1) + ': '; return '<span class="K_bar' + (b.hi ? ' K_bar-hi' : '') + '" role="img" aria-label="' + esc(dt + fmt(b.value) + ' kWh per night') + '" style="height:' + b.pct + '%"></span>'; }).join('') + '</div>' +
         '<p class="K_sub">' + esc(hi ? 'The gold bar used more than usual: ' + fmt(hi.value) + ' kWh a night.' : 'No stay stood out from the others.') + '</p></div>';
     }
-    h += '<div class="card glass K_lines">' + lineRow('zap', 'warn', 'Brownouts', 'Feeder notices', String(u.brownouts.count), u.brownouts.count ? fmt(u.brownouts.hours, 0) + ' h total' : 'none') +
+    h += avgCard(u, d.month) + '<div class="card glass K_lines">' + lineRow('zap', 'warn', 'Brownouts', 'Feeder notices', String(u.brownouts.count), u.brownouts.count ? fmt(u.brownouts.hours, 0) + ' h total' : 'none') +
       lineRow('drop', 'info', 'Water interruptions', 'GSCWD notices', String(u.water.count), u.water.count ? fmt(u.water.hours, 0) + ' h total' : 'none') +
       (u.internet ? lineRow('wifioff', 'purple', 'Internet outages', 'From notices', String(u.internet.count), u.internet.count ? fmt(u.internet.hours, 0) + ' h total' : 'none') : '') + '</div>';
     return h;
@@ -289,6 +314,7 @@
     var t = ev.target && ev.target.closest ? ev.target.closest('[data-kact]') : null; if (!S || !t) return;
     var act = attr(t, 'data-kact'), id = attr(t, 'data-id'), b;
     if (act === 'seg') { var s = attr(t, 'data-seg'); if (s === 'admin' && !isAdminRole(S.role)) return; S.seg = s; memory.seg = s; draw(); return; }
+    if (act === 'avg') { memory.avg = attr(t, 'data-avg') === 'm3' ? 'm3' : 'kwh'; draw(); return; }
     if (act === 'retry') { S.state = 'loading'; draw(); load(); return; }
     if (act === 'rate-open') { if (!canSetRate(S.role)) return; S.rate = { err: '' }; S.vals.php = S.data && S.data.admin && S.data.admin.rate ? String(S.data.admin.rate.php) : ''; S.vals.from = manilaToday(); draw(); return; }
     if (act === 'rate-close') { S.rate = null; draw(); return; }
@@ -330,7 +356,7 @@
   }
 
   root.K_Kpi = { mount: mount, unmount: unmount, reset: reset, lib: {
-    esc: esc, normalize: normalize, barHeights: barHeights, usageRows: usageRows, daysTone: daysTone, rateCost: rateCost, monthLabel: monthLabel, daysIn: daysIn, isAdminRole: isAdminRole, canSetRate: canSetRate,
+    esc: esc, normalize: normalize, barHeights: barHeights, usageRows: usageRows, monthBars: monthBars, daysTone: daysTone, rateCost: rateCost, monthLabel: monthLabel, daysIn: daysIn, isAdminRole: isAdminRole, canSetRate: canSetRate,
     normBlocks: normBlocks, correctionProblem: correctionProblem, blockCall: blockCall, resendCall: resendCall, rateCall: rateCall, rateProblem: rateProblem, errKind: errKind, peso: peso, pesoRate: pesoRate
   } };
 })(typeof window !== 'undefined' ? window : this);
