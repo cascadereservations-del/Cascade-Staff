@@ -66,8 +66,8 @@
   function manualCall(it, qtyUnits, key, today) { return { fn: 'inventory_receipt_manual_v1', args: { p_lines: [{ item_id: it.id, new_item: null, qty_units: qtyUnits }], p_purchased_on: today, p_vendor: null, p_idempotency_key: key } }; }
   // A matched item with a pack size: the receipt counts packs, the stock counts units. Returns the units to prefill and the words that show the sum.
   function packInfo(it, rcpt) {
-    var per = it && it.purchaseUnit && it.perPack > 1 ? it.perPack : 1, units = Math.round(rcpt * per * 100) / 100, unit = (it && it.unit) || 'units';
-    return { packed: per > 1, per: per, units: units, unit: unit, text: per > 1 ? rcpt + ' ' + (rcpt === 1 ? it.purchaseUnit : it.purchaseUnit + (/(s|x|z|ch|sh)$/i.test(it.purchaseUnit) ? 'es' : 's')) + ' of ' + per + ' = ' + fmt(units) + ' ' + unit : '' };
+    var per = it && it.perPack > 1 ? it.perPack : 1, pu = (it && it.purchaseUnit) || 'pack', units = Math.round(rcpt * per * 100) / 100, unit = (it && it.unit) || 'units';
+    return { packed: per > 1, per: per, units: units, unit: unit, text: per > 1 ? rcpt + ' ' + (rcpt === 1 ? pu : pu + (/(s|x|z|ch|sh)$/i.test(pu) ? 'es' : 's')) + ' of ' + per + ' = ' + fmt(units) + ' ' + (units === 1 || /s$/i.test(unit) ? unit : unit + (/(x|z|ch|sh)$/i.test(unit) ? 'es' : 's')) : '' };
   }
   // confirm's new_items: [{line_no, item_id}] (or a bare list of ids in line order); item id by line number.
   function newItemIds(res, lines) {
@@ -81,6 +81,8 @@
     var code = (res && res.error) || '';
     if (code === 'not_draft') return 'This receipt was already added. Nothing more to do.';
     if (code === 'forbidden' || (e && (e.code === '42501' || /denied|forbidden/i.test(String(e.message || ''))))) return 'Your account cannot do this. Ask Lloyd.';
+    if (code === 'not_found') return 'This receipt is no longer open. Start again with a new photo.';
+    if (code === 'no_lines') return 'Keep at least one line.';
     if (code === 'bad_line') return 'One line needs another look' + (res && res.line_no != null ? ' (line ' + res.line_no + ')' : '') + '. Check it and try again.';
     if (e && /fetch|network|offline/i.test(String(e.message || ''))) return 'No connection. Nothing was saved. Try again when you have signal.';
     return 'That was not saved. Try again in a moment. If it keeps happening, tell Lloyd.';
@@ -270,7 +272,7 @@
     if (act === 'man-save') { saveManual(); return; }
     if (!l && /^(line-|link-)/.test(act || '')) return;
     if (act === 'line-pick') { l.mode = 'pick'; draw(); return; }
-    if (act === 'line-new') { l.mode = 'new'; if (S.bad) delete S.bad[l.no]; draw(); return; }
+    if (act === 'line-new') { l.mode = 'new'; l.qty = fmt(l.rcpt); if (S.bad) delete S.bad[l.no]; draw(); return; }
     if (act === 'line-skip') { l.mode = 'skip'; if (S.bad) delete S.bad[l.no]; draw(); return; }
     if (act === 'line-keep') { l.mode = l.matchId ? 'match' : 'unset'; if (l.matchId) { l.itemId = l.matchId; repack(l); } draw(); return; }
     if (act === 'link-use') { var u = picUrl(l.link); if (!u) { l.err = 'The photo link must be an https image on cdn.shopify.com or down-ph.img.susercontent.com.'; draw(); return; } l.err = ''; itemPhoto(l, function () { return fetchPicture(u); }); return; }
@@ -322,6 +324,8 @@
       return me.client.functions.invoke('ocr-receipt', { body: { mode: 'supply', image_base64: b64, mime_type: 'image/jpeg' } });
     }).then(function (r) {
       if (S !== me) return;
+      var st = r && r.error && r.error.context && r.error.context.status;
+      if (st === 429 || (r && r.data && r.data.error === 'daily_limit')) throw { limit: true };
       var id = r && !r.error && r.data && r.data.ok !== false ? r.data.draft_id : null;
       if (!id) throw { read: true };
       return me.client.rpc('inventory_receipt_draft_v1', { p_draft_id: id }).then(function (d) {
@@ -331,7 +335,7 @@
       });
     }).then(null, function (e) {
       if (S !== me) return; me.step = 'start';
-      me.msg = e && e.photo ? PHOTO_ERR[e.photo] : e && e.read ? 'The receipt could not be read. Try a clearer photo, or enter it by hand.' : errText(e); draw();
+      me.msg = e && e.photo ? PHOTO_ERR[e.photo] : e && e.limit ? 'Receipts have been read enough times today. Enter it by hand instead.' : e && e.read ? 'The receipt could not be read. Try a clearer photo, or enter it by hand.' : errText(e); draw();
     });
   }
   function confirm() {
@@ -370,7 +374,10 @@
     var c = undoCall(me.draft.id);
     Promise.resolve().then(function () { return me.client.rpc(c.fn, c.args); }).then(function (r) {
       if (S !== me) return; me.busy = false;
-      if (!r || r.error || (r.data && r.data.ok === false)) { me.msg = 'The undo did not go through. Ask Lloyd to take a look.'; draw(); return; }
+      if (!r || r.error || (r.data && r.data.ok === false)) {
+        var uc = r && r.data && r.data.error, UNDO = { stock_moved: 'Some of it is already used, so it cannot be undone here. Tell Lloyd what to change.', already_reviewed: 'The owner has already checked this receipt. Ask Lloyd to change it.', not_confirmed: 'This receipt was never added, so there is nothing to undo.' };
+        me.msg = UNDO[uc] || 'The undo did not go through. Ask Lloyd to take a look.'; if (UNDO[uc]) me.canUndo = false; draw(); return;
+      }
       me.step = 'undone'; me.canUndo = false; say('Undone'); draw();
     }, function () { if (S === me) { me.busy = false; me.msg = 'No connection. The undo did not go through.'; draw(); } });
   }

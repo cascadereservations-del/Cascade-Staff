@@ -371,3 +371,13 @@ test('s110 Admin segment: the month at a glance for owner, admin and finance onl
     const c = adminKpi(role); await tick(); await clickK(c.el, 'seg', { 'data-seg': 'admin' }); assert.doesNotMatch(c.el.innerHTML, /₱|Net this month|Occupancy/, role);
   }
 });
+
+test('s110 final review: specific words for not_found / no_lines; pack math without a purchase-unit name; plural units', () => {
+  const L = loadModule('stock/S110_supply.js', makeWin()).S110_Supply.lib;
+  assert.match(L.errText(null, { error: 'not_found' }), /no longer open/);
+  assert.match(L.errText(null, { error: 'no_lines' }), /at least one line/);
+  const p = L.packInfo({ unit: 'roll', perPack: 12 }, 2);
+  assert.deepEqual([p.packed, p.units], [true, 24]); assert.equal(p.text, '2 packs of 12 = 24 rolls');
+  assert.equal(L.packInfo({ unit: 'box', purchaseUnit: 'case', perPack: 6 }, 1).text, '1 case of 6 = 6 boxes');
+  assert.equal(L.packInfo({ unit: 'pc', perPack: 1 }, 3).packed, false);
+});
