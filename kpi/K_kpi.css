@@ -18,16 +18,30 @@
 .K_ok { color: var(--v5-ok-t); } .K_warn { color: var(--v5-warn-t); } .K_bad { color: var(--v5-danger-t); }
 .K_p { margin: 0; font-size: var(--v5-t-body); color: var(--v5-ink); }
 .K_chart-h { display: flex; justify-content: space-between; align-items: baseline; font-size: var(--v5-t-2); }
-.K_bars { display: flex; align-items: flex-end; gap: 8px; height: 96px; padding-bottom: 4px; border-bottom: 1px solid var(--v5-line); }
-.K_bar { flex: 1 1 0; min-width: 0; border-radius: 6px 6px 2px 2px; background: var(--v5-rib-regular-bar); }
-.K_bar-hi, .K_fill-hi { background: var(--v5-rib-vip-bar); }
-/* s111: Average per stay. A gap is a thin line, the selected month is drawn in the returning-guest colour. */
-.K_bars-m { gap: 4px; }
-.K_bar-gap { align-self: flex-end; height: 2px; border-radius: 1px; background: var(--v5-line-2); }
-.K_bar-cur { background: var(--v5-rib-returning-bar); }
-.K_bars-l { display: flex; gap: 4px; font-size: var(--v5-t-min); color: var(--v5-ink-3); }
-.K_bars-l > span { flex: 1 1 0; min-width: 0; text-align: center; }
-.K_bars-l > .K_cur { color: var(--v5-ink); font-weight: 600; }
+/* s111 rev 2, the chart standard: y ticks from 0 and gridlines, one neutral bar colour, the latest/selected bar emphasised (and its labels bold), a value on
+   each bar, x labels, a dashed average line with its value, a caption. A gap is an empty column. */
+.K_plot { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 4px; margin-top: 16px; }
+.K_yax { position: relative; height: 9rem; width: 2.25rem; font-size: var(--v5-t-min); color: var(--v5-ink-3); }
+.K_yax > span { position: absolute; right: 0; transform: translateY(50%); line-height: 1; }
+.K_area { position: relative; height: 9rem; border-bottom: 1px solid var(--v5-chart-axis); }
+.K_grid > i { position: absolute; left: 0; right: 0; border-top: 1px solid var(--v5-chart-grid); }
+.K_avgl { position: absolute; left: 0; right: 0; z-index: 2; border-top: 2px dashed var(--v5-chart-avg); pointer-events: none; }
+.K_avgk { display: flex; align-items: center; justify-content: flex-end; gap: 8px; margin: 0; font: 600 var(--v5-t-min)/1.2 var(--v5-font-ui); color: var(--v5-chart-avg); }
+.K_avgk > i { display: inline-block; width: 1.5rem; border-top: 2px dashed var(--v5-chart-avg); }
+.K_cols { position: absolute; inset: 0; z-index: 3; display: flex; align-items: flex-end; gap: 4px; }
+.K_col { position: relative; flex: 1 1 0; min-width: 0; height: 100%; display: flex; align-items: flex-end; }
+.K_bar { position: relative; width: 100%; border-radius: 4px 4px 0 0; background: var(--v5-chart-bar); }
+.K_bar > b { position: absolute; left: 50%; bottom: 100%; transform: translateX(-50%); padding-bottom: 4px; font: 400 var(--v5-t-min)/1 var(--v5-font-ui); color: var(--v5-ink-2); background: var(--v5-surf); } /* the average line runs behind bars and labels */
+.K_col-em .K_bar { background: var(--v5-chart-bar-em); }
+.K_col-em .K_bar > b { font-weight: 700; color: var(--v5-ink); }
+.K_xax { display: flex; gap: 4px; margin-left: calc(2.25rem + 4px); font-size: var(--v5-t-min); color: var(--v5-ink-3); }
+.K_xax > span { flex: 1 1 0; min-width: 0; text-align: center; overflow: hidden; text-overflow: clip; }
+.K_xax > .K_xem { color: var(--v5-ink); font-weight: 700; }
+.K_cols-many .K_bar > b { writing-mode: vertical-rl; transform: translateX(-50%) rotate(180deg); }
+.K_cap { margin: 0; font-size: var(--v5-t-label); color: var(--v5-ink-2); }
+.K_fill-hi { background: var(--v5-rib-vip-bar); }
+.K_phb { display: block; width: 100%; padding: 0; border: 0; background: none; cursor: zoom-in; -webkit-touch-callout: none; user-select: none; }
+.K_tform { padding: 0; }
 .K_grid2:not(#K_glance) > .K_stat:last-child:nth-child(odd) { grid-column: 1 / -1; } /* the utility tiles only; the admin glance keeps its own grid */
 .K_lines { display: flex; flex-direction: column; padding: 8px 16px; border-radius: var(--v5-r-card); }
 .K_line { display: flex; align-items: center; gap: 12px; padding: 12px 0; border-bottom: 1px solid var(--v5-sep); }
@@ -79,4 +93,7 @@
 .S_line { display: flex; flex-direction: column; gap: 12px; padding: 16px; border-radius: var(--v5-r-card); }
 .S_line-h { display: flex; flex-direction: column; gap: 4px; }
 .S_line-q { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.S_rcpt { display: flex; align-items: center; gap: 12px; }
+.S_rcptb { flex: none; padding: 0; border: 0; border-radius: var(--v5-r-md); background: var(--v5-sunk); overflow: hidden; cursor: zoom-in; -webkit-touch-callout: none; }
+.S_rcptb img { display: block; width: 6rem; height: 6rem; object-fit: cover; }
 .S_photo { display: flex; align-items: center; gap: 12px; } .S_photo img { width: 72px; height: 72px; object-fit: cover; border-radius: var(--v5-r-md); }

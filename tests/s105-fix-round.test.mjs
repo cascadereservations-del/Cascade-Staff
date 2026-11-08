@@ -49,8 +49,8 @@ test('s109 up next: the incoming guest is its own card under the in-house one fo
     assert.ok(h.indexOf('T_now') < h.indexOf('T_upnext'), 'the guest in the house comes first');
     if (role === 'cleaner') assert.doesNotMatch(h.slice(h.indexOf('T_upnext')), /tel:|T_call/);
   }
-  { const fs1 = await house(cur, { next_guest: nx({ tier: null, repeat: false }) }); assert.match(fs1, /T_upnext T_tier-first[\s\S]*?First stay/, 'first stay'); assert.doesNotMatch(fs1.slice(fs1.indexOf('T_upnext')), /freebie|Kit Kat/, 'D-360: no freebie for a first stay'); }
-  { const h = await house(cur, { next_guest: nx({ tier: null, repeat: undefined, stay_count: undefined }) }); assert.doesNotMatch(h.slice(h.indexOf('T_upnext')), /First stay|T_badge/, 'an unknown tier is not called a first stay (the guest in the house has its own tag)'); }
+  { const fs1 = await house(cur, { next_guest: nx({ tier: null, repeat: false }) }); assert.match(fs1, /T_upnext T_tier-first[\s\S]*?First stay/, 'first stay'); assert.doesNotMatch(fs1.slice(fs1.indexOf('T_upnext'), fs1.indexOf('T_tiers')), /freebie|Kit Kat/, 'D-360: no freebie for a first stay (the s111 Guest tiers card below lists every tier)'); }
+  { const h = await house(cur, { next_guest: nx({ tier: null, repeat: undefined, stay_count: undefined }) }); assert.doesNotMatch(h.slice(h.indexOf('T_upnext'), h.indexOf('T_tiers')), /First stay|T_badge/, 'an unknown tier is not called a first stay (the guest in the house has its own tag)'); }
   assert.match(await house(cur, { next_guest: nx({ checkin_date: plus(3), checkout_date: plus(5) }) }), /T_upnext/, 'three days away');
   assert.doesNotMatch(await house(cur, { next_guest: nx({ checkin_date: plus(15), checkout_date: plus(17) }) }), /T_upnext/, 'over 14 days away');
   assert.equal(CS.nextPrep({ current_guest: null, next_guest: nx() }, TODAY), null, 'nobody in the house: the Today card is already the arrival card');

@@ -122,7 +122,7 @@
   }
   function unmount() {
     if (!S) return; cancelDraft(S); S.listeners.forEach(function (l) { try { S.el.removeEventListener(l[0], l[1]); } catch (e) { /* gone */ } });
-    S.lines.forEach(function (l) { relPrev(l); }); S.dead = true; S = null;
+    S.lines.forEach(function (l) { relPrev(l); }); relRcpt(S); S.dead = true; S = null;
   }
   function reset() { /* nothing is kept between visits */ }
   // Leaving the review (Cancel, back, another tab) frees the draft. Fire and forget; the draft also expires on its own. Never while a confirm is in flight.
@@ -130,6 +130,12 @@
     if (!me || me.step !== 'review' || me.busy || !me.draft || !me.client) return;
     me.step = 'cancelled'; var c = cancelCall(me.draft.id);
     try { Promise.resolve(me.client.rpc(c.fn, c.args)).then(null, function () {}); } catch (e) { /* the draft expires on its own */ }
+  }
+  // s111: the receipt photo stays in memory (an object URL, never uploaded again or saved) while its lines are checked; a tap opens the shared zoom viewer.
+  function relRcpt(me) { if (me && me.rcpt && root.URL && root.URL.revokeObjectURL) { try { root.URL.revokeObjectURL(me.rcpt); } catch (e) { /* gone */ } } if (me) me.rcpt = ''; }
+  function keepRcpt(me, b) { relRcpt(me); try { me.rcpt = b && root.URL && root.URL.createObjectURL ? root.URL.createObjectURL(b) : ''; } catch (e) { me.rcpt = ''; } return b; }
+  function rcptBox() {
+    return S.rcpt ? '<div class="S_rcpt"><button class="S_rcptb" type="button" data-sact="rcpt-zoom" aria-label="Zoom the receipt photo"><img src="' + esc(S.rcpt) + '" alt="The receipt photo" draggable="false"></button><span class="K_sub">Tap the receipt to zoom in.</span></div>' : '';
   }
   function relPrev(l) { if (l && l.prev && root.URL && root.URL.revokeObjectURL) { try { root.URL.revokeObjectURL(l.prev); } catch (e) { /* gone */ } } if (l) l.prev = ''; }
   function say(t) { if (S && S.opts.toast) S.opts.toast(t); }
@@ -221,7 +227,7 @@
     if (st === 'review' || st === 'saving') {
       var d = S.draft || {};
       return head('Check each line', [d.vendor ? String(d.vendor) : '', d.purchased_on ? String(d.purchased_on) : ''].filter(Boolean).join(' · ') || 'Match each line to an item in the house.') +
-        (S.lines.length ? S.lines.map(lineCard).join('') : '<p class="sub">No lines were found on this receipt. You can enter it by hand.</p>') + errLine() +
+        rcptBox() + (S.lines.length ? S.lines.map(lineCard).join('') : '<p class="sub">No lines were found on this receipt. You can enter it by hand.</p>') + errLine() +
         '<div class="K_btns"><button class="btn btn-primary btn-block" type="button" data-sact="confirm"' + (S.busy || !S.lines.length ? ' disabled' : '') + '>' + (S.busy ? 'Adding…' : 'Add to stock') + '</button><button class="btn btn-ghost btn-block" type="button" data-sact="cancel"' + (S.busy ? ' disabled' : '') + '>Cancel</button></div>';
     }
     if (st === 'done') {
@@ -268,6 +274,7 @@
     if (act === 'inc' || act === 'dec') { var nv = stepQty(getQty(id), act === 'inc' ? 1 : -1); setQty(id, nv); if (S.use) { drawList(); updateSave(); } else draw(); return; }
     if (act === 'use-save') { saveUse(); return; }
     if (act === 'manual') { S.step = 'manual'; S.msg = ''; draw(); return; }
+    if (act === 'rcpt-zoom') { if (S.rcpt && root.CSZoom) root.CSZoom.open(S.rcpt, { alt: 'The receipt photo', opener: t }); return; }
     if (act === 'to-start') { S.step = 'start'; S.msg = ''; draw(); return; }
     if (act === 'man-save') { saveManual(); return; }
     if (!l && /^(line-|link-)/.test(act || '')) return;
@@ -320,7 +327,7 @@
     var me = S; if (!me || me.step === 'reading') return;
     if (/pdf/i.test(String(file.type || '')) || /\.pdf$/i.test(String(file.name || ''))) { me.msg = PHOTO_ERR.notimage; draw(); return; }
     me.step = 'reading'; me.msg = ''; draw();
-    resizeImage(file, RECEIPT_SIDE, 2 * PHOTO_MAX).then(blobBase64).then(function (b64) {
+    resizeImage(file, RECEIPT_SIDE, 2 * PHOTO_MAX).then(function (b) { return keepRcpt(me, b); }).then(blobBase64).then(function (b64) {
       return me.client.functions.invoke('ocr-receipt', { body: { mode: 'supply', image_base64: b64, mime_type: 'image/jpeg' } });
     }).then(function (r) {
       if (S !== me) return;
@@ -334,7 +341,7 @@
         me.draft = d.data.draft || {}; me.draft.id = me.draft.id || id; me.lines = draftLines(me.draft); me.lines.forEach(function (l) { if (l.matchId) { l.itemId = l.matchId; repack(l); } }); me.bad = null; me.confirmKey = newKey('rcpt'); me.step = 'review'; draw();
       });
     }).then(null, function (e) {
-      if (S !== me) return; me.step = 'start';
+      if (S !== me) return; me.step = 'start'; relRcpt(me);
       me.msg = e && e.photo ? PHOTO_ERR[e.photo] : e && e.limit ? 'Receipts have been read enough times today. Enter it by hand instead.' : e && e.read ? 'The receipt could not be read. Try a clearer photo, or enter it by hand.' : errText(e); draw();
     });
   }

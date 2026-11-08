@@ -23,24 +23,49 @@
   function dateLabel(iso) { var p = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(iso || '')); return p ? MONTHS[+p[2] - 1].slice(0, 3) + ' ' + +p[3] : ''; }
   function plural(n, one, many) { return n + ' ' + (Math.abs(n) === 1 ? one : many || one + 's'); }
 
-  // Bars: a height in percent of the tallest, never under 8 so a small value still shows. `hi` marks a stay above 125% of the average.
-  function barHeights(values) {
-    var v = (values || []).map(num).filter(function (x) { return x != null; }), max = Math.max.apply(null, v.concat([0])), avg = v.length ? v.reduce(function (a, b) { return a + b; }, 0) / v.length : 0;
-    return v.map(function (x) { return { value: x, pct: max > 0 ? Math.max(8, Math.round(x / max * 100)) : 8, hi: v.length > 2 && avg > 0 && x > avg * 1.25 }; });
-  }
   // Used per turnover against the usual: the bar is scaled to the largest figure on the list; over = more than 110% of usual.
   function usageRows(rows) {
     var list = (rows || []).map(function (r) { return { name: String((r && r.name) || ''), used: num(r && r.used_per_turnover), usual: num(r && r.usual) }; }).filter(function (r) { return r.name && r.used != null; });
     var scale = Math.max.apply(null, list.map(function (r) { return Math.max(r.used, r.usual || 0); }).concat([0]));
     return list.map(function (r) { r.pct = scale > 0 ? Math.max(4, Math.round(r.used / scale * 100)) : 4; r.over = r.usual != null && r.usual > 0 && r.used > r.usual * 1.1; r.overPct = r.usual > 0 ? Math.round((r.used / r.usual - 1) * 100) : 0; return r; });
   }
-  // s111: Average per stay, last 12 months. A month with no figure is a gap (null), never a zero bar. `cur` marks the selected month.
-  function monthBars(rows, key, cur) {
-    var max = Math.max.apply(null, (rows || []).map(function (r) { return r[key] == null ? 0 : r[key]; }).concat([0]));
-    return (rows || []).map(function (r) { var v = r[key]; return { month: r.month, stays: r.stays, value: v, gap: v == null, cur: r.month === cur, pct: v == null ? 0 : max > 0 ? Math.max(8, Math.round(v / max * 100)) : 8 }; });
-  }
   function monthShort(m) { var p = monthParts(m); return p && p.m >= 1 && p.m <= 12 ? MONTHS[p.m - 1].slice(0, 3) + ' ' + p.y : ''; }
-  function barLabel(b, unit) { var n = monthShort(b.month); return b.gap ? n + ': no stays' : n + ': ' + fmt(b.value, unit === 'kWh' ? 1 : 2) + ' ' + unit + ' per stay, ' + plural(b.stays, 'stay'); }
+  // s111 rev 2, the chart standard: a y axis from 0 with 3-4 gridlines on a round step (1, 2, 2.5, 5 x 10^k), so the top tick is the first one at or above the largest value.
+  function niceTicks(max) {
+    var m = Number(max); if (!(m > 0)) return [0, 1];
+    var p = Math.pow(10, Math.floor(Math.log(m / 4) / Math.LN10)), steps = [1, 2, 2.5, 5, 10], step = p * 10;
+    for (var i = 0; i < steps.length; i++) { if (Math.ceil(m / (steps[i] * p) - 1e-9) <= 4) { step = steps[i] * p; break; } }
+    var n = Math.max(1, Math.ceil(m / step - 1e-9)), out = [];
+    for (var k = 0; k <= n; k++) out.push(Math.round(k * step * 1e6) / 1e6);
+    return out;
+  }
+  // points [{x, value|null, aria, em}] -> what the chart draws. A null value is a gap (no bar, never a zero bar); the average is over the values that exist.
+  function chartModel(points) {
+    var vals = (points || []).map(function (p) { return num(p && p.value); }).filter(function (v) { return v != null; });
+    var ticks = niceTicks(Math.max.apply(null, vals.concat([0]))), top = ticks[ticks.length - 1], avg = vals.length ? vals.reduce(function (a, b) { return a + b; }, 0) / vals.length : null;
+    return { ticks: ticks, top: top, avg: avg, avgPct: avg != null ? avg / top * 100 : null, n: vals.length,
+      bars: (points || []).map(function (p) { var v = num(p && p.value); return { x: p.x, value: v, gap: v == null, em: !!p.em, aria: p.aria, pct: v == null ? 0 : v / top * 100 }; }) };
+  }
+  function pctCss(p) { return Math.round(p * 10) / 10; }
+  // One chart, plain HTML: title with the unit, y ticks, gridlines, bars in one neutral colour (the latest/selected one emphasised and its labels bold), a value on each bar,
+  // x labels, a dashed average line with its value, a one-line caption. Every bar has an aria-label; colour never carries meaning alone (the emphasised bar's labels are bold too).
+  function chart(o) {
+    var m = chartModel(o.points), d = o.dec == null ? 1 : o.dec, h = '<div class="card glass K_chart" id="' + esc(o.id) + '"><div class="K_chart-h"><b>' + esc(o.title) + '</b></div>' + (o.tabs || '');
+    if (!m.n) return h + '<p class="K_sub">' + esc(o.empty || 'No readings yet.') + '</p>' + (o.foot || '') + '</div>';
+    if (m.avg != null) h += '<p class="K_avgk"><i aria-hidden="true"></i>' + esc('avg ' + fmt(m.avg, d) + ' ' + o.unit) + '</p>'; // the key for the dashed line, outside the bars so it never covers a value
+    h += '<div class="K_plot"><div class="K_yax" aria-hidden="true">' + m.ticks.map(function (t) { return '<span style="bottom:' + pctCss(t / m.top * 100) + '%">' + esc(fmt(t, d)) + '</span>'; }).join('') + '</div>' +
+      '<div class="K_area"><div class="K_grid" aria-hidden="true">' + m.ticks.map(function (t) { return '<i style="bottom:' + pctCss(t / m.top * 100) + '%"></i>'; }).join('') + '</div>' +
+      (m.avg != null ? '<div class="K_avgl" aria-hidden="true" style="bottom:' + pctCss(m.avgPct) + '%"></div>' : '') +
+      '<div class="K_cols' + (m.bars.length > 8 ? ' K_cols-many' : '') + '" role="group" aria-label="' + esc(o.title + (m.avg != null ? ', average ' + fmt(m.avg, d) + ' ' + o.unit : '')) + '">' + m.bars.map(function (b) {
+        return '<span class="K_col' + (b.em ? ' K_col-em' : '') + '" role="img" aria-label="' + esc(b.aria) + '">' + (b.gap ? '' : '<span class="K_bar" style="height:' + pctCss(b.pct) + '%"><b aria-hidden="true">' + esc(fmt(b.value, d)) + '</b></span>') + '</span>';
+      }).join('') + '</div></div></div>' +
+      '<div class="K_xax" aria-hidden="true">' + m.bars.map(function (b) { return '<span' + (b.em ? ' class="K_xem"' : '') + '>' + esc(b.x) + '</span>'; }).join('') + '</div>' +
+      '<p class="K_cap">' + esc(o.caption) + '</p>' + (o.foot || '') + '</div>';
+    return h;
+  }
+  function segTabs(act, label, on, list) {
+    return '<div class="K_seg" role="tablist" aria-label="' + esc(label) + '">' + list.map(function (s) { return '<button class="K_seg-b" type="button" role="tab" data-kact="' + act + '" data-' + act + '="' + s[0] + '" aria-selected="' + (on === s[0]) + '">' + s[1] + '</button>'; }).join('') + '</div>';
+  }
   function daysTone(d) { return d != null && d <= 5 ? 'bad' : d != null && d <= 10 ? 'warn' : 'ok'; }
   function rateCost(kwh, rate) { var k = num(kwh), r = num(rate); return k != null && r != null ? k * r : null; }
 
@@ -50,12 +75,11 @@
     var u = raw.utility || {}, inv = raw.inventory || {}, lr = u.last_reading && typeof u.last_reading === 'object' ? u.last_reading : null;
     var out = {
       month: String(raw.month || ''),
-      utility: { kwh: num(u.kwh_month), nights: num(u.nights_month), perNight: num(u.kwh_per_night),
-        last: lr ? { at: lr.recorded_at || null, delta: num(lr.delta_kwh), nights: num(lr.nights), perNight: num(lr.kwh_per_night), flag: lr.flag ? String(lr.flag) : '' } : null,
-        m3: num(u.m3_month), m3PerNight: num(u.m3_per_night),
+      // s111 rev 2: use per DAY between readings (a reading covers every day since the previous one, not only the guest nights); nights booked come from the calendar (= Admin occupancy)
+      utility: { kwh: num(u.kwh_month), perDay: num(u.kwh_per_day), m3: num(u.m3_month), m3PerDay: num(u.m3_per_day), booked: num(u.nights_booked), monthNights: num(u.nights_in_month),
+        last: lr ? { at: lr.recorded_at || null, delta: num(lr.delta_kwh), days: num(lr.days), perDay: num(lr.kwh_per_day), m3: num(lr.delta_m3), m3PerDay: num(lr.m3_per_day), flag: lr.flag ? String(lr.flag) : '' } : null,
         perMonth: (Array.isArray(u.per_month) ? u.per_month : []).filter(function (r) { return r && monthParts(r.month); }).map(function (r) { return { month: String(r.month).slice(0, 7), stays: num(r.stays) || 0, kwh: num(r.kwh_per_stay), m3: num(r.m3_per_stay) }; }).slice(-12),
-        stays: barHeights((u.per_stay || []).map(function (s) { return s && s.kwh_per_night; })),
-        stayDates: (u.per_stay || []).map(function (s) { return s && s.checkout_date ? String(s.checkout_date) : ''; }),
+        perStay: (Array.isArray(u.per_stay) ? u.per_stay : []).filter(function (s) { return s && typeof s === 'object'; }).map(function (s) { return { date: String(s.checkout_date || s.recorded_at || '').slice(0, 10), days: num(s.days), kwh: num(s.kwh_per_day), m3: num(s.m3_per_day) }; }).slice(-8),
         brownouts: { count: num(u.brownouts && u.brownouts.count) || 0, hours: num(u.brownouts && u.brownouts.hours) || 0 },
         water: { count: num(u.water_cuts && u.water_cuts.count) || 0, hours: num(u.water_cuts && u.water_cuts.hours) || 0 },
         internet: u.internet_cuts && typeof u.internet_cuts === 'object' ? { count: num(u.internet_cuts.count) || 0, hours: num(u.internet_cuts.hours) || 0 } : null }, // null: an older server, so no row
@@ -73,6 +97,7 @@
       if (has('occupancy')) out.admin.occupancy = { pct: num(a.occupancy), sold: num(a.sold_nights), sellable: num(a.sellable_nights) };
       if (has('adr')) out.admin.adr = num(a.adr);
       if (has('direct_share')) out.admin.direct = num(a.direct_share);
+      if (a.target && typeof a.target === 'object') { var tg = a.target; out.admin.target = { net: num(tg.net_target) || 0, costs: num(tg.costs_basis), need: num(tg.revenue_needed), adr: num(tg.adr), monthNights: num(tg.nights_in_month), onBooks: num(tg.nights_on_books), occ: num(tg.needed_occupancy), needAdr: num(tg.needed_adr), at: tg.set_at || '' }; }
     }
     return out;
   }
@@ -110,7 +135,7 @@
 
   /* ---------------------------------------------------------------- the screen */
   var S = null; // the live mount
-  var memory = { seg: 'utility', avg: 'kwh' }; // the segment survives a re-mount in the same visit
+  var memory = { seg: 'utility', avg: 'kwh', day: 'kwh' }; // the segment survives a re-mount in the same visit
 
   function manilaToday() { return new Date(Date.now() + 8 * 3600000).toISOString().slice(0, 10); }
   function mount(el, opts) {
@@ -124,7 +149,7 @@
     return S;
   }
   function unmount() { if (!S) return; S.listeners.forEach(function (l) { try { S.el.removeEventListener(l[0], l[1]); } catch (e) { /* gone already */ } }); S.dead = true; S = null; }
-  function reset() { memory.seg = 'utility'; memory.avg = 'kwh'; }
+  function reset() { memory.seg = 'utility'; memory.avg = 'kwh'; memory.day = 'kwh'; }
 
   function load() {
     var me = S; if (!me || !me.client) { if (me) { me.state = 'missing'; draw(); } return; }
@@ -164,40 +189,44 @@
   function lineRow(icon, tone, title, sub, big, small) {
     return '<div class="K_line"><span class="K_ic K_ic-' + tone + '" aria-hidden="true">' + gi(icon, 's16') + '</span><span class="K_mid"><b>' + esc(title) + '</b><span>' + esc(sub) + '</span></span><span class="K_end"><b>' + esc(big) + '</b><span>' + esc(small) + '</span></span></div>';
   }
+  var EW = [['kwh', 'Electricity'], ['m3', 'Water']];
+  function unitOf(kind) { return kind === 'm3' ? 'm\u00b3' : 'kWh'; }
+  // Chart 2: average use per stay in each of the last 12 months; the selected month is emphasised; a month with no reading is a gap.
   function avgCard(u, month) {
     var rows = u.perMonth; if (!rows.length) return '';
-    var hasW = rows.some(function (r) { return r.m3 != null; }), kind = hasW && memory.avg === 'm3' ? 'm3' : 'kwh', unit = kind === 'm3' ? 'm\u00b3' : 'kWh', cur = String(month).slice(0, 7);
+    var hasW = rows.some(function (r) { return r.m3 != null; }), kind = hasW && memory.avg === 'm3' ? 'm3' : 'kwh', unit = unitOf(kind), d = kind === 'm3' ? 2 : 1, cur = String(month).slice(0, 7);
     if (!rows.some(function (r) { return r.month === cur; })) cur = rows[rows.length - 1].month;
-    var bars = monthBars(rows, kind, cur), now = rows.filter(function (r) { return r.month === cur; })[0], bits = [];
+    var now = rows.filter(function (r) { return r.month === cur; })[0], bits = [];
     if (now.kwh != null) bits.push(fmt(now.kwh, 1) + ' kWh');
     if (now.m3 != null) bits.push(fmt(now.m3, 2) + ' m\u00b3');
     var sum = now.stays && bits.length ? 'This month: ' + bits.join(' and ') + ' per stay over ' + plural(now.stays, 'stay') + '.' : 'No stay has been read this month yet.';
-    var tabs = hasW ? '<div class="K_seg" role="tablist" aria-label="Average per stay">' + [['kwh', 'Electricity'], ['m3', 'Water']].map(function (s) { return '<button class="K_seg-b" type="button" role="tab" data-kact="avg" data-avg="' + s[0] + '" aria-selected="' + (kind === s[0]) + '">' + s[1] + '</button>'; }).join('') + '</div>' : '';
-    return '<div class="card glass K_chart" id="K_avg"><div class="K_chart-h"><b>Average per stay, ' + (kind === 'm3' ? 'water' : 'electricity') + '</b><span class="K_sub">' + unit + ' per stay</span></div>' + tabs +
-      '<div class="K_bars K_bars-m" role="group" aria-label="' + esc('Average ' + unit + ' per stay, last ' + bars.length + ' months') + '">' +
-      bars.map(function (b) { return '<span class="K_bar' + (b.gap ? ' K_bar-gap' : b.cur ? ' K_bar-cur' : '') + '" role="img" aria-label="' + esc(barLabel(b, unit)) + '"' + (b.gap ? '' : ' style="height:' + b.pct + '%"') + '></span>'; }).join('') + '</div>' +
-      '<div class="K_bars-l" aria-hidden="true">' + bars.map(function (b) { return '<span' + (b.cur ? ' class="K_cur"' : '') + '>' + esc(monthShort(b.month).charAt(0)) + '</span>'; }).join('') + '</div>' +
-      '<p class="K_sub" id="K_avg-sum">' + esc(sum) + '</p></div>';
+    return chart({ id: 'K_avg', title: 'Average ' + (kind === 'm3' ? 'water' : 'electricity') + ' per stay, last 12 months, ' + unit, unit: unit, dec: d,
+      tabs: hasW ? segTabs('avg', 'Average per stay', kind, EW) : '',
+      points: rows.map(function (r) { var v = r[kind], n = monthShort(r.month); return { x: rows.length > 8 ? n.charAt(0) : n.slice(0, 3), value: v, em: r.month === cur, aria: v == null ? n + ': no reading' : n + ': ' + fmt(v, d) + ' ' + unit + ' per stay, ' + plural(r.stays, 'stay') + (r.month === cur ? ', this month' : '') }; }),
+      caption: 'Average use per stay in each month; a month with no reading shows no bar.', foot: '<p class="K_sub" id="K_avg-sum">' + esc(sum) + '</p>' });
+  }
+  // Chart 1: use per day between the last 8 counted readings; the latest reading is emphasised.
+  function dayCard(u) {
+    var rows = u.perStay; if (!rows.length) return '';
+    var hasW = rows.some(function (r) { return r.m3 != null; }), kind = hasW && memory.day === 'm3' ? 'm3' : 'kwh', unit = unitOf(kind), d = kind === 'm3' ? 2 : 1, last = rows.length - 1;
+    return chart({ id: 'K_stays', title: (kind === 'm3' ? 'Water' : 'Electricity') + ' per day between meter readings, ' + unit, unit: unit, dec: d,
+      tabs: hasW ? segTabs('day', 'Use per day between readings', kind, EW) : '',
+      points: rows.map(function (r, i) { var v = r[kind], n = r.date ? dateLabel(r.date) : 'Reading ' + (i + 1); return { x: n, value: v, em: i === last, aria: v == null ? n + ': no figure' : n + ': ' + fmt(v, d) + ' ' + unit + ' a day' + (r.days ? ' over ' + plural(r.days, 'day') : '') + (i === last ? ', latest reading' : '') }; }),
+      caption: 'Each bar is the use since the previous reading, divided by the days in between.' });
   }
   function utilityPanel(d) {
-    var u = d.utility, days = daysIn(d.month), full = u.nights != null ? Math.round(u.nights / days * 100) : null, h = '';
+    var u = d.utility, nm = u.monthNights != null ? u.monthNights : daysIn(d.month), h = '';
     h += '<h2 class="K_h">Utility · this month</h2><div class="K_grid2">' +
-      stat('Electricity', u.kwh != null ? fmt(u.kwh, 0) + ' kWh' : 'No reading yet', u.perNight != null ? fmt(u.perNight) + ' kWh per night' : 'Per night once a stay is read') +
-      (u.m3 != null ? stat('Water', fmt(u.m3, 1) + ' m\u00b3', u.m3PerNight != null ? fmt(u.m3PerNight, 2) + ' m\u00b3 per night' : 'Per night once a stay is read') : '') +
-      stat('Nights booked', u.nights != null ? String(u.nights) : 'None yet', u.nights != null ? 'of ' + days + ' · ' + full + '% full' : '') + '</div>';
+      stat('Electricity this month', u.kwh != null ? fmt(u.kwh, 0) + ' kWh' : 'No reading yet', u.perDay != null ? fmt(u.perDay) + ' kWh a day' : 'A day figure needs two readings') +
+      (u.m3 != null ? stat('Water this month', fmt(u.m3, 1) + ' m\u00b3', u.m3PerDay != null ? fmt(u.m3PerDay, 2) + ' m\u00b3 a day' : 'A day figure needs two readings') : '') +
+      stat('Nights booked', u.booked != null ? u.booked + ' of ' + nm : 'Not yet', u.booked != null && nm > 0 ? Math.round(u.booked / nm * 100) + '% of the month' : '') + '</div>';
     if (u.last) {
-      var l = u.last, bits = [];
-      if (l.delta != null) bits.push(fmt(l.delta) + ' kWh' + (l.nights ? ' over ' + plural(l.nights, 'night') : ''));
-      if (l.perNight != null) bits.push(fmt(l.perNight) + ' kWh a night');
-      h += '<div class="card glass K_note" id="K_last"><span class="K_lab">Last meter reading' + (l.at ? ' · ' + esc(dateLabel(l.at)) : '') + '</span><p class="K_p">' + esc(bits.join(' · ') || 'Recorded') + '</p>' + (l.flag ? '<p class="K_sub K_warn">' + gi('alert', 's16') + ' This reading is being checked.</p>' : '') + '</div>';
+      var l = u.last, over = l.days ? ' over ' + plural(l.days, 'day') : '', lines = [];
+      if (l.delta != null) lines.push(fmt(l.delta) + ' kWh' + over + (l.perDay != null ? ' · ' + fmt(l.perDay) + ' kWh a day' : ''));
+      if (l.m3 != null) lines.push(fmt(l.m3, 2) + ' m\u00b3' + over + (l.m3PerDay != null ? ' · ' + fmt(l.m3PerDay, 2) + ' m\u00b3 a day' : ''));
+      h += '<div class="card glass K_note" id="K_last"><span class="K_lab">Last meter reading' + (l.at ? ' · ' + esc(dateLabel(l.at)) : '') + '</span>' + (lines.length ? lines.map(function (x) { return '<p class="K_p">' + esc(x) + '</p>'; }).join('') : '<p class="K_p">Recorded</p>') + (l.flag ? '<p class="K_sub K_warn">' + gi('alert', 's16') + ' This reading is being checked.</p>' : '') + '</div>';
     }
-    if (u.stays.length) {
-      var hi = u.stays.filter(function (b) { return b.hi; }).sort(function (a, b) { return b.value - a.value; })[0];
-      h += '<div class="card glass K_chart" id="K_stays"><div class="K_chart-h"><b>kWh per night, last ' + u.stays.length + ' stays</b></div><div class="K_bars" role="group" aria-label="kWh per night, last ' + u.stays.length + ' stays">' +
-        u.stays.map(function (b, i) { var dt = u.stayDates[i] ? dateLabel(u.stayDates[i]) + ': ' : 'Stay ' + (i + 1) + ': '; return '<span class="K_bar' + (b.hi ? ' K_bar-hi' : '') + '" role="img" aria-label="' + esc(dt + fmt(b.value) + ' kWh per night') + '" style="height:' + b.pct + '%"></span>'; }).join('') + '</div>' +
-        '<p class="K_sub">' + esc(hi ? 'The gold bar used more than usual: ' + fmt(hi.value) + ' kWh a night.' : 'No stay stood out from the others.') + '</p></div>';
-    }
-    h += avgCard(u, d.month) + '<div class="card glass K_lines">' + lineRow('zap', 'warn', 'Brownouts', 'Feeder notices', String(u.brownouts.count), u.brownouts.count ? fmt(u.brownouts.hours, 0) + ' h total' : 'none') +
+    h += dayCard(u) + avgCard(u, d.month) + '<div class="card glass K_lines">' + lineRow('zap', 'warn', 'Brownouts', 'Feeder notices', String(u.brownouts.count), u.brownouts.count ? fmt(u.brownouts.hours, 0) + ' h total' : 'none') +
       lineRow('drop', 'info', 'Water interruptions', 'GSCWD notices', String(u.water.count), u.water.count ? fmt(u.water.hours, 0) + ' h total' : 'none') +
       (u.internet ? lineRow('wifioff', 'purple', 'Internet outages', 'From notices', String(u.internet.count), u.internet.count ? fmt(u.internet.hours, 0) + ' h total' : 'none') : '') + '</div>';
     return h;
@@ -228,7 +257,7 @@
       '<span class="K_big">' + esc(rate ? pesoRate(rate.php) + ' per kWh' : 'No rate on file') + '</span>' +
       '<span class="K_sub">' + esc(rate ? 'From ' + dateLabel(rate.from) + (rate.source === 'auto' ? ' · read from the SOCOTECO II post' : rate.source === 'manual' ? ' · entered by hand' : '') : 'Add the rate to see what a reading costs.') + '</span>' +
       (rate && rate.url ? '<a class="K_link" href="' + esc(rate.url) + '" target="_blank" rel="noopener">See the source</a>' : '') + '</div>';
-    var l = d.utility.last, lastTxt = l && l.delta != null ? (a.lastCost != null ? 'About ' + peso(a.lastCost) + ' for ' + fmt(l.delta) + ' kWh' + (l.nights ? ' over ' + plural(l.nights, 'night') : '') + ', at ' + (rate ? pesoRate(rate.php) : 'the latest rate') + ' per kWh.' : fmt(l.delta) + ' kWh in the last report. The cost needs a rate on file.') : 'No consumption report yet.';
+    var l = d.utility.last, lastTxt = l && l.delta != null ? (a.lastCost != null ? 'About ' + peso(a.lastCost) + ' for ' + fmt(l.delta) + ' kWh' + (l.days ? ' over ' + plural(l.days, 'day') : '') + ', at ' + (rate ? pesoRate(rate.php) : 'the latest rate') + ' per kWh.' : fmt(l.delta) + ' kWh in the last report. The cost needs a rate on file.') : 'No consumption report yet.';
     h += '<div class="card glass K_note" id="K_lastcost"><span class="K_lab">Last reported consumption</span><p class="K_p">' + esc(lastTxt) + '</p></div>';
     if (canSetRate(role)) h += rateForm();
     h += '<h2 class="K_h">Money in utility and stock</h2><div class="card glass K_lines">' + [
@@ -247,10 +276,38 @@
     }
     var tiles = '';
     if (a.occupancy) { var o = a.occupancy; tiles += stat('Occupancy', pctOf(o.pct), o.pct != null && o.sold != null && o.sellable != null ? o.sold + ' of ' + o.sellable + ' nights' : '', o.pct != null && o.sold != null && o.sellable != null ? 'ok' : ''); }
-    if ('adr' in a) tiles += stat('Average rate', a.adr != null ? peso(a.adr) : 'Not yet', a.adr != null ? 'per night' : '');
+    if ('adr' in a) tiles += stat('Average rate', a.adr != null ? peso(a.adr) : 'Not yet', a.adr != null ? 'a night, on average' : '');
     if ('direct' in a) tiles += stat('Direct bookings', pctOf(a.direct), a.direct != null ? 'of nights, no Airbnb fee' : '');
-    return h + (tiles ? '<div class="K_grid2" id="K_glance">' + tiles + '</div>' : '');
+    return h + (tiles ? '<div class="K_grid2" id="K_glance">' + tiles + '</div>' : '') + targetCard(a.target);
   }
+  // s111 rev 2: the Target card under Average rate. The owner sets a monthly net target (0 = break-even); the server works out the revenue needed from the
+  // last 3 months' costs and what that means in occupancy at the average rate, or in rate for the nights already booked. Unknown parts read "Not enough data yet".
+  var NED = 'Not enough data yet';
+  function targetLines(t) {
+    if (!t) return null;
+    var goal = t.net > 0 ? peso(t.net) + ' net' : 'Break-even', parts = [];
+    if (t.need == null) return { goal: goal, line: NED + '.', basis: 'Costs basis: ' + (t.costs != null ? 'average of the last 3 months, ' + peso(t.costs) : NED.toLowerCase()) + '.' };
+    parts.push(t.occ == null || t.adr == null ? 'occupancy: ' + NED.toLowerCase() : t.occ > 1 ? 'more nights than the month has at ' + peso(t.adr) + ' a night' : 'about ' + Math.round(t.occ * 100) + '% occupancy at ' + peso(t.adr) + ' a night');
+    parts.push(t.needAdr == null || !t.onBooks ? 'a rate for the booked nights: ' + NED.toLowerCase() : peso(t.needAdr) + ' a night for the ' + plural(t.onBooks, 'night') + ' already booked');
+    return { goal: goal, line: 'To reach ' + peso(t.need) + ' in revenue this month: ' + parts.join(', or ') + '.', basis: 'Costs basis: ' + (t.costs != null ? 'average of the last 3 months, ' + peso(t.costs) : NED.toLowerCase()) + '.' };
+  }
+  function targetCard(t) {
+    if (!t) return '';
+    var L = targetLines(t), m = S.msg.tgt || '';
+    return '<div class="card glass K_note" id="K_target"><span class="K_lab">Target this month</span><span class="K_val">' + esc(L.goal) + '</span><p class="K_p">' + esc(L.line) + '</p><p class="K_sub">' + esc(L.basis) + '</p>' +
+      (canSetRate(S.role) ? (S.tgt ? targetForm() : '<button class="btn btn-secondary" type="button" data-kact="tgt-open">' + gi('star', 's16') + 'Set target</button>') : '') + (m ? '<p class="K_sub K_ok" role="status">' + esc(m) + '</p>' : '') + '</div>';
+  }
+  function targetForm() {
+    return '<form class="K_form K_tform" data-kform="tgt" novalidate><div class="field"><label for="K_f_tgt">Monthly net target, pesos</label><div class="input"><input id="K_f_tgt" inputmode="numeric" autocomplete="off" value="' + esc(S.vals.tgt || '') + '"></div></div>' +
+      '<p class="K_sub">0 means break-even: income covers the costs.</p>' + (S.tgt.err ? '<p class="K_sub K_bad" role="alert">' + esc(S.tgt.err) + '</p>' : '') +
+      '<div class="K_btns"><button class="btn btn-primary" type="submit"' + (S.busy === 'tgt' ? ' disabled' : '') + '>' + (S.busy === 'tgt' ? 'Saving…' : 'Save the target') + '</button><button class="btn btn-ghost" type="button" data-kact="tgt-close">Cancel</button></div></form>';
+  }
+  function targetProblem(v) {
+    var s = String(v == null ? '' : v).trim().replace(/[₱,\s]/g, ''), n = s === '' ? null : num(s);
+    if (n == null || n < 0 || n > 10000000) return 'Enter an amount from 0 to 10,000,000 pesos. 0 means break-even.';
+    return null;
+  }
+  function targetCall(pid, v) { return { fn: 'kpi_target_set_v1', args: { p_property_id: pid, p_monthly_net_target: Math.round(num(String(v).trim().replace(/[₱,\s]/g, ''))) } }; }
   function rateForm() {
     var f = S.vals, m = S.msg.rate || '', open = S.rate;
     if (!open) return '<button class="btn btn-secondary btn-block" type="button" data-kact="rate-open">' + gi('cash', 's16') + 'Update rate</button>' + (m ? '<p class="K_sub K_ok" role="status">' + esc(m) + '</p>' : '');
@@ -263,7 +320,7 @@
   }
   function photoBox(label, path) {
     var url = path && S.photos[path];
-    return '<div class="K_ph">' + (url ? '<img src="' + esc(url) + '" alt="' + esc(label + ' meter photo') + '" loading="lazy" decoding="async">' : '<span class="K_sub">' + esc(path ? 'Photo loading' : 'No photo') + '</span>') + '</div>';
+    return '<div class="K_ph">' + (url ? '<button class="K_phb" type="button" data-kact="zoom" data-path="' + esc(path) + '" data-alt="' + esc(label + ' meter photo') + '" aria-label="' + esc('Zoom the ' + label.toLowerCase() + ' meter photo') + '"><img src="' + esc(url) + '" alt="' + esc(label + ' meter photo') + '" loading="lazy" decoding="async" draggable="false"></button>' :'<span class="K_sub">' + esc(path ? 'Photo loading' : 'No photo') + '</span>') + '</div>';
   }
   function metersCard() {
     if (!S.blocksOk) return '';
@@ -306,7 +363,7 @@
   function onInput(ev) {
     var t = ev.target; if (!S || !t) return;
     var id = t.id || '', fix = attr(t, 'data-fix');
-    if (id === 'K_f_php') S.vals.php = t.value; else if (id === 'K_f_from') S.vals.from = t.value; else if (id === 'K_f_rnote') S.vals.rnote = t.value;
+    if (id === 'K_f_php') S.vals.php = t.value; else if (id === 'K_f_from') S.vals.from = t.value; else if (id === 'K_f_rnote') S.vals.rnote = t.value; else if (id === 'K_f_tgt') S.vals.tgt = t.value;
     else if (fix) { var f = S.vals['fix:' + attr(t, 'data-id')]; if (f) f[fix] = t.value; }
   }
   function blockOf(id) { return (S.blocks || []).filter(function (b) { return b.id === id; })[0] || null; }
@@ -315,6 +372,10 @@
     var act = attr(t, 'data-kact'), id = attr(t, 'data-id'), b;
     if (act === 'seg') { var s = attr(t, 'data-seg'); if (s === 'admin' && !isAdminRole(S.role)) return; S.seg = s; memory.seg = s; draw(); return; }
     if (act === 'avg') { memory.avg = attr(t, 'data-avg') === 'm3' ? 'm3' : 'kwh'; draw(); return; }
+    if (act === 'day') { memory.day = attr(t, 'data-day') === 'm3' ? 'm3' : 'kwh'; draw(); return; }
+    if (act === 'zoom') { var src = S.photos[attr(t, 'data-path')]; if (src && root.CSZoom) root.CSZoom.open(src, { alt: attr(t, 'data-alt') || 'Meter photo', opener: t }); return; }
+    if (act === 'tgt-open') { if (!canSetRate(S.role)) return; var tg0 = S.data && S.data.admin && S.data.admin.target; S.tgt = { err: '' }; S.vals.tgt = tg0 && tg0.net ? String(tg0.net) : ''; draw(); return; }
+    if (act === 'tgt-close') { S.tgt = null; draw(); return; }
     if (act === 'retry') { S.state = 'loading'; draw(); load(); return; }
     if (act === 'rate-open') { if (!canSetRate(S.role)) return; S.rate = { err: '' }; S.vals.php = S.data && S.data.admin && S.data.admin.rate ? String(S.data.admin.rate.php) : ''; S.vals.from = manilaToday(); draw(); return; }
     if (act === 'rate-close') { S.rate = null; draw(); return; }
@@ -344,6 +405,7 @@
   }
   function onSubmit(ev) {
     var f = ev.target && ev.target.closest ? ev.target.closest('[data-kform]') : ev.target; if (ev.preventDefault) ev.preventDefault();
+    if (S && S.tgt && !S.busy && attr(f, 'data-kform') === 'tgt') { targetSubmit(); return; }
     if (!S || !S.rate || S.busy || attr(f, 'data-kform') !== 'rate') return;
     var me = S, prob = rateProblem(me.vals.php, me.vals.from); if (prob) { me.rate.err = prob; draw(); return; }
     var c = rateCall(String(me.vals.php).replace(',', '.'), me.vals.from, me.vals.rnote);
@@ -355,8 +417,19 @@
     }, function () { if (S === me) { me.busy = ''; me.rate.err = 'No connection. The rate was not saved.'; draw(); } });
   }
 
+  function targetSubmit() {
+    var me = S; if (!canSetRate(me.role)) return;
+    var prob = targetProblem(me.vals.tgt); if (prob) { me.tgt.err = prob; draw(); return; }
+    var c = targetCall(me.pid, me.vals.tgt); me.busy = 'tgt'; me.tgt.err = ''; draw();
+    Promise.resolve().then(function () { return me.client.rpc(c.fn, c.args); }).then(function (r) {
+      if (S !== me) return; me.busy = '';
+      if (!r || r.error || (r.data && r.data.ok === false)) { var e = r && r.data && r.data.error; me.tgt.err = e === 'invalid_target' ? 'That amount is not in range. Check the number.' : e === 'forbidden' ? 'Only the owner or an admin can set the target.' : 'The target was not saved. Try again.'; draw(); return; }
+      me.tgt = null; me.msg.tgt = 'Target saved.'; say('Target saved'); load();
+    }, function () { if (S === me) { me.busy = ''; me.tgt.err = 'No connection. The target was not saved.'; draw(); } });
+  }
+
   root.K_Kpi = { mount: mount, unmount: unmount, reset: reset, lib: {
-    esc: esc, normalize: normalize, barHeights: barHeights, usageRows: usageRows, monthBars: monthBars, daysTone: daysTone, rateCost: rateCost, monthLabel: monthLabel, daysIn: daysIn, isAdminRole: isAdminRole, canSetRate: canSetRate,
+    esc: esc, normalize: normalize, niceTicks: niceTicks, chartModel: chartModel, targetLines: targetLines, targetProblem: targetProblem, targetCall: targetCall, usageRows: usageRows, daysTone: daysTone, rateCost: rateCost, monthLabel: monthLabel, daysIn: daysIn, isAdminRole: isAdminRole, canSetRate: canSetRate,
     normBlocks: normBlocks, correctionProblem: correctionProblem, blockCall: blockCall, resendCall: resendCall, rateCall: rateCall, rateProblem: rateProblem, errKind: errKind, peso: peso, pesoRate: pesoRate
   } };
 })(typeof window !== 'undefined' ? window : this);

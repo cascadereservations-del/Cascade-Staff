@@ -9,7 +9,7 @@ import { read, boot, baseHandlers, NOW } from './_a_harness.mjs';
 
 const C_Push = createRequire(import.meta.url)('../pay/C_push.js');
 const DAY = 86400000;
-const card = (app) => { const m = /<section class="card glass A_card H_alerts"[^]*?<\/section>/.exec(app.els['v-home'].innerHTML); return m && m[0]; };
+const card = (app) => { const m = /<section class="card glass A_card F_span H_alerts"[^]*?<\/section>/.exec(app.els['v-home'].innerHTML); return m && m[0]; };
 const STUB = { key: 'AQIDBA' };
 
 // a phone: permission state, answers to requestPermission, a push manager that subscribes, and the server's answers to staff_push_subscribe_v1
@@ -27,28 +27,29 @@ function phone({ permission = 'default', answer = 'granted', ua = 'Android', sub
 }
 const subCalls = (app) => app.calls.filter((c) => c[0] === 'staff_push_subscribe_v1');
 
-test('3.2 alerts card: every role sees the one-time card on Home when permission is "default" and push works; copy and buttons', async () => {
+test('s111 alerts card: every role sees the required card at the top of Today when permission is "default" and push works; one button, no Not now', async () => {
   for (const role of ['cleaner', 'finance', 'owner', 'admin']) {
     const p = phone(); const app = await boot(p.opts(role)); const c = card(app);
     assert.ok(c, role + ': the card is there'); assert.match(c, /<h2 class="hd">Turn on alerts<\/h2>/); assert.match(c, /Brownouts, water interruptions and rain on the way./);
-    assert.match(c, /data-act="alerts-on"[^>]*>Turn on<\/button>/); assert.match(c, /data-act="alerts-later"[^>]*>Not now<\/button>/); assert.doesNotMatch(c, /!/, 'no exclamation marks');
-    const h = app.els['v-home'].innerHTML; assert.ok(h.indexOf('class="card glass A_card H_alerts"') < h.search(/aria-label="(Notices|Needs action)"/), 'above Notices, drawn in the first Home paint, not inserted later');
+    assert.match(c, /data-act="alerts-on"[^>]*>Turn on<\/button>/); assert.doesNotMatch(c, /alerts-later|Not now|Hide/, 'it cannot be put away'); assert.doesNotMatch(c, /!/, 'no exclamation marks');
+    const h = app.els['v-home'].innerHTML; assert.ok(h.indexOf('H_alerts') < h.indexOf('class="S_sec'), 'at the top of Today, above the first section, drawn in the first Home paint');
     assert.equal(p.ctl.asked, 0, 'nothing is asked until the person taps');
   }
 });
 
-test('3.2 alerts card: no card when the permission is already answered, push is unsupported, an iPhone is not on the Home Screen, or the person said Not now less than 7 days ago', async () => {
-  for (const [name, o] of [['granted', { permission: 'granted' }], ['denied', { permission: 'denied' }], ['iphone in the browser', { ua: 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X)' }], ['not now 6 days ago', { flag: NOW.getTime() - 6 * DAY }]]) {
+test('s111 alerts card: no Turn on card when granted, push is unsupported, or the phone needs another card (blocked, iPhone in Safari); an old Not now stamp no longer hides it', async () => {
+  for (const [name, o] of [['granted', { permission: 'granted' }], ['denied', { permission: 'denied' }], ['iphone in the browser', { ua: 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X)' }]]) {
     const app = await boot(phone(o).opts('cleaner')); assert.equal(card(app), null, name);
   }
   const p = phone(); const o = p.opts('cleaner'); const w0 = o.winInit; o.winInit = (w) => { w0(w); delete w.PushManager; }; assert.equal(card(await boot(o)), null, 'no PushManager');
   const o2 = phone().opts('cleaner'); const w1 = o2.winInit; o2.winInit = (w) => { w1(w); delete w.C_Push; }; assert.equal(card(await boot(o2)), null, 'push code absent: hidden, no error');
-  assert.ok(card(await boot(phone({ flag: NOW.getTime() - 8 * DAY }).opts('cleaner'))), 'not now 8 days ago: asked again');
+  assert.ok(card(await boot(phone({ flag: NOW.getTime() - DAY }).opts('cleaner'))), 'a Not now from yesterday (old version) is ignored: alerts are required');
 });
 
-test('3.2 alerts card: Not now stores one time stamp, hides the card, asks nothing', async () => {
-  const p = phone(); const app = await boot(p.opts('owner')); await app.click({ 'data-act': 'alerts-later' });
-  assert.equal(card(app), null); assert.deepEqual(p.ctl.store, { cs_h_alerts_later: String(NOW.getTime()) }, 'one key, a time stamp, nothing else'); assert.equal(p.ctl.asked, 0); assert.equal(subCalls(app).length, 0);
+test('s111 alerts card: the old Not now action is gone; Turn on is the only way the card leaves', async () => {
+  assert.doesNotMatch(read('app.js'), /alerts-later|H_ALERT_KEY|H_alertsLater|alerts-blocked-later/, 'no code path puts the card away');
+  const p = phone(); const app = await boot(p.opts('owner')); assert.ok(card(app)); assert.equal(p.ctl.asked, 0);
+  await app.click({ 'data-act': 'alerts-on' }); await app.flush(); assert.equal(p.ctl.asked, 1); assert.equal(subCalls(app).length, 1); assert.equal(card(app), null, 'gone once alerts are on');
 });
 
 test('3.2 alerts card: Turn on asks the browser, gets the key from the server, subscribes, and sends the topics: owner and admin paid + inbox + notices, others paid + notices', async () => {
@@ -77,7 +78,7 @@ test('3.2 alerts card: a "no" from the browser makes no subscription and no serv
   const no = phone({ answer: 'denied' }); const app = await boot(no.opts('owner')); await app.click({ 'data-act': 'alerts-on' }); await app.flush();
   assert.equal(subCalls(app).length, 0); assert.equal(no.ctl.vapid.length, 0, 'the server is not asked for a key'); assert.equal(card(app), null);
   const later = phone({ answer: 'default' }); const a2 = await boot(later.opts('owner')); await a2.click({ 'data-act': 'alerts-on' }); await a2.flush();
-  assert.equal(subCalls(a2).length, 0); assert.equal(card(a2), null, 'the prompt was closed without an answer: treated as Not now for 7 days (3.2.1)');
+  assert.equal(subCalls(a2).length, 0); assert.ok(card(a2), 'the prompt was closed without an answer: the card stays (s111)'); assert.match(card(a2), /The phone did not answer\. Tap Turn on again\./); assert.equal(later.ctl.store.cs_h_alerts_later, undefined);
   const nokey = phone(); const o = nokey.opts('owner'); o.foldFetch = () => Promise.resolve({ ok: false }); const a3 = await boot(o); await a3.click({ 'data-act': 'alerts-on' }); await a3.flush();
   assert.equal(subCalls(a3).length, 0); assert.equal(nokey.ctl.subscribed.length, 0, 'no key from the server: no subscription');
 });
@@ -108,9 +109,9 @@ test('3.2 alerts: signing out clears the alerts state and the shell loads pay/C_
   assert.match(read('styles.css'), /\.H_alrow \.btn \{ flex: 1 1 8rem; \}/, 'the buttons wrap instead of clipping');
 });
 
-test('3.2 alerts: the old Not now key is read once and moved to cs_h_alerts_later; the More switch lines mention pay notices', async () => {
+test('s111 alerts: the old Not now keys no longer hide the card; the More switch lines mention pay notices', async () => {
   const p = phone(); p.ctl.store.cs_alerts_later = String(NOW.getTime() - 2 * DAY); const app = await boot(p.opts('cleaner'));
-  assert.equal(card(app), null, 'an old Not now still counts'); assert.deepEqual(p.ctl.store, { cs_h_alerts_later: String(NOW.getTime() - 2 * DAY) }, 'moved, the old key is gone');
+  assert.ok(card(app), 'an old Not now does not count any more');
   const m = await boot(Object.assign(phone().opts('cleaner'), { hash: '#more' })); await m.flush(); assert.match(m.els['v-more'].innerHTML, /Pay notices, brownouts, water interruptions and rain on the way\./);
   await m.click({ 'data-act': 'alerts-switch' }); await m.flush(); assert.match(m.els['v-more'].innerHTML, /You will be told about pay notices, brownouts, water interruptions and rain on the way on this phone\./);
 });

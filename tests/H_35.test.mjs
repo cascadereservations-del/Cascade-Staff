@@ -11,7 +11,7 @@ const STUB = { key: 'AQIDBA' };
 const CHROME = 'Mozilla/5.0 (Windows NT 10.0) Chrome/120 Safari/537';
 const IPHONE = 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X)';
 const subCalls = (app) => app.calls.filter((c) => c[0] === 'staff_push_subscribe_v1');
-const blocked = (app) => { const m = /<section class="card glass A_card H_alblocked"[^]*?<\/section>/.exec(app.els['v-home'].innerHTML); return m && m[0]; };
+const blocked = (app) => { const m = /<section class="card glass A_card F_span H_alerts H_alblocked"[^]*?<\/section>/.exec(app.els['v-home'].innerHTML); return m && m[0]; };
 const tap = async (app) => { for (const fn of [...(app.listeners.touchend || [])]) fn({ target: { closest: () => null } }); await app.flush(); };
 const withStore = (p, o) => { Object.assign(p.ctl.store, o); return p; };
 // a phone: permission state, answers to requestPermission, a push manager that subscribes, and the server's answers to staff_push_subscribe_v1
@@ -67,12 +67,12 @@ test('3.2.1 first tap: a Block answer is not asked again this load', async () =>
   assert.equal(p.ctl.asked, 1); assert.equal(subCalls(app).length, 0);
 });
 
-test('3.2.1 first tap: no ask when granted, denied, in the demo, after Not now, or when switched off', async () => {
-  for (const [name, p] of [['granted', phone({ permission: 'granted' })], ['denied', phone({ permission: 'denied' })], ['not now', phone({ flag: NOW.getTime() - DAY })], ['off', withStore(phone(), { cs_h_alerts_off: '1' })]]) {
+test('3.2.1 first tap: no ask when granted, denied, in the demo, or when switched off; an old Not now stamp no longer stops it (s111)', async () => {
+  for (const [name, p] of [['granted', phone({ permission: 'granted' })], ['denied', phone({ permission: 'denied' })], ['off', withStore(phone(), { cs_h_alerts_off: '1' })]]) {
     const app = await boot(p.opts('cleaner')); await tap(app); assert.equal(p.ctl.asked, 0, name);
   }
   const d = phone(); const o = d.opts('cleaner'); o.demo = true; const app = await boot(o); await tap(app); assert.equal(d.ctl.asked, 0, 'demo');
-  const l = phone(); const a2 = await boot(l.opts('cleaner')); await a2.click({ 'data-act': 'alerts-later' }); await tap(a2); assert.equal(l.ctl.asked, 0, 'Not now in this load');
+  const l = phone({ flag: NOW.getTime() - DAY }); const a2 = await boot(l.opts('cleaner')); await tap(a2); assert.equal(l.ctl.asked, 1, 'an old Not now stamp is ignored');
 });
 
 test('3.2.1 first tap: sign-out removes the listener', async () => {
@@ -81,20 +81,34 @@ test('3.2.1 first tap: sign-out removes the listener', async () => {
   await app.click({ 'data-act': 'signout' }); assert.equal((app.listeners.touchend || []).length, n0); await tap(app); assert.equal(p.ctl.asked, 0);
 });
 
-test('3.2.1 blocked card: every role, steps by device, Hide for 7 days', async () => {
-  const cases = [['android', /Tap the icon left of the web address, then Permissions, then Notifications, then Allow\. Then reload\./, 'Android'],
-    ['iphone', /Open Settings, then Notifications, then Cascade Staff, then turn on Allow Notifications\./, IPHONE],
-    ['desktop', /Click the icon left of the web address, then Site settings, then Notifications, then Allow\. Then reload\./, CHROME],
-    ['other', /Allow notifications for this site in your browser settings, then reload\./, 'Mozilla/5.0 Firefox/120']];
-  for (const [name, re, ua] of cases) for (const role of ['cleaner', 'owner']) {
+test('s111 blocked card: every role, Android Chrome and iPhone Settings steps, no Hide; the re-check reads the permission again and subscribes once allowed', async () => {
+  for (const [name, ua] of [['android', 'Android'], ['iphone', IPHONE], ['desktop', CHROME]]) for (const role of ['cleaner', 'owner']) {
     const p = phone({ permission: 'denied', ua }); const o = p.opts(role); if (name === 'iphone') o.nav.standalone = true; const app = await boot(o); const c = blocked(app);
-    assert.ok(c, name + role); assert.match(c, /Alerts are off on this phone/); assert.match(c, re); assert.doesNotMatch(c, /!/); assert.match(c, /data-act="alerts-blocked-later"[^>]*>Hide for 7 days/);
+    assert.ok(c, name + role); assert.match(c, /Alerts are off on this phone/); assert.match(c, /<b>Android \(Chrome\)<\/b>[\s\S]*Tap Permissions, then Notifications\.[\s\S]*<b>iPhone<\/b>[\s\S]*Tap Notifications, then Cascade Staff\.[\s\S]*Turn on Allow Notifications\./);
+    assert.doesNotMatch(c, /!|alerts-blocked-later|Hide for 7 days/); assert.match(c, /data-act="alerts-recheck"[^>]*>I’ve turned it on</);
   }
-  const p = phone({ permission: 'denied' }); const app = await boot(p.opts('cleaner')); await app.click({ 'data-act': 'alerts-blocked-later' });
-  assert.equal(blocked(app), null); assert.equal(p.ctl.store.cs_h_alerts_blocked_later, String(NOW.getTime()));
-  const six = withStore(phone({ permission: 'denied' }), { cs_h_alerts_blocked_later: String(NOW.getTime() - 6 * DAY) }); assert.equal(blocked(await boot(six.opts('cleaner'))), null, '6 days: hidden');
-  const eight = withStore(phone({ permission: 'denied' }), { cs_h_alerts_blocked_later: String(NOW.getTime() - 8 * DAY) }); assert.ok(blocked(await boot(eight.opts('cleaner'))), '8 days: back');
-  assert.equal(blocked(await boot(phone({ permission: 'denied', ua: IPHONE }).opts('cleaner'))), null, 'iPhone not installed keeps the install wording');
+  const old = withStore(phone({ permission: 'denied' }), { cs_h_alerts_blocked_later: String(NOW.getTime() - DAY) }); assert.ok(blocked(await boot(old.opts('cleaner'))), 'an old Hide stamp no longer hides it');
+  const p = phone({ permission: 'denied' }); const app = await boot(p.opts('cleaner'));
+  await app.click({ 'data-act': 'alerts-recheck' }); assert.match(blocked(app), /Notifications are still blocked\. Check the steps above, then tap again\./); assert.equal(subCalls(app).length, 0);
+  p.ctl.permission = 'granted'; await app.click({ 'data-act': 'alerts-recheck' }); await app.flush();
+  assert.equal(blocked(app), null, 'allowed now: the card goes'); assert.equal(subCalls(app).length, 1, 'subscribed without a prompt'); assert.equal(p.ctl.asked, 0);
+  assert.equal(blocked(await boot(phone({ permission: 'denied', ua: IPHONE }).opts('cleaner'))), null, 'iPhone not installed gets the install card instead');
+});
+
+test('s111 iPhone in Safari: the card shows the Home Screen steps, not a dead button; installed: Turn on', async () => {
+  const p = phone({ ua: IPHONE }); const app = await boot(p.opts('cleaner')); const h = app.els['v-home'].innerHTML;
+  const c = /<section class="card glass A_card F_span H_alerts H_alinstall"[^]*?<\/section>/.exec(h); assert.ok(c, 'install card');
+  assert.match(c[0], /add Cascade Staff to your Home Screen first/); assert.match(c[0], /Tap Share \(the square with an arrow pointing up\)\.[\s\S]*Add to Home Screen/); assert.match(c[0], /href="\.\/install\/"/); assert.doesNotMatch(c[0], /data-act="alerts-on"/);
+  const q = phone({ ua: IPHONE }); const o = q.opts('cleaner'); o.nav.standalone = true; const a2 = await boot(o); assert.match(a2.els['v-home'].innerHTML, /data-act="alerts-on"[^>]*>Turn on</);
+});
+
+test('s111 switched off on More: no card in that visit, back on the next open', async () => {
+  const p = phone({ permission: 'granted' }); const o = p.opts('cleaner'); o.hash = '#more'; const app = await boot(o); await app.flush();
+  await app.click({ 'data-act': 'alerts-switch' }); await app.flush(); // reads on (auto-subscribed), so this switches off
+  assert.equal(p.ctl.store.cs_h_alerts_off, '1');
+  const q = phone({ permission: 'granted' }); Object.assign(q.ctl.store, p.ctl.store); const a2 = await boot(q.opts('cleaner')); await a2.flush();
+  assert.match(a2.els['v-home'].innerHTML, /class="card glass A_card F_span H_alerts"[\s\S]*data-act="alerts-on"/, 'the next open asks again');
+  await a2.click({ 'data-act': 'alerts-on' }); await a2.flush(); assert.equal(q.ctl.store.cs_h_alerts_off, undefined); assert.doesNotMatch(a2.els['v-home'].innerHTML, /data-act="alerts-on"/);
 });
 
 test('3.2.1 version 3.2.1, cache v21, What is new line', async () => {
@@ -113,10 +127,10 @@ test('3.2.1 r2: the first tap asks with NO render before it, and the tapped cont
   await app.flush();
 });
 
-test('3.2.1 r2: dismissing the browser prompt stores the 7-day stamp, so the next load does not ask', async () => {
+test('s111: dismissing the browser prompt stores no stamp, so the next load asks again (alerts are required)', async () => {
   const p = phone({ answer: 'default' }); const app = await boot(p.opts('owner')); await tap(app);
-  assert.equal(p.ctl.store.cs_h_alerts_later, String(NOW.getTime()));
-  const q = phone(); Object.assign(q.ctl.store, p.ctl.store); const a2 = await boot(q.opts('owner')); await tap(a2); assert.equal(q.ctl.asked, 0);
+  assert.equal(p.ctl.store.cs_h_alerts_later, undefined);
+  const q = phone(); Object.assign(q.ctl.store, p.ctl.store); const a2 = await boot(q.opts('owner')); await tap(a2); assert.equal(q.ctl.asked, 1);
 });
 
 test('3.2.1 r2: a failed quiet subscribe never unsubscribes an existing push subscription', async () => {

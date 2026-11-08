@@ -32,8 +32,8 @@ function fakeClient(handlers, fns, extra) {
 }
 
 const KPI = (admin) => Object.assign({ ok: true, month: '2026-10-01',
-  utility: { kwh_month: 412, nights_month: 22, kwh_per_night: 18.7, last_reading: { recorded_at: '2026-10-14T02:00:00Z', delta_kwh: 38.2, nights: 2, kwh_per_night: 19.1, flag: null },
-    per_stay: [14, 18, 12, 24, 16, 13, 15, 14].map((v, i) => ({ checkout_date: '2026-10-0' + (i + 1), kwh_per_night: v })), brownouts: { count: 2, hours: 9 }, water_cuts: { count: 1, hours: 5 }, internet_cuts: { count: 2, hours: 3 } },
+  utility: { kwh_month: 412, kwh_per_day: 13.7, nights_booked: 22, nights_in_month: 31, last_reading: { recorded_at: '2026-10-14T02:00:00Z', delta_kwh: 38.2, days: 2, kwh_per_day: 19.1, flag: null }, // s111 rev 2 shape
+    per_stay: [14, 18, 12, 24, 16, 13, 15, 14].map((v, i) => ({ checkout_date: '2026-10-0' + (i + 1), days: 2, kwh: v * 2, kwh_per_day: v })), brownouts: { count: 2, hours: 9 }, water_cuts: { count: 1, hours: 5 }, internet_cuts: { count: 2, hours: 3 } },
   inventory: { low_now: 5, restocks_month: 3, turnovers_month: 9, per_turnover: [{ item_id: 'a', name: 'Toilet paper', used_per_turnover: 2.1, usual: 2 }, { item_id: 'b', name: 'Water bottles', used_per_turnover: 4.6, usual: 4 }],
     runs_out: [{ item_id: 'c', name: 'Hand soap', days_left: 4 }, { item_id: 'd', name: 'Garbage bags', days_left: 21 }] } },
   admin ? { admin: { rate: { php_per_kwh: 11.25, effective_from: '2026-09-20', source: 'auto', source_url: 'https://www.facebook.com/socoteco2.EC/' }, last_reading_cost: 429.75, month_kwh_cost: 4635, supplies_month: 4950, supply_cost_per_turnover: 550, cleaning_pay_month: 6300,
@@ -51,10 +51,10 @@ test('s110 laundry role: staff layout, own tab set, no checklist door, no guest 
 });
 
 // ---------------------------------------------------------------------------------------------- 2. pure KPI helpers
-test('s110 K_Kpi.lib: bars, usage rows, money keys only for the money roles, forms refuse bad numbers', () => {
+test('s110 K_Kpi.lib: chart scale (s111), usage rows, money keys only for the money roles, forms refuse bad numbers', () => {
   const K = loadModule('kpi/K_kpi.js', makeWin()).K_Kpi.lib;
-  const bars = K.barHeights([14, 18, 12, 24, 16, 13, 15, 14]); assert.equal(bars.length, 8); assert.equal(bars[3].pct, 100); assert.equal(bars[3].hi, true); assert.equal(bars.filter((b) => b.hi).length, 1);
-  assert.equal(K.barHeights([0, 0])[0].pct, 8, 'a flat zero still draws'); assert.deepEqual(K.barHeights([]), []);
+  const m = K.chartModel([14, 18, 12, 24, 16, 13, 15, 14].map((v) => ({ x: 'a', value: v }))); assert.deepEqual([...m.ticks], [0, 10, 20, 30]); assert.equal(m.bars[3].pct, 80); assert.equal(m.avg, 15.75);
+  assert.equal(K.chartModel([{ value: 0 }, { value: 0 }]).bars[0].pct, 0, 'a zero is a zero, never stretched'); assert.equal(K.chartModel([]).n, 0);
   const u = K.usageRows([{ name: 'Toilet paper', used_per_turnover: 2.1, usual: 2 }, { name: 'Water', used_per_turnover: 4.6, usual: 4 }, { name: 'Coffee', used_per_turnover: 3, usual: 4 }, { name: '', used_per_turnover: 1 }]);
   assert.equal(u.length, 3); assert.deepEqual(u.map((r) => r.over), [false, true, false]); assert.equal(u[1].overPct, 15);
   assert.equal(K.daysTone(4), 'bad'); assert.equal(K.daysTone(9), 'warn'); assert.equal(K.daysTone(21), 'ok');
@@ -99,7 +99,7 @@ function adminKpi(role, over) {
 }
 test('s110 Admin segment: rate, last reported consumption at that rate, costs, Update rate for owner/admin only', async () => {
   const o = adminKpi('owner'); await tick(); await clickK(o.el, 'seg', { 'data-seg': 'admin' });
-  assert.match(o.el.innerHTML, /₱11\.25 per kWh/); assert.match(o.el.innerHTML, /About ₱430 for 38\.2 kWh over 2 nights, at ₱11\.25 per kWh/); assert.match(o.el.innerHTML, /₱4,635/); assert.match(o.el.innerHTML, /₱550/); assert.match(o.el.innerHTML, /₱6,300/);
+  assert.match(o.el.innerHTML, /₱11\.25 per kWh/); assert.match(o.el.innerHTML, /About ₱430 for 38\.2 kWh over 2 days, at ₱11\.25 per kWh/); assert.match(o.el.innerHTML, /₱4,635/); assert.match(o.el.innerHTML, /₱550/); assert.match(o.el.innerHTML, /₱6,300/);
   assert.match(o.el.innerHTML, /data-kact="rate-open"/); assert.match(o.el.innerHTML, /href="#manage\/kpis"/, 'the full key figures stay one tap away');
   await clickK(o.el, 'rate-open'); await fire(o.el, 'input', target({}, { id: 'K_f_php', value: '12,5' })); await fire(o.el, 'input', target({}, { id: 'K_f_from', value: '2026-11-01' }));
   await fire(o.el, 'submit', target({ 'data-kform': 'rate' })); await tick();
@@ -356,7 +356,7 @@ test('s110 Admin segment: the month at a glance for owner, admin and finance onl
   for (const role of ['owner', 'admin', 'finance']) {
     const a = adminKpi(role); await tick(); await clickK(a.el, 'seg', { 'data-seg': 'admin' }); const h = a.el.innerHTML;
     assert.match(h, /Net this month so far[\s\S]*₱38,420/, role); assert.match(h, /Revenue ₱61,900 · costs ₱23,480/);
-    assert.match(h, /Occupancy[\s\S]*73%[\s\S]*22 of 30 nights/); assert.match(h, /Average rate[\s\S]*₱2,814[\s\S]*per night/); assert.match(h, /Direct bookings[\s\S]*41%/);
+    assert.match(h, /Occupancy[\s\S]*73%[\s\S]*22 of 30 nights/); assert.match(h, /Average rate[\s\S]*₱2,814[\s\S]*a night, on average/); assert.match(h, /Direct bookings[\s\S]*41%/);
     assert.ok(h.indexOf('K_net') < h.indexOf('Electricity cost'), 'the glance comes first');
   }
   const part = KPI(true); part.admin = { net_month: null, occupancy: null, adr: null, direct_share: null }; const p = adminKpi('finance', { kpi_tab_v1: () => ({ error: null, data: part }) }); await tick(); await clickK(p.el, 'seg', { 'data-seg': 'admin' });

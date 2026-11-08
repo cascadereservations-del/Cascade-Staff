@@ -570,6 +570,71 @@
     while (out.length > 4) { var i = out.map(function (x) { return x.k; }).indexOf('id'); out.splice(i >= 0 ? i : out.length - 1, 1); }
     return out.map(function (x) { return x.text; });
   }
+  // s111: the shared photo viewer's zoom maths (app.js Z_). Scale 1..5; double-tap toggles 1 <-> 2.5; zoomAt keeps the point under the finger still and the photo
+  // inside its box (pan limited to the overflow, (s - 1) * size / 2 each way). w/h unknown (0) = no pan.
+  var ZOOM_MAX = 5, ZOOM_TAP = 2.5;
+  function zoomClamp(s) { s = Number(s); return !(s > 1) ? 1 : s > ZOOM_MAX ? ZOOM_MAX : s; }
+  function zoomStep(s, dir) { return zoomClamp(dir > 0 ? s * 1.5 : s / 1.5); }
+  function zoomToggle(s) { return s > 1.01 ? 1 : ZOOM_TAP; }
+  function zoomPan(z, w, h) {
+    var mx = Math.max(0, (z.s - 1) * (Number(w) || 0) / 2), my = Math.max(0, (z.s - 1) * (Number(h) || 0) / 2);
+    return { s: z.s, x: Math.max(-mx, Math.min(mx, Number(z.x) || 0)), y: Math.max(-my, Math.min(my, Number(z.y) || 0)) };
+  }
+  // cx, cy: the zoom point measured from the box centre (px)
+  function zoomAt(z, s1, cx, cy, w, h) {
+    var s = zoomClamp(s1), k = s / (z.s || 1), x = (cx || 0) - ((cx || 0) - (z.x || 0)) * k, y = (cy || 0) - ((cy || 0) - (z.y || 0)) * k;
+    return zoomPan({ s: s, x: s === 1 ? 0 : x, y: s === 1 ? 0 : y }, w, h);
+  }
+  // s111: the Today "Guest tiers" card. The rule per tier (D-360 thresholds) and every perk the tier gets, arrival and house together, no ID line (it depends on the guest).
+  var TIER_RULES = { first: '1st stay. The standard amenities.', returning: 'From the 2nd stay.', regular: '4 or more stays, or 10 or more nights.', vip: '7 or more stays, or 20 or more nights.' };
+  function tierGuide() {
+    return ['first', 'returning', 'regular', 'vip'].map(function (t) {
+      var b = tierBadge({ tier: t }), seen = {}, perks = tierPerks(t, { phase: 'arrival' }).concat(tierPerks(t, { phase: 'house' })).filter(function (p) { if (seen[p]) return false; seen[p] = 1; return true; });
+      return { tier: t, icon: b.icon, word: b.word, rule: TIER_RULES[t], perks: perks };
+    });
+  }
+  // s111: Phone check (app.js PC_). Run once per device (key cs_phone_check, version bumped when a check is added); each probe result maps to a row:
+  // 'ok' | 'tap' (needs a tap, fix: true when Fix all can do it here, steps when the person must go elsewhere) | 'no' (not possible here). A row is OK only from a real probe.
+  var PHONE_CHECK_KEY = 'cs_phone_check', PHONE_CHECK_VER = 1, PHONE_FIX_ORDER = ['alerts', 'storage', 'install', 'camera', 'update'];
+  var IOS_A2HS = ['Open this page in Safari.', 'Tap Share (the square with an arrow pointing up).', 'Scroll down and tap Add to Home Screen, then Add.', 'Open Cascade Staff from your Home Screen.'];
+  function phoneCheckRead(ls) { try { var v = ls ? JSON.parse(ls.getItem(PHONE_CHECK_KEY) || 'null') : null; return v && typeof v === 'object' ? v : null; } catch (e) { return null; } }
+  function phoneCheckDue(ls) { var v = phoneCheckRead(ls); return !(v && Number(v.v) >= PHONE_CHECK_VER); }
+  function phoneCheckSave(ls, rows) { try { if (ls) ls.setItem(PHONE_CHECK_KEY, JSON.stringify({ v: PHONE_CHECK_VER, at: Date.now(), open: (rows || []).filter(function (r) { return r.state === 'tap' && r.fix; }).map(function (r) { return r.id; }) })); return true; } catch (e) { return false; } }
+  function phoneCheckOpen(ls) { var v = phoneCheckRead(ls); return v && Array.isArray(v.open) ? v.open.filter(function (x) { return PHONE_FIX_ORDER.indexOf(x) >= 0; }) : []; }
+  function phoneBlockedSteps(ua) {
+    ua = String(ua || '');
+    if (/iphone|ipad|ipod/i.test(ua)) return ['Open Settings.', 'Tap Notifications, then Cascade Staff.', 'Turn on Allow Notifications.', 'Come back and tap I’ve turned it on.'];
+    return ['Tap the icon left of the web address (or open the app info on the Home Screen icon).', 'Tap Permissions, then Notifications.', 'Choose Allow.', 'Come back and tap I’ve turned it on.'];
+  }
+  // p: { ua, alerts: { support, permission, subscribed }, install: { standalone, ios, canPrompt }, camera: { has, perm }, storage: { api, persisted }, update: { sw, controller, waiting, cacheOk }, trusted }
+  function phoneCheckRows(p) {
+    p = p || {}; var a = p.alerts || {}, i = p.install || {}, c = p.camera || {}, s = p.storage || {}, u = p.update || {}, rows = [];
+    var row = function (id, title, state, text, extra) { rows.push(Object.assign({ id: id, title: title, state: state, text: text, fix: false, steps: null }, extra || {})); };
+    if (a.support === 'unsupported' || !a.support) row('alerts', 'Alerts', 'no', 'This browser cannot show alerts from a web app.');
+    else if (a.support === 'needs_install') row('alerts', 'Alerts', 'tap', 'On iPhone, alerts work only in the app opened from the Home Screen.', { steps: IOS_A2HS });
+    else if (a.support === 'blocked') row('alerts', 'Alerts', 'tap', 'Notifications are blocked for this app. Only the phone settings can allow them again.', { steps: phoneBlockedSteps(p.ua) });
+    else if (a.permission === 'granted' && a.subscribed === true) row('alerts', 'Alerts', 'ok', 'Alerts are on. Brownouts, water interruptions, rain and pay notices reach this phone.');
+    else row('alerts', 'Alerts', 'tap', 'Alerts are off. One tap turns them on.', { fix: true });
+    if (i.standalone) row('install', 'Installed as an app', 'ok', 'Cascade Staff opens as an app on this phone.');
+    else if (i.ios) row('install', 'Installed as an app', 'tap', 'Add Cascade Staff to the Home Screen so it opens as an app.', { steps: IOS_A2HS });
+    else if (i.canPrompt) row('install', 'Installed as an app', 'tap', 'One tap installs Cascade Staff on this phone.', { fix: true });
+    else row('install', 'Installed as an app', 'tap', 'Install it from the browser menu.', { steps: ['Open the browser menu (three dots).', 'Tap Install app or Add to Home screen.', 'Open Cascade Staff from your Home Screen.'] });
+    if (!c.has) row('camera', 'Camera', 'no', 'No camera is available here for meter photos and receipts.');
+    else if (c.perm === 'granted') row('camera', 'Camera', 'ok', 'The camera is allowed for meter photos and receipts.');
+    else if (c.perm === 'denied') row('camera', 'Camera', 'tap', 'The camera is blocked for this app.', { steps: /iphone|ipad|ipod/i.test(String(p.ua || '')) ? ['Open Settings, then Safari, then Camera.', 'Choose Allow.'] : ['Tap the icon left of the web address.', 'Tap Permissions, then Camera, then Allow.'] });
+    else if (c.perm === 'prompt') row('camera', 'Camera', 'tap', 'The camera has not been allowed yet. One tap asks once.', { fix: true });
+    else row('camera', 'Camera', 'no', 'This phone asks for the camera when you take the first photo. Allow it then.');
+    if (!s.api) row('storage', 'Storage kept', 'no', 'This browser does not say whether it keeps the app data.');
+    else if (s.persisted === true) row('storage', 'Storage kept', 'ok', 'The phone keeps the app data, so drafts and sign-in are not cleared to save space.');
+    else row('storage', 'Storage kept', 'tap', 'The phone may clear the app data to save space. One tap asks to keep it.', { fix: true });
+    if (!u.sw) row('update', 'Up to date', 'no', 'This browser cannot keep the app ready offline.');
+    else if (u.controller && !u.waiting && u.cacheOk === true) row('update', 'Up to date', 'ok', 'This is the latest version, ready to work offline.');
+    else row('update', 'Up to date', 'tap', u.waiting ? 'A newer version is ready. One tap loads it.' : 'The app is not fully ready offline yet. One tap loads the latest version.', { fix: true });
+    if (p.trusted) row('trust', 'Trusted device', 'ok', 'This phone keeps you signed in (Trust this device is on).');
+    else row('trust', 'Trusted device', 'tap', 'Trust this device is off, so you sign in again after the app is closed. That is right for a shared phone.', { steps: ['To change it: sign out, then turn on Trust this device when you sign in.'] });
+    return rows;
+  }
+  function phoneFixPlan(rows) { var need = {}; (rows || []).forEach(function (r) { if (r.state === 'tap' && r.fix) need[r.id] = 1; }); return PHONE_FIX_ORDER.filter(function (id) { return need[id]; }); }
   // s96 SPEC-47: the notes that matter (rank 0 incident/complaint, 1 special request): the strongest one first, and how many other notes there are.
   function keyNote(text) {
     var all = [], key = null; parseNotes(text).forEach(function (g) { g.points.forEach(function (x) { all.push(x); if (x.rank <= 1 && (!key || x.rank < key.rank)) key = x; }); });
@@ -1630,7 +1695,7 @@
     fmtTime: fmtTime, fmt24: fmt24, ordinal: ordinal, plural: plural, agoLabel: agoLabel, clockLabel: clockLabel,
     monthGrid: monthGrid, dayState: dayState, dayStatus: dayStatus, mergeStays: mergeStays, sameGuest: sameGuest, dayMoves: dayMoves, blockWhy: blockWhy, flagName: flagName, FLAG_KINDS: FLAG_KINDS, blockedLines: blockedLines, blockedLineText: blockedLineText,
     canFlagDays: canFlagDays, guestContact: guestContact, canSeeGuestContact: canSeeGuestContact, MESSENGER_INBOX: MESSENGER_INBOX, rpcMissing: rpcMissing, tgLink: tgLink, warningInfo: warningInfo, findingKey: findingKey, initialOf: initialOf, sourceLabel: sourceLabel, stayDates: stayDates, monthInRange: monthInRange,
-    tierRibbon: tierRibbon, tierBadge: tierBadge, wxHazards: wxHazards, wxHourly: wxHourly, nextPrep: nextPrep, utilAlerts: utilAlerts, isInternetNotice: isInternetNotice, tierPerks: tierPerks, faceFrame: faceFrame, parseNotes: parseNotes, returningLabel: returningLabel, tierLabel: tierLabel, tierLine: tierLine, tierParts: tierParts, keyNote: keyNote, TOPIC_LABELS: TOPIC_LABELS, notableLine: notableLine, weatherIcon: weatherIcon, rainAlert: rainAlert, wxCard: wxCard, goodToKnow: goodToKnow, earlierLine: earlierLine, companionsLine: companionsLine, todayCardState: todayCardState,
+    tierRibbon: tierRibbon, tierBadge: tierBadge, wxHazards: wxHazards, wxHourly: wxHourly, nextPrep: nextPrep, utilAlerts: utilAlerts, isInternetNotice: isInternetNotice, tierPerks: tierPerks, tierGuide: tierGuide, phoneCheckRows: phoneCheckRows, phoneFixPlan: phoneFixPlan, phoneCheckDue: phoneCheckDue, phoneCheckSave: phoneCheckSave, phoneCheckOpen: phoneCheckOpen, phoneCheckRead: phoneCheckRead, phoneBlockedSteps: phoneBlockedSteps, PHONE_CHECK_KEY: PHONE_CHECK_KEY, PHONE_CHECK_VER: PHONE_CHECK_VER, IOS_A2HS: IOS_A2HS, zoomClamp: zoomClamp, zoomStep: zoomStep, zoomToggle: zoomToggle, zoomPan: zoomPan, zoomAt: zoomAt, ZOOM_MAX: ZOOM_MAX, faceFrame: faceFrame, parseNotes: parseNotes, returningLabel: returningLabel, tierLabel: tierLabel, tierLine: tierLine, tierParts: tierParts, keyNote: keyNote, TOPIC_LABELS: TOPIC_LABELS, notableLine: notableLine, weatherIcon: weatherIcon, rainAlert: rainAlert, wxCard: wxCard, goodToKnow: goodToKnow, earlierLine: earlierLine, companionsLine: companionsLine, todayCardState: todayCardState,
     orderWarnings: orderWarnings, brownoutText: brownoutText, lowStockText: lowStockText, warningSummary: warningSummary,
     weatherLine: weatherLine, rainLine: rainLine, weatherStale: weatherStale, WEATHER_STALE_MIN: WEATHER_STALE_MIN, esc: esc,
     A_HOUSE_FALLBACK: A_HOUSE_FALLBACK, A_houseTimes: A_houseTimes, A_turnoverClock: A_turnoverClock, A_turnoverLine: A_turnoverLine, A_hm: A_hm, A_NOTICE_TYPES: A_NOTICE_TYPES, A_noticesView: A_noticesView, A_noticeFilters: A_noticeFilters, A_dayMarks: A_dayMarks, A_noticeDay: A_noticeDay, A_guestMessage: A_guestMessage, A_CAL_TABS: A_CAL_TABS, A_calTab: A_calTab, A_stayShade: A_stayShade, A_hubGroups: A_hubGroups, A_hubNative: A_hubNative, A_hubRoutes: A_hubRoutes, A_hubRouteOk: A_hubRouteOk, A_hubDoorUrl: A_hubDoorUrl, A_whatsNew: A_whatsNew, A_shortTime: A_shortTime, A_PINNED: A_PINNED, A_noticeAddError: A_noticeAddError, A_NOTICE_HINT: A_NOTICE_HINT, A_flagDup: A_flagDup, A_facebookUrl: A_facebookUrl, A_fbPluginUrl: A_fbPluginUrl, A_noticeAddProblem: A_noticeAddProblem, A_noticeAddArgs: A_noticeAddArgs, A_plainRefusal: A_plainRefusal, A_hour12: A_hour12, A_timeRange: A_timeRange,
