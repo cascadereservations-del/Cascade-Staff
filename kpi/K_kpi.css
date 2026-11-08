@@ -18,31 +18,58 @@
 .K_ok { color: var(--v5-ok-t); } .K_warn { color: var(--v5-warn-t); } .K_bad { color: var(--v5-danger-t); }
 .K_p { margin: 0; font-size: var(--v5-t-body); color: var(--v5-ink); }
 .K_chart-h { display: flex; justify-content: space-between; align-items: baseline; font-size: var(--v5-t-2); }
-/* s111 rev 2, the chart standard: y ticks from 0 and gridlines, one neutral bar colour, the latest/selected bar emphasised (and its labels bold), a value on
-   each bar, x labels, a dashed average line with its value, a caption. A gap is an empty column. */
-.K_plot { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 4px; margin-top: 16px; }
-.K_yax { position: relative; height: 9rem; width: 2.25rem; font-size: var(--v5-t-min); color: var(--v5-ink-3); }
-.K_yax > span { position: absolute; right: 0; transform: translateY(50%); line-height: 1; }
-.K_area { position: relative; height: 9rem; border-bottom: 1px solid var(--v5-chart-axis); }
-.K_grid > i { position: absolute; left: 0; right: 0; border-top: 1px solid var(--v5-chart-grid); }
-.K_avgl { position: absolute; left: 0; right: 0; z-index: 2; border-top: 2px dashed var(--v5-chart-avg); pointer-events: none; }
-.K_avgk { display: flex; align-items: center; justify-content: flex-end; gap: 8px; margin: 0; font: 600 var(--v5-t-min)/1.2 var(--v5-font-ui); color: var(--v5-chart-avg); }
-.K_avgk > i { display: inline-block; width: 1.5rem; border-top: 2px dashed var(--v5-chart-avg); }
-.K_cols { position: absolute; inset: 0; z-index: 3; display: flex; align-items: flex-end; gap: 4px; }
-.K_col { position: relative; flex: 1 1 0; min-width: 0; height: 100%; display: flex; align-items: flex-end; }
-.K_bar { position: relative; width: 100%; border-radius: 4px 4px 0 0; background: var(--v5-chart-bar); }
-.K_bar > b { position: absolute; left: 50%; bottom: 100%; transform: translateX(-50%); padding-bottom: 4px; font: 400 var(--v5-t-min)/1 var(--v5-font-ui); color: var(--v5-ink-2); background: var(--v5-surf); } /* the average line runs behind bars and labels */
-.K_col-em .K_bar { background: var(--v5-chart-bar-em); }
-.K_col-em .K_bar > b { font-weight: 700; color: var(--v5-ink); }
-.K_xax { display: flex; gap: 4px; margin-left: calc(2.25rem + 4px); font-size: var(--v5-t-min); color: var(--v5-ink-3); }
-.K_xax > span { flex: 1 1 0; min-width: 0; text-align: center; overflow: hidden; text-overflow: clip; }
-.K_xax > .K_xem { color: var(--v5-ink); font-weight: 700; }
-.K_cols-many .K_bar > b { writing-mode: vertical-rl; transform: translateX(-50%) rotate(180deg); }
+/* s113, the chart standard: inline SVG line charts (kpi/K_kpi.js lineChart). The plot SVG stretches (preserveAspectRatio none, strokes non-scaling); the y labels,
+   dots, values and x labels are HTML placed by percent, so text never stretches. Classes are KU_ only: the s111 .K_bar collided with calendar/K_bookcal.css. */
+.KU_key { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8px; margin: 0; font: 600 var(--v5-t-min)/1.2 var(--v5-font-ui); color: var(--v5-chart-avg); }
+.KU_kband { display: inline-block; width: 1.25rem; height: 0.75rem; border-radius: 2px; background: var(--v5-chart-band); box-shadow: inset 0 0 0 1px var(--v5-chart-avg); }
+.KU_ktyp { display: inline-block; width: 1.5rem; border-top: 2px dashed var(--v5-chart-avg); }
+.KU_fig { display: grid; grid-template-columns: 2.5rem minmax(0, 1fr); gap: 8px; margin-top: 16px; }
+.KU_yax { position: relative; height: 10rem; font: 400 var(--v5-t-min)/1 var(--v5-font-ui); color: var(--v5-ink-2); }
+.KU_yax > span { position: absolute; right: 0; transform: translateY(-50%); }
+.KU_plot { position: relative; height: 10rem; }
+.KU_svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+.KU_grid { stroke: var(--v5-chart-grid); stroke-width: 1; }
+.KU_base { stroke: var(--v5-chart-axis); stroke-width: 1; }
+.KU_band { fill: var(--v5-chart-band); }
+.KU_typ { stroke: var(--v5-chart-avg); stroke-width: 2; stroke-dasharray: 5 4; }
+.KU_area { fill: var(--v5-chart-area); }
+.KU_line { fill: none; stroke: var(--v5-chart-line); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+.KU_pt { position: absolute; width: 0.5rem; height: 0.5rem; transform: translate(-50%, -50%); border-radius: 50%; border: 2px solid var(--v5-chart-line); background: var(--v5-surf); box-sizing: border-box; }
+.KU_pt-em { width: 0.875rem; height: 0.875rem; background: var(--v5-chart-line); box-shadow: 0 0 0 3px var(--v5-surf); }
+.KU_pt-over { width: 0.75rem; height: 0.625rem; border: 0; border-radius: 0; background: var(--v5-warn-t); clip-path: polygon(50% 0, 100% 100%, 0 100%); }
+.KU_val { position: absolute; width: max-content; transform: translate(-50%, calc(-100% - 8px)); padding: 0 4px; border-radius: 4px; font: 600 var(--v5-t-min)/1.3 var(--v5-font-ui); color: var(--v5-ink-2); background: var(--v5-surf); }
+.KU_val-em { color: var(--v5-ink); font-weight: 700; }
+.KU_val-below { transform: translate(-50%, 8px); }
+.KU_val-r { transform: translate(calc(-100% + 8px), calc(-100% - 8px)); } .KU_val-r.KU_val-below { transform: translate(calc(-100% + 8px), 8px); }
+.KU_val-l { transform: translate(-8px, calc(-100% - 8px)); } .KU_val-l.KU_val-below { transform: translate(-8px, 8px); }
+.KU_xax { position: relative; height: 1.5rem; margin-left: calc(2.5rem + 8px); margin-top: 4px; font: 400 var(--v5-t-min)/1.5 var(--v5-font-ui); color: var(--v5-ink-2); }
+.KU_x { position: absolute; top: 0; width: max-content; transform: translateX(-50%); }
+.KU_x0 { transform: translateX(-0.5rem); } .KU_xn { transform: translateX(calc(-100% + 0.5rem)); }
+.KU_xem { color: var(--v5-ink); font-weight: 700; }
+.KU_odd { display: flex; align-items: flex-start; gap: 8px; color: var(--v5-warn-t); }
+.KU_odd svg.i { flex: none; margin-top: 2px; }
 .K_cap { margin: 0; font-size: var(--v5-t-label); color: var(--v5-ink-2); }
+/* the summary tiles (contract A): small caps label, big number with its unit, context, change chip, sparkline or ring */
+.KU_tile { display: flex; flex-direction: column; gap: 4px; padding: 16px; border-radius: var(--v5-r-card); min-width: 0; }
+.KU_big { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px; margin-top: 4px; }
+.KU_big > b { font: 400 var(--v5-t-num)/1.1 var(--v5-font-display); color: var(--v5-ink); }
+.KU_big > span { font: 600 var(--v5-t-label)/1.2 var(--v5-font-ui); color: var(--v5-ink-2); }
+.KU_chip { align-self: flex-start; margin-top: 4px; padding: 2px 8px; border-radius: 999px; font: 600 var(--v5-t-min)/1.4 var(--v5-font-ui); background: var(--v5-sunk); color: var(--v5-ink-2); }
+.KU_chip-down { background: var(--v5-ok-w); color: var(--v5-ok-t); } .KU_chip-up { background: var(--v5-warn-w); color: var(--v5-warn-t); }
+.KU_spark { position: relative; display: block; height: 2rem; margin-top: 8px; }
+.KU_spark > svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+.KU_spark > i { position: absolute; width: 0.5rem; height: 0.5rem; transform: translate(-50%, -50%); border-radius: 50%; background: var(--v5-chart-line); box-shadow: 0 0 0 2px var(--v5-surf); }
+.KU_ringrow { display: flex; align-items: center; gap: 12px; margin-top: 4px; }
+.KU_ring { position: relative; display: inline-grid; place-items: center; width: 4rem; height: 4rem; flex: none; }
+.KU_ring > svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+.KU_ring-t { fill: none; stroke: var(--v5-sunk); stroke-width: 3.5; }
+.KU_ring-f { fill: none; stroke: var(--v5-chart-line); stroke-width: 3.5; stroke-linecap: round; }
+.KU_ring > b { position: relative; font: 700 var(--v5-t-label)/1 var(--v5-font-ui); color: var(--v5-ink); }
+.KU_means { margin: 0; padding: 12px 16px; border-radius: var(--v5-r-card); background: var(--v5-surf-2); font-size: var(--v5-t-2); color: var(--v5-ink); box-shadow: inset 0 0 0 1px var(--v5-sep); }
+.KU_means > b { display: block; font: 600 var(--v5-t-min)/1.2 var(--v5-font-ui); letter-spacing: .08em; text-transform: uppercase; color: var(--v5-ink-3); margin-bottom: 4px; }
 .K_fill-hi { background: var(--v5-rib-vip-bar); }
 .K_phb { display: block; width: 100%; padding: 0; border: 0; background: none; cursor: zoom-in; -webkit-touch-callout: none; user-select: none; }
 .K_tform { padding: 0; }
-.K_grid2:not(#K_glance) > .K_stat:last-child:nth-child(odd) { grid-column: 1 / -1; } /* the utility tiles only; the admin glance keeps its own grid */
 .K_lines { display: flex; flex-direction: column; padding: 8px 16px; border-radius: var(--v5-r-card); }
 .K_line { display: flex; align-items: center; gap: 12px; padding: 12px 0; border-bottom: 1px solid var(--v5-sep); }
 .K_line:last-child { border-bottom: 0; }

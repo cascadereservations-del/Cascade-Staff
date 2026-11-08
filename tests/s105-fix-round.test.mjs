@@ -21,9 +21,9 @@ test('layout: the name, the key day/time line and the ID pill are inside .T_id b
 
 test('ribbon: one colour class per tier, a first stay gets its own tag (s110)', async () => {
   for (const [t, words] of [['returning', 'Returning'], ['regular', 'Regular'], ['vip', 'VIP']]) {
-    const h = await house(GUEST({ tier: t })); assert.match(h, new RegExp('<div class="T_ribbon p-tier-' + t + '" role="note">[\\s\\S]*?' + words));
+    const h = await house(GUEST({ tier: t })); assert.match(h, new RegExp('<button class="T_ribbon p-tier-' + t + '" type="button" data-act="tiers-open" data-tier="' + t + '">[\\s\\S]*?' + words));
   }
-  assert.match(await house(GUEST({ tier: null, repeat: false, stay_count: 1 })), /<div class="T_ribbon p-tier-first" role="note">[\s\S]*?First stay/);
+  assert.match(await house(GUEST({ tier: null, repeat: false, stay_count: 1 })), /<button class="T_ribbon p-tier-first" type="button" data-act="tiers-open" data-tier="first">[\s\S]*?First stay/);
 });
 
 const lum = (h) => { const c = [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16) / 255).map((v) => (v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4)); return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]; };

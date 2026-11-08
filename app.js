@@ -20,7 +20,7 @@
     url: 'https://qkgfhsdppslwunarczeq.supabase.co',
     key: 'sb_publishable_JFuRYZ9csmQULcMRmHXDSg_Abo9UeCj',
     propertyId: '6ae230f4-c189-4547-84b1-cb6e0b2cc9bd',
-    version: '3.4.27'
+    version: '3.4.28'
   };
   var LINKS = {
     checklist: 'https://cascadereservations-del.github.io/CH-Cleaners-Checklist/',
@@ -161,7 +161,7 @@
     var outLater = st.kind === 'house' && g.checkout_date && g.checkout_date > p.today, outT = CS.fmtTime(g.checkout_time) || ht.outLabel; // s105: a past check-out date falls back to the old stay-dates line
     var key = st.kind === 'house' ? (outLater ? 'Out ' + (g.checkout_date === CS.addDays(p.today, 1) ? 'tomorrow' : CS.dayLabel(g.checkout_date)) + (g.checkout_date === CS.addDays(p.today, 1) ? ' ' : ', ') + outT : 'Out ' + outT) : 'In ' + (CS.fmtTime(g.checkin_time) || ht.inLabel); // s96: the time that matters comes first
     var tcls = ' T_tier-' + (CS.tierLabel(g.tier) ? g.tier : 'first') + (st.kind === 'house' ? ' T_now' : ' T_arr'); // s109: tier colour on the whole card; the guest in the house leads
-    return '<section class="card glass A_card F_span T_card' + tcls + '" aria-label="Today in the house">' + A_ribbon(g) + '<div class="row-between"><span class="cap up T_lbl">' + esc(st.kind === 'house' ? 'Now · in the house' : st.label) + '</span>' + (st.pill ? pill(st.pill.tone, toneIcon(st.pill.tone), st.pill.text) : '') + '</div>' +
+    return '<section class="card glass A_card F_span T_card' + tcls + '" aria-label="Today in the house">' + A_ribbon(g) + A_prog(g) + '<div class="row-between"><span class="cap up T_lbl">' + esc(st.kind === 'house' ? 'Now · in the house' : st.label) + '</span>' + (st.pill ? pill(st.pill.tone, toneIcon(st.pill.tone), st.pill.text) : '') + '</div>' +
       '<div class="T_who"><div class="T_id"><div class="T_namerow"><h2 class="A_name">' + esc(g.guest_name || 'Guest') + '</h2></div>' + // s105: name, the key day/time line and the ID state fill the height of the face square; Good to know, perks and the rest span the card
       '<p class="sub num T_when"><strong class="A_key">' + esc(A_nb(key)) + '</strong> · ' + esc(outLater ? A_nb(CS.plural(g.nights != null ? g.nights : CS.daysBetween(g.checkin_date, g.checkout_date), 'night')) : A_stayDates(g)) + '</p>' + A_idPill(g) + '</div>' + A_face(g) + '</div>' +
       A_grid(g, st.kind) + A_goodToKnow(g, st.kind) + A_perks(g, st.kind, tp) + (nl ? '<p class="help T_ask">' + esc(nl) + '</p>' : '') +
@@ -279,8 +279,11 @@
   }
   // s105 SPEC-46: the tier ribbon at the top of the Today card (first stays get none; it replaces the small chip beside the name) and the perks checklist (CS.tierPerks); both are for every role, they are not contact data.
   // s110: the ribbon and the compact tag both come from CS.tierBadge (glyph per tier, "Returning · 2 stays", "First stay"), so the stay count is said once.
-  function A_ribbon(g) { var r = CS.tierBadge(g); return r ? '<div class="T_ribbon p-tier-' + r.tier + '" role="note">' + ICON(r.icon, 's16') + '<span>' + esc(r.text) + '</span></div>' : ''; }
-  function A_badge(g) { var r = CS.tierBadge(g); return r ? '<span class="T_badge p-tier-' + r.tier + '" role="note">' + ICON(r.icon, 's16') + '<span>' + esc(r.text) + '</span></span>' : ''; }
+  // s113: every badge and ribbon is a button that opens the tier guide on this guest's tier (Lloyd: "could not find the context that explains how many stays")
+  function A_tierBtn(cls, r) { return '<button class="' + cls + ' p-tier-' + r.tier + '" type="button" data-act="tiers-open" data-tier="' + esc(r.tier) + '">' + ICON(r.icon, 's16') + '<span>' + esc(r.text) + '</span><span class="sr">' + esc(', open the guest tiers guide') + '</span></button>'; }
+  function A_ribbon(g) { var r = CS.tierBadge(g); return r ? A_tierBtn('T_ribbon', r) : ''; }
+  function A_badge(g) { var r = CS.tierBadge(g); return r ? A_tierBtn('T_badge', r) : ''; }
+  function A_prog(g) { var t = CS.tierProgress(g); return t ? '<p class="sub T_prog">' + esc(t) + '</p>' : ''; } // the stays to the next tier, under the badge
   function A_perks(g, kind, tp) {
     var perks = CS.tierPerks(g.tier, { id: !!g.id_photo_path, phase: kind === 'house' ? 'house' : 'arrival' });
     if (!perks.length) return tp.line; // the server's benefits line is only the fallback
@@ -294,16 +297,26 @@
     var p = state.payload, np = p && CS.nextPrep(p, p.today); if (!np) return '';
     var n = np.guest, tier = CS.tierLabel(n.tier) ? n.tier : 'first', when = 'Arrives ' + np.day + ' ' + (CS.fmtTime(n.checkin_time) || A_houseT().inLabel);
     return '<section class="card A_card F_span T_card T_upnext T_tier-' + tier + '" aria-label="Next arrival"><div class="row-between"><span class="cap up T_lbl">Up next · incoming</span>' + pill('info', 'clock', when) + '</div>' +
-      '<div class="T_namerow"><h3 class="T_nname">' + esc(np.name) + '</h3>' + A_badge(n) + '</div>' +
+      '<div class="T_namerow"><h3 class="T_nname">' + esc(np.name) + '</h3>' + A_badge(n) + '</div>' + A_prog(n) +
       A_grid(n, 'next') + A_perks(n, 'arriving', { line: '' }) + '<a class="A_more" href="#calendar/next">Open guest card' + ICON('chev', 's16') + '</a></section>';
   }
-  // s111: "Guest tiers", a closed-by-default context card under the guest cards, the same for every role: each tier's glyph and colour (CS.tierBadge styles),
-  // when a guest reaches it, and its perks (CS.tierPerks, arrival and house together). No prices.
+  // s113: "Guest tiers: how many stays for each". Open the first time on this phone; closed from then on once the person closes it (cs_tiers_seen, try/catch storage).
+  // A compact table: tier (glyph and colour) | when | what they get (CS.tierPerks, arrival and house). The same table is the tier guide sheet, with the guest's row marked.
+  var T_SEEN = 'cs_tiers_seen';
+  function T_seen() { try { var ls = store('localStorage'); return !!(ls && ls.getItem(T_SEEN)); } catch (e) { return false; } }
+  function T_seenSet() { try { var ls = store('localStorage'); if (ls) ls.setItem(T_SEEN, '1'); } catch (e) { /* private mode: it opens again next time */ } }
+  function A_tierTable(cur, ids) {
+    return '<table class="T_ttab"><thead><tr><th scope="col">Tier</th><th scope="col">When</th><th scope="col">What they get</th></tr></thead><tbody>' + CS.tierGuide().map(function (t) {
+      return '<tr class="T_tr' + (t.tier === cur ? ' T_tcur' : '') + '"' + (ids ? ' id="tg-' + t.tier + '" tabindex="-1"' : '') + (t.tier === cur ? ' aria-current="true"' : '') + '><th scope="row"><span class="T_badge p-tier-' + t.tier + '">' + ICON(t.icon, 's16') + '<span>' + esc(t.word) + '</span></span></th>' +
+        '<td>' + esc(t.when) + '</td><td>' + (t.perks.length ? '<ul class="T_tperks">' + t.perks.map(function (x) { return '<li>' + esc(x) + '</li>'; }).join('') + '</ul>' : esc('The standard amenities')) + '</td></tr>';
+    }).join('') + '</tbody></table>';
+  }
   function A_tierGuide() {
-    return '<details class="card glass A_card F_span T_tiers" id="T_tiers"><summary class="T_tsum">' + ICON('info', 's16') + '<span>Guest tiers</span>' + ICON('chev', 's16') + '</summary><ul class="T_tlist">' + CS.tierGuide().map(function (t) {
-      return '<li class="T_trow"><span class="T_badge p-tier-' + t.tier + '">' + ICON(t.icon, 's16') + '<span>' + esc(t.word) + '</span></span><p class="sub T_trule">' + esc(t.rule) + '</p>' +
-        (t.perks.length ? '<ul class="T_tperks">' + t.perks.map(function (x) { return '<li>' + ICON('check', 's16') + '<span>' + esc(x) + '</span></li>'; }).join('') + '</ul>' : '') + '</li>';
-    }).join('') + '</ul></details>';
+    var open = state.tiersOpen === undefined ? !T_seen() : state.tiersOpen;
+    return '<details class="card glass A_card F_span T_tiers" id="T_tiers"' + (open ? ' open' : '') + '><summary class="T_tsum">' + ICON('info', 's16') + '<span>Guest tiers: how many stays for each</span>' + ICON('chev', 's16') + '</summary><div class="T_tbody">' + A_tierTable(null, false) + '</div></details>';
+  }
+  function A_tierSheet(S) {
+    return '<h2 class="ttl" id="cs-h" tabindex="-1">Guest tiers: how many stays for each</h2><p class="sub" style="margin:8px 0 0">' + esc('A guest moves up by stays or by nights, whichever comes first.') + '</p><div class="T_tbody">' + A_tierTable(S.key, true) + '</div>';
   }
   // s109: the facts of a stay as a compact 2-column grid (dates, guests, ID, phone for owner/admin, channel), so the card uses its width.
   function A_grid(g, kind) {
@@ -1192,7 +1205,7 @@
     var e = sheetEls(); $('cs-live').textContent = ''; drawSheet();
     e.sheet.classList.add('on'); e.sheet.setAttribute('aria-hidden', 'false'); e.scrim.classList.add('on'); e.scrim.setAttribute('data-F-kind', kind);
     var appEl = $('app'); if (appEl && appEl.setAttribute) appEl.setAttribute('inert', ''); // the sheet says aria-modal: what is behind it cannot be tabbed to or read
-    var h = kind === 'add' ? $('t-title') : kind === 'nadd' ? $('n-title') : $('cs-h'); if (h) h.focus();
+    var h = kind === 'add' ? $('t-title') : kind === 'nadd' ? $('n-title') : kind === 'tiers' && key ? $('tg-' + key) || $('cs-h') : $('cs-h'); if (h) h.focus();
   }
   function closeSheet() {
     var S = state.sheet; if (!S) return; state.sheet = null;
@@ -1276,10 +1289,10 @@
     return html;
   }
   function drawSheet() {
-    var S = state.sheet; if (!S || (!state.payload && S.kind !== 'attn')) return; // the pill's list can say "Loading" and "No connection" before there is a payload
+    var S = state.sheet; if (!S || (!state.payload && S.kind !== 'attn' && S.kind !== 'tiers')) return; // the pill's list can say "Loading" and "No connection" before there is a payload
     var e = sheetEls(), had = e.sheet.contains(document.activeElement);
     e.sheet.setAttribute('data-F-kind', S.kind); e.sheet.setAttribute('data-E-swipe', E_sheetTwin(S.kind)); // the pull-down's tap twin: the button with this data-act is on the sheet
-    $('cs-body').innerHTML = E_sheetPage(S, (S.kind === 'attn' ? E_attnSheet() : S.kind === 'day' ? daySheet(S) : S.kind === 'add' ? addReminderCard() : S.kind === 'news' ? A_newsSheet() : S.kind === 'nadd' ? A_noticeAddForm() : S.kind === 'rate' ? A_rateConfirm() : S.kind === 'tour' ? H_tourSheet(S) : warnSheet(S)) +
+    $('cs-body').innerHTML = E_sheetPage(S, (S.kind === 'attn' ? E_attnSheet() : S.kind === 'day' ? daySheet(S) : S.kind === 'add' ? addReminderCard() : S.kind === 'news' ? A_newsSheet() : S.kind === 'tiers' ? A_tierSheet(S) : S.kind === 'nadd' ? A_noticeAddForm() : S.kind === 'rate' ? A_rateConfirm() : S.kind === 'tour' ? H_tourSheet(S) : warnSheet(S)) +
       (S.err ? '<div class="errbox" style="margin-top:12px">' + ICON('alert') + '<span>' + esc(S.err) + '</span></div>' : '') +
       (S.msg ? '<div class="okbox" style="margin-top:12px">' + ICON('check') + '<span>' + esc(S.msg) + '</span></div>' : '') + (S.hint ? '<p class="help" role="status" style="margin:8px 0 0">' + esc(S.hint) + '</p>' : '') +
       '');
@@ -1805,6 +1818,9 @@
       '<button class="rowi" type="button" data-act="tour-open"><span class="lead">' + ICON('help') + '</span><span class="mid"><span class="t">Show the tour</span><span class="s">Three short cards on how the app works</span></span><span class="chev">' + ICON('chev') + '</span></button></nav></div>' });
     g.push({ w: 3, id: 'phone', html: '<div class="F_group"><div class="A_label">This phone</div>' + H_alertsSwitch() + '<div class="card glass list PC_more" role="group" aria-label="Phone check"><button class="rowi" type="button" data-act="pc-open"><span class="lead">' + ICON('check') + '</span><span class="mid"><span class="t">Check this phone</span><span class="s">Alerts, install, camera, storage, version, sign-in</span></span><span class="chev">' + ICON('chev') + '</span></button></div>' + '<section class="card glass" id="install-card" hidden aria-label="Install the app"><h2 class="hd">Install the app</h2><p class="sub" style="margin-top:6px">Put Cascade Staff on your Home Screen.</p><button class="btn btn-secondary" id="install-btn" type="button" style="margin-top:10px">' + ICON('plus', 's16') + 'Install</button>' +
       '<a class="btn btn-secondary" id="install-link" href="./install/" style="margin-top:10px" hidden>' + ICON('plus', 's16') + 'How to install</a></section></div>' });
+    // s113: Settings, for every role: Phone check with its last result, and the Guest tiers guide
+    g.push({ w: 3, id: 'settings', html: '<div class="F_group"><div class="A_label">Settings</div><nav class="card glass list" aria-label="Settings"><button class="rowi" type="button" data-act="pc-open" id="H_pcrow"><span class="lead">' + ICON('check') + '</span><span class="mid"><span class="t">Phone check</span><span class="s">' + esc('Alerts, camera, storage, updates · ' + CS.phoneCheckSummary(PC_ls())) + '</span></span><span class="chev">' + ICON('chev') + '</span></button>' +
+      '<button class="rowi" type="button" data-act="tiers-open" data-tier=""><span class="lead">' + ICON('star') + '</span><span class="mid"><span class="t">Guest tiers guide</span><span class="s">How many stays for each tier, and what they get</span></span><span class="chev">' + ICON('chev') + '</span></button></nav></div>' });
     return g;
   }
   // the split that leaves the two stacks closest in height (weights are rows and cards, not pixels)
@@ -1815,7 +1831,7 @@
   }
   // In a browser the split is refined by what the groups really measure: every group goes into the first stack, is measured at the column width, and the order and the split that
   // leave the two stacks closest in height are used (all the orders read sensibly in one column too). Under 600 px the stacks follow each other, so nothing is moved.
-  var H_MORE_ORDERS = [['search', 'how', 'cassy', 'admin', 'appearance', 'help', 'phone'], ['search', 'how', 'appearance', 'cassy', 'admin', 'help', 'phone'], ['search', 'appearance', 'how', 'cassy', 'admin', 'help', 'phone'], ['search', 'how', 'cassy', 'appearance', 'admin', 'help', 'phone']];
+  var H_MORE_ORDERS = [['search', 'how', 'cassy', 'admin', 'appearance', 'help', 'phone', 'settings'], ['search', 'how', 'appearance', 'cassy', 'admin', 'help', 'phone', 'settings'], ['search', 'appearance', 'how', 'cassy', 'admin', 'help', 'settings', 'phone'], ['search', 'how', 'cassy', 'appearance', 'admin', 'help', 'phone', 'settings']];
   function H_moreBalance() {
     var root = $('v-more'), cols = root && root.querySelectorAll ? root.querySelectorAll('.H_col') : []; if (cols.length !== 2 || F_bottomSheet()) return;
     var A = cols[0], B = cols[1], all = Array.prototype.slice.call(A.children).concat(Array.prototype.slice.call(B.children)), by = {}; all.forEach(function (g) { by[g.getAttribute('data-g')] = g; A.appendChild(g); });
@@ -2061,7 +2077,7 @@
   // Runs once per device after sign-in (CS.phoneCheckDue, key cs_phone_check) and from More > This phone > Check this phone. Every row comes from a real probe
   // (CS.phoneCheckRows); Fix all runs the fixers in order from the one tap (CS.phoneFixPlan: alerts first, so the permission prompt rides the tap), then probes again.
   // The camera is opened only when its permission is 'prompt', and every track is stopped at once. Nothing changes Trust this device.
-  var PC_SHELL = 'cs-shell-v52'; // the service worker's cache for this version (sw.js CACHE_NAME; a test keeps them equal)
+  var PC_SHELL = 'cs-shell-v53'; // the service worker's cache for this version (sw.js CACHE_NAME; a test keeps them equal)
   var PC = { open: false, busy: false, rows: null, msg: '', camPerm: null };
   function PC_ls() { return store('localStorage'); }
   function PC_cameraPerm() {
@@ -2086,7 +2102,7 @@
     var box = $('pc-sheet'); if (!box) return;
     box.hidden = !PC.open; if (!PC.open) { box.innerHTML = ''; return; }
     var rows = PC.rows, plan = rows ? CS.phoneFixPlan(rows) : [];
-    box.innerHTML = '<div class="PC_card card glass"><h2 class="hd" id="pc-h" tabindex="-1">Check this phone</h2><p class="sub" style="margin:0">What Cascade Staff needs on this phone, checked just now.</p>' +
+    box.innerHTML = '<div class="PC_card card"><h2 class="hd" id="pc-h" tabindex="-1">Check this phone</h2><p class="sub" style="margin:0">What Cascade Staff needs on this phone, checked just now.</p>' +
       (!rows ? '<p class="help" role="status">Checking…</p>' : '<ul class="PC_list">' + rows.map(function (r) {
         return '<li class="PC_row PC_' + r.state + '" data-pc="' + esc(r.id) + '"><span class="PC_ic" aria-hidden="true">' + ICON(PC_ICON[r.state], 's16') + '</span><span class="PC_mid"><b>' + esc(r.title) + '</b><span class="PC_st">' + esc(PC_WORD[r.state]) + '</span><span class="sub">' + esc(r.text) + '</span>' +
           (r.steps && r.state !== 'ok' ? '<ol class="H_alsteps">' + r.steps.map(function (x) { return '<li>' + esc(x) + '</li>'; }).join('') + '</ol>' : '') + '</span></li>';
@@ -2474,6 +2490,7 @@
     location.hash = '#home'; route();
   });
   // The rain row can also be opened without a click (find in page, assistive tech): keep the remembered state in step with details.open.
+  document.addEventListener('toggle', function (ev) { var d = ev.target; if (d && d.classList && d.classList.contains('T_tiers')) { state.tiersOpen = !!d.open; if (!d.open) T_seenSet(); } }, true); // s113: closed once = closed on this phone
   document.addEventListener('toggle', function (ev) { var d = ev.target; if (d && d.classList && d.classList.contains('W_card') && !(state.wxOpen === undefined && !!d.open === (d.getAttribute('data-def') === '1'))) state.wxOpen = !!d.open; }, true); // s105: the Weather card stays open or shut across redraws; open by default only when rain is soon (the draw itself is not a choice)
   document.addEventListener('click', function (ev) {
     var t = ev.target.closest('[data-act],[data-theme],[data-day],[data-warn],[data-nfilter],[data-tfilter]'); if (!t) return;
@@ -2496,6 +2513,7 @@
     else if (a === 'task-add-cancel') { state.add = null; closeSheet(); }
     else if (a === 'plain') { window.CSTheme.setPlain(!window.CSTheme.plainOn()); renderMore(); }
     else if (a === 'whatsnew') openSheet('news', 'news');
+    else if (a === 'tiers-open') { var tk = t.getAttribute('data-tier'); openSheet('tiers', /^(first|returning|regular|vip)$/.test(tk || '') ? tk : ''); }
     else if (a === 'fb-show') { state.fbOpen = true; renderCalendar(); }
     else if (a === 'fb-hide') { state.fbOpen = false; renderCalendar(); }
     else if (a === 'notice-add-open') { if (CS.canSeeGuestContact(role()) && state.notices && !state.noticesAbsent) { state.nadd = { type: 'water', title: '', date: t.getAttribute('data-date') || '', start: '', hours: '', detail: '', err: '', busy: false }; openSheet('nadd', 'notice-add-open'); } }

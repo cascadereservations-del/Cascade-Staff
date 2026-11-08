@@ -1,4 +1,4 @@
-// s111 (Staff 3.4.27) rev 2. Lloyd 2026-11-08: "kwh per night is absurd ... make the graphs standard"; a Target card; zoom on photos; a Guest tiers card on Today.
+// s111 (Staff 3.4.28) rev 2. Lloyd 2026-11-08: "kwh per night is absurd ... make the graphs standard"; a Target card; zoom on photos; a Guest tiers card on Today.
 // Hand-computed expectations throughout. KPI module runs in a vm with a fake client; the shell parts run through the lane A harness (frozen clock).
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -28,61 +28,22 @@ function mountWith(data, role = 'cleaner', rpc) {
 const cardOf = (h, id) => { const i = h.indexOf('id="' + id + '"'); assert.ok(i > 0, id + ' is drawn'); const rest = h.slice(i); const j = rest.indexOf('<div class="card glass', 10); return j > 0 ? rest.slice(0, j) : rest; };
 
 // ---------------------------------------------------------------------------------------------- the chart standard
-test('s111 chart scale: ticks from 0 on a round step, 3-4 gridlines, the top tick at or above the largest value; average over the values that exist; gaps stay gaps', () => {
-  const win = { ICON: () => '' }; win.window = win; vm.runInContext(read('kpi/K_kpi.js'), vm.createContext(win)); const K = win.K_Kpi.lib;
-  for (const [max, want] of [[13.3, [0, 5, 10, 15]], [24, [0, 10, 20, 30]], [0.7, [0, 0.2, 0.4, 0.6, 0.8]], [100, [0, 25, 50, 75, 100]], [3, [0, 1, 2, 3]], [0, [0, 1]]]) assert.deepEqual([...K.niceTicks(max)], want, String(max));
-  const m = K.chartModel([{ x: 'a', value: 10 }, { x: 'b', value: null }, { x: 'c', value: 20 }]);
-  assert.deepEqual([...m.ticks], [0, 5, 10, 15, 20]); assert.equal(m.avg, 15, '(10 + 20) / 2, the gap is not a zero'); assert.equal(m.avgPct, 75); assert.equal(m.bars[1].gap, true); assert.equal(m.bars[1].pct, 0); assert.equal(m.bars[2].pct, 100);
-});
-
-test('s111 chart 1: use per day between readings, last 8, axis from 0, x dates, a value on every bar, the latest emphasised, dashed average labelled, caption, aria per bar', async () => {
-  const { el } = mountWith(payload()); await tick();
-  const c = cardOf(el.innerHTML, 'K_stays');
-  assert.match(c, /<b>Electricity per day between meter readings, kWh<\/b>/);
-  // per day = 10, 10, 10, 10, 8, 9, 9, 8.3 -> avg 9.29, top tick 10 on a step of 2.5 (13.3 would be 15)
-  assert.deepEqual([...c.matchAll(/<span style="bottom:[\d.]+%">([\d.]+)<\/span>/g)].map((x) => x[1]), ['0', '2.5', '5', '7.5', '10'], 'y ticks from 0');
-  assert.equal((c.match(/role="img"/g) || []).length, 8); assert.equal((c.match(/class="K_col K_col-em"/g) || []).length, 1, 'one emphasised bar');
-  assert.match(c, /<span class="K_col K_col-em" role="img" aria-label="Sep 27: 8\.3 kWh a day over 3 days, latest reading"><span class="K_bar" style="height:83%"><b aria-hidden="true">8\.3<\/b>/);
-  assert.match(c, /aria-label="Sep 20: 10 kWh a day over 3 days"/);
-  assert.match(c, /class="K_avgl" aria-hidden="true" style="bottom:92\.9%"><\/div>/, 'dashed average line at 9.29 / 10');
-  assert.match(c, /<p class="K_avgk"><i aria-hidden="true"><\/i>avg 9\.3 kWh<\/p>/, 'its value, as a key beside a dashed swatch so it never covers a bar value');
-  assert.match(c, /<div class="K_xax" aria-hidden="true"><span>Sep 20<\/span>[\s\S]*<span class="K_xem">Sep 27<\/span>/, 'x labels, the latest one bold');
-  assert.match(c, /<p class="K_cap">Each bar is the use since the previous reading, divided by the days in between\.<\/p>/);
-  assert.match(c, /role="group" aria-label="Electricity per day between meter readings, kWh, average 9\.3 kWh"/);
-  assert.doesNotMatch(c, /!|style="height:0/);
-});
-
-test('s111 chart 2: average per stay, 12 months, current month emphasised, empty months are gaps (no bar), average line, caption, Electricity | Water toggle on both charts', async () => {
-  const { el, click } = mountWith(payload()); await tick();
-  let c = cardOf(el.innerHTML, 'K_avg');
-  assert.match(c, /<b>Average electricity per stay, last 12 months, kWh<\/b>/);
-  assert.equal((c.match(/role="img"/g) || []).length, 12); assert.equal((c.match(/class="K_bar"/g) || []).length, 10, 'two months have no bar at all');
-  assert.match(c, /aria-label="Feb 2026: no reading"><\/span>/); assert.match(c, /class="K_col K_col-em" role="img" aria-label="Oct 2026: 26 kWh per stay, 4 stays, this month"/);
-  // values 15,16,17,19,20,21,22,24,25,26 -> avg 20.5; top 30
-  assert.match(c, />avg 20\.5 kWh<\/p>/); assert.match(c, /K_cols K_cols-many/, 'more than 8 bars: the value labels turn upright');
-  assert.match(c, /Average use per stay in each month; a month with no reading shows no bar\./); assert.match(c, /This month: 26 kWh and 0\.5 m³ per stay over 4 stays\./);
-  await click({ 'data-kact': 'avg', 'data-avg': 'm3' }); c = cardOf(el.innerHTML, 'K_avg');
-  assert.match(c, /Average water per stay, last 12 months, m³/); assert.match(c, /aria-label="Oct 2026: 0\.5 m³ per stay, 4 stays, this month"/);
-  await click({ 'data-kact': 'day', 'data-day': 'm3' }); c = cardOf(el.innerHTML, 'K_stays');
-  assert.match(c, /Water per day between meter readings, m³/); assert.match(c, /aria-label="Sep 27: 0\.3 m³ a day over 3 days, latest reading"/);
-  assert.match(read('kpi/K_kpi.css'), /\.K_avgl \{[^}]*border-top: 2px dashed var\(--v5-chart-avg\)/);
-});
-
-test('s111 utility tiles: per day, never per night; nights booked from the calendar with the month; the last reading over its days', async () => {
+// s113 superseded the s111 bar charts (scale, chart 1, chart 2, r3 L3 labels): tests/s113-kpi-overhaul.test.mjs covers the line charts.
+test('s111 utility tiles (s113 shape): per day, never per night; nights booked from the calendar with the month; the last reading over its days', async () => {
   for (const role of ['cleaner', 'laundry', 'owner']) {
     const { el, click } = mountWith(payload({}, role === 'owner'), role); await tick();
     const h = el.innerHTML;
-    assert.match(h, /<span class="K_lab">Electricity this month<\/span><span class="K_val">79 kWh<\/span><span class="K_sub">9\.9 kWh a day<\/span>/);
-    assert.match(h, /<span class="K_lab">Water this month<\/span><span class="K_val">3\.1 m³<\/span><span class="K_sub">0\.39 m³ a day<\/span>/);
-    assert.match(h, /<span class="K_lab">Nights booked<\/span><span class="K_val">12 of 30<\/span><span class="K_sub">40% of the month<\/span>/, '12 / 30 = 40%, the Admin occupancy figure');
-    assert.match(h, /Last meter reading · Nov 7<\/span><p class="K_p">25 kWh over 3 days · 8\.3 kWh a day<\/p><p class="K_p">0\.9 m³ over 3 days · 0\.3 m³ a day<\/p>/);
+    assert.match(h, /id="K_tE"><span class="K_lab">Electricity<\/span><span class="KU_big"><b>9\.9<\/b><span>kWh a day<\/span><\/span><span class="K_sub">79 kWh used this month<\/span>/);
+    assert.match(h, /id="K_tW"><span class="K_lab">Water<\/span><span class="KU_big"><b>0\.39<\/b><span>m³ a day<\/span><\/span><span class="K_sub">3\.1 m³ used this month<\/span>/);
+    assert.match(h, /id="K_tN"><span class="K_lab">Nights booked<\/span>[\s\S]*?<b>40%<\/b><\/span><span class="K_sub">12 of 30 nights<\/span>/, '12 / 30 = 40%, the Admin occupancy figure');
+    assert.match(h, /id="K_last"><span class="K_lab">Last reading<\/span><span class="KU_big"><b>7 Nov<\/b><\/span><span class="K_sub">25 kWh over 3 days<\/span><span class="K_sub">8\.3 kWh a day<\/span><span class="K_sub">0\.9 m³ over 3 days · 0\.3 m³ a day<\/span>/);
     assert.doesNotMatch(h, /per night|a night/i, role + ': no per-night wording on Utility');
     if (role === 'owner') { await click({ 'data-kact': 'seg', 'data-seg': 'admin' }); assert.doesNotMatch(el.innerHTML, /per night/i, 'none on Admin either'); }
     await click({ 'data-kact': 'seg', 'data-seg': 'inventory' }); assert.doesNotMatch(el.innerHTML, /per night/i);
   }
   assert.doesNotMatch(read('kpi/K_kpi.js'), /per night|kwh_per_night|m3_per_night|nights_month/, 'the removed keys are not read');
   const empty = mountWith(payload({ kwh_per_day: null, nights_booked: null, per_stay: [], per_month: [] })); await tick();
-  assert.match(empty.el.innerHTML, /A day figure needs two readings/); assert.match(empty.el.innerHTML, /Nights booked<\/span><span class="K_val">Not yet/); assert.doesNotMatch(empty.el.innerHTML, /K_stays|K_avg/);
+  assert.match(empty.el.innerHTML, /A day figure needs two readings/); assert.match(empty.el.innerHTML, /Nights booked<\/span><span class="KU_big"><b>Not yet/); assert.doesNotMatch(empty.el.innerHTML, /K_day|K_avg/);
 });
 
 // ---------------------------------------------------------------------------------------------- Target card
@@ -203,21 +164,20 @@ test('s111 Guest tiers: thresholds, glyphs, every perk per tier (arrival and hou
   assert.deepEqual(g[3].perks, ['Returning-guest freebie: 2 Kit Kats or an extra bottle of water', 'Up to 2 hours early or late free, if the calendar allows', 'Set saved preferences before arrival (pillows, AC temperature)', 'Handwritten welcome note', 'Mid-stay refresh, any stay length', 'First call on the dates they ask about']);
   assert.doesNotMatch(JSON.stringify(g), /₱|PHP|price|discount|!|No need to ask for ID/);
 });
-test('s111 Guest tiers: a closed card after the guest cards on Today, the same for every role, with the tier badge styles', async () => {
+test('s111 Guest tiers (s113 shape): a card after the guest cards on Today, open the first time, the same for every role, with the tier badge styles', async () => {
   for (const role of ['cleaner', 'laundry', 'owner']) {
     const h = (await boot({ role, hash: '#home', handlers: baseHandlers(role) })).els['v-home'].innerHTML;
-    const m = /<details class="card glass A_card F_span T_tiers" id="T_tiers"><summary class="T_tsum">[\s\S]*?<span>Guest tiers<\/span>[\s\S]*?<\/details>/.exec(h); assert.ok(m, role);
-    assert.doesNotMatch(m[0], /<details[^>]* open/, 'closed by default');
+    const m = /<details class="card glass A_card F_span T_tiers" id="T_tiers" open><summary class="T_tsum">[\s\S]*?<span>Guest tiers: how many stays for each<\/span>[\s\S]*?<\/details>/.exec(h); assert.ok(m, role);
     for (const t of ['first', 'returning', 'regular', 'vip']) assert.match(m[0], new RegExp('<span class="T_badge p-tier-' + t + '"><svg[^>]*data-i="[a-z]+"'), role + ' ' + t);
-    assert.match(m[0], /7 or more stays, or 20 or more nights\.[\s\S]*Handwritten welcome note/); assert.doesNotMatch(m[0], /₱/);
+    assert.match(m[0], /7 stays or 20 nights[\s\S]*Handwritten welcome note/); assert.doesNotMatch(m[0], /₱/);
     assert.ok(h.indexOf('T_tiers') > h.indexOf("S_sec") && (h.indexOf('Turnover') < 0 || h.indexOf('T_tiers') < h.indexOf('>Turnover<')), 'right after the guest cards');
   }
 });
 
 test('s111 release pins and tokens: version unchanged, chart tokens in all three theme blocks, no raw colours or px type in the new CSS', () => {
-  assert.equal(JSON.parse(read('package.json')).version, '3.4.27'); assert.match(read('sw.js'), /CACHE_NAME = 'cs-shell-v52'/);
-  const tok = read('tokens.css'); for (const k of ['chart-bar', 'chart-bar-em', 'chart-grid', 'chart-axis', 'chart-avg']) assert.equal((tok.match(new RegExp('--v5-' + k + ':', 'g')) || []).length, 3, k);
-  const css = read('kpi/K_kpi.css'); const s111 = css.slice(css.indexOf('s111 rev 2'), css.indexOf('.K_grid2:not'));
+  assert.equal(JSON.parse(read('package.json')).version, '3.4.28'); assert.match(read('sw.js'), /CACHE_NAME = 'cs-shell-v53'/);
+  const tok = read('tokens.css'); for (const k of ['chart-line', 'chart-area', 'chart-band', 'chart-grid', 'chart-axis', 'chart-avg']) assert.equal((tok.match(new RegExp('--v5-' + k + ':', 'g')) || []).length, 3, k);
+  const css = read('kpi/K_kpi.css'); const s111 = css.slice(css.indexOf('s113, the chart standard'), css.indexOf('/* supply and consumption'));
   assert.doesNotMatch(s111, /#[0-9a-f]{3,6}\b|rgb\(|nowrap|font-size:\s*\d+px|font:[^;]*\d+px/i);
   const sty = read('styles.css'); const z = sty.slice(sty.indexOf('s111: the shared zoom viewer'), sty.indexOf('s111: the shared zoom viewer') + 900); assert.doesNotMatch(z, /#[0-9a-f]{3,6}\b|rgb\(|nowrap/i);
   const d = createDemo(); assert.equal(d.utility.nights_booked, d.admin.sold_nights, 'demo: nights booked equals the Admin occupancy nights'); assert.ok(!('kwh_per_night' in d.utility) && !('nights_month' in d.utility));
@@ -256,13 +216,4 @@ test('s111 r3 L2: the Target line shows the sum (costs + target), the average ra
   await o.input('K_f_tgt', '45,000.75'); await o.submit({ 'data-kform': 'tgt' });
   assert.deepEqual(o.calls.filter((c) => c[0] === 'kpi_target_set_v1')[0][1].p_monthly_net_target, 45000.75);
   assert.doesNotMatch(read('kpi/K_kpi.js'), /p_monthly_net_target: Math\.round/);
-});
-
-test('s111 r3 L3: the 12-month chart labels every other month with 3 letters, the latest always; every bar keeps its full month name in its aria-label', async () => {
-  const { el } = mountWith(payload()); await tick();
-  const c = cardOf(el.innerHTML, 'K_avg'), xs = [...c.slice(c.indexOf('K_xax')).matchAll(/<span(?: class="K_xem")?>([^<]*)<\/span>/g)].map((m) => m[1]);
-  assert.deepEqual(xs, ['', 'Dec', '', 'Feb', '', 'Apr', '', 'Jun', '', 'Aug', '', 'Oct']);
-  for (const n of ['Nov 2025', 'Dec 2025', 'Jan 2026', 'Sep 2026', 'Oct 2026']) assert.ok(c.includes('aria-label="' + n + ':'), n);
-  const short = mountWith(payload({ per_month: perMonth().slice(-6) })); await tick();
-  const c6 = cardOf(short.el.innerHTML, 'K_avg'); assert.deepEqual([...c6.slice(c6.indexOf('K_xax')).matchAll(/<span(?: class="K_xem")?>([^<]*)<\/span>/g)].map((m) => m[1]), ['May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct'], 'six months: every label fits');
 });

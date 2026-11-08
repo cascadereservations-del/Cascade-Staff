@@ -586,11 +586,34 @@
     return zoomPan({ s: s, x: s === 1 ? 0 : x, y: s === 1 ? 0 : y }, w, h);
   }
   // s111: the Today "Guest tiers" card. The rule per tier (D-360 thresholds) and every perk the tier gets, arrival and house together, no ID line (it depends on the guest).
-  var TIER_RULES = { first: '1st stay. The standard amenities.', returning: 'From the 2nd stay.', regular: '4 or more stays, or 10 or more nights.', vip: '7 or more stays, or 20 or more nights.' };
+  // s113: the D-360 thresholds in ONE place. stays counts the current stay; nights is the guest's total nights where the payload has it (total_nights).
+  // The guide's rule lines and the progress line under a guest's badge both come from here.
+  var TIER_RULES = { returning: { stays: 2 }, regular: { stays: 4, nights: 10 }, vip: { stays: 7, nights: 20 } };
+  var TIER_ORDER = ['first', 'returning', 'regular', 'vip'], TIER_WORD = { first: 'First stay', returning: 'Returning', regular: 'Regular', vip: 'VIP' };
+  function tierRule(t) {
+    var r = TIER_RULES[t]; if (!r) return '1st stay. The standard amenities.';
+    return r.nights ? r.stays + ' or more stays, or ' + r.nights + ' or more nights.' : 'From the ' + ordinal(r.stays) + ' stay.';
+  }
+  function tierWhen(t) { var r = TIER_RULES[t]; return !r ? '1st stay' : r.nights ? r.stays + ' stays or ' + r.nights + ' nights' : 'from the ' + ordinal(r.stays) + ' stay'; }
+  // the tier the counts reach (the server decides the real tier; this is for the progress line and its tests)
+  function tierFromCounts(stays, nights) {
+    var s = Math.round(+stays) || 0, n = nights == null || nights === '' || !isFinite(+nights) ? null : +nights, out = 'first';
+    ['returning', 'regular', 'vip'].forEach(function (t) { var r = TIER_RULES[t]; if (s >= r.stays || (r.nights && n != null && n >= r.nights)) out = t; });
+    return out;
+  }
+  // "Returning · 2 more stays to Regular (4 stays or 10 nights)". Tier from CS.tierBadge (the server's tier, or what the count says); nights only where the guest record has a total.
+  function tierProgress(g) {
+    var b = tierBadge(g); if (!b) return null;
+    var t = b.tier, s = Math.round(+(g && g.stay_count)) || (t === 'first' ? 1 : 0), n = g && g.total_nights != null && isFinite(+g.total_nights) ? Math.round(+g.total_nights) : null;
+    if (t === 'vip') return 'VIP · top tier';
+    if (t === 'first') return 'First stay · Returning from the ' + ordinal(TIER_RULES.returning.stays) + ' stay';
+    var next = TIER_ORDER[TIER_ORDER.indexOf(t) + 1], r = TIER_RULES[next], left = Math.max(1, r.stays - s), nl = n != null && r.nights ? Math.max(1, r.nights - n) : null;
+    return TIER_WORD[t] + ' · ' + left + ' more ' + (left === 1 ? 'stay' : 'stays') + (nl != null ? ' or ' + nl + ' more ' + (nl === 1 ? 'night' : 'nights') : '') + ' to ' + TIER_WORD[next] + ' (' + tierWhen(next) + ')';
+  }
   function tierGuide() {
     return ['first', 'returning', 'regular', 'vip'].map(function (t) {
       var b = tierBadge({ tier: t }), seen = {}, perks = tierPerks(t, { phase: 'arrival' }).concat(tierPerks(t, { phase: 'house' })).filter(function (p) { if (seen[p]) return false; seen[p] = 1; return true; });
-      return { tier: t, icon: b.icon, word: b.word, rule: TIER_RULES[t], perks: perks };
+      return { tier: t, icon: b.icon, word: b.word, rule: tierRule(t), when: tierWhen(t), perks: perks };
     });
   }
   // s111: Phone check (app.js PC_). Run once per device (key cs_phone_check, version bumped when a check is added); each probe result maps to a row:
@@ -605,7 +628,7 @@
       if (!ls) return true; rows = rows || [];
       var ok = {}; rows.forEach(function (r) { if (r.state === 'ok') ok[r.id] = 1; });
       var tried = phoneCheckTried(ls).concat(addTried || []).filter(function (x, i, a) { return PHONE_FIX_ORDER.indexOf(x) >= 0 && a.indexOf(x) === i && !ok[x]; });
-      ls.setItem(PHONE_CHECK_KEY, JSON.stringify({ v: PHONE_CHECK_VER, at: Date.now(), open: rows.filter(function (r) { return r.state === 'tap' && r.fix; }).map(function (r) { return r.id; }), tried: tried }));
+      ls.setItem(PHONE_CHECK_KEY, JSON.stringify({ v: PHONE_CHECK_VER, at: Date.now(), need: rows.filter(function (r) { return r.state === 'tap'; }).length, open: rows.filter(function (r) { return r.state === 'tap' && r.fix; }).map(function (r) { return r.id; }), tried: tried }));
       return true;
     } catch (e) { return false; }
   }
@@ -615,6 +638,12 @@
   function phoneCheckSettle(rows, tried) {
     tried = tried || [];
     return (rows || []).map(function (r) { return r.state === 'tap' && r.fix && r.soft && tried.indexOf(r.id) >= 0 ? Object.assign({}, r, { state: 'no', fix: false, steps: null, text: 'This browser decides this one.' }) : r; });
+  }
+  // s113: the last result in a few words for the Settings row: "All good", "2 need a tap", or not checked yet. An older save has no need count: its open list stands in.
+  function phoneCheckSummary(ls) {
+    var v = phoneCheckRead(ls); if (!v || !(Number(v.v) >= 1)) return 'Not checked on this phone yet';
+    var n = typeof v.need === 'number' ? v.need : phoneCheckOpen(ls).length;
+    return n ? n + (n === 1 ? ' needs a tap' : ' need a tap') : 'All good';
   }
   function phoneCheckOpen(ls) { var v = phoneCheckRead(ls); return v && Array.isArray(v.open) ? v.open.filter(function (x) { return PHONE_FIX_ORDER.indexOf(x) >= 0; }) : []; }
   function phoneBlockedSteps(ua) {
@@ -1711,7 +1740,7 @@
     fmtTime: fmtTime, fmt24: fmt24, ordinal: ordinal, plural: plural, agoLabel: agoLabel, clockLabel: clockLabel,
     monthGrid: monthGrid, dayState: dayState, dayStatus: dayStatus, mergeStays: mergeStays, sameGuest: sameGuest, dayMoves: dayMoves, blockWhy: blockWhy, flagName: flagName, FLAG_KINDS: FLAG_KINDS, blockedLines: blockedLines, blockedLineText: blockedLineText,
     canFlagDays: canFlagDays, guestContact: guestContact, canSeeGuestContact: canSeeGuestContact, MESSENGER_INBOX: MESSENGER_INBOX, rpcMissing: rpcMissing, tgLink: tgLink, warningInfo: warningInfo, findingKey: findingKey, initialOf: initialOf, sourceLabel: sourceLabel, stayDates: stayDates, monthInRange: monthInRange,
-    tierRibbon: tierRibbon, tierBadge: tierBadge, wxHazards: wxHazards, wxHourly: wxHourly, nextPrep: nextPrep, utilAlerts: utilAlerts, isInternetNotice: isInternetNotice, tierPerks: tierPerks, tierGuide: tierGuide, phoneCheckRows: phoneCheckRows, phoneFixPlan: phoneFixPlan, phoneCheckDue: phoneCheckDue, phoneCheckSave: phoneCheckSave, phoneCheckTried: phoneCheckTried, phoneCheckSettle: phoneCheckSettle, phoneCheckOpen: phoneCheckOpen, phoneCheckRead: phoneCheckRead, phoneBlockedSteps: phoneBlockedSteps, PHONE_CHECK_KEY: PHONE_CHECK_KEY, PHONE_CHECK_VER: PHONE_CHECK_VER, IOS_A2HS: IOS_A2HS, zoomClamp: zoomClamp, zoomStep: zoomStep, zoomToggle: zoomToggle, zoomPan: zoomPan, zoomAt: zoomAt, ZOOM_MAX: ZOOM_MAX, faceFrame: faceFrame, parseNotes: parseNotes, returningLabel: returningLabel, tierLabel: tierLabel, tierLine: tierLine, tierParts: tierParts, keyNote: keyNote, TOPIC_LABELS: TOPIC_LABELS, notableLine: notableLine, weatherIcon: weatherIcon, rainAlert: rainAlert, wxCard: wxCard, goodToKnow: goodToKnow, earlierLine: earlierLine, companionsLine: companionsLine, todayCardState: todayCardState,
+    tierRibbon: tierRibbon, tierBadge: tierBadge, wxHazards: wxHazards, wxHourly: wxHourly, nextPrep: nextPrep, utilAlerts: utilAlerts, isInternetNotice: isInternetNotice, tierPerks: tierPerks, tierGuide: tierGuide, TIER_RULES: TIER_RULES, tierRule: tierRule, tierFromCounts: tierFromCounts, tierProgress: tierProgress, phoneCheckSummary: phoneCheckSummary, phoneCheckRows: phoneCheckRows, phoneFixPlan: phoneFixPlan, phoneCheckDue: phoneCheckDue, phoneCheckSave: phoneCheckSave, phoneCheckTried: phoneCheckTried, phoneCheckSettle: phoneCheckSettle, phoneCheckOpen: phoneCheckOpen, phoneCheckRead: phoneCheckRead, phoneBlockedSteps: phoneBlockedSteps, PHONE_CHECK_KEY: PHONE_CHECK_KEY, PHONE_CHECK_VER: PHONE_CHECK_VER, IOS_A2HS: IOS_A2HS, zoomClamp: zoomClamp, zoomStep: zoomStep, zoomToggle: zoomToggle, zoomPan: zoomPan, zoomAt: zoomAt, ZOOM_MAX: ZOOM_MAX, faceFrame: faceFrame, parseNotes: parseNotes, returningLabel: returningLabel, tierLabel: tierLabel, tierLine: tierLine, tierParts: tierParts, keyNote: keyNote, TOPIC_LABELS: TOPIC_LABELS, notableLine: notableLine, weatherIcon: weatherIcon, rainAlert: rainAlert, wxCard: wxCard, goodToKnow: goodToKnow, earlierLine: earlierLine, companionsLine: companionsLine, todayCardState: todayCardState,
     orderWarnings: orderWarnings, brownoutText: brownoutText, lowStockText: lowStockText, warningSummary: warningSummary,
     weatherLine: weatherLine, rainLine: rainLine, weatherStale: weatherStale, WEATHER_STALE_MIN: WEATHER_STALE_MIN, esc: esc,
     A_HOUSE_FALLBACK: A_HOUSE_FALLBACK, A_houseTimes: A_houseTimes, A_turnoverClock: A_turnoverClock, A_turnoverLine: A_turnoverLine, A_hm: A_hm, A_NOTICE_TYPES: A_NOTICE_TYPES, A_noticesView: A_noticesView, A_noticeFilters: A_noticeFilters, A_dayMarks: A_dayMarks, A_noticeDay: A_noticeDay, A_guestMessage: A_guestMessage, A_CAL_TABS: A_CAL_TABS, A_calTab: A_calTab, A_stayShade: A_stayShade, A_hubGroups: A_hubGroups, A_hubNative: A_hubNative, A_hubRoutes: A_hubRoutes, A_hubRouteOk: A_hubRouteOk, A_hubDoorUrl: A_hubDoorUrl, A_whatsNew: A_whatsNew, A_shortTime: A_shortTime, A_PINNED: A_PINNED, A_noticeAddError: A_noticeAddError, A_NOTICE_HINT: A_NOTICE_HINT, A_flagDup: A_flagDup, A_facebookUrl: A_facebookUrl, A_fbPluginUrl: A_fbPluginUrl, A_noticeAddProblem: A_noticeAddProblem, A_noticeAddArgs: A_noticeAddArgs, A_plainRefusal: A_plainRefusal, A_hour12: A_hour12, A_timeRange: A_timeRange,

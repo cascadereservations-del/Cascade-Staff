@@ -53,8 +53,8 @@ test('s110 laundry role: staff layout, own tab set, no checklist door, no guest 
 // ---------------------------------------------------------------------------------------------- 2. pure KPI helpers
 test('s110 K_Kpi.lib: chart scale (s111), usage rows, money keys only for the money roles, forms refuse bad numbers', () => {
   const K = loadModule('kpi/K_kpi.js', makeWin()).K_Kpi.lib;
-  const m = K.chartModel([14, 18, 12, 24, 16, 13, 15, 14].map((v) => ({ x: 'a', value: v }))); assert.deepEqual([...m.ticks], [0, 10, 20, 30]); assert.equal(m.bars[3].pct, 80); assert.equal(m.avg, 15.75);
-  assert.equal(K.chartModel([{ value: 0 }, { value: 0 }]).bars[0].pct, 0, 'a zero is a zero, never stretched'); assert.equal(K.chartModel([]).n, 0);
+  const m = K.lineModel([14, 18, 12, 24, 16, 13, 15, 14]); assert.deepEqual([...m.ticks], [0, 5, 10, 15, 20, 25]); assert.equal(m.pts[3].y, 100 - 24 / 25 * 100); // s113: the line model replaced chartModel
+  assert.equal(K.lineModel([0, 0]).pts[0].y, 100, 'a zero sits on the baseline, never stretched'); assert.equal(K.lineModel([]).n, 0);
   const u = K.usageRows([{ name: 'Toilet paper', used_per_turnover: 2.1, usual: 2 }, { name: 'Water', used_per_turnover: 4.6, usual: 4 }, { name: 'Coffee', used_per_turnover: 3, usual: 4 }, { name: '', used_per_turnover: 1 }]);
   assert.equal(u.length, 3); assert.deepEqual(u.map((r) => r.over), [false, true, false]); assert.equal(u[1].overPct, 15);
   assert.equal(K.daysTone(4), 'bad'); assert.equal(K.daysTone(9), 'warn'); assert.equal(K.daysTone(21), 'ok');

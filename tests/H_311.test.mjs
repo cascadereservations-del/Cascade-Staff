@@ -105,7 +105,7 @@ test('3.1.1 notices: Today has a visible Add a notice button for owner and admin
 // ------------------------------------------------------------------------------------------------ 6. More in two even columns
 test('3.1.1 More: every group has a caps label; the groups are dealt into two stacks that end at about the same height; You closes the page under both', async () => {
   const labels = (h) => [...h.matchAll(/<div class="A_label">([^<]+)<\/div>/g)].map((m) => m[1]);
-  for (const [role, cols] of [['cleaner', [['Search', 'How we do things', 'Cassy'], ['Appearance', 'Help', 'This phone']]], ['owner', [['Search', 'How we do things', 'Cassy', 'Admin'], ['Appearance', 'Help', 'This phone']]]]) {
+  for (const [role, cols] of [['cleaner', [['Search', 'How we do things', 'Cassy'], ['Appearance', 'Help', 'This phone', 'Settings']]], ['owner', [['Search', 'How we do things', 'Cassy', 'Admin'], ['Appearance', 'Help', 'This phone', 'Settings']]]]) {
     const h = (await boot({ role, hash: '#more', handlers: baseHandlers(role) })).els['v-more'].innerHTML;
     assert.equal((h.match(/class="H_cols"/g) || []).length, 1); assert.equal((h.match(/class="H_col"/g) || []).length, 2, 'two stacks (CSS makes it one under 600 px)');
     const parts = h.split('<div class="H_col">'), stack = (x) => labels(x.slice(0, x.indexOf('H_you') > 0 ? x.indexOf('H_you') : x.length));
@@ -117,7 +117,7 @@ test('3.1.1 More: every group has a caps label; the groups are dealt into two st
 });
 
 test('3.1.1 version: 3.1.1, cache v19, What is new names the new things for the right roles', () => {
-  assert.equal(JSON.parse(read('package.json')).version, '3.4.27'); assert.match(read('app.js'), /version: '3.4.27'/); assert.match(read('sw.js'), /CACHE_NAME = 'cs-shell-v52'/); assert.match(read('README.md'), /cs-shell-v52/);
+  assert.equal(JSON.parse(read('package.json')).version, '3.4.28'); assert.match(read('app.js'), /version: '3.4.28'/); assert.match(read('sw.js'), /CACHE_NAME = 'cs-shell-v53'/); assert.match(read('README.md'), /cs-shell-v53/);
   const titles = (role) => CS.A_whatsNew(role, { notices: true }).map((i) => i.title);
   for (const r of ['cleaner', 'owner']) for (const t of ['Undo works every time', 'Earlier months', 'Cassy reply shows its progress', 'Better on a tablet']) assert.ok(titles(r).includes(t), r + ': ' + t);
   assert.ok(titles('owner').includes('Add a notice from Today')); assert.ok(!titles('cleaner').includes('Add a notice from Today')); assert.match(CS.A_whatsNew('cleaner', {}).find((i) => i.title === 'Earlier months').text, /not shown here/); assert.match(CS.A_whatsNew('owner', {}).find((i) => i.title === 'Earlier months').text, /admin dashboard/);

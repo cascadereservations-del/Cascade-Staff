@@ -1215,9 +1215,6 @@ html { scroll-padding-bottom: calc(64px + 10px + env(safe-area-inset-bottom) + 1
 .T_tsum > svg.i:last-child { transition: transform .18s var(--v5-ease-out); }
 .T_tiers[open] > .T_tsum > svg.i:last-child { transform: rotate(90deg); }
 @media (prefers-reduced-motion: reduce) { .T_tsum > svg.i:last-child { transition: none; } }
-.T_tlist { list-style: none; margin: 0; padding: 0 16px 16px; display: grid; gap: 16px; }
-.T_trow { display: grid; gap: 8px; justify-items: start; }
-.T_trule { margin: 0; }
 .T_tperks { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
 .T_tperks li { display: flex; gap: 8px; align-items: flex-start; font-size: var(--v5-t-2); line-height: 1.4; }
 .T_tperks li svg.i { margin-top: 2px; flex: none; color: var(--v5-ink-3); }
@@ -1360,7 +1357,7 @@ a.T_call { min-height: var(--touch); display: inline-flex; align-items: center; 
 .A_chipglass { -webkit-backdrop-filter: var(--v5-gl-blur); backdrop-filter: var(--v5-gl-blur); box-shadow: inset 0 1px 0 var(--v5-photo-edge); }
 
 .sheet { background: var(--v5-gl-sheet); -webkit-backdrop-filter: var(--v5-gl-blur-lg); backdrop-filter: var(--v5-gl-blur-lg); box-shadow: inset 0 1px 0 var(--v5-gl-hi), 0 -1px 0 var(--v5-gl-rim), 0 -16px 48px var(--v5-gl-sh2); }
-.sheet.calsheet, .sheet.A_formsheet { background: var(--v5-surf); -webkit-backdrop-filter: none; backdrop-filter: none; } /* long forms and the calendar stay opaque: typing and tapping over a blur is tiring */
+.sheet.calsheet, .sheet.A_formsheet, .PC_sheet .PC_card { background: var(--v5-surf); -webkit-backdrop-filter: none; backdrop-filter: none; } /* long forms and the calendar stay opaque: typing and tapping over a blur is tiring */
 .sheet::before { width: 36px; height: 5px; border-radius: var(--v5-r-full); background: var(--v5-line-2); opacity: .7; }
 .toast { -webkit-backdrop-filter: var(--v5-gl-blur); backdrop-filter: var(--v5-gl-blur); box-shadow: inset 0 1px 0 var(--v5-bar-on-bg), 0 8px 24px var(--v5-gl-sh2); }
 
@@ -1406,3 +1403,23 @@ html[data-plain="1"] .tabbar, html[data-plain="1"] .toast, html[data-plain="1"] 
 .PC_mid { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
 .PC_st { font: 600 var(--v5-t-label)/1.2 var(--v5-font-ui); color: var(--v5-ink-2); }
 .PC_ok .PC_st { color: var(--v5-ok-t); } .PC_tap .PC_st { color: var(--v5-warn-t); }
+/* s113 Phone check: an opaque sheet (glass exception above), rows in the ink tokens so the text reads at 4.5:1 in light and dark */
+.PC_sheet .PC_card { border: 1px solid var(--v5-line-2); color: var(--v5-ink); box-shadow: var(--v5-shadow-card); }
+.PC_sheet .PC_mid > b { color: var(--v5-ink); } .PC_sheet .PC_mid > .sub { color: var(--v5-ink-2); }
+/* s113 tier guide: every badge and ribbon is a button that opens it; the progress line under the badge; the compact table (Today card and sheet) */
+button.T_ribbon, button.T_badge { position: relative; border-top: 0; border-right: 0; border-bottom: 0; border-left-style: solid; border-left-width: 4px; cursor: pointer; text-align: left; }
+button.T_ribbon { width: 100%; }
+button.T_badge::after { content: ""; position: absolute; inset: -8px -4px; } /* a 44 px tap target around the small tag */
+button.T_ribbon:focus-visible, button.T_badge:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
+.T_prog { margin: 4px 0 0; font-size: var(--v5-t-label); color: var(--v5-ink-2); }
+.T_tbody { padding: 0 16px 16px; overflow-x: auto; }
+.sheet .T_tbody { padding: 12px 0 0; }
+.T_ttab { width: 100%; border-collapse: collapse; font-size: var(--v5-t-label); color: var(--v5-ink); }
+.T_ttab th, .T_ttab td { padding: 8px 4px; text-align: left; vertical-align: top; border-bottom: 1px solid var(--v5-sep); }
+.T_ttab thead th { font: 600 var(--v5-t-min)/1.2 var(--v5-font-ui); letter-spacing: .08em; text-transform: uppercase; color: var(--v5-ink-3); }
+.T_ttab tbody tr:last-child > * { border-bottom: 0; }
+.T_ttab .T_badge { padding: 2px 8px; }
+.T_ttab .T_tperks { gap: 4px; padding-left: 16px; list-style: disc; }
+.T_ttab .T_tperks li { display: list-item; font-size: var(--v5-t-label); }
+.T_tcur > * { background: var(--v5-sunk); }
+.T_tr:focus { outline: 2px solid var(--ring); outline-offset: -2px; }
