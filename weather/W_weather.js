@@ -365,7 +365,7 @@
     var S = W_S; if (!S || S.dead || !ev || !ev.target || !ev.target.closest) return;
     var t = ev.target.closest('[data-w-day],[data-w-layer],[data-w-retry],[data-w-refresh],[data-w-tab],[data-w-locate]'); if (!t) return;
     var v;
-    if ((v = t.getAttribute('data-w-tab')) != null) { S.focusSel = '[data-w-tab="' + v + '"]'; W_setTab(v === 'here' ? 'here' : 'cascade'); }
+    if ((v = t.getAttribute('data-w-tab')) != null) { S.focusSel = '[data-w-tab="' + v + '"]'; S.picked = true; if (v !== 'here' && S.tab === 'cascade') W_load(); else W_setTab(v === 'here' ? 'here' : 'cascade'); } // a tap wins over the remembered-Here permission check still running
     else if ((v = t.getAttribute('data-w-day')) != null) {
       var on = S.open[+v] = !S.open[+v], more = t.nextElementSibling;
       if (t.setAttribute && more) { t.setAttribute('aria-expanded', String(on)); more.hidden = !on; S.last.days = W_daysBlock(S.model, S.open); } // in place: focus and scroll stay
@@ -439,7 +439,7 @@
     // L1: locate on open only when the browser says the permission is granted; otherwise the Here tab waits for one tap (no prompt on open)
     var perms = opts.permissions || (root.navigator && root.navigator.permissions) || null, q;
     try { q = perms && typeof perms.query === 'function' ? Promise.resolve(perms.query({ name: 'geolocation' })) : Promise.resolve(null); } catch (e) { q = Promise.resolve(null); }
-    q.then(function (r) { return r && r.state; }, function () { return null; }).then(function (st) { if (W_S === S && !S.dead && S.tab === 'cascade' && !S.busy) W_setTab('here', st !== 'granted'); });
+    q.then(function (r) { return r && r.state; }, function () { return null; }).then(function (st) { if (W_S === S && !S.dead && S.tab === 'cascade' && !S.busy && !S.picked) W_setTab('here', st !== 'granted'); });
   }
   function unmount() {
     var S = W_S; if (!S) return;
