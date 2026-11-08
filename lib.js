@@ -114,6 +114,10 @@
     try { for (var i = 0; session && i < session.length; i++) if (/^sb-.+-auth-token$/.test(session.key(i))) return false; } catch (e) {}
     return true;
   }
+  // s110: the sub-pages (guest/, pay/) draw the tab bar for the role the app saw last (laundry has Inventory where the others have Tasks). Unknown or blocked storage: the standard bar.
+  var ROLE_KEY = 'cs_role';
+  function rememberRole(storage, role) { try { if (!storage) return; if (role) storage.setItem(ROLE_KEY, String(role)); else storage.removeItem(ROLE_KEY); } catch (e) {} }
+  function recalledRole(storage) { var r = ''; try { r = (storage && storage.getItem(ROLE_KEY)) || ''; } catch (e) {} return ADMIN_ROLES.indexOf(r) >= 0 || STAFF_ROLES.indexOf(r) >= 0 ? r : ''; }
   function rememberName(storage, handle) { try { if (handle) storage.setItem(LAST_SIGNIN_KEY, String(handle)); } catch (e) {} }
   function recalledName(storage, list) {
     var h = null; try { h = storage.getItem(LAST_SIGNIN_KEY); } catch (e) {}
@@ -1619,7 +1623,7 @@
     REPLY_MAX_IMAGE_BYTES: REPLY_MAX_IMAGE_BYTES, REPLY_MAX_EDGE: REPLY_MAX_EDGE,
     staffAuthPassword: staffAuthPassword, staffLoginEmail: staffLoginEmail, deriveDisplayName: deriveDisplayName, greetingName: greetingName,
     signinKind: signinKind, signinList: signinList, resolveTeam: resolveTeam, signinForTeam: signinForTeam, typedEntry: typedEntry, keypadPress: keypadPress, signinCredentials: signinCredentials, signinAsKind: signinAsKind,
-    authStorage: authStorage, trustedFromStorage: trustedFromStorage, rememberName: rememberName, recalledName: recalledName, doorTarget: doorTarget, doorLink: doorLink, doorRule: doorRule, doorFramed: doorFramed, doorAllowed: doorAllowed, doorsForRole: doorsForRole, foldedDoorUrls: foldedDoorUrls, framedParentTarget: framedParentTarget, FOLD_DOORS: FOLD_DOORS,
+    authStorage: authStorage, trustedFromStorage: trustedFromStorage, rememberName: rememberName, rememberRole: rememberRole, recalledRole: recalledRole, recalledName: recalledName, doorTarget: doorTarget, doorLink: doorLink, doorRule: doorRule, doorFramed: doorFramed, doorAllowed: doorAllowed, doorsForRole: doorsForRole, foldedDoorUrls: foldedDoorUrls, framedParentTarget: framedParentTarget, FOLD_DOORS: FOLD_DOORS,
     layoutForRole: layoutForRole, isLaundry: isLaundry, tabKeys: tabKeys, kpiAdmin: kpiAdmin, accessVerdict: accessVerdict, assertNoMoney: assertNoMoney, moneyKeys: moneyKeys,
     manilaToday: manilaToday, manilaParts: manilaParts, addDays: addDays, daysBetween: daysBetween, weekdayIndex: weekdayIndex,
     dayLabel: dayLabel, dayLong: dayLong, dayShort: dayShort, monthTitle: monthTitle, monthShortYear: monthShortYear, greeting: greeting,

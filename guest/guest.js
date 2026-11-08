@@ -21,10 +21,15 @@
   // step: load | input | reading | review | saving | done
   var S = { step: 'load', err: '', ctx: null, text: '', images: [], preparing: 0, sheet: null, result: null };
 
+  // The tab bar for the role the app saw last (laundry has Inventory where the others have Tasks); no saved role: the standard five.
+  function tabsHtml() {
+    var TABS = { home: ['Today', 'house'], calendar: ['Calendar', 'calendar'], tasks: ['Tasks', 'tasks'], stock: ['Inventory', 'box'], kpis: ['KPIs', 'dash'], more: ['More', 'more'] };
+    var role = CS.recalledRole(store('sessionStorage'));
+    return (role ? CS.tabKeys(role) : ['home', 'calendar', 'tasks', 'kpis', 'more']).map(function (k) { return '<a class="tab" href="../#' + k + '"><span class="ico">' + ICON(TABS[k][1], 's24') + '</span>' + TABS[k][0] + '</a>'; }).join('');
+  }
   function shell(inner) {
     return '<header class="appbar"><a class="iconbtn" href="../#calendar" aria-label="Back">' + ICON('back', 's24') + '</a><h1 class="ttl">Add guest details</h1></header><div class="screen"><div class="stack">' + inner + '</div></div>' +
-      '<nav class="tabbar" aria-label="Primary"><a class="tab" href="../#home"><span class="ico">' + ICON('house', 's24') + '</span>Today</a><a class="tab" href="../#calendar"><span class="ico">' + ICON('calendar', 's24') + '</span>Calendar</a>' +
-      '<a class="tab" href="../#tasks"><span class="ico">' + ICON('tasks', 's24') + '</span>Tasks</a><a class="tab" href="../#kpis"><span class="ico">' + ICON('dash', 's24') + '</span>KPIs</a><a class="tab" href="../#more"><span class="ico">' + ICON('more', 's24') + '</span>More</a></nav>';
+      '<nav class="tabbar" aria-label="Primary">' + tabsHtml() + '</nav>';
   }
   function call(body) {
     return sb.auth.getSession().then(function (s) {

@@ -147,11 +147,12 @@
     var k = { ok: true, month: today.slice(0, 7) + '-01',
       utility: { kwh_month: 412, nights_month: 22, kwh_per_night: 18.7, last_reading: { recorded_at: today + 'T02:00:00Z', delta_kwh: 38.2, nights: 2, kwh_per_night: 19.1, flag: null },
         per_stay: [14.2, 18.4, 12.6, 24.1, 16, 13.3, 15.1, 13.8].map(function (v, i) { return { checkout_date: CS.addDays(today, -3 * (8 - i)), kwh_per_night: v }; }),
-        brownouts: { count: 2, hours: 9 }, water_cuts: { count: 1, hours: 5 } },
+        brownouts: { count: 2, hours: 9 }, water_cuts: { count: 1, hours: 5 }, internet_cuts: { count: 1, hours: 2 } },
       inventory: { low_now: 5, restocks_month: 3, turnovers_month: 9,
         per_turnover: [{ item_id: 'd1', name: 'Toilet paper', used_per_turnover: 2.1, usual: 2 }, { item_id: 'd3', name: 'Water bottles', used_per_turnover: 4.6, usual: 4 }, { item_id: 'd4', name: 'Coffee sachets', used_per_turnover: 3, usual: 4 }],
         runs_out: [{ item_id: 'd2', name: 'Hand soap', days_left: 4 }, { item_id: 'd5', name: 'Garbage bags', days_left: 21 }] } };
-    if (r === 'owner' || r === 'admin') k.admin = { rate: { php_per_kwh: 11.25, effective_from: CS.addDays(today, -20), source: 'auto', source_url: 'https://www.facebook.com/socoteco2.EC/' }, last_reading_cost: 429.75, month_kwh_cost: 4635, supplies_month: 4950, supply_cost_per_turnover: 550, cleaning_pay_month: 6300 };
+    if (r === 'owner' || r === 'admin') k.admin = { rate: { php_per_kwh: 11.25, effective_from: CS.addDays(today, -20), source: 'auto', source_url: 'https://www.facebook.com/socoteco2.EC/' }, last_reading_cost: 429.75, month_kwh_cost: 4635, supplies_month: 4950, supply_cost_per_turnover: 550, cleaning_pay_month: 6300,
+      net_month: 38420, revenue_month: 61900, costs_month: 23480, occupancy: 0.73, sold_nights: 22, sellable_nights: 30, adr: 2814, direct_share: 0.41 };
     return k;
   }
 
@@ -167,6 +168,7 @@
       var X = D();
       if (name === 'task_set_done_v1' && args && args.p_id) doneSet[args.p_id] = !!args.p_done; // memory only: nothing is ever saved
       if (name === 'ack_verifier_finding_v1' && args && args.p_key) acked[args.p_key] = 1; if (name === 'ops_notice_close_v1' && args && args.p_id) closed[args.p_id] = 1; // memory only, so the reload drops the row
+      if (name === 'inventory_receipt_manual_v1') { toast(NOTE); return done({ ok: true, draft_id: 'demo-manual', purchase_count: 1, new_items: [] }); } // the answer carries the entry id, so the demo shows Undo too
       if (WRITES.indexOf(name) >= 0) { toast(NOTE); return done({ ok: true }); }
       switch (name) {
         case 'current_staff_access': return done(X.access);

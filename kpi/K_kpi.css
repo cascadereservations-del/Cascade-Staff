@@ -28,6 +28,7 @@
 .K_line-s { justify-content: space-between; font-size: var(--v5-t-2); }
 .K_ic { display: inline-grid; place-items: center; width: 36px; height: 36px; border-radius: var(--v5-r-md); flex: none; }
 .K_ic-warn { background: var(--v5-warn-w); color: var(--v5-warn-t); } .K_ic-info { background: var(--v5-info-w); color: var(--v5-info-t); }
+.K_ic-purple { background: var(--v5-tier-regular-w); color: var(--v5-tier-regular-t); }
 .K_mid { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; }
 .K_mid > span, .K_end > span { font-size: var(--v5-t-label); color: var(--v5-ink-2); }
 .K_end { text-align: right; display: flex; flex-direction: column; }

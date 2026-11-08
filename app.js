@@ -563,11 +563,14 @@
   // F_: a label and its card travel as one grid item (F_group), so a two-column grid never splits them
   function A_navCard(label, rows, tiles) { return rows ? '<div class="F_group' + (tiles ? ' A_tiles' : '') + '"><div class="A_label">' + esc(label) + '</div><nav class="card glass list" aria-label="' + esc(label) + '">' + rows + '</nav></div>' : ''; }
   // s110: the Inventory card on Today (staff and admin) and the same actions on the laundry Inventory tab. Plain links: each opens its own screen.
+  // Only the doors this role may open (H_MODULES[k].roles): a button that leads to "not for you" is never drawn, and a card with no button is not drawn either.
+  function K_invMay(k) { var r = H_MODULES[k] && H_MODULES[k].roles; return !r || r.indexOf(role()) >= 0; }
   function K_invActions(here) {
     var b = function (href, icon, title, sub) { return '<a class="btn btn-secondary btn-block K_inv-btn" href="' + href + '" data-k="' + esc(title) + '">' + ICON(icon, 's24') + '<span class="K_inv-t"><b>' + esc(title) + '</b><span>' + esc(sub) + '</span></span></a>'; };
-    return '<div class="K_inv-row">' + (here === 'stock' ? '' : b('#stock', 'box', 'Check inventory', 'What is low and what is on the shelf')) + b('#supply/use', 'checks', 'Report consumption', 'What you used today') + b('#supply', 'camera', 'Report supply', 'A receipt or what you brought in') + '</div>';
+    var list = (here !== 'stock' && K_invMay('stock') ? b('#stock', 'box', 'Check inventory', 'What is low and what is on the shelf') : '') + (K_invMay('supply') ? b('#supply/use', 'checks', 'Report consumption', 'What you used today') + b('#supply', 'camera', 'Report supply', 'A receipt or what you brought in') : '');
+    return list ? '<div class="K_inv-row">' + list + '</div>' : '';
   }
-  function K_invCard() { return '<section class="card glass A_card K_inv" id="K_inv" aria-label="Inventory"><span class="cap up">Inventory</span>' + K_invActions('home') + '</section>'; }
+  function K_invCard() { var list = K_invActions('home'); return list ? '<section class="card glass A_card K_inv" id="K_inv" aria-label="Inventory"><span class="cap up">Inventory</span>' + list + '</section>' : ''; }
   function renderHome() {
     var el = $('v-home');
     if (!state.payload) { A_heroPut(el, '<div class="screen" style="min-height:0;padding-top:0"><div class="A_body">' + (state.error ? errBanner() : loadingBlock()) + '</div></div>'); return; }
@@ -2052,7 +2055,7 @@
     });
   }
   function signOutTo(msg) {
-    clearTimeout(H_rpT); state.H_q = ''; state.H_offKey = ''; H_unmount(); H_resetModules(); H_histGen++; H_calReset(); H_alReset(); closeSheet(); dropPhotos(); state.replyRecent = []; state.cleanDone = null; state.payWait = 0; state.payReqs = null; state.reviewN = 0; B_gone = {}; state.bheads = false; state.bookingsOldest = ''; state.bconfirm = ''; state.bmsg = ''; state.progress = null; state.progressAbsent = false; H_idClose(); state.reply = null; var rb = $('rp-body'); if (rb) rb.innerHTML = ''; rpLive(''); state.payload = null; state.bookings = null; state.bookingsDone = false; state.noticesDone = false; state.notices = null; state.noticesAbsent = false; state.nadd = null; state.fbOpen = false; state.tasks = null; state.access = null; state.layout = null; state.month = null; state.error = '';
+    clearTimeout(H_rpT); state.H_q = ''; state.H_offKey = ''; H_unmount(); H_resetModules(); H_histGen++; H_calReset(); H_alReset(); closeSheet(); dropPhotos(); state.replyRecent = []; state.cleanDone = null; state.payWait = 0; state.payReqs = null; state.reviewN = 0; B_gone = {}; state.bheads = false; state.bookingsOldest = ''; state.bconfirm = ''; state.bmsg = ''; state.progress = null; state.progressAbsent = false; H_idClose(); state.reply = null; var rb = $('rp-body'); if (rb) rb.innerHTML = ''; rpLive(''); state.payload = null; state.bookings = null; state.bookingsDone = false; state.noticesDone = false; state.notices = null; state.noticesAbsent = false; state.nadd = null; state.fbOpen = false; state.tasks = null; state.access = null; state.layout = null; state.month = null; state.error = ''; CS.rememberRole(store('sessionStorage'), '');
     return sb.auth.signOut().catch(function () {}).then(function () { showSignin(msg); });
   }
   function showSignin(msg) {
@@ -2190,6 +2193,7 @@
   function setFrame(f, url) { try { f.contentWindow.location.replace(url); } catch (e) { f.src = url; } }
   function enter() {
     H_histGen++; H_calReset(); H_alReset(); H_resetModules(); // a new sign-in starts every module empty, whoever was here before
+    CS.rememberRole(store('sessionStorage'), state.access.role); // per tab, so the pay and guest pages opened from here draw the same tab bar
     state.layout = CS.layoutForRole(state.access.role);
     state.name = CS.deriveDisplayName(state.user);
     if (!/^#(home|calendar|tasks|payrates|reply|more|hub|weather|stock|manage|guests|inbox|notices|search|kpis|supply)/.test(location.hash)) history.replaceState(null, '', '#home');

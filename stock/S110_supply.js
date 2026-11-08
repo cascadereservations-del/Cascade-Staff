@@ -4,7 +4,7 @@
    Money rule: nothing here reads or draws a price, cost or total, whatever the draft carries. Plain ES5, no build step. Pure helpers are on S110_Supply.lib for the tests. */
 (function (root) {
   'use strict';
-  var PHOTO_MAX = 1048576, RECEIPT_SIDE = 1600, CATS = ['Uncategorised'];
+  var PHOTO_MAX = 1048576, PHOTO_HUGE = 20 * 1048576, RECEIPT_SIDE = 1600, CATS = ['Uncategorised'];
   var SHOP_HOSTS = /^https:\/\/(cdn\.shopify\.com|down-ph\.img\.susercontent\.com)\//i; // the allow-list the item options already use (I_Stock o8Pic)
 
   function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
@@ -36,7 +36,7 @@
     var list = d && Array.isArray(d.lines) ? d.lines : [];
     return list.map(function (l, i) {
       var m = l && l.match && l.match.item_id ? { id: String(l.match.item_id), name: String(l.match.name || ''), unit: String(l.match.unit || '') } : null, q = num(l && l.qty);
-      return { no: l && l.line_no != null ? l.line_no : i + 1, text: String((l && l.description) || ''), qty: q != null && q > 0 ? fmt(q) : '1', matchId: m ? m.id : '', mode: m ? 'match' : 'unset', itemId: m ? m.id : '', itemName: m ? m.name : '', unit: m ? m.unit : '',
+      return { no: l && l.line_no != null ? l.line_no : i + 1, text: String((l && l.description) || ''), qty: q != null && q > 0 ? fmt(q) : '1', rcpt: q != null && q > 0 ? q : 1, matchId: m ? m.id : '', mode: m ? 'match' : 'unset', itemId: m ? m.id : '', itemName: m ? m.name : '', unit: m ? m.unit : '',
         nw: { name: String((l && l.description) || '').slice(0, 80), category: CATS[0], unit: 'pc', cons: 'yes' }, link: '', blob: null, prev: '', err: '' };
     });
   }
@@ -62,7 +62,13 @@
   function confirmCall(draftId, lines, purchasedOn, key) { return { fn: 'inventory_receipt_confirm_v1', args: { p_draft_id: draftId, p_lines: lines, p_purchased_on: purchasedOn || null, p_idempotency_key: key } }; }
   function undoCall(draftId) { return { fn: 'inventory_receipt_undo_v1', args: { p_draft_id: draftId } }; }
   function cancelCall(draftId) { return { fn: 'inventory_receipt_cancel_v1', args: { p_draft_id: draftId } }; }
-  function manualCall(it, packs, key, today) { return { fn: 'record_inventory_receipt_v1', args: { p_item_id: it.id, p_packs: packs, p_unit_cost: null, p_supplier: null, p_purchased_at: today, p_receipt_path: null, p_shopping_list_id: null, p_idempotency_key: key } }; }
+  // Supply without a photo: the server takes UNITS (not packs), needs report_supply only, writes no price and no finance row (contracts.md, Amendment 1).
+  function manualCall(it, qtyUnits, key, today) { return { fn: 'inventory_receipt_manual_v1', args: { p_lines: [{ item_id: it.id, new_item: null, qty_units: qtyUnits }], p_purchased_on: today, p_vendor: null, p_idempotency_key: key } }; }
+  // A matched item with a pack size: the receipt counts packs, the stock counts units. Returns the units to prefill and the words that show the sum.
+  function packInfo(it, rcpt) {
+    var per = it && it.purchaseUnit && it.perPack > 1 ? it.perPack : 1, units = Math.round(rcpt * per * 100) / 100, unit = (it && it.unit) || 'units';
+    return { packed: per > 1, per: per, units: units, unit: unit, text: per > 1 ? rcpt + ' ' + (rcpt === 1 ? it.purchaseUnit : it.purchaseUnit + (/(s|x|z|ch|sh)$/i.test(it.purchaseUnit) ? 'es' : 's')) + ' of ' + per + ' = ' + fmt(units) + ' ' + unit : '' };
+  }
   // confirm's new_items: [{line_no, item_id}] (or a bare list of ids in line order); item id by line number.
   function newItemIds(res, lines) {
     var out = {}, ni = res && res.new_items;
@@ -85,37 +91,44 @@
   function resizeImage(file, side, max) {
     var d = root.document, mk = root.createImageBitmap;
     if (!mk || !d || !d.createElement) return Promise.reject({ photo: 'photofail' });
+    if (file && file.size > PHOTO_HUGE) return Promise.reject({ photo: 'photohuge' }); // refused before it is decoded: a 20 MB+ photo can exhaust a phone's memory
     return Promise.resolve().then(function () { return mk.call(root, file); }).then(function (bm) {
-      var z = fitSize(bm.width, bm.height, side), c = d.createElement('canvas');
+      var z = fitSize(bm.width, bm.height, side), c = d.createElement('canvas'), free = function () { c.width = c.height = 0; }; // the canvas bitmap is released as soon as the blob exists
       c.width = z.w; c.height = z.h; c.getContext('2d').drawImage(bm, 0, 0, z.w, z.h); if (bm.close) { try { bm.close(); } catch (e) { /* closed already */ } }
       return canvasBlob(c, 'image/jpeg', 0.8).then(function (b) {
-        if (!b) throw { photo: 'photofail' };
-        if (b.size <= max) return b;
-        return canvasBlob(c, 'image/jpeg', 0.6).then(function (b2) { if (!b2 || b2.size > max) throw { photo: 'photobig' }; return b2; });
+        if (!b) { free(); throw { photo: 'photofail' }; }
+        if (b.size <= max) { free(); return b; }
+        return canvasBlob(c, 'image/jpeg', 0.6).then(function (b2) { free(); if (!b2 || b2.size > max) throw { photo: 'photobig' }; return b2; });
       });
     }, function () { throw { photo: 'photofail' }; });
   }
   function blobBase64(b) {
     return Promise.resolve(b.arrayBuffer()).then(function (buf) { var u = new Uint8Array(buf), s = ''; for (var i = 0; i < u.length; i += 8192) s += String.fromCharCode.apply(null, u.subarray(i, i + 8192)); return root.btoa(s); });
   }
-  var PHOTO_ERR = { photofail: 'That photo could not be prepared. Try another one.', photobig: 'That photo is too large. Try one taken a little further away.', optfetch: 'The picture could not be fetched. Try again, or take a photo yourself.', notimage: 'Please choose a photo of the receipt, not a PDF.' };
+  var PHOTO_ERR = { photofail: 'That photo could not be prepared. Try another one.', photobig: 'That photo is too large. Try one taken a little further away.', photohuge: 'That photo is too large to open. Choose a smaller one, or take it again.', optfetch: 'The picture could not be fetched. Try again, or take a photo yourself.', notimage: 'Please choose a photo of the receipt, not a PDF.' };
 
   /* ---------------------------------------------------------------- the screen */
   var S = null;
   function mount(el, opts) {
     unmount(); opts = opts || {};
     S = { el: el, opts: opts, role: opts.role, client: opts.client || null, pid: opts.propertyId, use: opts.sub === 'use', items: null, load: 'loading', step: opts.sub === 'use' ? 'list' : 'start', qtys: {}, keys: {}, find: '', msg: '', busy: false,
-      draft: null, lines: [], listeners: [], dead: false, confirmKey: newKey('rcpt'), result: null, photoNote: '', man: { itemId: '', packs: '1' } };
+      draft: null, lines: [], listeners: [], dead: false, confirmKey: newKey('rcpt'), result: null, photoNote: '', man: { itemId: '', qty: '1', key: '' } };
     var on = function (t, fn) { el.addEventListener(t, fn); S.listeners.push([t, fn]); };
     on('click', onClick); on('input', onInput); on('change', onChange); on('submit', onSubmit);
     draw(); loadItems();
     return S;
   }
   function unmount() {
-    if (!S) return; S.listeners.forEach(function (l) { try { S.el.removeEventListener(l[0], l[1]); } catch (e) { /* gone */ } });
+    if (!S) return; cancelDraft(S); S.listeners.forEach(function (l) { try { S.el.removeEventListener(l[0], l[1]); } catch (e) { /* gone */ } });
     S.lines.forEach(function (l) { relPrev(l); }); S.dead = true; S = null;
   }
   function reset() { /* nothing is kept between visits */ }
+  // Leaving the review (Cancel, back, another tab) frees the draft. Fire and forget; the draft also expires on its own. Never while a confirm is in flight.
+  function cancelDraft(me) {
+    if (!me || me.step !== 'review' || me.busy || !me.draft || !me.client) return;
+    me.step = 'cancelled'; var c = cancelCall(me.draft.id);
+    try { Promise.resolve(me.client.rpc(c.fn, c.args)).then(null, function () {}); } catch (e) { /* the draft expires on its own */ }
+  }
   function relPrev(l) { if (l && l.prev && root.URL && root.URL.revokeObjectURL) { try { root.URL.revokeObjectURL(l.prev); } catch (e) { /* gone */ } } if (l) l.prev = ''; }
   function say(t) { if (S && S.opts.toast) S.opts.toast(t); }
   function attr(t, n) { return t && t.getAttribute ? t.getAttribute(n) : null; }
@@ -163,7 +176,11 @@
     var it = l.itemId && (S.items || []).filter(function (x) { return x.id === l.itemId; })[0], bad = S.bad && S.bad[l.no];
     var what = l.mode === 'skip' ? '<span class="pill p-info">Skipped</span>' : l.mode === 'new' ? '<span class="pill p-ok">New item</span>' : it ? '<span class="pill p-ok">' + gi('check', 's16') + esc(it.name) + '</span>' : '<span class="pill p-warn">' + gi('alert', 's16') + 'No match yet</span>';
     var h = '<section class="card glass S_line" data-line="' + esc(l.no) + '"><div class="S_line-h"><b>' + esc(l.text || 'Item') + '</b><span class="K_sub">' + esc('on the receipt') + '</span></div><div class="S_line-m">' + what + '</div>';
-    if (l.mode !== 'skip') h += '<div class="S_line-q"><span class="K_lab">Quantity</span>' + stepper('L' + l.no, l.qty, 'quantity for ' + (l.text || 'this line')) + '</div>';
+    if (l.mode !== 'skip') {
+      var unit = l.mode === 'new' ? String(l.nw.unit || '').trim() : it ? it.unit : '', pk = l.mode !== 'new' && it ? packInfo(it, l.rcpt) : null, lab = unit ? 'How many ' + unit : 'How many';
+      h += '<div class="S_line-q"><span class="K_lab">' + esc(lab) + '</span>' + stepper('L' + l.no, l.qty, lab + ' for ' + (l.text || 'this line')) + '</div>';
+      if (pk && pk.packed) h += '<p class="K_sub">' + esc(pk.text + (num(l.qty) !== pk.units ? ' · adding ' + l.qty + ' ' + pk.unit : '')) + '</p>';
+    }
     if (l.mode === 'pick') h += '<div class="field"><label for="S_pick_' + esc(l.no) + '">Which item is it?</label><div class="input"><select id="S_pick_' + esc(l.no) + '" data-pick="' + esc(l.no) + '"><option value="">Choose an item</option>' + selectOpts((S.items || []).map(function (x) { return [x.id, x.name]; }), l.itemId) + '</select></div></div>';
     if (l.mode === 'new') {
       var n = l.nw;
@@ -193,16 +210,17 @@
     }
     if (st === 'reading') return head('Reading the receipt', 'One moment.') + '<div class="skel" style="height:96px"></div><p class="help" role="status">This can take up to half a minute.</p>';
     if (st === 'manual') {
-      var m = S.man;
-      return head('Enter it by hand', 'Pick the item and how many packs came in.') + '<div class="field"><label for="S_mi">Item</label><div class="input"><select id="S_mi" data-man="item">' + selectOpts((S.items || []).map(function (x) { return [x.id, x.name]; }), m.itemId) + '</select></div></div>' +
-        '<div class="S_line-q"><span class="K_lab">Packs received</span>' + stepper('M', m.packs, 'packs received') + '</div>' + errLine() +
+      var m = S.man, mit = (S.items || []).filter(function (x) { return x.id === m.itemId; })[0], mlab = mit && mit.unit ? 'How many ' + mit.unit : 'How many';
+      return head('Enter it by hand', 'Pick the item and how many came in. Count single ' + (mit && mit.unit ? mit.unit : 'units') + ', not packs.') + '<div class="field"><label for="S_mi">Item</label><div class="input"><select id="S_mi" data-man="item">' + selectOpts((S.items || []).map(function (x) { return [x.id, x.name]; }), m.itemId) + '</select></div></div>' +
+        '<div class="S_line-q"><span class="K_lab">' + esc(mlab) + '</span>' + stepper('M', m.qty, mlab) + '</div>' +
+        (mit && mit.purchaseUnit && mit.perPack > 1 ? '<p class="K_sub">' + esc('One ' + mit.purchaseUnit + ' is ' + mit.perPack + ' ' + (mit.unit || 'units') + '.') + '</p>' : '') + errLine() +
         '<div class="K_btns"><button class="btn btn-primary btn-block" type="button" data-sact="man-save"' + (S.busy ? ' disabled' : '') + '>' + (S.busy ? 'Saving…' : 'Add to stock') + '</button><button class="btn btn-ghost btn-block" type="button" data-sact="to-start">Back</button></div>';
     }
     if (st === 'review' || st === 'saving') {
       var d = S.draft || {};
       return head('Check each line', [d.vendor ? String(d.vendor) : '', d.purchased_on ? String(d.purchased_on) : ''].filter(Boolean).join(' · ') || 'Match each line to an item in the house.') +
         (S.lines.length ? S.lines.map(lineCard).join('') : '<p class="sub">No lines were found on this receipt. You can enter it by hand.</p>') + errLine() +
-        '<div class="K_btns"><button class="btn btn-primary btn-block" type="button" data-sact="confirm"' + (S.busy || !S.lines.length ? ' disabled' : '') + '>' + (S.busy ? 'Adding…' : 'Add to stock') + '</button><button class="btn btn-ghost btn-block" type="button" data-sact="cancel">Cancel</button></div>';
+        '<div class="K_btns"><button class="btn btn-primary btn-block" type="button" data-sact="confirm"' + (S.busy || !S.lines.length ? ' disabled' : '') + '>' + (S.busy ? 'Adding…' : 'Add to stock') + '</button><button class="btn btn-ghost btn-block" type="button" data-sact="cancel"' + (S.busy ? ' disabled' : '') + '>Cancel</button></div>';
     }
     if (st === 'done') {
       return head('Added to stock') + thanks(S.result) + (S.photoNote ? '<p class="K_sub">' + esc(S.photoNote) + '</p>' : '') + errLine() +
@@ -228,16 +246,18 @@
     if (nw && ln) { var l = lineOf(ln); if (l) l.nw[nw] = t.value; return; }
     if (attr(t, 'data-link') && ln) { var l2 = lineOf(ln); if (l2) l2.link = t.value; }
   }
-  function setQty(id, v) { if (id === 'M') S.man.packs = v; else if (/^L/.test(id)) { var l = lineOf(id.slice(1)); if (l) l.qty = v; } else S.qtys[id] = v; }
-  function getQty(id) { return id === 'M' ? S.man.packs : /^L/.test(id) ? (lineOf(id.slice(1)) || {}).qty : S.qtys[id]; }
+  function repack(l) { var it = l.itemId && (S.items || []).filter(function (x) { return x.id === l.itemId; })[0]; if (it) l.qty = fmt(packInfo(it, l.rcpt).units); }
+  function setQty(id, v) { if (id === 'M') { S.man.qty = v; S.man.key = ''; } // a changed amount is a new entry, so it gets a new key
+    else if (/^L/.test(id)) { var l = lineOf(id.slice(1)); if (l) l.qty = v; } else S.qtys[id] = v; }
+  function getQty(id) { return id === 'M' ? S.man.qty : /^L/.test(id) ? (lineOf(id.slice(1)) || {}).qty : S.qtys[id]; }
   function onChange(ev) {
     var t = ev.target; if (!S || !t) return;
     var kind = attr(t, 'data-sfile'), ln = attr(t, 'data-line'), nw = attr(t, 'data-nw'), pk = attr(t, 'data-pick'), mn = attr(t, 'data-man');
     if (kind === 'receipt') { var f = t.files && t.files[0]; if (f) receiptPicked(f); return; }
     if (kind === 'item') { var f2 = t.files && t.files[0], l = lineOf(ln); if (f2 && l) itemPhoto(l, function () { return f2; }); return; }
     if (nw && ln) { var l3 = lineOf(ln); if (l3) l3.nw[nw] = t.value; return; }
-    if (pk) { var l4 = lineOf(pk); if (l4) { l4.itemId = t.value; l4.mode = t.value ? 'item' : 'pick'; if (S.bad) delete S.bad[l4.no]; draw(); } return; }
-    if (mn === 'item') S.man.itemId = t.value;
+    if (pk) { var l4 = lineOf(pk); if (l4) { l4.itemId = t.value; l4.mode = t.value ? 'item' : 'pick'; if (t.value) repack(l4); if (S.bad) delete S.bad[l4.no]; draw(); } return; }
+    if (mn === 'item') { S.man.itemId = t.value; S.man.key = ''; draw(); }
   }
   function onSubmit(ev) { if (ev && ev.preventDefault) ev.preventDefault(); }
   function onClick(ev) {
@@ -252,10 +272,10 @@
     if (act === 'line-pick') { l.mode = 'pick'; draw(); return; }
     if (act === 'line-new') { l.mode = 'new'; if (S.bad) delete S.bad[l.no]; draw(); return; }
     if (act === 'line-skip') { l.mode = 'skip'; if (S.bad) delete S.bad[l.no]; draw(); return; }
-    if (act === 'line-keep') { l.mode = l.matchId ? 'match' : 'unset'; if (l.matchId) l.itemId = l.matchId; draw(); return; }
+    if (act === 'line-keep') { l.mode = l.matchId ? 'match' : 'unset'; if (l.matchId) { l.itemId = l.matchId; repack(l); } draw(); return; }
     if (act === 'link-use') { var u = picUrl(l.link); if (!u) { l.err = 'The photo link must be an https image on cdn.shopify.com or down-ph.img.susercontent.com.'; draw(); return; } l.err = ''; itemPhoto(l, function () { return fetchPicture(u); }); return; }
     if (act === 'confirm') { confirm(); return; }
-    if (act === 'cancel') { if (S.draft && S.client) { var c = cancelCall(S.draft.id); try { Promise.resolve(S.client.rpc(c.fn, c.args)).then(null, function () {}); } catch (e) { /* the draft expires on its own */ } } if (S.opts.navigate) S.opts.navigate('#home'); return; }
+    if (act === 'cancel') { if (S.busy) return; cancelDraft(S); if (S.opts.navigate) S.opts.navigate('#home'); return; }
     if (act === 'undo') { undo(); return; }
   }
   function updateSave() { var b = S.el.querySelector && S.el.querySelector('[data-sact="use-save"]'); if (!b) { draw(); return; } var n = usageRows(S.items || [], S.qtys, {}).length; b.textContent = n ? 'Record ' + plural(n, 'item') : 'Record'; b.disabled = !n || S.busy; }
@@ -284,13 +304,14 @@
   }
   function saveManual() {
     var me = S; if (!me || me.busy) return;
-    var it = (me.items || []).filter(function (x) { return x.id === me.man.itemId; })[0], packs = qtyOf(me.man.packs);
-    if (!it || packs == null) { me.msg = 'Pick the item and how many packs came in.'; draw(); return; }
-    me.man.key = me.man.key || newKey('man'); var c = manualCall(it, packs, me.man.key, manilaToday()); me.busy = true; me.msg = ''; draw();
+    var it = (me.items || []).filter(function (x) { return x.id === me.man.itemId; })[0], qty = qtyOf(me.man.qty);
+    if (!it || qty == null) { me.msg = 'Pick the item and how many came in.'; draw(); return; }
+    me.man.key = me.man.key || newKey('man'); var c = manualCall(it, qty, me.man.key, manilaToday()); me.busy = true; me.msg = ''; draw(); // the same key on a retry: the entry is recorded once
     Promise.resolve().then(function () { return me.client.rpc(c.fn, c.args); }).then(function (r) {
       if (S !== me) return; me.busy = false;
-      if (!r || r.error || (r.data && r.data.ok === false)) { me.msg = errText(r && r.error, r && r.data); draw(); return; }
-      me.step = 'done'; me.canUndo = false; me.result = 'Thank you. ' + it.name + ' is added to stock.'; say('Added to stock'); draw();
+      if (!r || r.error || !r.data || r.data.ok === false) { me.msg = errText(r && r.error, r && r.data); draw(); return; }
+      var did = r.data.draft_id ? String(r.data.draft_id) : ''; // the answer carries the entry's id, which is what Undo needs
+      me.draft = did ? { id: did } : null; me.step = 'done'; me.canUndo = !!did; me.result = 'Thank you. ' + qty + ' ' + (it.unit || 'units') + ' of ' + it.name + ' added to stock.'; say('Added to stock'); draw();
     }, function (e) { if (S === me) { me.busy = false; me.msg = errText(e); draw(); } });
   }
   function receiptPicked(file) {
@@ -306,7 +327,7 @@
       return me.client.rpc('inventory_receipt_draft_v1', { p_draft_id: id }).then(function (d) {
         if (S !== me) return;
         if (!d || d.error || !d.data || d.data.ok === false) throw { read: true };
-        me.draft = d.data.draft || {}; me.draft.id = me.draft.id || id; me.lines = draftLines(me.draft); me.bad = null; me.confirmKey = newKey('rcpt'); me.step = 'review'; draw();
+        me.draft = d.data.draft || {}; me.draft.id = me.draft.id || id; me.lines = draftLines(me.draft); me.lines.forEach(function (l) { if (l.matchId) { l.itemId = l.matchId; repack(l); } }); me.bad = null; me.confirmKey = newKey('rcpt'); me.step = 'review'; draw();
       });
     }).then(null, function (e) {
       if (S !== me) return; me.step = 'start';
@@ -323,7 +344,7 @@
       if (S !== me) return;
       if (!r || r.error || !r.data || r.data.ok === false) { me.busy = false; me.msg = errText(r && r.error, r && r.data); draw(); return; }
       var res = r.data, n = res.purchase_count != null ? res.purchase_count : built.lines.filter(function (x) { return !x.skip; }).length;
-      me.busy = false; me.step = 'done'; me.canUndo = true; me.result = 'Thank you. ' + plural(n, 'line') + ' added to stock. The owner will see the receipt to check.'; say('Added to stock');
+      me.busy = false; me.step = 'done'; me.canUndo = true; me.lines.forEach(relPrev); me.result = 'Thank you. ' + plural(n, 'line') + ' added to stock. The owner will see the receipt to check.'; say('Added to stock');
       draw(); return uploadNewPhotos(me, res, built.lines);
     }, function (e) { if (S === me) { me.busy = false; me.msg = errText(e); draw(); } });
   }
@@ -355,7 +376,7 @@
   }
 
   root.S110_Supply = { mount: mount, unmount: unmount, reset: reset, lib: {
-    esc: esc, normItems: normItems, usageRows: usageRows, usageCall: usageCall, draftLines: draftLines, confirmLines: confirmLines, confirmCall: confirmCall, undoCall: undoCall, cancelCall: cancelCall, manualCall: manualCall,
+    esc: esc, normItems: normItems, usageRows: usageRows, usageCall: usageCall, draftLines: draftLines, confirmLines: confirmLines, confirmCall: confirmCall, undoCall: undoCall, cancelCall: cancelCall, manualCall: manualCall, packInfo: packInfo, cancelDraft: cancelDraft,
     newItemIds: newItemIds, picUrl: picUrl, stepQty: stepQty, qtyOf: qtyOf, errText: errText, newKey: newKey, fitSize: fitSize
   } };
 })(typeof window !== 'undefined' ? window : this);

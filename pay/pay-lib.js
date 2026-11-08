@@ -181,9 +181,12 @@
     var r = String(referrer || ''), o = String(origin || '');
     return (!!o && !!r && (r === o || r.indexOf(o + '/') === 0)) || P_fromShell(hash);
   }
-  function P_tabs(hash, ICON, esc) {
+  // keys: CS.tabKeys(role) when the role is known (laundry has Inventory where the others have Tasks); left out, the standard five.
+  function P_tabs(hash, ICON, esc, keys) {
     var n = P_hashCounts(hash);
-    var tabs = [['home', '../#home', 'Today', 'house', 0, ''], ['calendar', '../#calendar', 'Calendar', 'calendar', n.cal, ' warnings'], ['tasks', '../#tasks', 'Tasks', 'tasks', n.tasks, ' due'], ['kpis', '../#kpis', 'KPIs', 'dash', 0, ''], ['more', '../#more', 'More', 'more', 0, '']];
+    var all = { home: ['home', '../#home', 'Today', 'house', 0, ''], calendar: ['calendar', '../#calendar', 'Calendar', 'calendar', n.cal, ' warnings'], tasks: ['tasks', '../#tasks', 'Tasks', 'tasks', n.tasks, ' due'],
+      stock: ['stock', '../#stock', 'Inventory', 'box', 0, ''], kpis: ['kpis', '../#kpis', 'KPIs', 'dash', 0, ''], more: ['more', '../#more', 'More', 'more', 0, ''] };
+    var tabs = (keys && keys.length ? keys : ['home', 'calendar', 'tasks', 'kpis', 'more']).filter(function (k) { return all[k]; }).map(function (k) { return all[k]; });
     return tabs.map(function (t) {
       return '<a class="tab" href="' + t[1] + '"' + (t[0] === 'home' ? ' aria-current="page"' : '') + '><span class="ico">' + ICON(t[3], 's24') + '</span>' + esc(t[2]) +
         (t[4] ? '<span class="badge" aria-label="' + t[4] + t[5] + '">' + t[4] + '</span>' : '') + '</a>';
@@ -193,7 +196,7 @@
   function P_shell(title, inner, o) {
     o = o || {}; var ICON = o.icon, esc = o.esc;
     return '<header class="appbar"><a class="iconbtn" href="' + esc(o.back || '../#home') + '" aria-label="Back"' + (o.back ? '' : ' data-p-back="1"') + '>' + ICON('back', 's24') + '</a><h1 class="ttl">' + esc(title) + '</h1></header>' +
-      '<div class="screen">' + inner + '</div><nav class="tabbar" aria-label="Primary">' + P_tabs(o.hash, ICON, esc) + '</nav>';
+      '<div class="screen">' + inner + '</div><nav class="tabbar" aria-label="Primary">' + P_tabs(o.hash, ICON, esc, o.keys) + '</nav>';
   }
   function P_wireBack(win) {
     var d = win && win.document; if (!d || !d.addEventListener) return;

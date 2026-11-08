@@ -48,7 +48,8 @@
         stays: barHeights((u.per_stay || []).map(function (s) { return s && s.kwh_per_night; })),
         stayDates: (u.per_stay || []).map(function (s) { return s && s.checkout_date ? String(s.checkout_date) : ''; }),
         brownouts: { count: num(u.brownouts && u.brownouts.count) || 0, hours: num(u.brownouts && u.brownouts.hours) || 0 },
-        water: { count: num(u.water_cuts && u.water_cuts.count) || 0, hours: num(u.water_cuts && u.water_cuts.hours) || 0 } },
+        water: { count: num(u.water_cuts && u.water_cuts.count) || 0, hours: num(u.water_cuts && u.water_cuts.hours) || 0 },
+        internet: u.internet_cuts && typeof u.internet_cuts === 'object' ? { count: num(u.internet_cuts.count) || 0, hours: num(u.internet_cuts.hours) || 0 } : null }, // null: an older server, so no row
       inventory: { low: num(inv.low_now), restocks: num(inv.restocks_month), turnovers: num(inv.turnovers_month), usage: usageRows(inv.per_turnover),
         runsOut: (inv.runs_out || []).map(function (r) { return { name: String((r && r.name) || ''), days: num(r && r.days_left) }; }).filter(function (r) { return r.name && r.days != null; }).slice(0, 3) },
       admin: null
@@ -57,6 +58,12 @@
       var a = raw.admin, rt = a.rate && typeof a.rate === 'object' ? a.rate : null;
       out.admin = { rate: rt && num(rt.php_per_kwh) != null ? { php: num(rt.php_per_kwh), from: rt.effective_from || '', source: rt.source || '', url: /^https:\/\//.test(String(rt.source_url || '')) ? String(rt.source_url) : '' } : null,
         lastCost: num(a.last_reading_cost), monthCost: num(a.month_kwh_cost), supplies: num(a.supplies_month), perTurnover: num(a.supply_cost_per_turnover), cleaning: num(a.cleaning_pay_month) };
+      // Amendment 1: the month at a glance. A key that is absent draws nothing; a key that is present but empty draws "Not yet". Kept only here, inside the admin role check.
+      var has = function (k) { return Object.prototype.hasOwnProperty.call(a, k); };
+      if (has('net_month')) out.admin.net = { net: num(a.net_month), revenue: has('revenue_month') ? num(a.revenue_month) : null, costs: has('costs_month') ? num(a.costs_month) : null };
+      if (has('occupancy')) out.admin.occupancy = { pct: num(a.occupancy), sold: num(a.sold_nights), sellable: num(a.sellable_nights) };
+      if (has('adr')) out.admin.adr = num(a.adr);
+      if (has('direct_share')) out.admin.direct = num(a.direct_share);
     }
     return out;
   }
@@ -166,7 +173,8 @@
         '<p class="K_sub">' + esc(hi ? 'The gold bar used more than usual: ' + fmt(hi.value) + ' kWh a night.' : 'No stay stood out from the others.') + '</p></div>';
     }
     h += '<div class="card glass K_lines">' + lineRow('zap', 'warn', 'Brownouts', 'Feeder notices', String(u.brownouts.count), u.brownouts.count ? fmt(u.brownouts.hours, 0) + ' h total' : 'none') +
-      lineRow('drop', 'info', 'Water interruptions', 'GSCWD notices', String(u.water.count), u.water.count ? fmt(u.water.hours, 0) + ' h total' : 'none') + '</div>';
+      lineRow('drop', 'info', 'Water interruptions', 'GSCWD notices', String(u.water.count), u.water.count ? fmt(u.water.hours, 0) + ' h total' : 'none') +
+      (u.internet ? lineRow('wifioff', 'purple', 'Internet outages', 'From notices', String(u.internet.count), u.internet.count ? fmt(u.internet.hours, 0) + ' h total' : 'none') : '') + '</div>';
     return h;
   }
   function inventoryPanel(d) {
@@ -191,7 +199,7 @@
     var a = d.admin, role = S.role, h = '';
     if (!a) return '<div class="card glass K_note"><p class="K_p">' + esc('The money figures are not available yet.') + '</p></div>';
     var rate = a.rate;
-    h += '<h2 class="K_h">Electricity cost</h2><div class="K_money" id="K_rate"><span class="K_lab">Latest SOCOTECO II rate</span>' +
+    h += monthGlance(a) + '<h2 class="K_h">Electricity cost</h2><div class="K_money" id="K_rate"><span class="K_lab">Latest SOCOTECO II rate</span>' +
       '<span class="K_big">' + esc(rate ? pesoRate(rate.php) + ' per kWh' : 'No rate on file') + '</span>' +
       '<span class="K_sub">' + esc(rate ? 'From ' + dateLabel(rate.from) + (rate.source === 'auto' ? ' · read from the SOCOTECO II post' : rate.source === 'manual' ? ' · entered by hand' : '') : 'Add the rate to see what a reading costs.') + '</span>' +
       (rate && rate.url ? '<a class="K_link" href="' + esc(rate.url) + '" target="_blank" rel="noopener">See the source</a>' : '') + '</div>';
@@ -203,6 +211,20 @@
     ].map(function (r) { return '<div class="K_line K_line-s"><span>' + esc(r[0]) + '</span><b>' + esc(r[1] != null ? peso(r[1]) : 'Not yet') + '</b></div>'; }).join('') + '</div>';
     if (canSetRate(role)) h += '<a class="btn btn-secondary btn-block" href="#manage/kpis">' + gi('star', 's16') + 'Open the full key figures</a>';
     return h + metersCard();
+  }
+  function pctOf(v) { return v != null ? Math.round(v * 100) + '%' : 'Not yet'; }
+  // The month at a glance (Admin.dc.html): the net card, then occupancy, average rate and direct bookings. Only the parts the server sent.
+  function monthGlance(a) {
+    var h = '';
+    if (a.net) {
+      var n = a.net, bits = [n.revenue != null ? 'Revenue ' + peso(n.revenue) : '', n.costs != null ? 'costs ' + peso(n.costs) : ''].filter(Boolean);
+      h += '<div class="K_money" id="K_net"><span class="K_lab">Net this month so far</span><span class="K_big">' + esc(n.net != null ? peso(n.net) : 'Not yet') + '</span><span class="K_sub">' + esc(bits.join(' · ') || 'Revenue and costs are not in yet.') + '</span></div>';
+    }
+    var tiles = '';
+    if (a.occupancy) { var o = a.occupancy; tiles += stat('Occupancy', pctOf(o.pct), o.pct != null && o.sold != null && o.sellable != null ? o.sold + ' of ' + o.sellable + ' nights' : '', o.pct != null && o.sold != null && o.sellable != null ? 'ok' : ''); }
+    if ('adr' in a) tiles += stat('Average rate', a.adr != null ? peso(a.adr) : 'Not yet', a.adr != null ? 'per night' : '');
+    if ('direct' in a) tiles += stat('Direct bookings', pctOf(a.direct), a.direct != null ? 'of nights, no Airbnb fee' : '');
+    return h + (tiles ? '<div class="K_grid2" id="K_glance">' + tiles + '</div>' : '');
   }
   function rateForm() {
     var f = S.vals, m = S.msg.rate || '', open = S.rate;

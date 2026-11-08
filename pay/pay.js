@@ -16,7 +16,8 @@
   var K = DEMO ? P.keyKeeper(undefined, null) : P.keyKeeper(); // demo: the in-flight key is kept in memory only
   var S = { step: 'pick', cands: null, sel: null, err: '', note: '', sending: false, draftOpen: false, askedOnce: false, askOpen: false, draft: { description: '', amount: '', file: null }, result: null, loadErr: '', mine: null, clean: P.P_param(typeof location !== 'undefined' ? location.search : '', 'clean'), pushState: null, pushMsg: '' };
 
-  function shell(title, inner, back) { return P.P_shell(title, inner, { back: back, icon: ICON, esc: esc, hash: P.P_hash(window) }).replace(' aria-current="page"', ''); } // B3: a pay page is not "Today", so no tab is marked
+  function tabKeys() { var ls = null; try { if (!(window.CSDemo && window.CSDemo.active)) ls = window.sessionStorage; } catch (e) { ls = null; } var r = CS.recalledRole(ls); return r ? CS.tabKeys(r) : null; } // s110: the tab bar follows the saved role (laundry sees Inventory)
+  function shell(title, inner, back) { return P.P_shell(title, inner, { back: back, icon: ICON, esc: esc, hash: P.P_hash(window), keys: tabKeys() }).replace(' aria-current="page"', ''); } // B3: a pay page is not "Today", so no tab is marked
   function dm(iso) { return CS.dayLabel(String(iso).slice(0, 10)); } // B3: "15 Oct", the shell's own style
   function ds(iso) { return CS.dayShort(String(iso).slice(0, 10)); } // "Fri 2 Oct"
   P.P_wireBack(window);

@@ -3,7 +3,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import { createRequire } from 'node:module';
-import { CS, D, read, boot, baseHandlers, HOMEWITH, stayRow, TODAY } from './_a_harness.mjs';
+import { CS, D, P, read, boot, baseHandlers, HOMEWITH, stayRow, TODAY } from './_a_harness.mjs';
 
 const clone = (x) => JSON.parse(JSON.stringify(x));
 const tick = async (n = 24) => { for (let i = 0; i < n; i++) await new Promise((r) => setImmediate(r)); };
@@ -33,10 +33,11 @@ function fakeClient(handlers, fns, extra) {
 
 const KPI = (admin) => Object.assign({ ok: true, month: '2026-10-01',
   utility: { kwh_month: 412, nights_month: 22, kwh_per_night: 18.7, last_reading: { recorded_at: '2026-10-14T02:00:00Z', delta_kwh: 38.2, nights: 2, kwh_per_night: 19.1, flag: null },
-    per_stay: [14, 18, 12, 24, 16, 13, 15, 14].map((v, i) => ({ checkout_date: '2026-10-0' + (i + 1), kwh_per_night: v })), brownouts: { count: 2, hours: 9 }, water_cuts: { count: 1, hours: 5 } },
+    per_stay: [14, 18, 12, 24, 16, 13, 15, 14].map((v, i) => ({ checkout_date: '2026-10-0' + (i + 1), kwh_per_night: v })), brownouts: { count: 2, hours: 9 }, water_cuts: { count: 1, hours: 5 }, internet_cuts: { count: 2, hours: 3 } },
   inventory: { low_now: 5, restocks_month: 3, turnovers_month: 9, per_turnover: [{ item_id: 'a', name: 'Toilet paper', used_per_turnover: 2.1, usual: 2 }, { item_id: 'b', name: 'Water bottles', used_per_turnover: 4.6, usual: 4 }],
     runs_out: [{ item_id: 'c', name: 'Hand soap', days_left: 4 }, { item_id: 'd', name: 'Garbage bags', days_left: 21 }] } },
-  admin ? { admin: { rate: { php_per_kwh: 11.25, effective_from: '2026-09-20', source: 'auto', source_url: 'https://www.facebook.com/socoteco2.EC/' }, last_reading_cost: 429.75, month_kwh_cost: 4635, supplies_month: 4950, supply_cost_per_turnover: 550, cleaning_pay_month: 6300 } } : {});
+  admin ? { admin: { rate: { php_per_kwh: 11.25, effective_from: '2026-09-20', source: 'auto', source_url: 'https://www.facebook.com/socoteco2.EC/' }, last_reading_cost: 429.75, month_kwh_cost: 4635, supplies_month: 4950, supply_cost_per_turnover: 550, cleaning_pay_month: 6300,
+    net_month: 38420, revenue_month: 61900, costs_month: 23480, occupancy: 0.73, sold_nights: 22, sellable_nights: 30, adr: 2814, direct_share: 0.41 } } : {});
 
 // ---------------------------------------------------------------------------------------------- 1. role helpers
 test('s110 laundry role: staff layout, own tab set, no checklist door, no guest contact, KPIs money only for owner/admin/finance', () => {
@@ -133,11 +134,17 @@ test('s110 Meter checks: signed photos, typed vs photo numbers, the three answer
 // ---------------------------------------------------------------------------------------------- 5. Today and the tab bar, through the app
 const homeFor = async (role, hash = '#home', extra) => boot({ role, hash, winInit: withModules, handlers: baseHandlers(role, Object.assign({ staff_home_v1: () => HOMEWITH([stayRow('Ana Reyes', TODAY, '2026-10-17', { checkin_time: '14:00', checkout_time: '12:00' }), stayRow('Ben Cruz', '2026-10-10', TODAY)]) }, extra || {})) });
 test('s110 Today: the Inventory card with three big buttons for staff and admin layouts; the tab bar by role', async () => {
-  for (const role of ['cleaner', 'owner', 'finance']) {
+  for (const role of ['cleaner', 'owner', 'admin']) {
     const h = (await homeFor(role)).els['v-home'].innerHTML;
     assert.match(h, /id="K_inv"/, role); assert.equal((h.match(/class="btn btn-secondary btn-block K_inv-btn"/g) || []).length, 3, role + ': three big buttons');
     assert.match(h, /href="#stock"[^>]*data-k="Check inventory"/); assert.match(h, /href="#supply\/use"[^>]*data-k="Report consumption"/); assert.match(h, /href="#supply"[^>]*data-k="Report supply"/);
   }
+  // only the doors the role may open (H_MODULES roles): finance reads stock, inspector reports, maintenance has nothing so no card
+  const btns = (h) => [...h.matchAll(/class="btn btn-secondary btn-block K_inv-btn"[^>]*data-k="([^"]+)"/g)].map((m) => m[1]);
+  assert.deepEqual(btns((await homeFor('finance')).els['v-home'].innerHTML), ['Check inventory']);
+  assert.deepEqual(btns((await homeFor('inspector')).els['v-home'].innerHTML), ['Report consumption', 'Report supply']);
+  assert.deepEqual(btns((await homeFor('laundry')).els['v-home'].innerHTML), ['Check inventory', 'Report consumption', 'Report supply']);
+  const mt = (await homeFor('maintenance')).els['v-home'].innerHTML; assert.doesNotMatch(mt, /id="K_inv"|K_inv-btn/, 'a role with no door gets no empty card');
   const tabs = (await homeFor('cleaner')).els.tabbar.innerHTML; assert.deepEqual([...tabs.matchAll(/href="(#[a-z]+)"/g)].map((m) => m[1]), ['#home', '#calendar', '#tasks', '#kpis', '#more']);
   const own = (await homeFor('owner', '#kpis')).els.tabbar.innerHTML; assert.match(own, /href="#kpis" aria-current="page"/);
 });
@@ -231,8 +238,18 @@ test('s110 Report supply: a receipt that cannot be read leaves the start screen;
   const s = supplyMount('', { inventory_receipt_draft_v1: () => DRAFT({ lines: [{ line_no: 1, description: 'TISSUE', qty: 1, match: { item_id: 'i1', name: 'Toilet paper', unit: 'rolls' } }] }), inventory_receipt_confirm_v1: () => ({ error: null, data: { ok: false, error: 'not_draft' } }), inventory_receipt_cancel_v1: () => ({ error: null, data: { ok: true } }) }, { 'ocr-receipt': () => ({ data: { ok: true, draft_id: 'dr-1' }, error: null }) });
   await toReview(s); await clickS(s.el, 'confirm'); assert.match(s.el.innerHTML, /already added/); await clickS(s.el, 'cancel');
   assert.deepEqual(s.client.calls.find((c) => c[0] === 'inventory_receipt_cancel_v1'), ['inventory_receipt_cancel_v1', { p_draft_id: 'dr-1' }]); assert.deepEqual(s.navs, ['#home']);
-  const m = supplyMount('', { record_inventory_receipt_v1: () => ({ error: null, data: { ok: true } }) }); await tick(); await clickS(m.el, 'manual'); await clickS(m.el, 'inc', { 'data-id': 'M' }); await fire(m.el, 'change', target({ 'data-man': 'item' }, { value: 'i2' })); await clickS(m.el, 'man-save');
-  const mc = m.client.calls.find((c) => c[0] === 'record_inventory_receipt_v1')[1]; assert.deepEqual([mc.p_item_id, mc.p_packs, mc.p_unit_cost, mc.p_receipt_path], ['i2', 2, null, null]); assert.match(mc.p_idempotency_key, /^stk-man-/); assert.match(m.el.innerHTML, /Thank you\. Hand &lt;b&gt;soap&lt;\/b&gt; is added to stock/);
+  let mfail = 1; const m = supplyMount('', { inventory_receipt_manual_v1: () => (mfail-- > 0 ? { error: { message: 'network down' }, data: null } : { error: null, data: { ok: true, draft_id: 'man-1', purchase_count: 1, new_items: [] } }), inventory_receipt_undo_v1: () => ({ error: null, data: { ok: true } }) });
+  await tick(); await clickS(m.el, 'manual'); await clickS(m.el, 'inc', { 'data-id': 'M' }); await fire(m.el, 'change', target({ 'data-man': 'item' }, { value: 'i2' })); assert.match(m.el.innerHTML, /How many bottles/, 'the field is in the own unit of the item');
+  assert.doesNotMatch(m.el.innerHTML, /Packs received/); await clickS(m.el, 'man-save');
+  const mc = m.client.calls.find((c) => c[0] === 'inventory_receipt_manual_v1')[1]; assert.deepEqual(mc.p_lines, [{ item_id: 'i2', new_item: null, qty_units: 2 }]); assert.equal(mc.p_vendor, null); assert.match(mc.p_purchased_on, /^\d{4}-\d{2}-\d{2}$/); assert.match(mc.p_idempotency_key, /^stk-man-/);
+  assert.equal(m.client.calls.filter((c) => c[0] === 'record_inventory_receipt_v1').length, 0, 'the owner-only RPC is never called');
+  await clickS(m.el, 'man-save'); const mcs = m.client.calls.filter((c) => c[0] === 'inventory_receipt_manual_v1'); assert.equal(mcs.length, 2); assert.equal(mcs[1][1].p_idempotency_key, mc.p_idempotency_key, 'a retry reuses the key');
+  assert.match(m.el.innerHTML, /Thank you\. 2 bottles of Hand &lt;b&gt;soap&lt;\/b&gt; added to stock/); assert.match(m.el.innerHTML, />Undo</);
+  await clickS(m.el, 'undo'); assert.deepEqual(m.client.calls.at(-1), ['inventory_receipt_undo_v1', { p_draft_id: 'man-1' }]); assert.match(m.el.innerHTML, /back as it was/);
+  const m2 = supplyMount('', { inventory_receipt_manual_v1: () => ({ error: null, data: { ok: true, draft_id: 'man-2' } }) }); await tick(); await clickS(m2.el, 'manual'); await clickS(m2.el, 'man-save');
+  const k1 = m2.client.calls[m2.client.calls.length - 1][1].p_idempotency_key; await clickS(m2.el, 'man-save'); assert.equal(m2.client.calls.at(-1)[1].p_idempotency_key, k1);
+  const m3 = supplyMount('', { inventory_receipt_manual_v1: () => ({ error: { message: 'x' }, data: null }) }); await tick(); await clickS(m3.el, 'manual'); await clickS(m3.el, 'man-save'); const ka = m3.client.calls.at(-1)[1].p_idempotency_key; await clickS(m3.el, 'inc', { 'data-id': 'M' }); await clickS(m3.el, 'man-save');
+  assert.notEqual(m3.client.calls.at(-1)[1].p_idempotency_key, ka, 'a changed amount is a new entry');
   const L = loadModule('stock/S110_supply.js', makeWin()).S110_Supply.lib;
   assert.equal(L.picUrl('https://cdn.shopify.com/s/files/1/x.jpg'), 'https://cdn.shopify.com/s/files/1/x.jpg'); assert.equal(L.picUrl('http://cdn.shopify.com/x.jpg'), ''); assert.equal(L.picUrl('https://evil.example/cdn.shopify.com/x'), '');
   assert.deepEqual(clone(L.newItemIds({ new_items: ['a', 'b'] }, [{ line_no: 2, new_item: {} }, { line_no: 5, new_item: {} }])), { 2: 'a', 5: 'b' });
@@ -262,4 +279,95 @@ test('s110 files and house rules: precached, no nowrap, no px font sizes, no raw
   const k = read('kpi/K_kpi.js'), s = read('stock/S110_supply.js');
   for (const src of [k, s]) assert.doesNotMatch(src, /[A-Za-z.]!(?=['" <])/, 'no exclamation mark in the copy');
   assert.equal(read('index.html').includes('\r'), false); assert.equal(k.includes('\r') || s.includes('\r'), false, 'LF line endings');
+});
+
+// ---------------------------------------------------------------------------------------------- 9. fix round: review units, cancel, photos, unmount
+const PACK_CAT = { ok: true, items: [{ id: 'i1', name: 'Toilet paper', category: 'Bathroom', unit: 'rolls', consumable: true, active: true, purchaseUnit: 'pack', unitsPerPurchase: 12 },
+  { id: 'i2', name: 'Hand soap', category: 'Bathroom', unit: 'bottles', consumable: true, active: true, purchaseUnit: 'box', unitsPerPurchase: 6 }, { id: 'i3', name: 'Bath towels', category: 'Linen', unit: 'pcs', consumable: false, active: true }] };
+const okFns = { 'ocr-receipt': () => ({ data: { ok: true, draft_id: 'dr-1' }, error: null }) };
+test('s110 review: each stepper is in the item unit, a pack size prefills packs x units and says so, changing the item recomputes', async () => {
+  const s = supplyMount('', { get_inventory_catalogue_v1: () => ({ error: null, data: PACK_CAT }), inventory_receipt_draft_v1: () => DRAFT(), inventory_receipt_confirm_v1: () => ({ error: null, data: { ok: true, purchase_count: 2 } }), inventory_receipt_cancel_v1: () => ({ error: null, data: { ok: true } }) }, okFns);
+  await toReview(s); let h = s.el.innerHTML;
+  assert.match(h, /How many rolls/); assert.match(h, /2 packs of 12 = 24 rolls/); assert.match(h, /id="S_q_L1"[^>]*value="24"/, 'prefilled with units, not packs');
+  assert.doesNotMatch(h, />Quantity</);
+  await clickS(s.el, 'line-pick', { 'data-line': '2' }); await fire(s.el, 'change', target({ 'data-pick': '2' }, { value: 'i2' })); h = s.el.innerHTML;
+  assert.match(h, /3 boxes of 6 = 18 bottles/); assert.match(h, /id="S_q_L2"[^>]*value="18"/); assert.match(h, /How many bottles/);
+  await fire(s.el, 'change', target({ 'data-pick': '2' }, { value: 'i3' })); h = s.el.innerHTML; assert.match(h, /id="S_q_L2"[^>]*value="3"/, 'no pack size: the receipt count stands'); assert.match(h, /How many pcs/);
+  await fire(s.el, 'change', target({ 'data-pick': '2' }, { value: 'i1' })); assert.match(s.el.innerHTML, /3 packs of 12 = 36 rolls/);
+  await clickS(s.el, 'inc', { 'data-id': 'L1' }); assert.match(s.el.innerHTML, /adding 25 rolls/, 'an edited amount is stated');
+  await clickS(s.el, 'line-skip', { 'data-line': '3' }); await clickS(s.el, 'line-skip', { 'data-line': '4' }); await clickS(s.el, 'confirm');
+  assert.deepEqual(s.client.calls.find((c) => c[0] === 'inventory_receipt_confirm_v1')[1].p_lines.filter((l) => !l.skip).map((l) => [l.item_id, l.qty_units]), [['i1', 25], ['i1', 36]]);
+});
+test('s110 review: Cancel is off while the confirm is in flight, and leaving the review frees the draft once', async () => {
+  let release; const s = supplyMount('', { inventory_receipt_draft_v1: () => DRAFT({ lines: [{ line_no: 1, description: 'TISSUE', qty: 1, match: { item_id: 'i1', name: 'Toilet paper', unit: 'rolls' } }] }), inventory_receipt_confirm_v1: () => new Promise((r) => { release = () => r({ error: null, data: { ok: true, purchase_count: 1 } }); }), inventory_receipt_cancel_v1: () => ({ error: null, data: { ok: true } }) }, okFns);
+  await toReview(s); await clickS(s.el, 'confirm'); assert.match(s.el.innerHTML, /data-sact="cancel" disabled/);
+  await clickS(s.el, 'cancel'); assert.equal(s.client.calls.filter((c) => c[0] === 'inventory_receipt_cancel_v1').length, 0, 'no cancel while busy'); assert.deepEqual(s.navs, []);
+  s.M.unmount(); assert.equal(s.client.calls.filter((c) => c[0] === 'inventory_receipt_cancel_v1').length, 0, 'unmount while busy leaves the draft to the confirm');
+  release(); await tick();
+  const t = supplyMount('', { inventory_receipt_draft_v1: () => DRAFT(), inventory_receipt_cancel_v1: () => ({ error: null, data: { ok: true } }) }, okFns);
+  await toReview(t); t.M.unmount(); t.M.unmount(); assert.deepEqual(t.client.calls.filter((c) => c[0] === 'inventory_receipt_cancel_v1'), [['inventory_receipt_cancel_v1', { p_draft_id: 'dr-1' }]], 'leaving the review cancels the draft, once');
+  const u = supplyMount('', { inventory_receipt_draft_v1: () => DRAFT(), inventory_receipt_cancel_v1: () => ({ error: null, data: { ok: true } }) }, okFns);
+  await toReview(u); await clickS(u.el, 'cancel'); u.M.unmount(); assert.equal(u.client.calls.filter((c) => c[0] === 'inventory_receipt_cancel_v1').length, 1, 'Cancel then the shell unmount cancels once');
+  const v = supplyMount('', {}); await tick(); v.M.unmount(); assert.equal(v.client.calls.filter((c) => c[0] === 'inventory_receipt_cancel_v1').length, 0, 'no draft, no cancel');
+});
+test('s110 photos: over 20 MB is refused before decoding, the canvas is released, previews are revoked', async () => {
+  let decoded = 0; const win = makeWin({ createImageBitmap: async () => { decoded++; return { width: 3000, height: 2000, close() {} }; } });
+  const revoked = []; win.URL = { createObjectURL: () => 'blob:x' + revoked.length, revokeObjectURL: (u) => revoked.push(u) };
+  loadModule('stock/S110_supply.js', win);
+  const client = fakeClient({ get_inventory_catalogue_v1: () => ({ error: null, data: CATALOGUE }), inventory_receipt_draft_v1: () => DRAFT(), inventory_receipt_confirm_v1: () => ({ error: null, data: { ok: true, purchase_count: 1, new_items: [{ line_no: 3, item_id: 'ni-3' }] } }) }, { 'ocr-receipt': () => ({ data: { ok: true, draft_id: 'dr-1' }, error: null }), 'upload-photo': () => ({ data: { ok: true, path: 'p.jpg' }, error: null }) });
+  const el = miniEl(); win.S110_Supply.mount(el, { client, role: 'laundry', sub: '', propertyId: 'prop-1', navigate() {}, toast() {} }); await tick();
+  await fire(el, 'change', target({ 'data-sfile': 'receipt' }, { files: [file({ size: 21 * 1048576 })] }));
+  assert.equal(decoded, 0, 'never decoded'); assert.match(el.innerHTML, /too large to open/); assert.match(el.innerHTML, /Take a photo of the receipt/); assert.equal(client.calls.filter((c) => c[0] === 'fn:ocr-receipt').length, 0);
+  const canvas = win.document.createElement('canvas');
+  await fire(el, 'change', target({ 'data-sfile': 'receipt' }, { files: [file({ size: 3 * 1048576 })] })); assert.equal(decoded, 1); assert.equal(canvas.width + canvas.height, 0, 'the canvas is released once the blob exists');
+  await clickS(el, 'line-new', { 'data-line': '3' }); await fire(el, 'change', target({ 'data-sfile': 'item', 'data-line': '3' }, { files: [file()] })); await fire(el, 'change', target({ 'data-sfile': 'item', 'data-line': '3' }, { files: [file()] }));
+  assert.equal(revoked.length, 1, 'a replaced preview is revoked'); assert.equal(canvas.width, 0);
+  await clickS(el, 'line-skip', { 'data-line': '2' }); await clickS(el, 'line-skip', { 'data-line': '4' }); await clickS(el, 'confirm'); assert.equal(revoked.length, 2, 'the last preview is revoked once the stock is added');
+});
+
+// ---------------------------------------------------------------------------------------------- 10. tab bars on the sub-pages
+test('s110 laundry tab bar on the guest and pay pages: Inventory where Tasks would be, from the saved role', () => {
+  const store = (r) => ({ getItem: (k) => (k === 'cs_role' ? r : null), setItem() {}, removeItem() {} });
+  assert.equal(CS.recalledRole(store('laundry')), 'laundry'); assert.equal(CS.recalledRole(store('hacker')), ''); assert.equal(CS.recalledRole(null), '');
+  const keys = [...P.P_tabs('', (n) => '', (x) => x, CS.tabKeys('laundry')).matchAll(/href="\.\.\/(#[a-z]+)"/g)].map((m) => m[1]); assert.deepEqual(keys, ['#home', '#calendar', '#stock', '#kpis', '#more']);
+  assert.deepEqual([...P.P_tabs('', (n) => '', (x) => x).matchAll(/href="\.\.\/(#[a-z]+)"/g)].map((m) => m[1]), ['#home', '#calendar', '#tasks', '#kpis', '#more'], 'no role: the standard bar');
+  assert.match(P.P_shell('Title', '', { icon: (n) => '', esc: (x) => x, keys: CS.tabKeys('laundry') }), /Inventory/);
+  const stored = {}; CS.rememberRole({ setItem: (k, v) => { stored[k] = v; }, removeItem: (k) => { delete stored[k]; } }, 'laundry'); assert.deepEqual(stored, { cs_role: 'laundry' });
+  CS.rememberRole({ setItem() {}, removeItem: (k) => { delete stored[k]; } }, ''); assert.deepEqual(stored, {});
+  // the real guest page, run against a window with a saved laundry role (no Supabase: the page draws its shell and stops)
+  const root = { innerHTML: '' }, win = { CS, ICON: (n) => '<i data-i="' + n + '"></i>', localStorage: store(null), sessionStorage: store('laundry'), location: { hash: '#x', search: '' }, document: { getElementById: () => root } };
+  win.window = win; const ctx = vm.createContext(win); vm.runInContext(read('guest/guest-lib.js'), ctx); vm.runInContext(read('guest/guest.js'), ctx);
+  assert.deepEqual([...root.innerHTML.matchAll(/class="tab" href="\.\.\/(#[a-z]+)"/g)].map((m) => m[1]), ['#home', '#calendar', '#stock', '#kpis', '#more']); assert.match(root.innerHTML, />Inventory</);
+  assert.match(read('pay/pay.js'), /keys: tabKeys\(\)/); assert.doesNotMatch(read('pay/C_admin.js'), /tabKeys|recalledRole/, 'the admin pay page touches no storage (payout hygiene)');
+  assert.match(read('app.js'), /CS\.rememberRole\(store\('sessionStorage'\), state\.access\.role\)/);
+});
+
+// ---------------------------------------------------------------------------------------------- 11. Amendment 1: internet outages and the admin month
+test('s110 KPIs: Internet outages row for every role, from utility.internet_cuts; no row on an older server', async () => {
+  for (const role of ['cleaner', 'laundry', 'owner']) {
+    const { html } = await kpiScreen(role, KPI(true)); assert.match(html, /Internet outages/, role); assert.match(html, /K_ic-purple/); assert.match(html, /data-i="wifioff"/);
+    assert.match(html, /<b>2<\/b><span>3 h total<\/span>/, role + ': count and hours');
+  }
+  const none = KPI(false); delete none.utility.internet_cuts; assert.doesNotMatch((await kpiScreen('cleaner', none)).html, /Internet outages/);
+  const zero = KPI(false); zero.utility.internet_cuts = { count: 0, hours: 0 }; assert.match((await kpiScreen('cleaner', zero)).html, /Internet outages[\s\S]*?<b>0<\/b><span>none<\/span>/);
+  assert.match(read('kpi/K_kpi.css'), /\.K_ic-purple \{[^}]*var\(--v5-tier-regular-t\)/);
+});
+test('s110 Admin segment: the month at a glance for owner, admin and finance only; unknown values read Not yet; nothing for the others', async () => {
+  for (const role of ['owner', 'admin', 'finance']) {
+    const a = adminKpi(role); await tick(); await clickK(a.el, 'seg', { 'data-seg': 'admin' }); const h = a.el.innerHTML;
+    assert.match(h, /Net this month so far[\s\S]*₱38,420/, role); assert.match(h, /Revenue ₱61,900 · costs ₱23,480/);
+    assert.match(h, /Occupancy[\s\S]*73%[\s\S]*22 of 30 nights/); assert.match(h, /Average rate[\s\S]*₱2,814[\s\S]*per night/); assert.match(h, /Direct bookings[\s\S]*41%/);
+    assert.ok(h.indexOf('K_net') < h.indexOf('Electricity cost'), 'the glance comes first');
+  }
+  const part = KPI(true); part.admin = { net_month: null, occupancy: null, adr: null, direct_share: null }; const p = adminKpi('finance', { kpi_tab_v1: () => ({ error: null, data: part }) }); await tick(); await clickK(p.el, 'seg', { 'data-seg': 'admin' });
+  assert.equal((p.el.innerHTML.match(/Not yet/g) || []).length >= 4, true, 'null is Not yet'); assert.doesNotMatch(p.el.innerHTML, /\b0%|₱0\b/, 'never a made-up zero');
+  const sparse = KPI(true); delete sparse.admin.occupancy; delete sparse.admin.direct_share; delete sparse.admin.net_month; const sp = adminKpi('owner', { kpi_tab_v1: () => ({ error: null, data: sparse }) }); await tick(); await clickK(sp.el, 'seg', { 'data-seg': 'admin' });
+  assert.doesNotMatch(sp.el.innerHTML, /Net this month|Occupancy|Direct bookings/, 'a key the server did not send draws nothing'); assert.match(sp.el.innerHTML, /Average rate/);
+  const K = loadModule('kpi/K_kpi.js', makeWin()).K_Kpi.lib;
+  for (const role of ['cleaner', 'laundry', 'inspector', 'maintenance']) { assert.equal(K.normalize(KPI(true), role).admin, null, role); }
+  assert.deepEqual(clone(K.normalize(KPI(true), 'finance').admin.occupancy), { pct: 0.73, sold: 22, sellable: 30 });
+  for (const role of ['cleaner', 'laundry']) {
+    const { html } = await kpiScreen(role, KPI(true)); assert.doesNotMatch(html, /₱|Net this month|Occupancy|Average rate|Direct bookings|38,420|2,814/, role + ': no money anywhere');
+    const c = adminKpi(role); await tick(); await clickK(c.el, 'seg', { 'data-seg': 'admin' }); assert.doesNotMatch(c.el.innerHTML, /₱|Net this month|Occupancy/, role);
+  }
 });
