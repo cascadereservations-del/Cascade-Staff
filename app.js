@@ -265,7 +265,7 @@
   function H_wxToday() {
     var wx = CS.wxCard(state.payload, A_notices()); if (!wx) return ''; // no reading: nothing on Today (the Notices card still says so)
     var desc = wx.desc || 'Weather';
-    var range = [wx.hi != null && wx.lo != null ? 'High ' + wx.hi + '°, low ' + wx.lo + '°' : '', wx.head].filter(Boolean).join(' · ');
+    var range = ['At Cascade', wx.hi != null && wx.lo != null ? 'High ' + wx.hi + '°, low ' + wx.lo + '°' : '', wx.head].filter(Boolean).join(' · '); // s112: Today is always the house, never the phone's place
     // s110: the next ~12 hours as a sideways strip: time, glyph, temperature when known, chance of rain (CS.wxCard hourly: weather-proxy hours the Home already loaded, else the notices hours)
     var strip = wx.hourly.length ? '<ul class="HF_strip" role="list" tabindex="0" aria-label="Next hours, chance of rain, scroll sideways">' + wx.hourly.map(function (h) {
       return '<li class="HF_h' + (h.pct != null && h.pct >= 50 ? ' wet' : '') + '"><span class="HF_t num">' + esc(A_nb(h.label)) + '</span>' + ICON(h.icon, 's16') + '<span class="HF_d num">' + (h.temp != null ? h.temp + '°' : '&nbsp;') + '</span><span class="HF_r num">' + (h.pct != null ? h.pct + '%' : '&nbsp;') + '</span></li>'; }).join('') + '</ul>' : '';
