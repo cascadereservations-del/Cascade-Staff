@@ -1315,3 +1315,60 @@ a.T_call { min-height: var(--touch); display: inline-flex; align-items: center; 
 .S_walkic { flex: none; }
 .S_thanks { display: flex; gap: 8px; align-items: flex-start; margin: 0; padding: 8px 12px; border-radius: 8px; background: var(--v5-ok-w); color: var(--v5-ok-t); font: 400 var(--v5-t-2)/1.45 var(--font-ui); }
 .S_thanks svg.i { flex: none; margin-top: 2px; }
+
+/* s110 glass */
+/* Apple-style materials. Tokens only (--v5-gl-*). Blur sits on containers: appbar, tab bar, sheet, toast, hero chips, Today cards (max 6 on a screen); list rows get a translucent fill and no blur.
+   Borders become hairline box-shadow rings so nothing changes size. Plain mode (html[data-plain]), reduced transparency, no backdrop-filter and more contrast all fall back to the opaque surface. */
+.A_bg::after { content: ""; position: absolute; inset: 0; pointer-events: none; /* review: inside .A_bg, over the ambient colour, so it is actually seen */
+  background: radial-gradient(60rem 36rem at 12% -6%, var(--v5-gl-glow-a), transparent 70%), radial-gradient(48rem 32rem at 105% 22%, var(--v5-gl-glow-b), transparent 70%), radial-gradient(52rem 30rem at 40% 108%, var(--v5-gl-glow-c), transparent 70%); }
+
+.card, .card.glass, .A_glass, .A_card { border-radius: 20px; }
+.card.glass, .A_glass, .A_card.glass { background: var(--v5-gl-card); border: 0;
+  box-shadow: inset 0 1px 0 var(--v5-gl-hi), 0 0 0 1px var(--v5-gl-rim), 0 1px 2px var(--v5-gl-sh1), 0 12px 32px var(--v5-gl-sh1); }
+.A_glass { -webkit-backdrop-filter: var(--v5-gl-blur); backdrop-filter: var(--v5-gl-blur); }
+.card.glass:not(.T_card):not(.P_alert), .card:not(.glass) { box-shadow: inset 0 1px 0 var(--v5-gl-hi), 0 0 0 1px var(--v5-gl-rim), 0 1px 2px var(--v5-gl-sh1); }
+.card.glass.G_in { background: color-mix(in oklab, var(--v5-ok-t) 10%, var(--v5-gl-card)); } .card.glass.G_stay { background: color-mix(in oklab, var(--v5-info-t) 10%, var(--v5-gl-card)); }
+.card.P_alert { box-shadow: inset 0 1px 0 var(--v5-gl-hi), 0 0 0 5px color-mix(in srgb, var(--v5-rib-vip-bar) 18%, transparent), 0 12px 32px var(--v5-gl-sh2); }
+.card.T_card.T_upnext { background: var(--v5-gl-chip); box-shadow: inset 0 1px 0 var(--v5-gl-hi); }
+.warnline { box-shadow: inset 0 1px 0 var(--v5-gl-hi); border-radius: 20px; }
+
+.appbar { background: var(--v5-gl-bar); -webkit-backdrop-filter: var(--v5-gl-blur); backdrop-filter: var(--v5-gl-blur); }
+.appbar.scrolled { border-bottom-color: var(--v5-gl-rim); box-shadow: 0 1px 0 var(--v5-gl-hi), 0 8px 24px var(--v5-gl-sh1); }
+.tabbar { -webkit-backdrop-filter: var(--v5-gl-blur-lg); backdrop-filter: var(--v5-gl-blur-lg); box-shadow: inset 0 1px 0 var(--v5-bar-on-bg), 0 0 0 1px var(--v5-gl-rim), 0 4px 8px var(--v5-gl-sh1), 0 16px 40px var(--v5-gl-sh2); }
+.tab[aria-current="page"] .ico { box-shadow: inset 0 1px 0 var(--v5-bar-on-bg); }
+.A_chipglass { -webkit-backdrop-filter: var(--v5-gl-blur); backdrop-filter: var(--v5-gl-blur); box-shadow: inset 0 1px 0 var(--v5-photo-edge); }
+
+.sheet { background: var(--v5-gl-sheet); -webkit-backdrop-filter: var(--v5-gl-blur-lg); backdrop-filter: var(--v5-gl-blur-lg); box-shadow: inset 0 1px 0 var(--v5-gl-hi), 0 -1px 0 var(--v5-gl-rim), 0 -16px 48px var(--v5-gl-sh2); }
+.sheet.calsheet, .sheet.A_formsheet { background: var(--v5-surf); -webkit-backdrop-filter: none; backdrop-filter: none; } /* long forms and the calendar stay opaque: typing and tapping over a blur is tiring */
+.sheet::before { width: 36px; height: 5px; border-radius: var(--v5-r-full); background: var(--v5-line-2); opacity: .7; }
+.toast { -webkit-backdrop-filter: var(--v5-gl-blur); backdrop-filter: var(--v5-gl-blur); box-shadow: inset 0 1px 0 var(--v5-bar-on-bg), 0 8px 24px var(--v5-gl-sh2); }
+
+.pill { box-shadow: inset 0 1px 0 var(--v5-gl-hi); }
+.chip { box-shadow: inset 0 1px 0 var(--v5-gl-hi); }
+.btn-primary { background-image: linear-gradient(180deg, color-mix(in srgb, var(--primary-fg) 14%, var(--primary)), var(--primary)); box-shadow: inset 0 1px 0 color-mix(in srgb, var(--primary-fg) 22%, transparent), 0 1px 2px var(--v5-gl-sh2), 0 6px 16px var(--v5-gl-sh1); }
+.btn-secondary { background: var(--v5-gl-chip); box-shadow: inset 0 1px 0 var(--v5-gl-hi), 0 1px 2px var(--v5-gl-sh1); }
+.btn, .chip, .iconbtn, .E_pill, .chk, .tab { transition-property: transform, background-color, box-shadow; }
+.btn:active, .chip:active, .iconbtn:active, .E_pill:active, .chk:active { transform: scale(.98); }
+.btn:focus-visible, .chip:focus-visible, .iconbtn:focus-visible, .E_pill:focus-visible, .tab:focus-visible, .chk:focus-visible, .A_slide:focus-visible { outline: 2px solid var(--v5-act); outline-offset: 2px; box-shadow: 0 0 0 6px color-mix(in srgb, var(--v5-act) 20%, transparent); }
+
+.S_sec::after { background: linear-gradient(90deg, var(--v5-line-2), transparent); opacity: .55; }
+.U_row { border-radius: 16px; box-shadow: inset 0 1px 0 var(--v5-gl-hi), 0 1px 2px var(--v5-gl-sh1); }
+
+/* fallbacks: opaque surfaces */
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .card.glass, .A_glass, .A_card.glass { background: var(--v5-surf); } .appbar { background: var(--v5-bg); } .sheet { background: var(--v5-surf); }
+  .tabbar { background: var(--v5-panel); } .toast { background: var(--v5-panel); } .A_chipglass { background: var(--v5-panel); } .card.T_card.T_upnext { background: var(--v5-surf-2); }
+}
+@media (prefers-reduced-transparency: reduce) {
+  .A_bg::after { display: none; }
+  .card.glass, .A_glass, .A_card.glass { background: var(--v5-surf); } .appbar { background: var(--v5-bg); } .sheet { background: var(--v5-surf); } .btn-secondary { background: var(--v5-fill); }
+  .tabbar, .toast, .A_chipglass { background: var(--v5-panel); } .card.T_card.T_upnext { background: var(--v5-surf-2); }
+  .card.glass.T_card, .A_glass, .card.P_alert, .appbar, .tabbar, .A_chipglass, .sheet, .toast { -webkit-backdrop-filter: none; backdrop-filter: none; }
+}
+@media (prefers-contrast: more) { .A_bg::after { display: none; } .card.glass, .A_glass, .A_card.glass { box-shadow: 0 0 0 1px var(--v5-line-2); } .card.glass, .A_glass, .A_card.glass { background: var(--v5-surf); } .appbar { background: var(--v5-bg); } .sheet { background: var(--v5-surf); } }
+html[data-plain="1"] .A_bg::after { display: none; }
+html[data-plain="1"] .card.glass.T_card, html[data-plain="1"] .card.P_alert, html[data-plain="1"] .A_chipglass, html[data-plain="1"] .sheet, html[data-plain="1"] .toast, html[data-plain="1"] .appbar, html[data-plain="1"] .tabbar { -webkit-backdrop-filter: none; backdrop-filter: none; }
+html[data-plain="1"] .card.glass, html[data-plain="1"] .A_glass, html[data-plain="1"] .A_card.glass { background: var(--v5-surf); box-shadow: 0 0 0 1px var(--v5-line-2); }
+html[data-plain="1"] .appbar { background: var(--v5-bg); } html[data-plain="1"] .sheet { background: var(--v5-surf); }
+html[data-plain="1"] .tabbar, html[data-plain="1"] .toast, html[data-plain="1"] .A_chipglass { background: var(--v5-panel); } html[data-plain="1"] .card.T_card.T_upnext { background: var(--v5-surf-2); }
+@media (prefers-reduced-motion: reduce) { .btn:active, .chip:active, .iconbtn:active, .E_pill:active, .chk:active { transform: none; } }
