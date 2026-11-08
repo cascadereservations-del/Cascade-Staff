@@ -202,7 +202,7 @@
     var sum = now.stays && bits.length ? 'This month: ' + bits.join(' and ') + ' per stay over ' + plural(now.stays, 'stay') + '.' : 'No stay has been read this month yet.';
     return chart({ id: 'K_avg', title: 'Average ' + (kind === 'm3' ? 'water' : 'electricity') + ' per stay, last 12 months, ' + unit, unit: unit, dec: d,
       tabs: hasW ? segTabs('avg', 'Average per stay', kind, EW) : '',
-      points: rows.map(function (r) { var v = r[kind], n = monthShort(r.month); return { x: rows.length > 8 ? n.charAt(0) : n.slice(0, 3), value: v, em: r.month === cur, aria: v == null ? n + ': no reading' : n + ': ' + fmt(v, d) + ' ' + unit + ' per stay, ' + plural(r.stays, 'stay') + (r.month === cur ? ', this month' : '') }; }),
+      points: rows.map(function (r, i) { var v = r[kind], n = monthShort(r.month); return { x: rows.length > 8 && (rows.length - 1 - i) % 2 ? '' : n.slice(0, 3), value: v, em: r.month === cur, aria: v == null ? n + ': no reading' : n + ': ' + fmt(v, d) + ' ' + unit + ' per stay, ' + plural(r.stays, 'stay') + (r.month === cur ? ', this month' : '') }; }),
       caption: 'Average use per stay in each month; a month with no reading shows no bar.', foot: '<p class="K_sub" id="K_avg-sum">' + esc(sum) + '</p>' });
   }
   // Chart 1: use per day between the last 8 counted readings; the latest reading is emphasised.
@@ -287,9 +287,10 @@
     if (!t) return null;
     var goal = t.net > 0 ? peso(t.net) + ' net' : 'Break-even', parts = [];
     if (t.need == null) return { goal: goal, line: NED + '.', basis: 'Costs basis: ' + (t.costs != null ? 'average of the last 3 months, ' + peso(t.costs) : NED.toLowerCase()) + '.' };
-    parts.push(t.occ == null || t.adr == null ? 'occupancy: ' + NED.toLowerCase() : t.occ > 1 ? 'more nights than the month has at ' + peso(t.adr) + ' a night' : 'about ' + Math.round(t.occ * 100) + '% occupancy at ' + peso(t.adr) + ' a night');
+    parts.push(t.occ == null || t.adr == null ? 'occupancy: ' + NED.toLowerCase() : t.occ > 1 ? 'more nights than the month has at ' + peso(t.adr) + ' a night before Airbnb fees' : 'about ' + Math.round(t.occ * 100) + '% occupancy at ' + peso(t.adr) + ' a night before Airbnb fees');
     parts.push(t.needAdr == null || !t.onBooks ? 'a rate for the booked nights: ' + NED.toLowerCase() : peso(t.needAdr) + ' a night for the ' + plural(t.onBooks, 'night') + ' already booked');
-    return { goal: goal, line: 'To reach ' + peso(t.need) + ' in revenue this month: ' + parts.join(', or ') + '.', basis: 'Costs basis: ' + (t.costs != null ? 'average of the last 3 months, ' + peso(t.costs) : NED.toLowerCase()) + '.' };
+    var sum = t.costs != null ? ' (' + peso(t.costs) + ' costs + ' + peso(t.net) + ' target)' : '';
+    return { goal: goal, line: 'To reach ' + peso(t.need) + ' in revenue this month' + sum + ': ' + parts.join(', or ') + '.', basis: 'Costs basis: ' + (t.costs != null ? 'average of the last 3 months, ' + peso(t.costs) : NED.toLowerCase()) + '.' };
   }
   function targetCard(t) {
     if (!t) return '';
@@ -298,16 +299,16 @@
       (canSetRate(S.role) ? (S.tgt ? targetForm() : '<button class="btn btn-secondary" type="button" data-kact="tgt-open">' + gi('star', 's16') + 'Set target</button>') : '') + (m ? '<p class="K_sub K_ok" role="status">' + esc(m) + '</p>' : '') + '</div>';
   }
   function targetForm() {
-    return '<form class="K_form K_tform" data-kform="tgt" novalidate><div class="field"><label for="K_f_tgt">Monthly net target, pesos</label><div class="input"><input id="K_f_tgt" inputmode="numeric" autocomplete="off" value="' + esc(S.vals.tgt || '') + '"></div></div>' +
-      '<p class="K_sub">0 means break-even: income covers the costs.</p>' + (S.tgt.err ? '<p class="K_sub K_bad" role="alert">' + esc(S.tgt.err) + '</p>' : '') +
+    return '<form class="K_form K_tform" data-kform="tgt" novalidate><div class="field"><label for="K_f_tgt">Monthly net target, pesos</label><div class="input"><input id="K_f_tgt" inputmode="decimal" autocomplete="off" value="' + esc(S.vals.tgt || '') + '"></div></div>' +
+      '<p class="K_sub">0 means break-even: income covers the costs. Centavos are kept, up to 2 decimals.</p>' + (S.tgt.err ? '<p class="K_sub K_bad" role="alert">' + esc(S.tgt.err) + '</p>' : '') +
       '<div class="K_btns"><button class="btn btn-primary" type="submit"' + (S.busy === 'tgt' ? ' disabled' : '') + '>' + (S.busy === 'tgt' ? 'Saving…' : 'Save the target') + '</button><button class="btn btn-ghost" type="button" data-kact="tgt-close">Cancel</button></div></form>';
   }
   function targetProblem(v) {
     var s = String(v == null ? '' : v).trim().replace(/[₱,\s]/g, ''), n = s === '' ? null : num(s);
-    if (n == null || n < 0 || n > 10000000) return 'Enter an amount from 0 to 10,000,000 pesos. 0 means break-even.';
+    if (n == null || n < 0 || n > 10000000 || !/^\d*(\.\d{0,2})?$/.test(s)) return 'Enter an amount from 0 to 10,000,000 pesos, up to 2 decimals. 0 means break-even.';
     return null;
   }
-  function targetCall(pid, v) { return { fn: 'kpi_target_set_v1', args: { p_property_id: pid, p_monthly_net_target: Math.round(num(String(v).trim().replace(/[₱,\s]/g, ''))) } }; }
+  function targetCall(pid, v) { return { fn: 'kpi_target_set_v1', args: { p_property_id: pid, p_monthly_net_target: num(String(v).trim().replace(/[₱,\s]/g, '')) } }; } // kpi_target_set_v1 keeps 2 dp (numeric(12,2)); targetProblem refuses more, so nothing is rounded here
   function rateForm() {
     var f = S.vals, m = S.msg.rate || '', open = S.rate;
     if (!open) return '<button class="btn btn-secondary btn-block" type="button" data-kact="rate-open">' + gi('cash', 's16') + 'Update rate</button>' + (m ? '<p class="K_sub K_ok" role="status">' + esc(m) + '</p>' : '');

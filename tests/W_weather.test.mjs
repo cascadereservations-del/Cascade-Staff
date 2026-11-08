@@ -492,7 +492,7 @@ test('s112 Here: the daily limit answers for Cascade and the screen says so; a 4
 
 test('s112 Here: the last choice is remembered; Here locates on mount with no Cascade call, and a late answer for the other tab is dropped', async () => {
   const geo = fakeGeo(HERE_POS); const w = world({ store: { cs_w_tab: 'here' }, invoke: route(full(), hereAnswer()) }); const e = el();
-  w.W.mount(e, { client: w.client, geo }); await settle();
+  w.W.mount(e, { client: w.client, geo, permissions: { query: () => Promise.resolve({ state: 'granted' }) } }); await settle();
   assert.equal(geo.asked.length, 1); assert.equal(w.calls.length, 1); assert.ok(w.calls[0][1] && w.calls[0][1].body, 'only the Here call');
   assert.ok(e.innerHTML.includes('Near you (about 1 km)'));
   const w0 = world({ store: { cs_w_tab: 'junk' }, invoke: ok(full()) }); const g0 = fakeGeo(HERE_POS); w0.W.mount(el(), { client: w0.client, geo: g0 }); await settle(); assert.equal(g0.asked.length, 0, 'anything else is Cascade');
@@ -521,4 +521,25 @@ test('s112 Today card: says "At Cascade" and still reads the default (Cascade) a
   assert.doesNotMatch(app, /geolocation/, 'the shell never asks for the phone place');
   const css = fs.readFileSync(path.join(root, 'weather', 'W_weather.css'), 'utf8'), tabs = css.slice(css.indexOf('/* s112'));
   assert.doesNotMatch(tabs, /#[0-9a-f]{3,8}\b|rgba?\(|font-size:\s*\d+px|nowrap/i);
+});
+
+// ---------------------------------------------------------------------------------------------- fix round r3 (L1)
+test('s111 r3 L1: a remembered Here locates on open only when the location permission is granted; otherwise one tap on Show weather near me', async () => {
+  const perm = (state) => ({ asked: [], query(q) { this.asked.push(q.name); return Promise.resolve({ state }); } });
+  for (const p of [perm('prompt'), perm('denied'), { query: () => Promise.reject(new Error('no')) }, null]) {
+    const geo = fakeGeo(HERE_POS); const w = world({ store: { cs_w_tab: 'here' }, invoke: route(full(), hereAnswer()) }); const e = el();
+    w.W.mount(e, { client: w.client, geo, permissions: p }); await settle();
+    assert.equal(geo.asked.length, 0, 'no location prompt on open'); assert.deepEqual(w.calls, [], 'and no call before the tap');
+    const h = e.innerHTML; assert.match(h, /data-w-tab="here" aria-selected="true"/, 'the Here tab is shown');
+    assert.match(h, /<button type="button" class="btn btn-primary" data-w-locate="1">Show weather near me<\/button>/); assert.ok(!h.includes('!'));
+    if (p && p.asked) assert.deepEqual(p.asked, ['geolocation']);
+    await click(e, { 'data-w-locate': '1' });
+    assert.equal(geo.asked.length, 1, 'one tap asks'); assert.ok(e.innerHTML.includes('Near you (about 1 km)')); assert.ok(!e.innerHTML.includes('data-w-locate'));
+  }
+  const geo = fakeGeo(HERE_POS); const w = world({ store: { cs_w_tab: 'here' }, invoke: route(full(), hereAnswer()) }); const e = el();
+  w.W.mount(e, { client: w.client, geo, permissions: perm('prompt') }); await settle(); await click(e, { 'data-w-tab': 'here' });
+  assert.equal(geo.asked.length, 1, 'a tap on the Here tab itself also asks');
+  const g2 = fakeGeo(HERE_POS); const w2 = world({ store: { cs_w_tab: 'here' }, invoke: route(full(), hereAnswer()) }); const e2 = el();
+  w2.W.mount(e2, { client: w2.client, geo: g2, permissions: perm('granted') }); await settle();
+  assert.equal(g2.asked.length, 1, 'granted: located on open, no button'); assert.ok(!e2.innerHTML.includes('data-w-locate'));
 });

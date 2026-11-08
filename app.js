@@ -768,6 +768,12 @@
     var im = ov.querySelector('img'); if (im) { im.src = src; im.className = o.rotate ? 'r' + H_idRot(src) : ''; }
     ov.classList.add('on'); Z_apply(false); var cb = ov.querySelector('button[data-act="id-full-close"]'); if (cb && cb.focus) cb.focus();
   }
+  // Tab and Shift+Tab stay on the viewer's own buttons while it is open (a disabled zoom button is skipped)
+  function Z_trap(ev) {
+    var ov = $('H_idfull'), bs = ov && ov.querySelectorAll ? Array.prototype.filter.call(ov.querySelectorAll('button'), function (b) { return !b.disabled; }) : []; if (!bs.length) return;
+    var i = bs.indexOf(document.activeElement), to = ev.shiftKey ? (i <= 0 ? bs.length - 1 : -1) : (i < 0 || i === bs.length - 1 ? 0 : -1); if (to < 0) return;
+    if (ev.preventDefault) ev.preventDefault(); if (bs[to].focus) bs[to].focus();
+  }
   function Z_isOpen() { var ov = $('H_idfull'); return !!(ov && ov.classList && ov.classList.contains('on') && ov.getAttribute('data-src')); }
   function Z_size() { var b = $('H_idfull'), bx = b && b.querySelector && b.querySelector('.Z_box'), r = bx && bx.getBoundingClientRect ? bx.getBoundingClientRect() : null; return r ? { w: r.width, h: r.height, l: r.left, t: r.top } : { w: 0, h: 0, l: 0, t: 0 }; }
   function Z_apply(anim) {
@@ -2071,8 +2077,8 @@
     var cacheP = window.caches && window.caches.has ? Promise.resolve().then(function () { return window.caches.has(PC_SHELL); }).then(function (v) { return v === true; }, function () { return false; }) : Promise.resolve(false);
     return Promise.all([subP, camP, stP, regP, cacheP]).then(function (r) {
       PC.camPerm = r[1];
-      return CS.phoneCheckRows({ ua: n.userAgent, alerts: { support: sp, permission: perm, subscribed: r[0] }, install: { standalone: standalone, ios: isIOS, canPrompt: !!deferredPrompt },
-        camera: { has: hasCam, perm: r[1] }, storage: { api: stApi, persisted: r[2] }, update: { sw: hasSw, controller: !!(n.serviceWorker && n.serviceWorker.controller), waiting: !!(r[3] && (r[3].waiting || r[3].installing)), cacheOk: r[4] }, trusted: !!trustOn });
+      return CS.phoneCheckSettle(CS.phoneCheckRows({ ua: n.userAgent, alerts: { support: sp, permission: perm, subscribed: r[0] }, install: { standalone: standalone, ios: isIOS, canPrompt: !!deferredPrompt },
+        camera: { has: hasCam, perm: r[1] }, storage: { api: stApi, persisted: r[2] }, update: { sw: hasSw, controller: !!(n.serviceWorker && n.serviceWorker.controller), waiting: !!(r[3] && (r[3].waiting || r[3].installing)), cacheOk: r[4] }, trusted: !!trustOn }), CS.phoneCheckTried(PC_ls()));
     });
   }
   var PC_WORD = { ok: 'OK', tap: 'Needs a tap', no: 'Not possible here' }, PC_ICON = { ok: 'check', tap: 'alert', no: 'info' };
@@ -2135,7 +2141,7 @@
     PC_draw();
     var chain = first.catch(function () {});
     plan.slice(1).forEach(function (id) { chain = chain.then(function () { try { return Promise.resolve(PC_FIX[id]()).catch(function () {}); } catch (e) { return null; } }); });
-    return chain.then(function () { return PC_probe(); }).then(function (rows) {
+    return chain.then(function () { CS.phoneCheckSave(PC_ls(), PC.rows, plan); return PC_probe(); }).then(function (rows) { // the tried fixers are kept first, so the re-check settles them
       PC.busy = false; PC_done(rows);
       var left = CS.phoneFixPlan(rows).length + rows.filter(function (r) { return r.state === 'tap' && !r.fix; }).length;
       PC.msg = left ? 'Checked again. The rows that still need a tap say what to do.' : 'Checked again. Everything this phone can do is on.'; PC_draw();
@@ -2563,7 +2569,7 @@
     if (ev.target && ev.target.id === 'df-kind' && state.sheet) { state.sheet.form.kind = ev.target.value; return; }
     if (ev.target && ev.target.id === 't-who' && state.add) state.add.who = ev.target.value;
   });
-  document.addEventListener('keydown', function (ev) { if (ev.key === 'Escape') { H_idClose(); if (PC.open) PC_close(); if (state.sheet) E_tryClose(); } else if (Z_isOpen() && (ev.key === '+' || ev.key === '=' || ev.key === '-' || ev.key === '_')) { if (ev.preventDefault) ev.preventDefault(); Z_step(ev.key === '+' || ev.key === '=' ? 1 : -1); } });
+  document.addEventListener('keydown', function (ev) { if (ev.key === 'Escape') { if (Z_isOpen()) { H_idClose(); return; } if (PC.open) PC_close(); if (state.sheet) E_tryClose(); } else if (ev.key === 'Tab' && Z_isOpen()) Z_trap(ev); else if (Z_isOpen() && (ev.key === '+' || ev.key === '=' || ev.key === '-' || ev.key === '_')) { if (ev.preventDefault) ev.preventDefault(); Z_step(ev.key === '+' || ev.key === '=' ? 1 : -1); } });
   // Telegram: the tg:// link opens the app. If the page is still in front ~1.2 s later the app did not open, so t.me opens instead.
   document.addEventListener('click', function (ev) {
     var a = ev.target.closest && ev.target.closest('a[data-tgweb]'), web = a && a.getAttribute('data-tgweb'); if (!web) return;

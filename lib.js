@@ -599,7 +599,23 @@
   var IOS_A2HS = ['Open this page in Safari.', 'Tap Share (the square with an arrow pointing up).', 'Scroll down and tap Add to Home Screen, then Add.', 'Open Cascade Staff from your Home Screen.'];
   function phoneCheckRead(ls) { try { var v = ls ? JSON.parse(ls.getItem(PHONE_CHECK_KEY) || 'null') : null; return v && typeof v === 'object' ? v : null; } catch (e) { return null; } }
   function phoneCheckDue(ls) { var v = phoneCheckRead(ls); return !(v && Number(v.v) >= PHONE_CHECK_VER); }
-  function phoneCheckSave(ls, rows) { try { if (ls) ls.setItem(PHONE_CHECK_KEY, JSON.stringify({ v: PHONE_CHECK_VER, at: Date.now(), open: (rows || []).filter(function (r) { return r.state === 'tap' && r.fix; }).map(function (r) { return r.id; }) })); return true; } catch (e) { return false; } }
+  // tried: the fixers Fix all already ran (added through addTried); kept until that row reads OK, so a browser that said no is not asked again
+  function phoneCheckSave(ls, rows, addTried) {
+    try {
+      if (!ls) return true; rows = rows || [];
+      var ok = {}; rows.forEach(function (r) { if (r.state === 'ok') ok[r.id] = 1; });
+      var tried = phoneCheckTried(ls).concat(addTried || []).filter(function (x, i, a) { return PHONE_FIX_ORDER.indexOf(x) >= 0 && a.indexOf(x) === i && !ok[x]; });
+      ls.setItem(PHONE_CHECK_KEY, JSON.stringify({ v: PHONE_CHECK_VER, at: Date.now(), open: rows.filter(function (r) { return r.state === 'tap' && r.fix; }).map(function (r) { return r.id; }), tried: tried }));
+      return true;
+    } catch (e) { return false; }
+  }
+  function phoneCheckTried(ls) { var v = phoneCheckRead(ls); return v && Array.isArray(v.tried) ? v.tried.filter(function (x) { return PHONE_FIX_ORDER.indexOf(x) >= 0; }) : []; }
+  // A row whose fixer ran and that the browser answered without asking (soft: storage persist, an update with nothing waiting) is 'no', not a tap again.
+  // It never makes a row OK: OK comes only from a real probe.
+  function phoneCheckSettle(rows, tried) {
+    tried = tried || [];
+    return (rows || []).map(function (r) { return r.state === 'tap' && r.fix && r.soft && tried.indexOf(r.id) >= 0 ? Object.assign({}, r, { state: 'no', fix: false, steps: null, text: 'This browser decides this one.' }) : r; });
+  }
   function phoneCheckOpen(ls) { var v = phoneCheckRead(ls); return v && Array.isArray(v.open) ? v.open.filter(function (x) { return PHONE_FIX_ORDER.indexOf(x) >= 0; }) : []; }
   function phoneBlockedSteps(ua) {
     ua = String(ua || '');
@@ -626,10 +642,10 @@
     else row('camera', 'Camera', 'no', 'This phone asks for the camera when you take the first photo. Allow it then.');
     if (!s.api) row('storage', 'Storage kept', 'no', 'This browser does not say whether it keeps the app data.');
     else if (s.persisted === true) row('storage', 'Storage kept', 'ok', 'The phone keeps the app data, so drafts and sign-in are not cleared to save space.');
-    else row('storage', 'Storage kept', 'tap', 'The phone may clear the app data to save space. One tap asks to keep it.', { fix: true });
+    else row('storage', 'Storage kept', 'tap', 'The phone may clear the app data to save space. One tap asks to keep it.', { fix: true, soft: true });
     if (!u.sw) row('update', 'Up to date', 'no', 'This browser cannot keep the app ready offline.');
     else if (u.controller && !u.waiting && u.cacheOk === true) row('update', 'Up to date', 'ok', 'This is the latest version, ready to work offline.');
-    else row('update', 'Up to date', 'tap', u.waiting ? 'A newer version is ready. One tap loads it.' : 'The app is not fully ready offline yet. One tap loads the latest version.', { fix: true });
+    else row('update', 'Up to date', 'tap', u.waiting ? 'A newer version is ready. One tap loads it.' : 'The app is not fully ready offline yet. One tap loads the latest version.', { fix: true, soft: !u.waiting });
     if (p.trusted) row('trust', 'Trusted device', 'ok', 'This phone keeps you signed in (Trust this device is on).');
     else row('trust', 'Trusted device', 'tap', 'Trust this device is off, so you sign in again after the app is closed. That is right for a shared phone.', { steps: ['To change it: sign out, then turn on Trust this device when you sign in.'] });
     return rows;
@@ -1695,7 +1711,7 @@
     fmtTime: fmtTime, fmt24: fmt24, ordinal: ordinal, plural: plural, agoLabel: agoLabel, clockLabel: clockLabel,
     monthGrid: monthGrid, dayState: dayState, dayStatus: dayStatus, mergeStays: mergeStays, sameGuest: sameGuest, dayMoves: dayMoves, blockWhy: blockWhy, flagName: flagName, FLAG_KINDS: FLAG_KINDS, blockedLines: blockedLines, blockedLineText: blockedLineText,
     canFlagDays: canFlagDays, guestContact: guestContact, canSeeGuestContact: canSeeGuestContact, MESSENGER_INBOX: MESSENGER_INBOX, rpcMissing: rpcMissing, tgLink: tgLink, warningInfo: warningInfo, findingKey: findingKey, initialOf: initialOf, sourceLabel: sourceLabel, stayDates: stayDates, monthInRange: monthInRange,
-    tierRibbon: tierRibbon, tierBadge: tierBadge, wxHazards: wxHazards, wxHourly: wxHourly, nextPrep: nextPrep, utilAlerts: utilAlerts, isInternetNotice: isInternetNotice, tierPerks: tierPerks, tierGuide: tierGuide, phoneCheckRows: phoneCheckRows, phoneFixPlan: phoneFixPlan, phoneCheckDue: phoneCheckDue, phoneCheckSave: phoneCheckSave, phoneCheckOpen: phoneCheckOpen, phoneCheckRead: phoneCheckRead, phoneBlockedSteps: phoneBlockedSteps, PHONE_CHECK_KEY: PHONE_CHECK_KEY, PHONE_CHECK_VER: PHONE_CHECK_VER, IOS_A2HS: IOS_A2HS, zoomClamp: zoomClamp, zoomStep: zoomStep, zoomToggle: zoomToggle, zoomPan: zoomPan, zoomAt: zoomAt, ZOOM_MAX: ZOOM_MAX, faceFrame: faceFrame, parseNotes: parseNotes, returningLabel: returningLabel, tierLabel: tierLabel, tierLine: tierLine, tierParts: tierParts, keyNote: keyNote, TOPIC_LABELS: TOPIC_LABELS, notableLine: notableLine, weatherIcon: weatherIcon, rainAlert: rainAlert, wxCard: wxCard, goodToKnow: goodToKnow, earlierLine: earlierLine, companionsLine: companionsLine, todayCardState: todayCardState,
+    tierRibbon: tierRibbon, tierBadge: tierBadge, wxHazards: wxHazards, wxHourly: wxHourly, nextPrep: nextPrep, utilAlerts: utilAlerts, isInternetNotice: isInternetNotice, tierPerks: tierPerks, tierGuide: tierGuide, phoneCheckRows: phoneCheckRows, phoneFixPlan: phoneFixPlan, phoneCheckDue: phoneCheckDue, phoneCheckSave: phoneCheckSave, phoneCheckTried: phoneCheckTried, phoneCheckSettle: phoneCheckSettle, phoneCheckOpen: phoneCheckOpen, phoneCheckRead: phoneCheckRead, phoneBlockedSteps: phoneBlockedSteps, PHONE_CHECK_KEY: PHONE_CHECK_KEY, PHONE_CHECK_VER: PHONE_CHECK_VER, IOS_A2HS: IOS_A2HS, zoomClamp: zoomClamp, zoomStep: zoomStep, zoomToggle: zoomToggle, zoomPan: zoomPan, zoomAt: zoomAt, ZOOM_MAX: ZOOM_MAX, faceFrame: faceFrame, parseNotes: parseNotes, returningLabel: returningLabel, tierLabel: tierLabel, tierLine: tierLine, tierParts: tierParts, keyNote: keyNote, TOPIC_LABELS: TOPIC_LABELS, notableLine: notableLine, weatherIcon: weatherIcon, rainAlert: rainAlert, wxCard: wxCard, goodToKnow: goodToKnow, earlierLine: earlierLine, companionsLine: companionsLine, todayCardState: todayCardState,
     orderWarnings: orderWarnings, brownoutText: brownoutText, lowStockText: lowStockText, warningSummary: warningSummary,
     weatherLine: weatherLine, rainLine: rainLine, weatherStale: weatherStale, WEATHER_STALE_MIN: WEATHER_STALE_MIN, esc: esc,
     A_HOUSE_FALLBACK: A_HOUSE_FALLBACK, A_houseTimes: A_houseTimes, A_turnoverClock: A_turnoverClock, A_turnoverLine: A_turnoverLine, A_hm: A_hm, A_NOTICE_TYPES: A_NOTICE_TYPES, A_noticesView: A_noticesView, A_noticeFilters: A_noticeFilters, A_dayMarks: A_dayMarks, A_noticeDay: A_noticeDay, A_guestMessage: A_guestMessage, A_CAL_TABS: A_CAL_TABS, A_calTab: A_calTab, A_stayShade: A_stayShade, A_hubGroups: A_hubGroups, A_hubNative: A_hubNative, A_hubRoutes: A_hubRoutes, A_hubRouteOk: A_hubRouteOk, A_hubDoorUrl: A_hubDoorUrl, A_whatsNew: A_whatsNew, A_shortTime: A_shortTime, A_PINNED: A_PINNED, A_noticeAddError: A_noticeAddError, A_NOTICE_HINT: A_NOTICE_HINT, A_flagDup: A_flagDup, A_facebookUrl: A_facebookUrl, A_fbPluginUrl: A_fbPluginUrl, A_noticeAddProblem: A_noticeAddProblem, A_noticeAddArgs: A_noticeAddArgs, A_plainRefusal: A_plainRefusal, A_hour12: A_hour12, A_timeRange: A_timeRange,

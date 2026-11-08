@@ -303,6 +303,10 @@
           '</p><button type="button" class="btn btn-primary" data-w-tab="cascade">Use Cascade</button></div>';
       return o;
     }
+    if (S.tab === 'here' && S.hereTap && !m) { // a remembered Here without a granted permission: one tap, never a prompt on open
+      o.hero = '<div class="card glass W_empty" role="status"><p class="sub">The forecast near you needs your location.</p><button type="button" class="btn btn-primary" data-w-locate="1">Show weather near me</button></div>';
+      return o;
+    }
     if (!m) {
       o.hero = S.busy && !S.failed ? '<div class="card glass W_empty" role="status"><p class="sub">Loading the forecast.</p></div>'
         : '<div class="card glass W_empty" role="status"><p class="W_big2">No connection</p><p class="sub">The weather did not load. Check your connection and try again.</p><button type="button" class="btn btn-primary" data-w-retry="1">Try again</button></div>';
@@ -359,7 +363,7 @@
 
   function W_click(ev) {
     var S = W_S; if (!S || S.dead || !ev || !ev.target || !ev.target.closest) return;
-    var t = ev.target.closest('[data-w-day],[data-w-layer],[data-w-retry],[data-w-refresh],[data-w-tab]'); if (!t) return;
+    var t = ev.target.closest('[data-w-day],[data-w-layer],[data-w-retry],[data-w-refresh],[data-w-tab],[data-w-locate]'); if (!t) return;
     var v;
     if ((v = t.getAttribute('data-w-tab')) != null) { S.focusSel = '[data-w-tab="' + v + '"]'; W_setTab(v === 'here' ? 'here' : 'cascade'); }
     else if ((v = t.getAttribute('data-w-day')) != null) {
@@ -369,25 +373,27 @@
     }
     else if ((v = t.getAttribute('data-w-layer')) != null) { S.layer = v; S.focusSel = '[data-w-layer="' + v + '"]'; W_render(); }
     else if (t.getAttribute('data-w-retry') != null) { S.failed = false; W_load(); }
+    else if (t.getAttribute('data-w-locate') != null) { S.focusSel = '[data-w-tab="here"]'; W_locate(); }
     else if (t.getAttribute('data-w-refresh') != null) { S.manual = true; S.focusSel = '[data-w-refresh="1"]'; W_load(); }
   }
 
   function W_keepTab(v) { if (W_S && !W_S.demo) W_store(function (ls) { ls.setItem(W_TAB_KEY, v); }); } // the demo stores nothing
 
   /** s112: switch place. Each tab keeps its own answer in memory; an answer still on its way for the other tab is dropped. */
-  function W_setTab(tab) {
-    var S = W_S; if (!S || S.tab === tab) { if (S && tab === 'here' && S.geoErr) W_locate(); return; }
+  function W_setTab(tab, noAsk) {
+    var S = W_S; if (!S || S.tab === tab) { if (S && tab === 'here' && (S.geoErr || S.hereTap)) W_locate(); return; }
     S.keep[S.tab] = { raw: S.raw, cacheAt: S.cacheAt, lastOk: S.lastOk, failed: S.failed };
-    S.req = (S.req || 0) + 1; if (S.timer) clearTimeout(S.timer); S.busy = false; S.geoErr = null; S.locating = false; S.geoTok = (S.geoTok || 0) + 1;
+    S.req = (S.req || 0) + 1; if (S.timer) clearTimeout(S.timer); S.busy = false; S.geoErr = null; S.locating = false; S.hereTap = false; S.geoTok = (S.geoTok || 0) + 1;
     var k = S.keep[tab] || {}; S.tab = tab; S.raw = k.raw || null; S.cacheAt = k.cacheAt || null; S.lastOk = k.lastOk || 0; S.failed = !!k.failed;
     if (tab === 'cascade') { W_keepTab('cascade'); W_render(); if (!S.demo && (!S.lastOk || W_nowMs() - S.lastOk >= W_FRESH_MS)) W_load(); return; }
+    if (noAsk) { S.hereTap = true; W_render(); return; }
     W_locate();
   }
   /** Ask the phone where it is (only after a tap on Here, or when Here was the last choice and worked). Two decimals before anything else sees it. */
   function W_locate() {
     var S = W_S; if (!S || S.dead) return;
     var geo = S.geo, tok = S.geoTok = (S.geoTok || 0) + 1;
-    S.geoErr = null;
+    S.geoErr = null; S.hereTap = false;
     if (!geo || typeof geo.getCurrentPosition !== 'function') { S.geoErr = 'unavailable'; W_render(); return; }
     S.locating = true; W_render();
     var live = function () { return W_S === S && !S.dead && S.geoTok === tok && S.tab === 'here'; };
@@ -428,8 +434,12 @@
     if (S.demo) { S.raw = W_sample(W_nowMs()); S.cacheAt = W_nowMs(); W_render(); return; } // the sample only: no network, no storage
     var c = W_store(function (ls) { return JSON.parse(ls.getItem(W_KEY) || 'null'); });
     if (c && c.j && W_parse(c.j, W_nowMs(), c.at)) { S.raw = c.j; S.cacheAt = W_num(c.at); }
-    var here = W_store(function (ls) { return ls.getItem(W_TAB_KEY); }) === 'here'; // Here worked last time: the browser already has the answer, no new prompt
-    W_render(); if (here) W_setTab('here'); else W_load();
+    var here = W_store(function (ls) { return ls.getItem(W_TAB_KEY); }) === 'here'; // Here worked last time
+    W_render(); if (!here) { W_load(); return; }
+    // L1: locate on open only when the browser says the permission is granted; otherwise the Here tab waits for one tap (no prompt on open)
+    var perms = opts.permissions || (root.navigator && root.navigator.permissions) || null, q;
+    try { q = perms && typeof perms.query === 'function' ? Promise.resolve(perms.query({ name: 'geolocation' })) : Promise.resolve(null); } catch (e) { q = Promise.resolve(null); }
+    q.then(function (r) { return r && r.state; }, function () { return null; }).then(function (st) { if (W_S === S && !S.dead && S.tab === 'cascade' && !S.busy) W_setTab('here', st !== 'granted'); });
   }
   function unmount() {
     var S = W_S; if (!S) return;

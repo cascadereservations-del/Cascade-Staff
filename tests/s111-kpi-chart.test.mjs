@@ -91,7 +91,7 @@ test('s111 Target card: under Average rate, the server figures in plain words, t
   const h = o.el.innerHTML; assert.ok(h.indexOf('Average rate') < h.indexOf('id="K_target"'), 'below Average rate');
   const c = cardOf(h, 'K_target');
   assert.match(c, /Target this month<\/span><span class="K_val">₱30,000 net<\/span>/);
-  assert.match(c, /To reach ₱54,100 in revenue this month: about 64% occupancy at ₱2,814 a night, or ₱2,459 a night for the 22 nights already booked\./);
+  assert.match(c, /To reach ₱54,100 in revenue this month \(₱24,100 costs \+ ₱30,000 target\): about 64% occupancy at ₱2,814 a night before Airbnb fees, or ₱2,459 a night for the 22 nights already booked\./);
   assert.match(c, /Costs basis: average of the last 3 months, ₱24,100\./); assert.match(c, /data-kact="tgt-open"/); assert.doesNotMatch(c, /!/);
   const f = mountWith(payload({}, true), 'finance'); await tick(); await f.click({ 'data-kact': 'seg', 'data-seg': 'admin' });
   assert.match(f.el.innerHTML, /id="K_target"/); assert.doesNotMatch(f.el.innerHTML, /tgt-open|Set target/, 'finance reads only');
@@ -103,11 +103,11 @@ test('s111 Target card: under Average rate, the server figures in plain words, t
 
 test('s111 Target card: break-even default, nulls read Not enough data yet, more than the month has', async () => {
   const be = mountWith(payload({}, { target: TARGET({ net_target: 0, revenue_needed: 24100, needed_occupancy: 0.286, needed_adr: 1095.45 }) }), 'admin'); await tick(); await be.click({ 'data-kact': 'seg', 'data-seg': 'admin' });
-  assert.match(be.el.innerHTML, /<span class="K_val">Break-even<\/span>/); assert.match(be.el.innerHTML, /about 29% occupancy at ₱2,814 a night, or ₱1,095 a night for the 22 nights already booked/);
+  assert.match(be.el.innerHTML, /<span class="K_val">Break-even<\/span>/); assert.match(be.el.innerHTML, /about 29% occupancy at ₱2,814 a night before Airbnb fees, or ₱1,095 a night for the 22 nights already booked/);
   const none = mountWith(payload({}, { target: TARGET({ costs_basis: null, revenue_needed: null, needed_occupancy: null, needed_adr: null }) }), 'owner'); await tick(); await none.click({ 'data-kact': 'seg', 'data-seg': 'admin' });
   assert.match(none.el.innerHTML, /<p class="K_p">Not enough data yet\.<\/p><p class="K_sub">Costs basis: not enough data yet\.<\/p>/);
   const noadr = mountWith(payload({}, { target: TARGET({ adr: null, needed_occupancy: null, nights_on_books: 0, needed_adr: null }) }), 'owner'); await tick(); await noadr.click({ 'data-kact': 'seg', 'data-seg': 'admin' });
-  assert.match(noadr.el.innerHTML, /To reach ₱54,100 in revenue this month: occupancy: not enough data yet, or a rate for the booked nights: not enough data yet\./);
+  assert.match(noadr.el.innerHTML, /To reach ₱54,100 in revenue this month \(₱24,100 costs \+ ₱30,000 target\): occupancy: not enough data yet, or a rate for the booked nights: not enough data yet\./);
   const over = mountWith(payload({}, { target: TARGET({ needed_occupancy: 1.4 }) }), 'owner'); await tick(); await over.click({ 'data-kact': 'seg', 'data-seg': 'admin' });
   assert.match(over.el.innerHTML, /more nights than the month has at ₱2,814 a night/);
 });
@@ -223,3 +223,46 @@ test('s111 release pins and tokens: version unchanged, chart tokens in all three
   const d = createDemo(); assert.equal(d.utility.nights_booked, d.admin.sold_nights, 'demo: nights booked equals the Admin occupancy nights'); assert.ok(!('kwh_per_night' in d.utility) && !('nights_month' in d.utility));
 });
 function createDemo() { const src = read('demo.js'); const m = /function kpiFixture\(r, today\) \{[\s\S]*?\n  \}\n/.exec(src); const fn = new Function('CS', m[0] + '; return kpiFixture;')(CS); return fn('owner', '2026-10-15'); }
+
+// ---------------------------------------------------------------------------------------------- fix round r3 (M3, L2, L3)
+test('s111 r3 M3: the zoom viewer keeps Tab and Shift+Tab on its own buttons (disabled skipped), and Esc closes only the viewer, not the sheet under it', async () => {
+  let win, active = null; const ov = overlay();
+  const btn = (n, dis) => ({ n, disabled: !!dis, focus() { active = this; } });
+  const bs = [btn('z-out', true), btn('z-in'), btn('rot'), btn('close')]; ov.o.querySelectorAll = (q) => (q === 'button' ? bs : []);
+  const app = await boot({ role: 'owner', hash: '#home', handlers: baseHandlers('owner'), els: { H_idfull: ov.o }, winInit: (w) => { win = w; }, activeEl: () => active });
+  const key = (k, shift) => { let stopped = 0; for (const fn of app.listeners.keydown) fn({ key: k, shiftKey: !!shift, preventDefault: () => { stopped++; } }); return stopped; };
+  win.CSZoom.open('blob:id', { alt: 'Guest ID photo', rotate: true });
+  active = bs[3]; assert.equal(key('Tab'), 1); assert.equal(active.n, 'z-in', 'Tab on the last button wraps to the first enabled one');
+  assert.equal(key('Tab', true), 1); assert.equal(active.n, 'close', 'Shift+Tab on the first wraps to the last');
+  active = bs[1]; assert.equal(key('Tab'), 0, 'in the middle the browser moves focus as usual');
+  active = null; assert.equal(key('Tab'), 1); assert.equal(active.n, 'z-in', 'focus outside the viewer comes back in');
+  const src = read('app.js'); assert.match(src, /if \(ev\.key === 'Escape'\) \{ if \(Z_isOpen\(\)\) \{ H_idClose\(\); return; \}/, 'Esc with the viewer open closes only the viewer');
+  await app.click({ 'data-act': 'pc-open' }); await app.flush(); assert.equal(app.els['pc-sheet'].hidden, false, 'a sheet under the viewer');
+  win.CSZoom.open('blob:id', { alt: 'Guest ID photo', rotate: true }); key('Escape'); assert.equal(win.CSZoom.state().open, false); assert.equal(app.els['pc-sheet'].hidden, false, 'the sheet stays');
+  key('Escape'); assert.equal(app.els['pc-sheet'].hidden, true, 'the next Esc closes the sheet');
+  win.CSZoom.close(); active = null; assert.equal(key('Tab'), 0, 'closed: Tab is left alone');
+});
+
+test('s111 r3 L2: the Target line shows the sum (costs + target), the average rate is before Airbnb fees, centavos up to 2 dp are sent as typed, never rounded', async () => {
+  const win = { ICON: () => '' }; win.window = win; vm.runInContext(read('kpi/K_kpi.js'), vm.createContext(win)); const K = win.K_Kpi.lib;
+  const L = K.targetLines({ net: 30000.5, costs: 24100, need: 54100.5, adr: 2814, occ: 0.641, onBooks: 22, needAdr: 2459.09 });
+  assert.match(L.line, /^To reach ₱54,101 in revenue this month \(₱24,100 costs \+ ₱30,001 target\): about 64% occupancy at ₱2,814 a night before Airbnb fees, or ₱2,459 a night for the 22 nights already booked\.$/);
+  assert.match(K.targetLines({ net: 0, costs: 24100, need: 24100, adr: 2814, occ: 0.3, onBooks: 0 }).line, /\(₱24,100 costs \+ ₱0 target\)/, 'break-even shows a zero target');
+  assert.deepEqual(JSON.parse(JSON.stringify(K.targetCall('p1', '₱30,000.50'))).args.p_monthly_net_target, 30000.5, 'kpi_target_set_v1 keeps 2 dp: sent as typed');
+  assert.equal(K.targetProblem('30000.25'), null); assert.match(K.targetProblem('30000.255'), /up to 2 decimals/, 'more than 2 dp is refused here, not rounded (the server would refuse it)');
+  assert.match(K.targetProblem('1e5'), /from 0 to 10,000,000 pesos/);
+  const o = mountWith(payload({}, true), 'owner'); await tick(); await o.click({ 'data-kact': 'seg', 'data-seg': 'admin' }); await o.click({ 'data-kact': 'tgt-open' });
+  assert.match(o.el.innerHTML, /<input id="K_f_tgt" inputmode="decimal"/); assert.match(o.el.innerHTML, /Centavos are kept, up to 2 decimals\./);
+  await o.input('K_f_tgt', '45,000.75'); await o.submit({ 'data-kform': 'tgt' });
+  assert.deepEqual(o.calls.filter((c) => c[0] === 'kpi_target_set_v1')[0][1].p_monthly_net_target, 45000.75);
+  assert.doesNotMatch(read('kpi/K_kpi.js'), /p_monthly_net_target: Math\.round/);
+});
+
+test('s111 r3 L3: the 12-month chart labels every other month with 3 letters, the latest always; every bar keeps its full month name in its aria-label', async () => {
+  const { el } = mountWith(payload()); await tick();
+  const c = cardOf(el.innerHTML, 'K_avg'), xs = [...c.slice(c.indexOf('K_xax')).matchAll(/<span(?: class="K_xem")?>([^<]*)<\/span>/g)].map((m) => m[1]);
+  assert.deepEqual(xs, ['', 'Dec', '', 'Feb', '', 'Apr', '', 'Jun', '', 'Aug', '', 'Oct']);
+  for (const n of ['Nov 2025', 'Dec 2025', 'Jan 2026', 'Sep 2026', 'Oct 2026']) assert.ok(c.includes('aria-label="' + n + ':'), n);
+  const short = mountWith(payload({ per_month: perMonth().slice(-6) })); await tick();
+  const c6 = cardOf(short.el.innerHTML, 'K_avg'); assert.deepEqual([...c6.slice(c6.indexOf('K_xax')).matchAll(/<span(?: class="K_xem")?>([^<]*)<\/span>/g)].map((m) => m[1]), ['May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct'], 'six months: every label fits');
+});

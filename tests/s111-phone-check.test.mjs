@@ -128,3 +128,38 @@ test('s111 phone check: More > This phone > Check this phone opens it for every 
   assert.match(read('app.js'), /PC = \{ open: false, busy: false, rows: null, msg: '', camPerm: null \}; PC_draw\(\); \}/, 'H_alReset (sign-out) clears the sheet');
   assert.doesNotMatch(read('app.js').slice(read('app.js').indexOf('s111 Phone check'), read('app.js').indexOf('Admin hub (owner')), /trustOn\s*=|rememberRole|authStorage\(/, 'the check never changes Trust this device');
 });
+
+// ---------------------------------------------------------------------------------------------- fix round r3 (M2)
+test('s111 r3 M2: a soft row Fix all already tried (storage, update with nothing waiting) is Not possible here; a waiting update or an untried row stays a tap; never OK', () => {
+  const rows = CS.phoneCheckRows(probe({ storage: { api: true, persisted: false }, update: { sw: true, controller: true, waiting: false, cacheOk: false }, camera: { has: true, perm: 'prompt' } }));
+  assert.deepEqual(CS.phoneCheckSettle(rows, []).map((r) => r.state), rows.map((r) => r.state), 'nothing tried: unchanged');
+  const s = CS.phoneCheckSettle(rows, ['storage', 'update', 'camera']);
+  for (const id of ['storage', 'update']) { const r = row(s, id); assert.equal(r.state, 'no', id); assert.equal(r.fix, false); assert.equal(r.text, 'This browser decides this one.'); }
+  assert.equal(row(s, 'camera').state, 'tap', 'the camera prompt can still be asked: not soft');
+  assert.deepEqual([...CS.phoneFixPlan(s)], ['camera']);
+  const waiting = CS.phoneCheckRows(probe({ update: { sw: true, controller: true, waiting: true, cacheOk: true } }));
+  assert.equal(row(CS.phoneCheckSettle(waiting, ['update']), 'update').state, 'tap', 'a newer version waiting is still one tap');
+  assert.equal(row(CS.phoneCheckSettle(CS.phoneCheckRows(OK), ['storage']), 'storage').state, 'ok', 'OK stays OK');
+  const m = {}; const ls = { getItem: (k) => (k in m ? m[k] : null), setItem: (k, v) => { m[k] = String(v); } };
+  CS.phoneCheckSave(ls, rows, ['storage', 'update', 'bogus']); assert.deepEqual(CS.phoneCheckTried(ls), ['storage', 'update']);
+  CS.phoneCheckSave(ls, CS.phoneCheckRows(probe({ update: { sw: true, controller: true, waiting: false, cacheOk: false } }))); assert.deepEqual(CS.phoneCheckTried(ls), ['update'], 'a row that reads OK forgets its try');
+});
+
+test('s111 r3 M2: Fix all where the browser says no without asking: storage and update become Not possible here, the Today card goes, Check again keeps them settled', async () => {
+  const p = phone({ permission: 'granted', camPerm: 'granted', waiting: null, cacheOk: false, standalone: true }); p.ctl.subscribed = 1;
+  const o = p.opts('owner'); o.nav.storage.persist = () => { p.order.push('persist'); return Promise.resolve(false); };
+  const app = await boot(o); await app.flush();
+  assert.match(sheet(app).innerHTML, /PC_tap" data-pc="storage"/); assert.match(sheet(app).innerHTML, /PC_tap" data-pc="update"/);
+  assert.match(app.els['v-home'].innerHTML, /PC_today[\s\S]*2 settings can be fixed/);
+  await app.click({ 'data-act': 'pc-fix' }); await app.flush(); await app.flush();
+  assert.deepEqual(p.order.filter((x) => x === 'persist' || x === 'update'), ['persist', 'update'], 'both fixers really ran');
+  let h = sheet(app).innerHTML;
+  for (const id of ['storage', 'update']) { const li = h.slice(h.indexOf('data-pc="' + id + '"') - 20); assert.match(li, /^[^<]*PC_no" data-pc="\w+"[\s\S]*?Not possible here[\s\S]*?This browser decides this one\./, id); }
+  assert.doesNotMatch(h, /data-act="pc-fix"/, 'nothing left for Fix all'); assert.match(h, /Everything this phone can do is on\./);
+  const saved = JSON.parse(p.store.cs_phone_check); assert.deepEqual(saved.open, []); assert.deepEqual(saved.tried, ['storage', 'update']);
+  assert.doesNotMatch(app.els['v-home'].innerHTML, /PC_today/, 'the Today card stops');
+  await app.click({ 'data-act': 'pc-run' }); await app.flush(); h = sheet(app).innerHTML;
+  assert.match(h, /PC_no" data-pc="storage"/, 'a plain re-check does not bring the tap back'); assert.doesNotMatch(app.els['v-home'].innerHTML, /PC_today/);
+  p.ctl.persisted = true; await app.click({ 'data-act': 'pc-run' }); await app.flush();
+  assert.match(sheet(app).innerHTML, /PC_ok" data-pc="storage"/, 'OK only from a real re-check'); assert.deepEqual(JSON.parse(p.store.cs_phone_check).tried, ['update']);
+});
