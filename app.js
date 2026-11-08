@@ -2491,8 +2491,8 @@
   // open by default only when rain is near or a weather warning is up (data-def="1"), and after the auto-close it goes back to that rule.
   var AUTO_CLOSE_MS = 5 * 60 * 1000, autoClose = {};
   function A_autoClose(key, d, after) {
-    clearTimeout(autoClose[key]); autoClose[key] = 0;
-    if (!d.open) return;
+    if (!d.open) { clearTimeout(autoClose[key]); autoClose[key] = 0; return; }
+    if (autoClose[key]) return; // a redraw of an open card keeps the first deadline
     autoClose[key] = setTimeout(function () { autoClose[key] = 0; after(); var el = document.getElementById(d.id) || d; if (el && el.open) el.open = false; }, AUTO_CLOSE_MS);
   }
   document.addEventListener('toggle', function (ev) { var d = ev.target; if (d && d.classList && d.classList.contains('T_tiers')) { state.tiersOpen = !!d.open; A_autoClose('tiers', d, function () { state.tiersOpen = undefined; }); } }, true);
