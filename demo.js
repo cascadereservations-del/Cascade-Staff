@@ -9,7 +9,7 @@
   else root.CSDemo = api;
 })(typeof self !== 'undefined' ? self : this, function (root, CS) {
   'use strict';
-  var ROLES = ['owner', 'admin', 'cleaner'], VIEWS = ['owner', 'admin', 'cleaner', 'signin'];
+  var ROLES = ['owner', 'admin', 'cleaner', 'laundry'], VIEWS = ['owner', 'admin', 'cleaner', 'laundry', 'signin'];
   var NOTE = 'Demo: nothing was saved';
 
   // ---- the one guard -----------------------------------------------------------------------------------------------------
@@ -35,7 +35,7 @@
     var onRoot = loc.pathname === rootPath || loc.pathname === rootPath + 'index.html';
     return rootPath + '?demo&role=' + role + (onRoot ? loc.hash || '' : '#home');
   }
-  var LABEL = { owner: 'Owner', admin: 'Admin', cleaner: 'Cleaner', signin: 'Sign in' };
+  var LABEL = { owner: 'Owner', admin: 'Admin', cleaner: 'Cleaner', laundry: 'Laundry', signin: 'Sign in' };
   function barHtml(role) {
     return '<span class="pill p-brand demo-pill">Demo data</span><div class="demo-roles" role="group" aria-label="View as">' +
       VIEWS.map(function (v) { return '<button type="button" data-demo-role="' + v + '" aria-pressed="' + (v === role) + '">' + LABEL[v] + '</button>'; }).join('') + '</div>';
@@ -63,7 +63,7 @@
 
   // ---- fixtures: every date is relative to today (Manila), every name and number is made up ------------------------------------
   function build(role, now) {
-    var r = role === 'cleaner' || role === 'admin' ? role : 'owner', admin = r !== 'cleaner', today = CS.manilaToday(now), stamp = (now instanceof Date ? now : new Date()).toISOString();
+    var r = role === 'cleaner' || role === 'admin' || role === 'laundry' ? role : 'owner', admin = r !== 'cleaner' && r !== 'laundry', today = CS.manilaToday(now), stamp = (now instanceof Date ? now : new Date()).toISOString();
     var d = function (n) { return CS.addDays(today, n); }, at = function (n, hm) { return d(n) + 'T' + hm + ':00+08:00'; };
     var guest = function (o) { // the server sends a cleaner no companions, phone, e-mail or Messenger link
       if (!admin) { delete o.companions; delete o.phone; delete o.email; delete o.messenger; }
@@ -132,16 +132,32 @@
         next: { effective_from: d(30), regular_rate: 420, general_rate: 840, transport_rate: 100, note: 'Demo rate change' },
         history: [{ effective_from: d(30), regular_rate: 420, general_rate: 840, transport_rate: 100, note: 'Demo rate change' }, { effective_from: d(-90), regular_rate: 400, general_rate: 800, transport_rate: 100, note: 'Demo rate' },
           { effective_from: d(-400), regular_rate: 350, general_rate: 700, transport_rate: null, note: 'Demo first rate' }] },
-      signin: [{ label: 'Demo Cleaner', handle: 'demo.cleaner@staff.cascade.invalid', kind: 'pin' }, { label: 'Demo Admin', handle: 'demo.admin@example.invalid', kind: 'password' }, { label: 'Demo Owner', handle: 'demo.owner@example.invalid', kind: 'password' }],
+      signin: [{ label: 'Demo Cleaner', handle: 'demo.cleaner@staff.cascade.invalid', kind: 'pin' }, { label: 'Demo Laundry', handle: 'demo.laundry@staff.cascade.invalid', kind: 'pin' }, { label: 'Demo Admin', handle: 'demo.admin@example.invalid', kind: 'password' }, { label: 'Demo Owner', handle: 'demo.owner@example.invalid', kind: 'password' }],
       pay: { ok: true, reports_owed: [{ date: '2026-10-14', ref: 'DEMO0002', status: 'paid' }, { date: '2026-10-17', ref: 'DEMO0002', status: 'paid' }, { date: '2026-10-19', ref: 'DEMO0002', status: 'paid' }], sessions: [{ id: 'demo-s1', date: d(-3), type: 'turnover', base: 400, transport: 100, guest: 'Demo Guest Zero' }, { id: 'demo-s2', date: d(-1), type: 'deep_clean', base: 800, transport: null }],
         claims: [{ id: 'demo-c1', date: d(-2), description: 'Demo: dish soap for the kitchen', amount: 35 }], missing_reports: [d(-6)], advance: [{ checkout_date: d(0), base: 400, transport: 100 }, { checkout_date: d(1), base: 400, transport: null }],
         requests: [{ total: 450, ref: 'CASCADE-DEMO001', created_at: d(-9) + 'T10:00:00Z', status: 'paid', paid_at: d(-8) + 'T10:00:00Z' }] },
-      stay: { guest_name: 'Demo Guest One', checkin: d(-1), checkout: d(2) }
+      stay: { guest_name: 'Demo Guest One', checkin: d(-1), checkout: d(2) },
+      kpi: kpiFixture(r, today),
+      items: [['d1', 'Toilet paper', 'Bathroom', 'rolls', true], ['d2', 'Hand soap', 'Bathroom', 'bottles', true], ['d3', 'Water bottles', 'Kitchen', 'bottles', true], ['d4', 'Coffee sachets', 'Kitchen', 'sachets', true], ['d5', 'Garbage bags', 'Cleaning', 'pcs', true], ['d6', 'Bath towels', 'Linen', 'pcs', false]]
+        .map(function (x) { return { id: x[0], name: x[1], category: x[2], unit: x[3], consumable: x[4], active: true, qty: 12 }; })
     };
+  }
+  // s110: kpi_tab_v1 as the contract says. The admin key is ABSENT for every role but owner and admin (demo has no finance view).
+  function kpiFixture(r, today) {
+    var k = { ok: true, month: today.slice(0, 7) + '-01',
+      utility: { kwh_month: 412, nights_month: 22, kwh_per_night: 18.7, last_reading: { recorded_at: today + 'T02:00:00Z', delta_kwh: 38.2, nights: 2, kwh_per_night: 19.1, flag: null },
+        per_stay: [14.2, 18.4, 12.6, 24.1, 16, 13.3, 15.1, 13.8].map(function (v, i) { return { checkout_date: CS.addDays(today, -3 * (8 - i)), kwh_per_night: v }; }),
+        brownouts: { count: 2, hours: 9 }, water_cuts: { count: 1, hours: 5 } },
+      inventory: { low_now: 5, restocks_month: 3, turnovers_month: 9,
+        per_turnover: [{ item_id: 'd1', name: 'Toilet paper', used_per_turnover: 2.1, usual: 2 }, { item_id: 'd3', name: 'Water bottles', used_per_turnover: 4.6, usual: 4 }, { item_id: 'd4', name: 'Coffee sachets', used_per_turnover: 3, usual: 4 }],
+        runs_out: [{ item_id: 'd2', name: 'Hand soap', days_left: 4 }, { item_id: 'd5', name: 'Garbage bags', days_left: 21 }] } };
+    if (r === 'owner' || r === 'admin') k.admin = { rate: { php_per_kwh: 11.25, effective_from: CS.addDays(today, -20), source: 'auto', source_url: 'https://www.facebook.com/socoteco2.EC/' }, last_reading_cost: 429.75, month_kwh_cost: 4635, supplies_month: 4950, supply_cost_per_turnover: 550, cleaning_pay_month: 6300 };
+    return k;
   }
 
   // ---- the stand-in for the Supabase client: same four calls the pages make, answered from the fixtures ---------------------------
-  var WRITES = ['calendar_day_flag_set_v1', 'calendar_day_flag_clear_v1', 'ack_verifier_finding_v1', 'task_set_done_v1', 'task_add_reminder_v1', 'admin_add_pay_rate_v1', 'ops_notice_add_v1', 'ops_notice_close_v1'];
+  var WRITES = ['calendar_day_flag_set_v1', 'calendar_day_flag_clear_v1', 'ack_verifier_finding_v1', 'task_set_done_v1', 'task_add_reminder_v1', 'admin_add_pay_rate_v1', 'ops_notice_add_v1', 'ops_notice_close_v1',
+    'record_inventory_usage', 'record_inventory_receipt_v1', 'inventory_receipt_confirm_v1', 'inventory_receipt_undo_v1', 'inventory_receipt_cancel_v1', 'inventory_item_photo_set_v1', 'utility_rate_set_v1', 'admin_resolve_report_block_v1', 'admin_request_meter_resend_v1']; // s110: stock, rate and meter-check writes say "nothing was saved"
   var clone = function (x) { return JSON.parse(JSON.stringify(x)); };
   function admin_(v) { return v === 'owner' || v === 'admin'; }
   function client(role, now) {
@@ -163,6 +179,14 @@
         case 'admin_pay_rates_v1': return done(X.rates);
         case 'staff_pay_candidates_v1': return done(X.pay);
         case 'staff_signin_list_v1': return done(X.signin);
+        case 'kpi_tab_v1': return done(X.kpi);
+        case 'get_inventory_catalogue_v1': return done({ ok: true, items: X.items });
+        case 'admin_report_blocks_v1': return admin_(view) ? done([{ reading_id: 'demo-reading-1', session_id: 'demo-s1', cleaner_name: 'Demo Cleaner', checkout_date: CS.addDays(X.home.today, -1), recorded_at: X.home.today + 'T02:00:00Z', typed_electric: 4310, typed_water: 812, prev_electric: 4272, prev_water: 805, photo_electric: 4301, photo_water: 812, photo_note_electric: 'Last digit unclear', photo_note_water: null, photo_path_electric: null, photo_path_water: null, resend_requested_at: null }]) : Promise.resolve({ data: null, error: { code: '42501', message: 'not authorized' } });
+        case 'inventory_receipt_draft_v1': return done({ ok: true, draft: { id: args && args.p_draft_id || 'demo-draft', vendor: 'Demo Hardware', purchased_on: X.home.today, receipt_path: 'demo/receipt.jpg', status: 'draft', lines: [
+          { line_no: 1, description: 'TOILET TISSUE 12S', qty: 2, match: { item_id: 'd1', name: 'Toilet paper', unit: 'rolls', photo_path: null } },
+          { line_no: 2, description: 'LIQ HAND SOAP 500ML', qty: 3, match: { item_id: 'd2', name: 'Hand soap', unit: 'bottles', photo_path: null } },
+          { line_no: 3, description: 'SCENTED CANDLE VANILLA', qty: 1, match: null }] } });
+        case 'inventory_receipt_confirm_v1': return done({ ok: true, purchase_count: (args && args.p_lines || []).filter(function (l) { return !l.skip; }).length, new_items: [], undo_token: 'demo-undo' });
         case 'staff_inquiry_payments_v1': return done([{}, {}]); // a count of two pending bookings; the rows themselves are never shown
         default: return Promise.resolve({ data: null, error: { code: 'PGRST202', message: 'not part of the demo' } });
       }
@@ -175,11 +199,15 @@
         signOut: function () { view = 'signin'; return Promise.resolve({ error: null }); },
         // any sign-in works in the demo: the name picked decides the role, and the page reloads as that role
         signInWithPassword: function (cred) {
-          var m = /demo\.(cleaner|admin|owner)@/.exec(String((cred && cred.email) || '')), next = m ? m[1] : 'owner';
+          var m = /demo\.(cleaner|laundry|admin|owner)@/.exec(String((cred && cred.email) || '')), next = m ? m[1] : 'owner';
           if (root.location && root.document) { root.location.replace(switchUrl(root.location, next, rootPath()) .replace(/#.*$/, '') + '#home'); return new Promise(function () {}); }
           view = next; return Promise.resolve({ data: { user: D().user }, error: null });
         }
       },
+      functions: { invoke: function (name) {
+        toast(NOTE); // memory only: the demo reads no receipt and stores no photo
+        return Promise.resolve({ data: name === 'ocr-receipt' ? { ok: true, draft_id: 'demo-draft' } : { ok: true, path: 'demo/photo.jpg' }, error: null });
+      } },
       storage: { from: function () { return { createSignedUrl: function () { return Promise.resolve({ data: { signedUrl: idPlaceholder() }, error: null }); } }; } }
     };
   }

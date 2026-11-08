@@ -101,7 +101,7 @@ test('every write says "Demo: nothing was saved" and changes nothing', async () 
   } finally { D.onNote(null); }
 });
 
-test('links keep ?demo&role=, the switcher goes to the same screen, and the bar has four 44 px buttons with one pressed', () => {
+test('links keep ?demo&role=, the switcher goes to the same screen, and the bar has five 44 px buttons with one pressed', () => {
   assert.equal(D.demoHref('./quick/', 'cleaner'), './quick/?demo&role=cleaner');
   assert.equal(D.demoHref('../#home', 'admin'), '../?demo&role=admin#home');
   assert.equal(D.demoHref('./guest/?for=id#demo-stay-2', 'owner'), './guest/?for=id&demo&role=owner#demo-stay-2');
@@ -109,7 +109,7 @@ test('links keep ?demo&role=, the switcher goes to the same screen, and the bar 
   assert.equal(D.switchUrl({ pathname: '/Cascade-Staff/', hash: '#calendar' }, 'cleaner', '/Cascade-Staff/'), '/Cascade-Staff/?demo&role=cleaner#calendar');
   assert.equal(D.switchUrl({ pathname: '/Cascade-Staff/pay/', hash: '' }, 'admin', '/Cascade-Staff/'), '/Cascade-Staff/?demo&role=admin#home');
   const bar = D.barHtml('admin');
-  assert.match(bar, /Demo data/); assert.equal((bar.match(/data-demo-role=/g) || []).length, 4);
+  assert.match(bar, /Demo data/); assert.equal((bar.match(/data-demo-role=/g) || []).length, 5);
   assert.equal((bar.match(/aria-pressed="true"/g) || []).length, 1); assert.match(bar, /data-demo-role="admin" aria-pressed="true"/);
   assert.match(read('demo.js'), /\.demo-roles button\{min-height:44px;min-width:44px/);
 });

@@ -140,7 +140,7 @@
   // Who sees which door (D-324): role decides, the server stays the real gate. Order = order on the home screen.
   var ALL_ROLES = ['owner', 'admin', 'finance', 'cleaner', 'inspector', 'maintenance'];
   var DOOR_ROLES = {
-    checklist: ALL_ROLES, manual: ALL_ROLES, guide: ALL_ROLES,
+    checklist: ALL_ROLES, manual: ALL_ROLES.concat('laundry'), guide: ALL_ROLES.concat('laundry'), // s110: laundry reads the manual and the guide, never opens the checklist
     dashboard: ['owner', 'admin', 'finance'],
     inventory: ['owner', 'admin'],
     adminguide: ['owner', 'admin']
@@ -181,7 +181,12 @@
 
   // ---- roles ---------------------------------------------------------------------------------------------------------
   var ADMIN_ROLES = ['owner', 'admin', 'finance'];
-  var STAFF_ROLES = ['cleaner', 'inspector', 'maintenance'];
+  var STAFF_ROLES = ['cleaner', 'inspector', 'maintenance', 'laundry'];
+  function isLaundry(role) { return role === 'laundry'; }
+  // s110: the tab bar by role. KPIs sits after Tasks; laundry swaps Tasks for Inventory (her own tasks are not part of this release).
+  function tabKeys(role) { return isLaundry(role) ? ['home', 'calendar', 'stock', 'kpis', 'more'] : ['home', 'calendar', 'tasks', 'kpis', 'more']; }
+  // s110: who sees the Admin segment of the KPIs tab (money): owner, admin and finance.
+  function kpiAdmin(role) { return ADMIN_ROLES.indexOf(role) >= 0; }
   function layoutForRole(role) {
     if (ADMIN_ROLES.indexOf(role) >= 0) return 'admin';
     if (STAFF_ROLES.indexOf(role) >= 0) return 'staff';
@@ -1615,7 +1620,7 @@
     staffAuthPassword: staffAuthPassword, staffLoginEmail: staffLoginEmail, deriveDisplayName: deriveDisplayName, greetingName: greetingName,
     signinKind: signinKind, signinList: signinList, resolveTeam: resolveTeam, signinForTeam: signinForTeam, typedEntry: typedEntry, keypadPress: keypadPress, signinCredentials: signinCredentials, signinAsKind: signinAsKind,
     authStorage: authStorage, trustedFromStorage: trustedFromStorage, rememberName: rememberName, recalledName: recalledName, doorTarget: doorTarget, doorLink: doorLink, doorRule: doorRule, doorFramed: doorFramed, doorAllowed: doorAllowed, doorsForRole: doorsForRole, foldedDoorUrls: foldedDoorUrls, framedParentTarget: framedParentTarget, FOLD_DOORS: FOLD_DOORS,
-    layoutForRole: layoutForRole, accessVerdict: accessVerdict, assertNoMoney: assertNoMoney, moneyKeys: moneyKeys,
+    layoutForRole: layoutForRole, isLaundry: isLaundry, tabKeys: tabKeys, kpiAdmin: kpiAdmin, accessVerdict: accessVerdict, assertNoMoney: assertNoMoney, moneyKeys: moneyKeys,
     manilaToday: manilaToday, manilaParts: manilaParts, addDays: addDays, daysBetween: daysBetween, weekdayIndex: weekdayIndex,
     dayLabel: dayLabel, dayLong: dayLong, dayShort: dayShort, monthTitle: monthTitle, monthShortYear: monthShortYear, greeting: greeting,
     fmtTime: fmtTime, fmt24: fmt24, ordinal: ordinal, plural: plural, agoLabel: agoLabel, clockLabel: clockLabel,

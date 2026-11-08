@@ -75,7 +75,7 @@ test('s109 payment request: owner/admin see who is waiting, how much and when it
 test('s109 layout: the Today sections are labelled, the guest in the house comes before Up next, the strip sits on top', () => {
   const app = read('app.js');
   assert.match(app, /errBanner\(\) \+ A_payBanner\(\) \+ A_utilBar\(\) \+ \(wxTop \? wxCard : ''\) \+ S_sec\('Guests'\) \+ todayCard\(\) \+ nextCard\(\)/);
-  assert.match(app, /errBanner\(\) \+ A_utilBar\(\) \+ \(wxTop \? wxCard : ''\) \+ S_sec\('Guests'\) \+ todayCard\(\) \+ nextCard\(\) \+ S_sec\('Turnover'\)/);
+  assert.match(app, /errBanner\(\) \+ A_utilBar\(\) \+ \(wxTop \? wxCard : ''\) \+ S_sec\('Guests'\) \+ todayCard\(\) \+ nextCard\(\) \+ \(laundry \? '' : S_sec\('Turnover'\)/); // s110: laundry has no Turnover section
   const css = read('styles.css');
   for (const k of ['power', 'water', 'internet']) assert.match(css, new RegExp('\\.U_' + k + ' \\{ background: var\\(--v5-'));
   assert.match(css, /prefers-reduced-motion: reduce\) \{ \.P_alic::after \{ animation: none/);

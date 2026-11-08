@@ -67,7 +67,7 @@
     notices: null, noticesAbsent: false, noticesLoading: false, noticeFilter: 'all', nadd: null, fbOpen: false, ratesMore: false, calTab: 'calendar', calView: 'month', legendOpen: false, H_peekedCal: false, H_peekedTask: false, progress: null, progressAbsent: false, taskFilter: 'all', hubRoute: '', tasks: null, tasksErr: '', tasksLoading: false, showDone: false, lastDone: null, add: null, assignees: null, rates: null, ratesErr: '', rateForm: null, rateSaving: false, reply: null, bookings: null, bookingsDone: false, noticesDone: false, tasksDenied: false, noticesFailed: false, bookingsFailed: false, errorKind: '' };
   var $ = function (id) { return document.getElementById(id); };
   try { var lsLegend = store('localStorage'); state.legendOpen = !!lsLegend && lsLegend.getItem('cs_legend_open') === '1'; if (lsLegend && lsLegend.getItem('cs_cal_view') === 'bookings') state.calView = 'bookings'; } catch (e) {} // F2: the legend's More stays as it was left
-  var VIEWS = ['signin', 'home', 'calendar', 'tasks', 'payrates', 'more', 'door', 'reply', 'hub', 'weather', 'stock', 'manage', 'guests', 'inbox', 'search'];
+  var VIEWS = ['signin', 'home', 'calendar', 'tasks', 'payrates', 'more', 'door', 'reply', 'hub', 'weather', 'stock', 'manage', 'guests', 'inbox', 'search', 'kpis', 'supply'];
   function pid() { return (state.access && state.access.property_ids && state.access.property_ids[0]) || CFG.propertyId; }
   function canReply() { return CS.canDraftReply(state.access && state.access.role); } // s82 decision 5: every signed-in staff role
   function canAddDetails() { return CS.canAddGuestDetails(state.access && state.access.role); } // the guest-details uploader stays owner and admin
@@ -127,8 +127,9 @@
   function renderTabs(current) {
     var staff = state.layout === 'staff', due = state.tasks ? CS.taskDueCount(state.tasks.tasks, state.tasks.today) : 0;
     var late = state.tasks ? state.tasks.tasks.some(function (t) { return t.status !== 'done' && CS.taskDue(t.due_at, state.tasks.today) === 'overdue'; }) : false; // red only when something is overdue
-    var tabs = [['home', '#home', 'Today', 'house'], ['calendar', '#calendar', 'Calendar', 'calendar', warnCount()],
-      ['tasks', '#tasks', 'Tasks', 'tasks', due], ['more', '#more', 'More', 'more']];
+    var TAB = { home: ['home', '#home', 'Today', 'house'], calendar: ['calendar', '#calendar', 'Calendar', 'calendar', warnCount()], tasks: ['tasks', '#tasks', 'Tasks', 'tasks', due],
+      stock: ['stock', '#stock', 'Inventory', 'box'], kpis: ['kpis', '#kpis', 'KPIs', 'dash'], more: ['more', '#more', 'More', 'more'] };
+    var tabs = CS.tabKeys(role()).map(function (k) { return TAB[k]; }); // s110: Today, Calendar, Tasks, KPIs, More; laundry has Inventory where Tasks would be
     $('tabbar').innerHTML = '<div class="H_railhead" aria-hidden="true"><b>C</b><span>' + esc(String(state.name || '').split(/\s+/)[0]) + '</span></div>' + tabs.map(function (t) {
       return '<a class="tab" href="' + esc(t[1]) + '"' + (t[0] === current ? ' aria-current="page"' : '') + '><span class="ico">' + ICON(t[3], 's24') + '</span>' + esc(t[2]) +
         (t[4] ? '<span class="badge' + (t[0] === 'tasks' && late ? ' bad' : '') + '" aria-label="' + t[4] + (t[0] === 'tasks' ? ' due' : ' warnings') + '">' + t[4] + '</span>' : '') + '</a>';
@@ -561,6 +562,12 @@
   function A_noticeIcon(type) { return type === 'house' ? 'house' : (CS.A_NOTICE_TYPES[type] || CS.A_NOTICE_TYPES.note).icon; }
   // F_: a label and its card travel as one grid item (F_group), so a two-column grid never splits them
   function A_navCard(label, rows, tiles) { return rows ? '<div class="F_group' + (tiles ? ' A_tiles' : '') + '"><div class="A_label">' + esc(label) + '</div><nav class="card glass list" aria-label="' + esc(label) + '">' + rows + '</nav></div>' : ''; }
+  // s110: the Inventory card on Today (staff and admin) and the same actions on the laundry Inventory tab. Plain links: each opens its own screen.
+  function K_invActions(here) {
+    var b = function (href, icon, title, sub) { return '<a class="btn btn-secondary btn-block K_inv-btn" href="' + href + '" data-k="' + esc(title) + '">' + ICON(icon, 's24') + '<span class="K_inv-t"><b>' + esc(title) + '</b><span>' + esc(sub) + '</span></span></a>'; };
+    return '<div class="K_inv-row">' + (here === 'stock' ? '' : b('#stock', 'box', 'Check inventory', 'What is low and what is on the shelf')) + b('#supply/use', 'checks', 'Report consumption', 'What you used today') + b('#supply', 'camera', 'Report supply', 'A receipt or what you brought in') + '</div>';
+  }
+  function K_invCard() { return '<section class="card glass A_card K_inv" id="K_inv" aria-label="Inventory"><span class="cap up">Inventory</span>' + K_invActions('home') + '</section>'; }
   function renderHome() {
     var el = $('v-home');
     if (!state.payload) { A_heroPut(el, '<div class="screen" style="min-height:0;padding-top:0"><div class="A_body">' + (state.error ? errBanner() : loadingBlock()) + '</div></div>'); return; }
@@ -568,9 +575,10 @@
     var body;
     if (staff) {
       // Today, Turnover, the paid notice (under Turnover: Turnover and Slide to start never move when it lands), Notices, then the doors
-      body = '<div class="A_body">' + errBanner() + A_utilBar() + (wxTop ? wxCard : '') + S_sec('Guests') + todayCard() + nextCard() + S_sec('Turnover') + A_turnoverCard(true) + (wxTop ? '' : wxCard) + H_cleanDoneCard() + '<div id="slot-paid-notice" class="A_slot" hidden></div><div id="slot-owed" class="A_slot" hidden></div>' + H_alertsCard() + A_noticesCard() + S_sec('Shortcuts') +
+      var laundry = CS.isLaundry(role()); // s110: no turnover, clean-done card, paid slots, checklist door or cleaning fee for the laundry role
+      body = '<div class="A_body">' + errBanner() + A_utilBar() + (wxTop ? wxCard : '') + S_sec('Guests') + todayCard() + nextCard() + (laundry ? '' : S_sec('Turnover') + A_turnoverCard(true)) + (wxTop ? '' : wxCard) + (laundry ? '' : H_cleanDoneCard() + '<div id="slot-paid-notice" class="A_slot" hidden></div><div id="slot-owed" class="A_slot" hidden></div>') + K_invCard() + H_alertsCard() + A_noticesCard() + S_sec('Shortcuts') +
         A_navCard('Work', row({ icon: 'cloud', title: 'Weather', sub: 'Today and the next few hours', href: '#weather' }) + doorRow('checklist', 'clip', 'Start or continue today’s turnover') +
-          (LINKS.pay ? row({ icon: 'cash', title: 'Cleaning fee', sub: state.payHint || 'Ask for payment for your cleans and expenses', href: H_payUrl(), subId: 'pay-sub' }) : '') +
+          (LINKS.pay && !laundry ? row({ icon: 'cash', title: 'Cleaning fee', sub: state.payHint || 'Ask for payment for your cleans and expenses', href: H_payUrl(), subId: 'pay-sub' }) : '') +
           row({ icon: 'calendar', title: 'Calendar', sub: 'Who is staying, who is next', href: '#calendar', count: n || '' }) +
           row({ icon: 'box', title: 'Inventory', sub: 'Stock levels and what to buy', href: '#stock' }) +
           (doorDef('manual') && CS.doorAllowed('manual', role()) ? row({ icon: 'book', title: 'House manual', sub: 'How we do things · when something breaks', door: 'manual' }) : '')) +
@@ -583,7 +591,7 @@
       // 3.2: the row opens the shell's own #inbox (which falls back to the dashboard's conversations page when the module is not shipped)
       var inboxShown = CS.canSeeGuestContact(role()) && !state.noticesAbsent && (v ? inbox != null : state.noticesLoading);
       var BD = B_build(); // the board sits above the Turnover card while something blocks an arrival or a guest is waiting; otherwise under it
-      body = '<div class="A_body">' + errBanner() + A_payBanner() + A_utilBar() + (wxTop ? wxCard : '') + S_sec('Guests') + todayCard() + nextCard() + (BD.top ? BD.html : '') + S_sec('Turnover') + A_turnoverCard(false) + (wxTop ? '' : wxCard) + H_cleanDoneCard() + H_alertsCard() + (BD.top ? '' : BD.html) + S_sec('Shortcuts') +
+      body = '<div class="A_body">' + errBanner() + A_payBanner() + A_utilBar() + (wxTop ? wxCard : '') + S_sec('Guests') + todayCard() + nextCard() + (BD.top ? BD.html : '') + S_sec('Turnover') + A_turnoverCard(false) + (wxTop ? '' : wxCard) + H_cleanDoneCard() + K_invCard() + H_alertsCard() + (BD.top ? '' : BD.html) + S_sec('Shortcuts') +
         A_navCard('Guests and bookings', (bk ? row({ icon: 'clip', title: 'Bookings to confirm', sub: 'Open the pending bookings', href: bk.href, external: bk.external, count: bk.count, countLabel: bk.n === 1 ? ' booking to confirm' : ' bookings to confirm' }) : '') +
           row({ icon: 'calendar', title: 'Calendar', sub: 'Stays, blocked nights, notices', href: '#calendar', count: n || '' }) +
           '<div id="slot-inbox"' + (inboxShown ? '' : ' hidden') + (inboxShown && !v ? ' style="min-height:64px"' : '') + '>' + (inboxShown && v ? row({ icon: 'chat', title: 'Inbox', sub: inbox ? inbox + ' open' : 'No open messages', href: '#inbox', count: inbox || '', countLabel: ' open messages' }) : '') + '</div>' +
@@ -1795,7 +1803,9 @@
   // ---------------------------------------------------------------- Modules (s82): weather, stock and manage are separate folders, loaded the first time their route opens
   var H_MODULES = {
     weather: { src: 'weather/W_weather.js', css: 'weather/W_weather.css', global: 'W_Weather', title: 'Weather', roles: null },
-    stock:   { src: 'stock/I_stock.js',     css: 'stock/I_stock.css',     global: 'I_Stock',   title: 'Inventory', roles: ['owner', 'admin', 'cleaner', 'finance'] },
+    stock:   { src: 'stock/I_stock.js',     css: 'stock/I_stock.css',     global: 'I_Stock',   title: 'Inventory', roles: ['owner', 'admin', 'cleaner', 'finance', 'laundry'] },
+    kpis:    { src: 'kpi/K_kpi.js',         css: 'kpi/K_kpi.css',         global: 'K_Kpi',     title: 'Key figures', roles: null, tab: true, demoClient: true }, // s110: the KPIs tab; its Admin segment is gated by role inside
+    supply:  { src: 'stock/S110_supply.js', css: 'kpi/K_kpi.css',         global: 'S110_Supply', title: 'Inventory', roles: ['owner', 'admin', 'inspector', 'cleaner', 'laundry'], demoClient: true }, // s110: report consumption (#supply/use) and report supply (#supply)
     manage:  { src: 'manage/N_manage.js',   css: 'manage/N_manage.css',   global: 'N_Manage',  title: 'Manage', roles: ['owner', 'admin'],
                deps: [{ src: 'manage/N_charts.js', css: 'manage/N_charts.css', global: 'N_CHARTS' }, { src: 'manage/N_bookings.js', css: 'manage/N_bookings.css', global: 'N_BOOKINGS' }, { src: 'manage/N_ops.js', css: 'manage/N_ops.css', global: 'N_OPS' }] }, // s89: the KPI charts and the Bookings / Ops tabs load with Manage
     guests:  { src: 'guests/G_guests.js',   css: 'guests/G_guests.css',   global: 'G_Guests',  title: 'Guests', roles: ['owner', 'admin'] },
@@ -1820,7 +1830,7 @@
     return pr;
   }
   // 3.2: a module that keeps a list or a draft in memory (guests, inbox) drops it on sign-out and on an account switch; a throwing reset never blocks sign-out.
-  function H_resetModules() { ['G_Guests', 'X_Inbox'].forEach(function (n) { try { var g = window[n]; if (g && typeof g.reset === 'function') g.reset(); } catch (e) { /* never block sign-out */ } }); }
+  function H_resetModules() { ['G_Guests', 'X_Inbox', 'S110_Supply', 'K_Kpi'].forEach(function (n) { try { var g = window[n]; if (g && typeof g.reset === 'function') g.reset(); } catch (e) { /* never block sign-out */ } }); }
   function H_unmount() {
     var k = H_mod.mounted; H_mod.mounted = ''; H_mod.sub = ''; H_mod.n++;
     var g = k && window[H_MODULES[k].global]; try { if (g && typeof g.unmount === 'function') g.unmount(); } catch (e) { /* never block navigation or sign-out */ }
@@ -1828,7 +1838,7 @@
   // The folder is not shipped yet: weather goes to the Notices tab (which has the weather card), stock to the inventory door, manage to the admin hub.
   // 3.2: guests and inbox fall back to the same pages of the admin dashboard door (route() sends a role or setting that cannot open the door to #home).
   function H_fallback(key) {
-    var fb = key === 'weather' ? '#calendar/notices' : key === 'stock' ? (doorDef('inventory') && CS.doorAllowed('inventory', role()) ? '#door/inventory' : '#home') : key === 'guests' ? '#door/dashboard/guests' : key === 'inbox' ? '#door/dashboard/guests/conversations' : (state.layout === 'admin' ? '#hub' : '#home');
+    var fb = key === 'kpis' || key === 'supply' ? '#home' : key === 'weather' ? '#calendar/notices' : key === 'stock' ? (doorDef('inventory') && CS.doorAllowed('inventory', role()) ? '#door/inventory' : '#home') : key === 'guests' ? '#door/dashboard/guests' : key === 'inbox' ? '#door/dashboard/guests/conversations' : (state.layout === 'admin' ? '#hub' : '#home');
     history.replaceState(null, '', fb); route();
   }
   // 3.2: what a module needs to subscribe to a push topic without touching pay/. The key comes from the server when asked (as pay/ does); the registration is the shell's own worker.
@@ -1849,13 +1859,13 @@
     if (H_mod.mounted === key && H_mod.sub === sub) return; // a redraw of the same screen must not remount it
     if (H_mod.mounted) H_unmount();
     var token = ++H_mod.n;
-    el.innerHTML = appbar({ title: m.title, back: '#home' }) + '<div class="screen"><div class="H_mod" id="H_mod-' + key + '"><div class="skel" style="height:120px"></div></div></div>';
+    el.innerHTML = appbar({ title: m.title, back: m.tab ? '' : key === 'supply' ? '#stock' : '#home' }) + '<div class="screen">' + (key === 'stock' && CS.isLaundry(role()) ? K_invActions('stock') : '') + '<div class="H_mod" id="H_mod-' + key + '"><div class="skel" style="height:120px"></div></div></div>'; // s110: the laundry Inventory tab is the stock screen with the three actions above it
     H_loadModule(key).then(function () {
       if (current !== key || token !== H_mod.n) return;
       var box = $('H_mod-' + key); if (!box) return; box.innerHTML = '';
       H_mod.mounted = key; H_mod.sub = sub;
       var bad = function () { if (H_mod.mounted === key) { H_mod.mounted = ''; H_mod.sub = ''; H_mod.n++; } if (current === key) H_fallback(key); };
-      try { var mr = window[m.global].mount(box, { client: DEMO ? null : sb, demo: DEMO, role: role(), sub: sub, propertyId: pid(), houseTimes: A_houseT(), pushKey: H_pushKey, swReg: H_swReg, navigate: function (h) { location.hash = String(h).charAt(0) === '#' ? h : '#' + h; }, toast: toast, haptic: E_vibe }); if (mr && typeof mr.then === 'function') mr.then(null, bad); } catch (e) { bad(); } // a module that throws leaves a screen that works, not a blank one
+      try { var mr = window[m.global].mount(box, { client: DEMO && !m.demoClient ? null : sb, demo: DEMO, role: role(), sub: sub, propertyId: pid(), houseTimes: A_houseT(), pushKey: H_pushKey, swReg: H_swReg, navigate: function (h) { location.hash = String(h).charAt(0) === '#' ? h : '#' + h; }, toast: toast, haptic: E_vibe }); if (mr && typeof mr.then === 'function') mr.then(null, bad); } catch (e) { bad(); } // a module that throws leaves a screen that works, not a blank one
     }, function () { if (current === key && token === H_mod.n) H_fallback(key); });
   }
 
@@ -2107,7 +2117,7 @@
       sb.rpc('staff_pay_admin_list_v1').then(function (r) { var d = r.data; if (r.error || !d || d.ok === false) return; state.payReqs = (d.requests || []).filter(function (q) { return q.status === 'requested'; }); state.payWait = state.payReqs.length; if (current === 'home' && state.layout) renderHome(); }).catch(function () {});
       return;
     }
-    if (state.layout !== 'staff' || !LINKS.pay) return;
+    if (state.layout !== 'staff' || !LINKS.pay || CS.isLaundry(role())) return;
     sb.rpc('staff_pay_candidates_v1').then(function (r) {
       var d = r.data; if (r.error || !d || d.ok === false) return;
       var n = (d.sessions || []).length + (d.claims || []).length;
@@ -2154,7 +2164,7 @@
     if (H_mod.mounted && H_mod.mounted !== v) H_unmount();
     setView(v);
     if (v === 'door') { renderDoor(); return; }
-    renderTabs(v === 'hub' || v === 'search' ? 'more' : v === 'weather' ? 'calendar' : v === 'stock' || v === 'manage' || v === 'guests' || v === 'inbox' ? '' : v); // B1: a sub-page marks no tab, never Today
+    renderTabs(v === 'hub' || v === 'search' ? 'more' : v === 'weather' ? 'calendar' : v === 'stock' && CS.isLaundry(role()) ? 'stock' : v === 'stock' || v === 'manage' || v === 'guests' || v === 'inbox' || v === 'supply' ? '' : v); // B1: a sub-page marks no tab, never Today
     if (H_MODULES[v]) renderModule(v); else if (v === 'search') renderSearch(); else if (v === 'hub') renderHub(); else if (v === 'home') renderHome(); else if (v === 'calendar') renderCalendar(); else if (v === 'tasks') renderTasks(); else if (v === 'payrates') { renderPayRates(); if (!state.rates) loadRates(); } else if (v === 'reply') renderReply(); else if (v === 'more') renderMore();
     var typing = document.activeElement && /^(df-(label|kind)|t-(title|due|who|note)|n-(type|title|date|start|hours|detail))$/.test(document.activeElement.id || '');
     if (state.sheet) { if (v !== state.sheet.view) closeSheet(); else if (!typing) drawSheet(); }
@@ -2182,7 +2192,7 @@
     H_histGen++; H_calReset(); H_alReset(); H_resetModules(); // a new sign-in starts every module empty, whoever was here before
     state.layout = CS.layoutForRole(state.access.role);
     state.name = CS.deriveDisplayName(state.user);
-    if (!/^#(home|calendar|tasks|payrates|reply|more|hub|weather|stock|manage|guests|inbox|notices|search)/.test(location.hash)) history.replaceState(null, '', '#home');
+    if (!/^#(home|calendar|tasks|payrates|reply|more|hub|weather|stock|manage|guests|inbox|notices|search|kpis|supply)/.test(location.hash)) history.replaceState(null, '', '#home');
     route(); loadHome(); loadTasks(); maybeIosHint(); H_tourMaybe(); H_alAuto();
   }
   function boot() {

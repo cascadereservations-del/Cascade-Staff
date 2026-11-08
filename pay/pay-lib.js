@@ -183,7 +183,7 @@
   }
   function P_tabs(hash, ICON, esc) {
     var n = P_hashCounts(hash);
-    var tabs = [['home', '../#home', 'Today', 'house', 0, ''], ['calendar', '../#calendar', 'Calendar', 'calendar', n.cal, ' warnings'], ['tasks', '../#tasks', 'Tasks', 'tasks', n.tasks, ' due'], ['more', '../#more', 'More', 'more', 0, '']];
+    var tabs = [['home', '../#home', 'Today', 'house', 0, ''], ['calendar', '../#calendar', 'Calendar', 'calendar', n.cal, ' warnings'], ['tasks', '../#tasks', 'Tasks', 'tasks', n.tasks, ' due'], ['kpis', '../#kpis', 'KPIs', 'dash', 0, ''], ['more', '../#more', 'More', 'more', 0, '']];
     return tabs.map(function (t) {
       return '<a class="tab" href="' + t[1] + '"' + (t[0] === 'home' ? ' aria-current="page"' : '') + '><span class="ico">' + ICON(t[3], 's24') + '</span>' + esc(t[2]) +
         (t[4] ? '<span class="badge" aria-label="' + t[4] + t[5] + '">' + t[4] + '</span>' : '') + '</a>';

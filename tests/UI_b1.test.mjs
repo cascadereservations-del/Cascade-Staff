@@ -37,7 +37,7 @@ test('owner primary rule in the source: pay request first, then the top attentio
 });
 
 test('a sub-page marks no tab; Today, Calendar, Tasks and More still do', async () => {
-  const s = read('app.js'); assert.match(s, /v === 'stock' \|\| v === 'manage' \|\| v === 'guests' \|\| v === 'inbox' \? '' : v/);
+  const s = read('app.js'); assert.match(s, /v === 'stock' \|\| v === 'manage' \|\| v === 'guests' \|\| v === 'inbox' \|\| v === 'supply' \? '' : v/);
   const tabs = async (hash) => { const app = await boot({ role: 'owner', hash, handlers: baseHandlers('owner') }); return app.els.tabbar.innerHTML; };
   assert.doesNotMatch(await tabs('#stock'), /aria-current/);
   assert.match(await tabs('#home'), /aria-current="page"><span class="ico">[^]*Today/);
