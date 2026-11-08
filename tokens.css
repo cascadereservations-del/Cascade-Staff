@@ -70,6 +70,11 @@
   --v5-hz-haze-t: #5E5A4F; --v5-hz-haze-w: #ECE9E0; --v5-hz-sun-t: #6B4A00; --v5-hz-sun-w: #F7EDC8; /* s110: weather warning strip, haze and very high UV */
   color-scheme: light;
   --v5-field-line: #7B8998; --v5-gold-wash: #EBE3D5; --v5-sidebar-hover: #223A55; --v5-turn-stripe: #B9CCEB; --v5-ok-wash: #DEF3E8; /* lane D (dashboard) */
+  /* s110 glass: translucent materials over a warm ambient glow. Cards 0.72, bars 0.78, sheets 0.82 so ink stays above 4.5:1 on every one */
+  --v5-gl-card: rgba(255, 255, 255, 0.72); --v5-gl-bar: rgba(251, 249, 246, 0.86); --v5-gl-sheet: rgba(255, 255, 255, 0.92); --v5-gl-chip: rgba(255, 255, 255, 0.60);
+  --v5-gl-blur: blur(20px) saturate(165%); --v5-gl-blur-lg: blur(28px) saturate(180%);
+  --v5-gl-hi: rgba(255, 255, 255, 0.90); --v5-gl-rim: rgba(40, 30, 20, 0.08); --v5-gl-sh1: rgba(40, 30, 20, 0.05); --v5-gl-sh2: rgba(40, 30, 20, 0.10);
+  --v5-gl-glow-a: rgba(201, 160, 99, 0.20); --v5-gl-glow-b: rgba(91, 139, 208, 0.12); --v5-gl-glow-c: rgba(108, 196, 161, 0.10);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -101,6 +106,11 @@
     --v5-hz-haze-t: #D6D2C4; --v5-hz-haze-w: #34322B; --v5-hz-sun-t: #F2DC8C; --v5-hz-sun-w: #3F3510; /* s110: weather warning strip, haze and very high UV */
     color-scheme: dark;
     --v5-field-line: #6A7E94; --v5-gold-wash: #2A2F33; --v5-sidebar-hover: #1A2B3F; --v5-turn-stripe: #24406E; --v5-ok-wash: #163628;
+    /* s110 glass (dark) */
+    --v5-gl-card: rgba(29, 42, 57, 0.64); --v5-gl-bar: rgba(14, 22, 33, 0.82); --v5-gl-sheet: rgba(26, 38, 52, 0.90); --v5-gl-chip: rgba(29, 42, 57, 0.60);
+    --v5-gl-blur: blur(20px) saturate(150%); --v5-gl-blur-lg: blur(28px) saturate(160%);
+    --v5-gl-hi: rgba(255, 255, 255, 0.10); --v5-gl-rim: rgba(255, 255, 255, 0.07); --v5-gl-sh1: rgba(0, 0, 0, 0.25); --v5-gl-sh2: rgba(0, 0, 0, 0.45);
+    --v5-gl-glow-a: rgba(224, 184, 114, 0.10); --v5-gl-glow-b: rgba(91, 139, 208, 0.16); --v5-gl-glow-c: rgba(79, 195, 168, 0.08);
   }
 }
 
@@ -132,4 +142,9 @@
     --v5-hz-haze-t: #D6D2C4; --v5-hz-haze-w: #34322B; --v5-hz-sun-t: #F2DC8C; --v5-hz-sun-w: #3F3510; /* s110: weather warning strip, haze and very high UV */
   color-scheme: dark;
   --v5-field-line: #6A7E94; --v5-gold-wash: #2A2F33; --v5-sidebar-hover: #1A2B3F; --v5-turn-stripe: #24406E; --v5-ok-wash: #163628;
+  /* s110 glass (dark) */
+  --v5-gl-card: rgba(29, 42, 57, 0.64); --v5-gl-bar: rgba(14, 22, 33, 0.82); --v5-gl-sheet: rgba(26, 38, 52, 0.90); --v5-gl-chip: rgba(29, 42, 57, 0.60);
+  --v5-gl-blur: blur(20px) saturate(150%); --v5-gl-blur-lg: blur(28px) saturate(160%);
+  --v5-gl-hi: rgba(255, 255, 255, 0.10); --v5-gl-rim: rgba(255, 255, 255, 0.07); --v5-gl-sh1: rgba(0, 0, 0, 0.25); --v5-gl-sh2: rgba(0, 0, 0, 0.45);
+  --v5-gl-glow-a: rgba(224, 184, 114, 0.10); --v5-gl-glow-b: rgba(91, 139, 208, 0.16); --v5-gl-glow-c: rgba(79, 195, 168, 0.08);
 }
