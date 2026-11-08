@@ -170,7 +170,7 @@
     if (!rows.some(function (r) { return r.month === cur; })) cur = rows[rows.length - 1].month;
     var bars = monthBars(rows, kind, cur), now = rows.filter(function (r) { return r.month === cur; })[0], bits = [];
     if (now.kwh != null) bits.push(fmt(now.kwh, 1) + ' kWh');
-    if (now.m3 != null) bits.push(fmt(now.m3, 1) + ' m\u00b3');
+    if (now.m3 != null) bits.push(fmt(now.m3, 2) + ' m\u00b3');
     var sum = now.stays && bits.length ? 'This month: ' + bits.join(' and ') + ' per stay over ' + plural(now.stays, 'stay') + '.' : 'No stay has been read this month yet.';
     var tabs = hasW ? '<div class="K_seg" role="tablist" aria-label="Average per stay">' + [['kwh', 'Electricity'], ['m3', 'Water']].map(function (s) { return '<button class="K_seg-b" type="button" role="tab" data-kact="avg" data-avg="' + s[0] + '" aria-selected="' + (kind === s[0]) + '">' + s[1] + '</button>'; }).join('') + '</div>' : '';
     return '<div class="card glass K_chart" id="K_avg"><div class="K_chart-h"><b>Average per stay, ' + (kind === 'm3' ? 'water' : 'electricity') + '</b><span class="K_sub">' + unit + ' per stay</span></div>' + tabs +

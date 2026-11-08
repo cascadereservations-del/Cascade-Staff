@@ -28,7 +28,7 @@
 .K_bars-l { display: flex; gap: 4px; font-size: var(--v5-t-min); color: var(--v5-ink-3); }
 .K_bars-l > span { flex: 1 1 0; min-width: 0; text-align: center; }
 .K_bars-l > .K_cur { color: var(--v5-ink); font-weight: 600; }
-.K_grid2 > .K_stat:last-child:nth-child(odd) { grid-column: 1 / -1; }
+.K_grid2:not(#K_glance) > .K_stat:last-child:nth-child(odd) { grid-column: 1 / -1; } /* the utility tiles only; the admin glance keeps its own grid */
 .K_lines { display: flex; flex-direction: column; padding: 8px 16px; border-radius: var(--v5-r-card); }
 .K_line { display: flex; align-items: center; gap: 12px; padding: 12px 0; border-bottom: 1px solid var(--v5-sep); }
 .K_line:last-child { border-bottom: 0; }
