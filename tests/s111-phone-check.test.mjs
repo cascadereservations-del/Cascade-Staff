@@ -69,7 +69,7 @@ function phone(o = {}) {
   const fetcher = (u) => (/notify-cleaner-payment/.test(String(u)) ? Promise.resolve({ ok: true, json: () => Promise.resolve({ ok: true, key: 'AQIDBA' }) }) : Promise.resolve({ ok: false }));
   const push = Object.assign({}, C_Push, { status: () => Promise.resolve({ state: ctl.subscribed ? 'on' : 'off' }) });
   const opts = (role) => ({ role, hash: '#home', ls, foldFetch: fetcher, serviceWorker: false, nav,
-    winInit: (w) => { w.Notification = N; w.PushManager = function () {}; w.C_Push = push; w.caches = { has: (k) => Promise.resolve(ctl.cacheOk && k === 'cs-shell-v56') }; }, handlers: baseHandlers(role, { staff_push_subscribe_v1: () => ({ error: null, data: { ok: true } }) }) });
+    winInit: (w) => { w.Notification = N; w.PushManager = function () {}; w.C_Push = push; w.caches = { has: (k) => Promise.resolve(ctl.cacheOk && k === 'cs-shell-v57') }; }, handlers: baseHandlers(role, { staff_push_subscribe_v1: () => ({ error: null, data: { ok: true } }) }) });
   return { order, store, ctl, opts };
 }
 const sheet = (app) => app.els['pc-sheet'];
@@ -120,7 +120,7 @@ test('s111 phone check: iPhone in Safari shows the Home Screen steps and Fix all
 
 test('s111 phone check: More > This phone > Check this phone opens it for every role; the cache name matches sw.js; Esc and Close shut it; sign-out clears it', async () => {
   for (const role of ['cleaner', 'laundry', 'owner']) { const h = (await boot({ role, hash: '#more', handlers: baseHandlers(role) })).els['v-more'].innerHTML; assert.match(h, /This phone<\/div>[\s\S]*data-act="pc-open"[\s\S]*Check this phone/, role); }
-  assert.match(read('app.js'), /var PC_SHELL = 'cs-shell-v56';/); assert.match(read('sw.js'), /CACHE_NAME = 'cs-shell-v56'/);
+  assert.match(read('app.js'), /var PC_SHELL = 'cs-shell-v57';/); assert.match(read('sw.js'), /CACHE_NAME = 'cs-shell-v57'/);
   assert.match(read('index.html'), /<div class="PC_sheet" id="pc-sheet" role="dialog" aria-modal="true" aria-labelledby="pc-h" hidden><\/div>/);
   const p = phone(); const app = await boot(p.opts('cleaner')); await app.flush(); assert.equal(sheet(app).hidden, false);
   for (const fn of app.listeners.keydown) fn({ key: 'Escape' }); assert.equal(sheet(app).hidden, true);

@@ -707,7 +707,7 @@
     if (typeof root.fetch !== 'function') throw { photo: 'optfetch' };
     return Promise.resolve().then(function () { return root.fetch(url, { mode: 'cors', credentials: 'omit', referrerPolicy: 'no-referrer' }); }).then(function (r) { if (!r || !r.ok) throw 0; return r.blob(); }).then(null, function () { throw { photo: 'optfetch' }; });
   }
-  function onChange(ev) { var t = ev.target; if (M && t && t.id === 'I_photo_in') photoPicked(ev); }
+  function onChange(ev) { var t = ev.target; if (M && t && (t.id === 'I_photo_in' || t.id === 'I_photo_pick')) photoPicked(ev); }
   // s107 B7: usual first, then preferred, then in stock, then cheapest (price roles) or by title (everyone else).
   function optSort(list, money) {
     var av = function (o) { return o.available === true ? 0 : o.available === null ? 1 : 2; };
@@ -1003,7 +1003,7 @@
         '<p class="I_lvline">' + (it.qty == null ? '' : levelBadge(it) + ' ') + esc(amountText(it)) + (lasts != null ? ' · lasts about ' + esc(lasts) + ' days' : '') + '</p>' +
         (M.denied.shop || !shopRows.length ? '' : '<p class="I_onlist">' + gi('bag', 's16') + ' On the list' + (listedQ ? ', ' + esc(listedQ) : '') + '</p>') + '</div></div>' +
         (a.note ? '<div class="okbox" role="status"><span>' + esc(a.note) + '</span></div>' : '') + errBox(a) +
-        '<div class="I_actbar">' + ac.chosen.map(function (c, n) { return actBtn(c, n === 0 ? 'btn-primary' : 'btn-secondary'); }).join('') + '</div>' + lastChange(it) + optionsBlock(it) +
+        '<div class="I_actbar">' + ac.chosen.map(function (c, n) { return actBtn(c, n === 0 ? 'btn-primary' : 'btn-secondary'); }).join('') + '</div>' + photoRow(it) + lastChange(it) + optionsBlock(it) +
         '<details class="I_det" open><summary>Details</summary><dl class="I_dl">' +
         row('On hand', it.qty == null ? 'Not counted' : esc(uq(it.qty, it.unit))) + row('Reorder at', it.reorder == null ? 'Not set' : esc(uq(it.reorder, it.unit))) + (it.location ? row('Kept in', esc(it.location)) : '') + whereRow(it) +
         (K.v84 && (it.consumable || it.par != null) ? row('Buy up to', it.par != null ? esc(uq(it.par, it.unit)) : it.reorder != null ? esc('2 x reorder level (' + fmt(it.reorder * 2) + ')') : 'Not set') : '') +
@@ -1231,7 +1231,6 @@
     if (allowed('levels')) add('levels', 'Edit details');
     if (allowed('link')) add('link', 'Link a barcode', 'begin-link');
     if (!listed && allowed('shop')) add('shop', 'Add to shopping list');
-    if (allowed('photo')) add('photo', it.photo ? 'Change photo' : 'Add photo', null, true);
     if (it.photo && allowed('photo')) add('photorem', 'Remove photo', 'photo-remove');
     if (canManage(m) && supOK() && root.I_Suppliers.openItemSuppliers) add('itemsup', 'Suppliers for this item', 'item-sup');
     if (allowed('history')) add('history', 'History', 'history-open');
@@ -1242,8 +1241,15 @@
     if (!chosen.length) order.some(function (k) { if (!all[k].file) { chosen.push(k); return true; } return false; });
     return { chosen: chosen.map(function (k) { return all[k]; }), rest: order.filter(function (k) { return chosen.indexOf(k) < 0; }).map(function (k) { return all[k]; }) };
   }
+  // s116 lane B: the photo row sits under the main buttons, camera and gallery side by side (the gallery input has no capture, so the phone offers stored photos).
+  function photoRow(it) {
+    if (!allowed('photo')) return '';
+    var has = !!it.photo, lead = has ? 'Change photo' : 'Add photo';
+    return '<div class="I_photorow" role="group" aria-label="' + lead + '"><p class="I_photolead">' + lead + '</p><div class="I_grid2">' +
+      '<label class="btn btn-secondary btn-block I_filebtn">' + gi('camera', 's16') + (has ? 'Retake' : 'Take a photo') + '<input class="sr" id="I_photo_in" type="file" accept="image/*" capture="environment" aria-label="' + (has ? 'Retake the photo with the camera' : 'Take a photo with the camera') + '"></label>' +
+      '<label class="btn btn-secondary btn-block I_filebtn">' + gi('image', 's16') + (has ? 'Choose another' : 'Choose a photo') + '<input class="sr" id="I_photo_pick" type="file" accept="image/*" aria-label="' + (has ? 'Choose another photo from your phone' : 'Choose a photo from your phone') + '"></label></div></div>';
+  }
   function actBtn(c, cls) {
-    if (c.file) return '<label class="btn btn-secondary btn-block I_filebtn"><input class="sr" id="I_photo_in" type="file" accept="image/*" capture="environment">' + c.text + '</label>';
     return '<button class="btn ' + cls + ' btn-block" type="button" data-act="' + c.act + '" data-kind="' + c.kind + '">' + c.text + '</button>';
   }
   // Running low (s84 1b): the amount to buy back to par (or 2 x reorder level), in packs; 1 when it cannot be worked out.

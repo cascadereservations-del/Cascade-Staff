@@ -137,7 +137,7 @@ test('s110 house rules: tokens in all three theme blocks, no raw colour or px fo
   for (const t of ['--v5-hz-haze-t', '--v5-hz-haze-w', '--v5-hz-sun-t', '--v5-hz-sun-w']) assert.equal(tk.split(t + ':').length - 1, 3, t + ' in light, media dark and data-theme dark');
   assert.doesNotMatch(s110, /#[0-9a-fA-F]{3,8}\b|rgba?\(/, 'tokens only'); assert.doesNotMatch(s110, /font-size:\s*[\d.]+px/); assert.doesNotMatch(s110, /white-space:\s*nowrap/);
   assert.doesNotMatch(s110, /gap:\s*(?!0\b|4px|8px|12px|16px|24px)\S+/, 'gaps on the 4/8/12/16/24 scale');
-  assert.equal(JSON.parse(read('package.json')).version, '3.4.31'); assert.match(read('app.js'), /version: '3.4.31'/); assert.match(read('sw.js'), /CACHE_NAME = 'cs-shell-v56'/);
+  assert.equal(JSON.parse(read('package.json')).version, '3.4.32'); assert.match(read('app.js'), /version: '3.4.32'/); assert.match(read('sw.js'), /CACHE_NAME = 'cs-shell-v57'/);
 });
 
 // ---------------------------------------------------------------------------------------------- s115 (Staff 3.4.30)
