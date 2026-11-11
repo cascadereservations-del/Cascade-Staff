@@ -113,7 +113,7 @@ test('s111 switched off on More: no card in that visit, back on the next open', 
 
 test('3.2.1 version 3.2.1, cache v21, What is new line', async () => {
   const CS = createRequire(import.meta.url)('../lib.js');
-  assert.match(read('sw.js'), /CACHE_NAME = 'cs-shell-v57'/); assert.match(read('app.js'), /version: '3.4.32'/);
+  assert.match(read('sw.js'), /CACHE_NAME = 'cs-shell-v58'/); assert.match(read('app.js'), /version: '3.4.33'/);
   for (const r of ['cleaner', 'owner']) assert.ok(CS.A_whatsNew(r, {}).some((i) => /Alerts now turn on by themselves when this phone allows them\. If they are blocked, Today shows how to allow them\./.test(i.text) && !/!/.test(i.text)));
 });
 

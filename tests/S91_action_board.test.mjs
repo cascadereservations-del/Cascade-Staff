@@ -41,7 +41,7 @@ test('s91 board: each source is one row whose whole row is the action, with plai
     [{ house: [STOCK] }, [/Towels: 2 left/, /href="#stock"/]],
     [{ warnings: [{ kind: 'inventory', title: 'Low stock: dish soap', detail: { qty: 1, unit: 'pc', reorder_below: 3 } }] }, [/Dish soap: 1 pc left \(reorder at 3\)/, /href="#stock"/]],
     [{ house: [FIND, { kind: 'finding', id: 'V8:x', title: 'Cam offline' }] }, [/2 system checks/]],
-    [{ house: [STOCK, { kind: 'low_stock', id: 's2', title: 'Low stock: soap', detail: '1 left' }, { kind: 'low_stock', id: 's3', title: 'Low stock: bulbs', detail: '1 left' }] }, [/3 items low/]],
+    [{ house: [STOCK, { kind: 'low_stock', id: 's2', title: 'Low stock: soap', detail: '1 left' }, { kind: 'low_stock', id: 's3', title: 'Low stock: bulbs', detail: '1 left' }] }, [/3 items running low/]],
   ];
   for (const role of ['owner', 'admin']) for (const [o, res] of cases) {
     const app = await own(Object.assign({ notices: [] }, o), role), c = card(app), rows = rowsOf(c);

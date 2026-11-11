@@ -782,6 +782,23 @@
     var below = d.reorder_below != null ? ' (reorder below ' + (+d.reorder_below) + ')' : '';
     return { head: 'Low stock', rest: name + qty + below };
   }
+  // s117: two or more low-stock warnings become ONE row, "N items running low". shop = names already on the shopping list (lower case); they are not counted. A warning may also say detail.on_list.
+  function lowName(w) { return String(w.title || '').replace(/^Low stock:\s*/i, ''); }
+  function lowFoldRow(names) {
+    var n = names.length, cap = function (t) { t = String(t || ''); return t.charAt(0).toUpperCase() + t.slice(1); };
+    return { title: n + ' items running low', sub: names.slice(0, 3).map(cap).join(', ') + (n > 3 ? ' and ' + (n - 3) + ' more' : ''), count: n };
+  }
+  function foldLowStock(list, shop) {
+    var low = [], rest = [], lc = {}; (shop || []).forEach(function (x) { lc[String(x).toLowerCase()] = 1; });
+    (list || []).forEach(function (w) {
+      if (!w || w.kind !== 'inventory') { rest.push(w); return; }
+      if ((w.detail && w.detail.on_list) || lc[lowName(w).toLowerCase()]) return;
+      low.push(w);
+    });
+    if (low.length === 1) rest.push(low[0]);
+    else if (low.length) { var f = lowFoldRow(low.map(lowName)); rest.push({ kind: 'inventory', severity: 'warn', title: f.title, detail: { folded: f.count, sub: f.sub } }); }
+    return rest;
+  }
   // One line for the home screen: "3 warnings · brownouts 11 and 15 Oct · low stock".
   function warningSummary(list) {
     var n = (list || []).length;
@@ -1413,23 +1430,27 @@
     var inn = mgr && typeof i.inbox === 'number' && i.inbox > 0 ? Math.floor(i.inbox) : 0;
     if (inn > 0) by.inbox.push({ group: 'inbox', id: 'inbox', glyph: 'chat', n: inn, title: inn === 1 ? '1 open message' : inn + ' open messages', sub: 'Guests waiting for a reply', go: { kind: 'inbox' } });
     var brown = {};
-    orderWarnings((Array.isArray(i.warnings) ? i.warnings : []).filter(function (w) { return w && w.kind && (w.kind !== 'verifier' || mgr); })).forEach(function (w) {
+    orderWarnings(foldLowStock((Array.isArray(i.warnings) ? i.warnings : []).filter(function (w) { return w && w.kind && (w.kind !== 'verifier' || mgr); }), i.shopNames)).forEach(function (w) {
       if (w.kind === 'brownout') {
         var b = brownoutText(w), d = w.detail && w.detail.date; if (d) brown[d] = 1;
         if (i.info) return; // s91: on the Needs action board a brownout is information (Heads-up), not an action
         by.warn.push({ group: 'warn', id: E_warnKey(w), glyph: 'alert', word: 'Brownout' + (d ? ' ' + dayShort(d).split(' ')[0] : ''), title: E_brownTitle(w, b), sub: b.rest, go: { kind: 'notices' } });
       } else if (w.kind === 'inventory') {
+        if (w.detail && w.detail.folded) { by.warn.push({ group: 'warn', id: 'low-stock', glyph: 'box', word: 'Low stock', title: w.title, sub: w.detail.sub, go: { kind: 'inventory' }, stock: { name: w.title, text: '', sub: w.detail.sub } }); return; }
         var l = lowStockText(w); by.warn.push({ group: 'warn', id: E_warnKey(w), glyph: 'alert', word: 'Low stock', title: 'Low stock · ' + l.rest, sub: 'Inventory', go: { kind: 'inventory' }, stock: lowStockParts(w) });
       } else by.warn.push({ group: 'warn', id: E_warnKey(w), glyph: 'info', word: 'System check', title: 'System check · ' + (w.title || ''), sub: 'Needs a person to look', go: { kind: 'warn', key: E_warnKey(w) } });
     });
     // s91: house items from notices_v1. The same finding or low-stock item can arrive as a payload warning too; a warning that already says it wins, so nothing is counted twice.
     var allW = Array.isArray(i.warnings) ? i.warnings : [], hasInv = allW.some(function (w) { return w && w.kind === 'inventory'; }), wvKeys = {};
     allW.forEach(function (w) { if (w && w.kind === 'verifier') { var k = findingKey(w, i.tasks); if (k) wvKeys[k] = 1; wvKeys['t:' + w.title] = 1; } });
+    var houseLow = [];
     (mgr && Array.isArray(i.house) ? i.house : []).forEach(function (h) {
       if (!h || !h.title) return;
       if (h.kind === 'finding') { if (wvKeys[h.id] || wvKeys['t:' + h.title]) return; by.find.push({ group: 'find', id: h.id, glyph: 'alert', word: 'Finding', title: h.title, sub: h.detail || 'Needs a person to look', go: { kind: 'finding', key: h.id } }); }
-      else if (h.kind === 'low_stock') { if (hasInv) return; by.stock.push({ group: 'stock', id: h.key || h.id, glyph: 'box', word: 'Low stock', title: h.title, sub: h.detail || 'Inventory', go: { kind: 'inventory' }, stock: { name: String(h.title).replace(/^Low stock:\s*/i, ''), text: h.detail ? String(h.detail) : '' } }); }
+      else if (h.kind === 'low_stock') { if (hasInv) return; houseLow.push(h); }
     });
+    if (houseLow.length === 1) { var h = houseLow[0]; by.stock.push({ group: 'stock', id: h.key || h.id, glyph: 'box', word: 'Low stock', title: h.title, sub: h.detail || 'Inventory', go: { kind: 'inventory' }, stock: { name: String(h.title).replace(/^Low stock:\s*/i, ''), text: h.detail ? String(h.detail) : '' } }); }
+    else if (houseLow.length) { var hf = lowFoldRow(houseLow.map(lowName)); by.stock.push({ group: 'stock', id: 'low-stock', glyph: 'box', word: 'Low stock', title: hf.title, sub: hf.sub, go: { kind: 'inventory' }, stock: { name: hf.title, text: '', sub: hf.sub } }); }
     var tomorrow = addDays(today, 1);
     (Array.isArray(i.notices) ? i.notices : []).forEach(function (n) {
       if (!n || !n.date || (n.date !== today && n.date !== tomorrow)) return;
@@ -1501,7 +1522,7 @@
     });
     if (finds.length === 1) { var f = finds[0]; add({ key: f.group + ':' + f.id, group: f.group, tier: 4, tone: 'info', glyph: 'alert', title: String(f.title).replace(/^System check · /, ''), sub: 'Found by the nightly check', weight: 1, go: f.go, single: true }); }
     else if (finds.length) add({ key: 'find:all', group: 'find', tier: 4, tone: 'info', glyph: 'alert', title: finds.length + ' system checks', sub: 'Found by the nightly check', count: finds.length, weight: finds.length, go: { kind: 'finding', key: null } });
-    if (stocks.length === 1) add({ key: stocks[0].group + ':' + stocks[0].id, group: 'stock', tier: 4, tone: 'info', glyph: 'box', title: B_stockTitle(stocks[0]), sub: 'Inventory', weight: 1, go: { kind: 'inventory' } });
+    if (stocks.length === 1) add({ key: stocks[0].group + ':' + stocks[0].id, group: 'stock', tier: 4, tone: 'info', glyph: 'box', title: B_stockTitle(stocks[0]), sub: (stocks[0].stock && stocks[0].stock.sub) || 'Inventory', weight: 1, go: { kind: 'inventory' } });
     else if (stocks.length) add({ key: 'stock:all', group: 'stock', tier: 4, tone: 'info', glyph: 'box', title: stocks.length + ' items low', sub: stocks.slice(0, 2).map(function (x) { return (x.stock && x.stock.name) || x.title; }).map(B_cap).join(', ') + (stocks.length > 2 ? ' and ' + (stocks.length - 2) + ' more' : ''), count: stocks.length, weight: stocks.length, go: { kind: 'inventory' } });
     cand.sort(function (a, b) { return a.tier - b.tier || String(a.when || '~').localeCompare(String(b.when || '~')) || a.i - b.i; });
     var n = cand.reduce(function (a, r) { return a + r.weight; }, 0), rows = cand;
@@ -1763,7 +1784,7 @@
     monthGrid: monthGrid, dayState: dayState, dayStatus: dayStatus, mergeStays: mergeStays, sameGuest: sameGuest, dayMoves: dayMoves, blockWhy: blockWhy, flagName: flagName, FLAG_KINDS: FLAG_KINDS, blockedLines: blockedLines, blockedLineText: blockedLineText,
     canFlagDays: canFlagDays, guestContact: guestContact, canSeeGuestContact: canSeeGuestContact, MESSENGER_INBOX: MESSENGER_INBOX, rpcMissing: rpcMissing, tgLink: tgLink, warningInfo: warningInfo, findingKey: findingKey, initialOf: initialOf, sourceLabel: sourceLabel, stayDates: stayDates, monthInRange: monthInRange,
     tierRibbon: tierRibbon, tierBadge: tierBadge, wxHazards: wxHazards, wxHourly: wxHourly, nextPrep: nextPrep, utilAlerts: utilAlerts, isInternetNotice: isInternetNotice, tierPerks: tierPerks, tierGuide: tierGuide, TIER_RULES: TIER_RULES, tierRule: tierRule, tierFromCounts: tierFromCounts, tierProgress: tierProgress, phoneCheckSummary: phoneCheckSummary, phoneCheckRows: phoneCheckRows, phoneFixPlan: phoneFixPlan, phoneCheckDue: phoneCheckDue, phoneCheckSave: phoneCheckSave, phoneCheckTried: phoneCheckTried, phoneCheckSettle: phoneCheckSettle, phoneCheckOpen: phoneCheckOpen, phoneCheckRead: phoneCheckRead, phoneBlockedSteps: phoneBlockedSteps, PHONE_CHECK_KEY: PHONE_CHECK_KEY, PHONE_CHECK_VER: PHONE_CHECK_VER, IOS_A2HS: IOS_A2HS, zoomClamp: zoomClamp, zoomStep: zoomStep, zoomToggle: zoomToggle, zoomPan: zoomPan, zoomAt: zoomAt, ZOOM_MAX: ZOOM_MAX, faceFrame: faceFrame, parseNotes: parseNotes, returningLabel: returningLabel, tierLabel: tierLabel, tierLine: tierLine, tierParts: tierParts, keyNote: keyNote, TOPIC_LABELS: TOPIC_LABELS, notableLine: notableLine, weatherIcon: weatherIcon, rainAlert: rainAlert, wxCard: wxCard, goodToKnow: goodToKnow, earlierLine: earlierLine, companionsLine: companionsLine, photoOwnerName: photoOwnerName, stayingLine: stayingLine, idOfLine: idOfLine, todayCardState: todayCardState,
-    orderWarnings: orderWarnings, brownoutText: brownoutText, lowStockText: lowStockText, warningSummary: warningSummary,
+    orderWarnings: orderWarnings, brownoutText: brownoutText, lowStockText: lowStockText, foldLowStock: foldLowStock, warningSummary: warningSummary,
     weatherLine: weatherLine, rainLine: rainLine, weatherStale: weatherStale, WEATHER_STALE_MIN: WEATHER_STALE_MIN, esc: esc,
     A_HOUSE_FALLBACK: A_HOUSE_FALLBACK, A_houseTimes: A_houseTimes, A_turnoverClock: A_turnoverClock, A_turnoverLine: A_turnoverLine, A_hm: A_hm, A_NOTICE_TYPES: A_NOTICE_TYPES, A_noticesView: A_noticesView, A_noticeFilters: A_noticeFilters, A_dayMarks: A_dayMarks, A_noticeDay: A_noticeDay, A_guestMessage: A_guestMessage, A_CAL_TABS: A_CAL_TABS, A_calTab: A_calTab, A_stayShade: A_stayShade, A_hubGroups: A_hubGroups, A_hubNative: A_hubNative, A_hubRoutes: A_hubRoutes, A_hubRouteOk: A_hubRouteOk, A_hubDoorUrl: A_hubDoorUrl, A_whatsNew: A_whatsNew, A_shortTime: A_shortTime, A_PINNED: A_PINNED, A_noticeAddError: A_noticeAddError, A_NOTICE_HINT: A_NOTICE_HINT, A_flagDup: A_flagDup, A_facebookUrl: A_facebookUrl, A_fbPluginUrl: A_fbPluginUrl, A_noticeAddProblem: A_noticeAddProblem, A_noticeAddArgs: A_noticeAddArgs, A_plainRefusal: A_plainRefusal, A_hour12: A_hour12, A_timeRange: A_timeRange,
     taskPriorityLabel: taskPriorityLabel, E_attention: E_attention, A_board: A_board, A_heads: A_heads, A_rangeLabel: A_rangeLabel, A_spanShort: A_spanShort, E_warnKey: E_warnKey, E_buzz: E_buzz, E_hapticsOn: E_hapticsOn, E_hapticsSet: E_hapticsSet, E_PATTERNS: E_PATTERNS,

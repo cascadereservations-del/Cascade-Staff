@@ -145,7 +145,7 @@ test('ID card and contact: no status tint on the ID card, one copy control per v
 });
 
 test('release: 3.4.30, cache v39, tier and key-note tokens in all three theme blocks, reduced motion covers the skeleton and the rain row', () => {
-  assert.equal(JSON.parse(read('package.json')).version, '3.4.32'); assert.match(read('app.js'), /version: '3.4.32'/); assert.match(read('sw.js'), /CACHE_NAME = 'cs-shell-v57'/);
+  assert.equal(JSON.parse(read('package.json')).version, '3.4.33'); assert.match(read('app.js'), /version: '3.4.33'/); assert.match(read('sw.js'), /CACHE_NAME = 'cs-shell-v58'/);
   const tk = read('tokens.css');
   for (const k of ['returning', 'regular', 'vip']) for (const s of ['t', 'w']) assert.equal(tk.split('--v5-tier-' + k + '-' + s + ':').length - 1, 3, k + s);
   assert.equal(tk.split('--v5-note-key-w:').length - 1, 3);

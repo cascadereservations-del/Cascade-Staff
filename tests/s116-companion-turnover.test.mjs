@@ -1,4 +1,4 @@
-// s116 (Staff 3.4.32): whose face is on the ID (id_photo_name), the face on Up next, and the turnover-today tag. Hand-computed expectations.
+// s116 (Staff 3.4.33): whose face is on the ID (id_photo_name), the face on Up next, and the turnover-today tag. Hand-computed expectations.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { CS, read, boot, HOMEWITH, baseHandlers, stayRow } from './_a_harness.mjs';
@@ -70,7 +70,7 @@ test('s116 Turnover today tag: every role, only when a checkout is today; the Tu
   for (const role of ['owner', 'cleaner']) assert.doesNotMatch(await homeHtml(role, { current_guest: GUEST() }), /A_turntag|A_turnnow/, role);
 });
 
-test('s116 the demo carries a guest whose ID photo name differs; release is 3.4.32 / cs-shell-v57', () => {
+test('s116 the demo carries a guest whose ID photo name differs; release is 3.4.33 / cs-shell-v58', () => {
   assert.match(read('demo.js'), /id_photo_name: 'Demo Companion One'/);
-  assert.equal(JSON.parse(read('package.json')).version, '3.4.32'); assert.match(read('app.js'), /version: '3\.4\.32'/); assert.match(read('sw.js'), /CACHE_NAME = 'cs-shell-v57'/); assert.match(read('app.js'), /var PC_SHELL = 'cs-shell-v57';/);
+  assert.equal(JSON.parse(read('package.json')).version, '3.4.33'); assert.match(read('app.js'), /version: '3.4.33'/); assert.match(read('sw.js'), /CACHE_NAME = 'cs-shell-v58'/); assert.match(read('app.js'), /var PC_SHELL = 'cs-shell-v58';/);
 });
