@@ -995,7 +995,7 @@
   function warningItems() {
     var p = state.payload, items = CS.orderWarnings(CS.foldLowStock(p.warnings)).map(function (w) {
       var ico, body;
-      if (w.kind === 'inventory' && w.detail && w.detail.folded) return '<li><a class="wbtn" href="#stock">' + ICON('box').replace('class="i"', 'class="i c-warn"') + '<span><b>' + esc(w.title) + '</b> · ' + esc(w.detail.sub) + '</span><span class="chev">' + ICON('chev', 's16') + '</span></a></li>';
+      if (w.kind === 'inventory' && w.detail && w.detail.folded) { var fb = ICON('box').replace('class="i"', 'class="i c-warn"') + '<span><b>' + esc(w.title) + '</b> · ' + esc(w.detail.sub) + '</span>'; return K_invMay('stock') ? '<li><a class="wbtn" href="#stock?low">' + fb + '<span class="chev">' + ICON('chev', 's16') + '</span></a></li>' : '<li>' + fb + '</li>'; } // roles without Inventory (inspector, maintenance) get a plain row, not a link that bounces home
       if (w.kind === 'brownout') { var b = CS.brownoutText(w); ico = ICON('zap', '').replace('class="i"', 'class="i c-warn"'); body = '<span class="num"><b>' + esc(b.head) + '</b>' + (b.rest ? ' · ' + esc(b.rest) : '') + '</span>'; }
       else if (w.kind === 'inventory') { var l = CS.lowStockText(w); ico = ICON('box').replace('class="i"', 'class="i c-danger"'); body = '<span><b>' + esc(l.head) + '</b> · ' + esc(l.rest) + '</span>'; }
       else { ico = ICON(w.severity === 'alert' ? 'alert' : 'info').replace('class="i"', 'class="i ' + (w.severity === 'alert' ? 'c-danger' : 'c-warn') + '"'); body = '<span><b>System check</b> · ' + esc(w.title) + '</span>'; }
@@ -1369,7 +1369,7 @@
     if (go.kind === 'day') return { tag: 'button', attrs: ' type="button" data-act="notice-cal" data-date="' + esc(go.date) + '"', ext: false };
     if (go.kind === 'bookings') { l = A_hubLink('bookings/inquiries') || { href: CS.INQUIRIES_URL, external: true }; }
     else if (go.kind === 'inbox') { l = { href: '#inbox', external: false }; } // 3.2: the shell's own Inbox
-    else if (go.kind === 'inventory') { l = state.layout === 'admin' ? A_hubLink('inventory') : null; l = l || { href: '#calendar/warnings', external: false }; }
+    else if (go.kind === 'inventory') { l = K_invMay('stock') ? { href: '#stock?low', external: false } : state.layout === 'admin' ? A_hubLink('inventory') : null; l = l || { href: '#calendar/warnings', external: false }; }
     else if (go.kind === 'warn') return { tag: 'button', attrs: ' type="button" data-warn="' + esc(go.key) + '"', ext: false };
     else l = { href: '#calendar/notices', external: false };
     if (!l) l = { href: '#home', external: false };
@@ -1947,16 +1947,16 @@
   }
   function renderModule(key) {
     var m = H_MODULES[key], el = $('v-' + key), sub = H_sub;
-    if (H_mod.mounted === key && H_mod.sub === sub) return; // a redraw of the same screen must not remount it
+    if (H_mod.mounted === key && H_mod.sub === sub) { state.H_lowOnce = false; return; } // a redraw of the same screen must not remount it
     if (H_mod.mounted) H_unmount();
     var token = ++H_mod.n;
     el.innerHTML = appbar({ title: m.title, back: m.tab ? '' : key === 'supply' ? '#stock' : '#home' }) + '<div class="screen">' + (key === 'stock' && CS.isLaundry(role()) ? K_invActions('stock') : '') + '<div class="H_mod" id="H_mod-' + key + '"><div class="skel" style="height:120px"></div></div></div>'; // s110: the laundry Inventory tab is the stock screen with the three actions above it
     H_loadModule(key).then(function () {
       if (current !== key || token !== H_mod.n) return;
       var box = $('H_mod-' + key); if (!box) return; box.innerHTML = '';
-      H_mod.mounted = key; H_mod.sub = sub;
+      H_mod.mounted = key; H_mod.sub = sub; var low = !!state.H_lowOnce; state.H_lowOnce = false; // read at mount: a redraw while the script loads must not eat the one-shot
       var bad = function () { if (H_mod.mounted === key) { H_mod.mounted = ''; H_mod.sub = ''; H_mod.n++; } if (current === key) H_fallback(key); };
-      try { var mr = window[m.global].mount(box, { client: DEMO && !m.demoClient ? null : sb, demo: DEMO, role: role(), sub: sub, propertyId: pid(), houseTimes: A_houseT(), pushKey: H_pushKey, swReg: H_swReg, navigate: function (h) { location.hash = String(h).charAt(0) === '#' ? h : '#' + h; }, toast: toast, haptic: E_vibe }); if (mr && typeof mr.then === 'function') mr.then(null, bad); } catch (e) { bad(); } // a module that throws leaves a screen that works, not a blank one
+      try { var mr = window[m.global].mount(box, { client: DEMO && !m.demoClient ? null : sb, demo: DEMO, role: role(), sub: sub, low: low && key === 'stock', propertyId: pid(), houseTimes: A_houseT(), pushKey: H_pushKey, swReg: H_swReg, navigate: function (h) { location.hash = String(h).charAt(0) === '#' ? h : '#' + h; }, toast: toast, haptic: E_vibe }); if (mr && typeof mr.then === 'function') mr.then(null, bad); } catch (e) { bad(); } // a module that throws leaves a screen that works, not a blank one
     }, function () { if (current === key && token === H_mod.n) H_fallback(key); });
   }
 
@@ -2332,6 +2332,7 @@
     var h = (location.hash || '').replace(/^#/, ''), parts = h.split('/'), v = parts[0] || 'home';
     if (!state.layout) return;
     if (v === 'notices') { history.replaceState(null, '', '#calendar/notices'); parts = ['calendar', 'notices']; v = 'calendar'; } // 3.2: the alerts open the Notices tab; #notices is its short name
+    if (v === 'stock?low') { if (K_invMay('stock')) state.H_lowOnce = true; history.replaceState(null, '', '#stock'); parts = ['stock']; v = 'stock'; } // one-shot: this visit opens Items on Low, plain #stock keeps the restored view
     if (VIEWS.indexOf(v) < 0 || v === 'signin') v = 'home';
     if (v === 'door' && !(doorDef(parts[1]) && CS.doorFramed(parts[1], state.layout, trustOn) && CS.doorAllowed(parts[1], state.access && state.access.role))) v = 'home'; // role decides; the server stays the real gate
     if (v === 'payrates' && !CS.canEditRates(state.access && state.access.role)) v = 'home';

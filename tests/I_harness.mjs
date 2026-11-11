@@ -99,6 +99,7 @@ export async function setup(o = {}) {
   vm.runInContext(fs.readFileSync(srcPath, 'utf8'), ctx, { filename: 'I_stock.js' });
   const root = new Root();
   const opts = { client, demo: !!o.demo, role, sub: o.sub || '', navigate: (h) => { navs.push(h); if (o.remount !== false) { const m = /^#stock\/?(.*)$/.exec(h); if (m) { const sub = m[1]; Promise.resolve().then(() => { opts.sub = sub; win.I_Stock.mount(root, opts); }); } } }, /* the shell re-mounts on a sub-route change */ toast: (m) => toasts.push(m), haptic: (k) => hapts.push(k) };
+  if (o.low) opts.low = true;
   if (o.propertyId) opts.propertyId = o.propertyId;
   // timers and camera: a stub the tests drive by hand (the module reads window.setInterval, BarcodeDetector and navigator.mediaDevices)
   const timers = [], cam = { opened: 0, stopped: 0, found: [], denied: o.camDenied || null, constraints: null, detectCalls: 0 };

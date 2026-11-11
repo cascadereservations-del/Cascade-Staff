@@ -58,3 +58,36 @@ test('s117 the board shows one low-stock row (weight 1) and routes to Inventory'
   assert.equal(b.n, 1); assert.equal(b.rows.length, 1);
   assert.equal(b.rows[0].title, '14 items running low'); assert.deepEqual(b.rows[0].go, { kind: 'inventory' });
 });
+
+// ---- fix round 1 (Opus findings): role gate, sheet link, one-shot Low view
+import { boot, baseHandlers, HOMEWITH, read } from './_a_harness.mjs';
+import { setup, mockClient, item } from './I_harness.mjs';
+const lowW = lows(NAMES.slice(0, 4));
+const calHtml = async (role) => { const s = await boot({ role, hash: '#calendar/warnings', handlers: baseHandlers(role, { staff_home_v1: () => HOMEWITH([], { warnings: lowW }) }) }); return s.els['v-calendar'].innerHTML; };
+
+test('s117 fix1 the folded Warnings row links to Inventory only for roles that have it; inspector and maintenance get a plain row', async () => {
+  for (const role of ['admin', 'cleaner']) { const h = await calHtml(role); assert.match(h, /<a class="wbtn" href="#stock\?low">[^]*4 items running low/, role); }
+  for (const role of ['inspector', 'maintenance']) { const h = await calHtml(role); assert.match(h, /4 items running low/, role); assert.doesNotMatch(h, /href="#stock/, role); }
+});
+
+test('s117 fix2 the To look at sheet row goes to #stock?low with Inventory, keeps the old fallback without it', () => {
+  const src = read('app.js');
+  assert.match(src, /go\.kind === 'inventory'\) \{ l = K_invMay\('stock'\) \? \{ href: '#stock\?low'/);
+  assert.match(src, /: state\.layout === 'admin' \? A_hubLink\('inventory'\) : null; l = l \|\| \{ href: '#calendar\/warnings'/);
+});
+
+test('s117 fix3 #stock?low mounts once with low:true and the URL becomes #stock; a plain #stock does not; no Inventory role never sets it', async () => {
+  const mounts = [], winInit = (win) => { win.H_loadAsset = (m) => { win[m.global] = { mount(el, o) { mounts.push(o); }, unmount() {} }; return Promise.resolve(); }; };
+  const s = await boot({ role: 'admin', hash: '#stock?low', winInit, handlers: baseHandlers('admin') });
+  assert.equal(mounts.length, 1); assert.equal(mounts[0].low, true); assert.equal(mounts[0].sub, ''); assert.equal(s.location.hash, '#stock');
+  const p = await boot({ role: 'admin', hash: '#stock', winInit, handlers: baseHandlers('admin') }); assert.equal(mounts.at(-1).low, false); assert.equal(p.location.hash, '#stock');
+  const m = await boot({ role: 'maintenance', hash: '#stock?low', winInit, handlers: baseHandlers('maintenance') }); assert.equal(mounts.length, 2, 'no module mounts for a role without Inventory'); assert.ok(m);
+});
+
+test('s117 fix3 I_stock low:true opens Items on Low over a saved All/shopping view, saves it; the next plain mount restores that saved Low', async () => {
+  const ss = { cs_I_view: JSON.stringify({ role: 'owner', tab: 'shopping', chip: 'all' }) };
+  const cat = { items: [item('a1', 'Toilet paper', 4, 12), item('a3', 'Bath towels', 14, 10, { consumable: false })] };
+  const e = await setup({ role: 'owner', client: mockClient({ catalogue: cat }), ss, low: true }); await e.mount('');
+  assert.equal(e.navs.length, 0, 'no jump to the shopping tab'); assert.match(e.html(), /data-k="low"[^>]*aria-pressed="true"/);
+  assert.deepEqual(JSON.parse(ss.cs_I_view), { role: 'owner', tab: '', chip: 'low' });
+});

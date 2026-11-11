@@ -242,7 +242,8 @@
     else if (M.client && M.client.auth && M.client.auth.getSession) { try { M.client.auth.getSession().then(function (r) { var s = r && r.data && r.data.session; M.uid = s && s.user ? s.user.id : null; }, function () {}); } catch (e) { /* no uid: rows read "Asked by staff" */ } }
     if (M.demo) o8Demo();
     var goShop = false;
-    if (!K.viewInit) { K.viewInit = true; var vw = ssGet('cs_I_view'); if (vw && vw.role === K.role) { if (/^(low|need|all|cons|out|c:.{1,80})$/.test(String(vw.chip))) K.chip = vw.chip; if (vw.tab === 'shopping' && !M.sub) { M.sub = 'shopping'; goShop = true; } } } // s107 B14: the last tab and chip come back once per visit
+    if (opts.low) { K.viewInit = true; K.chip = 'low'; viewSave(false); } // s117: the folded Warnings row opens Items on Low for this entry only, over any saved view
+    else if (!K.viewInit) { K.viewInit = true; var vw = ssGet('cs_I_view'); if (vw && vw.role === K.role) { if (/^(low|need|all|cons|out|c:.{1,80})$/.test(String(vw.chip))) K.chip = vw.chip; if (vw.tab === 'shopping' && !M.sub) { M.sub = 'shopping'; goShop = true; } } } // s107 B14: the last tab and chip come back once per visit
     ensureSuppliers(); draw();
     if (goShop && opts.navigate) opts.navigate('#stock/shopping');
     if (!M.demo && !(K.items && K.at && nowMs() - K.at < 60000)) load(); // a fresh list for this role is kept when only the sub-route changed
