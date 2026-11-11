@@ -1,4 +1,4 @@
-// s113 (Staff 3.4.29). Lloyd 2026-11-08 on live 3.4.27: "i dont understand this visualization and graphs shown. improve and overhaul it"; the Phone check sheet was
+// s113 (Staff 3.4.30). Lloyd 2026-11-08 on live 3.4.27: "i dont understand this visualization and graphs shown. improve and overhaul it"; the Phone check sheet was
 // translucent; make Phone check a permanent Settings feature; and (orchestrator item) the guest tier guide: badges open it, a progress line, one place for the thresholds.
 // Hand-computed expectations throughout. Contract: docs/s113/contract.md.
 import test from 'node:test';
@@ -165,7 +165,7 @@ test('s113 tier badges: on the Now and Up next cards (and the Calendar guest car
   let focused = ''; const rowEl = (t) => Object.assign(el(), { focus() { focused = t; } });
   const app = await boot({ role: 'cleaner', hash: '#home', els: { 'tg-vip': rowEl('vip'), 'tg-returning': rowEl('returning') }, handlers: baseHandlers('cleaner', { staff_home_v1: () => HOMEWITH([stayRow('Ana Reyes', '2026-10-13', '2026-10-17')], { current_guest: cur, next_guest: nxt }) }) });
   const h = app.els['v-home'].innerHTML;
-  assert.match(h, /<button class="T_ribbon p-tier-vip" type="button" data-act="tiers-open" data-tier="vip"><svg[^>]*><\/svg><span>VIP · 8 stays<\/span><span class="sr">, open the guest tiers guide<\/span><\/button><p class="sub T_prog">Top tier<\/p>/);
+  assert.match(h, /<button class="T_badge p-tier-vip" type="button" data-act="tiers-open" data-tier="vip"><svg[^>]*><\/svg><span>VIP · 8th stay<\/span><span class="sr">, open the guest tiers guide<\/span><\/button><\/div><p class="sub T_prog">Top tier<\/p>/);
   assert.match(h, /T_upnext[\s\S]*?<button class="T_badge p-tier-returning" type="button" data-act="tiers-open" data-tier="returning">[\s\S]*?<\/button><\/div><p class="sub T_prog">2 more stays to Regular \(4 stays or 10 nights\)<\/p>/);
   await app.click({ 'data-act': 'tiers-open', 'data-tier': 'vip' }); await app.flush();
   const b = app.els['cs-body'].innerHTML; assert.equal(app.els['cal-sheet'].getAttribute('aria-hidden'), 'false'); assert.equal(focused, 'vip', 'focus on the guest’s own tier row');
@@ -195,7 +195,7 @@ test('s114 Today guide card: "Guest tiers: how many stays for each", closed by d
 });
 
 // ---------------------------------------------------------------------------------------------- release
-test('s113 release: 3.4.29, cs-shell-v54 in sw.js and PC_SHELL, the new test file is the contract name', () => {
-  assert.equal(JSON.parse(read('package.json')).version, '3.4.29'); assert.match(read('app.js'), /version: '3\.4\.29'/);
-  assert.match(read('sw.js'), /CACHE_NAME = 'cs-shell-v54'/); assert.match(read('app.js'), /var PC_SHELL = 'cs-shell-v54';/);
+test('s113 release: 3.4.30, cs-shell-v55 in sw.js and PC_SHELL, the new test file is the contract name', () => {
+  assert.equal(JSON.parse(read('package.json')).version, '3.4.30'); assert.match(read('app.js'), /version: '3\.4\.30'/);
+  assert.match(read('sw.js'), /CACHE_NAME = 'cs-shell-v55'/); assert.match(read('app.js'), /var PC_SHELL = 'cs-shell-v55';/);
 });

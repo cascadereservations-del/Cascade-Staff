@@ -497,7 +497,7 @@
 
   // ---- guest card helpers ---------------------------------------------------------------------------------------------
   // Notes are one text field "YYYY-MM-DD: point | point || YYYY-MM-DD: point" (the dashboard's ImportantNotes parses it too).
-  var PRIORITY = [[/security|incident|complaint|damage|dispute|concern/i, 0], [/special request|requested/i, 1], [/courtesy|benefit|goodwill|complimentary/i, 2], [/early check|late check|checkout/i, 3]];
+  var PRIORITY = [[/^turnover report/i, 0], [/security|incident|complaint|damage|dispute|concern/i, 0], [/special request|requested/i, 1], [/courtesy|benefit|goodwill|complimentary/i, 2], [/early check|late check|checkout/i, 3]];
   function pointPriority(p) { for (var i = 0; i < PRIORITY.length; i++) if (PRIORITY[i][0].test(p)) return PRIORITY[i][1]; return 4; }
   function parseNotes(text) {
     if (!text) return [];
@@ -530,7 +530,7 @@
     var n = g.stay_count > 0 ? Math.round(+g.stay_count) : 0;
     return { tier: t, icon: r[1], text: r[0] + (n > 1 ? ' · ' + ordinal(n) + ' stay' : '') };
   }
-  // s110: one tag per guest tier with its own glyph and the total stays (stay_count includes the current stay). First stay only when the data says so
+  // s110: one tag per guest tier with its own glyph and the ordinal of THIS stay (stay_count includes the current stay; tiers count completed stays, so "4th stay" never reads as 4 done). First stay only when the data says so
   // (tier first, repeat false, or one stay); an unknown tier with no count and no repeat flag gives null, never a guessed label.
   var BADGE = { first: ['First stay', 'sprout'], returning: ['Returning', 'repeat'], regular: ['Regular', 'sparkles'], vip: ['VIP', 'crown'] };
   function tierBadge(g) {
@@ -545,7 +545,7 @@
       else return null;
     }
     var first = t === 'first', c = first ? 1 : n;
-    return { tier: t, icon: BADGE[t][1], word: BADGE[t][0], count: c || null, text: first ? 'First stay' : BADGE[t][0] + (c ? ' · ' + plural(c, 'stay') : '') };
+    return { tier: t, icon: BADGE[t][1], word: BADGE[t][0], count: c || null, text: first ? 'First stay' : BADGE[t][0] + (c ? ' · ' + ordinal(c) + ' stay' : '') };
   }
   // s105 SPEC-46 section 1: perks to give, from ONE map, cumulative by tier. phase 'arrival' = prepare before arrival, 'house' = what to give during the stay. opts.id: an ID is on file (the no-ID-again line needs it).
   // At most 4 lines: over that, the ID line goes first, then the last ones. No prices, no discounts, no exclamation marks.

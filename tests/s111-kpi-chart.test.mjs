@@ -1,4 +1,4 @@
-// s111 (Staff 3.4.29) rev 2. Lloyd 2026-11-08: "kwh per night is absurd ... make the graphs standard"; a Target card; zoom on photos; a Guest tiers card on Today.
+// s111 (Staff 3.4.30) rev 2. Lloyd 2026-11-08: "kwh per night is absurd ... make the graphs standard"; a Target card; zoom on photos; a Guest tiers card on Today.
 // Hand-computed expectations throughout. KPI module runs in a vm with a fake client; the shell parts run through the lane A harness (frozen clock).
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -175,7 +175,7 @@ test('s111 Guest tiers (s114 shape): a card after the guest cards on Today, clos
 });
 
 test('s111 release pins and tokens: version unchanged, chart tokens in all three theme blocks, no raw colours or px type in the new CSS', () => {
-  assert.equal(JSON.parse(read('package.json')).version, '3.4.29'); assert.match(read('sw.js'), /CACHE_NAME = 'cs-shell-v54'/);
+  assert.equal(JSON.parse(read('package.json')).version, '3.4.30'); assert.match(read('sw.js'), /CACHE_NAME = 'cs-shell-v55'/);
   const tok = read('tokens.css'); for (const k of ['chart-line', 'chart-area', 'chart-band', 'chart-grid', 'chart-axis', 'chart-avg']) assert.equal((tok.match(new RegExp('--v5-' + k + ':', 'g')) || []).length, 3, k);
   const css = read('kpi/K_kpi.css'); const s111 = css.slice(css.indexOf('s113, the chart standard'), css.indexOf('/* supply and consumption'));
   assert.doesNotMatch(s111, /#[0-9a-f]{3,6}\b|rgb\(|nowrap|font-size:\s*\d+px|font:[^;]*\d+px/i);

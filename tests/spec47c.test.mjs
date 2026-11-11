@@ -47,11 +47,11 @@ test('css: tier-coloured placeholder in the same 88 px slot, 10 px rhythm, name 
   assert.match(css, /strong\.A_key \{ font-weight: 500;/);
 });
 
-test('untiered returning guest: the tag says it once at the top (s110), the name row holds only the name', async () => {
+test('untiered returning guest: the tag says it once beside the name (s115)', async () => {
   const h = await home(GUEST({ tier: null, tier_line: null, repeat: true, stay_count: 3, id_face_box: BOX }));
-  const row = /<div class="T_namerow">([\s\S]*?)<\/div><p class="sub num T_when/.exec(h); assert.ok(row, 'name row closes right before the time line');
-  assert.equal(row[1], '<h2 class="A_name">Ana Reyes</h2>'); assert.doesNotMatch(row[1], /pill/);
-  assert.equal((h.match(/Returning · 3 stays/g) || []).length, 1, 'shown once');
+  const row = /<div class="T_namerow">([\s\S]*?)<\/div>(?:<p class="sub T_prog">[^<]*<\/p>)?<p class="sub num T_when/.exec(h); assert.ok(row, 'name row closes right before the time line');
+  assert.match(row[1], /^<h2 class="A_name">Ana Reyes<\/h2><button class="T_badge p-tier-returning"/); assert.doesNotMatch(row[1], /pill/); // s115: the tag now sits beside the name
+  assert.equal((h.match(/Returning · 3rd stay/g) || []).length, 1, 'shown once');
 });
 test('owner tap on the initial loads the photo once and opens the full view; the cleaner gets a bare span', async () => {
   let signs = 0; const full = el(), attrs = {}; full.setAttribute = (k, x) => { attrs[k] = x; }; full.getAttribute = (k) => attrs[k] || null; full.querySelector = () => ({ className: '', textContent: '' });

@@ -28,16 +28,16 @@ test('CS.tierRibbon: words and ordinal per tier, none for a first stay or an unk
 });
 
 test('Today card: ribbon per tier at the top, said once, perks for every role; none for a first stay; arriving says Prepare before arrival', async () => {
-  for (const [tier, n, word] of [['returning', 3, 'Returning · 3 stays'], ['regular', 5, 'Regular · 5 stays'], ['vip', 8, 'VIP · 8 stays']]) {
+  for (const [tier, n, word] of [['returning', 3, 'Returning · 3rd stay'], ['regular', 5, 'Regular · 5th stay'], ['vip', 8, 'VIP · 8th stay']]) {
     const h = await home('cleaner', { current_guest: GUEST({ tier, stay_count: n }) });
-    assert.match(h, new RegExp('aria-label="Today in the house"><button class="T_ribbon p-tier-' + tier + '" type="button" data-act="tiers-open" data-tier="' + tier + '">'), tier + ': the ribbon opens the card');
+    assert.match(h, new RegExp('<h2 class="A_name">[^<]*</h2><button class="T_badge p-tier-' + tier + '" type="button" data-act="tiers-open" data-tier="' + tier + '">'), tier + ': the ribbon opens the card');
     assert.equal((h.split(word).length - 1), 1, tier + ': tier wording once'); assert.doesNotMatch(h, /pill p-tier-|T_line/);
     assert.match(h, /aria-label="Perks to give"/); assert.doesNotMatch(h, /Server line/, 'the server line is only a fallback');
   }
   const first = await home('cleaner', { current_guest: GUEST({ tier: null, repeat: false, stay_count: 1 }) });
-  assert.match(first, /T_ribbon p-tier-first/); assert.doesNotMatch(first, /T_perks/);
+  assert.match(first, /T_badge p-tier-first/); assert.doesNotMatch(first, /T_perks/);
   const arr = await home('cleaner', { current_guest: null, next_guest: GUEST({ checkin_date: TODAY, tier: 'regular', stay_count: 4, id_photo_path: 'g/1.jpg' }) });
-  assert.match(arr, /T_ribbon p-tier-regular/); assert.match(arr, /aria-label="Prepare before arrival"/); assert.match(arr, /No need to ask for ID again, one is on file/); assert.match(arr, /Set saved preferences before arrival/);
+  assert.match(arr, /T_badge p-tier-regular/); assert.match(arr, /aria-label="Prepare before arrival"/); assert.match(arr, /No need to ask for ID again, one is on file/); assert.match(arr, /Set saved preferences before arrival/);
   assert.doesNotMatch(arr, /tel:/, 'a cleaner sees perks but no phone');
 });
 

@@ -20,7 +20,7 @@
     url: 'https://qkgfhsdppslwunarczeq.supabase.co',
     key: 'sb_publishable_JFuRYZ9csmQULcMRmHXDSg_Abo9UeCj',
     propertyId: '6ae230f4-c189-4547-84b1-cb6e0b2cc9bd',
-    version: '3.4.29'
+    version: '3.4.30'
   };
   var LINKS = {
     checklist: 'https://cascadereservations-del.github.io/CH-Cleaners-Checklist/',
@@ -161,8 +161,8 @@
     var outLater = st.kind === 'house' && g.checkout_date && g.checkout_date > p.today, outT = CS.fmtTime(g.checkout_time) || ht.outLabel; // s105: a past check-out date falls back to the old stay-dates line
     var key = st.kind === 'house' ? (outLater ? 'Out ' + (g.checkout_date === CS.addDays(p.today, 1) ? 'tomorrow' : CS.dayLabel(g.checkout_date)) + (g.checkout_date === CS.addDays(p.today, 1) ? ' ' : ', ') + outT : 'Out ' + outT) : 'In ' + (CS.fmtTime(g.checkin_time) || ht.inLabel); // s96: the time that matters comes first
     var tcls = ' T_tier-' + (CS.tierLabel(g.tier) ? g.tier : 'first') + (st.kind === 'house' ? ' T_now' : ' T_arr'); // s109: tier colour on the whole card; the guest in the house leads
-    return '<section class="card glass A_card F_span T_card' + tcls + '" aria-label="Today in the house">' + A_ribbon(g) + A_prog(g) + '<div class="row-between"><span class="cap up T_lbl">' + esc(st.kind === 'house' ? 'Now · in the house' : st.label) + '</span>' + (st.pill ? pill(st.pill.tone, toneIcon(st.pill.tone), st.pill.text) : '') + '</div>' +
-      '<div class="T_who"><div class="T_id"><div class="T_namerow"><h2 class="A_name">' + esc(g.guest_name || 'Guest') + '</h2></div>' + // s105: name, the key day/time line and the ID state fill the height of the face square; Good to know, perks and the rest span the card
+    return '<section class="card glass A_card F_span T_card' + tcls + '" aria-label="Today in the house"><div class="row-between"><span class="cap up T_lbl">' + esc(st.kind === 'house' ? 'Now · in the house' : st.label) + '</span>' + (st.pill ? pill(st.pill.tone, toneIcon(st.pill.tone), st.pill.text) : '') + '</div>' +
+      '<div class="T_who"><div class="T_id"><div class="T_namerow"><h2 class="A_name">' + esc(g.guest_name || 'Guest') + '</h2>' + A_badge(g) + '</div>' + A_prog(g) + // s105: name, the key day/time line and the ID state fill the height of the face square; Good to know, perks and the rest span the card
       '<p class="sub num T_when"><strong class="A_key">' + esc(A_nb(key)) + '</strong> · ' + esc(outLater ? A_nb(CS.plural(g.nights != null ? g.nights : CS.daysBetween(g.checkin_date, g.checkout_date), 'night')) : A_stayDates(g)) + '</p>' + A_idPill(g) + '</div>' + A_face(g) + '</div>' +
       A_grid(g, st.kind) + A_goodToKnow(g, st.kind) + A_perks(g, st.kind, tp) + (nl ? '<p class="help T_ask">' + esc(nl) + '</p>' : '') +
       '<a class="A_more" href="#calendar/' + (st.kind === 'house' ? 'house' : 'next') + '">Open guest card' + ICON('chev', 's16') + '</a></section>';
@@ -278,7 +278,7 @@
       '<a class="btn btn-ghost btn-sm" href="#weather">Open the forecast</a></div></details>';
   }
   // s105 SPEC-46: the tier ribbon at the top of the Today card (first stays get none; it replaces the small chip beside the name) and the perks checklist (CS.tierPerks); both are for every role, they are not contact data.
-  // s110: the ribbon and the compact tag both come from CS.tierBadge (glyph per tier, "Returning · 2 stays", "First stay"), so the stay count is said once.
+  // s110: the ribbon and the compact tag both come from CS.tierBadge (glyph per tier, "Returning · 2nd stay", "First stay"), so the stay count is said once.
   // s113: every badge and ribbon is a button that opens the tier guide on this guest's tier (Lloyd: "could not find the context that explains how many stays")
   function A_tierBtn(cls, r) { return '<button class="' + cls + ' p-tier-' + r.tier + '" type="button" data-act="tiers-open" data-tier="' + esc(r.tier) + '">' + ICON(r.icon, 's16') + '<span>' + esc(r.text) + '</span><span class="sr">' + esc(', open the guest tiers guide') + '</span></button>'; }
   function A_ribbon(g) { var r = CS.tierBadge(g); return r ? A_tierBtn('T_ribbon', r) : ''; }
@@ -2074,7 +2074,7 @@
   // Runs once per device after sign-in (CS.phoneCheckDue, key cs_phone_check) and from More > This phone > Check this phone. Every row comes from a real probe
   // (CS.phoneCheckRows); Fix all runs the fixers in order from the one tap (CS.phoneFixPlan: alerts first, so the permission prompt rides the tap), then probes again.
   // The camera is opened only when its permission is 'prompt', and every track is stopped at once. Nothing changes Trust this device.
-  var PC_SHELL = 'cs-shell-v54'; // the service worker's cache for this version (sw.js CACHE_NAME; a test keeps them equal)
+  var PC_SHELL = 'cs-shell-v55'; // the service worker's cache for this version (sw.js CACHE_NAME; a test keeps them equal)
   var PC = { open: false, busy: false, rows: null, msg: '', camPerm: null };
   function PC_ls() { return store('localStorage'); }
   function PC_cameraPerm() {
