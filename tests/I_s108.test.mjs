@@ -80,6 +80,8 @@ test('I_s108 shopee links lose their tracking query, a shopsuki link keeps its o
   assert.equal(L.o8Link('https://shopee.ph/Joy-i.123.456?sp_atk=abc&xptdk=x#top'), 'https://shopee.ph/Joy-i.123.456');
   assert.equal(L.o8Link('https://SHOPSUKI.ph/products/joy?variant=9'), 'https://shopsuki.ph/products/joy?variant=9');
   assert.equal(L.o8Link('https://shopee.ph'), 'https://shopee.ph/');
+  assert.equal(L.o8Link('https://mandauefoam.ph/products/graz-bath-rug-40x60-cm'), 'https://mandauefoam.ph/products/graz-bath-rug-40x60-cm', 's116: a Mandaue Foam link is accepted');
+  assert.equal(L.o8Link('https://mandauefoam.ph.evil.example/x'), null, 's116: a look-alike host is refused');
   for (const bad of ['http://shopee.ph/x', 'https://example.com/x', 'https://shopee.ph.evil.com/x', 'https://evil.com/shopee.ph/x', 'javascript:alert(1)', '']) assert.equal(L.o8Link(bad), null, bad);
   assert.equal(L.o8Link('https://www.shopee.ph/x?ref=1'), 'https://shopee.ph/x', 'a www. link is accepted without www and without its tracking query');
   assert.equal(L.o8Pic('https://down-ph.img.susercontent.com/file/abc'), 'https://down-ph.img.susercontent.com/file/abc'); assert.equal(L.o8Pic('https://example.com/a.jpg'), null);
@@ -88,7 +90,7 @@ test('I_s108 shopee links lose their tracking query, a shopsuki link keeps its o
   assert.equal(calls(e, 'inventory_option_request_v1')[0][2].p_payload.source_url, 'https://shopee.ph/Joy-i.123.456');
   const f = await make('owner'); await addForm(f);
   await fill(f, { title: 'X', supplierId: 's1', link: 'https://example.com/product' }); await f.submit();
-  assert.equal(calls(f, 'inventory_option_request_v1').length, 0); assert.match(f.sheet(), /role="alert"[^>]*>.*shopsuki\.ph or shopee\.ph/);
+  assert.equal(calls(f, 'inventory_option_request_v1').length, 0); assert.match(f.sheet(), /role="alert"[^>]*>.*shopsuki\.ph, shopee\.ph, mandauefoam\.ph or myhanabishi\.com/);
   await fill(f, { link: 'https://shopsuki.ph/p', photo: 'https://example.com/a.jpg' }); await f.submit();
   assert.equal(calls(f, 'inventory_option_request_v1').length, 0); assert.match(f.sheet(), /cdn\.shopify\.com or down-ph\.img\.susercontent\.com/);
   await fill(f, { photo: '', supplierId: '' }); await f.submit(); assert.match(f.sheet(), /Choose the shop/); assert.equal(calls(f, 'inventory_option_request_v1').length, 0);

@@ -380,7 +380,7 @@
     }, function (e) { if (!M || M.act !== a) return; a.step = 'bad'; a.err = e && e.photo || 'photofail'; drawLayer(); });
   }
   /* ---- s106 item options (Shopsuki): brand/size choices for one item, read from inventory_item_options_v1; hidden when the SQL is not there yet */
-  function siteOf(u) { var h = /^https:\/\/([^\/]+)/i.exec(u || ''); h = h ? h[1].replace(/^www\./, '') : ''; return h === 'shopsuki.ph' ? 'Shopsuki' : h === 'shopee.ph' ? 'Shopee' : h || 'the shop'; }
+  function siteOf(u) { var h = /^https:\/\/([^\/]+)/i.exec(u || ''); h = h ? h[1].replace(/^www\./, '') : ''; return h === 'shopsuki.ph' ? 'Shopsuki' : h === 'shopee.ph' ? 'Shopee' : h === 'mandauefoam.ph' ? 'Mandaue Foam' : h === 'myhanabishi.com' ? 'Hanabishi' : h || 'the shop'; }
   function normOpts(list) {
     return (Array.isArray(list) ? list : []).filter(function (o) { return o && o.id && o.title; }).map(function (o) {
       return { id: String(o.id), supplier: String(o.supplier || ''), title: String(o.title), brand: o.brand ? String(o.brand) : '', packLabel: o.pack_label ? String(o.pack_label) : '',
@@ -444,7 +444,7 @@
     var out = 'https://' + host + (m[2] || '/') + (host === 'shopee.ph' ? '' : m[3] || '');
     return out.length <= 500 ? out : null;
   }
-  var O8_LINK = ['shopsuki.ph', 'shopee.ph'], O8_PIC = ['cdn.shopify.com', 'down-ph.img.susercontent.com'];
+  var O8_LINK = ['shopsuki.ph', 'shopee.ph', 'mandauefoam.ph', 'myhanabishi.com'], O8_PIC = ['cdn.shopify.com', 'down-ph.img.susercontent.com'];
   function o8Link(s) { return o8Url(s, O8_LINK); }
   function o8Pic(s) { return o8Url(s, O8_PIC); }
   function o8Reqlist() { return K.req && M && K.req.role === M.role ? K.req.list : []; }
@@ -560,7 +560,7 @@
     if (diff('packSize')) p.pack_size = o8T(v.packSize) === '' ? null : parseQty(v.packSize);
     if (!o8T(v.supplierId)) return { msg: 'Choose the shop it is sold at.' };
     if (add || diff('supplierId')) p.supplier_id = o8T(v.supplierId);
-    var lk = o8Link(v.link); if (!lk) return { msg: 'Add the product link. It must be an https link from shopsuki.ph or shopee.ph.' };
+    var lk = o8Link(v.link); if (!lk) return { msg: 'Add the product link. It must be an https link from shopsuki.ph, shopee.ph, mandauefoam.ph or myhanabishi.com.' };
     var olk = add ? '' : o8Link(o.link) || o8T(o.link);
     if (add || lk !== olk) p.source_url = lk;
     if (o8T(v.photo) !== '') { var pu = o8Pic(v.photo); if (!pu) return { msg: 'The photo link must be an https image on cdn.shopify.com or down-ph.img.susercontent.com.' }; var opu = add ? '' : o8Pic(o.photo) || o8T(o.photo); if (add || pu !== opu) p.image_url = pu; }
@@ -582,7 +582,7 @@
     return head(a.action === 'add' ? 'Add a product' : 'Edit product', it.name) + '<form data-i-form novalidate>' +
       textField('title', 'Product name', v.title, 'maxlength="160"') + textField('brand', 'Brand', v.brand, 'maxlength="60"') + textField('packLabel', 'Size or pack label', v.packLabel, 'maxlength="40"') +
       textField('packSize', 'Pieces per pack (optional)', v.packSize, 'inputmode="decimal"') + sel +
-      textField('link', 'Product link', v.link, 'inputmode="url" autocapitalize="off" maxlength="500"') + '<p class="help">A link from shopsuki.ph or shopee.ph.</p>' +
+      textField('link', 'Product link', v.link, 'inputmode="url" autocapitalize="off" maxlength="500"') + '<p class="help">A link from shopsuki.ph, shopee.ph, mandauefoam.ph or myhanabishi.com.</p>' +
       textField('photo', 'Photo link (optional)', v.photo, 'inputmode="url" autocapitalize="off" maxlength="500"') +
       (canPrice(M.role) ? textField('price', 'Price in PHP (optional)', v.price, 'inputmode="decimal"') : '') +
       '<div class="field"><button class="chip I_choice" type="button" data-act="o8-avail" aria-pressed="' + (v.avail === '1') + '">' + (v.avail === '1' ? gi('check', 's16') + ' ' : '') + 'In stock</button></div>' +
