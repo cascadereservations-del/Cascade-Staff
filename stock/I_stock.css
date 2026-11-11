@@ -189,5 +189,5 @@ div.I_row { cursor: default; }
 .I_req form { display: grid; gap: 12px; }
 .I_rth { width: 56px; height: 56px; object-fit: cover; border-radius: var(--r-sm, 8px); background: var(--v5-sunk); }
 .I_photorow { margin: .5rem 0; }
-.I_photolead { margin: 0 0 .25rem; font-size: .875rem; color: var(--ink-2, inherit); }
+.I_photolead { margin: 0 0 .25rem; font: 400 var(--v5-t-label)/1.3 var(--font-ui); color: var(--fg-2); }
 .I_photorow .I_filebtn { min-height: 44px; display: inline-flex; align-items: center; justify-content: center; gap: .375rem; min-width: 0; }

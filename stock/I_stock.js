@@ -1245,7 +1245,7 @@
   function photoRow(it) {
     if (!allowed('photo')) return '';
     var has = !!it.photo, lead = has ? 'Change photo' : 'Add photo';
-    return '<div class="I_photorow" role="group" aria-label="' + lead + '"><p class="I_photolead">' + lead + '</p><div class="I_grid2">' +
+    return '<div class="I_photorow" role="group" aria-labelledby="I_photolead"><p class="I_photolead" id="I_photolead">' + lead + '</p><div class="I_grid2">' +
       '<label class="btn btn-secondary btn-block I_filebtn">' + gi('camera', 's16') + (has ? 'Retake' : 'Take a photo') + '<input class="sr" id="I_photo_in" type="file" accept="image/*" capture="environment" aria-label="' + (has ? 'Retake the photo with the camera' : 'Take a photo with the camera') + '"></label>' +
       '<label class="btn btn-secondary btn-block I_filebtn">' + gi('image', 's16') + (has ? 'Choose another' : 'Choose a photo') + '<input class="sr" id="I_photo_pick" type="file" accept="image/*" aria-label="' + (has ? 'Choose another photo from your phone' : 'Choose a photo from your phone') + '"></label></div></div>';
   }
