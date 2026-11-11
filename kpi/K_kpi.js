@@ -137,7 +137,7 @@
     return '<span class="KU_ring" aria-hidden="true"><svg viewBox="0 0 36 36" focusable="false"><circle class="KU_ring-t" cx="18" cy="18" r="15.9155"></circle>' + (p ? '<circle class="KU_ring-f" cx="18" cy="18" r="15.9155" stroke-dasharray="' + p + ' 100" transform="rotate(-90 18 18)"></circle>' : '') + '</svg><b>' + p + '%</b></span>';
   }
   function segTabs(act, label, on, list) {
-    return '<div class="K_seg" role="tablist" aria-label="' + esc(label) + '">' + list.map(function (s) { return '<button class="K_seg-b" type="button" role="tab" data-kact="' + act + '" data-' + act + '="' + s[0] + '" aria-selected="' + (on === s[0]) + '">' + s[1] + '</button>'; }).join('') + '</div>';
+    return '<div class="K_seg" role="tablist" aria-label="' + esc(label) + '">' + list.map(function (s) { return '<button class="K_seg-b" type="button" role="tab" data-kact="' + act + '" data-' + (act === 'day' ? 'kunit' : act) + '="' + s[0] + '" aria-selected="' + (on === s[0]) + '">' + s[1] + '</button>'; }).join('') + '</div>';
   }
   function daysTone(d) { return d != null && d <= 5 ? 'bad' : d != null && d <= 10 ? 'warn' : 'ok'; }
   function rateCost(kwh, rate) { var k = num(kwh), r = num(rate); return k != null && r != null ? k * r : null; }
@@ -472,7 +472,7 @@
     var act = attr(t, 'data-kact'), id = attr(t, 'data-id'), b;
     if (act === 'seg') { var s = attr(t, 'data-seg'); if (s === 'admin' && !isAdminRole(S.role)) return; S.seg = s; memory.seg = s; draw(); return; }
     if (act === 'avg') { memory.avg = attr(t, 'data-avg') === 'm3' ? 'm3' : 'kwh'; draw(); return; }
-    if (act === 'day') { memory.day = attr(t, 'data-day') === 'm3' ? 'm3' : 'kwh'; draw(); return; }
+    if (act === 'day') { memory.day = attr(t, 'data-kunit') === 'm3' ? 'm3' : 'kwh'; draw(); return; }
     if (act === 'zoom') { var src = S.photos[attr(t, 'data-path')]; if (src && root.CSZoom) root.CSZoom.open(src, { alt: attr(t, 'data-alt') || 'Meter photo', opener: t }); return; }
     if (act === 'tgt-open') { if (!canSetRate(S.role)) return; var tg0 = S.data && S.data.admin && S.data.admin.target; S.tgt = { err: '' }; S.vals.tgt = tg0 && tg0.net ? String(tg0.net) : ''; draw(); return; }
     if (act === 'tgt-close') { S.tgt = null; draw(); return; }

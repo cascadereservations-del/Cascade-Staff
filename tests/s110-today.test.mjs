@@ -157,3 +157,13 @@ test('s115 in-house card: the badge sits beside the name and the progress line i
   assert.match(css, /\.K_inv-btn \{[^}]*flex-direction: column;[^}]*height: auto|\.K_inv-btn \{[^}]*height: auto;[^}]*flex-direction: column/);
   assert.match(css, /\.K_inv-row \{ grid-template-columns: repeat\(auto-fit, minmax\(9\.5rem, 1fr\)\); \}/);
 });
+test('s115 the KPI unit toggle never reaches the calendar day sheet; a non-date data-day opens nothing', async () => {
+  const kpi = read('kpi/K_kpi.js'), app = read('app.js');
+  assert.doesNotMatch(kpi, /data-day/, 'the KPI toggle must not carry the calendar attribute');
+  assert.match(kpi, /data-kunit/);
+  assert.ok(app.includes(String.raw`if (/^\d{4}-\d{2}-\d{2}$/.test(t.getAttribute('data-day')`), 'only a real date opens the day sheet');
+  const a = await boot({ role: 'owner', hash: '#calendar', handlers: baseHandlers('owner', { staff_home_v1: () => HOMEWITH([]) }) });
+  await a.click({ 'data-day': 'kwh' });
+  assert.notEqual(a.els['cs-sheet'] && a.els['cs-sheet'].getAttribute('aria-hidden'), 'false', 'no sheet for kwh');
+  assert.doesNotMatch(String((a.els['cs-body'] || {}).innerHTML || ''), /undefined|NaN/);
+});

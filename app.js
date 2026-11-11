@@ -2576,7 +2576,7 @@
     else if (a === 'flag-save') flagSave();
     else if (a === 'flag-clear') sheetCall('calendar_day_flag_clear_v1', { p_property_id: pid(), p_id: t.getAttribute('data-id') }, 'Note removed.');
     else if (a === 'warn-ack') warnAck();
-    else if (t.hasAttribute('data-day')) openSheet('day', t.getAttribute('data-day'));
+    else if (t.hasAttribute('data-day')) { if (/^\d{4}-\d{2}-\d{2}$/.test(t.getAttribute('data-day') || '')) openSheet('day', t.getAttribute('data-day')); } // s115: only a real YYYY-MM-DD opens the day sheet (the KPI unit toggle once sent 'kwh'/'m3' here: title 'undefined NaN undefined')
     else if (t.hasAttribute('data-warn')) openSheet('warn', t.getAttribute('data-warn'));
     else if (a === 'prev') shiftMonth(-1);
     else if (a === 'next') shiftMonth(1);

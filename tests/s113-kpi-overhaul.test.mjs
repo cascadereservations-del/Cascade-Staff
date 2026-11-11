@@ -61,7 +61,7 @@ test('s113 geometry: every value v sits at y = plotBottom - v / max * plotHeight
 test('s113 chart B: Use per day, last 8 readings, a line with an area, a usual band (middle half), labels on the latest and the highest only, 4 short x labels, no average line', async () => {
   const { el, click } = mountWith(payload()); await tick();
   let c = cardOf(el.innerHTML, 'K_day');
-  assert.match(c, /<b>Use per day, last 8 readings, kWh<\/b>/); assert.match(c, /data-kact="day" data-day="kwh" aria-selected="true">Electricity/);
+  assert.match(c, /<b>Use per day, last 8 readings, kWh<\/b>/); assert.match(c, /data-kact="day" data-kunit="kwh" aria-selected="true">Electricity/);
   assert.match(c, /<svg class="KU_svg" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true" focusable="false">/); assert.match(c, /<polyline class="KU_line" points="4,80 /); assert.match(c, /<path class="KU_area" d="M4,100 L4,80 /);
   // sorted 8, 8.3, 9, 10, 10, 10, 10, 42: 25th = 8.3 + 0.7 x 0.75 = 8.825, 75th = 10 -> band from y 80 to y 82.35
   assert.match(c, /<rect class="KU_band" vector-effect="non-scaling-stroke" x="0" width="100" y="80" height="2.35"><\/rect>/); assert.match(c, /<i class="KU_kband"><\/i>usual 8\.8 to 10 kWh/);
@@ -73,7 +73,7 @@ test('s113 chart B: Use per day, last 8 readings, a line with an area, a usual b
   const xs = [...c.matchAll(/<span class="KU_x([^"]*)" style="left:[\d.]+%">([^<]+)<\/span>/g)].map((x) => x[2]); assert.deepEqual(xs, ['20 Oct', '22 Oct', '25 Oct', '27 Oct'], 'first, last, two between');
   assert.match(c, /<p class="K_cap">Each point is the use since the previous reading, divided by the days in between\. The shaded band is the usual range\.<\/p>/);
   assert.match(c, /role="group" aria-label="Electricity per day, last 8 readings, kWh\. Latest 8\.3 on 27 Oct\. Usual range 8\.8 to 10\."/);
-  await click({ 'data-kact': 'day', 'data-day': 'm3' }); c = cardOf(el.innerHTML, 'K_day');
+  await click({ 'data-kact': 'day', 'data-kunit': 'm3' }); c = cardOf(el.innerHTML, 'K_day');
   assert.match(c, /<b>Use per day, last 8 readings, m³<\/b>/); assert.match(c, /aria-label="27 Oct: 0\.3 m³ a day over 3 days, latest reading"/);
   const css = read('kpi/K_kpi.css'); assert.match(css, /\.KU_x \{[^}]*width: max-content;/, 'x labels never break across lines (no nowrap needed)'); assert.match(css, /\.KU_val \{[^}]*width: max-content;/);
 });
