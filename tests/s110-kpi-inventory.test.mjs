@@ -149,7 +149,7 @@ test('s110 Today: the Inventory card with three big buttons for staff and admin 
   const own = (await homeFor('owner', '#kpis')).els.tabbar.innerHTML; assert.match(own, /href="#kpis" aria-current="page"/);
 });
 test('s110 Laundry: Today without Turnover, nudges, clean-done card, checklist door or cleaning fee; Inventory tab; calendar privacy; no money', async () => {
-  const app = await homeFor('laundry'); const h = app.els['v-home'].innerHTML;
+  const app = await homeFor('laundry'); const h = app.els['v-home'].innerHTML.replace(/<p class="A_turntag"[\s\S]*?<\/p>/, ''); // s116: the turnover-today tag is for every role, laundry included; the Turnover section still is not
   assert.doesNotMatch(h, /Turnover today|aria-label="Turnover|Walk through first|Start cleaning|H_cleandone|Clean done|slot-paid-notice|slot-owed|Cleaning fee|Start or continue/i);
   assert.doesNotMatch(h, /door\/checklist|CH-Cleaners-Checklist|data-primary="start-cleaning"/); assert.match(h, /id="K_inv"/); assert.match(h, /Today in the house|Up next|Calendar/);
   assert.doesNotMatch(h, /₱|PHP/);

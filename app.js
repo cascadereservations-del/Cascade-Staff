@@ -20,7 +20,7 @@
     url: 'https://qkgfhsdppslwunarczeq.supabase.co',
     key: 'sb_publishable_JFuRYZ9csmQULcMRmHXDSg_Abo9UeCj',
     propertyId: '6ae230f4-c189-4547-84b1-cb6e0b2cc9bd',
-    version: '3.4.30'
+    version: '3.4.31'
   };
   var LINKS = {
     checklist: 'https://cascadereservations-del.github.io/CH-Cleaners-Checklist/',
@@ -162,7 +162,7 @@
     var key = st.kind === 'house' ? (outLater ? 'Out ' + (g.checkout_date === CS.addDays(p.today, 1) ? 'tomorrow' : CS.dayLabel(g.checkout_date)) + (g.checkout_date === CS.addDays(p.today, 1) ? ' ' : ', ') + outT : 'Out ' + outT) : 'In ' + (CS.fmtTime(g.checkin_time) || ht.inLabel); // s96: the time that matters comes first
     var tcls = ' T_tier-' + (CS.tierLabel(g.tier) ? g.tier : 'first') + (st.kind === 'house' ? ' T_now' : ' T_arr'); // s109: tier colour on the whole card; the guest in the house leads
     return '<section class="card glass A_card F_span T_card' + tcls + '" aria-label="Today in the house"><div class="row-between"><span class="cap up T_lbl">' + esc(st.kind === 'house' ? 'Now · in the house' : st.label) + '</span>' + (st.pill ? pill(st.pill.tone, toneIcon(st.pill.tone), st.pill.text) : '') + '</div>' +
-      '<div class="T_who"><div class="T_id"><div class="T_namerow"><h2 class="A_name">' + esc(g.guest_name || 'Guest') + '</h2>' + A_badge(g) + '</div>' + A_prog(g) + // s105: name, the key day/time line and the ID state fill the height of the face square; Good to know, perks and the rest span the card
+      '<div class="T_who"><div class="T_id"><div class="T_namerow"><h2 class="A_name">' + esc(g.guest_name || 'Guest') + '</h2>' + A_badge(g) + '</div>' + A_prog(g) + A_staying(g) + // s105: name, the key day/time line and the ID state fill the height of the face square; Good to know, perks and the rest span the card
       '<p class="sub num T_when"><strong class="A_key">' + esc(A_nb(key)) + '</strong> · ' + esc(outLater ? A_nb(CS.plural(g.nights != null ? g.nights : CS.daysBetween(g.checkin_date, g.checkout_date), 'night')) : A_stayDates(g)) + '</p>' + A_idPill(g) + '</div>' + A_face(g) + '</div>' +
       A_grid(g, st.kind) + A_goodToKnow(g, st.kind) + A_perks(g, st.kind, tp) + (nl ? '<p class="help T_ask">' + esc(nl) + '</p>' : '') +
       '<a class="A_more" href="#calendar/' + (st.kind === 'house' ? 'house' : 'next') + '">Open guest card' + ICON('chev', 's16') + '</a></section>';
@@ -172,6 +172,7 @@
   // photo as the Guest ID card: no download, copy or share control. Owner and admin tap either one for the full ID (the placeholder loads the photo on that tap only,
   // via data-idpath, which A_loadFaces never reads); everyone else sees a picture or the bare initial.
   var A_FACE_PX = 88;
+  function A_staying(g) { var l = CS.stayingLine(g); return l ? '<p class="sub T_stay">' + esc(l) + '</p>' : ''; } // s116: whose face it is, when the ID is a companion's
   // numbers stay joined to their unit (no break inside '3 nights', '12:00 noon', '2:00 pm'); the time line breaks only at ' · '
   function A_nb(t) { return String(t).replace(/ /g, ' '); }
   // "24 → 25 Oct · 1 night" (the month once when both days share it)
@@ -296,7 +297,7 @@
     var p = state.payload, np = p && CS.nextPrep(p, p.today); if (!np) return '';
     var n = np.guest, tier = CS.tierLabel(n.tier) ? n.tier : 'first', when = 'Arrives ' + np.day + ' ' + (CS.fmtTime(n.checkin_time) || A_houseT().inLabel);
     return '<section class="card A_card F_span T_card T_upnext T_tier-' + tier + '" aria-label="Next arrival"><div class="row-between"><span class="cap up T_lbl">Up next · incoming</span>' + pill('info', 'clock', when) + '</div>' +
-      '<div class="T_namerow"><h3 class="T_nname">' + esc(np.name) + '</h3>' + A_badge(n) + '</div>' + A_prog(n) +
+      '<div class="T_who"><div class="T_id"><div class="T_namerow"><h3 class="T_nname">' + esc(np.name) + '</h3>' + A_badge(n) + '</div>' + A_prog(n) + A_staying(n) + '</div>' + A_face(n) + '</div>' +
       A_grid(n, 'next') + A_perks(n, 'arriving', { line: '' }) + '<a class="A_more" href="#calendar/next">Open guest card' + ICON('chev', 's16') + '</a></section>';
   }
   // s113: "Guest tiers: how many stays for each". s114: closed until tapped; closes itself 5 minutes after a tap opened it (A_autoClose).
@@ -402,6 +403,11 @@
     var d = doorDef('checklist'), ok = d && CS.doorAllowed('checklist', role()), dl = ok ? CS.doorLink('checklist', d.url, location.origin, trustOn) : null;
     return '<div class="S_walk" role="note"><span class="S_walkic">' + ICON('clip', 's24') + '</span><div><b>Walk through first</b><p>Before cleaning, a look around the room helps. Slide to start below, then note each issue in the checklist: damage, stains, missing or broken items.</p></div></div>'; // one way in: the Slide to start below opens the checklist
   }
+  // s116: a gentle tag at the top of Today for every role when a guest checks out today (the Turnover card's own today state).
+  function A_turnTag() {
+    var p = state.payload, ds = p && dayStatusOf(p.today), cg = p && p.current_guest; if (!ds || !ds.out) return '';
+    return '<p class="A_turntag" role="status">' + ICON('logout', 's16') + '<span>' + esc('Turnover today · out ' + (CS.fmtTime(cg && cg.checkout_date === p.today && cg.checkout_time || ds.out.checkout_time) || A_houseT().outLabel)) + '</span></p>';
+  }
   function A_turnoverCard(staff) {
     var p = state.payload, T = A_houseT(), clock = CS.A_turnoverClock(new Date(), T), ds = dayStatusOf(p.today), outToday = !!ds.out, inToday = !!ds.arrive;
     if (!outToday && !inToday) {
@@ -415,7 +421,7 @@
       if (cl) rows += H_check(cl.tone, 'Clean', cl.text);
       if (rd) rows += H_check(CS.H_readyOk(rd) ? 'ok' : 'warn', 'Arrival', CS.H_readyLine(rd));
       if (hl) rows += H_check(hl.tone, 'House', hl.text);
-      return '<section class="card glass A_card" aria-label="Turnover today"><div class="row-between"><span class="cap up">Turnover today</span></div><p class="strong H_tline" style="margin:0">' + esc('Today · out ' + T.outLabel + ' · in ' + T.inLabel) + '</p>' +
+      return '<section class="card glass A_card' + (outToday ? ' A_turnnow' : '') + '" aria-label="Turnover today"><div class="row-between"><span class="cap up">Turnover today</span></div><p class="strong H_tline" style="margin:0">' + esc('Today · out ' + T.outLabel + ' · in ' + T.inLabel) + '</p>' +
         (rows ? '<div class="H_checks">' + rows + '</div>' : '') + ((rd && !CS.H_readyOk(rd)) || (noId && rdFull && rdFull.id === false) ? H_readyBlock(raw, ds.stay, true, noId) : '') + A_primary(false, true) + '</section>';
     }
     var nudge = outToday && clock.phase === 'window' && !state.cleanDone ? S110_walkNudge() : '';
@@ -424,7 +430,7 @@
       '<div class="' + (win ? 'now' : '') + '"><span class="dot">' + ICON('sparkles', 's16') + '</span><span>Clean</span><b>' + esc(closed ? 'Closed' : win ? 'Until ' + CS.A_shortTime(T.check_in) : 'From ' + CS.A_shortTime(T.check_out)) + '</b></div>' +
       '<div><span class="dot">' + ICON('user', 's16') + '</span><span>Guest in</span><b>' + esc(inToday ? T.inLabel : 'None today') + '</b></div></div>';
     var title = [outToday ? 'Guest out ' + T.outLabel : '', inToday ? (ds.stay.guest_name || 'Guest') + ' in ' + T.inLabel : ''].filter(Boolean).join(' · ');
-    return '<section class="card glass A_card" aria-label="Turnover today"><div class="row-between"><span class="cap up">Turnover today</span></div><p class="strong H_tline" style="margin:0">' + esc(title) + '</p>' +
+    return '<section class="card glass A_card' + (outToday ? ' A_turnnow' : '') + '" aria-label="Turnover today"><div class="row-between"><span class="cap up">Turnover today</span></div><p class="strong H_tline" style="margin:0">' + esc(title) + '</p>' +
       steps + '<p class="num H_until" style="margin:0">' + esc(CS.H_untilLine(clock, inToday)) + '</p>' + nudge + A_primary(true, true) + '</section>';
   }
   // MF1: the clean-done card (the checklist posts cs-clean-done). Primary leads straight into the pay request for that clean.
@@ -596,7 +602,7 @@
     if (staff) {
       // Today, Turnover, the paid notice (under Turnover: Turnover and Slide to start never move when it lands), Notices, then the doors
       var laundry = CS.isLaundry(role()); // s110: no turnover, clean-done card, paid slots, checklist door or cleaning fee for the laundry role
-      body = '<div class="A_body">' + errBanner() + H_alertsCard() + PC_todayCard() + A_utilBar() + (wxTop ? wxCard : '') + S_sec('Guests') + todayCard() + nextCard() + A_tierGuide() + (laundry ? '' : S_sec('Turnover') + A_turnoverCard(true)) + (wxTop ? '' : wxCard) + (laundry ? '' : H_cleanDoneCard() + '<div id="slot-paid-notice" class="A_slot" hidden></div><div id="slot-owed" class="A_slot" hidden></div>') + K_invCard() + A_noticesCard() + S_sec('Shortcuts') +
+      body = '<div class="A_body">' + errBanner() + H_alertsCard() + A_turnTag() + PC_todayCard() + A_utilBar() + (wxTop ? wxCard : '') + S_sec('Guests') + todayCard() + nextCard() + A_tierGuide() + (laundry ? '' : S_sec('Turnover') + A_turnoverCard(true)) + (wxTop ? '' : wxCard) + (laundry ? '' : H_cleanDoneCard() + '<div id="slot-paid-notice" class="A_slot" hidden></div><div id="slot-owed" class="A_slot" hidden></div>') + K_invCard() + A_noticesCard() + S_sec('Shortcuts') +
         A_navCard('Work', row({ icon: 'cloud', title: 'Weather', sub: 'Today and the next few hours', href: '#weather' }) + doorRow('checklist', 'clip', 'Start or continue today’s turnover') +
           (LINKS.pay && !laundry ? row({ icon: 'cash', title: 'Cleaning fee', sub: state.payHint || 'Ask for payment for your cleans and expenses', href: H_payUrl(), subId: 'pay-sub' }) : '') +
           row({ icon: 'calendar', title: 'Calendar', sub: 'Who is staying, who is next', href: '#calendar', count: n || '' }) +
@@ -611,7 +617,7 @@
       // 3.2: the row opens the shell's own #inbox (which falls back to the dashboard's conversations page when the module is not shipped)
       var inboxShown = CS.canSeeGuestContact(role()) && !state.noticesAbsent && (v ? inbox != null : state.noticesLoading);
       var BD = B_build(); // the board sits above the Turnover card while something blocks an arrival or a guest is waiting; otherwise under it
-      body = '<div class="A_body">' + errBanner() + H_alertsCard() + PC_todayCard() + A_payBanner() + A_utilBar() + (wxTop ? wxCard : '') + S_sec('Guests') + todayCard() + nextCard() + A_tierGuide() + (BD.top ? BD.html : '') + S_sec('Turnover') + A_turnoverCard(false) + (wxTop ? '' : wxCard) + H_cleanDoneCard() + K_invCard() + (BD.top ? '' : BD.html) + S_sec('Shortcuts') +
+      body = '<div class="A_body">' + errBanner() + H_alertsCard() + A_turnTag() + PC_todayCard() + A_payBanner() + A_utilBar() + (wxTop ? wxCard : '') + S_sec('Guests') + todayCard() + nextCard() + A_tierGuide() + (BD.top ? BD.html : '') + S_sec('Turnover') + A_turnoverCard(false) + (wxTop ? '' : wxCard) + H_cleanDoneCard() + K_invCard() + (BD.top ? '' : BD.html) + S_sec('Shortcuts') +
         A_navCard('Guests and bookings', (bk ? row({ icon: 'clip', title: 'Bookings to confirm', sub: 'Open the pending bookings', href: bk.href, external: bk.external, count: bk.count, countLabel: bk.n === 1 ? ' booking to confirm' : ' bookings to confirm' }) : '') +
           row({ icon: 'calendar', title: 'Calendar', sub: 'Stays, blocked nights, notices', href: '#calendar', count: n || '' }) +
           '<div id="slot-inbox"' + (inboxShown ? '' : ' hidden') + (inboxShown && !v ? ' style="min-height:64px"' : '') + '>' + (inboxShown && v ? row({ icon: 'chat', title: 'Inbox', sub: inbox ? inbox + ' open' : 'No open messages', href: '#inbox', count: inbox || '', countLabel: ' open messages' }) : '') + '</div>' +
@@ -648,7 +654,7 @@
     var tp = tierP(g, false), src = CS.sourceLabel(g.source), earlier = CS.earlierLine(g), withLine = CS.canSeeGuestContact(state.access && state.access.role) ? CS.companionsLine(g) : null; // D-319: owner/admin only, even if the server sent it
     var tint = kind === 'house' ? 'G_stay' : 'G_in'; // s93: arriving = green, in the house = blue (the house guest always checks out after today, so no third tint)
     var info = '<div class="card glass ' + tint + '" id="' + (kind === 'house' ? 'house' : 'next') + '"><div class="row-between"><span class="cap up">' + label + '</span>' + st + '</div>' +
-      '<div class="T_namerow T_gap"><h3 class="ttl">' + esc(g.guest_name || 'Guest') + '</h3>' + A_badge(g) + '</div>' + A_perks(g, kind === 'house' ? 'house' : 'arriving', tp) + (CS.notableLine(g) ? '<p class="help T_ask">' + esc(CS.notableLine(g)) + '</p>' : '') + (withLine ? '<p class="sub T_with">' + esc(withLine) + '</p>' : '') +
+      '<div class="T_namerow T_gap"><h3 class="ttl">' + esc(g.guest_name || 'Guest') + '</h3>' + A_badge(g) + '</div>' + A_staying(g) + A_perks(g, kind === 'house' ? 'house' : 'arriving', tp) + (CS.notableLine(g) ? '<p class="help T_ask">' + esc(CS.notableLine(g)) + '</p>' : '') + (withLine ? '<p class="sub T_with">' + esc(withLine) + '</p>' : '') +
       '<div class="row-wrap" style="margin-top:6px">' + (src ? '<span class="pill p-neutral">' + esc(src) + '</span>' : '') + '</div>' +
       '<p class="sub num" style="margin:8px 0 0">' + esc(datesLine(g)) + '</p>' + (earlier ? '<p class="help num" style="margin:2px 0 0">' + esc(earlier) + '</p>' : '') + contactBlock(g) +
       H_readyBlock(g.arrival_ready, g, true) + (canAddDetails() && g.uid ? '<a class="btn btn-secondary btn-sm" href="./guest/#' + encodeURIComponent(g.uid) + '" style="margin-top:12px">' + ICON('idcard', 's16') + 'Add guest details</a>' : '') +
@@ -665,7 +671,7 @@
     // Owner/admin: the empty box opens Add guest details in ID mode (take or choose the guest's own ID photo; D-320.5).
     var addId = canAddDetails() && g.uid ? './guest/?for=id#' + encodeURIComponent(g.uid) : '';
     var idcard = '<div class="card glass"><h3 class="hd">Guest ID</h3><div style="margin-top:10px">' +
-      (g.id_photo_path ? '<div class="idphoto" data-idpath="' + esc(g.id_photo_path) + '"><span class="skel T_skid"></span><span class="sr">Loading the photo…</span></div><p class="help" style="margin:10px 0 0">Check the face and the name against the guest at the door.</p>'
+      (g.id_photo_path ? '<div class="idphoto" data-idpath="' + esc(g.id_photo_path) + '"><span class="skel T_skid"></span><span class="sr">Loading the photo…</span></div>' + (CS.idOfLine(g) ? '<p class="help T_idof" style="margin:10px 0 0">' + esc(CS.idOfLine(g)) + '</p>' : '') + '<p class="help" style="margin:10px 0 0">Check the face and the name against the guest at the door.</p>'
         : addId ? '<a class="idphoto empty idadd" href="' + esc(addId) + '">' + ICON('camera', 's24') + '<span><b>No ID photo yet.</b><br>Tap to take or choose a photo of the guest’s ID.</span></a>'
         : '<div class="idphoto empty">No ID photo to show for this guest.</div>') +
       (addId ? '<a class="btn btn-ghost btn-sm" href="./guest/?for=companion#' + encodeURIComponent(g.uid) + '" style="margin:8px 0 0 -12px">' + ICON('plus', 's16') + 'Add a companion</a>' +
@@ -2073,7 +2079,7 @@
   // Runs once per device after sign-in (CS.phoneCheckDue, key cs_phone_check) and from More > This phone > Check this phone. Every row comes from a real probe
   // (CS.phoneCheckRows); Fix all runs the fixers in order from the one tap (CS.phoneFixPlan: alerts first, so the permission prompt rides the tap), then probes again.
   // The camera is opened only when its permission is 'prompt', and every track is stopped at once. Nothing changes Trust this device.
-  var PC_SHELL = 'cs-shell-v55'; // the service worker's cache for this version (sw.js CACHE_NAME; a test keeps them equal)
+  var PC_SHELL = 'cs-shell-v56'; // the service worker's cache for this version (sw.js CACHE_NAME; a test keeps them equal)
   var PC = { open: false, busy: false, rows: null, msg: '', camPerm: null };
   function PC_ls() { return store('localStorage'); }
   function PC_cameraPerm() {
