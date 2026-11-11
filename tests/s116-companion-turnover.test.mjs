@@ -42,6 +42,9 @@ test('s116 Up next shows the 88 px face square Today shows (initial without a lo
   for (const role of ['owner', 'cleaner']) {
     const h = await homeHtml(role, { current_guest: cur, next_guest: nxt });
     assert.match(h.slice(h.indexOf('T_upnext')), /<div class="T_who"><div class="T_id">[\s\S]*?(<button class="T_face"|<span class="T_face")[^>]*data-facepath="g\/2\.jpg"/, role);
+    const up = h.slice(h.indexOf('T_upnext')), face = up.match(/<(button|span) class="T_face"[^>]*>/);
+    assert.ok(face, 'face drawn: ' + role);
+    if (role === 'owner') { assert.equal(face[1], 'button'); assert.match(face[0], /data-act="id-full"/); } else { assert.equal(face[1], 'span'); assert.doesNotMatch(face[0], /data-act/); }
   }
   const ph = await homeHtml('owner', { current_guest: cur, next_guest: Object.assign({}, nxt, { id_face_box: null }) });
   assert.match(ph.slice(ph.indexOf('T_upnext')), /<button class="T_face T_ph[^"]*" type="button" data-act="id-full" data-idpath="g\/2\.jpg"[^>]*>B<\/button>/);
@@ -58,6 +61,7 @@ test('s116 Turnover today tag: every role, only when a checkout is today; the Tu
     assert.ok(tag, 'tag drawn: ' + role);
     assert.match(tag[0], /<span>Turnover today · out 11:00 am<\/span>/, role);
     assert.doesNotMatch(tag[0], /!/);
+    if (role !== 'laundry') assert.match(h, /aria-label="Turnover today"[\s\S]*?(Today · out 11:00 am · in |Guest out 11:00 am)/, 'card shows the same out time as the tag: ' + role);
     assert.ok(h.indexOf('A_turntag') < h.indexOf('aria-label="Today in the house"'), 'tag sits above the Today card: ' + role);
     if (role !== 'laundry') assert.match(h, /class="card glass A_card A_turnnow" aria-label="Turnover today"/, role);
   }

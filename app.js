@@ -404,9 +404,10 @@
     return '<div class="S_walk" role="note"><span class="S_walkic">' + ICON('clip', 's24') + '</span><div><b>Walk through first</b><p>Before cleaning, a look around the room helps. Slide to start below, then note each issue in the checklist: damage, stains, missing or broken items.</p></div></div>'; // one way in: the Slide to start below opens the checklist
   }
   // s116: a gentle tag at the top of Today for every role when a guest checks out today (the Turnover card's own today state).
+  function A_outTime(p, ds, T) { var cg = p.current_guest; return CS.fmtTime(cg && cg.checkout_date === p.today && cg.checkout_time || ds.out.checkout_time) || T.outLabel; } // one out-time for the tag and the Turnover card
   function A_turnTag() {
-    var p = state.payload, ds = p && dayStatusOf(p.today), cg = p && p.current_guest; if (!ds || !ds.out) return '';
-    return '<p class="A_turntag" role="status">' + ICON('logout', 's16') + '<span>' + esc('Turnover today · out ' + (CS.fmtTime(cg && cg.checkout_date === p.today && cg.checkout_time || ds.out.checkout_time) || A_houseT().outLabel)) + '</span></p>';
+    var p = state.payload, ds = p && dayStatusOf(p.today); if (!ds || !ds.out) return '';
+    return '<p class="A_turntag" role="status">' + ICON('logout', 's16') + '<span>' + esc('Turnover today · out ' + A_outTime(p, ds, A_houseT())) + '</span></p>';
   }
   function A_turnoverCard(staff) {
     var p = state.payload, T = A_houseT(), clock = CS.A_turnoverClock(new Date(), T), ds = dayStatusOf(p.today), outToday = !!ds.out, inToday = !!ds.arrive;
@@ -415,21 +416,21 @@
       var nextOut = nx ? ' · next out ' + CS.dayLabel(nx.checkout_date) + ', ' + T.outLabel : ' · nothing booked to leave soon';
       return '<section class="card glass A_card" aria-label="Turnover today"><span class="cap up">Turnover today</span><p class="sub" style="margin:0">' + esc('None today' + nextOut) + '</p>' + A_primary(staff, false) + '</section>';
     }
-    var win = clock.phase === 'window', closed = clock.phase === 'after';
+    var oT = outToday ? A_outTime(p, ds, T) : T.outLabel, win = clock.phase === 'window', closed = clock.phase === 'after';
     if (!staff) { // F4: the verdict. Three check rows with a glyph and a word; a row whose data is absent is not drawn.
       var rows = '', cl = CS.H_cleanLine(state.progress, clock), hl = CS.H_houseLine(A_notices(), p.today), raw = inToday ? H_readyRaw(ds.stay) : null, tg = CS.todayCardState(p, p.today).guest, noId = !!(inToday && tg && ds.stay && tg.checkin_date === p.today && (tg.uid && ds.stay.uid ? tg.uid === ds.stay.uid : tg.guest_name === ds.stay.guest_name)), rd = CS.H_ready(raw, role(), noId), rdFull = noId ? CS.H_ready(raw, role()) : rd; // s105: Good to know on the Today card owns the ID state
       if (cl) rows += H_check(cl.tone, 'Clean', cl.text);
       if (rd) rows += H_check(CS.H_readyOk(rd) ? 'ok' : 'warn', 'Arrival', CS.H_readyLine(rd));
       if (hl) rows += H_check(hl.tone, 'House', hl.text);
-      return '<section class="card glass A_card' + (outToday ? ' A_turnnow' : '') + '" aria-label="Turnover today"><div class="row-between"><span class="cap up">Turnover today</span></div><p class="strong H_tline" style="margin:0">' + esc('Today · out ' + T.outLabel + ' · in ' + T.inLabel) + '</p>' +
+      return '<section class="card glass A_card' + (outToday ? ' A_turnnow' : '') + '" aria-label="Turnover today"><div class="row-between"><span class="cap up">Turnover today</span></div><p class="strong H_tline" style="margin:0">' + esc('Today · out ' + oT + ' · in ' + T.inLabel) + '</p>' +
         (rows ? '<div class="H_checks">' + rows + '</div>' : '') + ((rd && !CS.H_readyOk(rd)) || (noId && rdFull && rdFull.id === false) ? H_readyBlock(raw, ds.stay, true, noId) : '') + A_primary(false, true) + '</section>';
     }
     var nudge = outToday && clock.phase === 'window' && !state.cleanDone ? S110_walkNudge() : '';
     var steps = '<div class="A_steps">' +
-      '<div><span class="dot">' + ICON('logout', 's16') + '</span><span>Guest out</span><b>' + esc(outToday ? T.outLabel : 'None today') + '</b></div>' +
+      '<div><span class="dot">' + ICON('logout', 's16') + '</span><span>Guest out</span><b>' + esc(outToday ? oT : 'None today') + '</b></div>' +
       '<div class="' + (win ? 'now' : '') + '"><span class="dot">' + ICON('sparkles', 's16') + '</span><span>Clean</span><b>' + esc(closed ? 'Closed' : win ? 'Until ' + CS.A_shortTime(T.check_in) : 'From ' + CS.A_shortTime(T.check_out)) + '</b></div>' +
       '<div><span class="dot">' + ICON('user', 's16') + '</span><span>Guest in</span><b>' + esc(inToday ? T.inLabel : 'None today') + '</b></div></div>';
-    var title = [outToday ? 'Guest out ' + T.outLabel : '', inToday ? (ds.stay.guest_name || 'Guest') + ' in ' + T.inLabel : ''].filter(Boolean).join(' · ');
+    var title = [outToday ? 'Guest out ' + oT : '', inToday ? (ds.stay.guest_name || 'Guest') + ' in ' + T.inLabel : ''].filter(Boolean).join(' · ');
     return '<section class="card glass A_card' + (outToday ? ' A_turnnow' : '') + '" aria-label="Turnover today"><div class="row-between"><span class="cap up">Turnover today</span></div><p class="strong H_tline" style="margin:0">' + esc(title) + '</p>' +
       steps + '<p class="num H_until" style="margin:0">' + esc(CS.H_untilLine(clock, inToday)) + '</p>' + nudge + A_primary(true, true) + '</section>';
   }
