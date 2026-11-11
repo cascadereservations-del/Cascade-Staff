@@ -497,7 +497,20 @@
 
   // ---- guest card helpers ---------------------------------------------------------------------------------------------
   // Notes are one text field "YYYY-MM-DD: point | point || YYYY-MM-DD: point" (the dashboard's ImportantNotes parses it too).
-  var PRIORITY = [[/^turnover report/i, 0], [/security|incident|complaint|damage|dispute|concern/i, 0], [/special request|requested/i, 1], [/courtesy|benefit|goodwill|complimentary/i, 2], [/early check|late check|checkout/i, 3]];
+  var PRIORITY = [[/^turnover report/i, 0], [/security|incident|complaint|damage|dispute|concern/i, 0], [/allerg|asthma|medical|wheelchair|disab/i, 1], [/special request|requested/i, 1], [/courtesy|benefit|goodwill|complimentary/i, 2], [/early check|late check|checkout/i, 3]];
+  function isTurnover(p) { return /^turnover report/i.test(p); }
+  // s115: the points that matter, strongest first: incident/complaint (0), request/allergy (1), then ONE turnover report (the newest chunk date); the rest are only counted
+  function keyPoints(text) {
+    var out = [], tr = null, order = 0;
+    parseNotes(text).forEach(function (g) { g.points.forEach(function (x) {
+      var o = { p: x.p, rank: x.rank, i: order++, d: g.date || '' };
+      if (x.rank > 1) return;
+      if (!isTurnover(x.p)) { out.push(o); return; }
+      if (!tr || o.d > tr.d) tr = o;
+    }); });
+    if (tr) { tr.t = 1; out.push(tr); }
+    return out.sort(function (a, b) { return (a.t ? 1.5 : a.rank) - (b.t ? 1.5 : b.rank) || a.i - b.i; });
+  }
   function pointPriority(p) { for (var i = 0; i < PRIORITY.length; i++) if (PRIORITY[i][0].test(p)) return PRIORITY[i][1]; return 4; }
   function parseNotes(text) {
     if (!text) return [];
@@ -684,8 +697,8 @@
   function phoneFixPlan(rows) { var need = {}; (rows || []).forEach(function (r) { if (r.state === 'tap' && r.fix) need[r.id] = 1; }); return PHONE_FIX_ORDER.filter(function (id) { return need[id]; }); }
   // s96 SPEC-47: the notes that matter (rank 0 incident/complaint, 1 special request): the strongest one first, and how many other notes there are.
   function keyNote(text) {
-    var all = [], key = null; parseNotes(text).forEach(function (g) { g.points.forEach(function (x) { all.push(x); if (x.rank <= 1 && (!key || x.rank < key.rank)) key = x; }); });
-    return key ? { p: key.p, rank: key.rank, word: key.rank === 0 ? 'Important:' : 'Request:', more: all.length - 1 } : null;
+    var n = 0, key = keyPoints(text)[0]; parseNotes(text).forEach(function (g) { n += g.points.length; });
+    return key ? { p: key.p, rank: key.rank, word: key.rank === 0 ? 'Important:' : 'Request:', more: n - 1 } : null;
   }
   // s96 SPEC-47: topics a guest asked about (card key `notable`, topic keys only), in plain words; absent or empty gives null, max 3, the third after a dot
   var TOPIC_LABELS = { directions: 'directions', links: 'links', wifi: 'Wi-Fi', brownout: 'brownout', guest_count: 'guest count', early_checkin: 'early check-in', late_checkout: 'late check-out', parking: 'parking', pets: 'pets', id: 'ID', complaint: 'a concern' };
@@ -890,9 +903,9 @@
   // s105: the "Good to know" block of the Today card. Notes: every unique important (rank 0) and request (rank 1) point, strongest first, 3 shown, 90 characters each;
   // `more` counts every other unique note. Phone and the companion count only when canContact (owner/admin); guests from a count the server sends, else 1 + companions. id: the photo path exists.
   function goodToKnow(g, canContact) {
-    var key = [], seen = {}, total = 0, cut = function (t) { return t.length > 90 ? t.slice(0, 89).replace(/\s+\S*$/, '') + '…' : t; };
-    parseNotes(g && g.notes).forEach(function (gr) { gr.points.forEach(function (x) { var k = x.p.toLowerCase(); if (seen[k]) return; seen[k] = 1; total++; if (x.rank <= 1) key.push(x); }); });
-    key = key.map(function (x, i) { return { x: x, i: i }; }).sort(function (a, b) { return a.x.rank - b.x.rank || a.i - b.i; }).map(function (o) { return { p: cut(o.x.p), rank: o.x.rank }; });
+    var seen = {}, total = 0, cut = function (t) { if (t.length <= 90) return t; var w = t.slice(0, 89).replace(/\s+\S*$/, ''); return (w.length < 69 ? t.slice(0, 89) : w) + '…'; }; // a word boundary that would drop more than 20 characters is not worth it
+    parseNotes(g && g.notes).forEach(function (gr) { gr.points.forEach(function (x) { var k = x.p.toLowerCase(); if (!seen[k]) { seen[k] = 1; total++; } }); });
+    var shown = {}, key = keyPoints(g && g.notes).filter(function (x) { var k = x.p.toLowerCase(); return shown[k] ? false : (shown[k] = 1); }).map(function (x) { return { p: cut(x.p), rank: x.rank }; });
     var c = canContact ? guestContact(g) : null, n = null;
     ['guest_count', 'num_guests', 'guests'].forEach(function (k) { if (n === null && g && typeof g[k] === 'number' && g[k] > 0) n = Math.round(g[k]); });
     if (n === null && canContact && g && Array.isArray(g.companions)) { var me = String(g.guest_name || '').trim().toLowerCase(), others = g.companions.filter(function (x) { return x && String(x.name || '').trim().toLowerCase() !== me; }); if (others.length) n = 1 + others.length; } // guest_companions holds the main guest's own row too

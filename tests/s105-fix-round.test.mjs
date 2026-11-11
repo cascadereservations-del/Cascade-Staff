@@ -35,7 +35,7 @@ test('ribbon tokens: defined in light and both dark blocks, text 4.5:1 on its ow
     const vals = [...tk.matchAll(new RegExp('--v5-rib-' + t + '-bg: (#[0-9A-F]{6}); --v5-rib-' + t + '-fg: (#[0-9A-F]{6}); --v5-rib-' + t + '-bar: (#[0-9A-F]{6});', 'g'))];
     assert.equal(vals.length, 3, t);
     for (const [, bg, fg, bar] of vals) { assert.ok(ratio(bg, fg) >= 4.5, t + ' text ' + ratio(bg, fg).toFixed(2)); assert.ok(ratio(bg, bar) >= 2.5, t + ' bar ' + ratio(bg, bar).toFixed(2)); }
-    assert.match(css, new RegExp('\\.T_ribbon\\.p-tier-' + t + ' \\{ background: var\\(--v5-rib-' + t + '-bg\\); color: var\\(--v5-rib-' + t + '-fg\\); border-left-color: var\\(--v5-rib-' + t + '-bar\\); \\}'));
+    assert.match(css, new RegExp('\\.T_badge\\.p-tier-' + t + ' \\{ background: var\\(--v5-rib-' + t + '-bg\\); color: var\\(--v5-rib-' + t + '-fg\\); border-left-color: var\\(--v5-rib-' + t + '-bar\\); \\}'));
   }
 });
 

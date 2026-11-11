@@ -152,7 +152,7 @@
       utility: { kwh: num(u.kwh_month), perDay: num(u.kwh_per_day), m3: num(u.m3_month), m3PerDay: num(u.m3_per_day), booked: num(u.nights_booked), monthNights: num(u.nights_in_month),
         last: lr ? { at: lr.recorded_at || null, delta: num(lr.delta_kwh), days: num(lr.days), perDay: num(lr.kwh_per_day), m3: num(lr.delta_m3), m3PerDay: num(lr.m3_per_day), flag: lr.flag ? String(lr.flag) : '' } : null,
         perMonth: (Array.isArray(u.per_month) ? u.per_month : []).filter(function (r) { return r && monthParts(r.month); }).map(function (r) { return { month: String(r.month).slice(0, 7), stays: num(r.stays) || 0, kwh: num(r.kwh_per_stay), m3: num(r.m3_per_stay), kwhDay: num(r.kwh_per_day), m3Day: num(r.m3_per_day) }; }).slice(-12),
-        perStay: (Array.isArray(u.per_stay) ? u.per_stay : []).filter(function (s) { return s && typeof s === 'object'; }).map(function (s) { return { date: String(s.checkout_date || s.recorded_at || '').slice(0, 10), days: num(s.days), kwh: num(s.kwh_per_day), m3: num(s.m3_per_day) }; }).slice(-8),
+        perStay: (Array.isArray(u.per_stay) ? u.per_stay : []).filter(function (s) { return s && typeof s === 'object'; }).map(function (s) { return { date: String(s.to || s.checkout_date || s.recorded_at || '').slice(0, 10), from: s.from ? String(s.from).slice(0, 10) : '', days: num(s.days), kwh: num(s.kwh_per_day), m3: num(s.m3_per_day) }; }).slice(-8),
         brownouts: { count: num(u.brownouts && u.brownouts.count) || 0, hours: num(u.brownouts && u.brownouts.hours) || 0 },
         water: { count: num(u.water_cuts && u.water_cuts.count) || 0, hours: num(u.water_cuts && u.water_cuts.hours) || 0 },
         internet: u.internet_cuts && typeof u.internet_cuts === 'object' ? { count: num(u.internet_cuts.count) || 0, hours: num(u.internet_cuts.hours) || 0 } : null }, // null: an older server, so no row
@@ -268,22 +268,25 @@
   // arrow and its true value, and named under the chart; the typical line is the median. Months on x every 3rd, the current month bold.
   function avgCard(u, month) {
     var rows = u.perMonth; if (!rows.length) return '';
-    var hasW = rows.some(function (r) { return r.m3 != null; }), kind = hasW && memory.avg === 'm3' ? 'm3' : 'kwh', unit = unitOf(kind), d = kind === 'm3' ? 2 : 1, cur = String(month).slice(0, 7);
+    var hasW = rows.some(function (r) { return r.m3 != null || r.m3Day != null; }), kind = hasW && memory.avg === 'm3' ? 'm3' : 'kwh', unit = unitOf(kind), d = kind === 'm3' ? 2 : 1, cur = String(month).slice(0, 7);
     if (!rows.some(function (r) { return r.month === cur; })) cur = rows[rows.length - 1].month;
     var em = rows.map(function (r) { return r.month; }).indexOf(cur), now = rows[em], bits = [], n = rows.length;
     if (now.kwh != null) bits.push(fmt(now.kwh, 1) + ' kWh');
     if (now.m3 != null) bits.push(fmt(now.m3, 2) + ' m³');
     var sum = now.stays && bits.length ? 'This month: ' + bits.join(' and ') + ' per stay over ' + plural(now.stays, 'stay') + '.' : 'No stay has been read this month yet.';
-    var vals = rows.map(function (r) { return r[kind]; }), m = monthModel(vals, em), word = kind === 'm3' ? 'water' : 'electricity';
+    // s115: per DAY (use divided by the days between checkouts) when the server sends it; an older server falls back to per stay
+    var perDay = rows.some(function (r) { return r.kwhDay != null || r.m3Day != null; }), vk = perDay ? kind + 'Day' : kind, per = perDay ? 'a day' : 'per stay', ttl = perDay ? 'Average per day' : 'Average per stay';
+    var vals = rows.map(function (r) { return r[vk]; }), m = monthModel(vals, em), word = kind === 'm3' ? 'water' : 'electricity';
+    if (perDay) { var nd = rows[em][vk]; sum = nd != null ? 'This month: ' + fmt(nd, d) + ' ' + unit + ' a day' + (now.stays ? ' over ' + plural(now.stays, 'stay') : '') + '.' : 'No reading this month yet.'; }
     var xs = rows.map(function (r, i) { return { i: i, text: MONTHS[monthParts(r.month).m - 1].slice(0, 3), em: i === em }; }).filter(function (x) { return (n - 1 - x.i) % 3 === 0 || x.em; });
     var odd = (m.overs || []).map(function (i) { return '<p class="K_sub KU_odd">' + gi('alert', 's16') + '<span>' + esc(fmt(vals[i], d) + ' ' + unit + ' in ' + MONTHS[monthParts(rows[i].month).m - 1] + ': unusually high, check that month’s readings.') + '</span></p>'; }).join('');
-    return lineChart({ id: 'K_avg', title: 'Average per stay, last 12 months, ' + unit, dec: d, model: m, em: em, area: false, // gaps would cut the area into blocks
-      tabs: hasW ? segTabs('avg', 'Average per stay', kind, EW) : '',
-      aria: function (p) { var r = rows[p.i]; return monthShort(r.month) + ': ' + fmt(p.v, d) + ' ' + unit + ' per stay, ' + plural(r.stays, 'stay') + (p.over ? ', unusually high' : '') + (p.i === em ? ', this month' : ''); },
+    return lineChart({ id: 'K_avg', title: ttl + ', last 12 months, ' + unit, dec: d, model: m, em: em, area: false, // gaps would cut the area into blocks
+      tabs: hasW ? segTabs('avg', ttl, kind, EW) : '',
+      aria: function (p) { var r = rows[p.i]; return monthShort(r.month) + ': ' + fmt(p.v, d) + ' ' + unit + ' ' + per + ', ' + plural(r.stays, 'stay') + (p.over ? ', unusually high' : '') + (p.i === em ? ', this month' : ''); },
       values: [em].concat(m.overs || []), x: xs,
       key: m.typical ? '<i class="KU_ktyp"></i>' + esc('typical ' + fmt(m.typical.v, d) + ' ' + unit) : '',
-      summary: 'Average ' + word + ' per stay, last 12 months, ' + unit + '. ' + (now[kind] != null ? 'This month ' + fmt(now[kind], d) + '. ' : '') + (m.typical ? 'Typical ' + fmt(m.typical.v, d) + '.' : ''),
-      caption: 'Each point is the average per stay in that month. The dashed line is the typical month. A month with no reading is a gap.', foot: odd + '<p class="K_sub" id="K_avg-sum">' + esc(sum) + '</p>' });
+      summary: 'Average ' + word + ' ' + per + ', last 12 months, ' + unit + '. ' + (now[vk] != null ? 'This month ' + fmt(now[vk], d) + '. ' : '') + (m.typical ? 'Typical ' + fmt(m.typical.v, d) + '.' : ''),
+      caption: perDay ? 'Each point is the use per day in that month (meter use divided by the days between checkouts). The dashed line is the typical month. A month with no readings is a gap.' : 'Each point is the average per stay in that month. The dashed line is the typical month. A month with no reading is a gap.', foot: odd + '<p class="K_sub" id="K_avg-sum">' + esc(sum) + '</p>' });
   }
   // Chart B: use per day between the last 8 counted readings, a line with a soft area; the shaded band is the usual range (middle half of the 8); no average line.
   function dayCard(u) {
@@ -292,7 +295,7 @@
     var vals = rows.map(function (r) { return r[kind]; }), m = dayModel(vals), name = function (i) { return rows[i].date ? dayMonth(rows[i].date) : 'Reading ' + (i + 1); };
     return lineChart({ id: 'K_day', title: 'Use per day, last ' + plural(rows.length, 'reading') + ', ' + unit, dec: d, model: m, em: m.latest,
       tabs: hasW ? segTabs('day', 'Use per day between readings', kind, EW) : '',
-      aria: function (p) { var r = rows[p.i]; return name(p.i) + ': ' + fmt(p.v, d) + ' ' + unit + ' a day' + (r.days ? ' over ' + plural(r.days, 'day') : '') + (p.i === m.latest ? ', latest reading' : '') + (p.i === m.highest && p.i !== m.latest ? ', highest' : ''); },
+      aria: function (p) { var r = rows[p.i]; return (r.from && r.date ? dayMonth(r.from) + '–' + dayMonth(r.date) : name(p.i)) + ': ' + fmt(p.v, d) + ' ' + unit + ' a day' + (r.days ? ' over ' + plural(r.days, 'day') : '') + (p.i === m.latest ? ', latest reading' : '') + (p.i === m.highest && p.i !== m.latest ? ', highest' : ''); },
       values: m.latest != null ? [m.latest, m.highest] : [], x: xPick(rows.length).map(function (i) { return { i: i, text: name(i), em: i === m.latest }; }),
       key: m.band ? '<i class="KU_kband"></i>' + esc('usual ' + fmt(m.band.lo, d) + ' to ' + fmt(m.band.hi, d) + ' ' + unit) : '',
       summary: (kind === 'm3' ? 'Water' : 'Electricity') + ' per day, last ' + plural(rows.length, 'reading') + ', ' + unit + '. ' + (m.latest != null ? 'Latest ' + fmt(vals[m.latest], d) + ' on ' + name(m.latest) + '. ' : '') + (m.band ? 'Usual range ' + fmt(m.band.lo, d) + ' to ' + fmt(m.band.hi, d) + '.' : ''),

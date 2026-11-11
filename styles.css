@@ -1155,7 +1155,6 @@ p.sub.T_line { margin: 2px 0 0; padding-left: 8px; border-left: 2px solid var(--
 .T_id > .pill { justify-self: start; } /* s105: name, the key day/time line and the ID state sit beside the face square, so its 88 px height is used */
 .T_id > .T_when { margin: 0; }
 .T_next { display: grid; gap: 8px; padding-top: 10px; border-top: 1px solid var(--v5-sep); }
-.T_next .T_ribbon { justify-self: start; }
 .A_card p.help.T_ask, p.help.T_ask { margin: 2px 0 0; color: var(--v5-ink-2); }
 /* the face (s97): an 88 px rounded square on the right of the guest header; the photo is a positioned <img> turned and scaled in app.js so the face box fills it */
 .T_face { position: relative; flex: none; display: block; width: 88px; height: 88px; aspect-ratio: 1; padding: 0; border: 0; border-radius: 12px; overflow: hidden; background: var(--v5-sunk); }
@@ -1198,11 +1197,6 @@ html { scroll-padding-bottom: calc(64px + 10px + env(safe-area-inset-bottom) + 1
 .W_card.W_rain { border-left: 3px solid var(--v5-warn-t); }
 .W_act { display: flex; gap: 8px; align-items: flex-start; margin: 0; font-size: var(--v5-t-body); line-height: 1.45; }
 .W_act svg.i { margin-top: 2px; color: var(--v5-warn-t); flex: none; }
-.T_ribbon.p-tier-returning { background: var(--v5-rib-returning-bg); color: var(--v5-rib-returning-fg); border-left-color: var(--v5-rib-returning-bar); }
-.T_ribbon.p-tier-regular { background: var(--v5-rib-regular-bg); color: var(--v5-rib-regular-fg); border-left-color: var(--v5-rib-regular-bar); }
-.T_ribbon.p-tier-vip { background: var(--v5-rib-vip-bg); color: var(--v5-rib-vip-fg); border-left-color: var(--v5-rib-vip-bar); }
-.T_ribbon svg.i { flex: none; }
-.T_ribbon { border-left: 4px solid transparent; display: flex; align-items: center; gap: 8px; min-height: 2.25rem; padding: 6px 12px; border-radius: var(--r-sm); font: 600 var(--v5-t-2)/1.3 var(--font-ui); }
 .T_perks { display: grid; gap: 8px; }
 .T_perks ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
 .T_perks li { display: flex; gap: 8px; align-items: flex-start; font-size: var(--v5-t-2); line-height: 1.4; }
@@ -1298,7 +1292,7 @@ a.T_call { min-height: var(--touch); display: inline-flex; align-items: center; 
 @media (min-width: 37.5rem) { .K_inv-row { grid-template-columns: repeat(auto-fit, minmax(9.5rem, 1fr)); } } /* s115: a narrow card (two-column Today at 720 px) drops to fewer tiles per line instead of a 19 px label column */
 /* end s110 kpi-inventory */
 /* ---- s110: tier tag with glyph, weather warnings, hourly strip, cleaner walk-through and thank-you ---- */
-.T_ribbon.p-tier-first, .T_badge.p-tier-first { background: var(--v5-ok-w); color: var(--v5-ok-t); border-left-color: var(--v5-ok-t); }
+.T_badge.p-tier-first { background: var(--v5-ok-w); color: var(--v5-ok-t); border-left-color: var(--v5-ok-t); }
 .T_badge { display: inline-flex; align-items: center; gap: 4px; min-width: 0; max-width: 100%; padding: 4px 8px; border-radius: 999px; border-left: 4px solid transparent; font: 600 var(--v5-t-label)/1.2 var(--font-ui); }
 .T_badge.p-tier-returning { background: var(--v5-rib-returning-bg); color: var(--v5-rib-returning-fg); border-left-color: var(--v5-rib-returning-bar); }
 .T_badge.p-tier-regular { background: var(--v5-rib-regular-bg); color: var(--v5-rib-regular-fg); border-left-color: var(--v5-rib-regular-bar); }
@@ -1407,10 +1401,9 @@ html[data-plain="1"] .tabbar, html[data-plain="1"] .toast, html[data-plain="1"] 
 .PC_sheet .PC_card { border: 1px solid var(--v5-line-2); color: var(--v5-ink); box-shadow: var(--v5-shadow-card); }
 .PC_sheet .PC_mid > b { color: var(--v5-ink); } .PC_sheet .PC_mid > .sub { color: var(--v5-ink-2); }
 /* s113 tier guide: every badge and ribbon is a button that opens it; the progress line under the badge; the compact table (Today card and sheet) */
-button.T_ribbon, button.T_badge { position: relative; border-top: 0; border-right: 0; border-bottom: 0; border-left-style: solid; border-left-width: 4px; cursor: pointer; text-align: left; }
-button.T_ribbon { width: 100%; }
+button.T_badge { position: relative; border-top: 0; border-right: 0; border-bottom: 0; border-left-style: solid; border-left-width: 4px; cursor: pointer; text-align: left; }
 button.T_badge::after { content: ""; position: absolute; inset: -8px -4px; } /* a 44 px tap target around the small tag */
-button.T_ribbon:focus-visible, button.T_badge:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
+button.T_badge:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
 .T_prog { margin: 4px 0 0; font-size: var(--v5-t-label); color: var(--v5-ink-2); }
 .T_tbody { padding: 0 16px 16px; overflow-x: auto; }
 .sheet .T_tbody { padding: 12px 0 0; }

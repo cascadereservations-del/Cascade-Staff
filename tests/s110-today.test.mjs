@@ -146,9 +146,9 @@ test('s115 badge reads as the ordinal of THIS stay, so it never contradicts "1 m
   assert.equal(CS.tierBadge(g).text, 'Returning · 4th stay');
   assert.equal(CS.tierProgress(g), '1 more stay to Regular (4 stays or 10 nights)');
   const k = CS.keyNote('2026-10-20: Turnover report: sofa stained, towel missing || 2026-09-01: Special request: extra pillows');
-  assert.equal(k.word, 'Important:'); assert.equal(k.p, 'Turnover report: sofa stained, towel missing');
+  assert.equal(k.word, 'Request:'); assert.equal(k.p, 'Special request: extra pillows'); // s115 fix 1: a current request comes before a turnover report
   const gk = CS.goodToKnow({ notes: '2026-09-01: Special request: extra pillows || 2026-10-20: Turnover report: sofa stained' }, false);
-  assert.equal(gk.notes[0].p, 'Turnover report: sofa stained'); assert.equal(gk.notes[0].rank, 0);
+  assert.equal(gk.notes[0].p, 'Special request: extra pillows'); assert.equal(gk.notes[1].p, 'Turnover report: sofa stained'); assert.equal(gk.notes[1].rank, 0);
 });
 test('s115 in-house card: the badge sits beside the name and the progress line is under it; Inventory tiles stack icon over text', async () => {
   const css = read('styles.css'), app = read('app.js');

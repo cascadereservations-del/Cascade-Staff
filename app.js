@@ -281,7 +281,6 @@
   // s110: the ribbon and the compact tag both come from CS.tierBadge (glyph per tier, "Returning · 2nd stay", "First stay"), so the stay count is said once.
   // s113: every badge and ribbon is a button that opens the tier guide on this guest's tier (Lloyd: "could not find the context that explains how many stays")
   function A_tierBtn(cls, r) { return '<button class="' + cls + ' p-tier-' + r.tier + '" type="button" data-act="tiers-open" data-tier="' + esc(r.tier) + '">' + ICON(r.icon, 's16') + '<span>' + esc(r.text) + '</span><span class="sr">' + esc(', open the guest tiers guide') + '</span></button>'; }
-  function A_ribbon(g) { var r = CS.tierBadge(g); return r ? A_tierBtn('T_ribbon', r) : ''; }
   function A_badge(g) { var r = CS.tierBadge(g); return r ? A_tierBtn('T_badge', r) : ''; }
   function A_prog(g) { var t = CS.tierProgress(g); return t ? '<p class="sub T_prog">' + esc(t) + '</p>' : ''; } // the stays to the next tier, under the badge
   function A_perks(g, kind, tp) {

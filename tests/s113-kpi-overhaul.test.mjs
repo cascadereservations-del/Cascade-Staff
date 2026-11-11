@@ -84,7 +84,7 @@ test('s113 chart C: one outlier month is drawn at the top edge with its true val
   // 85th percentile of the 11 values = 58 + 4.6 x 0.5 = 60.3; x 1.4 = 84.42 -> 100; March 233.5 is over; median = 29.2
   assert.equal(m.max, 100); assert.deepEqual([...m.overs], [4]); assert.equal(m.pts[4].y, 0, 'at the top edge'); assert.equal(m.typical.v, 29.2); assert.equal(m.pts[3].y, null, 'February has no reading');
   assert.deepEqual(JSON.parse(JSON.stringify(m.segs.map((s) => s.length))), [3, 8], 'the line breaks at the gap');
-  const { el, click } = mountWith(payload()); await tick(); let c = cardOf(el.innerHTML, 'K_avg');
+  const { el, click } = mountWith(payload({ per_month: perMonth().map((r) => { const o = { ...r }; delete o.kwh_per_day; delete o.m3_per_day; return o; }) })); await tick(); let c = cardOf(el.innerHTML, 'K_avg'); // s115: an older server (no per-day keys) keeps the per-stay chart
   assert.match(c, /<b>Average per stay, last 12 months, kWh<\/b>/);
   assert.match(c, /<span class="KU_pt KU_pt-over" style="left:[\d.]+%;top:0%" role="img" aria-label="Mar 2026: 233\.5 kWh per stay, 4 stays, unusually high"><\/span>/);
   assert.match(c, /<span class="KU_val[^"]*"[^>]*>↑ 233\.5<\/span>/); assert.match(c, /233\.5 kWh in March: unusually high, check that month’s readings\./);
@@ -175,7 +175,7 @@ test('s113 tier badges: on the Now and Up next cards (and the Calendar guest car
   await app.click({ 'data-act': 'tiers-open', 'data-tier': '<x>' }); await app.flush(); assert.doesNotMatch(app.els['cs-body'].innerHTML, /aria-current|&lt;x|<x>/, 'an unknown tier opens the plain guide');
   const cal = (await boot({ role: 'owner', hash: '#calendar/house', handlers: baseHandlers('owner', { staff_home_v1: () => HOMEWITH([stayRow('Ana Reyes', '2026-10-13', '2026-10-17')], { current_guest: GUEST({ tier: 'regular', stay_count: 5 }) }) }) })).els['v-calendar'].innerHTML;
   assert.match(cal, /<button class="T_badge p-tier-regular" type="button" data-act="tiers-open" data-tier="regular">/);
-  const css = read('styles.css'); assert.match(css, /button\.T_ribbon, button\.T_badge \{[^}]*cursor: pointer;/); assert.match(css, /button\.T_badge::after \{ content: ""; position: absolute; inset: -8px -4px; \}/);
+  const css = read('styles.css'); assert.match(css, /button\.T_badge \{[^}]*cursor: pointer;/); assert.match(css, /button\.T_badge::after \{ content: ""; position: absolute; inset: -8px -4px; \}/);
 });
 test('s114 Today guide card: "Guest tiers: how many stays for each", closed by default on every phone, open after a tap, auto-closes after 5 minutes; the Weather card auto-closes too unless rain is near or a warning is up', async () => {
   const app = await boot({ role: 'laundry', hash: '#home', handlers: baseHandlers('laundry') });
