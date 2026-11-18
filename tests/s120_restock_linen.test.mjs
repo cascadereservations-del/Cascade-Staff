@@ -305,7 +305,7 @@ test('s120R: the unit line reads "Counted in ..." and says nothing for an unknow
 
 test('s120R: the page wires it in: draft keeps linen and restock, Submit flushes first and waits for the online event, the shell cache is bumped', () => {
   assert.match(html, /linen:\s+state\.linen,/);
-  assert.match(html, /restock:\s+state\.restock,/);
+  assert.match(html, /restock:\s+state\.restock \|\| null,/, 'R5: the key is always written, so a draft without it is known to be from the older sheet');
   assert.match(html, /sent = await S120R_flushAll\(false, true\);/);
   assert.match(fnText('runPreSubmitFlush'), /state\.pendingPreSubmit = true;/, 'item 2: Submit remembers it stopped');
   assert.match(fnText('runPreSubmitFlush'), /submit-status/, 'item 2: and says so on screen, not only in a toast');

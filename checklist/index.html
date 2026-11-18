@@ -8102,7 +8102,7 @@ async function S94_precheck(i) {
 /* s94: what is still needed on this screen, in plain words. One list feeds the cue line under the nav and the tap-to-scroll.
    Each item: { t: words, id: element to scroll to }. Mirrors the gates in isPhase*Valid; never decides validity itself. */
 function S94_unmet(ph) {
-  const out = [], add = (t, id) => out.push({ t, id });
+  const out = [], add = (t, id, phase) => out.push({ t, id, phase });
   const val = id => (el(id)?.value || '').trim();
   const more = (n, what, id) => add(n + ' more ' + what + (n > 1 ? 's' : ''), id);
   const checks = p => { const u = K_gatedForPhase(p).filter(x => !K_answered(x.id)); if (u.length) add('answer ' + u.length + ' check' + (u.length > 1 ? 's' : ''), 'confirm-wrap-' + u[0].id); };
@@ -8130,6 +8130,7 @@ function S94_unmet(ph) {
       if (n > 0) more(n, 'after-clean photo', 'afterclean-photo-card');
     }
     checks(ph);
+    if (ph === 6 && !state.supplyLogSaved && ct !== 'emergency') add('restock (on the Bathroom & Kitchen step)', 'supply-usage-trigger-card', 4);   // Restock gates Submit too
   } else if (ph === 4) {
     const slots = K_missingSlots(), kn = K_KITCHEN_PHOTO_MIN - state.kitchenPhotos.length;
     if (slots.length) add(slots.length + ' kitchen photo' + (slots.length > 1 ? 's' : ''), 'kitchen-photo-card');
@@ -8152,10 +8153,13 @@ function S94_renderCue() {
   box.hidden = !list.length;
   box.textContent = list.length ? (last ? 'To submit: ' : 'To continue: ') + list.map(x => x.t).join(' \u00B7 ') : '';
   box._first = list[0] ? list[0].id : null;
+  box._firstPhase = list[0] && list[0].phase != null ? list[0].phase : null;   // an item that lives on another step
 }
 
 function S94_scrollToFirst() {
-  const id = el('nav-cue')?._first, t = id && el(id);
+  const cue = el('nav-cue'), id = cue?._first;
+  if (id && cue._firstPhase != null && cue._firstPhase !== state.phase) goToPhase(cue._firstPhase, true);   // the step has to be showing before its card can be scrolled to
+  const t = id && el(id);
   if (!t) return;
   const reduce = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
   t.scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: 'center' });
@@ -9699,7 +9703,9 @@ function initMessengerButtons() {
 /* ═══════════════════════════════════════════════════════════════
    DRAFT AUTO-SAVE / LOAD
 ═══════════════════════════════════════════════════════════════ */
+let _draftRestoring = false;   // s120R5: true only while a draft is being put back; a save then would write the half-restored state over the draft being read
 function saveDraft() {
+  if (_draftRestoring) return;
   const draft = {
     _v:              DRAFT_VERSION,
     _k:              2,                 // K_: 1 = the s82 line set and phase numbers; 2 = EcoFlow merged into check_9_4 (3.1.1)
@@ -9726,7 +9732,7 @@ function saveDraft() {
     confirmNotes:    { ...state.confirmNotes },
     supplyLogSaved:  state.supplyLogSaved,
     linen:           state.linen,       // s120R: optional keys; DRAFT_VERSION stays 5 so no draft is discarded (old drafts migrate in S120R_restore)
-    restock:         state.restock,
+    restock:         state.restock || null,   // the key is always present: a draft without it is from the older sheet (S120R_migrateRestock)
     cleaningType:    state.cleaningType || 'turnover',
     extraExpenses:   collectExtraExpenses(),
     sessionFolderId: state.sessionFolderId,
@@ -9877,6 +9883,13 @@ function applyDraft(draft) {
   showToast('Session resumed', 'success');
 }
 
+/* The one way a draft is resumed: no save runs until every part of it is back (the old order saved inside setCleaningType before Restock and linen were restored). */
+function resumeDraft(draft) {
+  _draftRestoring = true;
+  try { applyDraft(draft); }
+  finally { _draftRestoring = false; }
+}
+
 function clearDraft() {
   // A discarded draft ("Start fresh") or one whose unfinished photos got
   // silently dropped from a submission can still reference IndexedDB blobs
@@ -9933,7 +9946,7 @@ function checkAndShowDraftModal() {
 
   el('btn-draft-resume')?.addEventListener('click', () => {
     modal.classList.remove('open');
-    applyDraft(draft);
+    resumeDraft(draft);
   }, { once: true });
 
   el('btn-draft-fresh')?.addEventListener('click', () => {
@@ -11146,7 +11159,8 @@ function S120R_migrateRestock(draft) {
     return out;
   }
   // an old draft that had already saved its supply log: the old sheet sent it, so it is never sent again, and it is not "nothing used" (we do not know what it held)
-  if (d.supplyLogSaved || d.supplySaved) { out.saved = true; out.sent = true; out.legacy = true; }   // the s99g draft key means the same
+  // only a draft with no restock key at all comes from the older sheet; one written by this version always has the key, so a null there with supplyLogSaved set is a lost Restock: ask again, never call it sent
+  if (!Object.prototype.hasOwnProperty.call(d, 'restock') && (d.supplyLogSaved || d.supplySaved)) { out.saved = true; out.sent = true; out.legacy = true; }   // the s99g draft key means the same
   return out;
 }
 
