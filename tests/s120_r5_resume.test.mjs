@@ -3,6 +3,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { holdSnippet, resumeSnippet } from './s120_page_snippets.mjs';
 
 const NL = String.fromCharCode(10);
 const html = readFileSync(new URL('../checklist/index.html', import.meta.url), 'utf8').split(String.fromCharCode(13, 10)).join(NL);
@@ -39,13 +40,14 @@ function world({ online = false } = {}) {
   };
   const fns = ['S120R_rpc', 'S120R_sendLinen', 'S120R_sendRestock', 'S120R_flushAll', 'S120R_flushOnce', 'S120R_refreshStatus', 'S120R_fetchItems', 'S120R_loadItems', 'S120R_unsave', 'S120R_restore',
     'S120R_syncLinen', 'S120R_typeChanged', 'S120R_loadLinenItems', 'saveDraft', 'applyDraft', 'setCleaningType', 'loadDraft', 'flashAutosave'].map(fnText).join(NL)
-    + NL + (/\n(async )?function resumeDraft\(/.test(html) ? fnText('resumeDraft') : 'function resumeDraft(d) { applyDraft(d); }');   // before the fix there is no wrapper: the page called applyDraft directly
+    + NL + holdSnippet(html) + NL + resumeSnippet(html) + NL + fnText('clearDraft');   // before the fix there is no wrapper: the page called applyDraft directly
   let n = 0;
   const api = new Function('w', 'el', 'fetch', 'staffHeaders', 'uuid', 'todayManila', 'SUPABASE_URL', 'PROPERTY_ID', 'navigator', 'document', 'esc', 'setTimeout', 'clearTimeout',
     'let state = w.state;\n'
     + block + NL + fns + NL
     + 'const DRAFT_KEY = "ch_draft_v6", DRAFT_VERSION = 5, PHASE_COUNT = 7;\n'
-    + 'let _susItems = [], _susLoaded = false, _draftHold = false;\n'
+    + 'let _susItems = [], _susLoaded = false;\n'
+    + 'const ls = (k, v) => { if (v === null) delete w.store[k]; else w.store[k] = v; }, startElapsedTimer = () => {};\n'
     + 'const fetchWithRetry = (u, o) => fetch(u, o);\n'
     + 'const lsJSON = (k, v) => { if (v === undefined) return w.store[k] ? JSON.parse(w.store[k]) : null; w.store[k] = JSON.stringify(v); if (k === "ch_draft_v6") w.saves.push(JSON.parse(w.store[k])); };\n'
     + 'const K_migrateDraft = d => d, ARRIVE_ITEMS = [], CHEMICAL_ITEMS = [], BEDROOM_ITEMS = [], KITCHEN_ITEMS = [], FINAL_CLEANING_ITEMS = [], K_KILLER_ITEMS = [], K_PHASE_FROM_V1 = {};\n'

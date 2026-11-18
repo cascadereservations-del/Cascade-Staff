@@ -5,6 +5,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { holdSnippet, resumeSnippet } from './s120_page_snippets.mjs';
 
 const NL = String.fromCharCode(10);
 const html = readFileSync(new URL('../checklist/index.html', import.meta.url), 'utf8').split(String.fromCharCode(13, 10)).join(NL);
@@ -44,7 +45,7 @@ function world({ online = true, fieldsServed = 'all' } = {}) {
   const fns = ['S120R_rpc', 'S120R_sendLinen', 'S120R_sendRestock', 'S120R_flushAll', 'S120R_flushOnce', 'S120R_commit', 'S120R_refreshStatus', 'S120R_fetchItems', 'S120R_loadItems',
     'S120R_unsave', 'S120R_onRestockClick', 'S120R_saveRestock', 'S120R_renderRestock', 'S120R_stepperHtml', 'S120R_focusKey', 'S120R_focusBack', 'S120R_restore', 'S120R_syncLinen'].map(fnText).join(NL);
   const api = new Function('state', 'el', 'fetch', 'staffHeaders', 'uuid', 'todayManila', 'saveDraft', 'SUPABASE_URL', 'PROPERTY_ID', 'cache', 'navigator', 'log', 'document', 'esc',
-    block + NL + fns + NL
+    block + NL + holdSnippet(html) + NL + fns + NL
     + 'let _susItems = [], _susLoaded = false;\n'
     + 'const fetchWithRetry = (u, o) => fetch(u, o);\n'
     + 'const lsJSON = (k, v) => { if (v === undefined) return cache[k] || null; cache[k] = v; };\n'

@@ -2,6 +2,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { holdSnippet, resumeSnippet } from './s120_page_snippets.mjs';
 
 const html = readFileSync(new URL('../checklist/index.html', import.meta.url), 'utf8').split(String.fromCharCode(13, 10)).join(String.fromCharCode(10));
 const NL = String.fromCharCode(10);
@@ -150,7 +151,7 @@ function harness(t, items, opts = {}) {
   const log = { bar: 0, toasts: [], saves: 0, renders: 0 };
   let n = 0;
   const fn = new Function('state', 'el', 'fetch', 'staffHeaders', 'uuid', 'todayManila', 'saveDraft', 'SUPABASE_URL', 'PROPERTY_ID', 'log', 'cache',
-    block + NL + SEND_FNS.concat(opts.fns || []).map(fnText).join(NL) + NL
+    block + NL + holdSnippet(html) + NL + SEND_FNS.concat(opts.fns || []).map(fnText).join(NL) + NL
     + 'let _susItems = ' + JSON.stringify(items) + ', _susLoaded = false;\n'
     + 'const fetchWithRetry = (u, o) => fetch(u, o);\n'
     + 'const lsJSON = (k, v) => { if (v === undefined) return cache[k] || null; cache[k] = v; };\n'
@@ -389,7 +390,7 @@ test('R3 item 8: coming back online reruns Submit only when the report could be 
     const out = { flush: 0, cue: 0 };
     const state = { pendingPreSubmit: true, isSubmitting, submissionId: 's1' };
     const fn = new Function('state', 'isPhaseValid', 'PHASE_COUNT', 'runPreSubmitFlush', 'S94_renderCue', 'localStorage', 'SUBMITTED_IDS_KEY', 'setTimeout',
-      fnText('S120R_resumePreSubmit') + '\nreturn S120R_resumePreSubmit;');
+      holdSnippet(html) + NL + fnText('S120R_resumePreSubmit') + '\nreturn S120R_resumePreSubmit;');
     fn(state, () => valid, 6, () => { out.flush++; }, () => { out.cue++; }, { getItem: () => JSON.stringify(already ? ['s1'] : []) }, 'k', f => f())();
     return { out, state };
   };
@@ -407,7 +408,7 @@ test('R3 item 10: Submit says it is sending and cannot be tapped twice until the
     let release, proceeded = 0;
     const gate = new Promise((res, rej) => { release = v => (v instanceof Error ? rej(v) : res(v)); });
     const fn = new Function('state', 'el', 'showToast', 'S120R_flushAll', 'updateBottomBar', 'proceedWithSubmission', 'showFlushOverlay', 'enqueuePhotoUpload', 'uploadPhotoRecord', 'updateFlushOverlay', 'hideFlushOverlay', 'isPhaseValid', 'PHASE_COUNT', 'S120R_certainOffline',
-      'let _preSubmitRunning = false;' + NL + fnText('runPreSubmitFlush') + '\nreturn runPreSubmitFlush;');
+      'let _preSubmitRunning = false;' + NL + holdSnippet(html) + NL + fnText('runPreSubmitFlush') + '\nreturn runPreSubmitFlush;');
     const go = fn(state, id => els[id], () => {}, () => gate, () => { els['btn-submit'].disabled = false; }, () => { proceeded++; }, () => {}, () => {}, () => {}, () => {}, () => {}, () => true, 6, () => true);
     return { els, go, release, proceeded: () => proceeded };
   };

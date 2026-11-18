@@ -2498,6 +2498,7 @@ body.mode-quick .detail-text { display: none; }
 }
 
 .toast.exit { animation: toastOut 0.2s ease forwards; }
+.toast.wrap { white-space: normal; border-radius: 16px; text-align: center; width: min(22rem, calc(100vw - 2rem)); line-height: 1.4; }   /* a lasting message (the boot failure) stays inside the screen */
 .toast.success { background: var(--success); }
 .toast.error   { background: var(--error); }
 
@@ -5138,9 +5139,13 @@ html.K_folded .phase-header.K_hasimg .K_zone { background: rgba(22,13,6,0.74); b
       A saved draft was found from <strong id="draft-time">earlier</strong>.
       Pick up where you left off?
     </p>
+    <p class="modal-body" id="draft-modal-note" role="status" hidden></p>
     <div class="modal-actions">
       <button class="modal-btn secondary" id="btn-draft-fresh" type="button">
         Start fresh
+      </button>
+      <button class="modal-btn primary" id="btn-draft-retry" type="button" hidden>
+        Try again
       </button>
       <button class="modal-btn primary" id="btn-draft-resume" type="button">
         Resume ↺
@@ -6436,7 +6441,7 @@ function lsJSON(key, val) {
     try { const v = localStorage.getItem(key); return v ? JSON.parse(v) : null; }
     catch { return null; }
   }
-  try { localStorage.setItem(key, JSON.stringify(val)); } catch { /* quota */ }
+  try { localStorage.setItem(key, JSON.stringify(val)); return true; } catch { return false; /* quota */ }   // s120R9: a save says whether it stuck; a photo blob is deleted only after it did
 }
 
 /* ═══════════════════════════════════════════════════════════════
@@ -7875,7 +7880,23 @@ async function resolvePhotoDataUrl(photo) {
 const PHOTO_UPLOAD_CONCURRENCY = 2;
 const photoUploadQueue = { items: [], active: 0 };
 
+/* s120R9: Resume is all or nothing. While the draft is held (the Resume question is open, or a Resume has not finished), nothing that writes or sends starts:
+   it waits here and runs once, in order, when the hold is released. A hold that is never released (a failed Resume) runs none of it. */
+let _draftHold = false;
+let _heldWork = [];
+function afterHold(fn) {
+  if (_draftHold) _heldWork.push(fn);
+  else fn();
+}
+function releaseHold(first) {
+  _draftHold = false;
+  const work = _heldWork; _heldWork = [];
+  try { if (first) first(); }
+  finally { work.forEach(fn => { try { fn(); } catch (e) { console.error('held work failed', e); } }); }
+}
+
 function enqueuePhotoUpload(run) {
+  if (_draftHold) { _heldWork.push(() => enqueuePhotoUpload(run)); return; }
   photoUploadQueue.items.push(run);
   pumpPhotoUploadQueue();
 }
@@ -7924,6 +7945,7 @@ function renderPhotoThumb(wrapEl, photo, onRetry, imgClass = 'photo-thumb') {
 // raw-body path), updating its status and re-rendering its thumbnail at
 // each step. `photo` is the live state.*Photos[idx] / meterPhotos[i] object.
 async function uploadPhotoRecord(photo, slotKey, onStatus) {
+  let spent = null;
   photo.status = 'uploading';
   onStatus?.();
   try {
@@ -7937,12 +7959,15 @@ async function uploadPhotoRecord(photo, slotKey, onStatus) {
     photo.status   = 'done';
     photo.data     = null;
     photo._blob    = null;
-    if (photo.idbId) { await idbDeletePhoto(photo.idbId); photo.idbId = null; }
+    spent = photo.idbId; photo.idbId = null;
   } catch {
     photo.status = 'failed';
   }
   onStatus?.();
-  saveDraft();
+  // s120R9: the stored draft must hold the URL before the blob goes. Save first; delete only if the save stuck. If it did not, the blob stays and the next save stores both.
+  let stored = false;
+  try { stored = saveDraft() === true; } catch (e) { console.error('save failed', e); }
+  if (spent) { if (stored) await idbDeletePhoto(spent); else photo.idbId = spent; }
 }
 
 // Draft snapshot for one photo record — never base64/blob, just enough to
@@ -7977,7 +8002,7 @@ async function restorePhotoFromMeta(meta) {
   return photo;
 }
 
-window.addEventListener('online', () => {
+window.addEventListener('online', () => afterHold(() => {
   const groups = ['meterPhotos', 'precleanPhotos', 'bedroomPhotos', 'kitchenPhotos', 'aftercleanPhotos'];
   groups.forEach(key => {
     (state[key] || []).forEach((p, idx) => {
@@ -7987,7 +8012,7 @@ window.addEventListener('online', () => {
       }
     });
   });
-});
+}));
 
 /* ═══════════════════════════════════════════════════════════════
    FETCH WITH RETRY
@@ -8258,7 +8283,7 @@ function initMeterPhotos() {
       const photo = await restorePhotoFromMeta(meta);
       if (!photo) return;
       state.meterPhotos[i] = photo;
-      if (photo.uploaded && photo.fileId) S94_precheck(i);   // a draft-restored, already-uploaded photo is checked again after a reload
+      if (photo.uploaded && photo.fileId) afterHold(() => S94_precheck(i));   // a draft-restored, already-uploaded photo is checked again after a reload
       if (triggerBtn) triggerBtn.classList.add('has-photo');
       renderMeterThumb();
       updatePhotoCounter();
@@ -8283,7 +8308,7 @@ function initMeterPhotos() {
         // A retake replaces whatever was already in this slot — release its
         // storage first so retakes don't leak an IndexedDB row or object URL.
         const previous = state.meterPhotos[i];
-        if (previous?.idbId) idbDeletePhoto(previous.idbId);
+        const replacedId = previous?.idbId;   // s120R9: deleted after the draft no longer points at it
         if (previous?.objectUrl) URL.revokeObjectURL(previous.objectUrl);
 
         if (spinEl) spinEl.style.display = 'none';
@@ -8332,7 +8357,7 @@ function initMeterPhotos() {
         updatePhotoCounter();
         updateBottomBar();
         updateProgress(1);
-        saveDraft();
+        if (saveDraft() === true && replacedId) idbDeletePhoto(replacedId);
         renderMeterNudge();
 
         enqueuePhotoUpload(() => uploadPhotoRecord(state.meterPhotos[i], `meter_${i}`, () => { renderMeterThumb(); updatePhotoCounter(); S94_precheck(i); }));
@@ -8659,12 +8684,11 @@ function initSectionPhotos() {
         if (e.target.closest('.photo-status-badge')) return; // badge handles its own click (retry)
         const liveIdx = photos.indexOf(photo);
         if (liveIdx < 0) return;
-        if (photo.idbId) idbDeletePhoto(photo.idbId);
         if (photo.objectUrl) URL.revokeObjectURL(photo.objectUrl);
         photos.splice(liveIdx, 1);
         wrap.remove();
         updateSectionCount();
-        saveDraft();
+        if (saveDraft() === true && photo.idbId) idbDeletePhoto(photo.idbId);   // s120R9: the stored draft stops pointing at the blob first
       });
       thumbsEl.appendChild(wrap);
       photo._wrapEl = wrap;
@@ -9709,9 +9733,10 @@ function initMessengerButtons() {
 /* ═══════════════════════════════════════════════════════════════
    DRAFT AUTO-SAVE / LOAD
 ═══════════════════════════════════════════════════════════════ */
-let _draftHold = false;   // s120R7: while the Resume question is open, and while a draft is put back, the stored draft is read-only: the page holds an empty state and a save would write it over the real draft
+/* While the draft is held (declared with the upload queue) the stored draft is read-only: the page holds an empty state and a save would write it over the real draft.
+   Returns true only when the draft really reached storage. */
 function saveDraft() {
-  if (_draftHold) return;
+  if (_draftHold) return false;
   const draft = {
     _v:              DRAFT_VERSION,
     _k:              2,                 // K_: 1 = the s82 line set and phase numbers; 2 = EcoFlow merged into check_9_4 (3.1.1)
@@ -9764,8 +9789,9 @@ function saveDraft() {
     };
   });
 
-  lsJSON(DRAFT_KEY, draft);
+  const stored = lsJSON(DRAFT_KEY, draft) === true;
   flashAutosave();
+  return stored;
 }
 
 function flashAutosave() {
@@ -9887,35 +9913,81 @@ function applyDraft(draft) {
   else updateBottomBar();
 
   updateProgress();
-  showToast('Session resumed', 'success');
-  // every restore settles before this resolves; one rejection is thrown after the rest have finished
+  // every restore settles before this resolves; one rejection is thrown after the rest have finished. "Session resumed" is shown by resumeDraft, only once all of it is back.
   return Promise.allSettled(restores).then(rs => { const bad = rs.find(r => r.status === 'rejected'); if (bad) throw bad.reason; });
 }
 
-/* The one way a draft is resumed: no save runs until every part of it is back, photos included (their restores are asynchronous). The stored draft stays as it was until then; if anything fails the hold stays on, nothing is saved, and a reload offers Resume again. */
-const S120R_RESUME_FAIL = 'This saved session could not be reopened. Reload the page. If this happens again, choose Start fresh.';
+/* Resume is all or nothing. The draft modal stays open and the page behind it is inert until every restore has settled; nothing writes or sends in that time (see afterHold).
+   Success: release the hold, close the modal, save once, say so, then the held uploads and sends start. Failure or the time limit: the modal says so and offers Try again (reload, draft untouched)
+   or Start fresh; the stored draft and every blob stay as they were, and a restore that settles late changes nothing. */
 const S120R_BOOT_FAIL = 'This page did not finish loading. Reload it before you continue.';
+const S120R_RESUME_LIMIT = 20000;
+const S120R_CARRY_KEY = 'ch_s120_carry';
+function S120R_setInert(on) {
+  Array.from(document.querySelectorAll('body > *')).forEach(n => { if (n.id !== 'draft-modal' && n.id !== 'toast-area' && n.tagName !== 'SCRIPT') n.inert = on; });
+}
+/* ask = the question; wait = restoring (buttons off); fail = could not restore (Try again or Start fresh) */
+function S120R_draftView(view) {
+  const set = (id, fn) => { const n = el(id); if (n) fn(n); };
+  const note = view === 'wait' ? 'Restoring your saved work...' : view === 'fail' ? 'Your saved work could not be restored. It is still safe on this phone.' : '';
+  set('draft-modal-body', n => { n.hidden = view !== 'ask'; });
+  set('draft-modal-note', n => { n.hidden = view === 'ask'; n.textContent = note; });
+  set('btn-draft-resume', n => { n.hidden = view === 'fail'; n.disabled = view !== 'ask'; });
+  set('btn-draft-retry', n => { n.hidden = view !== 'fail'; });
+  set('btn-draft-fresh', n => { n.disabled = view === 'wait'; });
+}
 async function resumeDraft(draft) {
   _draftHold = true;   // already on from the question; set again so no caller can resume without it
-  try { await applyDraft(draft); }
-  catch (e) { console.error('resume failed', e); showToast(S120R_RESUME_FAIL, 'error', 86400000); return; }   // the hold stays on
-  _draftHold = false;
-  saveDraft();   // the restored state, photo records included, is stored once
+  S120R_draftView('wait');
+  let timer;
+  const run = (async () => { await applyDraft(draft); })();
+  const limit = new Promise((_, no) => { timer = setTimeout(() => no(new Error('restore did not finish in time')), S120R_RESUME_LIMIT); });
+  try { await Promise.race([run, limit]); }
+  catch (e) { console.error('resume failed', e); run.catch(() => {}); S120R_draftView('fail'); return; }   // the hold stays on: nothing was saved, sent or uploaded
+  finally { clearTimeout(timer); }
+  releaseHold(() => {
+    S120R_setInert(false);
+    el('draft-modal')?.classList.remove('open');
+    saveDraft();   // the restored state, photo records included, is stored once
+    showToast('Session resumed', 'success');
+  });
 }
-function S120R_initFailed(e) { console.error('init failed', e); showToast(S120R_BOOT_FAIL, 'error', 86400000); }   // the hold stays as init left it: the stored draft is untouched
+function S120R_initFailed(e) { console.error('init failed', e); showToast(S120R_BOOT_FAIL, 'error wrap', 86400000); }   // the hold stays as init left it: the stored draft is untouched
 
-/* Start fresh: a Restock or linen send that was sent, or may have reached the server, keeps its object and key, so the cards show their status and a new answer cannot be deducted twice. The draft counts when it was SAVED today (Manila) or less than 6 hours ago (work across midnight); cleaningDate is the report date and can be backdated, so it is not used. An older draft is finished work. */
+/* Start fresh: a Restock or linen send that was sent, or may have reached the server, keeps its object and key, so the cards show their status and a new answer cannot be deducted twice.
+   Only the send's own stamp counts (sendStartedAt, set when the request was first tried and never changed): the same Manila day or under 6 hours (work across midnight). No stamp, no carry-over. */
+function S120R_sendFresh(o) {
+  const at = Number(o && o.sendStartedAt);
+  if (!(at > 0)) return false;
+  const sameDay = new Date(at).toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' }) === todayManila();   // the same call todayManila makes
+  return sameDay || Date.now() - at < 6 * 3600 * 1000;
+}
+const S120R_liveSend = o => !!(o && o.key && (o.sent || o.tried || o.waiting) && S120R_sendFresh(o));
 function carryOverSends(draft) {
-  const saved = Number(draft && draft._saved);
-  if (!draft || !(saved > 0)) return false;
-  const savedToday = new Date(saved).toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' }) === todayManila();   // the same call todayManila makes
-  if (!savedToday && Date.now() - saved >= 6 * 3600 * 1000) return false;
-  const live = o => !!(o && o.key && (o.sent || o.tried || o.waiting));
+  if (!draft) return false;
   let kept = false;
-  if (live(draft.restock)) { state.restock = S120R_migrateRestock(draft); state.supplyLogSaved = !!draft.supplyLogSaved; if (state.restock.saved) el('supply-usage-trigger-card')?.classList.add('sus-done'); kept = true; }
-  if (live(draft.linen)) { state.linen = S120R_migrateLinen(draft); if (state.cleaningType !== 'emergency') S120R_syncLinen(); kept = true; }
-  if (kept) { try { renderConfirmItems(); } catch (e) { /* the cards repaint on the next tap */ } S120R_refreshStatus(); }
+  if (S120R_liveSend(draft.restock)) { state.restock = S120R_migrateRestock(draft); state.supplyLogSaved = !!draft.supplyLogSaved; if (state.restock.saved) el('supply-usage-trigger-card')?.classList.add('sus-done'); kept = true; }
+  if (S120R_liveSend(draft.linen)) { state.linen = S120R_migrateLinen(draft); if (state.cleaningType !== 'emergency') S120R_syncLinen(); kept = true; }
+  if (kept) { try { renderConfirmItems(); S120R_refreshStatus(); } catch (e) { /* the cards repaint on the next tap */ } }
   return kept;
+}
+/* Start fresh after a Resume was tried: the page is half restored, so it starts again clean. The sends that still count wait in the carry key; the next boot puts them back. */
+function S120R_freshAfterFailedResume(draft) {
+  const keep = S120R_liveSend(draft.restock) || S120R_liveSend(draft.linen);
+  ls(S120R_CARRY_KEY, keep ? JSON.stringify({ restock: draft.restock || null, linen: draft.linen || null, supplyLogSaved: !!draft.supplyLogSaved }) : null);
+  clearDraft();
+  location.reload();
+}
+function S120R_startFresh(draft) {
+  let kept = false;
+  try {
+    el('draft-modal')?.classList.remove('open');
+    S120R_setInert(false);
+    clearDraft();
+    state.startTimestamp = Date.now();
+    startElapsedTimer();
+    kept = carryOverSends(draft);
+  } finally { releaseHold(() => { if (kept) saveDraft(); }); }   // the hold is cleared on every path
 }
 
 function clearDraft() {
@@ -9944,6 +10016,7 @@ function initNavButtons() {
 }
 
 function onSubmitClick() {
+  if (_draftHold) return;
   if (!isPhase4Valid()) {
     showGateHint(4);
     return;
@@ -9956,38 +10029,33 @@ function onSubmitClick() {
 ═══════════════════════════════════════════════════════════════ */
 function checkAndShowDraftModal() {
   const draft = loadDraft();
-  if (!draft) { _draftHold = false; return; }
-
-  // Show draft modal
-  const modal   = el('draft-modal');
-  const timeEl  = el('draft-time');
-  if (!modal) { _draftHold = false; return; }
+  const modal = el('draft-modal');
+  if (!draft || !modal) {
+    const carry = lsJSON(S120R_CARRY_KEY);   // left by Start fresh after a failed Resume
+    ls(S120R_CARRY_KEY, null);
+    const kept = !!carry && carryOverSends(carry);
+    releaseHold(() => { if (kept) saveDraft(); });
+    return;
+  }
   _draftHold = true;   // the stored draft is read-only until the cleaner answers
+  if (modal.parentElement && modal.parentElement !== document.body) document.body.appendChild(modal);   // the page behind it goes inert, so the modal must sit outside it
+  S120R_setInert(true);
 
   const savedDate = new Date(draft._saved);
   const timeStr   = savedDate.toLocaleString('en-PH', {
     timeZone: 'Asia/Manila', weekday: 'short', month: 'short', day: 'numeric',
     hour: 'numeric', minute: '2-digit', hour12: true
   });
+  const timeEl = el('draft-time');
   if (timeEl) timeEl.textContent = timeStr;
 
+  S120R_draftView('ask');
   modal.classList.add('open');
 
-  el('btn-draft-resume')?.addEventListener('click', () => {
-    modal.classList.remove('open');
-    resumeDraft(draft);
-  }, { once: true });
-
-  el('btn-draft-fresh')?.addEventListener('click', () => {
-    modal.classList.remove('open');
-    clearDraft();
-    // Reset state
-    state.startTimestamp = Date.now();
-    startElapsedTimer();
-    const kept = carryOverSends(draft);
-    _draftHold = false;
-    if (kept) saveDraft();
-  }, { once: true });
+  let resumed = false;
+  el('btn-draft-resume')?.addEventListener('click', () => { resumed = true; resumeDraft(draft); }, { once: true });
+  el('btn-draft-retry')?.addEventListener('click', () => location.reload());   // the draft is untouched
+  el('btn-draft-fresh')?.addEventListener('click', () => { if (resumed) S120R_freshAfterFailedResume(draft); else S120R_startFresh(draft); }, { once: true });
 }
 
 /* ═══════════════════════════════════════════════════════════════
@@ -10079,7 +10147,7 @@ function initSubmitModal() {
 // rather than a separate ad hoc batch loop.
 let _preSubmitRunning = false;   // s120R8: one run at a time; a tap during an automatic run is not the second tap
 async function runPreSubmitFlush(fromTap) {
-  if (_preSubmitRunning) return;
+  if (_preSubmitRunning || _draftHold) return;
   _preSubmitRunning = true;
   try {   // the flag clears on every path; the body below is not re-indented
   // s120R: the linen check and the restock must be recorded before the report goes. No connection = they stay on this phone and the submit waits.
@@ -10726,6 +10794,7 @@ function buildPayload() {
    PROCEED WITH SUBMISSION
 ═══════════════════════════════════════════════════════════════ */
 async function proceedWithSubmission() {
+  if (_draftHold) return;
   if (state.isSubmitting) return;
 
   /* s103 (D-354): the meter-mismatch gate that stood here is gone. A mismatch on an earlier report flags that report
@@ -11133,9 +11202,9 @@ function S120R_guestCount() { return null; }
 // A send that certainly never left the phone (the browser says it is offline) does not lock the answers; any other first attempt may have reached the server.
 function S120R_certainOffline() { return typeof navigator !== 'undefined' && navigator.onLine === false; }
 
-function S120R_newLinen() { return { answer: null, rows: [], key: null, sent: false, tried: false, failed: '', legacyNote: '', unavailable: false, waiting: false }; }
+function S120R_newLinen() { return { answer: null, rows: [], key: null, sent: false, tried: false, failed: '', legacyNote: '', unavailable: false, waiting: false, sendStartedAt: null }; }
 function S120R_newRestock() {
-  return { top: {}, kit: { a: null, n: null }, extras: {}, other: {}, elseText: '', none: false, saved: false, sent: false, tried: false, key: null, failed: '', unavailable: false, legacy: false, waiting: false };
+  return { top: {}, kit: { a: null, n: null }, extras: {}, other: {}, elseText: '', none: false, saved: false, sent: false, tried: false, key: null, failed: '', unavailable: false, legacy: false, waiting: false, sendStartedAt: null };
 }
 
 /* Split the live consumables into the sheet's groups. Every consumable lands in exactly one group. */
@@ -11186,7 +11255,7 @@ function S120R_migrateLinen(draft) {
   if (d.linen && typeof d.linen === 'object') {
     out.answer = d.linen.answer || null;
     out.rows = Array.isArray(d.linen.rows) ? d.linen.rows.map(r => ({ rid: r.rid || null, item_id: r.item_id, name: r.name || '', qty: Number(r.qty) || 1, outcome: r.outcome || null })) : [];
-    out.key = d.linen.key || null; out.sent = !!d.linen.sent; out.tried = !!d.linen.tried; out.failed = d.linen.failed || ''; out.legacyNote = d.linen.legacyNote || ''; out.unavailable = !!d.linen.unavailable; out.waiting = !!d.linen.waiting;
+    out.key = d.linen.key || null; out.sent = !!d.linen.sent; out.tried = !!d.linen.tried; out.failed = d.linen.failed || ''; out.legacyNote = d.linen.legacyNote || ''; out.unavailable = !!d.linen.unavailable; out.waiting = !!d.linen.waiting; out.sendStartedAt = Number(d.linen.sendStartedAt) || null;
     return out;
   }
   const s = d.confirmItems && d.confirmItems.check_2_4;
@@ -11203,7 +11272,7 @@ function S120R_migrateRestock(draft) {
     out.top = Object.assign({}, r.top); out.kit = { a: (r.kit && r.kit.a) || null, n: (r.kit && r.kit.n) ?? null };
     out.extras = Object.assign({}, r.extras); out.other = Object.assign({}, r.other);
     out.elseText = r.elseText || ''; out.none = !!r.none; out.saved = !!r.saved; out.sent = !!r.sent; out.tried = !!r.tried; out.key = r.key || null; out.failed = r.failed || '';
-    out.unavailable = !!r.unavailable; out.legacy = !!r.legacy; out.waiting = !!r.waiting;
+    out.unavailable = !!r.unavailable; out.legacy = !!r.legacy; out.waiting = !!r.waiting; out.sendStartedAt = Number(r.sendStartedAt) || null;
     return out;
   }
   // an old draft that had already saved its supply log: the old sheet sent it, so it is never sent again, and it is not "nothing used" (we do not know what it held)
@@ -11274,6 +11343,7 @@ let _s120rQueue = Promise.resolve();   // one send at a time: a second tap or th
 function S120R_syncLinen() {
   if (!state.linen) state.linen = S120R_newLinen();
   const r = S120R_linenResult(state.linen);
+  if (state.linen.answer === 'found' && !state.linen.unavailable && S120R_linenComplete(state.linen) && !state.linen.key) state.linen.key = 's120-linen-' + uuid();   // the key is made when the answer is saved, as Restock does, and stays with it
   const photo = state.issueFlags.check_2_4;
   state.confirmItems.check_2_4 = r.state;
   if (r.state) state.confirmNotes.check_2_4 = r.note; else delete state.confirmNotes.check_2_4;
@@ -11289,6 +11359,7 @@ function S120R_issueFlagCount() {
 
 /* Back online with a Submit that stopped for lack of a connection: run it again only if the report could be submitted now; else the cue says what is missing. */
 function S120R_resumePreSubmit() {
+  if (_draftHold) { _heldWork.push(S120R_resumePreSubmit); return; }
   if (!state.pendingPreSubmit || state.isSubmitting) return;
   state.pendingPreSubmit = false;
   let already = false;
@@ -11322,6 +11393,7 @@ async function S120R_rpc(name, body) {
 async function S120R_sendLinen() {
   const L = state.linen;
   if (!L.key) L.key = 's120-linen-' + uuid();
+  if (!L.sendStartedAt) L.sendStartedAt = Date.now();   // the send's own time, stored before the request goes out; carry-over reads only this
   if (!S120R_certainOffline()) L.tried = true;   // a lost answer may still have been written: lock the answers until it is sent
   L.waiting = false;
   saveDraft();
@@ -11340,6 +11412,7 @@ async function S120R_sendRestock() {
   if (!R.key) R.key = uuid();
   const rows = S120R_restockRows(R, cls, state.cleaningType);
   if (!rows.length) return { ok: true, noop: true };   // nothing to record; this never marks the restock as sent
+  if (!R.sendStartedAt) R.sendStartedAt = Date.now();   // the send's own time, stored before the request goes out; carry-over reads only this
   if (!S120R_certainOffline()) R.tried = true;
   R.waiting = false;
   saveDraft();
@@ -11356,6 +11429,7 @@ async function S120R_sendRestock() {
    pending = the names of whatever could not be sent and still can (no connection); unanswered = restock rows that are no longer answered.
    atSubmit: a set the server refused earlier gets one more try. */
 function S120R_flushAll(onlyRestock, atSubmit) {
+  if (_draftHold) return new Promise(done => { _heldWork.push(() => done(S120R_flushAll(onlyRestock, atSubmit))); });   // s120R9: nothing is sent while the draft is held
   const run = () => S120R_flushOnce(onlyRestock, atSubmit);
   const p = _s120rQueue.then(run, run);
   _s120rQueue = p.catch(() => {});

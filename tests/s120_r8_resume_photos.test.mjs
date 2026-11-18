@@ -6,6 +6,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { holdSnippet, resumeSnippet } from './s120_page_snippets.mjs';
 
 const NL = String.fromCharCode(10);
 const html = readFileSync(process.env.CH_HTML || new URL('../checklist/index.html', import.meta.url), 'utf8').split(String.fromCharCode(13, 10)).join(NL);
@@ -20,10 +21,10 @@ const lineOf = re => { const m = re.exec(html); return m ? m[0] : ''; };
 const block = html.slice(html.indexOf('/* S120R:BEGIN'), html.indexOf('/* S120R:END */'));
 const initSrc = html.slice(html.indexOf('async function init() {'));
 const bootLine = (/\n\s*(_draftHold\s*=\s*!!loadDraft\(\);)/.exec(initSrc.slice(0, initSrc.indexOf('await '))) || [])[1] || '';
-const consts = ['S120R_RESUME_FAIL', 'S120R_BOOT_FAIL'].map(n => lineOf(new RegExp(`const ${n} = '[^']*';`))).join(NL);
+const consts = '';
 const guardLine = lineOf(/let _preSubmitRunning = false;/);
 
-const RESUME_FAIL = 'This saved session could not be reopened. Reload the page. If this happens again, choose Start fresh.';
+const RESUME_FAIL = 'Your saved work could not be restored. It is still safe on this phone.';
 const BOOT_FAIL = 'This page did not finish loading. Reload it before you continue.';
 const ITEMS = [['Bottled Water'], ['Coffee (3-in-1)'], ['Tea'], ['Sugar & Creamer Sticks'], ['Bathroom tissue'], ['Laundry Detergent'], ['Toiletries (toothbrush, toothpaste, soap)'], ['Kitchen towel'], ['Demo Soap']]
   .map(([name], n) => ({ id: 'id' + n, name, category: 'x', unit: 'bottle' }));
@@ -66,13 +67,13 @@ function world({ online = true } = {}) {
   w.drain = async () => { for (let i = 0; i < 30; i++) { w.release(); await settle(); } };   // opens every gate, the later ones too
   const names = ['S120R_rpc', 'S120R_sendLinen', 'S120R_sendRestock', 'S120R_flushAll', 'S120R_flushOnce', 'S120R_refreshStatus', 'S120R_fetchItems', 'S120R_loadItems', 'S120R_unsave', 'S120R_restore',
     'S120R_syncLinen', 'S120R_typeChanged', 'S120R_loadLinenItems', 'S120R_resumePreSubmit', 'saveDraft', 'applyDraft', 'setCleaningType', 'loadDraft', 'flashAutosave', 'clearDraft',
-    'checkAndShowDraftModal', 'carryOverSends', 'runPreSubmitFlush', 'initSubmitModal', 'startAutoSave', 'resumeDraft', 'photoMeta', 'todayManila', 'S120R_initFailed'].filter(hasFn);
-  const fns = names.map(fnText).join(NL);
+    'checkAndShowDraftModal', 'runPreSubmitFlush', 'initSubmitModal', 'startAutoSave', 'photoMeta', 'todayManila'].filter(hasFn);
+  const fns = names.map(fnText).join(NL) + NL + holdSnippet(html) + NL + resumeSnippet(html);
   const api = new Function('w', 'el', 'fetch', 'staffHeaders', 'uuid', 'SUPABASE_URL', 'PROPERTY_ID', 'navigator', 'document', 'esc', 'setTimeout', 'clearTimeout', 'setInterval', 'localStorage', 'Date', 'gate', 'rebuilt', 'console',
     'let state = w.state;\n'
     + block + NL + fns + NL + consts + NL + guardLine + NL
     + 'const DRAFT_KEY = "ch_draft_v6", DWELL_KEY = "ch_dwell", DRAFT_VERSION = 5, PHASE_COUNT = 7, SUBMITTED_IDS_KEY = "ids";\n'
-    + 'let _susItems = [], _susLoaded = false, _draftRestoring = false, _draftHold = false;\n'
+    + 'let _susItems = [], _susLoaded = false, _draftRestoring = false;\n'
     + 'const fetchWithRetry = (u, o) => fetch(u, o);\n'
     + 'const ls = (k, v) => { if (v === null) delete w.store[k]; else w.store[k] = v; }, idbDeletePhoto = () => {}, startElapsedTimer = () => {};\n'
     + 'const lsJSON = (k, v) => { if (v === undefined) return w.store[k] ? JSON.parse(w.store[k]) : null; if (w.lsThrow) throw new Error("storage full"); w.store[k] = JSON.stringify(v); if (k === "ch_draft_v6") w.saves.push(w.store[k]); };\n'
@@ -120,12 +121,14 @@ async function seed(w, { phase = 6, rs = 'saved', ln = 'saved', photos = true } 
     s.restock = mk('S120R_newRestock');
     cls.top.forEach(i => { s.restock.top[i.id] = 0; }); s.restock.top[idOf('Tea')] = 2; s.restock.kit = { a: 'no', n: null };
     s.restock.saved = true; s.restock.key = 'rk-1'; s.supplyLogSaved = true;
+    if (rs !== 'saved') s.restock.sendStartedAt = w.now;
     if (rs === 'sent') { s.restock.tried = true; s.restock.sent = true; }
     if (rs === 'tried') s.restock.tried = true;
   }
   if (ln) {
     s.linen = mk('S120R_newLinen');
     s.linen.answer = 'found'; s.linen.rows = [{ item_id: 'lin1', name: 'Bath Towel', qty: 1, outcome: 'cleaned' }]; s.linen.key = 'lk-1';
+    if (ln && ln !== 'saved') s.linen.sendStartedAt = w.now;
     if (ln === 'sent') { s.linen.tried = true; s.linen.sent = true; }
     if (ln === 'tried') s.linen.tried = true;
     s.confirmItems.check_2_4 = 'confirmed'; s.confirmNotes.check_2_4 = 'Bath Towel: stain came out';
@@ -161,7 +164,7 @@ test('R8 item 1: with delayed restores the store keeps every photo record during
   assert.equal(w.api.hold(), false, 'the hold ends once every restore has settled');
   assert.deepEqual(storedCounts(w.stored()), COUNTS, 'after the wait the store holds every photo record');
   assert.deepEqual(pendingIds(w.stored()), PENDING, 'pending photos keep their idbId');
-  assert.equal(w.saves.length, 2, 'one save, once');
+  assert.deepEqual(storedCounts(JSON.parse(w.saves[1])), COUNTS, 'the first save after the seed (the Resume save) already holds every photo record; the sends that follow save their own state later');
   w.delay = false;
   reopen(w);
   w.click('btn-draft-resume'); await settle();
@@ -207,7 +210,7 @@ for (const how of ['apply', 'meter', 'section']) {
     assert.equal(w.store.ch_draft_v6, before, 'the stored draft is unchanged');
     assert.equal(w.saves.length, 1, 'no save reached the store');
     assert.equal(w.api.hold(), true, 'the hold stays on');
-    assert.ok(w.toasts.includes(RESUME_FAIL), 'the message is shown: ' + JSON.stringify(w.toasts));
+    assert.equal(w.els['draft-modal-note'].textContent, RESUME_FAIL, 'the message is shown in the modal'); assert.equal(w.els['draft-modal'].classList.contains('open'), true, 'the modal stays open');
     w.api.throwIn(false); w.failMeter = false; w.failSection = false; w.delay = false;
     reopen(w);
     w.click('btn-draft-resume'); await settle();
@@ -259,10 +262,10 @@ test('R8 item 3: 6 hours exactly across midnight is not enough: saved 22:00, reo
   const b = await freshAt(manila(2026, 11, 18, 22, 0), manila(2026, 11, 19, 3, 59));
   assert.equal(carried(b), true);
 });
-test('R8 item 3: a draft with no save time cannot be shown to be recent: it starts clean', async () => {
+test('R9 item 6: a send with no stamp of its own cannot be shown to be recent: it starts clean', async () => {
   const w = world(); w.now = manila(2026, 11, 18, 10, 0);
   await seed(w, { photos: false });
-  const d = w.stored(); delete d._saved; w.store.ch_draft_v6 = JSON.stringify(d);
+  const d = w.stored(); delete d.restock.sendStartedAt; delete d.linen.sendStartedAt; w.store.ch_draft_v6 = JSON.stringify(d);
   reopen(w); w.click('btn-draft-fresh');
   assert.equal(carried(w), false);
 });

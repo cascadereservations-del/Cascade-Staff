@@ -4,6 +4,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { holdSnippet, resumeSnippet } from './s120_page_snippets.mjs';
 
 const NL = String.fromCharCode(10);
 const html = readFileSync(new URL('../checklist/index.html', import.meta.url), 'utf8').split(String.fromCharCode(13, 10)).join(NL);
@@ -51,13 +52,13 @@ function world({ online = true } = {}) {
   };
   const names = ['S120R_rpc', 'S120R_sendLinen', 'S120R_sendRestock', 'S120R_flushAll', 'S120R_flushOnce', 'S120R_refreshStatus', 'S120R_fetchItems', 'S120R_loadItems', 'S120R_unsave', 'S120R_restore',
     'S120R_syncLinen', 'S120R_typeChanged', 'S120R_loadLinenItems', 'S120R_resumePreSubmit', 'saveDraft', 'applyDraft', 'setCleaningType', 'loadDraft', 'flashAutosave', 'clearDraft',
-    'checkAndShowDraftModal', 'carryOverSends', 'runPreSubmitFlush', 'initSubmitModal', 'startAutoSave', 'resumeDraft'].filter(hasFn);
-  const fns = names.map(fnText).join(NL) + (hasFn('resumeDraft') ? '' : NL + 'function resumeDraft(d) { applyDraft(d); }') + NL + 'const S120R_RESUME_FAIL = "x"; const console = { error() {} };';
+    'checkAndShowDraftModal', 'runPreSubmitFlush', 'initSubmitModal', 'startAutoSave'].filter(hasFn);
+  const fns = names.map(fnText).join(NL) + NL + holdSnippet(html) + NL + resumeSnippet(html) + NL + 'const S120R_RESUME_FAIL = "x"; const console = { error() {} };';
   const api = new Function('w', 'el', 'fetch', 'staffHeaders', 'uuid', 'todayManila', 'SUPABASE_URL', 'PROPERTY_ID', 'navigator', 'document', 'esc', 'setTimeout', 'clearTimeout', 'setInterval', 'localStorage',
     'let state = w.state;\n'
     + block + NL + fns + NL + guardLine + NL
     + 'const DRAFT_KEY = "ch_draft_v6", DWELL_KEY = "ch_dwell", DRAFT_VERSION = 5, PHASE_COUNT = 7, SUBMITTED_IDS_KEY = "ids";\n'
-    + 'let _susItems = [], _susLoaded = false, _draftRestoring = false, _draftHold = false;\n'
+    + 'let _susItems = [], _susLoaded = false, _draftRestoring = false;\n'
     + 'const fetchWithRetry = (u, o) => fetch(u, o);\n'
     + 'const ls = (k, v) => { if (v === null) delete w.store[k]; else w.store[k] = v; }, idbDeletePhoto = () => {}, startElapsedTimer = () => {};\n'
     + 'const lsJSON = (k, v) => { if (v === undefined) return w.store[k] ? JSON.parse(w.store[k]) : null; w.store[k] = JSON.stringify(v); if (k === "ch_draft_v6") w.saves.push(w.store[k]); };\n'
@@ -97,6 +98,7 @@ async function seed(w, { phase = 4, rs = 'saved', ln = 'saved', date } = {}) {
     s.restock = mk('S120R_newRestock');
     cls.top.forEach(i => { s.restock.top[i.id] = 0; }); s.restock.top[idOf('Tea')] = 2; s.restock.kit = { a: 'no', n: null };
     s.restock.saved = true; s.restock.key = 'rk-1'; s.supplyLogSaved = true;
+    if (rs !== 'saved') s.restock.sendStartedAt = Date.now();
     if (rs === 'sent') { s.restock.tried = true; s.restock.sent = true; }
     if (rs === 'tried') s.restock.tried = true;
     if (rs === 'waiting') { s.restock.tried = true; s.restock.waiting = true; }
@@ -104,6 +106,7 @@ async function seed(w, { phase = 4, rs = 'saved', ln = 'saved', date } = {}) {
   if (ln) {
     s.linen = mk('S120R_newLinen');
     s.linen.answer = 'found'; s.linen.rows = [{ item_id: 'lin1', name: 'Bath Towel', qty: 1, outcome: 'cleaned' }]; s.linen.key = 'lk-1';
+    if (ln && ln !== 'saved') s.linen.sendStartedAt = Date.now();
     if (ln === 'sent') { s.linen.tried = true; s.linen.sent = true; }
     if (ln === 'tried') s.linen.tried = true;
     if (ln === 'waiting') { s.linen.tried = true; s.linen.waiting = true; }
@@ -202,7 +205,7 @@ test('R7 item 5: Start fresh discards an answer never sent and never tried, and 
   assert.deepEqual([a.api.getState().restock, a.api.getState().linen, a.api.getState().supplyLogSaved], [null, null, false], 'never sent, never tried: discarded');
   const b = world(); b.today = '2026-11-18';
   await seed(b, { rs: 'sent', ln: 'sent', date: '2026-11-17' });
-  const old = JSON.parse(b.store.ch_draft_v6); old._saved = Date.UTC(2026, 10, 10); b.store.ch_draft_v6 = JSON.stringify(old);   // R8: carry-over goes by the save time
+  const old = JSON.parse(b.store.ch_draft_v6); const at = Date.UTC(2026, 10, 10); old._saved = Date.now(); old.restock.sendStartedAt = at; old.linen.sendStartedAt = at; b.store.ch_draft_v6 = JSON.stringify(old);   // R9: carry-over goes by the send's own stamp, never the save time
   const kept = b.store.ch_draft_v6;
   b.reload(); b.date = '2026-11-18'; b.api.checkAndShowDraftModal();
   b.api.saveDraft(); assert.equal(b.store.ch_draft_v6, kept, 'a save while the question is open leaves the stored draft alone');
