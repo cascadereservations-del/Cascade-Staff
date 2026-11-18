@@ -9976,7 +9976,7 @@ function S120R_setInert(on) {
 /* ask = the question; wait = restoring (buttons off); fail = could not restore (Try again or Start fresh) */
 function S120R_draftView(view) {
   const set = (id, fn) => { const n = el(id); if (n) fn(n); };
-  setTimeout(() => { if (view === 'wait') return; const m = document.getElementById('draft-modal'); const b = m && m.classList.contains('open') && Array.from(m.querySelectorAll('.modal-actions button')).find(n => !n.hidden && !n.disabled); if (b) b.focus(); }, 0);   // first enabled button: the question, then the failure view
+  setTimeout(() => { if (view === 'wait') return; const m = document.getElementById('draft-modal'); const b = m && m.classList.contains('open') && Array.from(m.querySelectorAll('.modal-actions .primary')).find(n => !n.hidden && !n.disabled); if (b) b.focus(); }, 0);   // the safe main button, so Enter can never discard the draft through Start fresh
   const note = view === 'wait' ? 'Restoring your saved work...' : view === 'fail' ? 'Your saved work could not be restored. It is still safe on this phone.' : '';
   set('draft-modal-body', n => { n.hidden = view !== 'ask'; });
   set('draft-modal-note', n => { n.hidden = view === 'ask'; n.textContent = note; });

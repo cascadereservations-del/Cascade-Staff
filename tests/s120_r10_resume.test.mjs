@@ -413,19 +413,16 @@ for (const scheme of ['light', 'dark']) {
   });
 }
 
-t0('R10 item 8: focus goes to the first enabled button when the question opens, and to the first button of the failure view', async () => {
+t0('R10 item 8: focus goes to the safe main button, Resume on the question and Try again on failure, never Start fresh', async () => {
   const t = await open({ draft: draftOf(), blobs: BLOBS });
   try {
-    const first = () => t.page.evaluate(() => { const m = document.getElementById('draft-modal'); const b = Array.from(m.querySelectorAll('.modal-actions button')).find(n => !n.hidden && !n.disabled); return { active: document.activeElement && document.activeElement.id, first: b && b.id, inside: m.contains(document.activeElement) }; });
+    const active = () => t.page.evaluate(() => document.activeElement && document.activeElement.id);
     await t.page.waitForFunction(() => document.getElementById('draft-modal').contains(document.activeElement));
-    let f = await first();
-    assert.ok(f.inside && f.active === f.first, 'the question: ' + JSON.stringify(f));
+    assert.equal(await active(), 'btn-draft-resume', 'Enter on the question must not discard the draft');
     await t.page.evaluate(() => { window.__failRestore = true; });
     await t.page.click('#btn-draft-resume');
     await failed(t);
     await t.page.waitForFunction(() => document.getElementById('draft-modal').contains(document.activeElement));
-    f = await first();
-    assert.ok(f.inside && f.active === f.first, 'the failure view: ' + JSON.stringify(f));
-    assert.notEqual(f.active, 'btn-draft-resume', 'the hidden Resume never holds the focus');
+    assert.equal(await active(), 'btn-draft-retry', 'Enter on the failure view must not discard the draft');
   } finally { await t.close(); }
 });
