@@ -15,6 +15,7 @@ const fnText = name => {
   return html.slice(s, html.indexOf('\n}\n', s) + 3);
 };
 const block = html.slice(html.indexOf('/* S120R:BEGIN'), html.indexOf('/* S120R:END */'));
+const guardLine = (/let _preSubmitRunning = false;/.exec(html) || [''])[0];
 const initSrc = html.slice(html.indexOf('async function init() {'));
 const bootLine = (/\n\s*(_draftHold\s*=\s*!!loadDraft\(\);)/.exec(initSrc.slice(0, initSrc.indexOf('await '))) || [])[1] || '';
 
@@ -51,10 +52,10 @@ function world({ online = true } = {}) {
   const names = ['S120R_rpc', 'S120R_sendLinen', 'S120R_sendRestock', 'S120R_flushAll', 'S120R_flushOnce', 'S120R_refreshStatus', 'S120R_fetchItems', 'S120R_loadItems', 'S120R_unsave', 'S120R_restore',
     'S120R_syncLinen', 'S120R_typeChanged', 'S120R_loadLinenItems', 'S120R_resumePreSubmit', 'saveDraft', 'applyDraft', 'setCleaningType', 'loadDraft', 'flashAutosave', 'clearDraft',
     'checkAndShowDraftModal', 'carryOverSends', 'runPreSubmitFlush', 'initSubmitModal', 'startAutoSave', 'resumeDraft'].filter(hasFn);
-  const fns = names.map(fnText).join(NL) + (hasFn('resumeDraft') ? '' : NL + 'function resumeDraft(d) { applyDraft(d); }');
+  const fns = names.map(fnText).join(NL) + (hasFn('resumeDraft') ? '' : NL + 'function resumeDraft(d) { applyDraft(d); }') + NL + 'const S120R_RESUME_FAIL = "x"; const console = { error() {} };';
   const api = new Function('w', 'el', 'fetch', 'staffHeaders', 'uuid', 'todayManila', 'SUPABASE_URL', 'PROPERTY_ID', 'navigator', 'document', 'esc', 'setTimeout', 'clearTimeout', 'setInterval', 'localStorage',
     'let state = w.state;\n'
-    + block + NL + fns + NL
+    + block + NL + fns + NL + guardLine + NL
     + 'const DRAFT_KEY = "ch_draft_v6", DWELL_KEY = "ch_dwell", DRAFT_VERSION = 5, PHASE_COUNT = 7, SUBMITTED_IDS_KEY = "ids";\n'
     + 'let _susItems = [], _susLoaded = false, _draftRestoring = false, _draftHold = false;\n'
     + 'const fetchWithRetry = (u, o) => fetch(u, o);\n'
@@ -127,12 +128,13 @@ test('R7 item 1-3: boot sets the hold before anything can save; a stay pick, a t
   w.intervals.forEach(f => f());                // the 60-second autosave
   assert.equal(w.store.ch_draft_v6, before, 'the stored draft is byte-identical');
   w.reload(); w.api.checkAndShowDraftModal();
-  w.click('btn-draft-resume');
+  w.click('btn-draft-resume');   // the restored values are read at once, before the online flush of the unsent Restock runs
   const s = w.api.getState();
   assert.equal(s.phase, 4);
   assert.equal(s.restock.top[idOf('Tea')], 2); assert.deepEqual([s.restock.saved, s.restock.sent, s.supplyLogSaved], [true, false, true]);
   assert.equal(s.linen.rows.length, 1); assert.equal(s.linen.tried, false);
   assert.equal(s.confirmItems.check_2_4, 'confirmed');
+  await settle();   // R8: the hold ends when the restores have settled
   assert.equal(w.api.hold(), false, 'Resume clears the hold');
 });
 
@@ -141,24 +143,24 @@ test('R7 item 3: after Resume the store holds the full restored draft at once', 
   await seed(w, { phase: 4 });
   const old = JSON.parse(w.store.ch_draft_v6); old._saved = 1; w.store.ch_draft_v6 = JSON.stringify(old);
   w.reload(); w.api.checkAndShowDraftModal();
-  w.click('btn-draft-resume');
+  w.click('btn-draft-resume'); await settle();
   const stored = JSON.parse(w.store.ch_draft_v6);
   assert.ok(stored._saved > 1, 'a save ran at the end of the resume');
   assert.equal(stored.restock.saved, true); assert.equal(stored.linen.rows.length, 1); assert.equal(stored.phase, 4);
 });
 
-test('R7 item 3: if applyDraft throws, nothing is saved, the stored draft stays as it was, and later saves work', async () => {
+test('R7 item 3 (changed by R8 item 2): if applyDraft throws, nothing is saved, the stored draft stays as it was, and the hold stays on until a reload', async () => {
   const w = world();
   const before = await seed(w, { phase: 4 });
   w.reload(); w.api.checkAndShowDraftModal();
   w.api.saveDraft();                            // a save while the question is open must not reach the store
   w.api.throwIn(true);
-  assert.throws(() => w.click('btn-draft-resume'), /render failed/);
+  w.click('btn-draft-resume'); await settle();
   assert.equal(w.store.ch_draft_v6, before, 'the stored draft is unchanged');
-  assert.equal(w.api.hold(), false, 'the hold is cleared');
+  assert.equal(w.api.hold(), true, 'the hold stays on (R8: later saves wait for a reload)');
   w.api.throwIn(false);
   w.api.saveDraft();
-  assert.notEqual(w.store.ch_draft_v6, before, 'a later save works');
+  assert.equal(w.store.ch_draft_v6, before, 'no later save writes over it');
 });
 
 /* ---- Start fresh must not double a stock deduction ---- */
@@ -200,6 +202,7 @@ test('R7 item 5: Start fresh discards an answer never sent and never tried, and 
   assert.deepEqual([a.api.getState().restock, a.api.getState().linen, a.api.getState().supplyLogSaved], [null, null, false], 'never sent, never tried: discarded');
   const b = world(); b.today = '2026-11-18';
   await seed(b, { rs: 'sent', ln: 'sent', date: '2026-11-17' });
+  const old = JSON.parse(b.store.ch_draft_v6); old._saved = Date.UTC(2026, 10, 10); b.store.ch_draft_v6 = JSON.stringify(old);   // R8: carry-over goes by the save time
   const kept = b.store.ch_draft_v6;
   b.reload(); b.date = '2026-11-18'; b.api.checkAndShowDraftModal();
   b.api.saveDraft(); assert.equal(b.store.ch_draft_v6, kept, 'a save while the question is open leaves the stored draft alone');

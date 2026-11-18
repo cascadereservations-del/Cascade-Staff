@@ -886,10 +886,10 @@ body.submitting { pointer-events: none; }
 }
 
 /* s94: why Next or Submit is blocked; a tap on the dead button scrolls to the first missing item */
-#nav-cue { position: fixed; left: 0; right: 0; bottom: var(--bottom-bar-height); z-index: 99; box-sizing: border-box; padding: 0.5rem var(--space-4); background: var(--earthen-ivory, #faf6ee); border-top: 1px solid var(--border); color: var(--text-primary); font-size: 0.875rem; line-height: 1.35; cursor: pointer; text-align: center; }
+#nav-cue { position: fixed; left: 0; right: 0; bottom: var(--bottom-bar-height); z-index: 99; box-sizing: border-box; min-height: 44px; display: flex; align-items: center; justify-content: center; overflow-wrap: anywhere; padding: 0.5rem var(--space-4); background: var(--earthen-ivory, #faf6ee); border-top: 1px solid var(--border); color: var(--text-primary); font-size: 0.875rem; line-height: 1.35; cursor: pointer; text-align: center; }
 #nav-cue[hidden] { display: none; }
 #btn-next:disabled, #btn-submit:disabled { pointer-events: none; }
-.phase::after { content: ''; display: block; height: 5.5rem; }
+.phase::after { content: ''; display: block; height: 8.5rem; }   /* the bottom bar and the cue above it (s120R8: cue is at least 44px) */
 @media (min-width: 960px) { #nav-cue { max-width: 820px; left: 50%; right: auto; width: 820px; transform: translateX(-50%); } }
 .s94-precheck { margin-top: var(--space-2); font-size: 0.875rem; line-height: 1.35; color: var(--text-secondary); }
 .s94-precheck[hidden] { display: none; }
@@ -9872,12 +9872,13 @@ function applyDraft(draft) {
   // fire-and-forget: each restore updates its own thumbnail once the
   // IndexedDB read resolves, which init() has already made possible by
   // calling initMeterPhotos()/initSectionPhotos() before this runs.
+  const restores = [];   // s120R8: resumeDraft waits for these; each restoreFromDraft returns its promise
   if (draft.meterPhotoMeta) {
-    draft.meterPhotoMeta.forEach((meta, i) => { METER_PHOTO_API[i]?.restoreFromDraft(meta); });
+    draft.meterPhotoMeta.forEach((meta, i) => { restores.push(METER_PHOTO_API[i]?.restoreFromDraft(meta)); });
   }
   updatePhotoCounter();
   ['preclean', 'bedroom', 'kitchen', 'afterclean'].forEach(key => {
-    SECTION_PHOTO_API[key]?.restoreFromDraft(draft[`${key}PhotoMeta`]);
+    restores.push(SECTION_PHOTO_API[key]?.restoreFromDraft(draft[`${key}PhotoMeta`]));
   });
 
   // Go to saved phase
@@ -9887,20 +9888,28 @@ function applyDraft(draft) {
 
   updateProgress();
   showToast('Session resumed', 'success');
+  // every restore settles before this resolves; one rejection is thrown after the rest have finished
+  return Promise.allSettled(restores).then(rs => { const bad = rs.find(r => r.status === 'rejected'); if (bad) throw bad.reason; });
 }
 
-/* The one way a draft is resumed: no save runs until every part of it is back (the old order saved inside setCleaningType before Restock and linen were restored). */
-function resumeDraft(draft) {
-  let restored = false;
+/* The one way a draft is resumed: no save runs until every part of it is back, photos included (their restores are asynchronous). The stored draft stays as it was until then; if anything fails the hold stays on, nothing is saved, and a reload offers Resume again. */
+const S120R_RESUME_FAIL = 'This saved session could not be reopened. Reload the page. If this happens again, choose Start fresh.';
+const S120R_BOOT_FAIL = 'This page did not finish loading. Reload it before you continue.';
+async function resumeDraft(draft) {
   _draftHold = true;   // already on from the question; set again so no caller can resume without it
-  try { applyDraft(draft); restored = true; }   // the hold stays on for all of it
-  finally { _draftHold = false; }
-  if (restored) saveDraft();   // the restored state is stored at once; a throw above saves nothing and the stored draft stays as it was
+  try { await applyDraft(draft); }
+  catch (e) { console.error('resume failed', e); showToast(S120R_RESUME_FAIL, 'error', 86400000); return; }   // the hold stays on
+  _draftHold = false;
+  saveDraft();   // the restored state, photo records included, is stored once
 }
+function S120R_initFailed(e) { console.error('init failed', e); showToast(S120R_BOOT_FAIL, 'error', 86400000); }   // the hold stays as init left it: the stored draft is untouched
 
-/* Start fresh the same day: a Restock or linen send that was sent, or may have reached the server, keeps its object and key, so the cards show their status and a new answer cannot be deducted twice. An earlier day's draft is finished work. */
+/* Start fresh: a Restock or linen send that was sent, or may have reached the server, keeps its object and key, so the cards show their status and a new answer cannot be deducted twice. The draft counts when it was SAVED today (Manila) or less than 6 hours ago (work across midnight); cleaningDate is the report date and can be backdated, so it is not used. An older draft is finished work. */
 function carryOverSends(draft) {
-  if (!draft || draft.cleaningDate !== todayManila()) return false;
+  const saved = Number(draft && draft._saved);
+  if (!draft || !(saved > 0)) return false;
+  const savedToday = new Date(saved).toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' }) === todayManila();   // the same call todayManila makes
+  if (!savedToday && Date.now() - saved >= 6 * 3600 * 1000) return false;
   const live = o => !!(o && o.key && (o.sent || o.tried || o.waiting));
   let kept = false;
   if (live(draft.restock)) { state.restock = S120R_migrateRestock(draft); state.supplyLogSaved = !!draft.supplyLogSaved; if (state.restock.saved) el('supply-usage-trigger-card')?.classList.add('sus-done'); kept = true; }
@@ -10068,7 +10077,11 @@ function initSubmitModal() {
 // every photo whose bytes moved to IndexedDB after capture. Routes through
 // the same concurrency-2 queue as capture-time uploads (uploadPhotoRecord)
 // rather than a separate ad hoc batch loop.
+let _preSubmitRunning = false;   // s120R8: one run at a time; a tap during an automatic run is not the second tap
 async function runPreSubmitFlush(fromTap) {
+  if (_preSubmitRunning) return;
+  _preSubmitRunning = true;
+  try {   // the flag clears on every path; the body below is not re-indented
   // s120R: the linen check and the restock must be recorded before the report goes. No connection = they stay on this phone and the submit waits.
   const say = msg => { const st = el('submit-status'); if (st) { st.className = 'visible error'; st.textContent = msg; } };   // stays on screen, unlike a toast
   if (state.cleaningType !== 'emergency' && !state.supplyLogSaved) {
@@ -10139,6 +10152,7 @@ async function runPreSubmitFlush(fromTap) {
 
   hideFlushOverlay();
   proceedWithSubmission();
+  } finally { _preSubmitRunning = false; }
 }
 
 function showFlushOverlay(total) {
@@ -11230,8 +11244,8 @@ function S120R_reportLines(linen, restock) {
   if (restock && restock.unavailable) out.push({ section: 'Restock', text: S120R_RESTOCK_UNAVAILABLE_LINE });
   if (linen && linen.failed) out.push({ section: 'Linen', text: 'Linen stock was not updated (' + linen.failed + '). The host will check the shelf.' });
   if (restock && restock.failed) out.push({ section: 'Restock', text: 'Restock was not recorded (' + restock.failed + '). The host will check the shelf.' });
-  if (linen && linen.unconfirmed && !linen.sent) out.push({ section: 'Linen', text: 'Linen check could not be confirmed as recorded. The host will check the linen.' });
-  if (restock && restock.unconfirmed && !restock.sent) out.push({ section: 'Restock', text: 'Restock could not be confirmed as recorded. The host will check the shelf.' });
+  if (linen && linen.unconfirmed && !linen.sent && !linen.failed) out.push({ section: 'Linen', text: 'Linen check could not be confirmed as recorded. The host will check the linen.' });
+  if (restock && restock.unconfirmed && !restock.sent && !restock.failed) out.push({ section: 'Restock', text: 'Restock could not be confirmed as recorded. The host will check the shelf.' });
   return out;
 }
 
@@ -11365,7 +11379,11 @@ async function S120R_flushOnce(onlyRestock, atSubmit) {
         else { const r = await S120R_sendRestock(); if (!r.ok && r.kind === 'retry') pending.push('restock'); }
       }
     }
-  } catch (e) { pending.push('restock or linen'); }
+  } catch (e) {   // name what is still unsent, so both the stop message and the unconfirmed flags are right
+    const L = state.linen, R = state.restock;
+    if (!onlyRestock && L && !L.sent && S120R_linenComplete(L) && L.answer === 'found' && !L.unavailable && state.cleaningType !== 'emergency' && !pending.includes('linen check')) pending.push('linen check');
+    if (R && R.saved && !R.sent && !R.legacy && !R.unavailable && !(R.none && state.cleaningType === 'mid_stay') && !pending.includes('restock')) pending.push('restock');
+  }
   el('s120-linen-status')?.closest?.('.confirm-item')?._s120Repaint?.();   // a send changes the lock, and the card is otherwise drawn only on a tap
   S120R_refreshStatus();
   try { updateBottomBar(); } catch (e) { /* no page yet */ }
@@ -12498,9 +12516,9 @@ async function init() {
    BOOT
 ═══════════════════════════════════════════════════════════════ */
 if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', init);
+  document.addEventListener('DOMContentLoaded', () => init().catch(S120R_initFailed));
 } else {
-  init();
+  init().catch(S120R_initFailed);
 }
 
 })(); // end IIFE

@@ -39,7 +39,7 @@ function world({ online = false } = {}) {
   };
   const fns = ['S120R_rpc', 'S120R_sendLinen', 'S120R_sendRestock', 'S120R_flushAll', 'S120R_flushOnce', 'S120R_refreshStatus', 'S120R_fetchItems', 'S120R_loadItems', 'S120R_unsave', 'S120R_restore',
     'S120R_syncLinen', 'S120R_typeChanged', 'S120R_loadLinenItems', 'saveDraft', 'applyDraft', 'setCleaningType', 'loadDraft', 'flashAutosave'].map(fnText).join(NL)
-    + NL + (html.includes(NL + 'function resumeDraft(') ? fnText('resumeDraft') : 'function resumeDraft(d) { applyDraft(d); }');   // before the fix there is no wrapper: the page called applyDraft directly
+    + NL + (/\n(async )?function resumeDraft\(/.test(html) ? fnText('resumeDraft') : 'function resumeDraft(d) { applyDraft(d); }');   // before the fix there is no wrapper: the page called applyDraft directly
   let n = 0;
   const api = new Function('w', 'el', 'fetch', 'staffHeaders', 'uuid', 'todayManila', 'SUPABASE_URL', 'PROPERTY_ID', 'navigator', 'document', 'esc', 'setTimeout', 'clearTimeout',
     'let state = w.state;\n'
@@ -83,7 +83,7 @@ for (const phase of [0, 4]) {
     await seed(w, phase);
     for (let round = 1; round <= 2; round++) {
       w.reload();
-      w.api.resumeDraft(w.api.loadDraft());
+      await w.api.resumeDraft(w.api.loadDraft());   // R8: the resume ends when every restore has settled
       const s = w.api.getState();
       assert.equal(Object.values(s.restock.top).length, 6, `round ${round}: six Restock answers survive`);
       assert.equal(s.restock.top[idOf('Tea')], 2);
@@ -109,10 +109,10 @@ for (const phase of [0, 4]) {
 
 test('R5 item 1: no save during a resume writes a half-restored draft, whatever order the restore runs in', () => {
   const w = world();
-  return seed(w, 0).then(() => {
+  return seed(w, 0).then(async () => {
     w.reload();
     const before = w.saves.length;
-    w.api.resumeDraft(w.api.loadDraft());
+    await w.api.resumeDraft(w.api.loadDraft());
     assert.equal(w.saves.length, before + 1, 'the resume writes once, at the end (R7), when every part is back');
     assert.equal(w.saves[w.saves.length - 1].restock.saved, true, 'and that one write holds the full restored draft');
     // and the hold is cleared again: a normal save works after the resume

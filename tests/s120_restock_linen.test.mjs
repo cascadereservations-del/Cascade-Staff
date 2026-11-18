@@ -407,7 +407,7 @@ test('R3 item 10: Submit says it is sending and cannot be tapped twice until the
     let release, proceeded = 0;
     const gate = new Promise((res, rej) => { release = v => (v instanceof Error ? rej(v) : res(v)); });
     const fn = new Function('state', 'el', 'showToast', 'S120R_flushAll', 'updateBottomBar', 'proceedWithSubmission', 'showFlushOverlay', 'enqueuePhotoUpload', 'uploadPhotoRecord', 'updateFlushOverlay', 'hideFlushOverlay', 'isPhaseValid', 'PHASE_COUNT', 'S120R_certainOffline',
-      fnText('runPreSubmitFlush') + '\nreturn runPreSubmitFlush;');
+      'let _preSubmitRunning = false;' + NL + fnText('runPreSubmitFlush') + '\nreturn runPreSubmitFlush;');
     const go = fn(state, id => els[id], () => {}, () => gate, () => { els['btn-submit'].disabled = false; }, () => { proceeded++; }, () => {}, () => {}, () => {}, () => {}, () => {}, () => true, 6, () => true);
     return { els, go, release, proceeded: () => proceeded };
   };
