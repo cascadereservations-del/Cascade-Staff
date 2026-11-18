@@ -28,9 +28,9 @@ test('tierLine: trimmed text only with a known tier; null and blank draw nothing
 test('app.js draws ONE chip (CS.tierBadge) in both cards; the server benefits line and the ribbon are gone (s119 v4)', () => {
   const app = read('app.js');
   assert.doesNotMatch(app, /CS\.tierParts|A_ribbon|T_ribbon|tp\.line/);
-  assert.match(app, /<h2 class="A_name' \+ A_nm\(g\) \+ '">' \+ esc\(g\.guest_name \|\| 'Guest'\) \+ '<\/h2><\/div>' \+ A_badge\(g\) \+ [^\n]*\n[^\n]*A_idPill\(g\) \+ '<\/div>' \+ A_face\(g\)/); // s105: name, key line and ID pill beside the face, the rest full width under it
-  assert.match(app, /A_staying\(g\) \+ A_grid\(g, st\.kind\) \+ A_goodToKnow\(g, st\.kind\) \+ A_perks\(g, st\.kind\) \+ \(nl \?/); // s109: the fact grid sits above Good to know // s105: the perks checklist replaces the grey benefits line on the Today card
-  assert.match(app, /<h3 class="ttl' \+ A_nm\(g\) \+ '">' \+ esc\(g\.guest_name \|\| 'Guest'\) \+ '<\/h3>' \+ A_badge\(g\) \+ '<\/div>' \+ A_perks\(g, kind === 'house' \? 'house' : 'arriving'\)/); // s109: the guest card lists the perks (server sentence only as the fallback)
+  assert.match(app, /<h2 class="A_name' \+ A_nm\(g\) \+ '">' \+ esc\(g\.guest_name \|\| 'Guest'\) \+ '<\/h2><\/div>' \+ A_badge\(g\) \+ A_prog\(g\) \+ A_ownerLine\(g\) \+ [^\n]*\n[^\n]*A_idPill\(g\) \+ '<\/div>' \+ A_face\(g\)/); // s105: name, key line and ID pill beside the face, the rest full width under it
+  assert.match(app, /A_staying\(g\) \+ A_grid\(g, st\.kind\) \+ A_goodToKnow\(g, st\.kind\) \+ A_perks\(g, st\.kind\) \+ \(nl \?/); // s109: the fact grid sits above Good to know
+  assert.match(app, /<h3 class="ttl' \+ A_nm\(g\) \+ '">' \+ esc\(g\.guest_name \|\| 'Guest'\) \+ '<\/h3>' \+ A_badge\(g\) \+ '<\/div>' \+ A_ownerLine\(g\) \+ A_perks\(g, kind === 'house' \? 'house' : 'arriving'\)/); // s109: the guest card lists the perks
 });
 
 const pill = (tone, icon, text) => '<span class="pill p-' + tone + '">' + icon + CS.esc(text) + '</span>';

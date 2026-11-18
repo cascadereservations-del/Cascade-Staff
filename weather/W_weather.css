@@ -118,3 +118,9 @@ button.W_day:focus-visible { outline: 3px solid var(--v5-act); outline-offset: -
   @keyframes W_spin { to { transform: rotate(360deg); } }
   @keyframes W_twinkle { to { opacity: .35; } }
 }
+
+/* s112: the place tabs, Cascade (the house) and Here (the phone), and the line that says where */
+.W_tabs { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px; padding: 4px; border-radius: var(--v5-r-md); background: var(--v5-sunk); }
+.W_tab { min-height: var(--v5-touch); border: 0; border-radius: var(--v5-r-sm); background: transparent; color: var(--v5-ink-2); font: 600 var(--v5-t-body)/1.2 var(--v5-font-ui); cursor: pointer; }
+.W_tab[aria-selected="true"] { background: var(--v5-surf); color: var(--v5-ink); box-shadow: var(--v5-shadow-card); }
+.W_where { margin: 0 4px; font-size: max(0.8125rem, var(--v5-t-label)); color: var(--v5-ink-2); }

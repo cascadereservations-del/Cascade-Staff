@@ -1,4 +1,4 @@
-// s110 (Staff 3.4.27): tier badge with stay count, weather warnings beyond rain, hourly strip with rain chance, cleaner walk-through and thank-you nudges.
+// s110 (Staff 3.4.30): tier badge with stay count, weather warnings beyond rain, hourly strip with rain chance, cleaner walk-through and thank-you nudges.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { CS, read, boot, HOMEWITH, NOTICES_RAW, baseHandlers, stayRow, TODAY, NOW } from './_a_harness.mjs';
@@ -8,8 +8,8 @@ test('s110 CS.tierBadge: a glyph and the total stays per tier; first stay only w
   const b = (g) => CS.tierBadge(g);
   assert.deepEqual(b({ tier: 'first', repeat: false, stay_count: 1 }), { tier: 'first', icon: 'sprout', word: 'First stay', count: 1, text: 'First stay' });
   assert.deepEqual(b({ tier: 'returning', stay_count: 2 }), { tier: 'returning', icon: 'repeat', word: 'Returning', count: 2, text: 'Returning · 2nd stay' });
-  assert.equal(b({ tier: 'regular', stay_count: 5 }).text, 'Regular · 5 stays'); assert.equal(b({ tier: 'regular', stay_count: 5 }).icon, 'star');
-  assert.equal(b({ tier: 'vip', stay_count: 11 }).text, 'VIP · 11 stays'); assert.equal(b({ tier: 'vip', stay_count: 11 }).icon, 'crown');
+  assert.equal(b({ tier: 'regular', stay_count: 5 }).text, 'Regular · 5th stay'); assert.equal(b({ tier: 'regular', stay_count: 5 }).icon, 'star');
+  assert.equal(b({ tier: 'vip', stay_count: 11 }).text, 'VIP · 11th stay'); assert.equal(b({ tier: 'vip', stay_count: 11 }).icon, 'crown');
   assert.equal(b({ tier: 'vip' }).text, 'VIP', 'a known tier with no count: the word alone');
   assert.equal(b({ tier: 'returning', stay_count: 2 }).text, 'Returning · 2nd stay', 'ordinal'); assert.equal(b({ tier: 'returning', stay_count: 1 }).text, 'Returning', 'one stay under a non-first tier: no ordinal tail'); assert.equal(b({ tier: 'regular', stay_count: 1 }).text, 'Regular'); assert.equal(b({ tier: 'vip', stay_count: 1 }).text, 'VIP');
   assert.equal(b({ tier: null, repeat: false }).text, 'First stay'); assert.equal(b({ tier: null, stay_count: 1 }).text, 'First stay');
@@ -27,13 +27,13 @@ test('s110 tier tag: on the Now card (once), the Up next card and the Calendar g
   const cur = GUEST({ tier: 'vip', stay_count: 11 }), nxt = GUEST({ guest_name: 'Ben Cruz', checkin_date: '2026-10-17', checkout_date: '2026-10-19', tier: null, repeat: false, stay_count: 1 });
   for (const role of ['owner', 'cleaner']) {
     const h = await homeHtml(role, { current_guest: cur, next_guest: nxt });
-    assert.match(h, /<\/h2><\/div><span class="T_chip T_c-vip" role="note"><svg[^>]*data-i="crown"[^>]*><\/svg><span>VIP · 11 stays<\/span><\/span>/, role);
-    assert.equal((h.match(/11 stays/g) || []).length, 1, 'the count is said once');
-    assert.match(h, /T_upnext[\s\S]*?<span class="T_chip T_c-first" role="note"><svg[^>]*data-i="sprout"[^>]*><\/svg><span>First stay<\/span>/, role);
+    assert.match(h, /<\/h2><\/div><button class="T_chip T_c-vip" type="button" data-act="tiers-open" data-tier="vip"><svg[^>]*data-i="crown"[^>]*><\/svg><span>VIP · 11th stay<\/span><span class="sr">, open the guest tiers guide<\/span><\/button>/, role);
+    assert.equal((h.match(/11th stay/g) || []).length, 1, 'the count is said once');
+    assert.match(h, /T_upnext[\s\S]*?<button class="T_chip T_c-first" type="button" data-act="tiers-open" data-tier="first"><svg[^>]*data-i="sprout"[^>]*><\/svg><span>First stay<\/span>/, role);
   }
   const cal = (await boot({ role: 'owner', hash: '#calendar/house', handlers: baseHandlers('owner', { staff_home_v1: () => HOMEWITH([stayRow('Ana Reyes', '2026-10-13', '2026-10-17')], { current_guest: GUEST({ tier: 'regular', stay_count: 5 }) }) }) })).els['v-calendar'].innerHTML;
-  assert.match(cal, /<span class="T_chip T_c-regular" role="note"><svg[^>]*data-i="star"[^>]*><\/svg><span>Regular · 5 stays<\/span><\/span>/);
-  assert.equal((cal.match(/5 stays/g) || []).length, 1, 'the guest card says it once');
+  assert.match(cal, /<button class="T_chip T_c-regular" type="button" data-act="tiers-open" data-tier="regular"><svg[^>]*data-i="star"[^>]*><\/svg><span>Regular · 5th stay<\/span><span class="sr">, open the guest tiers guide<\/span><\/button>/);
+  assert.equal((cal.match(/5th stay/g) || []).length, 1, 'the guest card says it once');
   const css = read('styles.css'); for (const t of ['returning', 'regular', 'vip', 'first']) assert.match(css, new RegExp('\\.T_chip\\.T_c-' + t + '|\\.T_chip \\{'));
 });
 
@@ -137,5 +137,33 @@ test('s110 house rules: tokens in all three theme blocks, no raw colour or px fo
   for (const t of ['--v5-hz-haze-t', '--v5-hz-haze-w', '--v5-hz-sun-t', '--v5-hz-sun-w']) assert.equal(tk.split(t + ':').length - 1, 3, t + ' in light, media dark and data-theme dark');
   assert.doesNotMatch(s110, /#[0-9a-fA-F]{3,8}\b|rgba?\(/, 'tokens only'); assert.doesNotMatch(s110, /font-size:\s*[\d.]+px/); assert.doesNotMatch(s110, /white-space:\s*nowrap/);
   assert.doesNotMatch(s110, /gap:\s*(?!0\b|4px|8px|12px|16px|24px)\S+/, 'gaps on the 4/8/12/16/24 scale');
-  assert.equal(JSON.parse(read('package.json')).version, '3.4.27'); assert.match(read('app.js'), /version: '3.4.27'/); assert.match(read('sw.js'), /CACHE_NAME = 'cs-shell-v52'/);
+  assert.equal(JSON.parse(read('package.json')).version, '3.4.34'); assert.match(read('app.js'), /version: '3.4.34'/); assert.match(read('sw.js'), /CACHE_NAME = 'cs-shell-v59'/);
+});
+
+// ---------------------------------------------------------------------------------------------- s115 (Staff 3.4.30)
+test('s115 badge reads as the ordinal of THIS stay, so it never contradicts "1 more stay to Regular"; a turnover report is the Important line', () => {
+  const g = { tier: 'returning', stay_count: 4 };
+  assert.equal(CS.tierBadge(g).text, 'Returning · 4th stay');
+  assert.equal(CS.tierProgress(g), '1 more stay to Regular (4 stays or 10 nights)');
+  const k = CS.keyNote('2026-10-20: Turnover report: sofa stained, towel missing || 2026-09-01: Special request: extra pillows');
+  assert.equal(k.word, 'Request:'); assert.equal(k.p, 'Special request: extra pillows'); // s115 fix 1: a current request comes before a turnover report
+  const gk = CS.goodToKnow({ notes: '2026-09-01: Special request: extra pillows || 2026-10-20: Turnover report: sofa stained' }, false);
+  assert.equal(gk.notes[0].p, 'Special request: extra pillows'); assert.equal(gk.notes[1].p, 'Turnover report: sofa stained'); assert.equal(gk.notes[1].rank, 0);
+});
+test('s115 in-house card: the badge sits beside the name and the progress line is under it; Inventory tiles stack icon over text', async () => {
+  const css = read('styles.css'), app = read('app.js');
+  assert.match(app, /<h2 class="A_name' \+ A_nm\(g\) \+ '">' \+ esc\(g\.guest_name \|\| 'Guest'\) \+ '<\/h2><\/div>' \+ A_badge\(g\) \+ A_prog\(g\)/);
+  assert.doesNotMatch(app, /aria-label="Today in the house">' \+ A_ribbon/);
+  assert.match(css, /\.K_inv-btn \{[^}]*flex-direction: column;[^}]*height: auto|\.K_inv-btn \{[^}]*height: auto;[^}]*flex-direction: column/);
+  assert.match(css, /\.K_inv-row \{ grid-template-columns: repeat\(auto-fit, minmax\(9\.5rem, 1fr\)\); \}/);
+});
+test('s115 the KPI unit toggle never reaches the calendar day sheet; a non-date data-day opens nothing', async () => {
+  const kpi = read('kpi/K_kpi.js'), app = read('app.js');
+  assert.doesNotMatch(kpi, /data-day/, 'the KPI toggle must not carry the calendar attribute');
+  assert.match(kpi, /data-kunit/);
+  assert.ok(app.includes(String.raw`if (/^\d{4}-\d{2}-\d{2}$/.test(t.getAttribute('data-day')`), 'only a real date opens the day sheet');
+  const a = await boot({ role: 'owner', hash: '#calendar', handlers: baseHandlers('owner', { staff_home_v1: () => HOMEWITH([]) }) });
+  await a.click({ 'data-day': 'kwh' });
+  assert.notEqual(a.els['cs-sheet'] && a.els['cs-sheet'].getAttribute('aria-hidden'), 'false', 'no sheet for kwh');
+  assert.doesNotMatch(String((a.els['cs-body'] || {}).innerHTML || ''), /undefined|NaN/);
 });

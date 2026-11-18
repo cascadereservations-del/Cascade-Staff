@@ -21,9 +21,9 @@ test('layout: the name, the key day/time line and the ID pill are inside .T_id b
 
 test('chip: one tier chip per guest, a first stay gets its own (s119 v4)', async () => {
   for (const [t, words] of [['returning', 'Returning'], ['regular', 'Regular'], ['vip', 'VIP']]) {
-    const h = await house(GUEST({ tier: t })); assert.match(h, new RegExp('<span class="T_chip T_c-' + t + '" role="note">[\\s\\S]*?' + words));
+    const h = await house(GUEST({ tier: t })); assert.match(h, new RegExp('<button class="T_chip T_c-' + t + '" type="button" data-act="tiers-open" data-tier="' + t + '">[\\s\\S]*?' + words));
   }
-  assert.match(await house(GUEST({ tier: null, repeat: false, stay_count: 1 })), /<span class="T_chip T_c-first" role="note">[\s\S]*?First stay/);
+  assert.match(await house(GUEST({ tier: null, repeat: false, stay_count: 1 })), /<button class="T_chip T_c-first" type="button" data-act="tiers-open" data-tier="first">[\s\S]*?First stay/);
 });
 
 const lum = (h) => { const c = [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16) / 255).map((v) => (v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4)); return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]; };
@@ -35,8 +35,9 @@ test('chip tokens: defined in light and both dark blocks, text 4.5:1 on its own 
     const vals = [...tk.matchAll(new RegExp('--v5-rib-' + t + '-bg: (#[0-9A-F]{6}); --v5-rib-' + t + '-fg: (#[0-9A-F]{6}); --v5-rib-' + t + '-bar: (#[0-9A-F]{6});', 'g'))];
     assert.equal(vals.length, 3, t);
     for (const [, bg, fg, bar] of vals) { assert.ok(ratio(bg, fg) >= 4.5, t + ' text ' + ratio(bg, fg).toFixed(2)); assert.ok(ratio(bg, bar) >= 2.5, t + ' bar ' + ratio(bg, bar).toFixed(2)); }
+    assert.match(css, new RegExp('\\.T_badge\\.p-tier-' + t + ' \\{ background: var\\(--v5-rib-' + t + '-bg\\); color: var\\(--v5-rib-' + t + '-fg\\); border-left-color: var\\(--v5-rib-' + t + '-bar\\); \\}'));
   }
-  assert.doesNotMatch(css, /\.T_ribbon|\.T_badge/, 'the ribbon and the old badge are gone');
+  assert.doesNotMatch(css, /\.T_ribbon/, 'the ribbon is gone (T_badge rules stay for the Guest tiers table)');
   for (const [n, c] of [['t1', ''], ['t2', ' T_c-returning'], ['t3', ' T_c-regular'], ['t4', ' T_c-vip']]) assert.equal(tk.split('--v5-' + n + '-bg:').length - 1, 3, n + ' in all three blocks');
 });
 
@@ -50,8 +51,8 @@ test('s109 up next: the incoming guest is its own card under the in-house one fo
     assert.ok(h.indexOf('T_now') < h.indexOf('T_upnext'), 'the guest in the house comes first');
     if (role === 'cleaner') assert.doesNotMatch(h.slice(h.indexOf('T_upnext')), /tel:|T_call/);
   }
-  { const fs1 = await house(cur, { next_guest: nx({ tier: null, repeat: false, stay_count: 1 }) }); assert.match(fs1, /T_upnext T_tier-first[\s\S]*?First stay/, 'first stay'); assert.doesNotMatch(fs1.slice(fs1.indexOf('T_upnext')), /freebie|Kit Kat/, 'D-360: no freebie for a first stay'); }
-  { const h = await house(cur, { next_guest: nx({ tier: null, repeat: undefined, stay_count: undefined }) }); assert.doesNotMatch(h.slice(h.indexOf('T_upnext')), /First stay|T_chip/, 'an unknown tier is not called a first stay (the guest in the house has its own tag)'); }
+  { const fs1 = await house(cur, { next_guest: nx({ tier: null, repeat: false, stay_count: 1 }) }); assert.match(fs1, /T_upnext T_tier-first[\s\S]*?First stay/, 'first stay'); assert.doesNotMatch(fs1.slice(fs1.indexOf('T_upnext'), fs1.indexOf('T_tiers')), /freebie|Kit Kat/, 'D-360: no freebie for a first stay (the s111 Guest tiers card below lists every tier)'); }
+  { const h = await house(cur, { next_guest: nx({ tier: null, repeat: undefined, stay_count: undefined }) }); assert.doesNotMatch(h.slice(h.indexOf('T_upnext'), h.indexOf('T_tiers')), /First stay|T_chip/, 'an unknown tier is not called a first stay (the guest in the house has its own tag)'); }
   assert.match(await house(cur, { next_guest: nx({ checkin_date: plus(3), checkout_date: plus(5) }) }), /T_upnext/, 'three days away');
   assert.doesNotMatch(await house(cur, { next_guest: nx({ checkin_date: plus(15), checkout_date: plus(17) }) }), /T_upnext/, 'over 14 days away');
   assert.equal(CS.nextPrep({ current_guest: null, next_guest: nx() }, TODAY), null, 'nobody in the house: the Today card is already the arrival card');

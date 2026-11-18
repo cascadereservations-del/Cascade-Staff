@@ -215,3 +215,13 @@ test('demo app: the role switcher shows the new doors by the same role mapping, 
   assert.doesNotMatch(c, /Admin guide/); assert.match(c, /Inventory/); assert.match(cm, /System Guide/); assert.doesNotMatch(cm, /Inventory|Admin guide/);
   const t = await bootDemo('cleaner', '#door/adminguide'); assert.equal(t.location.hash, '#home');
 });
+
+test('s112 demo: weather-proxy answers for Cascade by default and "Near you" for a POST body {lat, lon}; the demo GPS is a fake spot near the house', async () => {
+  const D = require_('../demo.js');
+  const cas = await (await D.fetch('https://x.supabase.co/functions/v1/weather-proxy')).json();
+  assert.equal(cas.place.kind, 'cascade'); assert.ok(cas.current && cas.current.temp != null);
+  const here = await (await D.fetch('https://x.supabase.co/functions/v1/weather-proxy', { method: 'POST', body: JSON.stringify({ lat: 6.13, lon: 125.16 }) })).json();
+  assert.deepEqual([here.place.kind, here.place.label, here.place.lat, here.place.lon], ['here', 'Near you', 6.13, 125.16]);
+  const pos = await new Promise((r) => D.geo.getCurrentPosition(r));
+  assert.ok(Math.abs(pos.coords.latitude - 6.1545) < 0.05 && Math.abs(pos.coords.longitude - 125.1852) < 0.05);
+});

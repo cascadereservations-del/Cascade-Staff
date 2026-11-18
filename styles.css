@@ -944,6 +944,13 @@ button.A_chipglass.E_pill { width: auto; min-width: 124px; max-width: 184px; hei
 .H_idfull img.r90 { transform: translate(-50%, -50%) rotate(90deg); }
 .H_idfull img.r180 { transform: translate(-50%, -50%) rotate(180deg); }
 .H_idfull img.r270 { transform: translate(-50%, -50%) rotate(270deg); }
+/* s111: the shared zoom viewer. The pan layer carries the zoom; the img keeps its own rotation. No long-press menu, no selection, no drag. */
+.Z_box { overflow: hidden; touch-action: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; cursor: zoom-in; }
+.Z_pan { position: absolute; inset: 0; transform-origin: center center; will-change: transform; }
+.Z_pan.Z_anim { transition: transform .18s var(--v5-ease-out); }
+.Z_lvl { min-width: 3rem; text-align: center; font-size: var(--v5-t-label); color: var(--v5-ink-2); }
+.Z_b { min-width: var(--v5-touch); }
+@media (prefers-reduced-motion: reduce) { .Z_pan.Z_anim { transition: none; } }
 /* a photo shown turned: laid out as tall as the box is high, then turned to fill it */
 .idphoto.rot { aspect-ratio: 8 / 5; position: relative; container-type: size; }
 .idphoto.rot .H_idbtn { position: absolute; inset: 0; }
@@ -1194,6 +1201,17 @@ html { scroll-padding-bottom: calc(64px + 10px + env(safe-area-inset-bottom) + 1
 .T_perks ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
 .T_perks li { display: flex; gap: 8px; align-items: flex-start; font-size: var(--v5-t-2); line-height: 1.4; }
 .T_perks li svg.i { margin-top: 2px; flex: none; color: var(--v5-tier-regular-t); }
+/* s111: Guest tiers context card (closed by default) */
+.T_tiers { padding: 0; }
+.T_tsum { display: flex; align-items: center; gap: 8px; min-height: var(--v5-touch); padding: 12px 16px; cursor: pointer; list-style: none; font: 600 var(--v5-t-2)/1.2 var(--v5-font-ui); color: var(--v5-ink); }
+.T_tsum::-webkit-details-marker { display: none; }
+.T_tsum > span { flex: 1 1 auto; }
+.T_tsum > svg.i:last-child { transition: transform .18s var(--v5-ease-out); }
+.T_tiers[open] > .T_tsum > svg.i:last-child { transform: rotate(90deg); }
+@media (prefers-reduced-motion: reduce) { .T_tsum > svg.i:last-child { transition: none; } }
+.T_tperks { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+.T_tperks li { display: flex; gap: 8px; align-items: flex-start; font-size: var(--v5-t-2); line-height: 1.4; }
+.T_tperks li svg.i { margin-top: 2px; flex: none; color: var(--v5-ink-3); }
 .T_gtk { display: grid; gap: 8px; }
 .T_facts { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .T_facts .T_fact { display: inline-flex; align-items: center; gap: 4px; font-size: var(--v5-t-2); }
@@ -1264,13 +1282,22 @@ a.T_call { min-height: var(--touch); display: inline-flex; align-items: center; 
 /* s110 kpi-inventory: the Inventory card on Today and on the laundry Inventory tab (three big buttons); the KPIs and supply screens live in kpi/K_kpi.css */
 .K_inv { display: flex; flex-direction: column; gap: 12px; }
 .K_inv-row { display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; }
-.K_inv-btn { display: flex; align-items: center; justify-content: flex-start; gap: 12px; min-height: var(--v5-target-glove); padding: 12px 16px; text-align: left; }
+.K_inv-btn { display: flex; height: auto; flex-direction: column; align-items: flex-start; justify-content: flex-start; gap: 8px; overflow-wrap: break-word; min-height: var(--v5-target-glove); padding: 12px 16px; text-align: left; }
 .K_inv-t { display: flex; flex-direction: column; min-width: 0; }
 .K_inv-t b { font: 600 var(--v5-t-body)/1.2 var(--font-ui); }
 .K_inv-t span { font: 400 var(--v5-t-label)/1.3 var(--font-ui); opacity: .85; }
-@media (min-width: 37.5rem) { .K_inv-row { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (min-width: 37.5rem) { .K_inv-row { grid-template-columns: repeat(auto-fit, minmax(9.5rem, 1fr)); } } /* s115: a narrow card (two-column Today at 720 px) drops to fewer tiles per line instead of a 19 px label column */
 /* end s110 kpi-inventory */
 /* ---- s110: tier tag with glyph, weather warnings, hourly strip, cleaner walk-through and thank-you ---- */
+.T_badge.p-tier-first { background: var(--v5-ok-w); color: var(--v5-ok-t); border-left-color: var(--v5-ok-t); }
+.T_badge { display: inline-flex; align-items: center; gap: 4px; min-width: 0; max-width: 100%; padding: 4px 8px; border-radius: 999px; border-left: 4px solid transparent; font: 600 var(--v5-t-label)/1.2 var(--font-ui); }
+.T_badge.p-tier-returning { background: var(--v5-rib-returning-bg); color: var(--v5-rib-returning-fg); border-left-color: var(--v5-rib-returning-bar); }
+.T_badge.p-tier-regular { background: var(--v5-rib-regular-bg); color: var(--v5-rib-regular-fg); border-left-color: var(--v5-rib-regular-bar); }
+.T_badge.p-tier-vip { background: var(--v5-rib-vip-bg); color: var(--v5-rib-vip-fg); border-left-color: var(--v5-rib-vip-bar); }
+.T_badge svg.i { flex: none; }
+button.T_chip { position: relative; border: 0; cursor: pointer; font-family: inherit; text-align: left; } /* s119 chip is the s113 tier-guide button */
+button.T_chip::after { content: ""; position: absolute; inset: -8px -4px; } /* a 44 px tap target around the chip */
+button.T_chip:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
 /* weather warnings: one colour per kind, in the Today strip and in the Weather card */
 .U_storm { background: var(--v5-danger-w); color: var(--v5-danger-t); }
 .U_wind { background: var(--v5-info-w); color: var(--v5-info-t); }
@@ -1324,7 +1351,7 @@ a.T_call { min-height: var(--touch); display: inline-flex; align-items: center; 
 .A_chipglass { -webkit-backdrop-filter: var(--v5-gl-blur); backdrop-filter: var(--v5-gl-blur); box-shadow: inset 0 1px 0 var(--v5-photo-edge); }
 
 .sheet { background: var(--v5-gl-sheet); -webkit-backdrop-filter: var(--v5-gl-blur-lg); backdrop-filter: var(--v5-gl-blur-lg); box-shadow: inset 0 1px 0 var(--v5-gl-hi), 0 -1px 0 var(--v5-gl-rim), 0 -16px 48px var(--v5-gl-sh2); }
-.sheet.calsheet, .sheet.A_formsheet { background: var(--v5-surf); -webkit-backdrop-filter: none; backdrop-filter: none; } /* long forms and the calendar stay opaque: typing and tapping over a blur is tiring */
+.sheet.calsheet, .sheet.A_formsheet, .PC_sheet .PC_card { background: var(--v5-surf); -webkit-backdrop-filter: none; backdrop-filter: none; } /* long forms and the calendar stay opaque: typing and tapping over a blur is tiring */
 .sheet::before { width: 36px; height: 5px; border-radius: var(--v5-r-full); background: var(--v5-line-2); opacity: .7; }
 .toast { -webkit-backdrop-filter: var(--v5-gl-blur); backdrop-filter: var(--v5-gl-blur); box-shadow: inset 0 1px 0 var(--v5-bar-on-bg), 0 8px 24px var(--v5-gl-sh2); }
 
@@ -1396,3 +1423,39 @@ html[data-plain="1"] .tabbar, html[data-plain="1"] .toast, html[data-plain="1"] 
 .S_sgh { display: flex; gap: 8px; align-items: center; font: 600 .9375rem/1.3 var(--font-ui); color: var(--v5-gold-text, var(--v5-ink)); }
 .S_sgv { font: 650 1rem/1.3 var(--font-ui); overflow-wrap: anywhere; }
 .S_two { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+/* s111: required alerts steps and the Phone check sheet */
+.H_alsteps { margin: 0; padding-left: 24px; display: grid; gap: 4px; font-size: var(--v5-t-2); color: var(--v5-ink); }
+.PC_sheet { position: fixed; inset: 0; z-index: 55; display: flex; align-items: flex-end; justify-content: center; padding: 16px; padding-bottom: max(16px, env(safe-area-inset-bottom)); background: var(--v5-scrim); overflow-y: auto; }
+.PC_sheet[hidden] { display: none; }
+.PC_card { width: 100%; max-width: 32rem; max-height: 100%; overflow-y: auto; display: flex; flex-direction: column; gap: 12px; padding: 16px; border-radius: var(--v5-r-sheet); background: var(--v5-surf); }
+.PC_list { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; }
+.PC_row { display: flex; gap: 12px; align-items: flex-start; }
+.PC_ic { display: inline-grid; place-items: center; width: 32px; height: 32px; border-radius: var(--v5-r-md); flex: none; }
+.PC_ok .PC_ic { background: var(--v5-ok-w); color: var(--v5-ok-t); } .PC_tap .PC_ic { background: var(--v5-warn-w); color: var(--v5-warn-t); } .PC_no .PC_ic { background: var(--v5-sunk); color: var(--v5-ink-2); }
+.PC_mid { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.PC_st { font: 600 var(--v5-t-label)/1.2 var(--v5-font-ui); color: var(--v5-ink-2); }
+.PC_ok .PC_st { color: var(--v5-ok-t); } .PC_tap .PC_st { color: var(--v5-warn-t); }
+/* s113 Phone check: an opaque sheet (glass exception above), rows in the ink tokens so the text reads at 4.5:1 in light and dark */
+.PC_sheet .PC_card { border: 1px solid var(--v5-line-2); color: var(--v5-ink); box-shadow: var(--v5-shadow-card); }
+.PC_sheet .PC_mid > b { color: var(--v5-ink); } .PC_sheet .PC_mid > .sub { color: var(--v5-ink-2); }
+/* s113 tier guide: every badge and ribbon is a button that opens it; the progress line under the badge; the compact table (Today card and sheet) */
+button.T_badge { position: relative; border-top: 0; border-right: 0; border-bottom: 0; border-left-style: solid; border-left-width: 4px; cursor: pointer; text-align: left; }
+button.T_badge::after { content: ""; position: absolute; inset: -8px -4px; } /* a 44 px tap target around the small tag */
+button.T_badge:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
+.T_prog { margin: 4px 0 0; font-size: var(--v5-t-label); color: var(--v5-ink-2); }
+.T_tbody { padding: 0 16px 16px; overflow-x: auto; }
+.sheet .T_tbody { padding: 12px 0 0; }
+.T_ttab { width: 100%; border-collapse: collapse; font-size: var(--v5-t-label); color: var(--v5-ink); }
+.T_ttab th, .T_ttab td { padding: 8px 4px; text-align: left; vertical-align: top; border-bottom: 1px solid var(--v5-sep); }
+.T_ttab thead th { font: 600 var(--v5-t-min)/1.2 var(--v5-font-ui); letter-spacing: .08em; text-transform: uppercase; color: var(--v5-ink-3); }
+.T_ttab tbody tr:last-child > * { border-bottom: 0; }
+.T_ttab .T_badge { padding: 2px 8px; }
+.T_ttab .T_tperks { gap: 4px; padding-left: 16px; list-style: disc; }
+.T_ttab .T_tperks li { display: list-item; font-size: var(--v5-t-label); }
+.T_tcur > * { background: var(--v5-sunk); }
+.T_tr:focus { outline: 2px solid var(--ring); outline-offset: -2px; }
+
+/* s116: companion's ID photo name line, the turnover-today tag and the Turnover card outline */
+.T_stay { margin: 0; }
+.A_turntag { display: flex; align-items: center; gap: 8px; margin: 0; padding: 8px 12px; border-radius: 12px; font: 600 var(--v5-t-2)/1.3 var(--font-ui); color: var(--v5-act); background: color-mix(in oklab, var(--v5-act) 10%, transparent); border: 1px solid color-mix(in oklab, var(--v5-act) 35%, transparent); }
+.card.A_turnnow { outline: 2px solid var(--v5-act); outline-offset: -2px; }

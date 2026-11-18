@@ -20,7 +20,7 @@
     url: 'https://qkgfhsdppslwunarczeq.supabase.co',
     key: 'sb_publishable_JFuRYZ9csmQULcMRmHXDSg_Abo9UeCj',
     propertyId: '6ae230f4-c189-4547-84b1-cb6e0b2cc9bd',
-    version: '3.4.27'
+    version: '3.4.34'
   };
   var LINKS = {
     checklist: 'https://cascadereservations-del.github.io/CH-Cleaners-Checklist/',
@@ -118,7 +118,7 @@
   }
   // lane P: every link into pay/ carries the badge counts in its hash, even when they are zero (query first, then hash)
   function H_payUrl(page, query) { var n = state.tasks ? CS.taskDueCount(state.tasks.tasks, state.tasks.today) : 0; return LINKS.pay + (page || '') + (query || '') + '#tasks=' + n + '&cal=' + warnCount(); }
-  function warnCount() { return state.payload ? (state.payload.warnings || []).length : 0; }
+  function warnCount() { return state.payload ? CS.foldLowStock(state.payload.warnings || []).length : 0; }
   function errBanner() {
     return state.error ? '<div class="errbox" role="alert">' + ICON('alert') + '<span>' + esc(state.error) + ' <button class="btn btn-ghost btn-sm" type="button" data-act="refresh">Try again</button></span></div>' : '';
   }
@@ -160,7 +160,7 @@
     var key = st.kind === 'house' ? (outLater ? 'Out ' + (g.checkout_date === CS.addDays(p.today, 1) ? 'tomorrow' : CS.dayLabel(g.checkout_date)) + (g.checkout_date === CS.addDays(p.today, 1) ? ' ' : ', ') + outT : 'Out ' + outT) : 'In ' + (CS.fmtTime(g.checkin_time) || ht.inLabel); // s96: the time that matters comes first
     var tcls = ' T_tier-' + (CS.tierLabel(g.tier) ? g.tier : 'first') + (st.kind === 'house' ? ' T_now' : ' T_arr'); // s109: tier colour on the whole card; the guest in the house leads
     return '<section class="card glass A_card F_span T_card' + tcls + '" aria-label="Today in the house"><div class="row-between"><span class="cap up T_lbl">' + esc(st.kind === 'house' ? 'Now · in the house' : st.label) + '</span>' + (st.pill ? pill(st.pill.tone, toneIcon(st.pill.tone), st.pill.text) : '') + '</div>' +
-      '<div class="T_who"><div class="T_id"><div class="T_namerow"><h2 class="A_name' + A_nm(g) + '">' + esc(g.guest_name || 'Guest') + '</h2></div>' + A_badge(g) + // s105: name, the key day/time line and the ID state fill the height of the face square; Good to know, perks and the rest span the card
+      '<div class="T_who"><div class="T_id"><div class="T_namerow"><h2 class="A_name' + A_nm(g) + '">' + esc(g.guest_name || 'Guest') + '</h2></div>' + A_badge(g) + A_prog(g) + A_ownerLine(g) + // s105: name, the key day/time line and the ID state fill the height of the face square; Good to know, perks and the rest span the card
       '<p class="sub num T_when"><strong class="A_key">' + esc(A_nb(key)) + '</strong> · ' + esc(outLater ? A_nb(CS.plural(g.nights != null ? g.nights : CS.daysBetween(g.checkin_date, g.checkout_date), 'night')) : A_stayDates(g)) + '</p>' + A_idPill(g) + '</div>' + A_face(g) + '</div>' +
       A_staying(g) + A_grid(g, st.kind) + A_goodToKnow(g, st.kind) + A_perks(g, st.kind) + (nl ? '<p class="help T_ask">' + esc(nl) + '</p>' : '') +
       '<a class="A_more" href="#calendar/' + (st.kind === 'house' ? 'house' : 'next') + '">Open guest card' + ICON('chev', 's16') + '</a></section>';
@@ -170,6 +170,7 @@
   // photo as the Guest ID card: no download, copy or share control. Owner and admin tap either one for the full ID (the placeholder loads the photo on that tap only,
   // via data-idpath, which A_loadFaces never reads); everyone else sees a picture or the bare initial.
   var A_FACE_PX = 88;
+  function A_ownerLine(g) { var l = CS.stayingLine(g); return l ? '<p class="sub T_stay">' + esc(l) + '</p>' : ''; } // s116: whose face it is, when the ID is a companion's
   // numbers stay joined to their unit (no break inside '3 nights', '12:00 noon', '2:00 pm'); the time line breaks only at ' · '
   function A_nb(t) { return String(t).replace(/ /g, ' '); }
   // "24 → 25 Oct · 1 night" (the month once when both days share it)
@@ -263,22 +264,27 @@
   function H_wxToday() {
     var wx = CS.wxCard(state.payload, A_notices()); if (!wx) return ''; // no reading: nothing on Today (the Notices card still says so)
     var desc = wx.desc || 'Weather';
-    var range = [wx.hi != null && wx.lo != null ? 'High ' + wx.hi + '°, low ' + wx.lo + '°' : '', wx.head].filter(Boolean).join(' · ');
+    var range = ['At Cascade', wx.hi != null && wx.lo != null ? 'High ' + wx.hi + '°, low ' + wx.lo + '°' : '', wx.head].filter(Boolean).join(' · '); // s112: Today is always the house, never the phone's place
     // s110: the next ~12 hours as a sideways strip: time, glyph, temperature when known, chance of rain (CS.wxCard hourly: weather-proxy hours the Home already loaded, else the notices hours)
     var strip = wx.hourly.length ? '<ul class="HF_strip" role="list" tabindex="0" aria-label="Next hours, chance of rain, scroll sideways">' + wx.hourly.map(function (h) {
       return '<li class="HF_h' + (h.pct != null && h.pct >= 50 ? ' wet' : '') + '"><span class="HF_t num">' + esc(A_nb(h.label)) + '</span>' + ICON(h.icon, 's16') + '<span class="HF_d num">' + (h.temp != null ? h.temp + '°' : '&nbsp;') + '</span><span class="HF_r num">' + (h.pct != null ? h.pct + '%' : '&nbsp;') + '</span></li>'; }).join('') + '</ul>' : '';
     var hz = wx.hazards.length ? '<ul class="HZ_list" aria-label="Weather warnings">' + wx.hazards.map(function (x) {
       return '<li class="HZ_' + x.kind + '">' + ICON(x.icon, 's16') + '<span><b>' + esc(x.word) + '</b>' + (x.detail ? ' <span class="num">' + esc(x.detail) + '</span>' : '') + '<br>' + esc(x.advice) + '</span></li>'; }).join('') + '</ul>' : '', hzOpen = wx.hazards.some(function (x) { return x.strip; });
-    return '<details class="card glass A_card W_card' + (wx.rain ? ' W_rain' : '') + '"' + ((state.wxOpen === undefined ? wx.soon || hzOpen : state.wxOpen) ? ' open' : '') + ' data-def="' + (wx.soon || hzOpen ? 1 : 0) + '"><summary aria-label="Weather today"><span class="W_now">' + ICON(CS.weatherIcon(desc), 's24') + '<span class="W_temp num">' + wx.temp + '°</span><span class="W_cond">' + esc(desc) + '</span></span>' + (wx.rain ? pill('warn', 'rain', 'Rain likely') : wx.hazards.length && wx.hazards[0].level >= 2 ? pill('warn', wx.hazards[0].icon, wx.hazards[0].word) : '') + ICON('chevdown', 's16') + '</summary>' +
+    return '<details class="card glass A_card W_card' + (wx.rain ? ' W_rain' : '') + '"' + ((state.wxOpen === undefined ? wx.soon || hzOpen : state.wxOpen) ? ' open' : '') + ' data-def="' + (wx.soon || hzOpen ? 1 : 0) + '" id="W_card"><summary aria-label="Weather today"><span class="W_now">' + ICON(CS.weatherIcon(desc), 's24') + '<span class="W_temp num">' + wx.temp + '°</span><span class="W_cond">' + esc(desc) + '</span></span>' + (wx.rain ? pill('warn', 'rain', 'Rain likely') : wx.hazards.length && wx.hazards[0].level >= 2 ? pill('warn', wx.hazards[0].icon, wx.hazards[0].word) : '') + ICON('chevdown', 's16') + '</summary>' +
       '<div class="W_body">' + (range ? '<p class="sub num">' + esc(range) + '</p>' : '') +
       (wx.rain ? '<p class="sub W_win">Rain likely ' + esc(wx.window) + (wx.pct != null ? '. Peak chance ' + wx.pct + '%' + (wx.peakAt ? ' around ' + esc(wx.peakAt) : '') : '') + '.</p>' : '') + hz + strip +
       (wx.action ? '<p class="W_act">' + ICON('check', 's16') + '<span>' + esc(wx.action) + '</span></p>' : '') + (wx.asOf ? '<p class="help">as of ' + esc(wx.asOf) + '</p>' : '') +
       '<a class="btn btn-ghost btn-sm" href="#weather">Open the forecast</a></div></details>';
   }
-  // s119 v4: ONE tier chip per card (CS.tierBadge derives the stay number once; the ribbon and the server's benefits line are gone, so a card cannot say first stay and returning together).
-  function A_badge(g) { var r = CS.tierBadge(g); return r ? '<span class="T_chip T_c-' + r.tier + '" role="note">' + ICON(r.icon, 's16') + '<span>' + esc(r.text) + '</span></span>' : ''; }
+  // s105 SPEC-46: the tier ribbon at the top of the Today card (first stays get none; it replaces the small chip beside the name) and the perks checklist (CS.tierPerks); both are for every role, they are not contact data.
+  // s110: the ribbon and the compact tag both come from CS.tierBadge (glyph per tier, "Returning · 2nd stay", "First stay"), so the stay count is said once.
+  // s113: every badge and ribbon is a button that opens the tier guide on this guest's tier (Lloyd: "could not find the context that explains how many stays")
+  function A_tierBtn(cls, r) { return '<button class="' + cls + (/T_chip/.test(cls) ? '' : ' p-tier-' + r.tier) + '" type="button" data-act="tiers-open" data-tier="' + esc(r.tier) + '">' + ICON(r.icon, 's16') + '<span>' + esc(r.text) + '</span><span class="sr">' + esc(', open the guest tiers guide') + '</span></button>'; }
+  // s119 v4: ONE tier chip per card, still the s113 button that opens the tier guide
+  function A_badge(g) { var r = CS.tierBadge(g); return r ? A_tierBtn('T_chip T_c-' + r.tier, r) : ''; }
   // the guest name by tier: Regular bronze, VIP gold gradient; first and returning stay plain
   function A_nm(g) { var r = CS.tierBadge(g); return r && r.tier === 'regular' ? ' nm3' : r && r.tier === 'vip' ? ' nm4' : ''; }
+  function A_prog(g) { var t = CS.tierProgress(g); return t ? '<p class="sub T_prog">' + esc(t) + '</p>' : ''; } // the stays to the next tier, under the badge
   function A_perks(g, kind) {
     var perks = CS.tierPerks(g.tier, { id: !!g.id_photo_path, phase: kind === 'house' ? 'house' : 'arrival' });
     if (!perks.length) return '';
@@ -292,8 +298,23 @@
     var p = state.payload, np = p && CS.nextPrep(p, p.today); if (!np) return '';
     var n = np.guest, tier = CS.tierLabel(n.tier) ? n.tier : 'first', when = 'Arrives ' + np.day + ' ' + (CS.fmtTime(n.checkin_time) || A_houseT().inLabel);
     return '<section class="card A_card F_span T_card T_upnext T_tier-' + tier + '" aria-label="Next arrival"><div class="row-between"><span class="cap up T_lbl">Up next · incoming</span>' + pill('info', 'clock', when) + '</div>' +
-      '<div class="T_namerow"><h3 class="T_nname' + A_nm(n) + '">' + esc(np.name) + '</h3>' + A_badge(n) + '</div>' +
+      '<div class="T_who"><div class="T_id"><div class="T_namerow"><h3 class="T_nname' + A_nm(n) + '">' + esc(np.name) + '</h3>' + A_badge(n) + '</div>' + A_prog(n) + A_ownerLine(n) + '</div>' + A_face(n) + '</div>' +
       A_staying(n) + A_grid(n, 'next') + A_perks(n, 'arriving') + '<a class="A_more" href="#calendar/next">Open guest card' + ICON('chev', 's16') + '</a></section>';
+  }
+  // s113: "Guest tiers: how many stays for each". s114: closed until tapped; closes itself 5 minutes after a tap opened it (A_autoClose).
+  // A compact table: tier (glyph and colour) | when | what they get (CS.tierPerks, arrival and house). The same table is the tier guide sheet, with the guest's row marked.
+  function A_tierTable(cur, ids) {
+    return '<table class="T_ttab"><thead><tr><th scope="col">Tier</th><th scope="col">When</th><th scope="col">What they get</th></tr></thead><tbody>' + CS.tierGuide().map(function (t) {
+      return '<tr class="T_tr' + (t.tier === cur ? ' T_tcur' : '') + '"' + (ids ? ' id="tg-' + t.tier + '" tabindex="-1"' : '') + (t.tier === cur ? ' aria-current="true"' : '') + '><th scope="row"><span class="T_badge p-tier-' + t.tier + '">' + ICON(t.icon, 's16') + '<span>' + esc(t.word) + '</span></span></th>' +
+        '<td>' + esc(t.when) + '</td><td>' + (t.perks.length ? '<ul class="T_tperks">' + t.perks.map(function (x) { return '<li>' + esc(x) + '</li>'; }).join('') + '</ul>' : esc('The standard amenities')) + '</td></tr>';
+    }).join('') + '</tbody></table>';
+  }
+  function A_tierGuide() {
+    var open = state.tiersOpen === true; // s114 (Lloyd): closed by default; opens only on a tap and closes itself after 5 minutes
+    return '<details class="card glass A_card F_span T_tiers" id="T_tiers"' + (open ? ' open' : '') + '><summary class="T_tsum">' + ICON('info', 's16') + '<span>Guest tiers: how many stays for each</span>' + ICON('chev', 's16') + '</summary><div class="T_tbody">' + A_tierTable(null, false) + '</div></details>';
+  }
+  function A_tierSheet(S) {
+    return '<h2 class="ttl" id="cs-h" tabindex="-1">Guest tiers: how many stays for each</h2><p class="sub" style="margin:8px 0 0">' + esc('A guest moves up by stays or by nights, whichever comes first.') + '</p><div class="T_tbody">' + A_tierTable(S.key, true) + '</div>';
   }
   // s109: the facts of a stay as a compact 2-column grid (dates, guests, ID, phone for owner/admin, channel), so the card uses its width.
   function A_grid(g, kind) {
@@ -383,6 +404,12 @@
     var d = doorDef('checklist'), ok = d && CS.doorAllowed('checklist', role()), dl = ok ? CS.doorLink('checklist', d.url, location.origin, trustOn) : null;
     return '<div class="S_walk" role="note"><span class="S_walkic">' + ICON('clip', 's24') + '</span><div><b>Walk through first</b><p>Before cleaning, a look around the room helps. Slide to start below, then note each issue in the checklist: damage, stains, missing or broken items.</p></div></div>'; // one way in: the Slide to start below opens the checklist
   }
+  // s116: a gentle tag at the top of Today for every role when a guest checks out today (the Turnover card's own today state).
+  function A_outTime(p, ds, T) { var cg = p.current_guest; return CS.fmtTime(cg && cg.checkout_date === p.today && cg.checkout_time || ds.out.checkout_time) || T.outLabel; } // one out-time for the tag and the Turnover card
+  function A_turnTag() {
+    var p = state.payload, ds = p && dayStatusOf(p.today); if (!ds || !ds.out) return '';
+    return '<p class="A_turntag" role="status">' + ICON('logout', 's16') + '<span>' + esc('Turnover today · out ' + A_outTime(p, ds, A_houseT())) + '</span></p>';
+  }
   function A_turnoverCard(staff) {
     var p = state.payload, T = A_houseT(), clock = CS.A_turnoverClock(new Date(), T), ds = dayStatusOf(p.today), outToday = !!ds.out, inToday = !!ds.arrive;
     if (!outToday && !inToday) {
@@ -390,22 +417,22 @@
       var nextOut = nx ? ' · next out ' + CS.dayLabel(nx.checkout_date) + ', ' + T.outLabel : ' · nothing booked to leave soon';
       return '<section class="card glass A_card" aria-label="Turnover today"><span class="cap up">Turnover today</span><p class="sub" style="margin:0">' + esc('None today' + nextOut) + '</p>' + A_primary(staff, false) + '</section>';
     }
-    var win = clock.phase === 'window', closed = clock.phase === 'after';
+    var oT = outToday ? A_outTime(p, ds, T) : T.outLabel, win = clock.phase === 'window', closed = clock.phase === 'after';
     if (!staff) { // F4: the verdict. Three check rows with a glyph and a word; a row whose data is absent is not drawn.
       var rows = '', cl = CS.H_cleanLine(state.progress, clock), hl = CS.H_houseLine(A_notices(), p.today), raw = inToday ? H_readyRaw(ds.stay) : null, tg = CS.todayCardState(p, p.today).guest, noId = !!(inToday && tg && ds.stay && tg.checkin_date === p.today && (tg.uid && ds.stay.uid ? tg.uid === ds.stay.uid : tg.guest_name === ds.stay.guest_name)), rd = CS.H_ready(raw, role(), noId), rdFull = noId ? CS.H_ready(raw, role()) : rd; // s105: Good to know on the Today card owns the ID state
       if (cl) rows += H_check(cl.tone, 'Clean', cl.text);
       if (rd) rows += H_check(CS.H_readyOk(rd) ? 'ok' : 'warn', 'Arrival', CS.H_readyLine(rd));
       if (hl) rows += H_check(hl.tone, 'House', hl.text);
-      return '<section class="card glass A_card" aria-label="Turnover today"><div class="row-between"><span class="cap up">Turnover today</span></div><p class="strong H_tline" style="margin:0">' + esc('Today · out ' + T.outLabel + ' · in ' + T.inLabel) + '</p>' +
+      return '<section class="card glass A_card' + (outToday ? ' A_turnnow' : '') + '" aria-label="Turnover today"><div class="row-between"><span class="cap up">Turnover today</span></div><p class="strong H_tline" style="margin:0">' + esc('Today · out ' + oT + ' · in ' + T.inLabel) + '</p>' +
         (rows ? '<div class="H_checks">' + rows + '</div>' : '') + ((rd && !CS.H_readyOk(rd)) || (noId && rdFull && rdFull.id === false) ? H_readyBlock(raw, ds.stay, true, noId) : '') + A_primary(false, true) + '</section>';
     }
     var nudge = outToday && clock.phase === 'window' && !state.cleanDone ? S110_walkNudge() : '';
     var steps = '<div class="A_steps">' +
-      '<div><span class="dot">' + ICON('logout', 's16') + '</span><span>Guest out</span><b>' + esc(outToday ? T.outLabel : 'None today') + '</b></div>' +
+      '<div><span class="dot">' + ICON('logout', 's16') + '</span><span>Guest out</span><b>' + esc(outToday ? oT : 'None today') + '</b></div>' +
       '<div class="' + (win ? 'now' : '') + '"><span class="dot">' + ICON('sparkles', 's16') + '</span><span>Clean</span><b>' + esc(closed ? 'Closed' : win ? 'Until ' + CS.A_shortTime(T.check_in) : 'From ' + CS.A_shortTime(T.check_out)) + '</b></div>' +
       '<div><span class="dot">' + ICON('user', 's16') + '</span><span>Guest in</span><b>' + esc(inToday ? T.inLabel : 'None today') + '</b></div></div>';
-    var title = [outToday ? 'Guest out ' + T.outLabel : '', inToday ? (ds.stay.guest_name || 'Guest') + ' in ' + T.inLabel : ''].filter(Boolean).join(' · ');
-    return '<section class="card glass A_card" aria-label="Turnover today"><div class="row-between"><span class="cap up">Turnover today</span></div><p class="strong H_tline" style="margin:0">' + esc(title) + '</p>' +
+    var title = [outToday ? 'Guest out ' + oT : '', inToday ? (ds.stay.guest_name || 'Guest') + ' in ' + T.inLabel : ''].filter(Boolean).join(' · ');
+    return '<section class="card glass A_card' + (outToday ? ' A_turnnow' : '') + '" aria-label="Turnover today"><div class="row-between"><span class="cap up">Turnover today</span></div><p class="strong H_tline" style="margin:0">' + esc(title) + '</p>' +
       steps + '<p class="num H_until" style="margin:0">' + esc(CS.H_untilLine(clock, inToday)) + '</p>' + nudge + A_primary(true, true) + '</section>';
   }
   // MF1: the clean-done card (the checklist posts cs-clean-done). Primary leads straight into the pay request for that clean.
@@ -577,7 +604,7 @@
     if (staff) {
       // Today, Turnover, the paid notice (under Turnover: Turnover and Slide to start never move when it lands), Notices, then the doors
       var laundry = CS.isLaundry(role()); // s110: no turnover, clean-done card, paid slots, checklist door or cleaning fee for the laundry role
-      body = '<div class="A_body">' + errBanner() + A_utilBar() + (wxTop ? wxCard : '') + S_sec('Guests') + todayCard() + nextCard() + (laundry ? '' : S_sec('Turnover') + A_turnoverCard(true)) + (wxTop ? '' : wxCard) + (laundry ? '' : H_cleanDoneCard() + '<div id="slot-paid-notice" class="A_slot" hidden></div><div id="slot-owed" class="A_slot" hidden></div>') + K_invCard() + H_alertsCard() + A_noticesCard() + S_sec('Shortcuts') +
+      body = '<div class="A_body">' + errBanner() + H_alertsCard() + A_turnTag() + PC_todayCard() + A_utilBar() + (wxTop ? wxCard : '') + S_sec('Guests') + todayCard() + nextCard() + A_tierGuide() + (laundry ? '' : S_sec('Turnover') + A_turnoverCard(true)) + (wxTop ? '' : wxCard) + (laundry ? '' : H_cleanDoneCard() + '<div id="slot-paid-notice" class="A_slot" hidden></div><div id="slot-owed" class="A_slot" hidden></div>') + K_invCard() + A_noticesCard() + S_sec('Shortcuts') +
         A_navCard('Work', row({ icon: 'cloud', title: 'Weather', sub: 'Today and the next few hours', href: '#weather' }) + doorRow('checklist', 'clip', 'Start or continue today’s turnover') +
           (LINKS.pay && !laundry ? row({ icon: 'cash', title: 'Cleaning fee', sub: state.payHint || 'Ask for payment for your cleans and expenses', href: H_payUrl(), subId: 'pay-sub' }) : '') +
           row({ icon: 'calendar', title: 'Calendar', sub: 'Who is staying, who is next', href: '#calendar', count: n || '' }) +
@@ -592,7 +619,7 @@
       // 3.2: the row opens the shell's own #inbox (which falls back to the dashboard's conversations page when the module is not shipped)
       var inboxShown = CS.canSeeGuestContact(role()) && !state.noticesAbsent && (v ? inbox != null : state.noticesLoading);
       var BD = B_build(); // the board sits above the Turnover card while something blocks an arrival or a guest is waiting; otherwise under it
-      body = '<div class="A_body">' + errBanner() + A_payBanner() + A_utilBar() + (wxTop ? wxCard : '') + S_sec('Guests') + todayCard() + nextCard() + (BD.top ? BD.html : '') + S_sec('Turnover') + A_turnoverCard(false) + (wxTop ? '' : wxCard) + H_cleanDoneCard() + K_invCard() + H_alertsCard() + (BD.top ? '' : BD.html) + S_sec('Shortcuts') +
+      body = '<div class="A_body">' + errBanner() + H_alertsCard() + A_turnTag() + PC_todayCard() + A_payBanner() + A_utilBar() + (wxTop ? wxCard : '') + S_sec('Guests') + todayCard() + nextCard() + A_tierGuide() + (BD.top ? BD.html : '') + S_sec('Turnover') + A_turnoverCard(false) + (wxTop ? '' : wxCard) + H_cleanDoneCard() + K_invCard() + (BD.top ? '' : BD.html) + S_sec('Shortcuts') +
         A_navCard('Guests and bookings', (bk ? row({ icon: 'clip', title: 'Bookings to confirm', sub: 'Open the pending bookings', href: bk.href, external: bk.external, count: bk.count, countLabel: bk.n === 1 ? ' booking to confirm' : ' bookings to confirm' }) : '') +
           row({ icon: 'calendar', title: 'Calendar', sub: 'Stays, blocked nights, notices', href: '#calendar', count: n || '' }) +
           '<div id="slot-inbox"' + (inboxShown ? '' : ' hidden') + (inboxShown && !v ? ' style="min-height:64px"' : '') + '>' + (inboxShown && v ? row({ icon: 'chat', title: 'Inbox', sub: inbox ? inbox + ' open' : 'No open messages', href: '#inbox', count: inbox || '', countLabel: ' open messages' }) : '') + '</div>' +
@@ -629,7 +656,7 @@
     var src = CS.sourceLabel(g.source), earlier = CS.earlierLine(g), withLine = CS.canSeeGuestContact(state.access && state.access.role) ? CS.companionsLine(g) : null; // D-319: owner/admin only, even if the server sent it
     var tint = kind === 'house' ? 'G_stay' : 'G_in'; // s93: arriving = green, in the house = blue (the house guest always checks out after today, so no third tint)
     var info = '<div class="card glass ' + tint + '" id="' + (kind === 'house' ? 'house' : 'next') + '"><div class="row-between"><span class="cap up">' + label + '</span>' + st + '</div>' +
-      '<div class="T_namerow T_gap"><h3 class="ttl' + A_nm(g) + '">' + esc(g.guest_name || 'Guest') + '</h3>' + A_badge(g) + '</div>' + A_perks(g, kind === 'house' ? 'house' : 'arriving') + (CS.notableLine(g) ? '<p class="help T_ask">' + esc(CS.notableLine(g)) + '</p>' : '') + (withLine ? '<p class="sub T_with">' + esc(withLine) + '</p>' : '') +
+      '<div class="T_namerow T_gap"><h3 class="ttl' + A_nm(g) + '">' + esc(g.guest_name || 'Guest') + '</h3>' + A_badge(g) + '</div>' + A_ownerLine(g) + A_perks(g, kind === 'house' ? 'house' : 'arriving') + (CS.notableLine(g) ? '<p class="help T_ask">' + esc(CS.notableLine(g)) + '</p>' : '') + (withLine ? '<p class="sub T_with">' + esc(withLine) + '</p>' : '') +
       '<div class="row-wrap" style="margin-top:6px">' + (src ? '<span class="pill p-neutral">' + esc(src) + '</span>' : '') + '</div>' +
       '<p class="sub num" style="margin:8px 0 0">' + esc(datesLine(g)) + '</p>' + (earlier ? '<p class="help num" style="margin:2px 0 0">' + esc(earlier) + '</p>' : '') + contactBlock(g) +
       H_readyBlock(g.arrival_ready, g, true) + (canAddDetails() && g.uid ? '<a class="btn btn-secondary btn-sm" href="./guest/#' + encodeURIComponent(g.uid) + '" style="margin-top:12px">' + ICON('idcard', 's16') + 'Add guest details</a>' : '') +
@@ -646,7 +673,7 @@
     // Owner/admin: the empty box opens Add guest details in ID mode (take or choose the guest's own ID photo; D-320.5).
     var addId = canAddDetails() && g.uid ? './guest/?for=id#' + encodeURIComponent(g.uid) : '';
     var idcard = '<div class="card glass"><h3 class="hd">Guest ID</h3><div style="margin-top:10px">' +
-      (g.id_photo_path ? '<div class="idphoto" data-idpath="' + esc(g.id_photo_path) + '"><span class="skel T_skid"></span><span class="sr">Loading the photo…</span></div><p class="help" style="margin:10px 0 0">Check the face and the name against the guest at the door.</p>'
+      (g.id_photo_path ? '<div class="idphoto" data-idpath="' + esc(g.id_photo_path) + '"><span class="skel T_skid"></span><span class="sr">Loading the photo…</span></div>' + (CS.idOfLine(g) ? '<p class="help T_idof" style="margin:10px 0 0">' + esc(CS.idOfLine(g)) + '</p>' : '') + '<p class="help" style="margin:10px 0 0">Check the face and the name against the guest at the door.</p>'
         : addId ? '<a class="idphoto empty idadd" href="' + esc(addId) + '">' + ICON('camera', 's24') + '<span><b>No ID photo yet.</b><br>Tap to take or choose a photo of the guest’s ID.</span></a>'
         : '<div class="idphoto empty">No ID photo to show for this guest.</div>') +
       (addId ? '<a class="btn btn-ghost btn-sm" href="./guest/?for=companion#' + encodeURIComponent(g.uid) + '" style="margin:8px 0 0 -12px">' + ICON('plus', 's16') + 'Add a companion</a>' +
@@ -738,12 +765,67 @@
     img.addEventListener('contextmenu', function (e) { e.preventDefault(); });
     if (CS.canSeeGuestContact(role())) { var b = document.createElement('button'); b.type = 'button'; b.className = 'H_idbtn'; b.setAttribute('data-act', 'id-full'); b.setAttribute('aria-label', 'Show the ID photo full screen'); b.appendChild(img); box.appendChild(b); } else box.appendChild(img);
   }
-  // Full screen: the same in-memory picture, no download, no new request. A tap on the picture or Close puts it away.
+  // Full screen: the same in-memory picture, no download, no new request. Close or Esc puts it away; the picture itself zooms (s111).
   function H_idRot(src) { return state.rot[src] || 0; }
-  function H_idFull(src) {
-    var o = $('H_idfull'); if (!o) { o = document.createElement('div'); o.id = 'H_idfull'; o.className = 'H_idfull'; o.setAttribute('role', 'dialog'); o.setAttribute('aria-modal', 'true'); o.setAttribute('aria-label', 'Guest ID photo'); document.body.appendChild(o); }
-    o.innerHTML = '<div class="H_idbox"><img alt="Guest ID photo" draggable="false" data-act="id-full-close"></div><div class="H_idbar"><span class="H_idst" role="status" aria-live="polite"></span><button class="btn btn-secondary" type="button" data-act="id-rot">Rotate</button><button class="btn btn-secondary" type="button" data-act="id-full-close">' + ICON('close', 's16') + 'Close</button></div>';
-    o.setAttribute('data-src', src); var im = o.querySelector('img'); if (im) { im.src = src; im.className = 'r' + H_idRot(src); } o.classList.add('on'); var cb = o.querySelector('button[data-act="id-full-close"]'); if (cb && cb.focus) cb.focus();
+  function H_idFull(src) { Z_open(src, { alt: 'Guest ID photo', rotate: true }); }
+  // s111: the shared full-screen photo viewer (ID photo, meter check photos, the receipt in the supply review). Pinch and drag on touch, double-tap or
+  // double-click 2.5x and back, - / + buttons and keys, Esc closes, max 5x (CS.zoom*). Same rules for every photo: no save link, no drag, no hold menu.
+  // Focus goes to Close on open and back to the opener on close; reduced motion drops the zoom animation.
+  var Z = { s: 1, x: 0, y: 0, opener: null, pts: {}, pinch: null, drag: null, tap: 0 };
+  function Z_open(src, o) {
+    o = o || {}; var ov = $('H_idfull');
+    if (!ov) { ov = document.createElement('div'); ov.id = 'H_idfull'; ov.className = 'H_idfull'; ov.setAttribute('role', 'dialog'); ov.setAttribute('aria-modal', 'true'); document.body.appendChild(ov); }
+    if (ov.getAttribute('data-zb') !== '1') { ov.setAttribute('data-zb', '1'); Z_bind(ov); } // bound once per overlay
+    Z.opener = o.opener || (document.activeElement && document.activeElement !== document.body ? document.activeElement : null); Z.s = 1; Z.x = 0; Z.y = 0; Z.pts = {}; Z.pinch = null; Z.drag = null;
+    var alt = String(o.alt || 'Photo'); ov.setAttribute('aria-label', alt);
+    ov.innerHTML = '<div class="H_idbox Z_box"><div class="Z_pan"><img alt="' + esc(alt) + '" draggable="false"></div></div><div class="H_idbar"><span class="H_idst" role="status" aria-live="polite"></span>' +
+      '<button class="btn btn-secondary Z_b" type="button" data-act="z-out" aria-label="Zoom out">' + ICON('minus', 's16') + '</button><span class="Z_lvl num" aria-live="polite">100%</span><button class="btn btn-secondary Z_b" type="button" data-act="z-in" aria-label="Zoom in">' + ICON('plus', 's16') + '</button>' +
+      (o.rotate ? '<button class="btn btn-secondary" type="button" data-act="id-rot">Rotate</button>' : '') + '<button class="btn btn-secondary" type="button" data-act="id-full-close">' + ICON('close', 's16') + 'Close</button></div>';
+    ov.setAttribute('data-src', src); ov.setAttribute('data-zoom', o.rotate ? 'id' : 'photo');
+    var im = ov.querySelector('img'); if (im) { im.src = src; im.className = o.rotate ? 'r' + H_idRot(src) : ''; }
+    ov.classList.add('on'); Z_apply(false); var cb = ov.querySelector('button[data-act="id-full-close"]'); if (cb && cb.focus) cb.focus();
+  }
+  // Tab and Shift+Tab stay on the viewer's own buttons while it is open (a disabled zoom button is skipped)
+  function Z_trap(ev) {
+    var ov = $('H_idfull'), bs = ov && ov.querySelectorAll ? Array.prototype.filter.call(ov.querySelectorAll('button'), function (b) { return !b.disabled; }) : []; if (!bs.length) return;
+    var i = bs.indexOf(document.activeElement), to = ev.shiftKey ? (i <= 0 ? bs.length - 1 : -1) : (i < 0 || i === bs.length - 1 ? 0 : -1); if (to < 0) return;
+    if (ev.preventDefault) ev.preventDefault(); if (bs[to].focus) bs[to].focus();
+  }
+  function Z_isOpen() { var ov = $('H_idfull'); return !!(ov && ov.classList && ov.classList.contains('on') && ov.getAttribute('data-src')); }
+  function Z_size() { var b = $('H_idfull'), bx = b && b.querySelector && b.querySelector('.Z_box'), r = bx && bx.getBoundingClientRect ? bx.getBoundingClientRect() : null; return r ? { w: r.width, h: r.height, l: r.left, t: r.top } : { w: 0, h: 0, l: 0, t: 0 }; }
+  function Z_apply(anim) {
+    var ov = $('H_idfull'), pan = ov && ov.querySelector && ov.querySelector('.Z_pan'); if (!pan) return;
+    if (pan.classList) pan.classList.toggle('Z_anim', !!anim && !E_reduced());
+    pan.style.transform = 'translate(' + Math.round(Z.x) + 'px, ' + Math.round(Z.y) + 'px) scale(' + Math.round(Z.s * 1000) / 1000 + ')';
+    var lv = ov.querySelector('.Z_lvl'); if (lv) lv.textContent = Math.round(Z.s * 100) + '%';
+    var bo = ov.querySelector('[data-act="z-out"]'), bi = ov.querySelector('[data-act="z-in"]'); if (bo) bo.disabled = Z.s <= 1; if (bi) bi.disabled = Z.s >= CS.ZOOM_MAX;
+  }
+  function Z_to(s, cx, cy, anim) { var sz = Z_size(), r = CS.zoomAt(Z, s, cx || 0, cy || 0, sz.w, sz.h); Z.s = r.s; Z.x = r.x; Z.y = r.y; Z_apply(anim); }
+  function Z_step(dir) { if (Z_isOpen()) Z_to(CS.zoomStep(Z.s, dir), 0, 0, true); }
+  function Z_toggleAt(ev) { var sz = Z_size(); Z_to(CS.zoomToggle(Z.s), ev.clientX - sz.l - sz.w / 2, ev.clientY - sz.t - sz.h / 2, true); }
+  function Z_bind(ov) {
+    ov.addEventListener('contextmenu', function (e) { e.preventDefault(); }); // no hold-to-save menu on any photo
+    ov.addEventListener('pointerdown', function (e) {
+      if (!e.target || !e.target.closest || !e.target.closest('.Z_box')) return;
+      Z.pts[e.pointerId] = { x: e.clientX, y: e.clientY }; var ids = Object.keys(Z.pts);
+      if (ids.length === 2) { var a = Z.pts[ids[0]], b = Z.pts[ids[1]], sz = Z_size(); Z.pinch = { d: Math.hypot(a.x - b.x, a.y - b.y) || 1, s: Z.s, x: Z.x, y: Z.y, cx: (a.x + b.x) / 2 - sz.l - sz.w / 2, cy: (a.y + b.y) / 2 - sz.t - sz.h / 2 }; Z.drag = null; }
+      else if (ids.length === 1) Z.drag = { x0: e.clientX, y0: e.clientY, x: Z.x, y: Z.y, moved: false };
+      if (e.preventDefault) e.preventDefault();
+    });
+    ov.addEventListener('pointermove', function (e) {
+      if (!Z.pts[e.pointerId]) return; Z.pts[e.pointerId] = { x: e.clientX, y: e.clientY };
+      var sz = Z_size(), ids = Object.keys(Z.pts);
+      if (Z.pinch && ids.length >= 2) { var a = Z.pts[ids[0]], b = Z.pts[ids[1]], p = Z.pinch, r = CS.zoomAt({ s: p.s, x: p.x, y: p.y }, p.s * (Math.hypot(a.x - b.x, a.y - b.y) / p.d), p.cx, p.cy, sz.w, sz.h); Z.s = r.s; Z.x = r.x; Z.y = r.y; Z_apply(false); return; }
+      if (Z.drag) { var dx = e.clientX - Z.drag.x0, dy = e.clientY - Z.drag.y0; if (Math.abs(dx) + Math.abs(dy) > 6) Z.drag.moved = true; if (Z.s > 1) { var q = CS.zoomPan({ s: Z.s, x: Z.drag.x + dx, y: Z.drag.y + dy }, sz.w, sz.h); Z.x = q.x; Z.y = q.y; Z_apply(false); } }
+    });
+    var up = function (e) {
+      var was = Z.drag; delete Z.pts[e.pointerId]; if (Object.keys(Z.pts).length < 2) Z.pinch = null;
+      if (Object.keys(Z.pts).length) return; Z.drag = null;
+      if (e.type !== 'pointerup' || !was || was.moved || e.pointerType === 'mouse') return; // a mouse uses dblclick
+      var t = e.timeStamp || Date.now(); if (Z.tap && t - Z.tap < 320) { Z.tap = 0; Z.tapDone = t; Z_toggleAt(e); } else Z.tap = t;
+    };
+    ov.addEventListener('pointerup', up); ov.addEventListener('pointercancel', up);
+    ov.addEventListener('dblclick', function (e) { if (!e.target || !e.target.closest || !e.target.closest('.Z_box')) return; var t = e.timeStamp || Date.now(); if (Z.tapDone && t - Z.tapDone < 500) return; Z_toggleAt(e); });
   }
   // Rotate: +90 each tap. Owner/admin also save it (set_guest_photo_rotation_v1) so it sticks for everyone; other roles turn it for this session only.
   function H_idRotate() {
@@ -764,7 +846,12 @@
       }).catch(function () { say('Could not save'); });
     }, 600);
   }
-  function H_idClose() { var o = $('H_idfull'); if (o && o.classList) { o.classList.remove('on'); o.innerHTML = ''; } }
+  function H_idClose() {
+    var o = $('H_idfull'); if (!o || !o.classList || !o.getAttribute('data-src')) return;
+    o.classList.remove('on'); o.innerHTML = ''; o.removeAttribute('data-src'); Z.pts = {}; Z.pinch = null; Z.drag = null;
+    var op = Z.opener; Z.opener = null; if (op && op.focus && (!document.contains || document.contains(op))) op.focus();
+  }
+  window.CSZoom = { open: Z_open, close: H_idClose, step: Z_step, state: function () { return { s: Z.s, x: Z.x, y: Z.y, open: Z_isOpen() }; } };
   function dropPhotos() { Object.keys(state.photos).forEach(function (k) { URL.revokeObjectURL(state.photos[k].url); }); state.photos = {}; state.photoReq = {}; state.rot = {}; state.srot = {}; state.rotReq = {}; Object.keys(state.rotTimers).forEach(function (k) { clearTimeout(state.rotTimers[k]); }); state.rotTimers = {}; state.photoGen++; }
 
   // ---------------------------------------------------------------- Guest Calendar Info
@@ -907,8 +994,9 @@
   function H_legendSave() { var ls = store('localStorage'); try { if (ls) ls.setItem('cs_legend_open', state.legendOpen ? '1' : '0'); } catch (e) {} }
   function warnKey(w) { return w.kind + '|' + (w.title || '') + '|' + ((w.detail && w.detail.date) || ''); }
   function warningItems() {
-    var p = state.payload, items = CS.orderWarnings(p.warnings).map(function (w) {
+    var p = state.payload, items = CS.orderWarnings(CS.foldLowStock(p.warnings)).map(function (w) {
       var ico, body;
+      if (w.kind === 'inventory' && w.detail && w.detail.folded) { var fb = ICON('box').replace('class="i"', 'class="i c-warn"') + '<span><b>' + esc(w.title) + '</b> · ' + esc(w.detail.sub) + '</span>'; return K_invMay('stock') ? '<li><a class="wbtn" href="#stock?low">' + fb + '<span class="chev">' + ICON('chev', 's16') + '</span></a></li>' : '<li>' + fb + '</li>'; } // roles without Inventory (inspector, maintenance) get a plain row, not a link that bounces home
       if (w.kind === 'brownout') { var b = CS.brownoutText(w); ico = ICON('zap', '').replace('class="i"', 'class="i c-warn"'); body = '<span class="num"><b>' + esc(b.head) + '</b>' + (b.rest ? ' · ' + esc(b.rest) : '') + '</span>'; }
       else if (w.kind === 'inventory') { var l = CS.lowStockText(w); ico = ICON('box').replace('class="i"', 'class="i c-danger"'); body = '<span><b>' + esc(l.head) + '</b> · ' + esc(l.rest) + '</span>'; }
       else { ico = ICON(w.severity === 'alert' ? 'alert' : 'info').replace('class="i"', 'class="i ' + (w.severity === 'alert' ? 'c-danger' : 'c-warn') + '"'); body = '<span><b>System check</b> · ' + esc(w.title) + '</span>'; }
@@ -1122,7 +1210,7 @@
     var e = sheetEls(); $('cs-live').textContent = ''; drawSheet();
     e.sheet.classList.add('on'); e.sheet.setAttribute('aria-hidden', 'false'); e.scrim.classList.add('on'); e.scrim.setAttribute('data-F-kind', kind);
     var appEl = $('app'); if (appEl && appEl.setAttribute) appEl.setAttribute('inert', ''); // the sheet says aria-modal: what is behind it cannot be tabbed to or read
-    var h = kind === 'add' ? $('t-title') : kind === 'nadd' ? $('n-title') : $('cs-h'); if (h) h.focus();
+    var h = kind === 'add' ? $('t-title') : kind === 'nadd' ? $('n-title') : kind === 'tiers' && key ? $('tg-' + key) || $('cs-h') : $('cs-h'); if (h) h.focus();
   }
   function closeSheet() {
     var S = state.sheet; if (!S) return; state.sheet = null;
@@ -1206,10 +1294,10 @@
     return html;
   }
   function drawSheet() {
-    var S = state.sheet; if (!S || (!state.payload && S.kind !== 'attn')) return; // the pill's list can say "Loading" and "No connection" before there is a payload
+    var S = state.sheet; if (!S || (!state.payload && S.kind !== 'attn' && S.kind !== 'tiers')) return; // the pill's list can say "Loading" and "No connection" before there is a payload
     var e = sheetEls(), had = e.sheet.contains(document.activeElement);
     e.sheet.setAttribute('data-F-kind', S.kind); e.sheet.setAttribute('data-E-swipe', E_sheetTwin(S.kind)); // the pull-down's tap twin: the button with this data-act is on the sheet
-    $('cs-body').innerHTML = E_sheetPage(S, (S.kind === 'attn' ? E_attnSheet() : S.kind === 'day' ? daySheet(S) : S.kind === 'add' ? addReminderCard() : S.kind === 'news' ? A_newsSheet() : S.kind === 'nadd' ? A_noticeAddForm() : S.kind === 'stay' ? A_stayForm() : S.kind === 'rate' ? A_rateConfirm() : S.kind === 'tour' ? H_tourSheet(S) : warnSheet(S)) +
+    $('cs-body').innerHTML = E_sheetPage(S, (S.kind === 'attn' ? E_attnSheet() : S.kind === 'day' ? daySheet(S) : S.kind === 'add' ? addReminderCard() : S.kind === 'news' ? A_newsSheet() : S.kind === 'tiers' ? A_tierSheet(S) : S.kind === 'stay' ? A_stayForm() : S.kind === 'nadd' ? A_noticeAddForm() : S.kind === 'rate' ? A_rateConfirm() : S.kind === 'tour' ? H_tourSheet(S) : warnSheet(S)) +
       (S.err ? '<div class="errbox" style="margin-top:12px">' + ICON('alert') + '<span>' + esc(S.err) + '</span></div>' : '') +
       (S.msg ? '<div class="okbox" style="margin-top:12px">' + ICON('check') + '<span>' + esc(S.msg) + '</span></div>' : '') + (S.hint ? '<p class="help" role="status" style="margin:8px 0 0">' + esc(S.hint) + '</p>' : '') +
       '');
@@ -1282,7 +1370,7 @@
     if (go.kind === 'day') return { tag: 'button', attrs: ' type="button" data-act="notice-cal" data-date="' + esc(go.date) + '"', ext: false };
     if (go.kind === 'bookings') { l = A_hubLink('bookings/inquiries') || { href: CS.INQUIRIES_URL, external: true }; }
     else if (go.kind === 'inbox') { l = { href: '#inbox', external: false }; } // 3.2: the shell's own Inbox
-    else if (go.kind === 'inventory') { l = state.layout === 'admin' ? A_hubLink('inventory') : null; l = l || { href: '#calendar/warnings', external: false }; }
+    else if (go.kind === 'inventory') { l = K_invMay('stock') ? { href: '#stock?low', external: false } : state.layout === 'admin' ? A_hubLink('inventory') : null; l = l || { href: '#calendar/warnings', external: false }; }
     else if (go.kind === 'warn') return { tag: 'button', attrs: ' type="button" data-warn="' + esc(go.key) + '"', ext: false };
     else l = { href: '#calendar/notices', external: false };
     if (!l) l = { href: '#home', external: false };
@@ -1734,8 +1822,11 @@
         '<p class="help" style="margin:4px 0 0">A short buzz when something is saved or finished. Off saves nothing but the buzz.</p>' : '') + '</section></div>' });
     g.push({ w: 3, id: 'help', html: '<div class="F_group"><div class="A_label">Help</div><nav class="card glass list" aria-label="Help"><button class="rowi" type="button" data-act="whatsnew"><span class="lead">' + ICON('sparkles') + '</span><span class="mid"><span class="t">What’s new</span><span class="s">What changed in this version</span></span><span class="chev">' + ICON('chev') + '</span></button>' +
       '<button class="rowi" type="button" data-act="tour-open"><span class="lead">' + ICON('help') + '</span><span class="mid"><span class="t">Show the tour</span><span class="s">Three short cards on how the app works</span></span><span class="chev">' + ICON('chev') + '</span></button></nav></div>' });
-    g.push({ w: 3, id: 'phone', html: '<div class="F_group"><div class="A_label">This phone</div>' + H_alertsSwitch() + '<section class="card glass" id="install-card" hidden aria-label="Install the app"><h2 class="hd">Install the app</h2><p class="sub" style="margin-top:6px">Put Cascade Staff on your Home Screen.</p><button class="btn btn-secondary" id="install-btn" type="button" style="margin-top:10px">' + ICON('plus', 's16') + 'Install</button>' +
+    g.push({ w: 3, id: 'phone', html: '<div class="F_group"><div class="A_label">This phone</div>' + H_alertsSwitch() + '<div class="card glass list PC_more" role="group" aria-label="Phone check"><button class="rowi" type="button" data-act="pc-open"><span class="lead">' + ICON('check') + '</span><span class="mid"><span class="t">Check this phone</span><span class="s">Alerts, install, camera, storage, version, sign-in</span></span><span class="chev">' + ICON('chev') + '</span></button></div>' + '<section class="card glass" id="install-card" hidden aria-label="Install the app"><h2 class="hd">Install the app</h2><p class="sub" style="margin-top:6px">Put Cascade Staff on your Home Screen.</p><button class="btn btn-secondary" id="install-btn" type="button" style="margin-top:10px">' + ICON('plus', 's16') + 'Install</button>' +
       '<a class="btn btn-secondary" id="install-link" href="./install/" style="margin-top:10px" hidden>' + ICON('plus', 's16') + 'How to install</a></section></div>' });
+    // s113: Settings, for every role: Phone check with its last result, and the Guest tiers guide
+    g.push({ w: 3, id: 'settings', html: '<div class="F_group"><div class="A_label">Settings</div><nav class="card glass list" aria-label="Settings"><button class="rowi" type="button" data-act="pc-open" id="H_pcrow"><span class="lead">' + ICON('check') + '</span><span class="mid"><span class="t">Phone check</span><span class="s">' + esc('Alerts, camera, storage, updates · ' + CS.phoneCheckSummary(PC_ls())) + '</span></span><span class="chev">' + ICON('chev') + '</span></button>' +
+      '<button class="rowi" type="button" data-act="tiers-open" data-tier=""><span class="lead">' + ICON('star') + '</span><span class="mid"><span class="t">Guest tiers guide</span><span class="s">How many stays for each tier, and what they get</span></span><span class="chev">' + ICON('chev') + '</span></button></nav></div>' });
     return g;
   }
   // the split that leaves the two stacks closest in height (weights are rows and cards, not pixels)
@@ -1746,7 +1837,7 @@
   }
   // In a browser the split is refined by what the groups really measure: every group goes into the first stack, is measured at the column width, and the order and the split that
   // leave the two stacks closest in height are used (all the orders read sensibly in one column too). Under 600 px the stacks follow each other, so nothing is moved.
-  var H_MORE_ORDERS = [['search', 'how', 'cassy', 'admin', 'appearance', 'help', 'phone'], ['search', 'how', 'appearance', 'cassy', 'admin', 'help', 'phone'], ['search', 'appearance', 'how', 'cassy', 'admin', 'help', 'phone'], ['search', 'how', 'cassy', 'appearance', 'admin', 'help', 'phone']];
+  var H_MORE_ORDERS = [['search', 'how', 'cassy', 'admin', 'appearance', 'help', 'phone', 'settings'], ['search', 'how', 'appearance', 'cassy', 'admin', 'help', 'phone', 'settings'], ['search', 'appearance', 'how', 'cassy', 'admin', 'help', 'settings', 'phone'], ['search', 'how', 'cassy', 'appearance', 'admin', 'help', 'phone', 'settings']];
   function H_moreBalance() {
     var root = $('v-more'), cols = root && root.querySelectorAll ? root.querySelectorAll('.H_col') : []; if (cols.length !== 2 || F_bottomSheet()) return;
     var A = cols[0], B = cols[1], all = Array.prototype.slice.call(A.children).concat(Array.prototype.slice.call(B.children)), by = {}; all.forEach(function (g) { by[g.getAttribute('data-g')] = g; A.appendChild(g); });
@@ -1858,56 +1949,64 @@
   }
   function renderModule(key) {
     var m = H_MODULES[key], el = $('v-' + key), sub = H_sub;
-    if (H_mod.mounted === key && H_mod.sub === sub) return; // a redraw of the same screen must not remount it
+    if (H_mod.mounted === key && H_mod.sub === sub) { state.H_lowOnce = false; return; } // a redraw of the same screen must not remount it
     if (H_mod.mounted) H_unmount();
     var token = ++H_mod.n;
     el.innerHTML = appbar({ title: m.title, back: m.tab ? '' : key === 'supply' ? '#stock' : '#home' }) + '<div class="screen">' + (key === 'stock' && CS.isLaundry(role()) ? K_invActions('stock') : '') + '<div class="H_mod" id="H_mod-' + key + '"><div class="skel" style="height:120px"></div></div></div>'; // s110: the laundry Inventory tab is the stock screen with the three actions above it
     H_loadModule(key).then(function () {
       if (current !== key || token !== H_mod.n) return;
       var box = $('H_mod-' + key); if (!box) return; box.innerHTML = '';
-      H_mod.mounted = key; H_mod.sub = sub;
+      H_mod.mounted = key; H_mod.sub = sub; var low = !!state.H_lowOnce; state.H_lowOnce = false; // read at mount: a redraw while the script loads must not eat the one-shot
       var bad = function () { if (H_mod.mounted === key) { H_mod.mounted = ''; H_mod.sub = ''; H_mod.n++; } if (current === key) H_fallback(key); };
-      try { var mr = window[m.global].mount(box, { client: DEMO && !m.demoClient ? null : sb, demo: DEMO, role: role(), sub: sub, propertyId: pid(), houseTimes: A_houseT(), pushKey: H_pushKey, swReg: H_swReg, navigate: function (h) { location.hash = String(h).charAt(0) === '#' ? h : '#' + h; }, toast: toast, haptic: E_vibe }); if (mr && typeof mr.then === 'function') mr.then(null, bad); } catch (e) { bad(); } // a module that throws leaves a screen that works, not a blank one
+      try { var mr = window[m.global].mount(box, { client: DEMO && !m.demoClient ? null : sb, demo: DEMO, role: role(), sub: sub, low: low && key === 'stock', propertyId: pid(), houseTimes: A_houseT(), pushKey: H_pushKey, swReg: H_swReg, navigate: function (h) { location.hash = String(h).charAt(0) === '#' ? h : '#' + h; }, toast: toast, haptic: E_vibe }); if (mr && typeof mr.then === 'function') mr.then(null, bad); } catch (e) { bad(); } // a module that throws leaves a screen that works, not a blank one
     }, function () { if (current === key && token === H_mod.n) H_fallback(key); });
   }
 
   // ---------------------------------------------------------------- Alerts on this phone (3.2, every role)
-  // Brownouts, water interruptions and rain during a brownout reach a phone only after one permission tap. The card on Home asks once, calmly; Not now keeps it away for 7 days
-  // (a time stamp in localStorage, nothing else). Turn on asks the browser, subscribes through the pay/ push code (C_Push) and sends the topics with staff_push_subscribe_v1.
-  // Before the server knows the topic 'notices' the call is retried without topics, so nothing breaks. More > This phone shows the same state as a switch.
+  // Brownouts, water interruptions and rain during a brownout reach a phone only after one permission tap. s111 (Lloyd: "enforce notification by default"): alerts are
+  // required, one tap. While they are off and the phone can have them, the card sits at the top of Today for every role and cannot be put away: Turn on (the tap the
+  // browser prompt needs), the Home Screen steps on an iPhone in Safari, or the unblock steps with a re-check when notifications are blocked. Switching alerts off on
+  // More > This phone is allowed; the card then comes back on the next open. Turn on subscribes through the pay/ push code (C_Push) and sends the topics with
+  // staff_push_subscribe_v1; before the server knows the topic 'notices' the call is retried without topics, so nothing breaks.
   var H_TAP_EV = ['touch' + 'end', 'click']; // the first tap that carries the permission prompt (a gesture iOS accepts); built so the no-gesture-listeners guard stays about swipes
-  var H_al = { busy: false, msg: '', on: null, loading: false, auto: false, tapDone: false }, H_tapFn = null, H_ALERT_OFF = 'cs_h_alerts_off', H_ALERT_BLOCKED = 'cs_h_alerts_blocked_later', H_ALERT_KEY = 'cs_h_alerts_later', H_ALERT_OLD = 'cs_alerts_later', H_ALERT_DAYS = 7;
+  var H_al = { busy: false, msg: '', on: null, loading: false, auto: false, tapDone: false, offNow: false }, H_tapFn = null, H_ALERT_OFF = 'cs_h_alerts_off';
   function H_alEnv() { return { navigator: navigator, window: window }; }
   function H_alSupport() { return DEMO || !window.C_Push ? 'unsupported' : window.C_Push.support(H_alEnv()); }
-  // the first key name (cs_alerts_later) is read once and moved to the new one
-  function H_alLater() { var ls = store('localStorage'), t = 0; try { t = ls ? Number(ls.getItem(H_ALERT_KEY)) || 0 : 0; if (ls && !t) { t = Number(ls.getItem(H_ALERT_OLD)) || 0; if (t) { ls.setItem(H_ALERT_KEY, String(t)); ls.removeItem(H_ALERT_OLD); } } } catch (e) { t = 0; } return t > 0 && Date.now() - t < H_ALERT_DAYS * 86400000; }
   function H_alertTopics() { return CS.canSeeGuestContact(role()) ? ['paid', 'inbox', 'notices'] : ['paid', 'notices']; }
-  function H_alCardOn() { return !!state.access && H_alSupport() === 'ready' && window.Notification && window.Notification.permission === 'default' && !H_alLater(); }
   // 3.2.1: a person who switched alerts off on More is never auto-subscribed; the key is set by switching off, cleared by switching on
   function H_alOff() { var ls = store('localStorage'); try { return !!ls && ls.getItem(H_ALERT_OFF) === '1'; } catch (e) { return false; } }
   function H_alSetOff(v) { var ls = store('localStorage'); try { if (ls) { if (v) ls.setItem(H_ALERT_OFF, '1'); else ls.removeItem(H_ALERT_OFF); } } catch (e) { /* the choice is kept for this visit only */ } }
-  function H_alBlockedLater() { var ls = store('localStorage'), t = 0; try { t = ls ? Number(ls.getItem(H_ALERT_BLOCKED)) || 0 : 0; } catch (e) { t = 0; } return t > 0 && Date.now() - t < H_ALERT_DAYS * 86400000; }
-  // the steps to allow notifications again, by device: a denied permission can only be reset in the phone or browser settings
-  function H_alBlockedSteps(ua) {
-    ua = String(ua || '');
-    if (/iphone|ipad|ipod/i.test(ua)) return 'Open Settings, then Notifications, then Cascade Staff, then turn on Allow Notifications.';
-    if (/android/i.test(ua)) return 'Tap the icon left of the web address, then Permissions, then Notifications, then Allow. Then reload.';
-    if (/chrome|edg\//i.test(ua)) return 'Click the icon left of the web address, then Site settings, then Notifications, then Allow. Then reload.';
-    return 'Allow notifications for this site in your browser settings, then reload.';
+  // which card Today shows: 'ask' (Turn on), 'install' (iPhone, add to the Home Screen first), 'blocked' (unblock steps), or '' (on, unsupported, or switched off in this visit)
+  function H_alCardKind() {
+    if (!state.access) return '';
+    var sp = H_alSupport();
+    if (sp === 'needs_install') return 'install';
+    if (sp === 'blocked') return 'blocked';
+    if (sp !== 'ready' || !window.Notification) return '';
+    var perm = window.Notification.permission;
+    if (perm === 'default') return 'ask';
+    if (perm === 'granted' && H_alOff() && !H_al.offNow) return 'ask'; // switched off on an earlier visit: asked again on this open
+    return '';
   }
-  function H_alBlockedCard() {
-    return '<section class="card glass A_card H_alblocked" id="H_alblocked" aria-label="Alerts are off"><h2 class="hd">Alerts are off on this phone</h2><p class="sub" style="margin:0">This phone has blocked notifications, so pay notices, brownouts and rain will not reach you.</p><p class="help" style="margin:0">' + esc(H_alBlockedSteps(navigator.userAgent)) + '</p>' +
-      '<div class="row-wrap H_alrow"><button class="btn btn-ghost" type="button" data-act="alerts-blocked-later">Hide for 7 days</button></div></section>';
-  }
+  function H_alSteps(list) { return '<ol class="H_alsteps">' + list.map(function (x) { return '<li>' + esc(x) + '</li>'; }).join('') + '</ol>'; }
   function H_alertsCard() {
-    if (state.access && H_alSupport() === 'blocked' && !H_alBlockedLater()) return H_alBlockedCard();
-    if (!H_alCardOn()) return '';
-    return '<section class="card glass A_card H_alerts" id="H_alerts" aria-label="Turn on alerts"><h2 class="hd">Turn on alerts</h2><p class="sub" style="margin:0">Brownouts, water interruptions and rain on the way.</p>' +
-      (H_al.msg ? '<p class="help" role="status" style="margin:0">' + esc(H_al.msg) + '</p>' : '') +
-      '<div class="row-wrap H_alrow"><button class="btn btn-primary" type="button" data-act="alerts-on"' + (H_al.busy ? ' disabled' : '') + '>' + (H_al.busy ? 'Turning on…' : 'Turn on') + '</button><button class="btn btn-ghost" type="button" data-act="alerts-later"' + (H_al.busy ? ' disabled' : '') + '>Not now</button></div></section>';
+    var k = H_alCardKind(); if (!k) return '';
+    var msg = H_al.msg ? '<p class="help" role="status" style="margin:0">' + esc(H_al.msg) + '</p>' : '';
+    if (k === 'install') return '<section class="card glass A_card F_span H_alerts H_alinstall" id="H_alerts" aria-label="Turn on alerts"><h2 class="hd">Turn on alerts</h2><p class="sub" style="margin:0">' + esc(window.C_Push.words('needs_install')) + '</p>' + H_alSteps(CS.IOS_A2HS) +
+      '<a class="btn btn-secondary" href="./install/">' + ICON('plus', 's16') + 'Show me how</a></section>';
+    if (k === 'blocked') return '<section class="card glass A_card F_span H_alerts H_alblocked" id="H_alblocked" aria-label="Alerts are off"><h2 class="hd">Alerts are off on this phone</h2><p class="sub" style="margin:0">This phone has blocked notifications, so pay notices, brownouts and rain will not reach you. Allow them in the phone settings:</p>' +
+      '<p class="help" style="margin:0"><b>Android (Chrome)</b></p>' + H_alSteps(CS.phoneBlockedSteps('android')) + '<p class="help" style="margin:0"><b>iPhone</b></p>' + H_alSteps(CS.phoneBlockedSteps('iphone')) + msg +
+      '<div class="row-wrap H_alrow"><button class="btn btn-primary" type="button" data-act="alerts-recheck">I’ve turned it on</button></div></section>';
+    return '<section class="card glass A_card F_span H_alerts" id="H_alerts" aria-label="Turn on alerts"><h2 class="hd">Turn on alerts</h2><p class="sub" style="margin:0">Brownouts, water interruptions and rain on the way. Every phone on the team needs them.</p>' + msg +
+      '<div class="row-wrap H_alrow"><button class="btn btn-primary" type="button" data-act="alerts-on"' + (H_al.busy ? ' disabled' : '') + '>' + (H_al.busy ? 'Turning on…' : 'Turn on') + '</button></div></section>';
   }
-  function H_alertsBlockedLater() { var ls = store('localStorage'); try { if (ls) ls.setItem(H_ALERT_BLOCKED, String(Date.now())); } catch (e) { /* it may come back sooner */ } render(); }
-  function H_alertsLater() { H_alTapDisarm(); var ls = store('localStorage'); try { if (ls) ls.setItem(H_ALERT_KEY, String(Date.now())); } catch (e) { /* the card may come back sooner; nothing breaks */ } render(); }
+  // The re-check button: read the permission again. Allowed now: subscribe at once (an allowed permission needs no prompt). Still blocked: say so, calmly.
+  function H_alRecheck() {
+    var sp = H_alSupport();
+    if (sp === 'blocked') { H_al.msg = 'Notifications are still blocked. Check the steps above, then tap again.'; render(); return; }
+    H_al.msg = ''; H_al.auto = false; render();
+    if (sp === 'ready' && window.Notification && window.Notification.permission === 'granted') { H_alSetOff(false); H_alertsEnable(true); }
+  }
   // The switch on More > This phone: hidden where alerts cannot work, a plain sentence where they are blocked, a switch where they can be turned on or off.
   function H_alertsSwitch() {
     var sp = H_alSupport(); if (sp === 'unsupported') return '';
@@ -1947,10 +2046,10 @@
       });
     }).catch(function () { return { ok: false, reason: 'failed' }; }).then(function (out) {
       H_al.busy = false;
-      if (quiet) { H_al.on = !!out.ok; if (current === 'more') renderMore(); return; }
+      if (quiet) { H_al.on = !!out.ok; if (out.ok) H_al.offNow = false; render(); if (current === 'more') renderMore(); return; }
       if (out.ok) { H_alSetOff(false); H_al.on = true; H_al.msg = ''; toast('Alerts are on'); E_vibe('tap'); }
       else if (out.reason === 'blocked') { H_al.on = false; H_al.msg = ''; toast('Alerts stay off. You can turn them on in your phone settings.'); }
-      else if (out.reason === 'later') { var lsl = store('localStorage'); try { if (lsl) lsl.setItem(H_ALERT_KEY, String(Date.now())); } catch (e) { /* asked again next load */ } }
+      else if (out.reason === 'later') { H_al.msg = 'The phone did not answer. Tap Turn on again.'; }
       else { H_al.on = false; H_al.msg = P.words(out.reason) || P.words('failed'); }
       render(); if (current === 'more') renderMore();
     });
@@ -1958,9 +2057,9 @@
   function H_alertsDisable() {
     if (H_al.busy || H_alSupport() !== 'ready') return Promise.resolve();
     H_al.busy = true; H_al.msg = ''; renderMore();
-    return window.C_Push.disable({ client: sb, env: H_alEnv() }).then(function (r) { if (r && r.ok) { H_al.on = false; H_alSetOff(true); toast('Alerts are off on this phone'); } else H_al.msg = window.C_Push.words('failed'); }).catch(function () { H_al.msg = window.C_Push.words('failed'); }).then(function () { H_al.busy = false; renderMore(); });
+    return window.C_Push.disable({ client: sb, env: H_alEnv() }).then(function (r) { if (r && r.ok) { H_al.on = false; H_al.offNow = true; H_alSetOff(true); toast('Alerts are off on this phone'); } else H_al.msg = window.C_Push.words('failed'); }).catch(function () { H_al.msg = window.C_Push.words('failed'); }).then(function () { H_al.busy = false; renderMore(); });
   }
-  function H_alReset() { H_alTapDisarm(); H_al = { busy: false, msg: '', on: null, loading: false, auto: false, tapDone: false }; }
+  function H_alReset() { H_alTapDisarm(); H_al = { busy: false, msg: '', on: null, loading: false, auto: false, tapDone: false, offNow: false }; PC = { open: false, busy: false, rows: null, msg: '', camPerm: null }; PC_draw(); }
   function H_alTapDisarm() { if (!H_tapFn) return; H_TAP_EV.forEach(function (t) { document.removeEventListener(t, H_tapFn, true); }); H_tapFn = null; }
   // 3.2.1: after sign-in. Permission already granted: subscribe quietly (once per load) unless the person switched alerts off.
   // Never asked: the first tap anywhere carries the browser prompt (it needs a gesture). Blocked: Today shows how to allow it.
@@ -1970,15 +2069,105 @@
     if (perm === 'granted') {
       H_al.auto = true;
       window.C_Push.status({ client: sb, env: H_alEnv() }).then(function (st) { if (st && st.state === 'on') { H_al.on = true; return; } if (st && st.state === 'off') return H_alertsEnable(true); }).catch(function () {});
-    } else if (perm === 'default' && !H_alLater() && !H_tapFn && !H_al.tapDone) {
+    } else if (perm === 'default' && !H_tapFn && !H_al.tapDone) {
       H_tapFn = function (ev) {
         var a = ev && ev.target && ev.target.closest ? ev.target.closest('[data-act]') : null, act = a && a.getAttribute('data-act');
         H_alTapDisarm(); H_al.tapDone = true;
-        if (act === 'alerts-on' || act === 'alerts-later') return; // the card's own buttons answer for themselves
-        if (!H_alOff() && !H_alLater() && H_alSupport() === 'ready' && window.Notification.permission === 'default') H_alertsEnable(false, true);
+        if (act === 'alerts-on' || /^pc-/.test(act || '')) return; // the card's and the phone check's own buttons answer for themselves
+        if (!H_alOff() && H_alSupport() === 'ready' && window.Notification.permission === 'default') H_alertsEnable(false, true);
       };
       H_TAP_EV.forEach(function (t) { document.addEventListener(t, H_tapFn, true); });
     }
+  }
+  // ---------------------------------------------------------------- s111 Phone check (Lloyd: "a one time checker if notifications and necessary functions are on")
+  // Runs once per device after sign-in (CS.phoneCheckDue, key cs_phone_check) and from More > This phone > Check this phone. Every row comes from a real probe
+  // (CS.phoneCheckRows); Fix all runs the fixers in order from the one tap (CS.phoneFixPlan: alerts first, so the permission prompt rides the tap), then probes again.
+  // The camera is opened only when its permission is 'prompt', and every track is stopped at once. Nothing changes Trust this device.
+  var PC_SHELL = 'cs-shell-v59'; // the service worker's cache for this version (sw.js CACHE_NAME; a test keeps them equal)
+  var PC = { open: false, busy: false, rows: null, msg: '', camPerm: null };
+  function PC_ls() { return store('localStorage'); }
+  function PC_cameraPerm() {
+    var n = navigator; if (!n.permissions || !n.permissions.query) return Promise.resolve(null);
+    return Promise.resolve().then(function () { return n.permissions.query({ name: 'camera' }); }).then(function (r) { return r && r.state ? String(r.state) : null; }, function () { return null; });
+  }
+  function PC_probe() {
+    var n = navigator, sp = H_alSupport(), perm = window.Notification ? window.Notification.permission : '';
+    var subP = sp === 'ready' && perm === 'granted' && window.C_Push && !H_alOff() ? Promise.resolve().then(function () { return window.C_Push.status({ client: sb, env: H_alEnv() }); }).then(function (st) { return !!st && st.state === 'on'; }, function () { return false; }) : Promise.resolve(false);
+    var hasCam = !!(n.mediaDevices && n.mediaDevices.getUserMedia), camP = hasCam ? PC_cameraPerm() : Promise.resolve(null);
+    var stApi = !!(n.storage && n.storage.persisted), stP = stApi ? Promise.resolve().then(function () { return n.storage.persisted(); }).then(function (v) { return v === true; }, function () { return false; }) : Promise.resolve(false);
+    var hasSw = !!n.serviceWorker, regP = hasSw ? H_swReg().catch(function () { return null; }) : Promise.resolve(null);
+    var cacheP = window.caches && window.caches.has ? Promise.resolve().then(function () { return window.caches.has(PC_SHELL); }).then(function (v) { return v === true; }, function () { return false; }) : Promise.resolve(false);
+    return Promise.all([subP, camP, stP, regP, cacheP]).then(function (r) {
+      PC.camPerm = r[1];
+      return CS.phoneCheckSettle(CS.phoneCheckRows({ ua: n.userAgent, alerts: { support: sp, permission: perm, subscribed: r[0] }, install: { standalone: standalone, ios: isIOS, canPrompt: !!deferredPrompt },
+        camera: { has: hasCam, perm: r[1] }, storage: { api: stApi, persisted: r[2] }, update: { sw: hasSw, controller: !!(n.serviceWorker && n.serviceWorker.controller), waiting: !!(r[3] && (r[3].waiting || r[3].installing)), cacheOk: r[4] }, trusted: !!trustOn }), CS.phoneCheckTried(PC_ls()));
+    });
+  }
+  var PC_WORD = { ok: 'OK', tap: 'Needs a tap', no: 'Not possible here' }, PC_ICON = { ok: 'check', tap: 'alert', no: 'info' };
+  function PC_draw() {
+    var box = $('pc-sheet'); if (!box) return;
+    box.hidden = !PC.open; if (!PC.open) { box.innerHTML = ''; return; }
+    var rows = PC.rows, plan = rows ? CS.phoneFixPlan(rows) : [];
+    box.innerHTML = '<div class="PC_card card"><h2 class="hd" id="pc-h" tabindex="-1">Check this phone</h2><p class="sub" style="margin:0">What Cascade Staff needs on this phone, checked just now.</p>' +
+      (!rows ? '<p class="help" role="status">Checking…</p>' : '<ul class="PC_list">' + rows.map(function (r) {
+        return '<li class="PC_row PC_' + r.state + '" data-pc="' + esc(r.id) + '"><span class="PC_ic" aria-hidden="true">' + ICON(PC_ICON[r.state], 's16') + '</span><span class="PC_mid"><b>' + esc(r.title) + '</b><span class="PC_st">' + esc(PC_WORD[r.state]) + '</span><span class="sub">' + esc(r.text) + '</span>' +
+          (r.steps && r.state !== 'ok' ? '<ol class="H_alsteps">' + r.steps.map(function (x) { return '<li>' + esc(x) + '</li>'; }).join('') + '</ol>' : '') + '</span></li>';
+      }).join('') + '</ul>') + (PC.msg ? '<p class="help" role="status" style="margin:0">' + esc(PC.msg) + '</p>' : '') +
+      '<div class="row-wrap H_alrow">' + (plan.length ? '<button class="btn btn-primary" type="button" data-act="pc-fix"' + (PC.busy ? ' disabled' : '') + '>' + (PC.busy ? 'Fixing…' : 'Fix all') + '</button>' : '') +
+      '<button class="btn btn-secondary" type="button" data-act="pc-run"' + (PC.busy ? ' disabled' : '') + '>Check again</button><button class="btn btn-ghost" type="button" data-act="pc-close">Close</button></div></div>';
+  }
+  function PC_done(rows) { PC.rows = rows; CS.phoneCheckSave(PC_ls(), rows); PC_draw(); render(); return rows; }
+  function PC_run(show) {
+    if (show) { PC.open = true; PC.rows = null; PC.msg = ''; PC_draw(); var h = $('pc-h'); if (h && h.focus) h.focus(); }
+    return PC_probe().then(PC_done, function () { PC.msg = 'The check could not finish. Try again.'; PC_draw(); });
+  }
+  function PC_close() { PC.open = false; PC_draw(); }
+  // after sign-in: the first time on this device (or after an update that adds a check) the sheet opens when something needs a tap; a phone with open items is re-probed quietly
+  function PC_auto() {
+    if (DEMO || !state.access) return;
+    if (CS.phoneCheckDue(PC_ls())) { PC_probe().then(function (rows) { PC_done(rows); if (rows.some(function (r) { return r.state === 'tap'; })) { PC.open = true; PC_draw(); } }).catch(function () {}); }
+    else if (CS.phoneCheckOpen(PC_ls()).length) PC_probe().then(PC_done).catch(function () {});
+  }
+  // Today: a fixable row other than alerts (alerts have their own card) keeps this card up until a real re-check says OK
+  function PC_todayCard() {
+    if (DEMO || !state.access) return '';
+    var open = CS.phoneCheckOpen(PC_ls()).filter(function (x) { return x !== 'alerts'; }); if (!open.length) return '';
+    return '<section class="card glass A_card F_span PC_today" aria-label="This phone needs a tap"><h2 class="hd">This phone needs a tap</h2><p class="sub" style="margin:0">' + esc(CS.plural(open.length, 'setting') + ' can be fixed with one tap.') + '</p>' +
+      '<div class="row-wrap H_alrow"><button class="btn btn-primary" type="button" data-act="pc-open">Check this phone</button></div></section>';
+  }
+  var PC_FIX = {
+    alerts: function () { return H_alertsEnable(false, true); },
+    storage: function () { return navigator.storage && navigator.storage.persist ? navigator.storage.persist() : null; },
+    install: function () { var d = deferredPrompt; if (!d || !d.prompt) return null; d.prompt(); return Promise.resolve(d.userChoice).then(function () { deferredPrompt = null; syncInstall(); }); },
+    camera: function () {
+      if (PC.camPerm !== 'prompt' || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) return null; // never open the camera just to look when it is already answered
+      return navigator.mediaDevices.getUserMedia({ video: true }).then(function (st) { (st && st.getTracks ? st.getTracks() : []).forEach(function (t) { try { t.stop(); } catch (e) { /* stopped */ } }); });
+    },
+    update: function () {
+      return H_swReg().then(function (reg) {
+        if (!reg || !reg.update) return null;
+        return Promise.resolve(reg.update()).then(function () {
+          if (!reg.installing && !reg.waiting && navigator.serviceWorker.controller) return null;
+          PC.reload = true; // the new worker takes over (sw.js skips waiting); the page reloads once it does, or after 6 seconds
+          return new Promise(function (res) { var go = function () { res(); location.reload(); }; if (navigator.serviceWorker.addEventListener) navigator.serviceWorker.addEventListener('controllerchange', go); setTimeout(go, 6000); });
+        });
+      });
+    }
+  };
+  function PC_fixAll() {
+    if (PC.busy || !PC.rows) return Promise.resolve();
+    var plan = CS.phoneFixPlan(PC.rows); if (!plan.length) return Promise.resolve();
+    PC.busy = true; PC.msg = '';
+    // the first fixer runs inside this tap (the alerts prompt needs it), the rest in order after it
+    var first; try { first = Promise.resolve(PC_FIX[plan[0]]()); } catch (e) { first = Promise.resolve(); }
+    PC_draw();
+    var chain = first.catch(function () {});
+    plan.slice(1).forEach(function (id) { chain = chain.then(function () { try { return Promise.resolve(PC_FIX[id]()).catch(function () {}); } catch (e) { return null; } }); });
+    return chain.then(function () { CS.phoneCheckSave(PC_ls(), PC.rows, plan); return PC_probe(); }).then(function (rows) { // the tried fixers are kept first, so the re-check settles them
+      PC.busy = false; PC_done(rows);
+      var left = CS.phoneFixPlan(rows).length + rows.filter(function (r) { return r.state === 'tap' && !r.fix; }).length;
+      PC.msg = left ? 'Checked again. The rows that still need a tap say what to do.' : 'Checked again. Everything this phone can do is on.'; PC_draw();
+    }, function () { PC.busy = false; PC.msg = 'The check could not finish. Try again.'; PC_draw(); });
   }
   // ---------------------------------------------------------------- Admin hub (owner, admin, finance): every dashboard page, in the groups of the admin home
   function renderHub() {
@@ -2208,6 +2397,7 @@
     var h = (location.hash || '').replace(/^#/, ''), parts = h.split('/'), v = parts[0] || 'home';
     if (!state.layout) return;
     if (v === 'notices') { history.replaceState(null, '', '#calendar/notices'); parts = ['calendar', 'notices']; v = 'calendar'; } // 3.2: the alerts open the Notices tab; #notices is its short name
+    if (v === 'stock?low') { if (K_invMay('stock')) state.H_lowOnce = true; history.replaceState(null, '', '#stock'); parts = ['stock']; v = 'stock'; } // one-shot: this visit opens Items on Low, plain #stock keeps the restored view
     if (VIEWS.indexOf(v) < 0 || v === 'signin') v = 'home';
     if (v === 'door' && !(doorDef(parts[1]) && CS.doorFramed(parts[1], state.layout, trustOn) && CS.doorAllowed(parts[1], state.access && state.access.role))) v = 'home'; // role decides; the server stays the real gate
     if (v === 'payrates' && !CS.canEditRates(state.access && state.access.role)) v = 'home';
@@ -2259,7 +2449,7 @@
     state.layout = CS.layoutForRole(state.access.role);
     state.name = CS.deriveDisplayName(state.user);
     if (!/^#(home|calendar|tasks|payrates|reply|more|hub|weather|stock|manage|guests|inbox|notices|search|kpis|supply)/.test(location.hash)) history.replaceState(null, '', '#home');
-    route(); loadHome(); loadTasks(); maybeIosHint(); H_tourMaybe(); H_alAuto();
+    route(); loadHome(); loadTasks(); maybeIosHint(); H_tourMaybe(); H_alAuto(); PC_auto();
   }
   function boot() {
     sb.auth.getSession().then(function (s) {
@@ -2370,7 +2560,22 @@
     location.hash = '#home'; route();
   });
   // The rain row can also be opened without a click (find in page, assistive tech): keep the remembered state in step with details.open.
-  document.addEventListener('toggle', function (ev) { var d = ev.target; if (d && d.classList && d.classList.contains('W_card') && !(state.wxOpen === undefined && !!d.open === (d.getAttribute('data-def') === '1'))) state.wxOpen = !!d.open; }, true); // s105: the Weather card stays open or shut across redraws; open by default only when rain is soon (the draw itself is not a choice)
+  // s114 (Lloyd): a card opened by hand closes itself after 5 minutes. The Guest tiers card is always closed until tapped; the Weather card is
+  // open by default only when rain is near or a weather warning is up (data-def="1"), and after the auto-close it goes back to that rule.
+  var AUTO_CLOSE_MS = 5 * 60 * 1000, autoClose = {};
+  function A_autoClose(key, d, after) {
+    if (!d.open) { clearTimeout(autoClose[key]); autoClose[key] = 0; return; }
+    if (autoClose[key]) return; // a redraw of an open card keeps the first deadline
+    autoClose[key] = setTimeout(function () { autoClose[key] = 0; after(); var el = document.getElementById(d.id) || d; if (el && el.open) el.open = false; }, AUTO_CLOSE_MS);
+  }
+  document.addEventListener('toggle', function (ev) { var d = ev.target; if (d && d.classList && d.classList.contains('T_tiers')) { state.tiersOpen = !!d.open; A_autoClose('tiers', d, function () { state.tiersOpen = undefined; }); } }, true);
+  document.addEventListener('toggle', function (ev) {
+    var d = ev.target; if (!(d && d.classList && d.classList.contains('W_card'))) return;
+    var def = d.getAttribute('data-def') === '1';
+    if (!(state.wxOpen === undefined && !!d.open === def)) state.wxOpen = !!d.open;
+    if (def) { clearTimeout(autoClose.wx); autoClose.wx = 0; return; } // rain near or a warning up: it stays as the person left it
+    A_autoClose('wx', d, function () { state.wxOpen = undefined; });
+  }, true); // s105: the Weather card stays open or shut across redraws; open by default only when rain is soon (the draw itself is not a choice)
   document.addEventListener('click', function (ev) {
     var t = ev.target.closest('[data-act],[data-theme],[data-day],[data-warn],[data-nfilter],[data-tfilter]'); if (!t) return;
     var a = t.getAttribute('data-act');
@@ -2392,6 +2597,7 @@
     else if (a === 'task-add-cancel') { state.add = null; closeSheet(); }
     else if (a === 'plain') { window.CSTheme.setPlain(!window.CSTheme.plainOn()); renderMore(); }
     else if (a === 'whatsnew') openSheet('news', 'news');
+    else if (a === 'tiers-open') { var tk = t.getAttribute('data-tier'); openSheet('tiers', /^(first|returning|regular|vip)$/.test(tk || '') ? tk : ''); }
     else if (a === 'fb-show') { state.fbOpen = true; renderCalendar(); }
     else if (a === 'fb-hide') { state.fbOpen = false; renderCalendar(); }
     else if (a === 'notice-add-open') { if (CS.canSeeGuestContact(role()) && state.notices && !state.noticesAbsent) { state.nadd = { type: 'water', title: '', date: t.getAttribute('data-date') || '', start: '', hours: '', detail: '', err: '', busy: false }; openSheet('nadd', 'notice-add-open'); } }
@@ -2434,9 +2640,13 @@
     else if (a === 'reply-cancel') { var RC = state.reply; if (RC) { try { if (RC.ctl) RC.ctl.abort(); } catch (e) {} RC.busy = false; RC.reqId = ++H_rpSeq; clearTimeout(H_rpT); rpLive('Cancelled'); renderReply(RC.mode === 'text' ? '' : 'heading'); if (RC.mode === 'text') rpFocus('rp-text'); } }
     else if (a === 'nkind') { if (state.nadd) { state.nadd.type = t.getAttribute('data-kind') === 'power' ? 'power' : 'water'; state.nadd.err = ''; A_noticeAddDraw(); } }
     else if (a === 'reply-reset') { state.reply = newReply(); renderReply('heading'); rpLive(''); window.scrollTo(0, 0); }
+    else if (a === 'z-in') Z_step(1);
+    else if (a === 'z-out') Z_step(-1);
     else if (a === 'alerts-on') H_alertsEnable();
-    else if (a === 'alerts-later') H_alertsLater();
-    else if (a === 'alerts-blocked-later') H_alertsBlockedLater();
+    else if (a === 'alerts-recheck') H_alRecheck();
+    else if (a === 'pc-open' || a === 'pc-run') PC_run(true);
+    else if (a === 'pc-fix') PC_fixAll();
+    else if (a === 'pc-close') PC_close();
     else if (a === 'alerts-switch') { if (H_al.on) H_alertsDisable(); else H_alertsEnable(); }
     else if (a === 'signout') { signOutTo(''); }
     else if (a === 'sheet-close') closeSheet();
@@ -2444,7 +2654,7 @@
     else if (a === 'flag-save') flagSave();
     else if (a === 'flag-clear') sheetCall('calendar_day_flag_clear_v1', { p_property_id: pid(), p_id: t.getAttribute('data-id') }, 'Note removed.');
     else if (a === 'warn-ack') warnAck();
-    else if (t.hasAttribute('data-day')) openSheet('day', t.getAttribute('data-day'));
+    else if (t.hasAttribute('data-day')) { if (/^\d{4}-\d{2}-\d{2}$/.test(t.getAttribute('data-day') || '')) openSheet('day', t.getAttribute('data-day')); } // s115: only a real YYYY-MM-DD opens the day sheet (the KPI unit toggle once sent 'kwh'/'m3' here: title 'undefined NaN undefined')
     else if (t.hasAttribute('data-warn')) openSheet('warn', t.getAttribute('data-warn'));
     else if (a === 'prev') shiftMonth(-1);
     else if (a === 'next') shiftMonth(1);
@@ -2467,7 +2677,7 @@
     if (ev.target && ev.target.id === 'df-kind' && state.sheet) { state.sheet.form.kind = ev.target.value; return; }
     if (ev.target && ev.target.id === 't-who' && state.add) state.add.who = ev.target.value;
   });
-  document.addEventListener('keydown', function (ev) { if (ev.key === 'Escape') { H_idClose(); if (state.sheet) E_tryClose(); } });
+  document.addEventListener('keydown', function (ev) { if (ev.key === 'Escape') { if (Z_isOpen()) { H_idClose(); return; } if (PC.open) PC_close(); if (state.sheet) E_tryClose(); } else if (ev.key === 'Tab' && Z_isOpen()) Z_trap(ev); else if (Z_isOpen() && (ev.key === '+' || ev.key === '=' || ev.key === '-' || ev.key === '_')) { if (ev.preventDefault) ev.preventDefault(); Z_step(ev.key === '+' || ev.key === '=' ? 1 : -1); } });
   // Telegram: the tg:// link opens the app. If the page is still in front ~1.2 s later the app did not open, so t.me opens instead.
   document.addEventListener('click', function (ev) {
     var a = ev.target.closest && ev.target.closest('a[data-tgweb]'), web = a && a.getAttribute('data-tgweb'); if (!web) return;

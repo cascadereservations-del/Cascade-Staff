@@ -497,7 +497,20 @@
 
   // ---- guest card helpers ---------------------------------------------------------------------------------------------
   // Notes are one text field "YYYY-MM-DD: point | point || YYYY-MM-DD: point" (the dashboard's ImportantNotes parses it too).
-  var PRIORITY = [[/security|incident|complaint|damage|dispute|concern/i, 0], [/special request|requested/i, 1], [/courtesy|benefit|goodwill|complimentary/i, 2], [/early check|late check|checkout/i, 3]];
+  var PRIORITY = [[/^turnover report/i, 0], [/security|incident|complaint|damage|dispute|concern/i, 0], [/allerg|asthma|medical|wheelchair|disab/i, 1], [/special request|requested/i, 1], [/courtesy|benefit|goodwill|complimentary/i, 2], [/early check|late check|checkout/i, 3]];
+  function isTurnover(p) { return /^turnover report/i.test(p); }
+  // s115: the points that matter, strongest first: incident/complaint (0), request/allergy (1), then ONE turnover report (the newest chunk date); the rest are only counted
+  function keyPoints(text) {
+    var out = [], tr = null, order = 0;
+    parseNotes(text).forEach(function (g) { g.points.forEach(function (x) {
+      var o = { p: x.p, rank: x.rank, i: order++, d: g.date || '' };
+      if (x.rank > 1) return;
+      if (!isTurnover(x.p)) { out.push(o); return; }
+      if (!tr || o.d > tr.d) tr = o;
+    }); });
+    if (tr) { tr.t = 1; out.push(tr); }
+    return out.sort(function (a, b) { return (a.t ? 1.5 : a.rank) - (b.t ? 1.5 : b.rank) || a.i - b.i; });
+  }
   function pointPriority(p) { for (var i = 0; i < PRIORITY.length; i++) if (PRIORITY[i][0].test(p)) return PRIORITY[i][1]; return 4; }
   function parseNotes(text) {
     if (!text) return [];
@@ -530,7 +543,7 @@
     var n = g.stay_count > 0 ? Math.round(+g.stay_count) : 0;
     return { tier: t, icon: r[1], text: r[0] + (n > 1 ? ' · ' + ordinal(n) + ' stay' : '') };
   }
-  // s110: one tag per guest tier with its own glyph and the total stays (stay_count includes the current stay). First stay only when the data says so
+  // s110: one tag per guest tier with its own glyph and the ordinal of THIS stay (stay_count includes the current stay; tiers count completed stays, so "4th stay" never reads as 4 done). First stay only when the data says so
   // (tier first, repeat false, or one stay); an unknown tier with no count and no repeat flag gives null, never a guessed label.
   var BADGE = { first: ['First stay', 'sprout'], returning: ['Returning', 'repeat'], regular: ['Regular', 'star'], vip: ['VIP', 'crown'] };
   function tierBadge(g) {
@@ -544,7 +557,7 @@
       else if (g.repeat === false || (n === 1 && g.repeat !== true) || g.tier === 'first') t = 'first';
       else return null;
     }
-    var first = t === 'first', c = first ? 1 : n, tail = !c || (!first && c === 1) ? '' : t === 'returning' ? ordinal(c) + ' stay' : plural(c, 'stay'); // one stay under a non-first tier: the word alone, never '1st stay'
+    var first = t === 'first', c = first ? 1 : n, tail = !c || (!first && c === 1) ? '' : ordinal(c) + ' stay'; // one stay under a non-first tier: the word alone, never '1st stay'
     return { tier: t, icon: BADGE[t][1], word: BADGE[t][0], count: c || null, text: first ? 'First stay' : BADGE[t][0] + (tail ? ' · ' + tail : '') };
   }
   // s119: the staying line. g.staying = { names, source, suggestion, version } from staff_home_v1; absent (older server) gives null and the card draws nothing new.
@@ -603,10 +616,122 @@
     while (out.length > 4) { var i = out.map(function (x) { return x.k; }).indexOf('id'); out.splice(i >= 0 ? i : out.length - 1, 1); }
     return out.map(function (x) { return x.text; });
   }
+  // s111: the shared photo viewer's zoom maths (app.js Z_). Scale 1..5; double-tap toggles 1 <-> 2.5; zoomAt keeps the point under the finger still and the photo
+  // inside its box (pan limited to the overflow, (s - 1) * size / 2 each way). w/h unknown (0) = no pan.
+  var ZOOM_MAX = 5, ZOOM_TAP = 2.5;
+  function zoomClamp(s) { s = Number(s); return !(s > 1) ? 1 : s > ZOOM_MAX ? ZOOM_MAX : s; }
+  function zoomStep(s, dir) { return zoomClamp(dir > 0 ? s * 1.5 : s / 1.5); }
+  function zoomToggle(s) { return s > 1.01 ? 1 : ZOOM_TAP; }
+  function zoomPan(z, w, h) {
+    var mx = Math.max(0, (z.s - 1) * (Number(w) || 0) / 2), my = Math.max(0, (z.s - 1) * (Number(h) || 0) / 2);
+    return { s: z.s, x: Math.max(-mx, Math.min(mx, Number(z.x) || 0)), y: Math.max(-my, Math.min(my, Number(z.y) || 0)) };
+  }
+  // cx, cy: the zoom point measured from the box centre (px)
+  function zoomAt(z, s1, cx, cy, w, h) {
+    var s = zoomClamp(s1), k = s / (z.s || 1), x = (cx || 0) - ((cx || 0) - (z.x || 0)) * k, y = (cy || 0) - ((cy || 0) - (z.y || 0)) * k;
+    return zoomPan({ s: s, x: s === 1 ? 0 : x, y: s === 1 ? 0 : y }, w, h);
+  }
+  // s111: the Today "Guest tiers" card. The rule per tier (D-360 thresholds) and every perk the tier gets, arrival and house together, no ID line (it depends on the guest).
+  // s113: the D-360 thresholds in ONE place. stays counts the current stay; nights is the guest's total nights where the payload has it (total_nights).
+  // The guide's rule lines and the progress line under a guest's badge both come from here.
+  var TIER_RULES = { returning: { stays: 2 }, regular: { stays: 4, nights: 10 }, vip: { stays: 7, nights: 20 } };
+  var TIER_ORDER = ['first', 'returning', 'regular', 'vip'], TIER_WORD = { first: 'First stay', returning: 'Returning', regular: 'Regular', vip: 'VIP' };
+  function tierRule(t) {
+    var r = TIER_RULES[t]; if (!r) return '1st stay. The standard amenities.';
+    return r.nights ? r.stays + ' or more stays, or ' + r.nights + ' or more nights.' : 'From the ' + ordinal(r.stays) + ' stay.';
+  }
+  function tierWhen(t) { var r = TIER_RULES[t]; return !r ? '1st stay' : r.nights ? r.stays + ' stays or ' + r.nights + ' nights' : 'from the ' + ordinal(r.stays) + ' stay'; }
+  // the tier the counts reach (the server decides the real tier; this is for the progress line and its tests)
+  function tierFromCounts(stays, nights) {
+    var s = Math.round(+stays) || 0, n = nights == null || nights === '' || !isFinite(+nights) ? null : +nights, out = 'first';
+    ['returning', 'regular', 'vip'].forEach(function (t) { var r = TIER_RULES[t]; if (s >= r.stays || (r.nights && n != null && n >= r.nights)) out = t; });
+    return out;
+  }
+  // "Returning · 2 more stays to Regular (4 stays or 10 nights)". Tier from CS.tierBadge (the server's tier, or what the count says); nights only where the guest record has a total.
+  function tierProgress(g) {
+    var b = tierBadge(g); if (!b) return null;
+    var t = b.tier, s = Math.round(+(g && g.stay_count)) || (t === 'first' ? 1 : 0), n = g && g.total_nights != null && isFinite(+g.total_nights) ? Math.round(+g.total_nights) : null;
+    // the badge right above already names the tier, so the line starts with what comes next
+    if (t === 'vip') return 'Top tier';
+    if (t === 'first') return 'Returning from the ' + ordinal(TIER_RULES.returning.stays) + ' stay';
+    var next = TIER_ORDER[TIER_ORDER.indexOf(t) + 1], r = TIER_RULES[next], left = Math.max(1, r.stays - s), nl = n != null && r.nights ? Math.max(1, r.nights - n) : null;
+    if (!s) return 'Next: ' + TIER_WORD[next] + ' (' + tierWhen(next) + ')'; // no stay count sent: never guess how many are left
+    return left + ' more ' + (left === 1 ? 'stay' : 'stays') + (nl != null ? ' or ' + nl + ' more ' + (nl === 1 ? 'night' : 'nights') : '') + ' to ' + TIER_WORD[next] + ' (' + tierWhen(next) + ')';
+  }
+  function tierGuide() {
+    return ['first', 'returning', 'regular', 'vip'].map(function (t) {
+      var b = tierBadge({ tier: t }), seen = {}, perks = tierPerks(t, { phase: 'arrival' }).concat(tierPerks(t, { phase: 'house' })).filter(function (p) { if (seen[p]) return false; seen[p] = 1; return true; });
+      return { tier: t, icon: b.icon, word: b.word, rule: tierRule(t), when: tierWhen(t), perks: perks };
+    });
+  }
+  // s111: Phone check (app.js PC_). Run once per device (key cs_phone_check, version bumped when a check is added); each probe result maps to a row:
+  // 'ok' | 'tap' (needs a tap, fix: true when Fix all can do it here, steps when the person must go elsewhere) | 'no' (not possible here). A row is OK only from a real probe.
+  var PHONE_CHECK_KEY = 'cs_phone_check', PHONE_CHECK_VER = 1, PHONE_FIX_ORDER = ['alerts', 'storage', 'install', 'camera', 'update'];
+  var IOS_A2HS = ['Open this page in Safari.', 'Tap Share (the square with an arrow pointing up).', 'Scroll down and tap Add to Home Screen, then Add.', 'Open Cascade Staff from your Home Screen.'];
+  function phoneCheckRead(ls) { try { var v = ls ? JSON.parse(ls.getItem(PHONE_CHECK_KEY) || 'null') : null; return v && typeof v === 'object' ? v : null; } catch (e) { return null; } }
+  function phoneCheckDue(ls) { var v = phoneCheckRead(ls); return !(v && Number(v.v) >= PHONE_CHECK_VER); }
+  // tried: the fixers Fix all already ran (added through addTried); kept until that row reads OK, so a browser that said no is not asked again
+  function phoneCheckSave(ls, rows, addTried) {
+    try {
+      if (!ls) return true; rows = rows || [];
+      var ok = {}; rows.forEach(function (r) { if (r.state === 'ok') ok[r.id] = 1; });
+      var tried = phoneCheckTried(ls).concat(addTried || []).filter(function (x, i, a) { return PHONE_FIX_ORDER.indexOf(x) >= 0 && a.indexOf(x) === i && !ok[x]; });
+      ls.setItem(PHONE_CHECK_KEY, JSON.stringify({ v: PHONE_CHECK_VER, at: Date.now(), need: rows.filter(function (r) { return r.state === 'tap'; }).length, open: rows.filter(function (r) { return r.state === 'tap' && r.fix; }).map(function (r) { return r.id; }), tried: tried }));
+      return true;
+    } catch (e) { return false; }
+  }
+  function phoneCheckTried(ls) { var v = phoneCheckRead(ls); return v && Array.isArray(v.tried) ? v.tried.filter(function (x) { return PHONE_FIX_ORDER.indexOf(x) >= 0; }) : []; }
+  // A row whose fixer ran and that the browser answered without asking (soft: storage persist, an update with nothing waiting) is 'no', not a tap again.
+  // It never makes a row OK: OK comes only from a real probe.
+  function phoneCheckSettle(rows, tried) {
+    tried = tried || [];
+    return (rows || []).map(function (r) { return r.state === 'tap' && r.fix && r.soft && tried.indexOf(r.id) >= 0 ? Object.assign({}, r, { state: 'no', fix: false, steps: null, text: 'This browser decides this one.' }) : r; });
+  }
+  // s113: the last result in a few words for the Settings row: "All good", "2 need a tap", or not checked yet. An older save has no need count: its open list stands in.
+  function phoneCheckSummary(ls) {
+    var v = phoneCheckRead(ls); if (!v || !(Number(v.v) >= 1)) return 'Not checked on this phone yet';
+    var n = typeof v.need === 'number' ? v.need : phoneCheckOpen(ls).length;
+    return n ? n + (n === 1 ? ' needs a tap' : ' need a tap') : 'All good';
+  }
+  function phoneCheckOpen(ls) { var v = phoneCheckRead(ls); return v && Array.isArray(v.open) ? v.open.filter(function (x) { return PHONE_FIX_ORDER.indexOf(x) >= 0; }) : []; }
+  function phoneBlockedSteps(ua) {
+    ua = String(ua || '');
+    if (/iphone|ipad|ipod/i.test(ua)) return ['Open Settings.', 'Tap Notifications, then Cascade Staff.', 'Turn on Allow Notifications.', 'Come back and tap I’ve turned it on.'];
+    return ['Tap the icon left of the web address (or open the app info on the Home Screen icon).', 'Tap Permissions, then Notifications.', 'Choose Allow.', 'Come back and tap I’ve turned it on.'];
+  }
+  // p: { ua, alerts: { support, permission, subscribed }, install: { standalone, ios, canPrompt }, camera: { has, perm }, storage: { api, persisted }, update: { sw, controller, waiting, cacheOk }, trusted }
+  function phoneCheckRows(p) {
+    p = p || {}; var a = p.alerts || {}, i = p.install || {}, c = p.camera || {}, s = p.storage || {}, u = p.update || {}, rows = [];
+    var row = function (id, title, state, text, extra) { rows.push(Object.assign({ id: id, title: title, state: state, text: text, fix: false, steps: null }, extra || {})); };
+    if (a.support === 'unsupported' || !a.support) row('alerts', 'Alerts', 'no', 'This browser cannot show alerts from a web app.');
+    else if (a.support === 'needs_install') row('alerts', 'Alerts', 'tap', 'On iPhone, alerts work only in the app opened from the Home Screen.', { steps: IOS_A2HS });
+    else if (a.support === 'blocked') row('alerts', 'Alerts', 'tap', 'Notifications are blocked for this app. Only the phone settings can allow them again.', { steps: phoneBlockedSteps(p.ua) });
+    else if (a.permission === 'granted' && a.subscribed === true) row('alerts', 'Alerts', 'ok', 'Alerts are on. Brownouts, water interruptions, rain and pay notices reach this phone.');
+    else row('alerts', 'Alerts', 'tap', 'Alerts are off. One tap turns them on.', { fix: true });
+    if (i.standalone) row('install', 'Installed as an app', 'ok', 'Cascade Staff opens as an app on this phone.');
+    else if (i.ios) row('install', 'Installed as an app', 'tap', 'Add Cascade Staff to the Home Screen so it opens as an app.', { steps: IOS_A2HS });
+    else if (i.canPrompt) row('install', 'Installed as an app', 'tap', 'One tap installs Cascade Staff on this phone.', { fix: true });
+    else row('install', 'Installed as an app', 'tap', 'Install it from the browser menu.', { steps: ['Open the browser menu (three dots).', 'Tap Install app or Add to Home screen.', 'Open Cascade Staff from your Home Screen.'] });
+    if (!c.has) row('camera', 'Camera', 'no', 'No camera is available here for meter photos and receipts.');
+    else if (c.perm === 'granted') row('camera', 'Camera', 'ok', 'The camera is allowed for meter photos and receipts.');
+    else if (c.perm === 'denied') row('camera', 'Camera', 'tap', 'The camera is blocked for this app.', { steps: /iphone|ipad|ipod/i.test(String(p.ua || '')) ? ['Open Settings, then Safari, then Camera.', 'Choose Allow.'] : ['Tap the icon left of the web address.', 'Tap Permissions, then Camera, then Allow.'] });
+    else if (c.perm === 'prompt') row('camera', 'Camera', 'tap', 'The camera has not been allowed yet. One tap asks once.', { fix: true });
+    else row('camera', 'Camera', 'no', 'This phone asks for the camera when you take the first photo. Allow it then.');
+    if (!s.api) row('storage', 'Storage kept', 'no', 'This browser does not say whether it keeps the app data.');
+    else if (s.persisted === true) row('storage', 'Storage kept', 'ok', 'The phone keeps the app data, so drafts and sign-in are not cleared to save space.');
+    else row('storage', 'Storage kept', 'tap', 'The phone may clear the app data to save space. One tap asks to keep it.', { fix: true, soft: true });
+    if (!u.sw) row('update', 'Up to date', 'no', 'This browser cannot keep the app ready offline.');
+    else if (u.controller && !u.waiting && u.cacheOk === true) row('update', 'Up to date', 'ok', 'This is the latest version, ready to work offline.');
+    else row('update', 'Up to date', 'tap', u.waiting ? 'A newer version is ready. One tap loads it.' : 'The app is not fully ready offline yet. One tap loads the latest version.', { fix: true, soft: !u.waiting });
+    if (p.trusted) row('trust', 'Trusted device', 'ok', 'This phone keeps you signed in (Trust this device is on).');
+    else row('trust', 'Trusted device', 'tap', 'Trust this device is off, so you sign in again after the app is closed. That is right for a shared phone.', { steps: ['To change it: sign out, then turn on Trust this device when you sign in.'] });
+    return rows;
+  }
+  function phoneFixPlan(rows) { var need = {}; (rows || []).forEach(function (r) { if (r.state === 'tap' && r.fix) need[r.id] = 1; }); return PHONE_FIX_ORDER.filter(function (id) { return need[id]; }); }
   // s96 SPEC-47: the notes that matter (rank 0 incident/complaint, 1 special request): the strongest one first, and how many other notes there are.
   function keyNote(text) {
-    var all = [], key = null; parseNotes(text).forEach(function (g) { g.points.forEach(function (x) { all.push(x); if (x.rank <= 1 && (!key || x.rank < key.rank)) key = x; }); });
-    return key ? { p: key.p, rank: key.rank, word: key.rank === 0 ? 'Important:' : 'Request:', more: all.length - 1 } : null;
+    var n = 0, key = keyPoints(text)[0]; parseNotes(text).forEach(function (g) { n += g.points.length; });
+    return key ? { p: key.p, rank: key.rank, word: key.rank === 0 ? 'Important:' : 'Request:', more: n - 1 } : null;
   }
   // s96 SPEC-47: topics a guest asked about (card key `notable`, topic keys only), in plain words; absent or empty gives null, max 3, the third after a dot
   var TOPIC_LABELS = { directions: 'directions', links: 'links', wifi: 'Wi-Fi', brownout: 'brownout', guest_count: 'guest count', early_checkin: 'early check-in', late_checkout: 'late check-out', parking: 'parking', pets: 'pets', id: 'ID', complaint: 'a concern' };
@@ -645,6 +770,13 @@
     var withId = c.filter(function (x) { return x && x.has_photo === true; }).length;
     return 'With: ' + names.join(', ') + ' (ID on file for ' + withId + ' of ' + c.length + ')';
   }
+  // s116: the ID photo can belong to a companion (the booker booked for someone else). Server key id_photo_name; null when it is the booker's own or unknown.
+  function photoOwnerName(g) {
+    var n = g && g.id_photo_name != null ? String(g.id_photo_name).trim().replace(/\s+/g, ' ') : '';
+    return n && nameKey(n) !== nameKey(g.guest_name) ? n : null;
+  }
+  function stayingLine(g) { var n = photoOwnerName(g); return n ? 'Staying: ' + n : null; }
+  function idOfLine(g) { var n = photoOwnerName(g); return n ? 'ID of ' + n + ', travelling with ' + (String(g.guest_name || '').trim() || 'the booker') : null; }
   // What the Today card says about the stay: in the house, arriving today, or nobody.
   function todayCardState(payload, today) {
     var cur = payload && payload.current_guest, nxt = payload && payload.next_guest;
@@ -682,6 +814,23 @@
     var qty = d.qty != null ? ', ' + (+d.qty) + (d.unit ? ' ' + d.unit : '') : '';
     var below = d.reorder_below != null ? ' (reorder below ' + (+d.reorder_below) + ')' : '';
     return { head: 'Low stock', rest: name + qty + below };
+  }
+  // s117: two or more low-stock warnings become ONE row, "N items running low". shop = names already on the shopping list (lower case); they are not counted. A warning may also say detail.on_list.
+  function lowName(w) { return String(w.title || '').replace(/^Low stock:\s*/i, ''); }
+  function lowFoldRow(names) {
+    var n = names.length, cap = function (t) { t = String(t || ''); return t.charAt(0).toUpperCase() + t.slice(1); };
+    return { title: n + ' items running low', sub: names.slice(0, 3).map(cap).join(', ') + (n > 3 ? ' and ' + (n - 3) + ' more' : ''), count: n };
+  }
+  function foldLowStock(list, shop) {
+    var low = [], rest = [], lc = {}; (shop || []).forEach(function (x) { lc[String(x).toLowerCase()] = 1; });
+    (list || []).forEach(function (w) {
+      if (!w || w.kind !== 'inventory') { rest.push(w); return; }
+      if ((w.detail && w.detail.on_list) || lc[lowName(w).toLowerCase()]) return;
+      low.push(w);
+    });
+    if (low.length === 1) rest.push(low[0]);
+    else if (low.length) { var f = lowFoldRow(low.map(lowName)); rest.push({ kind: 'inventory', severity: 'warn', title: f.title, detail: { folded: f.count, sub: f.sub } }); }
+    return rest;
   }
   // One line for the home screen: "3 warnings · brownouts 11 and 15 Oct · low stock".
   function warningSummary(list) {
@@ -811,9 +960,9 @@
   // s105: the "Good to know" block of the Today card. Notes: every unique important (rank 0) and request (rank 1) point, strongest first, 3 shown, 90 characters each;
   // `more` counts every other unique note. Phone and the companion count only when canContact (owner/admin); guests from a count the server sends, else 1 + companions. id: the photo path exists.
   function goodToKnow(g, canContact) {
-    var key = [], seen = {}, total = 0, cut = function (t) { return t.length > 90 ? t.slice(0, 89).replace(/\s+\S*$/, '') + '…' : t; };
-    parseNotes(g && g.notes).forEach(function (gr) { gr.points.forEach(function (x) { var k = x.p.toLowerCase(); if (seen[k]) return; seen[k] = 1; total++; if (x.rank <= 1) key.push(x); }); });
-    key = key.map(function (x, i) { return { x: x, i: i }; }).sort(function (a, b) { return a.x.rank - b.x.rank || a.i - b.i; }).map(function (o) { return { p: cut(o.x.p), rank: o.x.rank }; });
+    var seen = {}, total = 0, cut = function (t) { if (t.length <= 90) return t; var w = t.slice(0, 89).replace(/\s+\S*$/, ''); return (w.length < 69 ? t.slice(0, 89) : w) + '…'; }; // a word boundary that would drop more than 20 characters is not worth it
+    parseNotes(g && g.notes).forEach(function (gr) { gr.points.forEach(function (x) { var k = x.p.toLowerCase(); if (!seen[k]) { seen[k] = 1; total++; } }); });
+    var shown = {}, key = keyPoints(g && g.notes).filter(function (x) { var k = x.p.toLowerCase(); return shown[k] ? false : (shown[k] = 1); }).map(function (x) { return { p: cut(x.p), rank: x.rank }; });
     var c = canContact ? guestContact(g) : null, n = null;
     ['guest_count', 'num_guests', 'guests'].forEach(function (k) { if (n === null && g && typeof g[k] === 'number' && g[k] > 0) n = Math.round(g[k]); });
     if (n === null && canContact && g && Array.isArray(g.companions)) { var me = String(g.guest_name || '').trim().toLowerCase(), others = g.companions.filter(function (x) { return x && String(x.name || '').trim().toLowerCase() !== me; }); if (others.length) n = 1 + others.length; } // guest_companions holds the main guest's own row too
@@ -1314,23 +1463,27 @@
     var inn = mgr && typeof i.inbox === 'number' && i.inbox > 0 ? Math.floor(i.inbox) : 0;
     if (inn > 0) by.inbox.push({ group: 'inbox', id: 'inbox', glyph: 'chat', n: inn, title: inn === 1 ? '1 open message' : inn + ' open messages', sub: 'Guests waiting for a reply', go: { kind: 'inbox' } });
     var brown = {};
-    orderWarnings((Array.isArray(i.warnings) ? i.warnings : []).filter(function (w) { return w && w.kind && (w.kind !== 'verifier' || mgr); })).forEach(function (w) {
+    orderWarnings(foldLowStock((Array.isArray(i.warnings) ? i.warnings : []).filter(function (w) { return w && w.kind && (w.kind !== 'verifier' || mgr); }), i.shopNames)).forEach(function (w) {
       if (w.kind === 'brownout') {
         var b = brownoutText(w), d = w.detail && w.detail.date; if (d) brown[d] = 1;
         if (i.info) return; // s91: on the Needs action board a brownout is information (Heads-up), not an action
         by.warn.push({ group: 'warn', id: E_warnKey(w), glyph: 'alert', word: 'Brownout' + (d ? ' ' + dayShort(d).split(' ')[0] : ''), title: E_brownTitle(w, b), sub: b.rest, go: { kind: 'notices' } });
       } else if (w.kind === 'inventory') {
+        if (w.detail && w.detail.folded) { by.warn.push({ group: 'warn', id: 'low-stock', glyph: 'box', word: 'Low stock', title: w.title, sub: w.detail.sub, go: { kind: 'inventory' }, stock: { name: w.title, text: '', sub: w.detail.sub } }); return; }
         var l = lowStockText(w); by.warn.push({ group: 'warn', id: E_warnKey(w), glyph: 'alert', word: 'Low stock', title: 'Low stock · ' + l.rest, sub: 'Inventory', go: { kind: 'inventory' }, stock: lowStockParts(w) });
       } else by.warn.push({ group: 'warn', id: E_warnKey(w), glyph: 'info', word: 'System check', title: 'System check · ' + (w.title || ''), sub: 'Needs a person to look', go: { kind: 'warn', key: E_warnKey(w) } });
     });
     // s91: house items from notices_v1. The same finding or low-stock item can arrive as a payload warning too; a warning that already says it wins, so nothing is counted twice.
     var allW = Array.isArray(i.warnings) ? i.warnings : [], hasInv = allW.some(function (w) { return w && w.kind === 'inventory'; }), wvKeys = {};
     allW.forEach(function (w) { if (w && w.kind === 'verifier') { var k = findingKey(w, i.tasks); if (k) wvKeys[k] = 1; wvKeys['t:' + w.title] = 1; } });
+    var houseLow = [];
     (mgr && Array.isArray(i.house) ? i.house : []).forEach(function (h) {
       if (!h || !h.title) return;
       if (h.kind === 'finding') { if (wvKeys[h.id] || wvKeys['t:' + h.title]) return; by.find.push({ group: 'find', id: h.id, glyph: 'alert', word: 'Finding', title: h.title, sub: h.detail || 'Needs a person to look', go: { kind: 'finding', key: h.id } }); }
-      else if (h.kind === 'low_stock') { if (hasInv) return; by.stock.push({ group: 'stock', id: h.key || h.id, glyph: 'box', word: 'Low stock', title: h.title, sub: h.detail || 'Inventory', go: { kind: 'inventory' }, stock: { name: String(h.title).replace(/^Low stock:\s*/i, ''), text: h.detail ? String(h.detail) : '' } }); }
+      else if (h.kind === 'low_stock') { if (hasInv) return; houseLow.push(h); }
     });
+    if (houseLow.length === 1) { var h = houseLow[0]; by.stock.push({ group: 'stock', id: h.key || h.id, glyph: 'box', word: 'Low stock', title: h.title, sub: h.detail || 'Inventory', go: { kind: 'inventory' }, stock: { name: String(h.title).replace(/^Low stock:\s*/i, ''), text: h.detail ? String(h.detail) : '' } }); }
+    else if (houseLow.length) { var hf = lowFoldRow(houseLow.map(lowName)); by.stock.push({ group: 'stock', id: 'low-stock', glyph: 'box', word: 'Low stock', title: hf.title, sub: hf.sub, go: { kind: 'inventory' }, stock: { name: hf.title, text: '', sub: hf.sub } }); }
     var tomorrow = addDays(today, 1);
     (Array.isArray(i.notices) ? i.notices : []).forEach(function (n) {
       if (!n || !n.date || (n.date !== today && n.date !== tomorrow)) return;
@@ -1402,7 +1555,7 @@
     });
     if (finds.length === 1) { var f = finds[0]; add({ key: f.group + ':' + f.id, group: f.group, tier: 4, tone: 'info', glyph: 'alert', title: String(f.title).replace(/^System check · /, ''), sub: 'Found by the nightly check', weight: 1, go: f.go, single: true }); }
     else if (finds.length) add({ key: 'find:all', group: 'find', tier: 4, tone: 'info', glyph: 'alert', title: finds.length + ' system checks', sub: 'Found by the nightly check', count: finds.length, weight: finds.length, go: { kind: 'finding', key: null } });
-    if (stocks.length === 1) add({ key: stocks[0].group + ':' + stocks[0].id, group: 'stock', tier: 4, tone: 'info', glyph: 'box', title: B_stockTitle(stocks[0]), sub: 'Inventory', weight: 1, go: { kind: 'inventory' } });
+    if (stocks.length === 1) add({ key: stocks[0].group + ':' + stocks[0].id, group: 'stock', tier: 4, tone: 'info', glyph: 'box', title: B_stockTitle(stocks[0]), sub: (stocks[0].stock && stocks[0].stock.sub) || 'Inventory', weight: 1, go: { kind: 'inventory' } });
     else if (stocks.length) add({ key: 'stock:all', group: 'stock', tier: 4, tone: 'info', glyph: 'box', title: stocks.length + ' items low', sub: stocks.slice(0, 2).map(function (x) { return (x.stock && x.stock.name) || x.title; }).map(B_cap).join(', ') + (stocks.length > 2 ? ' and ' + (stocks.length - 2) + ' more' : ''), count: stocks.length, weight: stocks.length, go: { kind: 'inventory' } });
     cand.sort(function (a, b) { return a.tier - b.tier || String(a.when || '~').localeCompare(String(b.when || '~')) || a.i - b.i; });
     var n = cand.reduce(function (a, r) { return a + r.weight; }, 0), rows = cand;
@@ -1663,8 +1816,8 @@
     fmtTime: fmtTime, fmt24: fmt24, ordinal: ordinal, plural: plural, agoLabel: agoLabel, clockLabel: clockLabel,
     monthGrid: monthGrid, dayState: dayState, dayStatus: dayStatus, mergeStays: mergeStays, sameGuest: sameGuest, dayMoves: dayMoves, blockWhy: blockWhy, flagName: flagName, FLAG_KINDS: FLAG_KINDS, blockedLines: blockedLines, blockedLineText: blockedLineText,
     canFlagDays: canFlagDays, guestContact: guestContact, canSeeGuestContact: canSeeGuestContact, MESSENGER_INBOX: MESSENGER_INBOX, rpcMissing: rpcMissing, tgLink: tgLink, warningInfo: warningInfo, findingKey: findingKey, initialOf: initialOf, sourceLabel: sourceLabel, stayDates: stayDates, monthInRange: monthInRange,
-    tierRibbon: tierRibbon, tierBadge: tierBadge, stayNames: stayNames, stayNamesProblem: stayNamesProblem, canEditStaying: canEditStaying, stayErrorText: stayErrorText, stayingView: stayingView, wxHazards: wxHazards, wxHourly: wxHourly, nextPrep: nextPrep, utilAlerts: utilAlerts, isInternetNotice: isInternetNotice, tierPerks: tierPerks, faceFrame: faceFrame, parseNotes: parseNotes, returningLabel: returningLabel, tierLabel: tierLabel, tierLine: tierLine, tierParts: tierParts, keyNote: keyNote, TOPIC_LABELS: TOPIC_LABELS, notableLine: notableLine, weatherIcon: weatherIcon, rainAlert: rainAlert, wxCard: wxCard, goodToKnow: goodToKnow, earlierLine: earlierLine, companionsLine: companionsLine, todayCardState: todayCardState,
-    orderWarnings: orderWarnings, brownoutText: brownoutText, lowStockText: lowStockText, warningSummary: warningSummary,
+    tierRibbon: tierRibbon, tierBadge: tierBadge, stayNames: stayNames, stayNamesProblem: stayNamesProblem, canEditStaying: canEditStaying, stayErrorText: stayErrorText, stayingView: stayingView, wxHazards: wxHazards, wxHourly: wxHourly, nextPrep: nextPrep, utilAlerts: utilAlerts, isInternetNotice: isInternetNotice, tierPerks: tierPerks, tierGuide: tierGuide, TIER_RULES: TIER_RULES, tierRule: tierRule, tierFromCounts: tierFromCounts, tierProgress: tierProgress, phoneCheckSummary: phoneCheckSummary, phoneCheckRows: phoneCheckRows, phoneFixPlan: phoneFixPlan, phoneCheckDue: phoneCheckDue, phoneCheckSave: phoneCheckSave, phoneCheckTried: phoneCheckTried, phoneCheckSettle: phoneCheckSettle, phoneCheckOpen: phoneCheckOpen, phoneCheckRead: phoneCheckRead, phoneBlockedSteps: phoneBlockedSteps, PHONE_CHECK_KEY: PHONE_CHECK_KEY, PHONE_CHECK_VER: PHONE_CHECK_VER, IOS_A2HS: IOS_A2HS, zoomClamp: zoomClamp, zoomStep: zoomStep, zoomToggle: zoomToggle, zoomPan: zoomPan, zoomAt: zoomAt, ZOOM_MAX: ZOOM_MAX, faceFrame: faceFrame, parseNotes: parseNotes, returningLabel: returningLabel, tierLabel: tierLabel, tierLine: tierLine, tierParts: tierParts, keyNote: keyNote, TOPIC_LABELS: TOPIC_LABELS, notableLine: notableLine, weatherIcon: weatherIcon, rainAlert: rainAlert, wxCard: wxCard, goodToKnow: goodToKnow, earlierLine: earlierLine, companionsLine: companionsLine, photoOwnerName: photoOwnerName, stayingLine: stayingLine, idOfLine: idOfLine, todayCardState: todayCardState,
+    orderWarnings: orderWarnings, brownoutText: brownoutText, lowStockText: lowStockText, foldLowStock: foldLowStock, warningSummary: warningSummary,
     weatherLine: weatherLine, rainLine: rainLine, weatherStale: weatherStale, WEATHER_STALE_MIN: WEATHER_STALE_MIN, esc: esc,
     A_HOUSE_FALLBACK: A_HOUSE_FALLBACK, A_houseTimes: A_houseTimes, A_turnoverClock: A_turnoverClock, A_turnoverLine: A_turnoverLine, A_hm: A_hm, A_NOTICE_TYPES: A_NOTICE_TYPES, A_noticesView: A_noticesView, A_noticeFilters: A_noticeFilters, A_dayMarks: A_dayMarks, A_noticeDay: A_noticeDay, A_guestMessage: A_guestMessage, A_CAL_TABS: A_CAL_TABS, A_calTab: A_calTab, A_stayShade: A_stayShade, A_hubGroups: A_hubGroups, A_hubNative: A_hubNative, A_hubRoutes: A_hubRoutes, A_hubRouteOk: A_hubRouteOk, A_hubDoorUrl: A_hubDoorUrl, A_whatsNew: A_whatsNew, A_shortTime: A_shortTime, A_PINNED: A_PINNED, A_noticeAddError: A_noticeAddError, A_NOTICE_HINT: A_NOTICE_HINT, A_flagDup: A_flagDup, A_facebookUrl: A_facebookUrl, A_fbPluginUrl: A_fbPluginUrl, A_noticeAddProblem: A_noticeAddProblem, A_noticeAddArgs: A_noticeAddArgs, A_plainRefusal: A_plainRefusal, A_hour12: A_hour12, A_timeRange: A_timeRange,
     taskPriorityLabel: taskPriorityLabel, E_attention: E_attention, A_board: A_board, A_heads: A_heads, A_rangeLabel: A_rangeLabel, A_spanShort: A_spanShort, E_warnKey: E_warnKey, E_buzz: E_buzz, E_hapticsOn: E_hapticsOn, E_hapticsSet: E_hapticsSet, E_PATTERNS: E_PATTERNS,

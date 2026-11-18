@@ -70,8 +70,8 @@ test('E_ haptics setting: "Vibrate on confirm" is on More > Appearance only wher
   assert.match(h, /<b>Vibrate on confirm<\/b>/); assert.match(h, /data-act="haptics" aria-checked="true"/); assert.match(h, /A short buzz when something is saved or finished\. Off saves nothing but the buzz\./);
   assert.ok(h.indexOf('Plain bars') < h.indexOf('Vibrate on confirm') && h.indexOf('Vibrate on confirm') < h.indexOf('aria-label="Help"'), 'under Plain bars, inside Appearance');
   await app.click({ 'data-act': 'haptics' });
-  assert.deepEqual(ls.m, { cs_haptics: '0' }); assert.match(app.els['v-more'].innerHTML, /data-act="haptics" aria-checked="false"/);
-  await app.click({ 'data-act': 'haptics' }); assert.deepEqual(ls.m, { cs_haptics: '1' }); assert.match(app.els['v-more'].innerHTML, /data-act="haptics" aria-checked="true"/);
+  assert.equal(ls.m.cs_haptics, '0'); assert.deepEqual(Object.keys(ls.m).filter((k) => k !== 'cs_phone_check'), ['cs_haptics'], 'only the haptics key (and the s111 phone check record)'); assert.match(app.els['v-more'].innerHTML, /data-act="haptics" aria-checked="false"/);
+  await app.click({ 'data-act': 'haptics' }); assert.equal(ls.m.cs_haptics, '1'); assert.match(app.els['v-more'].innerHTML, /data-act="haptics" aria-checked="true"/);
   reset();
 });
 

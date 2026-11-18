@@ -71,7 +71,7 @@
     };
     var g1 = guest({ uid: 'demo-stay-1', guest_name: 'Demo Guest One', checkin_date: d(-1), checkout_date: d(2), checkin_time: '14:00:00', checkout_time: '12:00:00', nights: 3, source: 'airbnb',
       repeat: true, stay_count: 2, earlier_stays: [{ month: d(-120).slice(0, 7), nights: 2 }], notes: d(-120) + ': Special request: extra pillows | Courtesy: late check-out was offered',
-      tier: 'returning', id_photo_path: 'demo/id-1', companions: [{ name: 'Demo Companion One', has_photo: true }, { name: 'Demo Companion Two', has_photo: false }],
+      tier: 'returning', id_photo_path: 'demo/id-1', id_photo_name: 'Demo Companion One', companions: [{ name: 'Demo Companion One', has_photo: true }, { name: 'Demo Companion Two', has_photo: false }],
       phone: '0900-000-0000', email: 'demo.guest.one@example.invalid', messenger: {} });
     var g2 = guest({ uid: 'demo-stay-2', guest_name: 'Demo Guest Two', checkin_date: d(2), checkout_date: d(5), checkin_time: '14:00:00', checkout_time: '12:00:00', nights: 3, source: 'direct',
       repeat: true, tier: 'vip', stay_count: 8, earlier_stays: [], notes: null, id_photo_path: null, companions: [], phone: '0900-000-0001', email: 'demo.guest.two@example.invalid' });
@@ -147,20 +147,25 @@
   // s110: kpi_tab_v1 as the contract says. The admin key is ABSENT for every role but owner and admin (demo has no finance view).
   function kpiFixture(r, today) {
     var k = { ok: true, month: today.slice(0, 7) + '-01',
-      utility: { kwh_month: 412, nights_month: 22, kwh_per_night: 18.7, last_reading: { recorded_at: today + 'T02:00:00Z', delta_kwh: 38.2, nights: 2, kwh_per_night: 19.1, flag: null },
-        per_stay: [14.2, 18.4, 12.6, 24.1, 16, 13.3, 15.1, 13.8].map(function (v, i) { return { checkout_date: CS.addDays(today, -3 * (8 - i)), kwh_per_night: v }; }),
+      // s111 rev 2: use per DAY between readings; nights booked from the calendar (same 22 as the Admin occupancy below)
+      utility: { kwh_month: 412, kwh_per_day: 13.7, m3_month: 13.2, m3_per_day: 0.44, nights_booked: 22, nights_in_month: 30,
+        last_reading: { recorded_at: today + 'T02:00:00Z', delta_kwh: 38.2, days: 3, kwh_per_day: 12.7, delta_m3: 1.3, m3_per_day: 0.43, flag: null },
+        per_stay: [[14.2, 0.45, 3], [18.4, 0.52, 2], [12.6, 0.38, 4], [24.1, 0.7, 1], [16, 0.5, 3], [13.3, 0.41, 5], [15.1, 0.47, 2], [12.7, 0.43, 3]].map(function (v, i) { var d = CS.addDays(today, -3 * (7 - i)); return { checkout_date: d, from: CS.addDays(d, -v[2]), to: d, recorded_at: d + 'T04:00:00Z', days: v[2], kwh: Math.round(v[0] * v[2] * 10) / 10, kwh_per_day: v[0], m3: Math.round(v[1] * v[2] * 100) / 100, m3_per_day: v[1] }; }),
+        per_month: [[38, 1.2, 4], [41, 1.3, 5], [36, 1.1, 3], [0, 0, 0], [44, 1.4, 6], [39, 1.2, 4], [146, 1.5, 2], [42, 1.3, 4], [0, 0, 0], [40, 1.2, 5], [45, 1.32, 4], [41, 1.3, 5]] // s113: per stay over about 3 nights; one outlier month (146 kWh, a meter misread) to show the outlier marker
+          .map(function (v, i, all) { var m = new Date(Date.UTC(+today.slice(0, 4), +today.slice(5, 7) - 1 - (all.length - 1 - i), 1)); return { month: m.toISOString().slice(0, 7), stays: v[2], kwh: v[0] ? v[0] * v[2] : null, m3: v[1] ? Math.round(v[1] * v[2] * 100) / 100 : null, kwh_per_stay: v[0] || null, m3_per_stay: v[1] || null, kwh_per_day: v[0] ? (v[0] > 100 ? 13.6 : Math.round(v[0] / 3 * 10) / 10) : null, m3_per_day: v[1] ? Math.round(v[1] / 3 * 100) / 100 : null }; }),
         brownouts: { count: 2, hours: 9 }, water_cuts: { count: 1, hours: 5 }, internet_cuts: { count: 1, hours: 2 } },
       inventory: { low_now: 5, restocks_month: 3, turnovers_month: 9,
         per_turnover: [{ item_id: 'd1', name: 'Toilet paper', used_per_turnover: 2.1, usual: 2 }, { item_id: 'd3', name: 'Water bottles', used_per_turnover: 4.6, usual: 4 }, { item_id: 'd4', name: 'Coffee sachets', used_per_turnover: 3, usual: 4 }],
         runs_out: [{ item_id: 'd2', name: 'Hand soap', days_left: 4 }, { item_id: 'd5', name: 'Garbage bags', days_left: 21 }] } };
     if (r === 'owner' || r === 'admin') k.admin = { rate: { php_per_kwh: 11.25, effective_from: CS.addDays(today, -20), source: 'auto', source_url: 'https://www.facebook.com/socoteco2.EC/' }, last_reading_cost: 429.75, month_kwh_cost: 4635, supplies_month: 4950, supply_cost_per_turnover: 550, cleaning_pay_month: 6300,
-      net_month: 38420, revenue_month: 61900, costs_month: 23480, occupancy: 0.73, sold_nights: 22, sellable_nights: 30, adr: 2814, direct_share: 0.41 };
+      net_month: 38420, revenue_month: 61900, costs_month: 23480, occupancy: 0.73, sold_nights: 22, sellable_nights: 30, adr: 2814, direct_share: 0.41,
+      target: { net_target: 30000, costs_basis: 24100, revenue_needed: 54100, adr: 2814, nights_in_month: 30, nights_on_books: 22, needed_occupancy: 0.64, needed_adr: 2459, set_by: null, set_at: CS.addDays(today, -6) + 'T03:00:00Z' } };
     return k;
   }
 
   // ---- the stand-in for the Supabase client: same four calls the pages make, answered from the fixtures ---------------------------
   var WRITES = ['calendar_day_flag_set_v1', 'calendar_day_flag_clear_v1', 'ack_verifier_finding_v1', 'task_set_done_v1', 'task_add_reminder_v1', 'admin_add_pay_rate_v1', 'ops_notice_add_v1', 'ops_notice_close_v1',
-    'record_inventory_usage', 'record_inventory_receipt_v1', 'inventory_receipt_confirm_v1', 'inventory_receipt_undo_v1', 'inventory_receipt_cancel_v1', 'inventory_item_photo_set_v1', 'utility_rate_set_v1', 'admin_resolve_report_block_v1', 'admin_request_meter_resend_v1']; // s110: stock, rate and meter-check writes say "nothing was saved"
+    'record_inventory_usage', 'record_inventory_receipt_v1', 'inventory_receipt_confirm_v1', 'inventory_receipt_undo_v1', 'inventory_receipt_cancel_v1', 'inventory_item_photo_set_v1', 'utility_rate_set_v1', 'admin_resolve_report_block_v1', 'admin_request_meter_resend_v1', 'kpi_target_set_v1']; // s110: stock, rate and meter-check writes say "nothing was saved"
   var clone = function (x) { return JSON.parse(JSON.stringify(x)); };
   function admin_(v) { return v === 'owner' || v === 'admin'; }
   function client(role, now) {
@@ -239,9 +244,16 @@
     if (name === 'notify-cleaner-payment') { toast(NOTE); return reply(200, { ok: true, total: 0, ref: 'CASCADE-DEMO0001' }); }
     if (name === 'upload-photo') return reply(200, { ok: true, path: 'demo/receipt.jpg' });
     if (/manual\/index\.json/.test(url)) return reply(200, [{ title: 'Aircon does not cool', id: 'aircon' }, { title: 'Hot water heater', id: 'heater' }, { title: 'Brownout: what to do', id: 'brownout' }]);
-    if (name === 'weather-proxy') return reply(200, { source: 'demo', fetched_at: new Date().toISOString(), current: X.home.weather.current });
+    if (name === 'weather-proxy') {
+      var lat = Number(body && body.lat), lon = Number(body && body.lon), here = !!body && body.lat != null && isFinite(lat) && isFinite(lon); // "Here" is a POST body, never a query string
+      return reply(200, { source: 'demo', fetched_at: new Date().toISOString(), current: X.home.weather.current, // s112: the same answer, labelled with the place it is for
+        place: here ? { label: 'Near you', lat: Math.round(lat * 100) / 100, lon: Math.round(lon * 100) / 100, kind: 'here' } : { label: 'Cascade, Bria Homes, General Santos', lat: 6.1545, lon: 125.1852, kind: 'cascade' } });
+    }
     return reply(404, { error: 'not part of the demo' });
   }
+
+  // ---- s112: the demo has no real GPS. The Weather "Here" tab asks this instead: a made-up spot about 3 km from the house, answered after a short pause.
+  var geo = { getCurrentPosition: function (ok) { setTimeout(function () { ok({ coords: { latitude: 6.13187, longitude: 125.16422, accuracy: 40 }, timestamp: Date.now() }); }, 300); } };
 
   // ---- the page furniture: a "Demo data" pill and a role switcher on every screen -------------------------------------------------
   var STYLE = '.demo-bar{position:sticky;top:0;z-index:40;display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:4px;padding:2px 8px;background:var(--card);border-bottom:1px solid var(--border-strong)}' +
@@ -270,6 +282,6 @@
 
   return {
     active: active, ROLES: ROLES, VIEWS: VIEWS, NOTE: NOTE, WRITES: WRITES, isDemo: isDemo, roleFrom: roleFrom, role: function () { return roleFrom(root.location && root.location.search); },
-    onNote: function (fn) { hook = fn; }, demoHref: demoHref, switchUrl: switchUrl, barHtml: barHtml, build: build, client: client, fetch: demoFetch, toast: toast, idPlaceholder: idPlaceholder
+    onNote: function (fn) { hook = fn; }, demoHref: demoHref, switchUrl: switchUrl, barHtml: barHtml, build: build, client: client, fetch: demoFetch, toast: toast, idPlaceholder: idPlaceholder, geo: geo
   };
 });

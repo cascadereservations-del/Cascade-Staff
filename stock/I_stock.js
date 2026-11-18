@@ -242,7 +242,8 @@
     else if (M.client && M.client.auth && M.client.auth.getSession) { try { M.client.auth.getSession().then(function (r) { var s = r && r.data && r.data.session; M.uid = s && s.user ? s.user.id : null; }, function () {}); } catch (e) { /* no uid: rows read "Asked by staff" */ } }
     if (M.demo) o8Demo();
     var goShop = false;
-    if (!K.viewInit) { K.viewInit = true; var vw = ssGet('cs_I_view'); if (vw && vw.role === K.role) { if (/^(low|need|all|cons|out|c:.{1,80})$/.test(String(vw.chip))) K.chip = vw.chip; if (vw.tab === 'shopping' && !M.sub) { M.sub = 'shopping'; goShop = true; } } } // s107 B14: the last tab and chip come back once per visit
+    if (opts.low) { K.viewInit = true; K.chip = 'low'; viewSave(false); } // s117: the folded Warnings row opens Items on Low for this entry only, over any saved view
+    else if (!K.viewInit) { K.viewInit = true; var vw = ssGet('cs_I_view'); if (vw && vw.role === K.role) { if (/^(low|need|all|cons|out|c:.{1,80})$/.test(String(vw.chip))) K.chip = vw.chip; if (vw.tab === 'shopping' && !M.sub) { M.sub = 'shopping'; goShop = true; } } } // s107 B14: the last tab and chip come back once per visit
     ensureSuppliers(); draw();
     if (goShop && opts.navigate) opts.navigate('#stock/shopping');
     if (!M.demo && !(K.items && K.at && nowMs() - K.at < 60000)) load(); // a fresh list for this role is kept when only the sub-route changed
@@ -380,7 +381,7 @@
     }, function (e) { if (!M || M.act !== a) return; a.step = 'bad'; a.err = e && e.photo || 'photofail'; drawLayer(); });
   }
   /* ---- s106 item options (Shopsuki): brand/size choices for one item, read from inventory_item_options_v1; hidden when the SQL is not there yet */
-  function siteOf(u) { var h = /^https:\/\/([^\/]+)/i.exec(u || ''); h = h ? h[1].replace(/^www\./, '') : ''; return h === 'shopsuki.ph' ? 'Shopsuki' : h === 'shopee.ph' ? 'Shopee' : h || 'the shop'; }
+  function siteOf(u) { var h = /^https:\/\/([^\/]+)/i.exec(u || ''); h = h ? h[1].replace(/^www\./, '') : ''; return h === 'shopsuki.ph' ? 'Shopsuki' : h === 'shopee.ph' ? 'Shopee' : h === 'mandauefoam.ph' ? 'Mandaue Foam' : h === 'myhanabishi.com' ? 'Hanabishi' : h || 'the shop'; }
   function normOpts(list) {
     return (Array.isArray(list) ? list : []).filter(function (o) { return o && o.id && o.title; }).map(function (o) {
       return { id: String(o.id), supplier: String(o.supplier || ''), title: String(o.title), brand: o.brand ? String(o.brand) : '', packLabel: o.pack_label ? String(o.pack_label) : '',
@@ -444,7 +445,7 @@
     var out = 'https://' + host + (m[2] || '/') + (host === 'shopee.ph' ? '' : m[3] || '');
     return out.length <= 500 ? out : null;
   }
-  var O8_LINK = ['shopsuki.ph', 'shopee.ph'], O8_PIC = ['cdn.shopify.com', 'down-ph.img.susercontent.com'];
+  var O8_LINK = ['shopsuki.ph', 'shopee.ph', 'mandauefoam.ph', 'myhanabishi.com'], O8_PIC = ['cdn.shopify.com', 'down-ph.img.susercontent.com'];
   function o8Link(s) { return o8Url(s, O8_LINK); }
   function o8Pic(s) { return o8Url(s, O8_PIC); }
   function o8Reqlist() { return K.req && M && K.req.role === M.role ? K.req.list : []; }
@@ -560,7 +561,7 @@
     if (diff('packSize')) p.pack_size = o8T(v.packSize) === '' ? null : parseQty(v.packSize);
     if (!o8T(v.supplierId)) return { msg: 'Choose the shop it is sold at.' };
     if (add || diff('supplierId')) p.supplier_id = o8T(v.supplierId);
-    var lk = o8Link(v.link); if (!lk) return { msg: 'Add the product link. It must be an https link from shopsuki.ph or shopee.ph.' };
+    var lk = o8Link(v.link); if (!lk) return { msg: 'Add the product link. It must be an https link from shopsuki.ph, shopee.ph, mandauefoam.ph or myhanabishi.com.' };
     var olk = add ? '' : o8Link(o.link) || o8T(o.link);
     if (add || lk !== olk) p.source_url = lk;
     if (o8T(v.photo) !== '') { var pu = o8Pic(v.photo); if (!pu) return { msg: 'The photo link must be an https image on cdn.shopify.com or down-ph.img.susercontent.com.' }; var opu = add ? '' : o8Pic(o.photo) || o8T(o.photo); if (add || pu !== opu) p.image_url = pu; }
@@ -582,7 +583,7 @@
     return head(a.action === 'add' ? 'Add a product' : 'Edit product', it.name) + '<form data-i-form novalidate>' +
       textField('title', 'Product name', v.title, 'maxlength="160"') + textField('brand', 'Brand', v.brand, 'maxlength="60"') + textField('packLabel', 'Size or pack label', v.packLabel, 'maxlength="40"') +
       textField('packSize', 'Pieces per pack (optional)', v.packSize, 'inputmode="decimal"') + sel +
-      textField('link', 'Product link', v.link, 'inputmode="url" autocapitalize="off" maxlength="500"') + '<p class="help">A link from shopsuki.ph or shopee.ph.</p>' +
+      textField('link', 'Product link', v.link, 'inputmode="url" autocapitalize="off" maxlength="500"') + '<p class="help">A link from shopsuki.ph, shopee.ph, mandauefoam.ph or myhanabishi.com.</p>' +
       textField('photo', 'Photo link (optional)', v.photo, 'inputmode="url" autocapitalize="off" maxlength="500"') +
       (canPrice(M.role) ? textField('price', 'Price in PHP (optional)', v.price, 'inputmode="decimal"') : '') +
       '<div class="field"><button class="chip I_choice" type="button" data-act="o8-avail" aria-pressed="' + (v.avail === '1') + '">' + (v.avail === '1' ? gi('check', 's16') + ' ' : '') + 'In stock</button></div>' +
@@ -707,7 +708,7 @@
     if (typeof root.fetch !== 'function') throw { photo: 'optfetch' };
     return Promise.resolve().then(function () { return root.fetch(url, { mode: 'cors', credentials: 'omit', referrerPolicy: 'no-referrer' }); }).then(function (r) { if (!r || !r.ok) throw 0; return r.blob(); }).then(null, function () { throw { photo: 'optfetch' }; });
   }
-  function onChange(ev) { var t = ev.target; if (M && t && t.id === 'I_photo_in') photoPicked(ev); }
+  function onChange(ev) { var t = ev.target; if (M && t && (t.id === 'I_photo_in' || t.id === 'I_photo_pick')) photoPicked(ev); }
   // s107 B7: usual first, then preferred, then in stock, then cheapest (price roles) or by title (everyone else).
   function optSort(list, money) {
     var av = function (o) { return o.available === true ? 0 : o.available === null ? 1 : 2; };
@@ -1003,7 +1004,7 @@
         '<p class="I_lvline">' + (it.qty == null ? '' : levelBadge(it) + ' ') + esc(amountText(it)) + (lasts != null ? ' · lasts about ' + esc(lasts) + ' days' : '') + '</p>' +
         (M.denied.shop || !shopRows.length ? '' : '<p class="I_onlist">' + gi('bag', 's16') + ' On the list' + (listedQ ? ', ' + esc(listedQ) : '') + '</p>') + '</div></div>' +
         (a.note ? '<div class="okbox" role="status"><span>' + esc(a.note) + '</span></div>' : '') + errBox(a) +
-        '<div class="I_actbar">' + ac.chosen.map(function (c, n) { return actBtn(c, n === 0 ? 'btn-primary' : 'btn-secondary'); }).join('') + '</div>' + lastChange(it) + optionsBlock(it) +
+        '<div class="I_actbar">' + ac.chosen.map(function (c, n) { return actBtn(c, n === 0 ? 'btn-primary' : 'btn-secondary'); }).join('') + '</div>' + photoRow(it) + lastChange(it) + optionsBlock(it) +
         '<details class="I_det" open><summary>Details</summary><dl class="I_dl">' +
         row('On hand', it.qty == null ? 'Not counted' : esc(uq(it.qty, it.unit))) + row('Reorder at', it.reorder == null ? 'Not set' : esc(uq(it.reorder, it.unit))) + (it.location ? row('Kept in', esc(it.location)) : '') + whereRow(it) +
         (K.v84 && (it.consumable || it.par != null) ? row('Buy up to', it.par != null ? esc(uq(it.par, it.unit)) : it.reorder != null ? esc('2 x reorder level (' + fmt(it.reorder * 2) + ')') : 'Not set') : '') +
@@ -1231,7 +1232,6 @@
     if (allowed('levels')) add('levels', 'Edit details');
     if (allowed('link')) add('link', 'Link a barcode', 'begin-link');
     if (!listed && allowed('shop')) add('shop', 'Add to shopping list');
-    if (allowed('photo')) add('photo', it.photo ? 'Change photo' : 'Add photo', null, true);
     if (it.photo && allowed('photo')) add('photorem', 'Remove photo', 'photo-remove');
     if (canManage(m) && supOK() && root.I_Suppliers.openItemSuppliers) add('itemsup', 'Suppliers for this item', 'item-sup');
     if (allowed('history')) add('history', 'History', 'history-open');
@@ -1242,8 +1242,15 @@
     if (!chosen.length) order.some(function (k) { if (!all[k].file) { chosen.push(k); return true; } return false; });
     return { chosen: chosen.map(function (k) { return all[k]; }), rest: order.filter(function (k) { return chosen.indexOf(k) < 0; }).map(function (k) { return all[k]; }) };
   }
+  // s116 lane B: the photo row sits under the main buttons, camera and gallery side by side (the gallery input has no capture, so the phone offers stored photos).
+  function photoRow(it) {
+    if (!allowed('photo')) return '';
+    var has = !!it.photo, lead = has ? 'Change photo' : 'Add photo';
+    return '<div class="I_photorow" role="group" aria-labelledby="I_photolead"><p class="I_photolead" id="I_photolead">' + lead + '</p><div class="I_grid2">' +
+      '<label class="btn btn-secondary btn-block I_filebtn">' + gi('camera', 's16') + (has ? 'Retake' : 'Take a photo') + '<input class="sr" id="I_photo_in" type="file" accept="image/*" capture="environment" aria-label="' + (has ? 'Retake the photo with the camera' : 'Take a photo with the camera') + '"></label>' +
+      '<label class="btn btn-secondary btn-block I_filebtn">' + gi('image', 's16') + (has ? 'Choose another' : 'Choose a photo') + '<input class="sr" id="I_photo_pick" type="file" accept="image/*" aria-label="' + (has ? 'Choose another photo from your phone' : 'Choose a photo from your phone') + '"></label></div></div>';
+  }
   function actBtn(c, cls) {
-    if (c.file) return '<label class="btn btn-secondary btn-block I_filebtn"><input class="sr" id="I_photo_in" type="file" accept="image/*" capture="environment">' + c.text + '</label>';
     return '<button class="btn ' + cls + ' btn-block" type="button" data-act="' + c.act + '" data-kind="' + c.kind + '">' + c.text + '</button>';
   }
   // Running low (s84 1b): the amount to buy back to par (or 2 x reorder level), in packs; 1 when it cannot be worked out.
