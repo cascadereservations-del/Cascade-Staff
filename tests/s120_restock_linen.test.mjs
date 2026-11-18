@@ -348,7 +348,7 @@ test('R3 item 4: after a send fails for lack of connection the card says it will
   assert.match(n.textContent, /will send when the connection returns/i);
   assert.ok(!/warn/.test(n.className), 'waiting for a connection is not a fault');
   const ln = t.el('s120-linen-status');
-  assert.ok(!/Sending now/.test(ln.textContent) && /connection returns/i.test(ln.textContent), 'linen says the same: ' + ln.textContent);
+  assert.ok(!/Sending now/.test(ln.textContent) && /sends when you submit/i.test(ln.textContent), 'linen waits for Submit, not for the connection: ' + ln.textContent);
   assert.equal(t.state.linen.tried, true);
   t.mode = 'online'; await h.flush(false);
   assert.equal(n.textContent, 'Saved and sent.');
@@ -406,9 +406,9 @@ test('R3 item 10: Submit says it is sending and cannot be tapped twice until the
     const state = { cleaningType: 'turnover', supplyLogSaved: true, pendingPreSubmit: false, meterPhotos: [], precleanPhotos: [], aftercleanPhotos: [], bedroomPhotos: [], kitchenPhotos: [] };
     let release, proceeded = 0;
     const gate = new Promise((res, rej) => { release = v => (v instanceof Error ? rej(v) : res(v)); });
-    const fn = new Function('state', 'el', 'showToast', 'S120R_flushAll', 'updateBottomBar', 'proceedWithSubmission', 'showFlushOverlay', 'enqueuePhotoUpload', 'uploadPhotoRecord', 'updateFlushOverlay', 'hideFlushOverlay', 'isPhaseValid', 'PHASE_COUNT',
+    const fn = new Function('state', 'el', 'showToast', 'S120R_flushAll', 'updateBottomBar', 'proceedWithSubmission', 'showFlushOverlay', 'enqueuePhotoUpload', 'uploadPhotoRecord', 'updateFlushOverlay', 'hideFlushOverlay', 'isPhaseValid', 'PHASE_COUNT', 'S120R_certainOffline',
       fnText('runPreSubmitFlush') + '\nreturn runPreSubmitFlush;');
-    const go = fn(state, id => els[id], () => {}, () => gate, () => { els['btn-submit'].disabled = false; }, () => { proceeded++; }, () => {}, () => {}, () => {}, () => {}, () => {}, () => true, 6);
+    const go = fn(state, id => els[id], () => {}, () => gate, () => { els['btn-submit'].disabled = false; }, () => { proceeded++; }, () => {}, () => {}, () => {}, () => {}, () => {}, () => true, 6, () => true);
     return { els, go, release, proceeded: () => proceeded };
   };
   for (const [name, result] of [['unanswered', { pending: [], unanswered: ['Tea'] }], ['pending', { pending: ['restock'], unanswered: [] }]]) {

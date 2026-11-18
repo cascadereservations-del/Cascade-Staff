@@ -45,7 +45,7 @@ function world({ online = false } = {}) {
     'let state = w.state;\n'
     + block + NL + fns + NL
     + 'const DRAFT_KEY = "ch_draft_v6", DRAFT_VERSION = 5, PHASE_COUNT = 7;\n'
-    + 'let _susItems = [], _susLoaded = false, _draftRestoring = false;\n'
+    + 'let _susItems = [], _susLoaded = false, _draftHold = false;\n'
     + 'const fetchWithRetry = (u, o) => fetch(u, o);\n'
     + 'const lsJSON = (k, v) => { if (v === undefined) return w.store[k] ? JSON.parse(w.store[k]) : null; w.store[k] = JSON.stringify(v); if (k === "ch_draft_v6") w.saves.push(JSON.parse(w.store[k])); };\n'
     + 'const K_migrateDraft = d => d, ARRIVE_ITEMS = [], CHEMICAL_ITEMS = [], BEDROOM_ITEMS = [], KITCHEN_ITEMS = [], FINAL_CLEANING_ITEMS = [], K_KILLER_ITEMS = [], K_PHASE_FROM_V1 = {};\n'
@@ -113,10 +113,11 @@ test('R5 item 1: no save during a resume writes a half-restored draft, whatever 
     w.reload();
     const before = w.saves.length;
     w.api.resumeDraft(w.api.loadDraft());
-    assert.equal(w.saves.length, before, 'the resume itself writes nothing');
-    // and the flag is cleared again: a normal save works after the resume
+    assert.equal(w.saves.length, before + 1, 'the resume writes once, at the end (R7), when every part is back');
+    assert.equal(w.saves[w.saves.length - 1].restock.saved, true, 'and that one write holds the full restored draft');
+    // and the hold is cleared again: a normal save works after the resume
     w.api.saveDraft();
-    assert.equal(w.saves.length, before + 1);
+    assert.equal(w.saves.length, before + 2);
     assert.equal(w.saves[w.saves.length - 1].restock.saved, true);
   });
 });

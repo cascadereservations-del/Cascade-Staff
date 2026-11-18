@@ -6349,6 +6349,7 @@ const state = {
   submissionId:       null,
   isSubmitting:       false,
   pendingOnlineRetry: false,
+  preSubmitStalled:   false,        // s120R7: Submit stopped once while online with a send that keeps failing; the next tap lets the report go
   pendingPreSubmit:   false,        // s120R: the pre-submit send could not finish offline; the online event runs it again
   weekendMandatory:   false,
   elapsedInterval:    null,
@@ -6716,7 +6717,7 @@ function buildNudgeMessage(phase) {
       const smell = K_gatedForPhase(4).filter(i => !K_answered(i.id)).length;
       if (smell) missing.push(`${smell} check${smell>1?'s':''} to answer (Confirmed, or Issue Found)`);
       if (missing.length === 0) return null;
-      return `Almost ready to finish! Still needed: ${missing.join('; ')}. 💛`;
+      return `Almost ready to finish. Still needed: ${missing.join('; ')}. 💛`;
     }
     case 5: {
       const acNeed = AFTERCLEAN_PHOTO_MIN - state.aftercleanPhotos.length;
@@ -8158,12 +8159,17 @@ function S94_renderCue() {
 
 function S94_scrollToFirst() {
   const cue = el('nav-cue'), id = cue?._first;
-  if (id && cue._firstPhase != null && cue._firstPhase !== state.phase) goToPhase(cue._firstPhase, true);   // the step has to be showing before its card can be scrolled to
-  const t = id && el(id);
-  if (!t) return;
-  const reduce = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
-  t.scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: 'center' });
-  if (/^(INPUT|TEXTAREA|SELECT|BUTTON)$/.test(t.tagName)) t.focus({ preventScroll: true });
+  const go = () => {
+    const t = id && el(id);
+    if (!t) return;
+    const reduce = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
+    t.scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: 'center' });
+    if (/^(INPUT|TEXTAREA|SELECT|BUTTON)$/.test(t.tagName)) t.focus({ preventScroll: true });
+  };
+  if (id && cue._firstPhase != null && cue._firstPhase !== state.phase) {
+    goToPhase(cue._firstPhase, true);
+    setTimeout(go, 60);   // goToPhase shows the step 20 ms later; a card on a hidden step cannot be scrolled to
+  } else go();
 }
 
 function S94_initCue() {
@@ -9703,9 +9709,9 @@ function initMessengerButtons() {
 /* ═══════════════════════════════════════════════════════════════
    DRAFT AUTO-SAVE / LOAD
 ═══════════════════════════════════════════════════════════════ */
-let _draftRestoring = false;   // s120R5: true only while a draft is being put back; a save then would write the half-restored state over the draft being read
+let _draftHold = false;   // s120R7: while the Resume question is open, and while a draft is put back, the stored draft is read-only: the page holds an empty state and a save would write it over the real draft
 function saveDraft() {
-  if (_draftRestoring) return;
+  if (_draftHold) return;
   const draft = {
     _v:              DRAFT_VERSION,
     _k:              2,                 // K_: 1 = the s82 line set and phase numbers; 2 = EcoFlow merged into check_9_4 (3.1.1)
@@ -9885,9 +9891,22 @@ function applyDraft(draft) {
 
 /* The one way a draft is resumed: no save runs until every part of it is back (the old order saved inside setCleaningType before Restock and linen were restored). */
 function resumeDraft(draft) {
-  _draftRestoring = true;
-  try { applyDraft(draft); }
-  finally { _draftRestoring = false; }
+  let restored = false;
+  _draftHold = true;   // already on from the question; set again so no caller can resume without it
+  try { applyDraft(draft); restored = true; }   // the hold stays on for all of it
+  finally { _draftHold = false; }
+  if (restored) saveDraft();   // the restored state is stored at once; a throw above saves nothing and the stored draft stays as it was
+}
+
+/* Start fresh the same day: a Restock or linen send that was sent, or may have reached the server, keeps its object and key, so the cards show their status and a new answer cannot be deducted twice. An earlier day's draft is finished work. */
+function carryOverSends(draft) {
+  if (!draft || draft.cleaningDate !== todayManila()) return false;
+  const live = o => !!(o && o.key && (o.sent || o.tried || o.waiting));
+  let kept = false;
+  if (live(draft.restock)) { state.restock = S120R_migrateRestock(draft); state.supplyLogSaved = !!draft.supplyLogSaved; if (state.restock.saved) el('supply-usage-trigger-card')?.classList.add('sus-done'); kept = true; }
+  if (live(draft.linen)) { state.linen = S120R_migrateLinen(draft); if (state.cleaningType !== 'emergency') S120R_syncLinen(); kept = true; }
+  if (kept) { try { renderConfirmItems(); } catch (e) { /* the cards repaint on the next tap */ } S120R_refreshStatus(); }
+  return kept;
 }
 
 function clearDraft() {
@@ -9928,12 +9947,13 @@ function onSubmitClick() {
 ═══════════════════════════════════════════════════════════════ */
 function checkAndShowDraftModal() {
   const draft = loadDraft();
-  if (!draft) return;
+  if (!draft) { _draftHold = false; return; }
 
   // Show draft modal
   const modal   = el('draft-modal');
   const timeEl  = el('draft-time');
-  if (!modal) return;
+  if (!modal) { _draftHold = false; return; }
+  _draftHold = true;   // the stored draft is read-only until the cleaner answers
 
   const savedDate = new Date(draft._saved);
   const timeStr   = savedDate.toLocaleString('en-PH', {
@@ -9955,6 +9975,9 @@ function checkAndShowDraftModal() {
     // Reset state
     state.startTimestamp = Date.now();
     startElapsedTimer();
+    const kept = carryOverSends(draft);
+    _draftHold = false;
+    if (kept) saveDraft();
   }, { once: true });
 }
 
@@ -10030,7 +10053,7 @@ function initSubmitModal() {
 
   el('btn-submit-confirm')?.addEventListener('click', () => {
     el('submit-modal')?.classList.remove('open');
-    runPreSubmitFlush();
+    runPreSubmitFlush(true);   // a tap; only a tap can be the second one
   });
 }
 
@@ -10045,7 +10068,7 @@ function initSubmitModal() {
 // every photo whose bytes moved to IndexedDB after capture. Routes through
 // the same concurrency-2 queue as capture-time uploads (uploadPhotoRecord)
 // rather than a separate ad hoc batch loop.
-async function runPreSubmitFlush() {
+async function runPreSubmitFlush(fromTap) {
   // s120R: the linen check and the restock must be recorded before the report goes. No connection = they stay on this phone and the submit waits.
   const say = msg => { const st = el('submit-status'); if (st) { st.className = 'visible error'; st.textContent = msg; } };   // stays on screen, unlike a toast
   if (state.cleaningType !== 'emergency' && !state.supplyLogSaved) {
@@ -10069,10 +10092,21 @@ async function runPreSubmitFlush() {
   }
   if (sent.pending.length) {
     state.pendingPreSubmit = true;
-    say('Not sent yet: ' + sent.pending.join(' and ') + '. Your answers are kept on this phone. The report goes when you are online again, or tap Submit again.');
-    showToast('Not sent yet: ' + sent.pending.join(' and ') + '. Your answers are kept on this phone. Connect, then tap Submit again.', 'error', 8000);
-    return;
-  }
+    if (S120R_certainOffline()) {
+      say('Not sent yet: ' + sent.pending.join(' and ') + '. Your answers are kept on this phone. The report goes when you are online again, or tap Submit again.');
+      showToast('Not sent yet: ' + sent.pending.join(' and ') + '. Your answers are kept on this phone. Connect, then tap Submit again.', 'error', 8000);
+      return;
+    }
+    // Online but the send keeps failing: the first stop says so; the next TAP in this page session lets the report go without it (an automatic resubmit never does).
+    if (!(fromTap === true && state.preSubmitStalled)) {
+      state.preSubmitStalled = true;
+      const m = 'Not sent yet: ' + sent.pending.join(' and ') + '. Tap Submit again to send the report without it. The host will be told.';
+      say(m); showToast(m, 'error', 8000);
+      return;
+    }
+    if (sent.pending.includes('linen check') && state.linen) state.linen.unconfirmed = true;   // the key stays: a later resend records it normally
+    if (sent.pending.includes('restock') && state.restock) state.restock.unconfirmed = true;
+  } else state.preSubmitStalled = false;
   state.pendingPreSubmit = false;
   const sectionKeys = ['preclean', 'afterclean', 'bedroom', 'kitchen'];
 
@@ -10890,7 +10924,7 @@ function resetApp() {
   setCleaningType('turnover');
   _susLoaded = false;
   _susItems  = [];
-  state.pendingPreSubmit = false;
+  state.pendingPreSubmit = false; state.preSubmitStalled = false;
   el('s120-restock-status') && (el('s120-restock-status').textContent = '');
   el('sus-status') && (el('sus-status').textContent = '');
 
@@ -11196,6 +11230,8 @@ function S120R_reportLines(linen, restock) {
   if (restock && restock.unavailable) out.push({ section: 'Restock', text: S120R_RESTOCK_UNAVAILABLE_LINE });
   if (linen && linen.failed) out.push({ section: 'Linen', text: 'Linen stock was not updated (' + linen.failed + '). The host will check the shelf.' });
   if (restock && restock.failed) out.push({ section: 'Restock', text: 'Restock was not recorded (' + restock.failed + '). The host will check the shelf.' });
+  if (linen && linen.unconfirmed && !linen.sent) out.push({ section: 'Linen', text: 'Linen check could not be confirmed as recorded. The host will check the linen.' });
+  if (restock && restock.unconfirmed && !restock.sent) out.push({ section: 'Restock', text: 'Restock could not be confirmed as recorded. The host will check the shelf.' });
   return out;
 }
 
@@ -11407,7 +11443,7 @@ function S120R_refreshStatus() {
     else if (L.answer === 'found' && !S120R_linenComplete(L)) t = L.rows.length ? 'Choose what happened to every piece to continue.' : 'Tap a piece to start.';
     else if (L.answer === 'found' && L.sent) t = 'Sent.';
     else if (L.answer === 'found' && L.failed) t = 'The system could not record this. The host will see it in the report.';
-    else if (L.answer === 'found' && L.tried && L.waiting) t = 'Saved on this phone. It will send when the connection returns; the answers stay locked until then.';
+    else if (L.answer === 'found' && L.tried && L.waiting) t = 'Saved on this phone. It sends when you submit; the answers stay locked until then.';
     else if (L.answer === 'found' && L.tried) t = 'Sending now. The answers are locked until they are sent.';
     else if (L.answer === 'found') t = 'Kept on this phone. Not sent yet; it sends before you submit.';
     ln.textContent = t;
@@ -12343,6 +12379,7 @@ function initAutofillBanner() {
    MAIN INIT
 ═══════════════════════════════════════════════════════════════ */
 async function init() {
+  _draftHold = !!loadDraft();   // s120R7: set before the first await, so nothing the page does while it boots can save its empty state over the stored draft; checkAndShowDraftModal clears it when there is no question to ask
   registerServiceWorker();
 
   await initStaffAuth();
