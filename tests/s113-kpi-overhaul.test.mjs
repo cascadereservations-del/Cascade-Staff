@@ -165,7 +165,7 @@ test('s113 tier badges: on the Now and Up next cards (and the Calendar guest car
   let focused = ''; const rowEl = (t) => Object.assign(el(), { focus() { focused = t; } });
   const app = await boot({ role: 'cleaner', hash: '#home', els: { 'tg-vip': rowEl('vip'), 'tg-returning': rowEl('returning') }, handlers: baseHandlers('cleaner', { staff_home_v1: () => HOMEWITH([stayRow('Ana Reyes', '2026-10-13', '2026-10-17')], { current_guest: cur, next_guest: nxt }) }) });
   const h = app.els['v-home'].innerHTML;
-  assert.match(h, /<button class="T_chip T_c-vip" type="button" data-act="tiers-open" data-tier="vip"><svg[^>]*><\/svg><span>VIP · 8th stay<\/span><span class="sr">, open the guest tiers guide<\/span><\/button><p class="sub T_prog">Top tier<\/p>/);
+  assert.match(h, /<button class="T_chip T_c-vip" type="button" data-act="tiers-open" data-tier="vip"><svg[^>]*><\/svg><span>VIP · 8 stays<\/span><span class="sr">, open the guest tiers guide<\/span><\/button><p class="sub T_prog">Top tier<\/p>/);
   assert.match(h, /T_upnext[\s\S]*?<button class="T_chip T_c-returning" type="button" data-act="tiers-open" data-tier="returning">[\s\S]*?<\/button><\/div><p class="sub T_prog">2 more stays to Regular \(4 stays or 10 nights\)<\/p>/);
   await app.click({ 'data-act': 'tiers-open', 'data-tier': 'vip' }); await app.flush();
   const b = app.els['cs-body'].innerHTML; assert.equal(app.els['cal-sheet'].getAttribute('aria-hidden'), 'false'); assert.equal(focused, 'vip', 'focus on the guest’s own tier row');

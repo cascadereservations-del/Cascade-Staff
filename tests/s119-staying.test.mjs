@@ -17,7 +17,7 @@ test('the contradiction: tier first / repeat false with 2 stays, and the inverse
 });
 
 test('chip texts per tier and the name styling', async () => {
-  for (const [g, text, cls, nm] of [[{ tier: 'first', repeat: false, stay_count: 1 }, 'First stay', 'T_c-first', ''], [{ stay_count: 2 }, 'Returning · 2nd stay', 'T_c-returning', ''], [{ tier: 'regular', stay_count: 5 }, 'Regular · 5th stay', 'T_c-regular', ' nm3'], [{ tier: 'vip', stay_count: 12 }, 'VIP · 12th stay', 'T_c-vip', ' nm4']]) {
+  for (const [g, text, cls, nm] of [[{ tier: 'first', repeat: false, stay_count: 1 }, 'First stay', 'T_c-first', ''], [{ stay_count: 2 }, 'Returning · 2nd stay', 'T_c-returning', ''], [{ tier: 'regular', stay_count: 5 }, 'Regular · 5 stays', 'T_c-regular', ' nm3'], [{ tier: 'vip', stay_count: 12 }, 'VIP · 12 stays', 'T_c-vip', ' nm4']]) {
     const h = await home(GUEST(g));
     assert.match(h, new RegExp('<h2 class="A_name' + nm + '">Ana Reyes</h2></div><button class="T_chip ' + cls + '" type="button" data-act="tiers-open" data-tier="' + cls.slice(4) + '"><svg[^>]*></svg><span>' + text + '</span><span class="sr">, open the guest tiers guide</span></button>'));
     assert.doesNotMatch(h, /T_ribbon/);

@@ -170,7 +170,7 @@
   // photo as the Guest ID card: no download, copy or share control. Owner and admin tap either one for the full ID (the placeholder loads the photo on that tap only,
   // via data-idpath, which A_loadFaces never reads); everyone else sees a picture or the bare initial.
   var A_FACE_PX = 88;
-  function A_ownerLine(g) { var l = CS.stayingLine(g); return l ? '<p class="sub T_stay">' + esc(l) + '</p>' : ''; } // s116: whose face it is, when the ID is a companion's
+  function A_ownerLine(g) { if (g.staying && CS.stayNames(g.staying.names).length) return ''; var l = CS.stayingLine(g); return l ? '<p class="sub T_stay">' + esc(l) + '</p>' : ''; } // s116: whose face it is, when the ID is a companion's
   // numbers stay joined to their unit (no break inside '3 nights', '12:00 noon', '2:00 pm'); the time line breaks only at ' · '
   function A_nb(t) { return String(t).replace(/ /g, ' '); }
   // "24 → 25 Oct · 1 night" (the month once when both days share it)

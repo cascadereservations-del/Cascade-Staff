@@ -28,7 +28,7 @@ test('CS.tierRibbon: words and ordinal per tier, none for a first stay or an unk
 });
 
 test('Today card: ribbon per tier at the top, said once, perks for every role; none for a first stay; arriving says Prepare before arrival', async () => {
-  for (const [tier, n, word] of [['returning', 3, 'Returning · 3rd stay'], ['regular', 5, 'Regular · 5th stay'], ['vip', 8, 'VIP · 8th stay']]) {
+  for (const [tier, n, word] of [['returning', 3, 'Returning · 3rd stay'], ['regular', 5, 'Regular · 5 stays'], ['vip', 8, 'VIP · 8 stays']]) {
     const h = await home('cleaner', { current_guest: GUEST({ tier, stay_count: n }) });
     assert.match(h, new RegExp('<h2 class="A_name[^"]*">[^<]*</h2></div><button class="T_chip T_c-' + tier + '" type="button" data-act="tiers-open" data-tier="' + tier + '">'), tier + ': one chip under the name, it opens the card');
     assert.equal((h.split(word).length - 1), 1, tier + ': tier wording once'); assert.doesNotMatch(h, /pill p-tier-|T_line|T_ribbon/);

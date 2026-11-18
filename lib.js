@@ -557,7 +557,7 @@
       else if (g.repeat === false || (n === 1 && g.repeat !== true) || g.tier === 'first') t = 'first';
       else return null;
     }
-    var first = t === 'first', c = first ? 1 : n, tail = !c || (!first && c === 1) ? '' : ordinal(c) + ' stay'; // one stay under a non-first tier: the word alone, never '1st stay'
+    var first = t === 'first', c = first ? 1 : n, tail = !c || (!first && c === 1) ? '' : (t === 'returning' ? ordinal(c) + ' stay' : c + ' stays'); // one stay under a non-first tier: the word alone, never '1st stay'
     return { tier: t, icon: BADGE[t][1], word: BADGE[t][0], count: c || null, text: first ? 'First stay' : BADGE[t][0] + (tail ? ' · ' + tail : '') };
   }
   // s119: the staying line. g.staying = { names, source, suggestion, version } from staff_home_v1; absent (older server) gives null and the card draws nothing new.
