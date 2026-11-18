@@ -324,7 +324,8 @@
     if (gk.guests) {
       var gl = '<span class="T_fact">' + ICON('users', 's16') + esc(CS.plural(gk.guests, 'guest')) + '</span>';
       // s120: owner and admin open the guest page (This stay card) from the Guests tile; every other role, and a stay with no guest record, keeps the plain tile
-      if (CS.canSeeGuestContact(role()) && /^[0-9a-f-]{36}$/i.test(String(g.guest_id || ''))) t.push('<a class="T_tile T_tap" href="#guests/' + esc(g.guest_id) + '/stay" aria-label="' + esc(CS.plural(gk.guests, 'guest') + ', open the guest page to change the number') + '"><span class="T_tk">Guests</span><span class="T_tv num">' + gl + '</span><span class="chev" aria-hidden="true">' + ICON('chev', 's16') + '</span></a>');
+      var cg = state.payload && state.payload.current_guest, same = kind === 'next' && !!cg && !!g.guest_id && cg.guest_id === g.guest_id; // the link opens by guest and the RPC answers the current stay first, so Up next for the same guest is a plain tile
+      if (!same && CS.canSeeGuestContact(role()) && /^[0-9a-f-]{36}$/i.test(String(g.guest_id || ''))) t.push('<a class="T_tile T_tap" href="#guests/' + esc(g.guest_id) + '/stay" aria-label="' + esc(CS.plural(gk.guests, 'guest') + ', open the guest page to change the number') + '"><span class="T_tk">Guests</span><span class="T_tv num">' + gl + '</span><span class="chev" aria-hidden="true">' + ICON('chev', 's16') + '</span></a>');
       else t.push(tile('Guests', gl));
     }
     if (kind === 'next' && gk.idKnown) t.push(tile('ID', gk.id ? 'On file' : 'Not yet', gk.id ? 'T_ok' : 'T_warn'));
@@ -665,7 +666,7 @@
       '<div class="row-wrap" style="margin-top:6px">' + (src ? '<span class="pill p-neutral">' + esc(src) + '</span>' : '') + '</div>' +
       '<p class="sub num" style="margin:8px 0 0">' + esc(datesLine(g)) + '</p>' + (earlier ? '<p class="help num" style="margin:2px 0 0">' + esc(earlier) + '</p>' : '') + contactBlock(g) +
       H_readyBlock(g.arrival_ready, g, true) + (canAddDetails() && g.uid ? '<a class="btn btn-secondary btn-sm" href="./guest/#' + encodeURIComponent(g.uid) + '" style="margin-top:12px">' + ICON('idcard', 's16') + 'Add guest details</a>' : '') +
-      (CS.canSeeGuestContact(role()) && /^[\w-]{1,64}$/.test(String(g.guest_id || '')) ? '<a class="btn btn-ghost btn-sm" href="#guests/' + encodeURIComponent(g.guest_id) + '" style="margin-top:12px">' + ICON('user', 's16') + 'Open guest</a>' : '') + '</div>'; // 3.2: when the payload carries the guest id
+      '</div>'; // s120: no Open guest button in this release (not in the approved mockup); the Guests tile on Today is the way in
     var groups = CS.parseNotes(g.notes), notes = '';
     if (groups.length) {
       notes = '<div class="card glass"><h3 class="hd">Notes from earlier stays</h3><div style="margin-top:10px">' + groups.map(function (gr) {

@@ -21,7 +21,8 @@ const PROP = '6ae230f4-c189-4547-84b1-cb6e0b2cc9bd';
 // s120: the This stay card is updated in place, so a few of its ids answer querySelector with a node that edits this.html the way the DOM would. `paints` counts whole-page redraws; `log` records focus and scroll calls.
 const LIVE = new Set(['G_gout', 'G_gdec', 'G_ginc', 'G_gbk', 'G_sv', 'G_stm', 'G_staywrap', 'G_stay']);
 class FakeEl {
-  constructor() { this.html = ''; this.l = {}; this.nodes = {}; this.paints = 0; this.log = []; }
+  constructor() { this.html = ''; this.l = {}; this.nodes = {}; this.paints = 0; this.log = []; this.rotNodes = []; }
+  querySelectorAll(sel) { return /data-path/.test(String(sel)) ? this.rotNodes : []; }
   set innerHTML(v) { this.html = String(v); this.paints++; }
   get innerHTML() { return this.html; }
   addEventListener(t, f) { (this.l[t] ||= []).push(f); }
@@ -674,7 +675,7 @@ test('G: Save sends the exact payload, keeps the key for the same count, and use
   assert.deepEqual(Object.keys(seen[0]).sort(), ['p_count', 'p_expected_version', 'p_idempotency_key', 'p_property', 'p_reason', 'p_uid']);
   assert.equal(seen[0].p_property, PROP); assert.equal(seen[0].p_uid, 'stay-uid-1'); assert.equal(seen[0].p_count, 3); assert.equal(seen[0].p_expected_version, 4);
   assert.equal(seen[0].p_reason, 'Guest count changed in the Staff app'); assert.match(seen[0].p_idempotency_key, /^guests-/);
-  assert.match(el.html, /Needs a connection, so we could not confirm the save\./); assert.doesNotMatch(el.html, /Nothing was (saved|changed)/, 'a dropped answer may have saved: never claim nothing changed'); assert.equal(outN(el), 3);
+  assert.match(el.html, /The save could not be confirmed\./); assert.doesNotMatch(el.html, /Nothing was (saved|changed)/, 'a dropped answer may have saved: never claim nothing changed'); assert.equal(outN(el), 3);
   await clickA(el, 'stay-save'); await tick();
   assert.equal(seen[1].p_idempotency_key, seen[0].p_idempotency_key, 'a retry of the same count reuses the key');
   assert.match(el.html, /Saved\. 3 guests\./); assert.doesNotMatch(el.html, /data-act="stay-save"/); assert.match(el.html, /Booked for 3, staying 3|<output[^>]*>3<\/output>/);
@@ -688,7 +689,7 @@ test('G: a version conflict (40001) reloads the card and says so plainly', async
   const { el } = await mount(cl, GID);
   await clickA(el, 'stay-inc'); await clickA(el, 'stay-save'); await tick();
   assert.equal(cl.calls.filter((c) => c[0] === 'staff_guest_stay_v1').length, 2, 'the card was read again');
-  assert.match(el.html, /Someone else changed the number of guests\. The latest number is shown\./); assert.equal(outN(el), 1); assert.doesNotMatch(el.html, /data-act="stay-save"/);
+  assert.match(el.html, /This stay was updated by someone else\. It now shows 1 guest\./); assert.doesNotMatch(el.html, /changed the number|number of guests (was )?changed/); assert.equal(outN(el), 1); assert.doesNotMatch(el.html, /data-act="stay-save"/);
 });
 
 test('G: 40001 with a reload that fails says to reload the page, never that the latest number is shown', async () => {
@@ -696,7 +697,7 @@ test('G: 40001 with a reload that fails says to reload the page, never that the 
   const cl = stayClient(() => (n++ === 0 ? { data: STAY, error: null } : { data: null, error: { message: 'TypeError: Failed to fetch', code: '' }, status: 0 }), () => ({ data: null, error: { code: '40001', message: 'stale version' } }));
   const { el } = await mount(cl, GID);
   await clickA(el, 'stay-inc'); await clickA(el, 'stay-save'); await tick();
-  assert.match(el.html, /the latest number could not load\. Reload the page to see it\./); assert.doesNotMatch(el.html, /latest number is shown/);
+  assert.match(el.html, /updated by someone else, and the latest count could not load\. Reload the page to see it\./); assert.doesNotMatch(el.html, /It now shows|latest number is shown/);
 });
 
 test('G: P0002 says the stay left the calendar and reads the card again; with no stay left the card goes', async () => {
@@ -771,21 +772,6 @@ test('G s120: demo shows every state with no storage or client call: Guest ID wi
   assert.deepEqual(touched, [], 'no storage, and a demo has no client to call');
 });
 
-test('G s120: ID pills: only ID on file and No ID yet, and the list and the guest page agree for the same guest', async () => {
-  const flags = [true, false];
-  for (const on of flags) {
-    const prof = { ...PROFILE, id_on_file: on };
-    for (const comps of [COMPS, [COMPS[1]], []]) {
-      const d = await mount(detailClient({ tables: { guests: { data: GUEST, error: null }, guest_profile_details: { data: prof, error: null } }, rpcs: { list_guest_companions_v1: () => ({ data: comps, error: null }) } }), GID);
-      const chips = d.el.html.split('G_chipsrow')[1].split('</div>')[0];
-      assert.doesNotMatch(d.el.html, /ID via companion|ID marked, no photo/);
-      const l = await mount(client({ tables: { guests: { data: [{ ...GUEST, guest_profile_details: [{ id_on_file: on, birthday: null, contact_number: null, vip: false }] }], count: 1, error: null }, airbnb_reservations: { data: [], error: null }, booking_inquiries: { data: [], error: null } } }), '');
-      for (const word of ['ID on file', 'No ID yet']) assert.equal(chips.includes(word), l.el.html.includes(word), word + ' flag ' + on);
-      assert.equal(chips.includes(on ? 'ID on file' : 'No ID yet'), true);
-    }
-  }
-});
-
 test('G s120: Edit details is the app bar title while the form is open, and no second heading is added to the page', async () => {
   const titles = [], cl = detailClient(), { el } = await mount(cl, GID, 'owner', { setTitle: (t) => titles.push(t) });
   await clickA(el, 'edit'); assert.deepEqual(titles, ['Edit details']);
@@ -796,4 +782,104 @@ test('G s120: Edit details is the app bar title while the form is open, and no s
 test('G s120: the CSS has the four G_frwrap grid rules, no dead G_dl or G_namerow, and the profile read no longer asks for id_type', () => {
   for (const r of [/\.G_frwrap \.G_frm \{[^}]*grid-template-columns: 1fr auto/, /\.G_frwrap \.G_fl \{[^}]*grid-column: 1/, /\.G_frwrap \.G_fv \{[^}]*white-space: nowrap/, /\.G_frwrap \.chev \{[^}]*grid-row: 1 \/ 3/]) assert.match(CSS, r);
   assert.doesNotMatch(CSS, /G_dl|G_namerow/); assert.doesNotMatch(SRC, /id_on_file,id_type/);
+});
+
+// ------------------------------------------------------------------------------------------------ s120 U3 (re-plan): one rule per fact, save results, repaint
+const idChips = (el) => el.html.split('G_chipsrow')[1].split('</div>')[0];
+const FAILED = { data: null, error: { message: 'TypeError: Failed to fetch' } };
+
+test('G U3: ID status on the guest page is the Today rule (flag OR any companion photo); unknown shows no pill, never No ID yet', async () => {
+  const P = (f) => ({ data: { ...PROFILE, id_on_file: f }, error: null }), ok = (c) => () => ({ data: c, error: null }), none = COMPS.map((c) => ({ ...c, id_photo_path: null }));
+  const cases = [['flag false, companion photo', P(false), ok(COMPS), 'ID on file'], ['flag true, no photos', P(true), ok(none), 'ID on file'], ['flag false, no photos', P(false), ok(none), 'No ID yet'],
+    ['profile read failed, no photo', FAILED, ok(none), null], ['profile read failed, companion photo', FAILED, ok(COMPS), 'ID on file'],
+    ['companions read failed, flag false', P(false), () => FAILED, null], ['companions read failed, flag true', P(true), () => FAILED, 'ID on file'],
+    ['companions function missing, flag false', P(false), () => ({ data: null, error: { code: 'PGRST202', message: 'x' } }), null]];
+  for (const [what, prof, comps, want] of cases) {
+    const { el } = await mount(detailClient({ tables: { guests: { data: GUEST, error: null }, guest_profile_details: prof }, rpcs: { list_guest_companions_v1: comps } }), GID);
+    const chips = idChips(el);
+    if (want) { assert.match(chips, new RegExp(want), what); assert.doesNotMatch(chips, want === 'ID on file' ? /No ID yet/ : /ID on file/, what); } else assert.doesNotMatch(chips, /ID on file|No ID yet/, what);
+  }
+});
+
+test('G U3: the list cannot see companion photos, so it shows ID on file only for a true flag and nothing otherwise', async () => {
+  const row = (id, d) => ({ id, name: 'Guest ' + id, phone: null, email: null, tier: null, last_stay_date: '2026-10-12', guest_profile_details: d });
+  const cl = client({ tables: { guests: { data: [row('g1', [{ id_on_file: true, birthday: null, contact_number: null, vip: false }]), row('g2', [{ id_on_file: false, birthday: null, contact_number: null, vip: false }]), row('g3', [])], count: 3, error: null },
+    airbnb_reservations: { data: [], error: null }, booking_inquiries: { data: [], error: null } } });
+  const { el } = await mount(cl, ''), rows = el.html.split('<a class="rowi G_row"').slice(1);
+  assert.match(rows[0], /ID on file/); assert.doesNotMatch(rows[1] + rows[2], /ID on file|No ID yet/);
+  const d = await mount(detailClient({ tables: { guests: { data: GUEST, error: null }, guest_profile_details: { data: { ...PROFILE, id_on_file: true }, error: null } } }), GID);
+  assert.match(idChips(d.el), /ID on file/, 'a true flag reads the same on the page');
+});
+
+test('G U3: the companion fallback is clamped to 3 on Today and on the card: the same input gives the same number', async () => {
+  const names = ['Ana Maria Reyes', 'Bo Cruz', 'Cy Dela', 'Di Lim', 'Ed Tan'], { win } = load();
+  const today = win.CS.goodToKnow({ guest_name: 'Ana Maria Reyes', companions: names.map((name) => ({ name })) }, true).guests;
+  const comps = names.map((name, i) => ({ id: 'c' + i, guest_id: GID, name, id_type: null, id_number: null, id_photo_path: null }));
+  const cl = detailClient({ rpcs: { list_guest_companions_v1: () => ({ data: comps, error: null }), staff_guest_stay_v1: () => ({ data: { ...STAY, guest_count: null, booked_guests: null }, error: null }) } });
+  const { el } = await mount(cl, GID);
+  assert.equal(today, 3); assert.equal(outN(el), today);
+});
+
+test('G U3: onChange fires once per save on success, replay and conflict, including when the person left mid-save', async () => {
+  const answers = { success: () => ({ data: { ok: true, guest_count: 3, version: 5 }, error: null }), replay: () => ({ data: { ok: true, guest_count: 3, version: 5, replay: true }, error: null }), conflict: () => ({ data: null, error: { code: '40001', message: 'stale version' } }) };
+  for (const [name, answer] of Object.entries(answers)) for (const leave of [false, true]) {
+    let changed = 0, release; const gate = new Promise((r) => { release = r; });
+    const { M, el } = await mount(stayClient(STAY, () => (leave ? gate.then(answer) : answer())), GID, 'owner', { onChange: () => changed++ });
+    await clickA(el, 'stay-inc'); await clickA(el, 'stay-save');
+    if (leave) { M.unmount(); release(); }
+    await tick(); assert.equal(changed, 1, name + (leave ? ' after leaving' : ''));
+  }
+});
+
+test('G U3: onChange also fires when the answer cannot prove nothing changed, and never for a definite refusal', async () => {
+  const run = async (error) => { let changed = 0; const { el } = await mount(stayClient(STAY, () => ({ data: null, error })), GID, 'owner', { onChange: () => changed++ }); await clickA(el, 'stay-inc'); await clickA(el, 'stay-save'); await tick(); return changed; };
+  for (const error of [{ code: '', message: 'Internal Server Error', status: 500 }, { message: 'TypeError: Failed to fetch', network: true }, { code: 'P0002', message: 'stay_not_found' }]) assert.equal(await run(error), 1, error.message);
+  for (const code of ['42501', '22023', 'PGRST202']) assert.equal(await run({ code, message: 'x' }), 0, code);
+});
+
+test('G U3: 40001 says the stay was updated by someone else and shows the number it re-read, without claiming the count changed', async () => {
+  for (const [count, say] of [[2, /It now shows 2 guests\./], [1, /It now shows 1 guest\./]]) {
+    let n = 0;
+    const { el } = await mount(stayClient(() => ({ data: n++ === 0 ? STAY : { ...STAY, guest_count: count, version: 9 }, error: null }), () => ({ data: null, error: { code: '40001', message: 'stale version' } })), GID);
+    await clickA(el, 'stay-inc'); await clickA(el, 'stay-save'); await tick();
+    assert.match(el.html, /This stay was updated by someone else\./); assert.match(el.html, say); assert.doesNotMatch(el.html, /changed the number|number of guests (was )?changed/);
+  }
+});
+
+test('G U3: a 5xx, a gateway error or a dropped answer says the save could not be confirmed, reads the card again and keeps the key; only definite refusals say Nothing was changed', async () => {
+  for (const error of [{ code: '', message: 'Internal Server Error', status: 500 }, { code: '', message: 'Bad Gateway' }, { code: 'XX000', message: 'boom' }, { code: '57014', message: 'canceling statement due to statement timeout' }, { message: 'TypeError: Failed to fetch', network: true }]) {
+    const seen = [], cl = stayClient(STAY, (a) => { seen.push(plain(a)); return seen.length === 1 ? { data: null, error } : { data: { ok: true, guest_count: 3, version: 5 }, error: null }; });
+    const { el } = await mount(cl, GID); await clickA(el, 'stay-inc'); await clickA(el, 'stay-save'); await tick();
+    assert.match(el.html, /The save could not be confirmed/, error.message); assert.doesNotMatch(el.html, /Nothing was changed/);
+    assert.equal(cl.calls.filter((c) => c[0] === 'staff_guest_stay_v1').length, 2, 'the card was read again'); assert.equal(outN(el), 3, 'the number you set stays'); assert.match(el.html, /data-act="stay-save"/);
+    await clickA(el, 'stay-save'); await tick();
+    assert.equal(seen[1].p_idempotency_key, seen[0].p_idempotency_key, 'the retry keeps the key'); assert.equal(seen[1].p_expected_version, 4); assert.match(el.html, /Saved\. 3 guests\./);
+  }
+  let reads = 0; // the save did land and only the answer was lost: the re-read shows it
+  const landed = await mount(stayClient(() => ({ data: reads++ === 0 ? STAY : { ...STAY, guest_count: 3, version: 5 }, error: null }), () => FAILED), GID);
+  await clickA(landed.el, 'stay-inc'); await clickA(landed.el, 'stay-save'); await tick();
+  assert.match(landed.el.html, /The save could not be confirmed/); assert.equal(outN(landed.el), 3); assert.doesNotMatch(landed.el.html, /data-act="stay-save"/);
+  for (const [code, re] of [['42501', /not allowed to change this\. Nothing was changed\./], ['22023', /Choose 1, 2 or 3 guests\. Nothing was changed\./], ['PGRST202', /not available yet\. Nothing was changed\./]]) {
+    const { el } = await mount(stayClient(STAY, () => ({ data: null, error: { code, message: 'x' } })), GID); await clickA(el, 'stay-inc'); await clickA(el, 'stay-save'); await tick();
+    assert.match(el.html, re, code); assert.doesNotMatch(el.html, /could not be confirmed/);
+  }
+});
+
+test('G U3: with no count and no booked number, Save is offered without a change so a count of 1 can be confirmed; a known count offers none', async () => {
+  const cl = detailClient({ rpcs: { list_guest_companions_v1: () => ({ data: [COMPS[0]], error: null }), staff_guest_stay_v1: () => ({ data: { ...STAY, guest_count: null, booked_guests: null }, error: null }), set_stay_guest_count_v1: (a) => ({ data: { ok: true, guest_count: a.p_count, version: 5 }, error: null }) } });
+  const { el } = await mount(cl, GID);
+  assert.equal(outN(el), 1); assert.match(el.html, /data-act="stay-save"/); assert.doesNotMatch(el.html, /data-act="stay-undo"/, 'nothing to cancel yet');
+  await clickA(el, 'stay-save'); await tick();
+  const set = cl.calls.find((c) => c[0] === 'set_stay_guest_count_v1')[1]; assert.equal(set.p_count, 1); assert.equal(set.p_expected_version, 4);
+  assert.match(el.html, /Saved\. 1 guest\./); assert.doesNotMatch(el.html, /data-act="stay-save"/);
+  for (const stay of [STAY, { ...STAY, guest_count: null, booked_guests: 2 }, { ...STAY, guest_count: 1, booked_guests: null }]) assert.doesNotMatch((await mount(stayClient(stay), GID)).el.html, /data-act="stay-save"/);
+});
+
+test('G U3: a saved turn that arrives late turns the photos in place: no page redraw, so stepper focus and More details stay', async () => {
+  let release; const gate = new Promise((r) => { release = r; }), cls = new Set(['G_r90']);
+  const cl = rotDetail({ staff_guest_stay_v1: () => ({ data: STAY, error: null }), staff_photo_rotation_v1: () => gate.then(() => ({ data: [{ path: compPath, rotation: 180 }], error: null })) });
+  const { el } = await mount(cl, GID);
+  el.rotNodes = [{ getAttribute: (k) => (k === 'data-path' ? compPath : null), classList: { add: (c) => cls.add(c), remove: (c) => cls.delete(c) } }];
+  const paints = el.paints; el.log.length = 0; release(); await tick();
+  assert.equal(el.paints, paints, 'no whole-page repaint'); assert.deepEqual([...cls], ['G_r180']); assert.deepEqual(el.log, []);
 });

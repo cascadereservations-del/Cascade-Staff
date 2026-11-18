@@ -60,7 +60,7 @@ test('3.2 modules: a cleaner and finance never reach Guests or Inbox: not by rou
   const src = read('app.js'); assert.match(src, /H_MODULES\[v\]\.roles && H_MODULES\[v\]\.roles\.indexOf\(role\(\)\) < 0\) v = 'home'/, 'the role is checked before anything is loaded');
 });
 
-test('3.2 Home: Inbox goes to #inbox, Guests goes to #guests, the guest card offers Open guest only when the payload has the guest id and the person is owner or admin', async () => {
+test('3.2 Home: Inbox goes to #inbox, Guests goes to #guests, the guest card offers no Open guest button in s120 (dormant until the mockup carries it)', async () => {
   const cur = { guest_name: 'Ana Reyes', guest_id: 'g-77', uid: 'u1', checkin_date: '2026-10-12', checkout_date: TODAY, source: 'direct', nights: 3 };
   const hw = HOMEWITH([stayRow('Ana Reyes', '2026-10-12', TODAY)], { current_guest: cur });
   const app = await boot({ role: 'admin', hash: '#home', handlers: baseHandlers('admin', { staff_home_v1: () => hw, notices_v1: () => ({ error: null, data: NOTICES_RAW({ role: 'admin', inbox_open: 4 }) }) }) });
@@ -68,7 +68,7 @@ test('3.2 Home: Inbox goes to #inbox, Guests goes to #guests, the guest card off
   assert.match(h, /id="slot-inbox"[^>]*><a class="rowi" href="#inbox"[^>]*>[^]*4 open/); assert.match(h, /<a class="rowi" href="#guests"[^>]*>[^]*<span class="t">Guests<\/span>/);
   assert.ok(h.indexOf('Guests and bookings') < h.indexOf('href="#guests"') && h.indexOf('href="#guests"') < h.indexOf('aria-label="Admin"'), 'the row sits in Guests and bookings');
   const cal = await boot({ role: 'owner', hash: '#calendar/house', handlers: baseHandlers('owner', { staff_home_v1: () => hw }) });
-  assert.match(cal.els['v-calendar'].innerHTML, /href="#guests\/g-77"[^>]*>[^]*Open guest/);
+  assert.doesNotMatch(cal.els['v-calendar'].innerHTML, /Open guest|href="#guests\/g-77"/, 's120: hidden even for the owner with a guest id');
   const nogid = await boot({ role: 'owner', hash: '#calendar/house', handlers: baseHandlers('owner', { staff_home_v1: () => HOMEWITH([stayRow('Ana Reyes', '2026-10-12', TODAY)], { current_guest: Object.assign({}, cur, { guest_id: undefined }) }) }) });
   assert.doesNotMatch(nogid.els['v-calendar'].innerHTML, /Open guest/, 'no id, no link');
   const bad = await boot({ role: 'owner', hash: '#calendar/house', handlers: baseHandlers('owner', { staff_home_v1: () => HOMEWITH([], { current_guest: Object.assign({}, cur, { guest_id: '../x"><b>' }) }) }) });

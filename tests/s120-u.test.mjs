@@ -2,7 +2,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import { CS, boot, HOMEWITH, baseHandlers, stayRow, TODAY } from './_a_harness.mjs';
+import { CS, boot, el, HOMEWITH, baseHandlers, stayRow, TODAY } from './_a_harness.mjs';
 
 const GID = '0a1b2c3d-0000-4000-8000-000000000001';
 const GUEST = (o) => Object.assign({ uid: 'stay-1', guest_name: 'Ana Reyes', checkin_date: TODAY, checkout_date: '2026-10-17', checkout_time: '12:00', checkin_time: '14:00', nights: 2, repeat: false, stay_count: 1, tier: 'first', tier_line: null, notes: null, id_photo_path: null, guest_id: GID }, o || {});
@@ -70,7 +70,48 @@ test('shell: the guest module gets onChange and setTitle; a saved count refreshe
   assert.equal(rs[0].p_expected_version, 5, 'the names save uses the version read after the count save: no 40001');
 });
 
-test('demo names save keeps guest_count and booked_guests on the staying object', () => {
-  const app = fs.readFileSync(new URL('../app.js', import.meta.url), 'utf8');
-  assert.match(app, /g\.staying = Object\.assign\(\{\}, g\.staying, \{ names: use\.join/);
+const COUNTED = { names: '', version: 1, guest_count: 2, booked_guests: 3 };
+const tiles = (h) => (h.match(/class="T_tile T_tap"/g) || []).length;
+const upnext = (h) => h.slice(h.indexOf('T_upnext'));
+
+test('Guests tile: with a count and a guest id, owner and admin get the link and cleaner, laundry and finance a plain tile', async () => {
+  for (const role of ['owner', 'admin']) assert.equal(tiles(await home(GUEST({ staying: COUNTED }), role)), 1, role);
+  for (const role of ['cleaner', 'laundry', 'finance']) {
+    const h = await home(GUEST({ staying: COUNTED }), role);
+    assert.equal(tiles(h), 0, role); assert.match(h, /<span class="T_tk">Guests<\/span><span class="T_tv num"><span class="T_fact">[^]*?2 guests/, role + ': the count is there, as a plain tile');
+    assert.doesNotMatch(h, /href="#guests\//, role);
+  }
+});
+
+test('Up next for the same guest as the current stay is a plain tile; a different guest keeps the link', async () => {
+  const OTHER = '0a1b2c3d-0000-4000-8000-000000000002';
+  const both = async (nextId) => (await boot({ role: 'owner', hash: '#home', handlers: baseHandlers('owner', { staff_home_v1: () => HOMEWITH([stayRow('Ana Reyes', TODAY, '2026-10-17')],
+    { current_guest: GUEST({ staying: COUNTED }), next_guest: GUEST({ uid: 'stay-2', guest_id: nextId, checkin_date: '2026-10-20', checkout_date: '2026-10-22', staying: COUNTED }) }) }) })).els['v-home'].innerHTML;
+  const same = await both(GID), other = await both(OTHER);
+  assert.match(same, /T_upnext/); assert.equal(tiles(same), 1, 'only the current stay links'); assert.equal(tiles(upnext(same)), 0); assert.match(upnext(same), /<span class="T_tk">Guests<\/span>/);
+  assert.equal(tiles(other), 2); assert.equal(tiles(upnext(other)), 1);
+});
+
+test('shell: setTitle from a module changes the app bar title, and an empty string puts the module title back', async () => {
+  let seen = null; const ttl = { textContent: 'Guests' };
+  await boot({ role: 'owner', hash: '#guests', els: { 'v-guests': Object.assign(el(), { querySelector: (q) => (q === '.ttl' ? ttl : null) }) },
+    winInit: (w) => { w.H_loadAsset = () => Promise.resolve(); w.G_Guests = { mount: (b, o) => { seen = o; } }; }, handlers: baseHandlers('owner') });
+  seen.setTitle('Edit details'); assert.equal(ttl.textContent, 'Edit details');
+  seen.setTitle(''); assert.equal(ttl.textContent, 'Guests');
+});
+
+test('demo: saving who is staying keeps the guest count and the booked number, so the Guests tile still reads the same (run, not grepped)', async () => {
+  const app = await boot({ role: 'owner', hash: '#home', demo: true, handlers: baseHandlers('owner', { staff_home_v1: () => HOMEWITH([stayRow('Ana Reyes', TODAY, '2026-10-17')], { current_guest: GUEST({ staying: { names: 'Ana Reyes', version: 1, guest_count: 2, booked_guests: 3 } }), next_guest: null }) }) });
+  assert.match(tile(app.els['v-home'].innerHTML), /2 guests/);
+  await app.click({ 'data-act': 'stay-open', 'data-uid': 'stay-1' }); app.input('stay-names', 'Ana Reyes, Bo Cruz'); await app.click({ 'data-act': 'stay-save' });
+  assert.equal(app.calls.filter((c) => c[0] === 'set_stay_staying_v1').length, 0, 'the demo sends nothing');
+  const h = app.els['v-home'].innerHTML;
+  assert.match(h, /Ana Reyes, Bo Cruz/, 'the demo applied the new names'); assert.match(tile(h), /2 guests/, 'the count survived the names save');
+});
+
+test('the calendar guest card has no Open guest button in this release, even for owner and admin when the payload carries a guest id', async () => {
+  for (const role of ['owner', 'admin']) for (const id of [GID, 'g-77']) {
+    const cal = await boot({ role, hash: '#calendar/house', handlers: baseHandlers(role, { staff_home_v1: () => HOMEWITH([stayRow('Ana Reyes', '2026-10-12', TODAY)], { current_guest: GUEST({ guest_id: id, uid: 'u1', checkin_date: '2026-10-12', checkout_date: TODAY }) }) }) });
+    const h = cal.els['v-calendar'].innerHTML; assert.match(h, /id="house"/, role); assert.doesNotMatch(h, /Open guest|href="#guests\//, role + ' ' + id);
+  }
 });
