@@ -1,4 +1,4 @@
-// s119 (Staff 3.4.34): one tier chip that cannot contradict itself, tier on the name, and the staying line with its sheet.
+// s119 (Staff 3.4.35): one tier chip that cannot contradict itself, tier on the name, and the staying line with its sheet.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { CS, D, read, boot, HOMEWITH, baseHandlers, stayRow, TODAY } from './_a_harness.mjs';
@@ -68,7 +68,7 @@ test('the sheet calls the two RPCs with the agreed arguments; the demo sends not
 test('demo: sample staying data on both stays; release pins', async () => {
   const r = await D.client('owner', new Date('2026-10-15T04:30:00Z')).rpc('staff_home_v1');
   assert.match(r.data.current_guest.staying.names, /Demo Guest One/); assert.equal(r.data.next_guest.staying.names, ''); assert.match(r.data.next_guest.staying.suggestion, /Demo Guest Two/);
-  assert.equal(JSON.parse(read('package.json')).version, '3.4.34'); assert.match(read('app.js'), /version: '3.4.34'/); assert.match(read('sw.js'), /CACHE_NAME = 'cs-shell-v59'/);
+  assert.equal(JSON.parse(read('package.json')).version, '3.4.35'); assert.match(read('app.js'), /version: '3.4.35'/); assert.match(read('sw.js'), /CACHE_NAME = 'cs-shell-v60'/);
 });
 
 // ---- fix round: roles, error mapping, length, hostile text

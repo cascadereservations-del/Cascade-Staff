@@ -153,7 +153,7 @@ test('s113 tier rules: one place (CS.TIER_RULES), the boundaries by stays and by
   for (const [s, t] of [[1, 'first'], [2, 'returning'], [3, 'returning'], [4, 'regular'], [6, 'regular'], [7, 'vip']]) assert.equal(CS.tierFromCounts(s), t, s + ' stays');
   assert.equal(CS.tierFromCounts(2, 9), 'returning'); assert.equal(CS.tierFromCounts(2, 10), 'regular'); assert.equal(CS.tierFromCounts(5, 19), 'regular'); assert.equal(CS.tierFromCounts(5, 20), 'vip');
   const P = (s, n) => CS.tierProgress({ tier: CS.tierFromCounts(s, n), stay_count: s, total_nights: n });
-  assert.equal(P(1), 'Returning from the 2nd stay'); assert.equal(P(2), '2 more stays to Regular (4 stays or 10 nights)'); assert.equal(P(3), '1 more stay to Regular (4 stays or 10 nights)');
+  assert.equal(P(1), null); assert.equal(P(2), '2 more stays to Regular (4 stays or 10 nights)'); assert.equal(P(3), '1 more stay to Regular (4 stays or 10 nights)');
   assert.equal(P(4), '3 more stays to VIP (7 stays or 20 nights)'); assert.equal(P(6), '1 more stay to VIP (7 stays or 20 nights)'); assert.equal(P(7), 'Top tier');
   assert.equal(P(2, 9), '2 more stays or 1 more night to Regular (4 stays or 10 nights)'); assert.equal(P(5, 19), '2 more stays or 1 more night to VIP (7 stays or 20 nights)');
   assert.equal(CS.tierProgress({ tier: 'vip' }), 'Top tier'); assert.equal(CS.tierProgress(null), null); assert.equal(CS.tierProgress({ tier: 'returning', repeat: true }), 'Next: Regular (4 stays or 10 nights)', 'no stay count: never guess how many are left'); assert.equal(CS.tierProgress({ tier: 'gold' }), null);
@@ -195,7 +195,7 @@ test('s114 Today guide card: "Guest tiers: how many stays for each", closed by d
 });
 
 // ---------------------------------------------------------------------------------------------- release
-test('s113 release: 3.4.30, cs-shell-v59 in sw.js and PC_SHELL, the new test file is the contract name', () => {
-  assert.equal(JSON.parse(read('package.json')).version, '3.4.34'); assert.match(read('app.js'), /version: '3.4.34'/);
-  assert.match(read('sw.js'), /CACHE_NAME = 'cs-shell-v59'/); assert.match(read('app.js'), /var PC_SHELL = 'cs-shell-v59';/);
+test('s113 release: 3.4.30, cs-shell-v60 in sw.js and PC_SHELL, the new test file is the contract name', () => {
+  assert.equal(JSON.parse(read('package.json')).version, '3.4.35'); assert.match(read('app.js'), /version: '3.4.35'/);
+  assert.match(read('sw.js'), /CACHE_NAME = 'cs-shell-v60'/); assert.match(read('app.js'), /var PC_SHELL = 'cs-shell-v60';/);
 });

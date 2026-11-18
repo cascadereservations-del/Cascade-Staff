@@ -3,10 +3,10 @@
   "surfaces": {
     "admin": {
       "source": "dist",
-      "head": "ebbed33",
-      "files": 91,
-      "bytes": 2030455,
-      "time": "2026-10-17T00:07:03.985Z"
+      "head": "0047882",
+      "files": 101,
+      "bytes": 2149706,
+      "time": "2026-11-18T13:30:56.919Z"
     },
     "checklist": {
       "source": "s94-checklist",
