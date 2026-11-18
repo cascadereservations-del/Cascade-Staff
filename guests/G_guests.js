@@ -20,7 +20,7 @@
   var G_NO_CONN = 'No connection, so nothing was sent. Check your signal and tap again.';
   var G_SEL = 'id,name,phone,email,tier,total_stays,last_stay_date,guest_profile_details(id_on_file,birthday,contact_number,vip)';
   var G_COMP_COLS = 'id,name,id_type,id_photo_path'; // never id_number, notes or contact_number
-  var G_PROFILE_COLS = 'guest_id,preferred_channel,language,stay_preferences,tags,vip,vip_reason,version,contact_number,birthday,id_on_file,id_type'; // never id_number
+  var G_PROFILE_COLS = 'guest_id,preferred_channel,language,stay_preferences,tags,vip,vip_reason,version,contact_number,birthday,id_on_file'; // never id_number
 
   var G_clock = function () { return Date.now(); };
   var S = null, G_seq = 0;
@@ -174,13 +174,13 @@
   }
   // s120 (D-373): guests on a stay are 1 to 3 (booking-terms: the unit holds up to 3). The shown number follows the contract order: staff correction, booked number, then 1 + companions.
   var G_MIN_GUESTS = 1, G_MAX_GUESTS = 3, G_REASON_COUNT = 'Guest count changed in the Staff app';
-  function G_clampGuests(n) { n = Math.round(+n); return n >= G_MIN_GUESTS ? Math.min(G_MAX_GUESTS, n) : null; }
-  function G_posInt(n) { return typeof n === 'number' && n >= 1 ? Math.round(n) : null; }
+  // Same rule as CS.goodToKnow in lib.js (Today): only a number counts, rounded, 1 to 3. A value over 3 is shown as 3 and is never a staff correction.
+  function G_clampGuests(n) { if (typeof n !== 'number') return null; n = Math.round(n); return n >= G_MIN_GUESTS ? Math.min(G_MAX_GUESTS, n) : null; }
   function G_stayRange(a, b) { var x = String(a || '').split('-'), y = String(b || '').split('-'); return x[1] === y[1] ? +x[2] + ' → ' + G_dayMon(b) : G_dayMon(a) + ' → ' + G_dayMon(b); }
   /** The staff_guest_stay_v1 answer as the card's state; null when the server sent no stay (or the old shape). fallback is 1 + companions on file. */
   function G_stayFrom(d, fallback) {
     if (!d || typeof d !== 'object' || !d.uid || !/^\d{4}-\d{2}-\d{2}$/.test(String(d.checkin_date || ''))) return null;
-    var count = G_clampGuests(d.guest_count), booked = G_posInt(d.booked_guests), base = count != null ? count : booked != null ? G_clampGuests(booked) : G_clampGuests(fallback) || 1;
+    var count = G_clampGuests(d.guest_count), booked = G_clampGuests(d.booked_guests), base = count != null ? count : booked != null ? booked : G_clampGuests(fallback) || 1;
     return { uid: String(d.uid), checkin_date: d.checkin_date, checkout_date: d.checkout_date || d.checkin_date, booked: booked, count: count, base: base, draft: base, version: +d.version > 0 ? Math.round(+d.version) : 0, busy: false, msg: '', err: '', key: null, keyN: null };
   }
   function G_stayKey() { var c = root.crypto; return 'guests-' + (c && c.randomUUID ? c.randomUUID() : Date.now() + '-' + Math.random().toString(16).slice(2)); }
@@ -192,7 +192,10 @@
   function G_val(id) { var e = S && S.el && S.el.querySelector('#' + id); return e ? e.value : ''; }
   function G_chk(id) { var e = S && S.el && S.el.querySelector('#' + id); return !!(e && e.checked); }
   function G_live(tok) { return S && S.token === tok; }
-  function G_paint() { if (S && S.el) S.el.innerHTML = G_html(); }
+  function G_paint() { if (S && S.el) { S.el.innerHTML = G_html(); G_title(); } }
+  // The app bar owns the screen's one heading: while the edit form is open it reads Edit details, otherwise the module's own title (the shell restores it on an empty string).
+  function G_title() { var t = S.view === 'detail' && S.edit ? 'Edit details' : ''; if (S.ttl !== t) { S.ttl = t; S.setTitle(t); } }
+  function G_q(id) { return S && S.el && S.el.querySelector ? S.el.querySelector('#' + id) : null; }
   function G_focus(id) { var e = S && S.el && S.el.querySelector && S.el.querySelector('#' + id); if (e && e.focus) e.focus(); }
   function G_busyOn() { return !!(S && (S.busy || (S.add && S.add.step === 'reading') || (S.add && S.add.step === 'saving'))); }
   /** An rpc call that never throws: { data, error }. */
@@ -244,6 +247,8 @@
   }
   function G_glyph(k) { return '<span class="G_gl" aria-hidden="true">' + ({ i: 'ℹ', ok: '✓', no: '!', x: '×', star: '★', cake: '✦' }[k] || '') + '</span>'; }
   function G_pill(tone, icon, text) { return '<span class="pill p-' + tone + '">' + (root.ICON ? root.ICON(icon, 's16') : '') + G_esc(text) + '</span>'; }
+  // One ID rule for the Guests list and the guest page: the guest's profile flag decides, so the same guest reads the same in both. Only the two approved pills exist.
+  function G_idPill(profile) { return profile && profile.id_on_file ? G_pill('ok', 'check', 'ID on file') : G_pill('warn', 'idcard', 'No ID yet'); }
   function G_err(msg, id) { return msg ? '<div class="errbox G_note" role="alert" id="' + (id || 'G_err') + '" tabindex="-1">' + G_glyph('no') + '<span>' + G_esc(msg) + '</span></div>' : ''; }
   function G_chev() { return root.ICON ? root.ICON('chev') : '›'; }
 
@@ -264,7 +269,7 @@
     var rows = L.rows.map(function (g) {
       var d = G_detailOf(g), flags = [], bd = G_daysToBirthday(d.birthday, today);
       flags.push(G_tierChip(g.tier, g.total_stays, d.vip));
-      flags.push(d.id_on_file ? G_pill('ok', 'check', 'ID on file') : G_pill('warn', 'idcard', 'No ID yet'));
+      flags.push(G_idPill(d));
       if (!g.phone && !g.email && !d.contact_number) flags.push('<span class="pill p-warn">' + G_glyph('no') + 'No contact</span>');
       if (d.vip) flags.push('<span class="pill p-brand">' + G_glyph('star') + 'VIP</span>');
       if (bd !== null && bd <= G_BDAY_DAYS) flags.push('<span class="pill p-info">' + G_glyph('cake') + (bd === 0 ? 'Birthday today' : 'Birthday in ' + bd + (bd === 1 ? ' day' : ' days')) + '</span>');
@@ -290,13 +295,11 @@
     if (S.add) return G_addHtml();
     var g = D.guest, p = D.details || {}, today = G_today(), bd = G_daysToBirthday(p.birthday, today);
     var phone = p.contact_number || g.phone || '';
-    var own = G_ownComp(), others = (D.companions || []).filter(function (c) { return c !== own && c.id_photo_path; }).length, noComp = D.compAbsent || D.cErr;
+    var own = G_ownComp(), noComp = D.compAbsent || D.cErr;
     var notice = S.msg ? '<div class="okbox G_note" role="status" id="G_msg" tabindex="-1">' + G_glyph('ok') + '<span>' + S.msg.map(G_esc).join('<br>') + '</span></div>' : '';
     var name = '<h2 class="G_name" id="G_h" tabindex="-1">' + G_esc(g.name || 'Guest') + '</h2>';
     if (S.edit) return '<div class="G_detail">' + back + notice + G_err(S.err) + name + G_editHtml() + '</div>'; // mockup 4: the name and the form, nothing else
-    var idChip = noComp ? (p.id_on_file ? G_pill('ok', 'check', 'ID on file') : G_pill('warn', 'idcard', 'No ID yet')) :
-      own && own.id_photo_path ? G_pill('ok', 'check', 'ID on file') : others ? G_pill('info', 'check', 'ID via companion') :
-      p.id_on_file ? '<span class="pill p-warn">' + G_glyph('no') + 'ID marked, no photo</span>' : G_pill('warn', 'idcard', 'No ID yet');
+    var idChip = G_idPill(p);
     var canAdd = !!(D.feat && D.feat.guest_id && D.feat.preferences);
     var idBlock = noComp ? '' : '<div class="cap up G_cap">Guest ID</div>' + (own ? '<div class="G_frame' + (own.id_photo_path ? '' : ' G_noid') + '">' + G_idPhoto(own, true) + '</div>' + G_idControls(own) :
       '<div class="G_frame G_noid"><span class="G_none">No ID photo yet</span></div>' + (canAdd ? '<div class="G_btns"><button class="btn btn-primary btn-sm" type="button" data-act="add-open">' + G_ic('camera') + 'Add ID photo</button></div>' : ''));
@@ -379,17 +382,27 @@
       (addOpen ? '<div class="field G_addcomp"><label for="G_newc">Full name</label><div class="G_inline"><div class="input"><input id="G_newc" maxlength="80" placeholder="Full name" autocomplete="off"></div><button class="btn btn-secondary" type="button" data-act="add-comp"' + (S.cbusy === 'new' ? ' disabled' : '') + '>Add</button></div></div>' : '') + '</div>';
   }
   // ---- This stay (s120): the number of guests on the guest's current or next stay, from staff_guest_stay_v1 (D-373). Absent or null from the server: no card.
-  function G_stayHtml() {
-    var st = S.d.stay; if (!st) return '';
-    var today = G_today(), changed = st.draft !== st.base, n = st.draft;
-    var bk = st.booked != null && st.booked !== st.base ? 'Booked for ' + st.booked + ', staying ' + st.base : '';
+  function G_bookedText(st) { return st.booked != null ? 'Booked for ' + st.booked + (st.draft !== st.booked ? ', staying ' + st.draft : '') : ''; }
+  function G_svHtml(st) { return st.draft !== st.base || st.busy ? '<button class="btn btn-primary btn-sm" type="button" data-act="stay-save"' + (st.busy ? ' disabled' : '') + '>' + (st.busy ? 'Saving…' : 'Save') + '</button><button class="btn btn-ghost btn-sm" type="button" data-act="stay-undo"' + (st.busy ? ' disabled' : '') + '>Cancel</button>' : ''; }
+  function G_stmHtml(st) { return st.err ? '<p class="G_stm G_ster" role="alert" id="G_stmsg" tabindex="-1">' + G_esc(st.err) + '</p>' : st.msg ? '<p class="G_stm" role="status" id="G_stmsg" tabindex="-1">' + G_esc(st.msg) + '</p>' : ''; }
+  function G_stayInner(st) {
+    var n = st.draft;
     var btn = function (id, act, label, glyph, off) { return '<button class="G_stb" id="' + id + '" type="button" data-act="' + act + '" aria-label="' + label + '"' + (off ? ' aria-disabled="true"' : '') + '>' + glyph + '</button>'; };
-    return '<div class="cap up G_cap" id="G_stay">' + (st.checkin_date > today ? 'Next stay' : 'This stay') + '</div><div class="card list G_group G_stay">' +
+    return '<div class="cap up G_cap" id="G_stay" tabindex="-1">' + (st.checkin_date > G_today() ? 'Next stay' : 'This stay') + '</div><div class="card list G_group G_stay">' +
       '<div class="G_fr"><div class="G_frm"><span class="G_fl">Dates</span><span class="G_fv num">' + G_esc(G_stayRange(st.checkin_date, st.checkout_date)) + '</span></div></div>' +
-      '<div class="G_fr"><div class="G_frm"><span class="G_cl" id="G_gl">Number of guests' + (bk ? '<small>' + G_esc(bk) + '</small>' : '') + '</span><span class="G_st" role="group" aria-labelledby="G_gl">' +
+      '<div class="G_fr"><div class="G_frm"><span class="G_cl" id="G_gl">Number of guests<small id="G_gbk">' + G_esc(G_bookedText(st)) + '</small></span><span class="G_st" role="group" aria-labelledby="G_gl">' +
         btn('G_gdec', 'stay-dec', 'Fewer guests', '−', n <= G_MIN_GUESTS || st.busy) + '<output id="G_gout" aria-live="polite">' + n + '</output>' + btn('G_ginc', 'stay-inc', 'More guests', '+', n >= G_MAX_GUESTS || st.busy) + '</span></div></div>' +
-      (changed || st.busy ? '<div class="G_sv"><button class="btn btn-primary btn-sm" type="button" data-act="stay-save"' + (st.busy ? ' disabled' : '') + '>' + (st.busy ? 'Saving…' : 'Save') + '</button><button class="btn btn-ghost btn-sm" type="button" data-act="stay-undo"' + (st.busy ? ' disabled' : '') + '>Cancel</button></div>' : '') +
-      (st.err ? '<p class="G_stm G_ster" role="alert" id="G_stmsg" tabindex="-1">' + G_esc(st.err) + '</p>' : st.msg ? '<p class="G_stm" role="status" id="G_stmsg" tabindex="-1">' + G_esc(st.msg) + '</p>' : '') + '</div>';
+      '<div class="G_sv" id="G_sv">' + G_svHtml(st) + '</div><div id="G_stm">' + G_stmHtml(st) + '</div></div>';
+  }
+  function G_stayHtml() { var st = S.d.stay; return st ? '<section class="G_staywrap" id="G_staywrap">' + G_stayInner(st) + '</section>' : ''; }
+  // Redraws only the card (More details and the rest of the page stay as they are); the whole page when the card is not on screen.
+  function G_stayPaint() { var w = G_q('G_staywrap'), st = S.d && S.d.stay; if (w && st) w.innerHTML = G_stayInner(st); else G_paint(); }
+  // A stepper tap changes the number, the two buttons, the booked line and the Save row in place, so the live region keeps speaking and nothing else on the page is redrawn.
+  function G_stayLive(st) {
+    var o = G_q('G_gout'), dec = G_q('G_gdec'), inc = G_q('G_ginc'), bk = G_q('G_gbk'), sv = G_q('G_sv'), mg = G_q('G_stm'); if (!o || !dec || !inc || !bk || !sv || !mg) return false;
+    var off = function (b, on) { if (on) b.setAttribute('aria-disabled', 'true'); else b.removeAttribute('aria-disabled'); };
+    o.textContent = String(st.draft); off(dec, st.draft <= G_MIN_GUESTS); off(inc, st.draft >= G_MAX_GUESTS);
+    bk.textContent = G_bookedText(st); sv.innerHTML = G_svHtml(st); mg.innerHTML = G_stmHtml(st); return true;
   }
   function G_confirm(text, act, id, label) {
     return '<div class="G_ask" role="group" aria-label="Please confirm"><p class="help">' + G_esc(text) + '</p><div class="G_btns"><button class="btn btn-danger btn-sm" type="button" data-act="' + act + '" data-id="' + G_esc(id) + '">' + G_esc(label) + '</button><button class="btn btn-secondary btn-sm" type="button" data-act="confirm-no">Keep it</button></div></div>';
@@ -560,10 +573,13 @@
       D.feat = f.status === 200 && f.j && f.j.features ? f.j.features : f.status === 0 ? { guest_id: true, preferences: true, replace_id: true, remove_id: true } : null;
       var sr = rs[4], own = G_ownComp(); // s120: a missing function, an error or null leaves the card out, never an error line
       D.stay = sr && !sr.error && sr.data ? G_stayFrom(Array.isArray(sr.data) ? sr.data[0] : sr.data, 1 + D.companions.filter(function (x) { return x !== own; }).length) : null;
-      G_paint(); G_focus('G_h');
+      G_paint(); if (S.seg === 'stay' && D.stay) G_showStay(); else G_focus('G_h');
+      S.seg = ''; // the stay segment applies to the first open only; a reload after Add from text or a retry opens the top
       G_loadRot(D.companions.map(function (x) { return x.id_photo_path; }).filter(Boolean), tok);
     });
   }
+  // #guests/<id>/stay (the Today Guests tile): the card is scrolled to and focused; its own scroll margins keep it clear of the app bar and the tab bar.
+  function G_showStay() { var e = G_q('G_stay'); if (!e) return; if (e.focus) e.focus({ preventScroll: true }); if (e.scrollIntoView) e.scrollIntoView({ block: 'start' }); }
   // s91: saved turns (owner/admin) come in one batched call and win over the auto guess; a missing function or an error leaves the auto guess alone.
   function G_loadRot(paths, tok) {
     var need = paths.filter(function (p) { return G_rotSaved[p] === undefined; }); if (!need.length) return;
@@ -666,6 +682,7 @@
   }
   function G_showId(id) {
     var D = S.d, c = D.companions.filter(function (x) { return x.id === id; })[0], tok = S.token; if (!c || !c.id_photo_path || D.urlBusy) return;
+    if (S.demo) { S.cerr = 'Demo only. No ID photos are stored.'; G_paint(); return; }
     D.urlBusy = id; G_paint();
     G_sign(S.client, c.id_photo_path).then(function (r) {
       if (!G_live(tok)) return;
@@ -735,36 +752,60 @@
   }
 
   // ---- This stay: stepper and save (s120, D-373). Same pattern as the Today stay save: one key per draft, the version it was read at, plain offline text.
+  var G_NET = /fetch|network|load failed|offline|abort|request timed? ?out|timeout.{0,12}(?:fetch|request)|(?:fetch|request).{0,12}time ?out/i; // the same words as E_netErr in app.js: a server statement timeout is not "no connection"
+  var G_GONE = 'This stay is no longer on the calendar.';
+  /** A dropped connection as supabase-js answers it: { error: { message: 'TypeError: Failed to fetch', code: '' }, status: 0 }. */
+  function G_isNet(r) { var e = r && r.error; return !!e && (e.network === true || r.status === 0 || G_NET.test(String(e.message || ''))); }
   function G_stayStep(by) {
     var st = S.d && S.d.stay; if (!st || st.busy) return;
     var n = st.draft + by; if (n < G_MIN_GUESTS || n > G_MAX_GUESTS) return;
-    st.draft = n; st.err = ''; st.msg = ''; G_paint(); G_focus(by > 0 ? 'G_ginc' : 'G_gdec');
+    st.draft = n; st.err = ''; st.msg = '';
+    if (!G_stayLive(st)) { G_paint(); G_focus(by > 0 ? 'G_ginc' : 'G_gdec'); }
   }
-  function G_stayUndo() { var st = S.d && S.d.stay; if (!st || st.busy) return; st.draft = st.base; st.err = ''; st.msg = ''; G_paint(); G_focus('G_ginc'); }
-  function G_stayDone(st, msg, isErr) { st.busy = false; st.msg = isErr ? '' : msg; st.err = isErr ? msg : ''; G_paint(); G_focus('G_stmsg'); }
+  function G_stayUndo() { var st = S.d && S.d.stay; if (!st || st.busy) return; st.draft = st.base; st.err = ''; st.msg = ''; if (!G_stayLive(st)) G_paint(); G_focus('G_ginc'); }
+  function G_stayDone(st, msg, isErr) { st.busy = false; st.msg = isErr ? '' : msg; st.err = isErr ? msg : ''; G_stayPaint(); G_focus('G_stmsg'); }
+  /** The card as the server holds it now, or null (nothing, an error, or the screen moved on). */
+  function G_stayRead(tok, fallback) {
+    return G_rpc('staff_guest_stay_v1', { p_property: S.pid || G_FALLBACK_PROPERTY, p_guest_id: S.gid }).then(function (q) {
+      return G_live(tok) && !q.error && q.data ? G_stayFrom(Array.isArray(q.data) ? q.data[0] : q.data, fallback) : null;
+    });
+  }
   function G_staySave() {
     var D = S.d, st = D && D.stay; if (!st || st.busy || st.draft === st.base) return;
-    var n = st.draft, tok = S.token;
-    if (S.demo) { st.base = st.count = n; st.version += 1; st.key = null; st.keyN = null; S.haptic('ok'); G_stayDone(st, 'Saved. ' + n + (n === 1 ? ' guest' : ' guests') + '. Demo only, nothing was sent.'); return; }
+    var n = st.draft, tok = S.token, said = function (g) { return 'Saved. ' + g + (g === 1 ? ' guest' : ' guests') + '.'; };
+    if (S.demo) { st.base = st.count = n; st.version += 1; st.key = null; st.keyN = null; S.haptic('ok'); G_stayDone(st, said(n) + ' Demo only, nothing was sent.'); return; }
     if (!S.client || (root.navigator && root.navigator.onLine === false)) { G_stayDone(st, 'Needs a connection. Nothing was saved, and what you set is still here.', true); return; }
     if (!st.key || st.keyN !== n) { st.key = G_stayKey(); st.keyN = n; }
-    st.busy = true; st.err = ''; st.msg = ''; G_paint();
+    st.busy = true; st.err = ''; st.msg = ''; G_stayPaint();
     G_rpc('set_stay_guest_count_v1', { p_property: S.pid || G_FALLBACK_PROPERTY, p_uid: st.uid, p_count: n, p_expected_version: st.version || 0, p_reason: G_REASON_COUNT, p_idempotency_key: st.key }).then(function (r) {
-      if (!G_live(tok) || !D.stay) return;
+      if (!G_live(tok) || D.stay !== st) return;
       var e = r.error, c = e && String(e.code || '');
       if (e && (c === '40001' || /stale version/i.test(String(e.message || '')))) { // someone else moved it: show their number, keep nothing of ours
-        G_rpc('staff_guest_stay_v1', { p_property: S.pid || G_FALLBACK_PROPERTY, p_guest_id: S.gid }).then(function (q) {
-          if (!G_live(tok)) return;
-          var fresh = !q.error && q.data ? G_stayFrom(Array.isArray(q.data) ? q.data[0] : q.data, st.base) : null;
-          if (fresh) { D.stay = fresh; st = fresh; } else { st.draft = st.base; }
-          G_stayDone(st, 'Someone else changed the number of guests. The latest number is shown. Set it again if it is still wrong.', true);
+        G_stayRead(tok, st.base).then(function (fresh) {
+          if (!G_live(tok) || D.stay !== st) return;
+          if (fresh) { D.stay = fresh; G_stayDone(fresh, 'Someone else changed the number of guests. The latest number is shown. Set it again if it is still wrong.', true); }
+          else { st.draft = st.base; G_stayDone(st, 'Someone else changed the number of guests, and the latest number could not load. Reload the page to see it.', true); }
         });
         return;
       }
-      if (e) { G_stayDone(st, e.network ? 'Needs a connection. Nothing was saved, and what you set is still here.' : G_absent(e) ? 'Changing the number of guests is not available yet.' : c === '42501' ? 'You are not allowed to change this.' : c === '22023' ? 'Choose 1, 2 or 3 guests.' : 'That did not save. Nothing was changed. Tap Save again in a moment.', true); return; }
-      var j = r.data || {}, got = G_clampGuests(j.guest_count) || n;
-      st.base = st.count = got; st.draft = got; st.version = +j.version > 0 ? Math.round(+j.version) : st.version + 1; st.key = null; st.keyN = null;
-      S.haptic('ok'); G_stayDone(st, 'Saved. ' + got + (got === 1 ? ' guest' : ' guests') + '.');
+      if (e && c === 'P0002') { // the stay left the calendar: read the card again; with no stay left the card goes and the page says why
+        G_stayRead(tok, st.base).then(function (fresh) {
+          if (!G_live(tok) || D.stay !== st) return;
+          if (fresh) { D.stay = fresh; G_stayDone(fresh, G_GONE, true); } else { D.stay = null; S.err = G_GONE; G_paint(); G_focus('G_err'); }
+        });
+        return;
+      }
+      if (e) { G_stayDone(st, G_isNet(r) ? 'Needs a connection, so we could not confirm the save. Check your signal, then tap Save again. Saving twice does not count twice.' : G_absent(e) ? 'Changing the number of guests is not available yet.' : c === '42501' ? 'You are not allowed to change this.' : c === '22023' ? 'Choose 1, 2 or 3 guests.' : 'That did not save. Nothing was changed. Tap Save again in a moment.', true); return; }
+      var j = r.data || {}, got = G_clampGuests(j.guest_count) || n, ver = +j.version > 0 ? Math.round(+j.version) : st.version + 1;
+      var settle = function (t, g, v) { t.base = t.count = g; t.draft = g; t.version = v; t.key = null; t.keyN = null; S.haptic('ok'); S.onChange(); G_stayDone(t, said(g)); };
+      if (j.replay === true) { // an earlier try already saved this: read the card again so what is shown is what the server holds
+        G_stayRead(tok, st.base).then(function (fresh) {
+          if (!G_live(tok) || D.stay !== st) return;
+          if (fresh) { D.stay = fresh; settle(fresh, fresh.base, fresh.version); } else settle(st, got, ver);
+        });
+        return;
+      }
+      settle(st, got, ver);
     });
   }
 
@@ -835,17 +876,20 @@
     var t = G_today(), at = function (n) { return G_iso(Date.parse(t + 'T00:00:00Z') + n * 86400000); };
     return [
       { id: G_DEMO_IDS[0], name: 'Demo Guest One', tier: 'returning', total_stays: 2, last_stay_date: at(-1), phone: '0900-000-0000', guest_profile_details: { id_on_file: true, birthday: null, vip: false },
-        stay: { uid: 'demo-stay-1', checkin_date: at(-1), checkout_date: at(2), booked_guests: 2, guest_count: null, version: 0 } },
+        stay: { uid: 'demo-stay-1', checkin_date: at(-1), checkout_date: at(2), booked_guests: 2, guest_count: null, version: 0 },
+        people: [{ id: 'demo-c1', name: 'Demo Guest One', id_type: null, id_photo_path: 'demo/id-1.jpg' }, { id: 'demo-c2', name: 'Demo Companion', id_type: null, id_photo_path: null }] },
       { id: G_DEMO_IDS[1], name: 'Demo Guest Two', tier: 'vip', total_stays: 8, last_stay_date: at(2), guest_profile_details: { id_on_file: false, birthday: null, vip: true },
-        stay: { uid: 'demo-stay-2', checkin_date: at(2), checkout_date: at(5), booked_guests: 3, guest_count: 2, version: 1 } }
+        stay: { uid: 'demo-stay-2', checkin_date: at(2), checkout_date: at(5), booked_guests: 3, guest_count: 2, version: 1 },
+        people: [{ id: 'demo-c3', name: 'Demo Friend', id_type: null, id_photo_path: null }] }
     ];
   }
   function G_mount(el, opts) {
     G_unmount();
     opts = opts || {};
-    var sub = String(opts.sub || '').split('/')[0], uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(sub) ? sub.toLowerCase() : '';
+    var parts = String(opts.sub || '').split('/'), sub = parts[0], uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(sub) ? sub.toLowerCase() : '';
     S = {
-      el: el, client: opts.client || null, demo: !!opts.demo, role: opts.role, pid: opts.propertyId || null, token: ++G_seq, gid: uuid, view: uuid ? 'detail' : 'list',
+      el: el, client: opts.client || null, demo: !!opts.demo, role: opts.role, pid: opts.propertyId || null, token: ++G_seq, gid: uuid, view: uuid ? 'detail' : 'list', seg: uuid && parts[1] === 'stay' ? 'stay' : '', ttl: '',
+      setTitle: typeof opts.setTitle === 'function' ? opts.setTitle : G_noop, onChange: typeof opts.onChange === 'function' ? opts.onChange : G_noop,
       nav: typeof opts.navigate === 'function' ? opts.navigate : G_noop, toast: typeof opts.toast === 'function' ? opts.toast : G_noop, haptic: typeof opts.haptic === 'function' ? opts.haptic : G_noop,
       list: { q: '', filter: 'recent', rows: [], total: 0, more: false, loading: false, err: '', ticket: 0, stays: { ok: false, map: {} } },
       d: null, cOpen: '', addComp: false, edit: null, add: null, msg: null, err: '', cerr: '', confirm: null, cbusy: '', busy: false, full: null
@@ -855,8 +899,11 @@
     if (S.demo || !S.client) {
       if (!S.demo) { el.innerHTML = '<div class="G_root">' + G_err('No connection, so Guests could not open.') + '</div>'; return; }
       var DEMO = G_demoRows(); S.list.rows = DEMO; S.list.total = DEMO.length;
-      if (uuid) { var g = DEMO.filter(function (x) { return x.id === uuid; })[0]; S.d = { loading: false, err: g ? '' : G_errText(404, 'guest_not_found'), guest: g, details: g ? g.guest_profile_details : null, companions: [], compAbsent: true, feat: null, urls: {}, urlBusy: '', stay: g ? G_stayFrom(g.stay, 1) : null }; }
-      G_paint(); return;
+      if (uuid) { // invented people and the feature flags, so every block shows: Guest ID (with and without a photo), Add ID photo, People, Add from text. Nothing here touches storage.
+        var g = DEMO.filter(function (x) { return x.id === uuid; })[0], ppl = g ? g.people : [];
+        S.d = { loading: false, err: g ? '' : G_errText(404, 'guest_not_found'), guest: g, details: g ? g.guest_profile_details : null, companions: ppl, compAbsent: false, feat: { guest_id: true, preferences: true, replace_id: true, remove_id: true }, urls: {}, urlBusy: '', stay: g ? G_stayFrom(g.stay, ppl.length) : null };
+      }
+      G_paint(); if (uuid && S.seg === 'stay' && S.d.stay) G_showStay(); S.seg = ''; return;
     }
     if (uuid) G_loadDetail();
     else { G_paint(); G_loadStays(); G_loadList(false); }
@@ -881,7 +928,7 @@
   root.G_Guests = {
     mount: G_mount, unmount: G_unmount, reset: G_reset, _setClock: function (f) { G_clock = f; },
     _t: { searchPattern: G_searchPattern, daysToBirthday: G_daysToBirthday, stayMap: G_stayMap, tagsFromText: G_tagsFromText, check: G_check, patch: G_patch, sameName: G_sameName,
-      errText: G_errText, rpcText: G_rpcText, absent: G_absent, saveLines: G_saveLines, stayLine: G_stayLine, sheetFrom: G_sheetFrom, addBody: G_addBody, today: G_today },
+      errText: G_errText, rpcText: G_rpcText, absent: G_absent, saveLines: G_saveLines, stayLine: G_stayLine, stayFrom: G_stayFrom, sheetFrom: G_sheetFrom, addBody: G_addBody, today: G_today },
     _state: function () { return S; }, _onImg: G_onImg, _onImgErr: G_onImgErr
   };
 })(typeof window !== 'undefined' ? window : this);

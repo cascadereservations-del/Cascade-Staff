@@ -324,7 +324,7 @@
     if (gk.guests) {
       var gl = '<span class="T_fact">' + ICON('users', 's16') + esc(CS.plural(gk.guests, 'guest')) + '</span>';
       // s120: owner and admin open the guest page (This stay card) from the Guests tile; every other role, and a stay with no guest record, keeps the plain tile
-      if (CS.canSeeGuestContact(role()) && /^[0-9a-f-]{36}$/i.test(String(g.guest_id || ''))) t.push('<a class="T_tile T_tap" href="#guests/' + esc(g.guest_id) + '" aria-label="' + esc(CS.plural(gk.guests, 'guest') + ', open the guest page to change the number') + '"><span class="T_tk">Guests</span><span class="T_tv num">' + gl + '</span><span class="chev" aria-hidden="true">' + ICON('chev', 's16') + '</span></a>');
+      if (CS.canSeeGuestContact(role()) && /^[0-9a-f-]{36}$/i.test(String(g.guest_id || ''))) t.push('<a class="T_tile T_tap" href="#guests/' + esc(g.guest_id) + '/stay" aria-label="' + esc(CS.plural(gk.guests, 'guest') + ', open the guest page to change the number') + '"><span class="T_tk">Guests</span><span class="T_tv num">' + gl + '</span><span class="chev" aria-hidden="true">' + ICON('chev', 's16') + '</span></a>');
       else t.push(tile('Guests', gl));
     }
     if (kind === 'next' && gk.idKnown) t.push(tile('ID', gk.id ? 'On file' : 'Not yet', gk.id ? 'T_ok' : 'T_warn'));
@@ -1963,7 +1963,7 @@
       var box = $('H_mod-' + key); if (!box) return; box.innerHTML = '';
       H_mod.mounted = key; H_mod.sub = sub; var low = !!state.H_lowOnce; state.H_lowOnce = false; // read at mount: a redraw while the script loads must not eat the one-shot
       var bad = function () { if (H_mod.mounted === key) { H_mod.mounted = ''; H_mod.sub = ''; H_mod.n++; } if (current === key) H_fallback(key); };
-      try { var mr = window[m.global].mount(box, { client: DEMO && !m.demoClient ? null : sb, demo: DEMO, role: role(), sub: sub, low: low && key === 'stock', propertyId: pid(), houseTimes: A_houseT(), pushKey: H_pushKey, swReg: H_swReg, navigate: function (h) { location.hash = String(h).charAt(0) === '#' ? h : '#' + h; }, toast: toast, haptic: E_vibe }); if (mr && typeof mr.then === 'function') mr.then(null, bad); } catch (e) { bad(); } // a module that throws leaves a screen that works, not a blank one
+      try { var mr = window[m.global].mount(box, { client: DEMO && !m.demoClient ? null : sb, demo: DEMO, role: role(), sub: sub, low: low && key === 'stock', propertyId: pid(), houseTimes: A_houseT(), pushKey: H_pushKey, swReg: H_swReg, navigate: function (h) { location.hash = String(h).charAt(0) === '#' ? h : '#' + h; }, toast: toast, haptic: E_vibe, setTitle: function (t) { var h = el.querySelector && el.querySelector('.ttl'); if (h) h.textContent = t || m.title; }, onChange: function () { if (!DEMO) loadHome({ again: true }); } }); if (mr && typeof mr.then === 'function') mr.then(null, bad); } catch (e) { bad(); } // a module that throws leaves a screen that works, not a blank one
     }, function () { if (current === key && token === H_mod.n) H_fallback(key); });
   }
 
@@ -2264,7 +2264,7 @@
     if (!DEMO && navigator.onLine === false) { a.err = offline; A_stayDraw(); E_vibe('error'); return; }
     var done = function (msg) { state.stay = null; closeSheet(); toast(msg); E_vibe('tap'); };
     if (DEMO) {
-      if (g && g.staying) { var use = kind === 'save' ? names : accept ? a.sug : CS.stayNames(g.staying.names); g.staying = { names: use.join(', '), source: kind === 'save' || accept ? 'staff' : g.staying.source, suggestion: null, version: (+g.staying.version || 0) + 1 }; }
+      if (g && g.staying) { var use = kind === 'save' ? names : accept ? a.sug : CS.stayNames(g.staying.names); g.staying = Object.assign({}, g.staying, { names: use.join(', '), source: kind === 'save' || accept ? 'staff' : g.staying.source, suggestion: null, version: (+g.staying.version || 0) + 1 }); }
       done('Demo only. Nothing is saved.'); if (current === 'home') renderHome(); return;
     }
     a.busy = true; a.err = ''; A_stayDraw();

@@ -18,13 +18,23 @@ const NOW = Date.parse('2026-10-14T03:00:00Z');
 const GID = '0a1b2c3d-0000-4000-8000-000000000001', CID = '0a1b2c3d-0000-4000-8000-0000000000c1', CID2 = '0a1b2c3d-0000-4000-8000-0000000000c2';
 const PROP = '6ae230f4-c189-4547-84b1-cb6e0b2cc9bd';
 
+// s120: the This stay card is updated in place, so a few of its ids answer querySelector with a node that edits this.html the way the DOM would. `paints` counts whole-page redraws; `log` records focus and scroll calls.
+const LIVE = new Set(['G_gout', 'G_gdec', 'G_ginc', 'G_gbk', 'G_sv', 'G_stm', 'G_staywrap', 'G_stay']);
 class FakeEl {
-  constructor() { this.html = ''; this.l = {}; this.nodes = {}; }
-  set innerHTML(v) { this.html = String(v); }
+  constructor() { this.html = ''; this.l = {}; this.nodes = {}; this.paints = 0; this.log = []; }
+  set innerHTML(v) { this.html = String(v); this.paints++; }
   get innerHTML() { return this.html; }
   addEventListener(t, f) { (this.l[t] ||= []).push(f); }
   removeEventListener(t, f) { this.l[t] = (this.l[t] || []).filter((x) => x !== f); }
-  querySelector(sel) { const id = String(sel).replace(/^#/, ''); return this.nodes[id] || null; }
+  querySelector(sel) { const id = String(sel).replace(/^#/, ''); return this.nodes[id] || (LIVE.has(id) && this.html.includes('id="' + id + '"') ? this.live(id) : null); }
+  live(id) {
+    const self = this, open = () => new RegExp('<(\\w+)([^>]*\\bid="' + id + '"[^>]*)>').exec(self.html);
+    const inner = (v) => { const m = open(); if (!m) return; const at = m.index + m[0].length, end = self.html.indexOf('</' + m[1] + '>', at); self.html = self.html.slice(0, at) + v + self.html.slice(end); };
+    const tag = (f) => { const m = open(); if (m) self.html = self.html.replace(m[0], f(m[0])); };
+    return { focus(o) { self.log.push(['focus', id, o]); }, scrollIntoView(o) { self.log.push(['scroll', id, o]); },
+      setAttribute(k, v) { tag((t) => t.replace(new RegExp('\\s' + k + '="[^"]*"'), '').replace(/>$/, ' ' + k + '="' + v + '">')); }, removeAttribute(k) { tag((t) => t.replace(new RegExp('\\s' + k + '="[^"]*"'), '')); },
+      set innerHTML(v) { inner(v); }, set textContent(v) { inner(String(v).replace(/&/g, '&amp;').replace(/</g, '&lt;')); } };
+  }
 }
 const tick = async (n = 12) => { for (let i = 0; i < n; i++) await new Promise((r) => setImmediate(r)); };
 const plain = (x) => JSON.parse(JSON.stringify(x));
@@ -624,11 +634,28 @@ test('G: This stay card: heading, dates, stepper 1 to 3, Save and Cancel only af
   assert.match(CSS, /\.G_stb \{[^}]*width: 44px; height: 44px/);
 });
 
-test('G: the booked line shows only when the count differs from the booked number', async () => {
+const booked = (el) => (/id="G_gbk">([^<]*)</.exec(el.html) || [])[1];
+test('G: the booked line is always there when the booked number is known and follows the stepper (mockup: Booked for B, staying D)', async () => {
   const { el } = await mount(stayClient({ ...STAY, guest_count: 3 }), GID);
-  assert.doesNotMatch(el.html, /Booked for/);
+  assert.equal(booked(el), 'Booked for 3');
   const b = await mount(stayClient({ ...STAY, guest_count: null, booked_guests: 2 }), GID);
-  assert.equal(outN(b.el), 2); assert.doesNotMatch(b.el.html, /Booked for/);
+  assert.equal(outN(b.el), 2); assert.equal(booked(b.el), 'Booked for 2');
+  await clickA(b.el, 'stay-dec'); assert.equal(booked(b.el), 'Booked for 2, staying 1');
+  await clickA(b.el, 'stay-inc'); assert.equal(booked(b.el), 'Booked for 2');
+  await clickA(b.el, 'stay-inc'); assert.equal(booked(b.el), 'Booked for 2, staying 3');
+  const none = await mount(stayClient({ ...STAY, guest_count: 2, booked_guests: null }), GID);
+  assert.equal(booked(none.el), '', 'no booked number, no line'); assert.equal(outN(none.el), 2);
+});
+
+test('G s120: one count rule for Today and the card: 1 to 3, a booked number over 3 reads 3 and is not shown as a staff correction', async () => {
+  const { M, win } = load();
+  for (const [g, want] of [[{ staying: { booked_guests: 4 } }, 3], [{ staying: { guest_count: 2, booked_guests: 4 } }, 2], [{ staying: { booked_guests: 2.4 } }, 2], [{ staying: { booked_guests: 0.4 } }, null], [{ staying: { booked_guests: 0 } }, null], [{ num_guests: 9 }, 3]]) {
+    assert.equal(win.CS.goodToKnow(g, false).guests, want, JSON.stringify(g));
+    const sy = g.staying || {}, card = M._t.stayFrom({ uid: 'u', checkin_date: '2026-10-13', checkout_date: '2026-10-16', guest_count: sy.guest_count, booked_guests: sy.booked_guests !== undefined ? sy.booked_guests : g.num_guests, version: 1 }, 1);
+    if (g.staying) assert.equal(card.base, want == null ? 1 : want, 'the card shows the same number as Today: ' + JSON.stringify(g));
+  }
+  const { el } = await mount(stayClient({ ...STAY, guest_count: null, booked_guests: 4 }), GID);
+  assert.equal(outN(el), 3); assert.equal(booked(el), 'Booked for 3'); assert.doesNotMatch(el.html, /staying/);
 });
 
 test('G: a stay that starts after today is headed Next stay, and the list reads Next stay for a date still ahead', async () => {
@@ -641,13 +668,13 @@ test('G: a stay that starts after today is headed Next stay, and the list reads 
 
 test('G: Save sends the exact payload, keeps the key for the same count, and uses the version it read', async () => {
   const seen = [];
-  const cl = stayClient(STAY, (a) => { seen.push(plain(a)); return seen.length === 1 ? { data: null, error: { network: true, message: 'Failed to fetch' } } : { data: { ok: true, guest_count: seen.length === 2 ? 3 : 2, version: seen.length === 2 ? 5 : 6 }, error: null }; });
+  const cl = stayClient(STAY, (a) => { seen.push(plain(a)); return seen.length === 1 ? { data: null, error: { message: 'TypeError: Failed to fetch', code: '' }, status: 0 } : { data: { ok: true, guest_count: seen.length === 2 ? 3 : 2, version: seen.length === 2 ? 5 : 6 }, error: null }; });
   const { el } = await mount(cl, GID);
   await clickA(el, 'stay-inc'); await clickA(el, 'stay-save'); await tick();
   assert.deepEqual(Object.keys(seen[0]).sort(), ['p_count', 'p_expected_version', 'p_idempotency_key', 'p_property', 'p_reason', 'p_uid']);
   assert.equal(seen[0].p_property, PROP); assert.equal(seen[0].p_uid, 'stay-uid-1'); assert.equal(seen[0].p_count, 3); assert.equal(seen[0].p_expected_version, 4);
   assert.equal(seen[0].p_reason, 'Guest count changed in the Staff app'); assert.match(seen[0].p_idempotency_key, /^guests-/);
-  assert.match(el.html, /Needs a connection\. Nothing was saved, and what you set is still here\./); assert.equal(outN(el), 3);
+  assert.match(el.html, /Needs a connection, so we could not confirm the save\./); assert.doesNotMatch(el.html, /Nothing was (saved|changed)/, 'a dropped answer may have saved: never claim nothing changed'); assert.equal(outN(el), 3);
   await clickA(el, 'stay-save'); await tick();
   assert.equal(seen[1].p_idempotency_key, seen[0].p_idempotency_key, 'a retry of the same count reuses the key');
   assert.match(el.html, /Saved\. 3 guests\./); assert.doesNotMatch(el.html, /data-act="stay-save"/); assert.match(el.html, /Booked for 3, staying 3|<output[^>]*>3<\/output>/);
@@ -662,6 +689,52 @@ test('G: a version conflict (40001) reloads the card and says so plainly', async
   await clickA(el, 'stay-inc'); await clickA(el, 'stay-save'); await tick();
   assert.equal(cl.calls.filter((c) => c[0] === 'staff_guest_stay_v1').length, 2, 'the card was read again');
   assert.match(el.html, /Someone else changed the number of guests\. The latest number is shown\./); assert.equal(outN(el), 1); assert.doesNotMatch(el.html, /data-act="stay-save"/);
+});
+
+test('G: 40001 with a reload that fails says to reload the page, never that the latest number is shown', async () => {
+  let n = 0;
+  const cl = stayClient(() => (n++ === 0 ? { data: STAY, error: null } : { data: null, error: { message: 'TypeError: Failed to fetch', code: '' }, status: 0 }), () => ({ data: null, error: { code: '40001', message: 'stale version' } }));
+  const { el } = await mount(cl, GID);
+  await clickA(el, 'stay-inc'); await clickA(el, 'stay-save'); await tick();
+  assert.match(el.html, /the latest number could not load\. Reload the page to see it\./); assert.doesNotMatch(el.html, /latest number is shown/);
+});
+
+test('G: P0002 says the stay left the calendar and reads the card again; with no stay left the card goes', async () => {
+  let n = 0;
+  const gone = (reread) => stayClient(() => (n++ === 0 ? { data: STAY, error: null } : reread), () => ({ data: null, error: { code: 'P0002', message: 'stay_not_found' } }));
+  const a = await mount(gone({ data: { ...STAY, guest_count: 1, version: 7 }, error: null }), GID);
+  await clickA(a.el, 'stay-inc'); await clickA(a.el, 'stay-save'); await tick();
+  assert.match(a.el.html, /This stay is no longer on the calendar\./); assert.equal(outN(a.el), 1, 'the card was read again');
+  n = 0; const b = await mount(gone({ data: null, error: null }), GID);
+  await clickA(b.el, 'stay-inc'); await clickA(b.el, 'stay-save'); await tick();
+  assert.match(b.el.html, /This stay is no longer on the calendar\./); assert.doesNotMatch(b.el.html, /<output/);
+});
+
+test('G: a replayed save reads the card again before it shows the result; success tells the shell to refresh Today', async () => {
+  let n = 0, changed = 0;
+  const cl = stayClient(() => (n++ === 0 ? { data: STAY, error: null } : { data: { ...STAY, guest_count: 3, version: 8 }, error: null }), () => ({ data: { ok: true, guest_count: 3, version: 5, replay: true }, error: null }));
+  const { el } = await mount(cl, GID, 'owner', { onChange: () => changed++ });
+  await clickA(el, 'stay-inc'); await clickA(el, 'stay-save'); await tick();
+  assert.equal(cl.calls.filter((c) => c[0] === 'staff_guest_stay_v1').length, 2, 'reloaded on a replay');
+  assert.match(el.html, /Saved\. 3 guests\./); assert.equal(outN(el), 3); assert.equal(changed, 1);
+  await clickA(el, 'stay-dec'); await clickA(el, 'stay-save'); await tick(); // a second save from the reloaded card uses ITS version
+  assert.equal(cl.calls.filter((c) => c[0] === 'set_stay_guest_count_v1')[1][1].p_expected_version, 8);
+});
+
+test('G: stepper taps update the card in place: no page redraw, the live region and More details stay', async () => {
+  const { el } = await mount(stayClient(STAY), GID), paints = el.paints;
+  await clickA(el, 'stay-inc'); await clickA(el, 'stay-dec'); await clickA(el, 'stay-dec'); await clickA(el, 'stay-undo');
+  assert.equal(el.paints, paints, 'no whole-page repaint');
+  assert.match(el.html, /<output id="G_gout" aria-live="polite">2<\/output>/);
+  assert.match(el.html, /<details class="card list G_group G_opt">/);
+});
+
+test('G: #guests/<id>/stay scrolls to and focuses the card once; a plain guest page focuses the name', async () => {
+  const a = await mount(stayClient(STAY), GID + '/stay');
+  assert.deepEqual(a.el.log.map((x) => x[0] + ':' + x[1]), ['focus:G_stay', 'scroll:G_stay']);
+  assert.match(a.el.html, /id="G_stay" tabindex="-1"/);
+  assert.match(CSS, /\.G_cap \{[^}]*scroll-margin-top/);
+  const b = await mount(stayClient(STAY), GID); assert.equal(b.el.log.length, 0, 'plain #guests/<id> keeps today\'s behaviour');
 });
 
 test('G: other errors are said in words; a missing function or a null answer draws no card and no error', async () => {
@@ -684,4 +757,43 @@ test('G: demo mode shows a current and a next stay and saves a count without a s
   const two = await demoMount(M, '00000000-0000-4000-8000-0000000000d2');
   assert.match(two.html, />Next stay</); assert.match(two.html, /No ID yet/);
   assert.doesNotMatch(two.html + el.html, /Ana Reyes|Ben Cruz/);
+});
+
+test('G s120: demo shows every state with no storage or client call: Guest ID with and without a photo, Add ID photo, People, Add from text', async () => {
+  const { M, touched } = load();
+  const one = await demoMount(M, '00000000-0000-4000-8000-0000000000d1'), oneHtml = one.html;
+  assert.match(oneHtml, /Guest ID/); assert.match(oneHtml, /ID on file/); assert.match(oneHtml, /data-act="show-id"/); assert.match(oneHtml, /Demo Companion/); assert.match(oneHtml, /People and ID photos/);
+  assert.match(oneHtml, /Add from text, screenshot or photo/); assert.match(oneHtml, /Add a companion/);
+  await clickA(one, 'show-id', { id: 'demo-c1' }); await tick();
+  assert.match(one.html, /Demo only\. No ID photos are stored\./);
+  const two = await demoMount(M, '00000000-0000-4000-8000-0000000000d2');
+  assert.match(two.html, /No ID photo yet/); assert.match(two.html, /No ID yet/); assert.match(two.html, /Add ID photo/); assert.match(two.html, /Demo Friend/); assert.match(two.html, /Add from text, screenshot or photo/);
+  assert.deepEqual(touched, [], 'no storage, and a demo has no client to call');
+});
+
+test('G s120: ID pills: only ID on file and No ID yet, and the list and the guest page agree for the same guest', async () => {
+  const flags = [true, false];
+  for (const on of flags) {
+    const prof = { ...PROFILE, id_on_file: on };
+    for (const comps of [COMPS, [COMPS[1]], []]) {
+      const d = await mount(detailClient({ tables: { guests: { data: GUEST, error: null }, guest_profile_details: { data: prof, error: null } }, rpcs: { list_guest_companions_v1: () => ({ data: comps, error: null }) } }), GID);
+      const chips = d.el.html.split('G_chipsrow')[1].split('</div>')[0];
+      assert.doesNotMatch(d.el.html, /ID via companion|ID marked, no photo/);
+      const l = await mount(client({ tables: { guests: { data: [{ ...GUEST, guest_profile_details: [{ id_on_file: on, birthday: null, contact_number: null, vip: false }] }], count: 1, error: null }, airbnb_reservations: { data: [], error: null }, booking_inquiries: { data: [], error: null } } }), '');
+      for (const word of ['ID on file', 'No ID yet']) assert.equal(chips.includes(word), l.el.html.includes(word), word + ' flag ' + on);
+      assert.equal(chips.includes(on ? 'ID on file' : 'No ID yet'), true);
+    }
+  }
+});
+
+test('G s120: Edit details is the app bar title while the form is open, and no second heading is added to the page', async () => {
+  const titles = [], cl = detailClient(), { el } = await mount(cl, GID, 'owner', { setTitle: (t) => titles.push(t) });
+  await clickA(el, 'edit'); assert.deepEqual(titles, ['Edit details']);
+  assert.doesNotMatch(el.html, /<h[1-3][^>]*>[^<]*Edit details/); assert.equal((el.html.match(/<h2/g) || []).length, 1, 'only the name');
+  await clickA(el, 'edit-cancel'); assert.deepEqual(titles, ['Edit details', '']);
+});
+
+test('G s120: the CSS has the four G_frwrap grid rules, no dead G_dl or G_namerow, and the profile read no longer asks for id_type', () => {
+  for (const r of [/\.G_frwrap \.G_frm \{[^}]*grid-template-columns: 1fr auto/, /\.G_frwrap \.G_fl \{[^}]*grid-column: 1/, /\.G_frwrap \.G_fv \{[^}]*white-space: nowrap/, /\.G_frwrap \.chev \{[^}]*grid-row: 1 \/ 3/]) assert.match(CSS, r);
+  assert.doesNotMatch(CSS, /G_dl|G_namerow/); assert.doesNotMatch(SRC, /id_on_file,id_type/);
 });

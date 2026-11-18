@@ -17,7 +17,6 @@
 .G_flags { display: flex; flex-wrap: wrap; gap: 4px 6px; }
 .G_back { align-self: start; justify-self: start; }
 .G_head { display: grid; gap: 6px; }
-.G_namerow { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
 .G_name { font: 600 1.75rem/1.2 var(--font-display); margin: 0; overflow-wrap: anywhere; text-align: center; }
 .G_name:focus { outline: none; }
 .G_h3 { font: 600 max(0.9375rem, var(--v5-t-body))/1.3 var(--font-ui); margin: 0; }
@@ -25,9 +24,6 @@
 .G_line { margin: 0; color: var(--fg-2); line-height: 1.4; }
 .G_slot { min-height: 52px; display: grid; align-content: start; }
 .G_card { display: grid; gap: 12px; }
-.G_dl { display: grid; grid-template-columns: minmax(0, 34%) minmax(0, 1fr); gap: 10px 12px; margin: 0; }
-.G_dl dt { color: var(--fg-2); }
-.G_dl dd { margin: 0; overflow-wrap: anywhere; }
 .G_pre { white-space: pre-wrap; line-height: 1.45; }
 .G_none { color: var(--fg-3); }
 .G_tags { display: flex; flex-wrap: wrap; gap: 6px; }
@@ -87,6 +83,10 @@
 .G_group > :last-child { border-bottom: 0; }
 .G_frwrap { display: flex; align-items: center; }
 .G_frwrap .G_fr { flex: 1; border: 0; }
+.G_frwrap .G_frm { display: grid; grid-template-columns: 1fr auto; gap: 0 8px; padding-right: 4px; }
+.G_frwrap .G_fl { grid-column: 1; width: auto; }
+.G_frwrap .G_fv { grid-column: 1; white-space: nowrap; }
+.G_frwrap .chev { grid-column: 2; grid-row: 1 / 3; }
 .G_fr { display: block; }
 .G_frm { display: flex; align-items: center; gap: 12px; width: 100%; min-height: 3.5rem; padding: 8px 16px; background: transparent; border: 0; color: inherit; font: inherit; text-align: left; }
 button.G_frm { cursor: pointer; }
@@ -108,9 +108,8 @@ button.G_frm:active { background: var(--muted); }
 @media (forced-colors: active) { .G_frame, .G_exp, .G_group { border: 1px solid CanvasText; } .G_exp { background: Canvas; color: CanvasText; } }
 @media (min-width: 48rem) {
   .G_root { max-width: 56rem; margin: 0 auto; }
-  .G_dl { grid-template-columns: minmax(0, 14rem) minmax(0, 1fr); }
 }
-@media (max-width: 22rem) { .G_dl { grid-template-columns: 1fr; gap: 2px; } .G_dl dd { margin-bottom: 8px; } .G_inline { grid-template-columns: 1fr; } }
+@media (max-width: 22rem) { .G_inline { grid-template-columns: 1fr; } }
 @media (prefers-reduced-motion: reduce) { .G_root * { transition: none !important; animation: none !important; } }
 
 /* s120: This stay card, people rows, one-line chips (mockup sections 2 to 4). Tokens only. */
@@ -133,3 +132,6 @@ button.G_frm:active { background: var(--muted); }
 .G_stm { margin: 0; padding: 8px 16px 12px; font-size: 0.8125rem; color: var(--fg-2); }
 .G_ster { color: var(--danger); }
 .G_wide { width: 100%; }
+.G_staywrap { display: grid; gap: 12px; scroll-margin-top: calc(var(--appbar-h) + 12px); }
+.G_cap { scroll-margin-top: calc(var(--appbar-h) + 12px); }
+.G_cl small:empty, .G_sv:empty { display: none; }
