@@ -365,7 +365,7 @@ t0('R10 item 5: when the carry key cannot be stored at all, nothing is lost: the
 });
 
 /* ---- item 6: an uploaded photo whose blob could not be deleted ---- */
-t0('R10 item 6: a failed delete keeps the id in the stored draft; the next save that sticks deletes the blob and clears the id', async () => {
+for (const reload of [false, true]) t0(`R10 item 6${reload ? ' (R11 item 3: after a reload)' : ''}: a failed delete keeps the id in the stored draft; the next save that sticks deletes the blob and clears the id`, async () => {
   const t = await open({ draft: draftOf(), blobs: BLOBS, server: { upload: 'ok' } });
   try {
     await flag(t, '__failDelete', 'throw');
@@ -377,6 +377,12 @@ t0('R10 item 6: a failed delete keeps the id in the stored draft; the next save 
     const d = parse(await stored(t));
     const withBoth = photoMetas(d).filter(p => p.url && p.idbId);
     assert.equal(withBoth.length, 3, 'each uploaded photo holds its URL and still names its blob: ' + JSON.stringify(photoMetas(d)));
+    if (reload) {   // R11 item 3: a reload must not forget the blobs of uploaded photos: Resume keeps their ids, so the save after it sweeps them
+      await t.page.reload({ waitUntil: 'domcontentloaded' });
+      await t.page.waitForSelector('#draft-modal.open');
+      await t.page.click('#btn-draft-resume');
+      await closed(t);
+    }
     await flag(t, '__failDelete', null);
     assert.equal(await t.page.evaluate(() => __s120.saveDraft()), true);
     await t.page.waitForFunction(() => !(localStorage.getItem('ch_draft_v6') || '').match(/"idbId":"idb-/), null, { timeout: 15000 });

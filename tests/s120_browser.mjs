@@ -93,8 +93,15 @@ export async function openPage({ draft, blobs = [], viewport = { width: 375, hei
       if (window.__failDelete === 'abort') { this.transaction.abort(); return undefined; }   // the transaction aborts: no complete, no error event on the request
       return del.call(this, k);
     };
+    const put = IDBObjectStore.prototype.put;
+    IDBObjectStore.prototype.put = function () { if (window.__abortPut) { this.transaction.abort(); return undefined; } return put.apply(this, arguments); };   // __abortPut: the write aborts on its own (abort event only, no error event)
     const txn = IDBDatabase.prototype.transaction;
-    IDBDatabase.prototype.transaction = function (store, mode) { if (window.__failDelete === 'throw' && mode === 'readwrite') throw new DOMException('transaction failed', 'InvalidStateError'); return txn.apply(this, arguments); };
+    IDBDatabase.prototype.transaction = function (store, mode) {
+      if (window.__failDelete === 'throw' && mode === 'readwrite') throw new DOMException('transaction failed', 'InvalidStateError');
+      // __hangTx = 'write' | 'read' | 'all': a transaction that never fires an event (a store call that never settles)
+      const h = window.__hangTx; if (h && (h === 'all' || (h === 'write') === (mode === 'readwrite'))) { const req = { set onsuccess(f) {}, set onerror(f) {} }; const os = { put() { return req; }, get() { return req; }, delete() { return req; } }; return { objectStore() { return os; }, set oncomplete(f) {}, set onerror(f) {}, set onabort(f) {}, abort() {} }; }
+      return txn.apply(this, arguments);
+    };
     const set = Storage.prototype.setItem;
     Storage.prototype.setItem = function (k, v) { if (k === 'ch_draft_v6' && window.__failSave) throw new DOMException('full', 'QuotaExceededError');
       // storage full: the carry key fits only once the old draft is gone ('until-cleared'), or never ('always')
@@ -105,7 +112,10 @@ export async function openPage({ draft, blobs = [], viewport = { width: 375, hei
     window.fetch = function (u) { try { const url = String((u && u.url) || u); if (url.includes('/rpc/record_') || url.includes('/upload-photo')) { window.__atSend.push({ url, draft: localStorage.getItem('ch_draft_v6') }); window.__ops.push('req:' + url.split('/').pop()); } } catch (e) { /* ignore */ } return ofetch.apply(this, arguments); };
     const iopen = IDBFactory.prototype.open;
     IDBFactory.prototype.open = function () { if (!window.__failOpen) return iopen.apply(this, arguments); const req = {}; setTimeout(() => { if (req.onerror) req.onerror({ target: req }); }, 0); return req; };
-    // test switches: __failOpen / __failGet make the blob store fail to open / read; __failDelete = 'throw' | 'abort' makes a blob delete fail; __fullCarry = 'until-cleared' | 'always' makes the carry key not fit; __gate holds every blob read until it settles; __failRestore makes a restored photo throw; __failSave makes every draft write fail; __bootBreak makes the page's first form step throw
+    // test switches: __hangTx = 'write' | 'read' | 'all' makes a blob transaction that never settles; __failOpen / __failGet make the blob store fail to open / read; __failDelete = 'throw' | 'abort' makes a blob delete fail; __fullCarry = 'until-cleared' | 'always' makes the carry key not fit; __gate holds every blob read until it settles; __failRestore makes a restored photo throw; __failSave makes every draft write fail; __bootBreak makes the page's first form step throw
+    // __slowComplete = ms: every transaction reports 'complete' that many ms late (a slow delete that does finish)
+    const od = Object.getOwnPropertyDescriptor(IDBTransaction.prototype, 'oncomplete');
+    Object.defineProperty(IDBTransaction.prototype, 'oncomplete', { configurable: true, get() { return od.get.call(this); }, set(fn) { od.set.call(this, typeof fn === 'function' ? function (e) { const ms = window.__slowComplete; if (ms) setTimeout(() => fn.call(this, e), ms); else fn.call(this, e); } : fn); } });
     const get = IDBObjectStore.prototype.get;
     IDBObjectStore.prototype.get = function (k) {
       const req = get.call(this, k);
