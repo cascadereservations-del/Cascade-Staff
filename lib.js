@@ -964,7 +964,9 @@
     parseNotes(g && g.notes).forEach(function (gr) { gr.points.forEach(function (x) { var k = x.p.toLowerCase(); if (!seen[k]) { seen[k] = 1; total++; } }); });
     var shown = {}, key = keyPoints(g && g.notes).filter(function (x) { var k = x.p.toLowerCase(); return shown[k] ? false : (shown[k] = 1); }).map(function (x) { return { p: cut(x.p), rank: x.rank }; });
     var c = canContact ? guestContact(g) : null, n = null;
-    ['guest_count', 'num_guests', 'guests'].forEach(function (k) { if (n === null && g && typeof g[k] === 'number' && g[k] > 0) n = Math.round(g[k]); });
+    // s120 (D-373): the staff correction (guest_count) wins, then the number Airbnb booked (booked_guests), then the older server counts, then 1 + companions below. staff_home_v1 puts the first two on `staying`.
+    var sy = g && g.staying && typeof g.staying === 'object' ? g.staying : null;
+    [[sy, 'guest_count'], [g, 'guest_count'], [sy, 'booked_guests'], [g, 'booked_guests'], [g, 'num_guests'], [g, 'guests']].forEach(function (s) { var v = s[0] && s[0][s[1]]; if (n === null && typeof v === 'number' && v > 0) n = Math.round(v); });
     if (n === null && canContact && g && Array.isArray(g.companions)) { var me = String(g.guest_name || '').trim().toLowerCase(), others = g.companions.filter(function (x) { return x && String(x.name || '').trim().toLowerCase() !== me; }); if (others.length) n = 1 + others.length; } // guest_companions holds the main guest's own row too
     return { notes: key.slice(0, 3), more: total - Math.min(3, key.length), phone: c && c.phone ? c.phone : null, tel: c && c.tel ? c.tel : null, guests: n, id: !!(g && g.id_photo_path) || !!(g && g.arrival_ready && g.arrival_ready.id === true), idKnown: !!(g && (g.id_photo_path || (g.arrival_ready && typeof g.arrival_ready.id === 'boolean') || g.guest_id !== null)) }; // idKnown false: no ID photo and the stay is not linked to a guest record (guest_id null), so the pill says nothing rather than No ID yet
   }

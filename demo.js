@@ -75,8 +75,9 @@
       phone: '0900-000-0000', email: 'demo.guest.one@example.invalid', messenger: {} });
     var g2 = guest({ uid: 'demo-stay-2', guest_name: 'Demo Guest Two', checkin_date: d(2), checkout_date: d(5), checkin_time: '14:00:00', checkout_time: '12:00:00', nights: 3, source: 'direct',
       repeat: true, tier: 'vip', stay_count: 8, earlier_stays: [], notes: null, id_photo_path: null, companions: [], phone: '0900-000-0001', email: 'demo.guest.two@example.invalid' });
-    g1.staying = { names: 'Demo Guest One, Demo Companion One', source: 'staff', suggestion: null, version: 1 }; // s119: sample staying data (names typed by staff; the next stay has only a Cassy suggestion)
-    g2.staying = { names: '', source: null, suggestion: 'Demo Guest Two, Demo Companion Three', version: 0 };
+    g1.staying = { names: 'Demo Guest One, Demo Companion One', source: 'staff', suggestion: null, version: 1, guest_count: null, booked_guests: 2 }; // s119: sample staying data (names typed by staff; the next stay has only a Cassy suggestion)
+    g2.staying = { names: '', source: null, suggestion: 'Demo Guest Two, Demo Companion Three', version: 0, guest_count: 2, booked_guests: 3 };
+    if (admin) { g1.guest_id = '00000000-0000-4000-8000-0000000000d1'; g2.guest_id = '00000000-0000-4000-8000-0000000000d2'; } // s120: the Guests tile links to the guest page (the demo guest page knows these two ids)
     if (admin) { g1.arrival_ready = { id: true, paid: true, door_code: true }; g2.arrival_ready = { id: false, paid: false, door_code: true }; }
     var row = function (name, a, b, src) { return { guest_name: name, checkin_date: d(a), checkout_date: d(b), status: 'confirmed', source: src }; };
     var block = function (a, b, why, label) { return { guest_name: null, checkin_date: d(a), checkout_date: d(b), status: 'blocked', source: 'manual', block_reason: why, block_label: label }; };

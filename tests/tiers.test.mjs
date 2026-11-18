@@ -45,6 +45,9 @@ test('tierParts: tier + line shows once (no older Returning pill); no tier keeps
   assert.match(d.chip, /star/); assert.match(d.chip, /p-tier-vip/); assert.equal(d.ret, '', 's96: a tier chip means no older Returning pill');
 });
 
-test('guests list chip: only vip gets a glyph (no check mark shared with ID on file)', () => {
-  assert.match(read('guests/G_guests.js'), /\(tier === 'vip' \? G_glyph\('star'\) : ''\) \+ l/);
+test('guests list chip: one tier chip from CS.tierBadge (s120), and only the manual VIP pill carries the star glyph', () => {
+  const src = read('guests/G_guests.js');
+  assert.ok(src.includes("root.CS.tierBadge({ tier: tier, stay_count: stays })"));
+  assert.ok(src.includes("flags.push(G_tierChip(g.tier, g.total_stays, d.vip))"));
+  assert.ok(src.includes("p-brand\">' + G_glyph('star') + 'VIP"));
 });

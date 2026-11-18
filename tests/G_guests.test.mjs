@@ -37,8 +37,11 @@ function load() {
   Object.defineProperty(win, 'fetch', { value: (u, o) => { fetched.push([u, o]); return Promise.resolve({ ok: true, blob: () => Promise.resolve({ u }) }); } });
   Object.defineProperty(win, 'URL', { value: { createObjectURL: () => 'blob:t/' + (++blobN), revokeObjectURL: (u) => revoked.push(u) } });
   const ctx = { window: win, localStorage: trap('localStorage'), sessionStorage: trap('sessionStorage'), Intl, Date, Promise, JSON, Math, console, setTimeout, clearTimeout, Uint8Array,
-    document: { cookie: '' } };
+    document: { cookie: '' }, self: win };
   vm.createContext(ctx);
+  // s120: the shell's own CS (tierBadge) and ICON, loaded from the real files; hidden from Object.keys like fetch and URL
+  for (const f of ['icons.js', 'lib.js']) vm.runInContext(fs.readFileSync(path.join(root, f), 'utf8'), ctx, { filename: f });
+  for (const k of ['CS', 'ICON']) Object.defineProperty(win, k, { value: win[k], enumerable: false, configurable: true });
   vm.runInContext(SRC, ctx, { filename: 'G_guests.js' });
   win.G_Guests._setClock(() => NOW);
   return { M: win.G_Guests, touched, win, fetched, revoked };
@@ -223,7 +226,7 @@ test('G: the record reads explicit columns (never the ID number), companions by 
   assert.match(el.html, /Ana Maria Reyes/); assert.match(el.html, /Quiet room/); assert.match(el.html, /anniversary/);
   assert.match(el.html, /20 Oct 1990/); assert.match(el.html, /Birthday in 6 days/);
   assert.match(el.html, /Add from text, screenshot or photo/);
-  assert.match(el.html, /Guest’s own ID/); assert.match(el.html, /Ben Cruz/);
+  assert.match(el.html, /Guest ID/); assert.match(el.html, /ID on file/); assert.match(el.html, /Ben Cruz/);
   assert.doesNotMatch(el.html, /P1234567/); // the ID number is dropped as the rows come in
   assert.doesNotMatch(el.html, /a\.jpg/); // the stored path is not on the page; a signed link is fetched only on tap
   assert.match(el.html, /tel:09171234567/);
@@ -235,7 +238,7 @@ test('G: an older staff-guest-details (answers 400) hides Add, Replace and Remov
   assert.match(el.html, /Ana Maria Reyes/);
   assert.doesNotMatch(el.html, /Add from text/); assert.doesNotMatch(el.html, /Remove photo/);
   assert.doesNotMatch(el.html, /Replace photo|Add ID photo/);
-  assert.doesNotMatch(el.html, /People and ID photos/); assert.doesNotMatch(el.html, /class="errbox/);
+  assert.doesNotMatch(el.html, /Add a companion/); assert.doesNotMatch(el.html, /class="errbox/);
   assert.match(el.html, /class="G_slot"/); // the slot is kept either way, so nothing jumps
 });
 
@@ -250,7 +253,7 @@ test('G: edit saves through save_guest_profile_v1 with only the changed keys, th
   const cl = detailClient();
   const { el, toasts } = await mount(cl, GID);
   await clickA(el, 'edit');
-  assert.match(el.html, /Edit details/); assert.match(el.html, /value="Updated in the Staff app"/);
+  assert.match(el.html, /Contact number/); assert.match(el.html, /value="Updated in the Staff app"/);
   setNodes(el, { G_f_phone: '0917 555 0000', G_f_bday: '1990-10-20', G_f_pref: 'Quiet room\nLate arrival', G_f_tags: 'Anniversary, baby', G_f_reason: 'Guest asked on Messenger' });
   await clickA(el, 'save-edit'); await tick();
   const save = cl.calls.find((c) => c[0] === 'save_guest_profile_v1');
@@ -286,7 +289,7 @@ test('G: a stale version keeps the form and says who to reload for; no overwrite
   const { el } = await mount(cl, GID);
   await clickA(el, 'edit'); setNodes(el, { G_f_phone: '0999', G_f_bday: '1990-10-20', G_f_pref: 'Quiet room', G_f_tags: 'anniversary', G_f_reason: 'Phone fix' });
   await clickA(el, 'save-edit'); await tick();
-  assert.match(el.html, /Someone changed this guest/); assert.match(el.html, /Edit details/); assert.match(el.html, /value="0999"|0999/);
+  assert.match(el.html, /Someone changed this guest/); assert.match(el.html, /Contact number/); assert.match(el.html, /value="0999"|0999/);
 });
 
 test('G: Add from text: extract body, review sheet, save body with expected_version and reason; a 207 lists what failed', async () => {
@@ -361,7 +364,7 @@ test('G: add and remove a companion use the dashboard RPC shapes', async () => {
 test('G: the guest\'s own row offers no Remove person; a short or numeric companion name is refused', async () => {
   const cl = detailClient();
   const { el } = await mount(cl, GID);
-  const ownBlock = el.html.slice(el.html.indexOf('Guest’s own ID'), el.html.indexOf('Ben Cruz'));
+  const ownBlock = el.html.slice(el.html.indexOf('G_hero'), el.html.indexOf('Ben Cruz'));
   assert.doesNotMatch(ownBlock, /remove-comp/);
   setNodes(el, { G_newc: 'A' });
   await clickA(el, 'add-comp');
@@ -430,19 +433,20 @@ test('G: Add from text refuses a tag over 30 characters, the server limit, with 
 test('G: with companions shown and an older function, Replace photo and Add ID photo stay hidden', async () => {
   const cl = detailClient({ fn: () => ({ status: 400, j: { error: 'bad_stay' } }) });
   const { el } = await mount(cl, GID);
-  assert.match(el.html, /People and ID photos/); assert.match(el.html, /Ben Cruz/);
+  assert.match(el.html, /Add a companion/); assert.match(el.html, /Ben Cruz/);
   assert.doesNotMatch(el.html, /Replace photo|Add ID photo|Remove photo/);
 });
 
 test('G: after remove_id also clears the ID flag, the record reloads so ID reads Not on file at once', async () => {
   let flag = true;
   const cl = detailClient({ tables: { guests: { data: GUEST, error: null }, guest_profile_details: () => ({ data: { ...PROFILE, id_on_file: flag }, error: null }) },
+    rpcs: { list_guest_companions_v1: () => ({ data: flag ? COMPS : COMPS.map((c) => ({ ...c, id_photo_path: null })), error: null }), delete_guest_companion_v1: () => ({ data: { ok: true }, error: null }) },
     fn: (b) => { if (b.action === 'context') return { status: 200, j: { ok: true, features: FEAT } }; flag = false; return { status: 200, j: { ok: true, saved: [{ what: 'id_photo_removed', ok: true }, { what: 'profile', ok: true }] } }; } });
   const { el } = await mount(cl, GID);
-  assert.match(el.html, /On file/);
+  assert.match(el.html, /ID on file/);
   await clickA(el, 'remove-photo', { id: CID }); await clickA(el, 'remove-photo-yes', { id: CID }); await tick();
   assert.equal(cl.chains.filter((c) => c[0][1] === 'guest_profile_details').length, 2);
-  assert.match(el.html, /ID photo removed/); assert.match(el.html, /<dt>ID<\/dt><dd><span class="G_none">Not on file/);
+  assert.match(el.html, /ID photo removed/); assert.match(el.html, /No ID yet/); assert.doesNotMatch(el.html, /ID on file/);
 });
 
 // ------------------------------------------------------------------------------------------------ s90: photo cache and turning
@@ -573,14 +577,111 @@ test('G s95: list rows and guest card show the tier chip, incl. regular; manual 
   const { el } = await mount(cl, '');
   const rows = el.html.split('<a class="rowi G_row"').slice(1);
   const by = (n) => rows.find((r) => r.includes(n));
-  assert.match(by("Reg Guest"), /<span class="pill p-brand">Regular<\/span>/); // no glyph on returning/regular
-  assert.match(by('Ret Guest'), /Returning<\/span>/);
+  assert.match(by("Reg Guest"), /<span class="T_chip T_c-regular"><svg[^>]*>.*?<\/svg><span>Regular<\/span><\/span>/); // s120: CS.tierBadge chip with its glyph
+  assert.match(by('Ret Guest'), /T_c-returning[\s\S]*<span>Returning<\/span>/);
   assert.equal((by('Vip Guest').match(/VIP<\/span>/g) || []).length, 1); // manual flag on and tier vip: one badge
   assert.equal((by('Auto Vip').match(/VIP<\/span>/g) || []).length, 1); // tier vip alone: still one
   assert.doesNotMatch(by('No Tier'), /Regular|Returning|VIP/);
   assert.doesNotMatch(by('Odd'), /Regular|Returning|VIP/); // unknown tier value draws nothing
   const d = await mount(detailClient({ tables: { guests: { data: { ...GUEST, tier: 'regular' }, error: null }, guest_profile_details: { data: PROFILE, error: null } } }), GID);
-  assert.match(d.el.html, /G_namerow[\s\S]*Regular<\/span><\/div>/);
+  assert.match(d.el.html, /G_chipsrow[\s\S]*T_c-regular[\s\S]*Regular · 2 stays<\/span><\/span><\/div>/);
   const v = await mount(detailClient({ tables: { guests: { data: { ...GUEST, tier: 'vip' }, error: null }, guest_profile_details: { data: { ...PROFILE, vip: true }, error: null } } }), GID);
-  assert.equal((v.el.html.split('G_namerow')[1].split('</div>')[0].match(/VIP<\/span>/g) || []).length, 1);
+  assert.equal((v.el.html.split('G_chipsrow')[1].split('</div>')[0].match(/VIP<\/span>/g) || []).length, 1);
+});
+
+test('G s120: one chip in both apps: null tier with one stay says First stay, no CS draws nothing', async () => {
+  const row = (id, name, tier, n) => ({ id, name, phone: null, email: null, tier, total_stays: n, last_stay_date: '2026-10-12', guest_profile_details: [{ id_on_file: false, birthday: null, contact_number: null, vip: false }] });
+  const cl = client({ tables: { guests: { data: [row('g1', 'First Guest', null, 1), row('g2', 'Back Guest', null, 3)], count: 2, error: null }, airbnb_reservations: { data: [], error: null }, booking_inquiries: { data: [], error: null } } });
+  const { el } = await mount(cl, '');
+  assert.match(el.html, /T_c-first[\s\S]*<span>First stay<\/span>/);
+  assert.match(el.html, /T_c-returning[\s\S]*<span>Returning · 3rd stay<\/span>/);
+  const d = await mount(detailClient({ tables: { guests: { data: { ...GUEST, total_stays: 1 }, error: null }, guest_profile_details: { data: PROFILE, error: null } } }), GID);
+  assert.match(d.el.html, /G_hero[\s\S]*T_c-first/);
+  const L = load(); delete L.win.CS; // no CS at runtime: the chip is left out, nothing throws
+  const el2 = new FakeEl(); L.M.mount(el2, { client: detailClient(), demo: false, role: 'owner', sub: GID, propertyId: PROP, navigate: () => {}, toast: () => {}, haptic: () => {} }); await tick();
+  assert.match(el2.html, /Ana Maria Reyes/); assert.doesNotMatch(el2.html, /T_chip/);
+});
+
+// ------------------------------------------------------------------------------------------------ s120: the This stay card (staff_guest_stay_v1, set_stay_guest_count_v1; contract docs/s120/CONTRACT-guest-count.md)
+const STAY = { uid: 'stay-uid-1', checkin_date: '2026-10-13', checkout_date: '2026-10-16', booked_guests: 3, guest_count: 2, version: 4 };
+const stayClient = (stay, set) => detailClient({ rpcs: {
+  list_guest_companions_v1: () => ({ data: COMPS, error: null }), staff_guest_stay_v1: typeof stay === 'function' ? stay : () => ({ data: stay, error: null }),
+  ...(set ? { set_stay_guest_count_v1: set } : {}) } });
+const outN = (el) => +/<output[^>]*>(\d)<\/output>/.exec(el.html)[1];
+const demoMount = async (M, sub) => { const el = new FakeEl(); M.mount(el, { client: null, demo: true, role: 'owner', sub, propertyId: PROP, navigate: () => {}, toast: () => {}, haptic: () => {} }); await tick(); return el; };
+
+test('G: This stay card: heading, dates, stepper 1 to 3, Save and Cancel only after a change', async () => {
+  const cl = stayClient(STAY), { el } = await mount(cl, GID);
+  assert.deepEqual(cl.calls.find((c) => c[0] === 'staff_guest_stay_v1'), ['staff_guest_stay_v1', { p_property: PROP, p_guest_id: GID }]);
+  assert.match(el.html, />This stay</); assert.doesNotMatch(el.html, />Next stay</); assert.match(el.html, /13 → 16 Oct/);
+  assert.equal(outN(el), 2); assert.doesNotMatch(el.html, /data-act="stay-save"/); assert.doesNotMatch(el.html, /data-act="stay-undo"/);
+  assert.match(el.html, /Booked for 3, staying 2/);
+  await clickA(el, 'stay-inc'); assert.equal(outN(el), 3); assert.match(el.html, /data-act="stay-save"/); assert.match(el.html, /data-act="stay-undo"/);
+  assert.match(el.html, /id="G_ginc"[^>]*aria-disabled="true"/); await clickA(el, 'stay-inc'); assert.equal(outN(el), 3, 'stops at 3');
+  await clickA(el, 'stay-dec'); await clickA(el, 'stay-dec'); assert.equal(outN(el), 1); assert.match(el.html, /id="G_gdec"[^>]*aria-disabled="true"/);
+  await clickA(el, 'stay-dec'); assert.equal(outN(el), 1, 'stops at 1');
+  await clickA(el, 'stay-undo'); assert.equal(outN(el), 2); assert.doesNotMatch(el.html, /data-act="stay-save"/);
+  assert.match(CSS, /\.G_stb \{[^}]*width: 44px; height: 44px/);
+});
+
+test('G: the booked line shows only when the count differs from the booked number', async () => {
+  const { el } = await mount(stayClient({ ...STAY, guest_count: 3 }), GID);
+  assert.doesNotMatch(el.html, /Booked for/);
+  const b = await mount(stayClient({ ...STAY, guest_count: null, booked_guests: 2 }), GID);
+  assert.equal(outN(b.el), 2); assert.doesNotMatch(b.el.html, /Booked for/);
+});
+
+test('G: a stay that starts after today is headed Next stay, and the list reads Next stay for a date still ahead', async () => {
+  const { el } = await mount(stayClient({ ...STAY, checkin_date: '2026-10-20', checkout_date: '2026-10-22' }), GID);
+  assert.match(el.html, />Next stay</); assert.doesNotMatch(el.html, />This stay</);
+  const { M } = load();
+  assert.match(M._t.stayLine({ last_stay_date: '2026-10-20' }, null, '2026-10-14'), /^Next stay /);
+  assert.match(M._t.stayLine({ last_stay_date: '2026-10-12' }, null, '2026-10-14'), /^Last stay /);
+});
+
+test('G: Save sends the exact payload, keeps the key for the same count, and uses the version it read', async () => {
+  const seen = [];
+  const cl = stayClient(STAY, (a) => { seen.push(plain(a)); return seen.length === 1 ? { data: null, error: { network: true, message: 'Failed to fetch' } } : { data: { ok: true, guest_count: seen.length === 2 ? 3 : 2, version: seen.length === 2 ? 5 : 6 }, error: null }; });
+  const { el } = await mount(cl, GID);
+  await clickA(el, 'stay-inc'); await clickA(el, 'stay-save'); await tick();
+  assert.deepEqual(Object.keys(seen[0]).sort(), ['p_count', 'p_expected_version', 'p_idempotency_key', 'p_property', 'p_reason', 'p_uid']);
+  assert.equal(seen[0].p_property, PROP); assert.equal(seen[0].p_uid, 'stay-uid-1'); assert.equal(seen[0].p_count, 3); assert.equal(seen[0].p_expected_version, 4);
+  assert.equal(seen[0].p_reason, 'Guest count changed in the Staff app'); assert.match(seen[0].p_idempotency_key, /^guests-/);
+  assert.match(el.html, /Needs a connection\. Nothing was saved, and what you set is still here\./); assert.equal(outN(el), 3);
+  await clickA(el, 'stay-save'); await tick();
+  assert.equal(seen[1].p_idempotency_key, seen[0].p_idempotency_key, 'a retry of the same count reuses the key');
+  assert.match(el.html, /Saved\. 3 guests\./); assert.doesNotMatch(el.html, /data-act="stay-save"/); assert.match(el.html, /Booked for 3, staying 3|<output[^>]*>3<\/output>/);
+  await clickA(el, 'stay-dec'); await clickA(el, 'stay-save'); await tick();
+  assert.equal(seen[2].p_expected_version, 5, 'the saved version is used next'); assert.notEqual(seen[2].p_idempotency_key, seen[0].p_idempotency_key, 'a new count gets a new key');
+});
+
+test('G: a version conflict (40001) reloads the card and says so plainly', async () => {
+  let n = 0;
+  const cl = stayClient(() => ({ data: n++ === 0 ? STAY : { ...STAY, guest_count: 1, version: 9 }, error: null }), () => ({ data: null, error: { code: '40001', message: 'stale version' } }));
+  const { el } = await mount(cl, GID);
+  await clickA(el, 'stay-inc'); await clickA(el, 'stay-save'); await tick();
+  assert.equal(cl.calls.filter((c) => c[0] === 'staff_guest_stay_v1').length, 2, 'the card was read again');
+  assert.match(el.html, /Someone else changed the number of guests\. The latest number is shown\./); assert.equal(outN(el), 1); assert.doesNotMatch(el.html, /data-act="stay-save"/);
+});
+
+test('G: other errors are said in words; a missing function or a null answer draws no card and no error', async () => {
+  const set = (code) => stayClient(STAY, () => ({ data: null, error: { code, message: 'x' } }));
+  for (const [code, re] of [['42501', /not allowed/], ['22023', /Choose 1, 2 or 3 guests/]]) {
+    const { el } = await mount(set(code), GID); await clickA(el, 'stay-inc'); await clickA(el, 'stay-save'); await tick(); assert.match(el.html, re, code);
+  }
+  for (const stay of [() => ({ data: null, error: { code: 'PGRST202', message: 'Could not find the function' } }), () => ({ data: null, error: { code: '42883', message: 'x' } }), () => ({ data: null, error: { status: 404, message: 'x' } }), null]) {
+    const { el } = await mount(stayClient(stay), GID);
+    assert.doesNotMatch(el.html, /This stay|Next stay<|G_stay|<output/); assert.doesNotMatch(el.html, /class="errbox/); assert.match(el.html, /Ana Maria Reyes/);
+  }
+  const none = await mount(detailClient(), GID); assert.doesNotMatch(none.el.html, /<output/); // an older server with no stay function at all
+});
+
+test('G: demo mode shows a current and a next stay and saves a count without a server', async () => {
+  const { M } = load(), el = await demoMount(M, '00000000-0000-4000-8000-0000000000d1');
+  assert.match(el.html, />This stay</); assert.equal(outN(el), 2);
+  await clickA(el, 'stay-inc'); await clickA(el, 'stay-save'); await tick();
+  assert.match(el.html, /Saved\. 3 guests\. Demo only, nothing was sent\./); assert.equal(outN(el), 3);
+  const two = await demoMount(M, '00000000-0000-4000-8000-0000000000d2');
+  assert.match(two.html, />Next stay</); assert.match(two.html, /No ID yet/);
+  assert.doesNotMatch(two.html + el.html, /Ana Reyes|Ben Cruz/);
 });

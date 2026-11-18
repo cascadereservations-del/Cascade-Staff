@@ -170,8 +170,20 @@
   function G_stayLine(g, st, today) {
     if (st && st.state === 'in') return 'In house until ' + G_dayMon(st.to);
     if (st && st.state === 'arr') return st.from === today ? 'Arrives today' : 'Arrives ' + G_dayMon(st.from);
-    return g.last_stay_date ? 'Last stay ' + G_date(g.last_stay_date) : 'No stay yet';
+    return g.last_stay_date ? (g.last_stay_date > today ? 'Next stay ' : 'Last stay ') + G_date(g.last_stay_date) : 'No stay yet'; // s120: a date still ahead is the next stay, not the last
   }
+  // s120 (D-373): guests on a stay are 1 to 3 (booking-terms: the unit holds up to 3). The shown number follows the contract order: staff correction, booked number, then 1 + companions.
+  var G_MIN_GUESTS = 1, G_MAX_GUESTS = 3, G_REASON_COUNT = 'Guest count changed in the Staff app';
+  function G_clampGuests(n) { n = Math.round(+n); return n >= G_MIN_GUESTS ? Math.min(G_MAX_GUESTS, n) : null; }
+  function G_posInt(n) { return typeof n === 'number' && n >= 1 ? Math.round(n) : null; }
+  function G_stayRange(a, b) { var x = String(a || '').split('-'), y = String(b || '').split('-'); return x[1] === y[1] ? +x[2] + ' → ' + G_dayMon(b) : G_dayMon(a) + ' → ' + G_dayMon(b); }
+  /** The staff_guest_stay_v1 answer as the card's state; null when the server sent no stay (or the old shape). fallback is 1 + companions on file. */
+  function G_stayFrom(d, fallback) {
+    if (!d || typeof d !== 'object' || !d.uid || !/^\d{4}-\d{2}-\d{2}$/.test(String(d.checkin_date || ''))) return null;
+    var count = G_clampGuests(d.guest_count), booked = G_posInt(d.booked_guests), base = count != null ? count : booked != null ? G_clampGuests(booked) : G_clampGuests(fallback) || 1;
+    return { uid: String(d.uid), checkin_date: d.checkin_date, checkout_date: d.checkout_date || d.checkin_date, booked: booked, count: count, base: base, draft: base, version: +d.version > 0 ? Math.round(+d.version) : 0, busy: false, msg: '', err: '', key: null, keyN: null };
+  }
+  function G_stayKey() { var c = root.crypto; return 'guests-' + (c && c.randomUUID ? c.randomUUID() : Date.now() + '-' + Math.random().toString(16).slice(2)); }
   function G_initial(n) { var s = String(n || '').trim(); return s ? s.charAt(0).toUpperCase() : '?'; }
   function G_detailOf(r) { var d = r && r.guest_profile_details; return Array.isArray(d) ? d[0] || {} : d || {}; }
 
@@ -225,12 +237,13 @@
     var body = S.gid ? G_detailHtml() : G_listHtml();
     return '<div class="G_root">' + body + (S.full ? G_fullHtml() : '') + '</div>';
   }
-  // s95 tiers: chip from guests.tier ('returning'|'regular'|'vip'). The hand-set VIP flag is a separate concept; when it is on and the tier is vip, one badge only.
-  function G_tierChip(tier, manualVip) {
-    var l = tier === 'returning' ? 'Returning' : tier === 'regular' ? 'Regular' : tier === 'vip' ? 'VIP' : '';
-    return !l || (tier === 'vip' && manualVip) ? '' : '<span class="pill p-brand">' + (tier === 'vip' ? G_glyph('star') : '') + l + '</span>';
+  // s120: the one tier chip of the Staff app (CS.tierBadge: tier and total stays, a glyph per tier, "First stay"). The hand-set VIP flag is a separate concept; when it is on and the tier is vip, one badge only.
+  function G_tierChip(tier, stays, manualVip) {
+    var r = root.CS && root.CS.tierBadge ? root.CS.tierBadge({ tier: tier, stay_count: stays }) : null;
+    return !r || (r.tier === 'vip' && manualVip) ? '' : '<span class="T_chip T_c-' + r.tier + '">' + (root.ICON ? root.ICON(r.icon, 's16') : '') + '<span>' + G_esc(r.text) + '</span></span>';
   }
   function G_glyph(k) { return '<span class="G_gl" aria-hidden="true">' + ({ i: 'ℹ', ok: '✓', no: '!', x: '×', star: '★', cake: '✦' }[k] || '') + '</span>'; }
+  function G_pill(tone, icon, text) { return '<span class="pill p-' + tone + '">' + (root.ICON ? root.ICON(icon, 's16') : '') + G_esc(text) + '</span>'; }
   function G_err(msg, id) { return msg ? '<div class="errbox G_note" role="alert" id="' + (id || 'G_err') + '" tabindex="-1">' + G_glyph('no') + '<span>' + G_esc(msg) + '</span></div>' : ''; }
   function G_chev() { return root.ICON ? root.ICON('chev') : '›'; }
 
@@ -250,10 +263,10 @@
     if (!L.rows.length) return '<p class="G_empty">' + G_esc(L.filter === 'in' ? 'Nobody is in the house right now.' : L.filter === 'arr' ? 'No arrivals in the next ' + G_SOON_DAYS + ' days.' : L.q.trim() ? 'No guest matches. Try a shorter name.' : 'No guests yet.') + '</p>';
     var rows = L.rows.map(function (g) {
       var d = G_detailOf(g), flags = [], bd = G_daysToBirthday(d.birthday, today);
-      flags.push(d.id_on_file ? '<span class="pill p-ok">' + G_glyph('ok') + 'ID on file</span>' : '');
+      flags.push(G_tierChip(g.tier, g.total_stays, d.vip));
+      flags.push(d.id_on_file ? G_pill('ok', 'check', 'ID on file') : G_pill('warn', 'idcard', 'No ID yet'));
       if (!g.phone && !g.email && !d.contact_number) flags.push('<span class="pill p-warn">' + G_glyph('no') + 'No contact</span>');
       if (d.vip) flags.push('<span class="pill p-brand">' + G_glyph('star') + 'VIP</span>');
-      flags.push(G_tierChip(g.tier, d.vip));
       if (bd !== null && bd <= G_BDAY_DAYS) flags.push('<span class="pill p-info">' + G_glyph('cake') + (bd === 0 ? 'Birthday today' : 'Birthday in ' + bd + (bd === 1 ? ' day' : ' days')) + '</span>');
       return '<a class="rowi G_row" href="#guests/' + G_esc(g.id) + '"><span class="lead" aria-hidden="true">' + G_esc(G_initial(g.name)) + '</span><span class="mid"><span class="t">' + G_esc(g.name || 'Guest') + '</span><span class="s">' +
         G_esc(G_stayLine(g, L.stays.map[g.id], today)) + '</span>' + (flags.filter(Boolean).length ? '<span class="G_flags">' + flags.join('') + '</span>' : '') + '</span><span class="chev" aria-hidden="true">' + G_chev() + '</span></a>';
@@ -264,6 +277,11 @@
   }
 
   // ---- detail
+  function G_ic(n) { return root.ICON ? root.ICON(n, 's16') : ''; }
+  function G_heroLine(g, st, today) {
+    if (st) return st.checkin_date < today ? 'In the house until ' + G_dayMon(st.checkout_date) : st.checkin_date === today ? 'Arrives today' : 'Next stay ' + G_date(st.checkin_date);
+    return g.last_stay_date ? (g.last_stay_date > today ? 'Next stay ' : 'Last stay ') + G_date(g.last_stay_date) : 'No stay yet';
+  }
   function G_detailHtml() {
     var D = S.d;
     var back = '<a class="btn btn-ghost G_back" href="#guests">‹ All guests</a>';
@@ -272,34 +290,50 @@
     if (S.add) return G_addHtml();
     var g = D.guest, p = D.details || {}, today = G_today(), bd = G_daysToBirthday(p.birthday, today);
     var phone = p.contact_number || g.phone || '';
-    var head = '<div class="card glass G_head"><div class="G_namerow"><h2 class="G_name" id="G_h" tabindex="-1">' + G_esc(g.name || 'Guest') + '</h2>' + (p.vip ? '<span class="pill p-brand">' + G_glyph('star') + 'VIP</span>' : '') + G_tierChip(g.tier, p.vip) + '</div>' +
-      '<p class="G_line">' + G_esc(g.last_stay_date ? 'Last stay ' + G_date(g.last_stay_date) + (g.total_stays ? ' · ' + g.total_stays + (g.total_stays === 1 ? ' stay' : ' stays') : '') : 'No stay yet') + '</p>' +
-      (bd !== null && bd <= G_BDAY_DAYS ? '<p class="G_line">' + G_glyph('cake') + G_esc(bd === 0 ? 'Birthday today' : 'Birthday in ' + bd + (bd === 1 ? ' day' : ' days')) + '</p>' : '') + '</div>';
+    var own = G_ownComp(), others = (D.companions || []).filter(function (c) { return c !== own && c.id_photo_path; }).length, noComp = D.compAbsent || D.cErr;
     var notice = S.msg ? '<div class="okbox G_note" role="status" id="G_msg" tabindex="-1">' + G_glyph('ok') + '<span>' + S.msg.map(G_esc).join('<br>') + '</span></div>' : '';
+    var name = '<h2 class="G_name" id="G_h" tabindex="-1">' + G_esc(g.name || 'Guest') + '</h2>';
+    if (S.edit) return '<div class="G_detail">' + back + notice + G_err(S.err) + name + G_editHtml() + '</div>'; // mockup 4: the name and the form, nothing else
+    var idChip = noComp ? (p.id_on_file ? G_pill('ok', 'check', 'ID on file') : G_pill('warn', 'idcard', 'No ID yet')) :
+      own && own.id_photo_path ? G_pill('ok', 'check', 'ID on file') : others ? G_pill('info', 'check', 'ID via companion') :
+      p.id_on_file ? '<span class="pill p-warn">' + G_glyph('no') + 'ID marked, no photo</span>' : G_pill('warn', 'idcard', 'No ID yet');
+    var canAdd = !!(D.feat && D.feat.guest_id && D.feat.preferences);
+    var idBlock = noComp ? '' : '<div class="cap up G_cap">Guest ID</div>' + (own ? '<div class="G_frame' + (own.id_photo_path ? '' : ' G_noid') + '">' + G_idPhoto(own, true) + '</div>' + G_idControls(own) :
+      '<div class="G_frame G_noid"><span class="G_none">No ID photo yet</span></div>' + (canAdd ? '<div class="G_btns"><button class="btn btn-primary btn-sm" type="button" data-act="add-open">' + G_ic('camera') + 'Add ID photo</button></div>' : ''));
+    var head = '<div class="G_hero">' + idBlock + name + '<p class="G_line">' + G_esc(G_heroLine(g, D.stay, today)) + '</p>' +
+      (bd !== null && bd <= G_BDAY_DAYS ? '<p class="G_line">' + G_glyph('cake') + G_esc(bd === 0 ? 'Birthday today' : 'Birthday in ' + bd + (bd === 1 ? ' day' : ' days')) + '</p>' : '') +
+      '<div class="G_chipsrow">' + idChip + (p.vip ? '<span class="pill p-brand">' + G_glyph('star') + 'VIP</span>' : '') + G_tierChip(g.tier, g.total_stays, p.vip) + '</div>' +
+      '<button class="btn btn-secondary btn-sm" type="button" data-act="edit">Edit details</button></div>';
     // The Add button has its slot from the first paint: the function probe decides whether it is shown, never whether space is kept.
-    var addSlot = '<div class="G_slot">' + (D.feat && D.feat.guest_id && D.feat.preferences ? '<button class="btn btn-primary btn-block" type="button" data-act="add-open">Add from text, screenshot or photo</button>' : '') + '</div>';
-    return back + notice + G_err(S.err) + head + addSlot + (S.edit ? G_editHtml() : G_infoHtml(g, p, phone)) + G_companionsHtml();
+    var addSlot = '<div class="G_slot">' + (canAdd ? '<button class="btn btn-secondary btn-block" type="button" data-act="add-open">' + G_ic('image') + 'Add from text, screenshot or photo</button>' : '') + '</div>';
+    return '<div class="G_detail">' + back + notice + G_err(S.err) + head + G_stayHtml() + G_infoHtml(g, p, phone) + G_companionsHtml() + addSlot + '</div>';
+  }
+  function G_row(label, value, edit) {
+    var tag = edit ? 'button class="G_frm" type="button" data-act="edit"' : 'div class="G_frm"';
+    return '<div class="G_fr"><' + tag + '><span class="G_fl">' + label + '</span><span class="G_fv">' + value + '</span>' + (edit ? '<span class="chev" aria-hidden="true">' + G_chev() + '</span>' : '') + '</' + (edit ? 'button' : 'div') + '></div>';
   }
   function G_infoHtml(g, p, phone) {
-    var tags = (p.tags || []).map(function (t) { return '<span class="pill p-neutral">' + G_esc(t) + '</span>'; }).join('');
-    return '<div class="card glass G_card"><div class="card-head"><h3>Details</h3><button class="btn btn-secondary btn-sm" type="button" data-act="edit">Edit</button></div><dl class="G_dl">' +
-      '<dt>Phone</dt><dd>' + (phone ? '<a class="G_tel" href="tel:' + G_esc(String(phone).replace(/[^\d+]/g, '')) + '">' + G_esc(phone) + '</a>' : '<span class="G_none">Not on file</span>') + '</dd>' +
-      '<dt>Email</dt><dd>' + (g.email ? '<a class="G_tel" href="mailto:' + G_esc(g.email) + '">' + G_esc(g.email) + '</a>' : '<span class="G_none">Not on file</span>') + '</dd>' +
-      '<dt>Birthday</dt><dd>' + (p.birthday ? G_esc(G_date(p.birthday)) : '<span class="G_none">Not on file</span>') + '</dd>' +
-      '<dt>Preferences</dt><dd class="G_pre">' + (p.stay_preferences ? G_esc(p.stay_preferences) : '<span class="G_none">None noted</span>') + '</dd>' +
-      '<dt>Tags</dt><dd>' + (tags ? '<span class="G_tags">' + tags + '</span>' : '<span class="G_none">None</span>') + '</dd>' +
-      '<dt>VIP</dt><dd>' + (p.vip ? G_glyph('star') + 'Yes' + (p.vip_reason ? ' · ' + G_esc(p.vip_reason) : '') : 'No') + '</dd>' +
-      '<dt>ID</dt><dd>' + (p.id_on_file ? G_glyph('ok') + 'On file' : '<span class="G_none">Not on file</span>') + '</dd></dl></div>';
+    var tags = (p.tags || []).map(function (t) { return '<span class="pill p-neutral">' + G_esc(t) + '</span>'; }).join(''), none = function (t) { return '<span class="G_none">' + t + '</span>'; };
+    var filled = [p.birthday, (p.tags || []).length, p.vip].filter(Boolean).length;
+    var call = phone ? '<a class="btn btn-ghost btn-sm G_call" href="tel:' + G_esc(String(phone).replace(/[^\d+]/g, '')) + '" aria-label="' + G_esc('Call ' + phone) + '">Call</a>' : '';
+    return '<div class="cap up G_cap">Guest</div><div class="card list G_group">' +
+      '<div class="G_frwrap">' + G_row('Contact number', phone ? G_esc(phone) : none('Add'), true) + call + '</div>' +
+      G_row('Email', g.email ? '<a class="G_tel" href="mailto:' + G_esc(g.email) + '">' + G_esc(g.email) + '</a>' : none('Not on file'), false) +
+      G_row('Notes', p.stay_preferences ? '<span class="G_pre">' + G_esc(p.stay_preferences) + '</span>' : none('Add'), true) +
+      '</div>' +
+      '<details class="card list G_group G_opt"><summary><span class="G_fl">More details</span><span class="G_cnt">' + filled + ' of 3 filled</span><span class="chev turn" aria-hidden="true">' + G_chev() + '</span></summary>' +
+      G_row('Birthday', p.birthday ? G_esc(G_date(p.birthday)) : none('Not on file'), false) + G_row('Tags', tags ? '<span class="G_tags">' + tags + '</span>' : none('None'), false) +
+      G_row('VIP', p.vip ? G_glyph('star') + 'Yes' + (p.vip_reason ? ' · ' + G_esc(p.vip_reason) : '') : 'No', false) + '</details>';
   }
   function G_field(id, label, value, attrs, hint) {
     return '<div class="field"><label for="' + id + '">' + G_esc(label) + '</label><div class="input"><input id="' + id + '" value="' + G_esc(value) + '" autocomplete="off" ' + (attrs || '') + '></div>' + (hint ? '<span class="help">' + G_esc(hint) + '</span>' : '') + '</div>';
   }
   function G_editHtml() {
     var E = S.edit, busy = S.busy;
-    return '<div class="card glass G_card G_form"><div class="card-head"><h3>Edit details</h3></div>' + G_err(E.err, 'G_eerr') +
-      G_field('G_f_phone', 'Phone', E.contact_number, 'inputmode="tel" maxlength="40"') +
+    return '<div class="card G_card G_form">' + G_err(E.err, 'G_eerr') +
+      G_field('G_f_phone', 'Contact number', E.contact_number, 'inputmode="tel" maxlength="40"') +
       G_field('G_f_bday', 'Birthday', E.birthday, 'type="date" max="' + G_today() + '"') +
-      '<div class="field"><label for="G_f_pref">Preferences</label><textarea class="ta" id="G_f_pref" rows="4" maxlength="4000" placeholder="Allergies, a quiet room, a late arrival">' + G_esc(E.stay_preferences) + '</textarea></div>' +
+      '<div class="field"><label for="G_f_pref">Notes</label><textarea class="ta" id="G_f_pref" rows="4" maxlength="4000" placeholder="Allergies, a quiet room, a late arrival">' + G_esc(E.stay_preferences) + '</textarea></div>' +
       G_field('G_f_tags', 'Tags', E.tags, 'maxlength="400"', 'Separate tags with commas.') +
       '<div class="G_vip"><button class="chk" type="button" id="G_f_vip" role="checkbox" aria-checked="' + !!E.vip + '" aria-label="VIP guest" data-act="vip">' + (root.ICON ? root.ICON('check', 's16') : '') + '</button><span>VIP guest</span></div>' +
       (E.vip ? G_field('G_f_vipr', 'VIP note', E.vip_reason, 'maxlength="500"') : '') +
@@ -308,27 +342,54 @@
   }
 
   // ---- companions and ID photos
+  function G_ownComp() { var D = S.d, l = D.companions || [], i; for (i = 0; i < l.length; i++) if (G_exact(l[i].name, D.guest.name)) return l[i]; return null; }
+  function G_idPhoto(c, hero) {
+    var D = S.d, url = G_cached(c.id_photo_path);
+    if (!c.id_photo_path) return '<span class="G_none">No ID photo yet</span>';
+    return url ? '<button class="G_photo' + G_rotCls(c.id_photo_path) + '" type="button" data-act="full" data-id="' + G_esc(c.id) + '" data-path="' + G_esc(c.id_photo_path) + '" aria-label="Open the ID photo of ' + G_esc(c.name) + ' full screen"><img class="G_img" src="' + G_esc(url) + '" loading="lazy" decoding="async" alt="ID photo of ' + G_esc(c.name) + '">' + (hero ? '<span class="G_exp" aria-hidden="true">' + (root.ICON ? root.ICON('ext', 's16') : '⤢') + '</span>' : '') + '</button>' :
+      '<button class="btn btn-secondary btn-sm" type="button" data-act="show-id" data-id="' + G_esc(c.id) + '">' + (D.urlBusy === c.id ? 'Opening…' : 'Show ID photo') + '</button>';
+  }
+  // Replace, remove and the confirm step for one person; the guest's own record has no Remove person.
+  function G_idControls(c) {
+    var D = S.d, own = G_exact(c.name, D.guest.name), conf = S.confirm && S.confirm.id === c.id ? S.confirm.kind : '';
+    var pick = function (label, act, primary) {
+      return '<label class="btn ' + (primary ? 'btn-primary' : 'btn-secondary') + ' btn-sm G_pick">' + (primary ? G_ic('camera') : '') + label + '<input class="sr" type="file" accept="image/*" data-pick="' + act + '" data-id="' + G_esc(c.id) + '" aria-label="' + G_esc(label + ' for ' + c.name) + '"></label>';
+    };
+    if (S.cbusy === c.id) return '<p class="help" role="status">Working…</p>';
+    return conf === 'remove-photo' ? G_confirm('Remove this ID photo? The file is deleted by the clean-up job later.', 'remove-photo-yes', c.id, 'Remove photo') :
+      conf === 'remove-comp' ? G_confirm('Remove ' + c.name + ' from this record, with the ID photo?', 'remove-comp-yes', c.id, 'Remove person') :
+      '<div class="G_btns">' + (D.feat && D.feat.replace_id ? pick(c.id_photo_path ? 'Replace photo' : 'Add ID photo', 'replace', !c.id_photo_path) : '') + (c.id_photo_path && D.feat && D.feat.remove_id ? '<button class="btn btn-ghost btn-sm" type="button" data-act="remove-photo" data-id="' + G_esc(c.id) + '">Remove photo</button>' : '') +
+      (!own ? '<button class="btn btn-ghost btn-sm" type="button" data-act="remove-comp" data-id="' + G_esc(c.id) + '">Remove person</button>' : '') + '</div>';
+  }
   function G_companionsHtml() {
     var D = S.d;
     if (D.compAbsent) return '';
-    if (D.cErr) return '<div class="card glass G_card"><div class="card-head"><h3>People and ID photos</h3></div>' + G_err('No connection, so the people and ID photos could not load.', 'G_cerr') + '<button class="btn btn-secondary" type="button" data-act="detail-retry">Try again</button></div>';
-    var list = D.companions || [], g = D.guest;
+    var cap = '<div class="cap up G_cap">People and ID photos</div>';
+    if (D.cErr) return cap + '<div class="card G_card">' + G_err('No connection, so the people and ID photos could not load.', 'G_cerr') + '<button class="btn btn-secondary" type="button" data-act="detail-retry">Try again</button></div>';
+    var own = G_ownComp(), list = (D.companions || []).filter(function (c) { return c !== own; });
     var rows = list.map(function (c) {
-      var own = G_exact(c.name, g.name), url = G_cached(c.id_photo_path), conf = S.confirm && S.confirm.id === c.id ? S.confirm.kind : '';
-      var photo = c.id_photo_path ? (url ? '<button class="G_photo' + G_rotCls(c.id_photo_path) + '" type="button" data-act="full" data-id="' + G_esc(c.id) + '" data-path="' + G_esc(c.id_photo_path) + '" aria-label="Open the ID photo of ' + G_esc(c.name) + ' full screen"><img class="G_img" src="' + G_esc(url) + '" loading="lazy" decoding="async" alt="ID photo of ' + G_esc(c.name) + '"></button>' :
-        '<button class="btn btn-secondary btn-sm" type="button" data-act="show-id" data-id="' + G_esc(c.id) + '">' + (D.urlBusy === c.id ? 'Opening…' : 'Show ID photo') + '</button>') : '<span class="G_none">No ID photo</span>';
-      var pick = function (label, act) {
-        return '<label class="btn btn-secondary btn-sm G_pick">' + label + '<input class="sr" type="file" accept="image/*" data-pick="' + act + '" data-id="' + G_esc(c.id) + '" aria-label="' + G_esc(label + ' for ' + c.name) + '"></label>';
-      };
-      var actions = conf === 'remove-photo' ? G_confirm('Remove this ID photo? The file is deleted by the clean-up job later.', 'remove-photo-yes', c.id, 'Remove photo') :
-        conf === 'remove-comp' ? G_confirm('Remove ' + c.name + ' from this record, with the ID photo?', 'remove-comp-yes', c.id, 'Remove person') :
-        '<div class="G_btns">' + (D.feat && D.feat.replace_id ? pick(c.id_photo_path ? 'Replace photo' : 'Add ID photo', 'replace') : '') + (c.id_photo_path && D.feat && D.feat.remove_id ? '<button class="btn btn-ghost btn-sm" type="button" data-act="remove-photo" data-id="' + G_esc(c.id) + '">Remove photo</button>' : '') +
-        (!own ? '<button class="btn btn-ghost btn-sm" type="button" data-act="remove-comp" data-id="' + G_esc(c.id) + '">Remove person</button>' : '') + '</div>';
-      return '<div class="G_comp"><div class="G_namerow"><strong class="G_cname">' + G_esc(c.name) + '</strong>' + (own ? '<span class="pill p-neutral">Guest’s own ID</span>' : '') + (c.id_type ? '<span class="G_none">' + G_esc(G_typeName(c.id_type)) + '</span>' : '') + '</div>' + photo +
-        (S.cbusy === c.id ? '<p class="help" role="status">Working…</p>' : actions) + '</div>';
+      var open = S.cOpen === c.id || S.cbusy === c.id || (S.confirm && S.confirm.id === c.id);
+      return '<div class="G_fr"><button class="G_frm" type="button" data-act="comp-open" data-id="' + G_esc(c.id) + '" aria-expanded="' + !!open + '"><span class="G_fl">' + G_esc(c.name) + '</span><span class="G_fv">' +
+        (c.id_photo_path ? G_pill('ok', 'check', 'ID on file') : G_pill('warn', 'idcard', 'No ID yet')) + '</span><span class="chev" aria-hidden="true">' + G_chev() + '</span></button></div>' +
+        (open ? '<div class="G_comp">' + (c.id_type ? '<span class="G_none">' + G_esc(G_typeName(c.id_type)) + '</span>' : '') + G_idPhoto(c) + G_idControls(c) + '</div>' : '');
     }).join('');
-    return '<div class="card glass G_card"><div class="card-head"><h3>People and ID photos</h3></div>' + (rows || '<p class="G_empty">No companions or ID photos yet.</p>') + G_err(S.cerr, 'G_cerr') +
-      '<div class="field G_addcomp"><label for="G_newc">Add a companion</label><div class="G_inline"><div class="input"><input id="G_newc" maxlength="80" placeholder="Full name" autocomplete="off"></div><button class="btn btn-secondary" type="button" data-act="add-comp"' + (S.cbusy === 'new' ? ' disabled' : '') + '>Add</button></div></div></div>';
+    var addOpen = S.addComp || S.cbusy === 'new';
+    return cap + '<div class="card list G_group G_person">' + rows + G_err(S.cerr, 'G_cerr') +
+      '<div class="G_fr"><button class="G_frm G_addrow" type="button" data-act="comp-add-open" aria-expanded="' + !!addOpen + '">' + G_ic('plus') + 'Add a companion</button></div>' +
+      (addOpen ? '<div class="field G_addcomp"><label for="G_newc">Full name</label><div class="G_inline"><div class="input"><input id="G_newc" maxlength="80" placeholder="Full name" autocomplete="off"></div><button class="btn btn-secondary" type="button" data-act="add-comp"' + (S.cbusy === 'new' ? ' disabled' : '') + '>Add</button></div></div>' : '') + '</div>';
+  }
+  // ---- This stay (s120): the number of guests on the guest's current or next stay, from staff_guest_stay_v1 (D-373). Absent or null from the server: no card.
+  function G_stayHtml() {
+    var st = S.d.stay; if (!st) return '';
+    var today = G_today(), changed = st.draft !== st.base, n = st.draft;
+    var bk = st.booked != null && st.booked !== st.base ? 'Booked for ' + st.booked + ', staying ' + st.base : '';
+    var btn = function (id, act, label, glyph, off) { return '<button class="G_stb" id="' + id + '" type="button" data-act="' + act + '" aria-label="' + label + '"' + (off ? ' aria-disabled="true"' : '') + '>' + glyph + '</button>'; };
+    return '<div class="cap up G_cap" id="G_stay">' + (st.checkin_date > today ? 'Next stay' : 'This stay') + '</div><div class="card list G_group G_stay">' +
+      '<div class="G_fr"><div class="G_frm"><span class="G_fl">Dates</span><span class="G_fv num">' + G_esc(G_stayRange(st.checkin_date, st.checkout_date)) + '</span></div></div>' +
+      '<div class="G_fr"><div class="G_frm"><span class="G_cl" id="G_gl">Number of guests' + (bk ? '<small>' + G_esc(bk) + '</small>' : '') + '</span><span class="G_st" role="group" aria-labelledby="G_gl">' +
+        btn('G_gdec', 'stay-dec', 'Fewer guests', '−', n <= G_MIN_GUESTS || st.busy) + '<output id="G_gout" aria-live="polite">' + n + '</output>' + btn('G_ginc', 'stay-inc', 'More guests', '+', n >= G_MAX_GUESTS || st.busy) + '</span></div></div>' +
+      (changed || st.busy ? '<div class="G_sv"><button class="btn btn-primary btn-sm" type="button" data-act="stay-save"' + (st.busy ? ' disabled' : '') + '>' + (st.busy ? 'Saving…' : 'Save') + '</button><button class="btn btn-ghost btn-sm" type="button" data-act="stay-undo"' + (st.busy ? ' disabled' : '') + '>Cancel</button></div>' : '') +
+      (st.err ? '<p class="G_stm G_ster" role="alert" id="G_stmsg" tabindex="-1">' + G_esc(st.err) + '</p>' : st.msg ? '<p class="G_stm" role="status" id="G_stmsg" tabindex="-1">' + G_esc(st.msg) + '</p>' : '') + '</div>';
   }
   function G_confirm(text, act, id, label) {
     return '<div class="G_ask" role="group" aria-label="Please confirm"><p class="help">' + G_esc(text) + '</p><div class="G_btns"><button class="btn btn-danger btn-sm" type="button" data-act="' + act + '" data-id="' + G_esc(id) + '">' + G_esc(label) + '</button><button class="btn btn-secondary btn-sm" type="button" data-act="confirm-no">Keep it</button></div></div>';
@@ -477,14 +538,15 @@
   function G_paintResults() { var box = S && S.el && S.el.querySelector && S.el.querySelector('#G_results'); if (box) box.innerHTML = G_resultsHtml(); else G_paint(); }
 
   function G_loadDetail() {
-    var tok = S.token, id = S.gid, D = S.d = { loading: true, err: '', guest: null, details: null, companions: [], compAbsent: false, feat: null, urls: {}, urlBusy: '' };
-    S.edit = null; S.add = null; S.msg = null; S.err = ''; S.cerr = ''; S.confirm = null; S.cbusy = ''; G_paint();
+    var tok = S.token, id = S.gid, D = S.d = { loading: true, err: '', guest: null, details: null, companions: [], compAbsent: false, feat: null, urls: {}, urlBusy: '', stay: null };
+    S.cOpen = ''; S.addComp = false; S.edit = null; S.add = null; S.msg = null; S.err = ''; S.cerr = ''; S.confirm = null; S.cbusy = ''; G_paint();
     var one = function (q) { return Promise.resolve(q).then(function (r) { return r; }, function (e) { return { data: null, error: e || { message: 'network', network: true } }; }); };
     return Promise.all([
       one(S.client.from('guests').select('id,name,phone,email,tier,total_stays,last_stay_date,property_id').eq('id', id).maybeSingle()),
       one(S.client.from('guest_profile_details').select(G_PROFILE_COLS).eq('guest_id', id).maybeSingle()),
       G_rpc('list_guest_companions_v1', { p_guest_id: id }, G_COMP_COLS),
-      G_call({ action: 'context', guest_id: id })
+      G_call({ action: 'context', guest_id: id }),
+      G_rpc('staff_guest_stay_v1', { p_property: S.pid || G_FALLBACK_PROPERTY, p_guest_id: id })
     ]).then(function (rs) {
       if (!G_live(tok) || S.d !== D) return;
       D.loading = false;
@@ -496,6 +558,8 @@
       else D.companions = (c.data || []).map(function (x) { return { id: x.id, name: x.name, id_type: x.id_type || null, id_photo_path: x.id_photo_path || null }; }); // the ID number is dropped here, never shown
       // The function answers with the keys it understands; an older deployment answers 400 and the new actions stay hidden.
       D.feat = f.status === 200 && f.j && f.j.features ? f.j.features : f.status === 0 ? { guest_id: true, preferences: true, replace_id: true, remove_id: true } : null;
+      var sr = rs[4], own = G_ownComp(); // s120: a missing function, an error or null leaves the card out, never an error line
+      D.stay = sr && !sr.error && sr.data ? G_stayFrom(Array.isArray(sr.data) ? sr.data[0] : sr.data, 1 + D.companions.filter(function (x) { return x !== own; }).length) : null;
       G_paint(); G_focus('G_h');
       G_loadRot(D.companions.map(function (x) { return x.id_photo_path; }).filter(Boolean), tok);
     });
@@ -657,7 +721,7 @@
       if (!G_live(tok)) return;
       S.cbusy = '';
       if (r.error) { S.cerr = r.error.network ? G_NO_CONN : G_rpcText(r.error); G_paint(); return; }
-      S.msg = [name + ' was added.']; G_refreshCompanions();
+      S.msg = [name + ' was added.']; S.addComp = false; G_refreshCompanions();
     });
   }
   function G_removeComp(id) {
@@ -670,6 +734,40 @@
     });
   }
 
+  // ---- This stay: stepper and save (s120, D-373). Same pattern as the Today stay save: one key per draft, the version it was read at, plain offline text.
+  function G_stayStep(by) {
+    var st = S.d && S.d.stay; if (!st || st.busy) return;
+    var n = st.draft + by; if (n < G_MIN_GUESTS || n > G_MAX_GUESTS) return;
+    st.draft = n; st.err = ''; st.msg = ''; G_paint(); G_focus(by > 0 ? 'G_ginc' : 'G_gdec');
+  }
+  function G_stayUndo() { var st = S.d && S.d.stay; if (!st || st.busy) return; st.draft = st.base; st.err = ''; st.msg = ''; G_paint(); G_focus('G_ginc'); }
+  function G_stayDone(st, msg, isErr) { st.busy = false; st.msg = isErr ? '' : msg; st.err = isErr ? msg : ''; G_paint(); G_focus('G_stmsg'); }
+  function G_staySave() {
+    var D = S.d, st = D && D.stay; if (!st || st.busy || st.draft === st.base) return;
+    var n = st.draft, tok = S.token;
+    if (S.demo) { st.base = st.count = n; st.version += 1; st.key = null; st.keyN = null; S.haptic('ok'); G_stayDone(st, 'Saved. ' + n + (n === 1 ? ' guest' : ' guests') + '. Demo only, nothing was sent.'); return; }
+    if (!S.client || (root.navigator && root.navigator.onLine === false)) { G_stayDone(st, 'Needs a connection. Nothing was saved, and what you set is still here.', true); return; }
+    if (!st.key || st.keyN !== n) { st.key = G_stayKey(); st.keyN = n; }
+    st.busy = true; st.err = ''; st.msg = ''; G_paint();
+    G_rpc('set_stay_guest_count_v1', { p_property: S.pid || G_FALLBACK_PROPERTY, p_uid: st.uid, p_count: n, p_expected_version: st.version || 0, p_reason: G_REASON_COUNT, p_idempotency_key: st.key }).then(function (r) {
+      if (!G_live(tok) || !D.stay) return;
+      var e = r.error, c = e && String(e.code || '');
+      if (e && (c === '40001' || /stale version/i.test(String(e.message || '')))) { // someone else moved it: show their number, keep nothing of ours
+        G_rpc('staff_guest_stay_v1', { p_property: S.pid || G_FALLBACK_PROPERTY, p_guest_id: S.gid }).then(function (q) {
+          if (!G_live(tok)) return;
+          var fresh = !q.error && q.data ? G_stayFrom(Array.isArray(q.data) ? q.data[0] : q.data, st.base) : null;
+          if (fresh) { D.stay = fresh; st = fresh; } else { st.draft = st.base; }
+          G_stayDone(st, 'Someone else changed the number of guests. The latest number is shown. Set it again if it is still wrong.', true);
+        });
+        return;
+      }
+      if (e) { G_stayDone(st, e.network ? 'Needs a connection. Nothing was saved, and what you set is still here.' : G_absent(e) ? 'Changing the number of guests is not available yet.' : c === '42501' ? 'You are not allowed to change this.' : c === '22023' ? 'Choose 1, 2 or 3 guests.' : 'That did not save. Nothing was changed. Tap Save again in a moment.', true); return; }
+      var j = r.data || {}, got = G_clampGuests(j.guest_count) || n;
+      st.base = st.count = got; st.draft = got; st.version = +j.version > 0 ? Math.round(+j.version) : st.version + 1; st.key = null; st.keyN = null;
+      S.haptic('ok'); G_stayDone(st, 'Saved. ' + got + (got === 1 ? ' guest' : ' guests') + '.');
+    });
+  }
+
   // ------------------------------------------------------------------------------------------------ events
   function G_idx(t) { return +t.getAttribute('data-i'); }
   function G_onClick(ev) {
@@ -679,6 +777,12 @@
     else if (a === 'more') G_loadList(true);
     else if (a === 'list-retry') G_loadList(false);
     else if (a === 'detail-retry') G_loadDetail();
+    else if (a === 'stay-dec') G_stayStep(-1);
+    else if (a === 'stay-inc') G_stayStep(1);
+    else if (a === 'stay-undo') G_stayUndo();
+    else if (a === 'stay-save') G_staySave();
+    else if (a === 'comp-open') { S.cOpen = S.cOpen === id ? '' : id; G_paint(); }
+    else if (a === 'comp-add-open') { S.addComp = !S.addComp; G_paint(); if (S.addComp) G_focus('G_newc'); }
     else if (a === 'edit') G_openEdit();
     else if (a === 'edit-cancel') { S.edit = null; G_paint(); }
     else if (a === 'vip') { G_readEdit(); S.edit.vip = !S.edit.vip; G_paint(); G_focus('G_f_vip'); }
@@ -726,10 +830,16 @@
   function G_onKey(ev) { if (S && S.full && ev.key === 'Escape') { S.full = null; G_paint(); } }
 
   // ------------------------------------------------------------------------------------------------ mount
-  var G_DEMO = [
-    { id: '00000000-0000-4000-8000-0000000000d1', name: 'Ana Reyes', last_stay_date: '2026-10-12', guest_profile_details: { id_on_file: true, birthday: null, vip: false } },
-    { id: '00000000-0000-4000-8000-0000000000d2', name: 'Ben Cruz', last_stay_date: '2026-09-02', guest_profile_details: { id_on_file: false, birthday: null, vip: true } }
-  ];
+  var G_DEMO_IDS = ['00000000-0000-4000-8000-0000000000d1', '00000000-0000-4000-8000-0000000000d2'];
+  function G_demoRows() { // built at mount so the dates sit around today
+    var t = G_today(), at = function (n) { return G_iso(Date.parse(t + 'T00:00:00Z') + n * 86400000); };
+    return [
+      { id: G_DEMO_IDS[0], name: 'Demo Guest One', tier: 'returning', total_stays: 2, last_stay_date: at(-1), phone: '0900-000-0000', guest_profile_details: { id_on_file: true, birthday: null, vip: false },
+        stay: { uid: 'demo-stay-1', checkin_date: at(-1), checkout_date: at(2), booked_guests: 2, guest_count: null, version: 0 } },
+      { id: G_DEMO_IDS[1], name: 'Demo Guest Two', tier: 'vip', total_stays: 8, last_stay_date: at(2), guest_profile_details: { id_on_file: false, birthday: null, vip: true },
+        stay: { uid: 'demo-stay-2', checkin_date: at(2), checkout_date: at(5), booked_guests: 3, guest_count: 2, version: 1 } }
+    ];
+  }
   function G_mount(el, opts) {
     G_unmount();
     opts = opts || {};
@@ -738,14 +848,14 @@
       el: el, client: opts.client || null, demo: !!opts.demo, role: opts.role, pid: opts.propertyId || null, token: ++G_seq, gid: uuid, view: uuid ? 'detail' : 'list',
       nav: typeof opts.navigate === 'function' ? opts.navigate : G_noop, toast: typeof opts.toast === 'function' ? opts.toast : G_noop, haptic: typeof opts.haptic === 'function' ? opts.haptic : G_noop,
       list: { q: '', filter: 'recent', rows: [], total: 0, more: false, loading: false, err: '', ticket: 0, stays: { ok: false, map: {} } },
-      d: null, edit: null, add: null, msg: null, err: '', cerr: '', confirm: null, cbusy: '', busy: false, full: null
+      d: null, cOpen: '', addComp: false, edit: null, add: null, msg: null, err: '', cerr: '', confirm: null, cbusy: '', busy: false, full: null
     };
     if (S.role !== 'owner' && S.role !== 'admin') { G_paint(); return; }
     el.addEventListener('click', G_onClick); el.addEventListener('change', G_onChange); el.addEventListener('input', G_onInput); el.addEventListener('keydown', G_onKey); el.addEventListener('load', G_onImg, true); el.addEventListener('error', G_onImgErr, true);
     if (S.demo || !S.client) {
       if (!S.demo) { el.innerHTML = '<div class="G_root">' + G_err('No connection, so Guests could not open.') + '</div>'; return; }
-      S.list.rows = G_DEMO; S.list.total = G_DEMO.length;
-      if (uuid) { var g = G_DEMO.filter(function (x) { return x.id === uuid; })[0]; S.d = { loading: false, err: g ? '' : G_errText(404, 'guest_not_found'), guest: g, details: g ? g.guest_profile_details : null, companions: [], compAbsent: true, feat: null, urls: {}, urlBusy: '' }; }
+      var DEMO = G_demoRows(); S.list.rows = DEMO; S.list.total = DEMO.length;
+      if (uuid) { var g = DEMO.filter(function (x) { return x.id === uuid; })[0]; S.d = { loading: false, err: g ? '' : G_errText(404, 'guest_not_found'), guest: g, details: g ? g.guest_profile_details : null, companions: [], compAbsent: true, feat: null, urls: {}, urlBusy: '', stay: g ? G_stayFrom(g.stay, 1) : null }; }
       G_paint(); return;
     }
     if (uuid) G_loadDetail();

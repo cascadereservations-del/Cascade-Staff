@@ -20,7 +20,7 @@
     url: 'https://qkgfhsdppslwunarczeq.supabase.co',
     key: 'sb_publishable_JFuRYZ9csmQULcMRmHXDSg_Abo9UeCj',
     propertyId: '6ae230f4-c189-4547-84b1-cb6e0b2cc9bd',
-    version: '3.4.35'
+    version: '3.4.36'
   };
   var LINKS = {
     checklist: 'https://cascadereservations-del.github.io/CH-Cleaners-Checklist/',
@@ -321,7 +321,12 @@
     var gk = CS.goodToKnow(g, CS.canSeeGuestContact(role())), src = CS.sourceLabel(g.source), t = [];
     var tile = function (k, v, cls) { return '<div class="T_tile' + (cls ? ' ' + cls : '') + '"><span class="T_tk">' + k + '</span><span class="T_tv num">' + v + '</span></div>'; };
     t.push(tile('Stay', esc(kind === 'house' ? A_stayDates(g).split(' · ')[0] : A_stayDates(g)))); // the house card already says the nights in its key line
-    if (gk.guests) t.push(tile('Guests', '<span class="T_fact">' + ICON('users', 's16') + esc(CS.plural(gk.guests, 'guest')) + '</span>'));
+    if (gk.guests) {
+      var gl = '<span class="T_fact">' + ICON('users', 's16') + esc(CS.plural(gk.guests, 'guest')) + '</span>';
+      // s120: owner and admin open the guest page (This stay card) from the Guests tile; every other role, and a stay with no guest record, keeps the plain tile
+      if (CS.canSeeGuestContact(role()) && /^[0-9a-f-]{36}$/i.test(String(g.guest_id || ''))) t.push('<a class="T_tile T_tap" href="#guests/' + esc(g.guest_id) + '" aria-label="' + esc(CS.plural(gk.guests, 'guest') + ', open the guest page to change the number') + '"><span class="T_tk">Guests</span><span class="T_tv num">' + gl + '</span><span class="chev" aria-hidden="true">' + ICON('chev', 's16') + '</span></a>');
+      else t.push(tile('Guests', gl));
+    }
     if (kind === 'next' && gk.idKnown) t.push(tile('ID', gk.id ? 'On file' : 'Not yet', gk.id ? 'T_ok' : 'T_warn'));
     if (gk.tel) t.push(tile('Call', '<a class="T_call" href="' + esc(gk.tel) + '" aria-label="' + esc('Call ' + gk.phone) + '">' + esc(gk.phone) + '</a>'));
     else if (gk.phone) t.push(tile('Phone', '<button class="T_call" type="button" data-act="copy" data-copy="' + esc(gk.phone) + '" aria-label="' + esc('Copy phone ' + gk.phone) + '">' + esc(gk.phone) + ' · Copy</button>'));
@@ -2083,7 +2088,7 @@
   // Runs once per device after sign-in (CS.phoneCheckDue, key cs_phone_check) and from More > This phone > Check this phone. Every row comes from a real probe
   // (CS.phoneCheckRows); Fix all runs the fixers in order from the one tap (CS.phoneFixPlan: alerts first, so the permission prompt rides the tap), then probes again.
   // The camera is opened only when its permission is 'prompt', and every track is stopped at once. Nothing changes Trust this device.
-  var PC_SHELL = 'cs-shell-v60'; // the service worker's cache for this version (sw.js CACHE_NAME; a test keeps them equal)
+  var PC_SHELL = 'cs-shell-v61'; // the service worker's cache for this version (sw.js CACHE_NAME; a test keeps them equal)
   var PC = { open: false, busy: false, rows: null, msg: '', camPerm: null };
   function PC_ls() { return store('localStorage'); }
   function PC_cameraPerm() {
