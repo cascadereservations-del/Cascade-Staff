@@ -1817,6 +1817,9 @@ test('G U11 item 3: a photo that saved shows Saved, disabled and unticked, canno
   const rows = tagsOf(el, 'data-act', 'id-on'); assert.equal(rows.length, 2);
   assert.ok(/disabled/.test(rows[0]) && /aria-checked="false"/.test(rows[0]), 'saved row disabled and unticked'); assert.ok(!/disabled/.test(rows[1]), 'the failed photo can be ticked');
   assert.equal((el.html.match(/>Saved</g) || []).length, 1, 'one Saved label');
+  assert.match(el.html, /<select id="G_io0"[^>]*disabled/, 'whose ID is locked on the saved row'); assert.match(el.html, /<select id="G_it0"[^>]*disabled/, 'ID type is locked on the saved row');
+  assert.doesNotMatch(el.html, /<select id="G_io1"[^>]*disabled/, 'the failed photo stays editable'); assert.doesNotMatch(el.html, /<select id="G_it1"[^>]*disabled/);
+  assert.match(el.html, /aria-label="ID photo saved"/); assert.match(el.html, /class="G_idform"><span class="help">Saved<\/span>/, 'the label sits in the form, not beside the photo');
   await clickA(el, 'id-on', { i: 0 }); assert.equal(M._state().add.sheet.ids[0].on, false, 'a tap on the saved row ticks nothing');
   await clickA(el, 'save-add'); await tick();
   assert.equal(saves[1].ids.length, 1, 'only the failed photo is sent again'); assert.equal(M._state().add.sheet.ids.length, 2);
