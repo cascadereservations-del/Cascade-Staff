@@ -1148,7 +1148,6 @@ p.sub.T_line { margin: 2px 0 0; padding-left: 8px; border-left: 2px solid var(--
 .T_id > .pill { justify-self: start; } /* s105: name, the key day/time line and the ID state sit beside the face square, so its 88 px height is used */
 .T_id > .T_when { margin: 0; }
 .T_next { display: grid; gap: 8px; padding-top: 10px; border-top: 1px solid var(--v5-sep); }
-.T_next .T_ribbon { justify-self: start; }
 .A_card p.help.T_ask, p.help.T_ask { margin: 2px 0 0; color: var(--v5-ink-2); }
 /* the face (s97): an 88 px rounded square on the right of the guest header; the photo is a positioned <img> turned and scaled in app.js so the face box fills it */
 .T_face { position: relative; flex: none; display: block; width: 88px; height: 88px; aspect-ratio: 1; padding: 0; border: 0; border-radius: 12px; overflow: hidden; background: var(--v5-sunk); }
@@ -1191,11 +1190,6 @@ html { scroll-padding-bottom: calc(64px + 10px + env(safe-area-inset-bottom) + 1
 .W_card.W_rain { border-left: 3px solid var(--v5-warn-t); }
 .W_act { display: flex; gap: 8px; align-items: flex-start; margin: 0; font-size: var(--v5-t-body); line-height: 1.45; }
 .W_act svg.i { margin-top: 2px; color: var(--v5-warn-t); flex: none; }
-.T_ribbon.p-tier-returning { background: var(--v5-rib-returning-bg); color: var(--v5-rib-returning-fg); border-left-color: var(--v5-rib-returning-bar); }
-.T_ribbon.p-tier-regular { background: var(--v5-rib-regular-bg); color: var(--v5-rib-regular-fg); border-left-color: var(--v5-rib-regular-bar); }
-.T_ribbon.p-tier-vip { background: var(--v5-rib-vip-bg); color: var(--v5-rib-vip-fg); border-left-color: var(--v5-rib-vip-bar); }
-.T_ribbon svg.i { flex: none; }
-.T_ribbon { border-left: 4px solid transparent; display: flex; align-items: center; gap: 8px; min-height: 2.25rem; padding: 6px 12px; border-radius: var(--r-sm); font: 600 var(--v5-t-2)/1.3 var(--font-ui); }
 .T_perks { display: grid; gap: 8px; }
 .T_perks ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
 .T_perks li { display: flex; gap: 8px; align-items: flex-start; font-size: var(--v5-t-2); line-height: 1.4; }
@@ -1217,10 +1211,7 @@ a.T_call { min-height: var(--touch); display: inline-flex; align-items: center; 
 .S_sec { display: flex; align-items: center; gap: 12px; margin: 18px 4px 0; font: 600 var(--v5-t-min)/1 var(--font-ui); letter-spacing: .16em; text-transform: uppercase; color: var(--v5-ink-2, var(--fg-2)); }
 .S_sec::after { content: ""; flex: 1; height: 1px; background: linear-gradient(90deg, var(--v5-line), transparent); }
 .A_body > .S_sec:first-child, .U_bar + .S_sec, .P_alert + .S_sec { margin-top: 6px; }
-.T_tier-first { --tbar: var(--v5-line-2); --tbg: var(--v5-surf-2); --tink: var(--v5-ink-2, var(--fg-2)); }
-.T_tier-returning { --tbar: var(--v5-rib-returning-bar); --tbg: var(--v5-rib-returning-bg); --tink: var(--v5-rib-returning-fg); }
-.T_tier-regular { --tbar: var(--v5-rib-regular-bar); --tbg: var(--v5-rib-regular-bg); --tink: var(--v5-rib-regular-fg); }
-.T_tier-vip { --tbar: var(--v5-rib-vip-bar); --tbg: var(--v5-rib-vip-bg); --tink: var(--v5-rib-vip-fg); }
+.T_tier-first, .T_tier-returning, .T_tier-regular, .T_tier-vip { --tbar: var(--v5-now-bar); --tbg: var(--v5-now-bg); --tink: var(--v5-ink-2, var(--fg-2)); } /* s119 v4: one calm bar for every tier; the chip and the name carry the tier */
 /* the guest in the house: tier bar on top, a soft wash of the tier colour, the biggest name on the screen */
 .card.glass.T_card.T_now, .card.glass.T_card.T_arr { border-top: 4px solid var(--tbar); background-image: linear-gradient(180deg, color-mix(in oklab, var(--tbg) 60%, transparent), transparent 9rem); }
 .T_card .T_lbl { color: var(--tink); letter-spacing: .14em; }
@@ -1234,7 +1225,7 @@ a.T_call { min-height: var(--touch); display: inline-flex; align-items: center; 
 .T_tk { font: 600 var(--v5-t-min)/1.2 var(--font-ui); letter-spacing: .1em; text-transform: uppercase; color: var(--fg-3); }
 .T_tv { font: 600 var(--v5-t-2)/1.35 var(--font-ui); color: var(--v5-ink, var(--fg)); overflow-wrap: anywhere; }
 .T_tv .T_fact { display: inline-flex; align-items: center; gap: 4px; }
-.T_tv .T_call { font: inherit; color: var(--accent-text, var(--v5-info-t)); text-decoration: none; background: none; border: 0; padding: 0; min-height: 24px; cursor: pointer; text-align: left; }
+.T_tv .T_call { font: inherit; color: var(--accent-text, var(--v5-info-t)); text-decoration: none; background: none; border: 0; padding: 0; min-height: var(--touch, 44px); margin-block: -10px; display: inline-flex; align-items: center; cursor: pointer; text-align: left; } /* s119: a 44 px target that takes no more room than the 24 px text line */
 .T_tile.T_ok .T_tv { color: var(--v5-ok-t); } .T_tile.T_warn .T_tv { color: var(--v5-warn-t); }
 /* the incoming guest: quieter, outlined, tier bar on the left, a smaller name */
 .card.T_card.T_upnext { display: grid; row-gap: 10px; background: var(--v5-surf-2); border: 1px dashed var(--v5-line-2); border-left: 4px solid var(--tbar); box-shadow: none; }
@@ -1280,12 +1271,6 @@ a.T_call { min-height: var(--touch); display: inline-flex; align-items: center; 
 @media (min-width: 37.5rem) { .K_inv-row { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
 /* end s110 kpi-inventory */
 /* ---- s110: tier tag with glyph, weather warnings, hourly strip, cleaner walk-through and thank-you ---- */
-.T_ribbon.p-tier-first, .T_badge.p-tier-first { background: var(--v5-ok-w); color: var(--v5-ok-t); border-left-color: var(--v5-ok-t); }
-.T_badge { display: inline-flex; align-items: center; gap: 4px; min-width: 0; max-width: 100%; padding: 4px 8px; border-radius: 999px; border-left: 4px solid transparent; font: 600 var(--v5-t-label)/1.2 var(--font-ui); }
-.T_badge.p-tier-returning { background: var(--v5-rib-returning-bg); color: var(--v5-rib-returning-fg); border-left-color: var(--v5-rib-returning-bar); }
-.T_badge.p-tier-regular { background: var(--v5-rib-regular-bg); color: var(--v5-rib-regular-fg); border-left-color: var(--v5-rib-regular-bar); }
-.T_badge.p-tier-vip { background: var(--v5-rib-vip-bg); color: var(--v5-rib-vip-fg); border-left-color: var(--v5-rib-vip-bar); }
-.T_badge svg.i { flex: none; }
 /* weather warnings: one colour per kind, in the Today strip and in the Weather card */
 .U_storm { background: var(--v5-danger-w); color: var(--v5-danger-t); }
 .U_wind { background: var(--v5-info-w); color: var(--v5-info-t); }
@@ -1372,3 +1357,42 @@ html[data-plain="1"] .card.glass, html[data-plain="1"] .A_glass, html[data-plain
 html[data-plain="1"] .appbar { background: var(--v5-bg); } html[data-plain="1"] .sheet { background: var(--v5-surf); }
 html[data-plain="1"] .tabbar, html[data-plain="1"] .toast, html[data-plain="1"] .A_chipglass { background: var(--v5-panel); } html[data-plain="1"] .card.T_card.T_upnext { background: var(--v5-surf-2); }
 @media (prefers-reduced-motion: reduce) { .btn:active, .chip:active, .iconbtn:active, .E_pill:active, .chk:active { transform: none; } }
+
+/* ================= s119 v4: one tier chip per guest, tier on the name, the staying line and its sheet ================= */
+.T_chip { --bgc: var(--v5-t1-bg); --fgc: var(--v5-t1-fg); --edge: var(--v5-t1-edge); display: inline-flex; align-items: center; gap: 8px; justify-self: start; max-width: 100%; min-height: 2rem; padding: 4px 12px 4px 10px; border-radius: 999px; background: var(--bgc); color: var(--fgc); box-shadow: var(--edge); font: 500 .9375rem/1.2 var(--font-ui); }
+.T_chip.T_c-returning { --bgc: var(--v5-t2-bg); --fgc: var(--v5-t2-fg); --edge: var(--v5-t2-edge); font-weight: 600; }
+.T_chip.T_c-regular { --bgc: var(--v5-t3-bg); --fgc: var(--v5-t3-fg); --edge: var(--v5-t3-edge); font-weight: 600; }
+.T_chip.T_c-vip { --bgc: var(--v5-t4-bg); --fgc: var(--v5-t4-fg); --edge: var(--v5-t4-edge); font-weight: 700; }
+.T_chip svg.i { width: 18px; height: 18px; stroke-width: 1.75; }
+.T_chip.T_c-vip svg.i { fill: currentColor; fill-opacity: .9; }
+.T_id > .T_chip { margin: 2px 0; }
+.nm3 { color: var(--v5-nm3); }
+.nm4 { display: inline-block; color: var(--v5-nm4a); }
+@supports (background-clip: text) or (-webkit-background-clip: text) { .nm4 { background: linear-gradient(90deg, var(--v5-nm4a), var(--v5-nm4b), var(--v5-nm4c)); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; filter: drop-shadow(0 0 6px var(--v5-glow)); } }
+.card.glass.T_card.T_tier-vip.T_now, .card.glass.T_card.T_tier-vip.T_arr { border-top: 0; background-image: none; box-shadow: var(--v5-vip-ring), 0 1px 2px var(--v5-card-shadow); }
+.card.T_card.T_upnext { --tbar: var(--v5-line-2); }
+.card.T_card.T_upnext.T_tier-vip { border: 0; box-shadow: var(--v5-vip-ring); }
+@media (prefers-contrast: more) {
+  .nm3, .nm4 { color: var(--v5-ink); background: none; -webkit-text-fill-color: currentColor; filter: none; }
+  .T_chip { background: var(--v5-hc-bg); box-shadow: inset 0 0 0 2px currentColor; }
+  .card.glass.T_card.T_tier-vip.T_now, .card.glass.T_card.T_tier-vip.T_arr, .card.T_card.T_upnext.T_tier-vip { box-shadow: 0 0 0 2px var(--v5-t4-fg); }
+}
+@media (forced-colors: active) { .nm3, .nm4 { color: CanvasText; background: none; -webkit-text-fill-color: currentColor; filter: none; } .T_chip { border: 1px solid CanvasText; } }
+/* the staying line: names, who booked, one link to change it */
+.S_who { display: grid; gap: 8px; padding-top: 10px; border-top: 1px solid var(--v5-sep); min-width: 0; }
+.S_k { font: 700 var(--v5-t-label)/1.3 var(--font-ui); color: var(--v5-ink-2, var(--fg-2)); }
+.S_line { display: flex; align-items: center; gap: 12px; min-height: var(--touch, 44px); flex-wrap: wrap; font: 400 var(--v5-t-body)/1.4 var(--font-ui); overflow-wrap: anywhere; }
+.S_person { display: flex; align-items: center; gap: 12px; min-height: var(--touch, 44px); }
+.S_av { position: relative; flex: none; display: grid; place-items: center; width: 36px; height: 36px; border-radius: 50%; background: var(--v5-sunk); color: var(--v5-ink-2, var(--fg-2)); border: 1px solid var(--v5-line); font: 700 var(--v5-t-label)/1 var(--font-ui); }
+.S_av.on { background: var(--v5-fill, var(--v5-surf-2)); color: var(--v5-ink, var(--fg)); border: 2px solid var(--v5-act); }
+.S_tk { position: absolute; right: -5px; bottom: -5px; width: 18px; height: 18px; border-radius: 50%; background: var(--v5-act); color: var(--v5-act-fg); display: grid; place-items: center; }
+.S_tk svg.i { width: 12px; height: 12px; stroke-width: 3; }
+.S_n { min-width: 0; font-weight: 600; overflow-wrap: anywhere; }
+.S_person.muted .S_n { font-weight: 500; color: var(--v5-ink-3, var(--fg-3)); }
+.S_mk { margin-left: auto; flex: none; display: inline-flex; align-items: center; min-height: 24px; padding: 0 8px; border-radius: 999px; font: 600 var(--v5-t-label)/1.2 var(--font-ui); background: var(--v5-fill, var(--v5-surf-2)); border: 2px solid var(--v5-act); color: var(--v5-ink, var(--fg)); }
+.S_mk.q { background: transparent; border: 1px solid var(--v5-line-2); color: var(--v5-ink-3, var(--fg-3)); font-weight: 500; }
+.S_lnk { display: inline-flex; align-items: center; gap: 8px; justify-self: start; min-height: var(--touch, 44px); padding: 0; border: 0; background: none; color: var(--v5-act); font: 600 .9375rem/1.2 var(--font-ui); cursor: pointer; }
+.S_sg { display: grid; gap: 8px; padding: 12px; border-radius: 12px; background: var(--v5-gold-wash); margin-top: 10px; }
+.S_sgh { display: flex; gap: 8px; align-items: center; font: 600 .9375rem/1.3 var(--font-ui); color: var(--v5-gold-text, var(--v5-ink)); }
+.S_sgv { font: 650 1rem/1.3 var(--font-ui); overflow-wrap: anywhere; }
+.S_two { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }

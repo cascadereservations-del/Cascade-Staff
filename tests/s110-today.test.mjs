@@ -1,4 +1,4 @@
-// s110 (Staff 3.4.26): tier badge with stay count, weather warnings beyond rain, hourly strip with rain chance, cleaner walk-through and thank-you nudges.
+// s110 (Staff 3.4.27): tier badge with stay count, weather warnings beyond rain, hourly strip with rain chance, cleaner walk-through and thank-you nudges.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { CS, read, boot, HOMEWITH, NOTICES_RAW, baseHandlers, stayRow, TODAY, NOW } from './_a_harness.mjs';
@@ -7,13 +7,13 @@ import { CS, read, boot, HOMEWITH, NOTICES_RAW, baseHandlers, stayRow, TODAY, NO
 test('s110 CS.tierBadge: a glyph and the total stays per tier; first stay only when the data says so; unknown gives null', () => {
   const b = (g) => CS.tierBadge(g);
   assert.deepEqual(b({ tier: 'first', repeat: false, stay_count: 1 }), { tier: 'first', icon: 'sprout', word: 'First stay', count: 1, text: 'First stay' });
-  assert.deepEqual(b({ tier: 'returning', stay_count: 2 }), { tier: 'returning', icon: 'repeat', word: 'Returning', count: 2, text: 'Returning · 2 stays' });
-  assert.equal(b({ tier: 'regular', stay_count: 5 }).text, 'Regular · 5 stays'); assert.equal(b({ tier: 'regular', stay_count: 5 }).icon, 'sparkles');
+  assert.deepEqual(b({ tier: 'returning', stay_count: 2 }), { tier: 'returning', icon: 'repeat', word: 'Returning', count: 2, text: 'Returning · 2nd stay' });
+  assert.equal(b({ tier: 'regular', stay_count: 5 }).text, 'Regular · 5 stays'); assert.equal(b({ tier: 'regular', stay_count: 5 }).icon, 'star');
   assert.equal(b({ tier: 'vip', stay_count: 11 }).text, 'VIP · 11 stays'); assert.equal(b({ tier: 'vip', stay_count: 11 }).icon, 'crown');
   assert.equal(b({ tier: 'vip' }).text, 'VIP', 'a known tier with no count: the word alone');
-  assert.equal(b({ tier: 'returning', stay_count: 1 }).text, 'Returning · 1 stay', 'singular');
+  assert.equal(b({ tier: 'returning', stay_count: 1 }).text, 'Returning · 1st stay', 'ordinal');
   assert.equal(b({ tier: null, repeat: false }).text, 'First stay'); assert.equal(b({ tier: null, stay_count: 1 }).text, 'First stay');
-  assert.equal(b({ tier: null, repeat: true, stay_count: 3 }).text, 'Returning · 3 stays', 'no tier, a repeat flag and a count');
+  assert.equal(b({ tier: null, repeat: true, stay_count: 3 }).text, 'Returning · 3rd stay', 'no tier, a repeat flag and a count');
   assert.equal(b({ tier: null, repeat: true }).text, 'Returning');
   assert.equal(b({ tier: 'first', stay_count: 4 }).tier, 'returning', 'the count beats a stale first tier');
   for (const g of [null, undefined, {}, { tier: null }, { tier: 'gold' }, { tier: null, repeat: undefined, stay_count: 0 }]) assert.equal(b(g), null, JSON.stringify(g));
@@ -27,14 +27,14 @@ test('s110 tier tag: on the Now card (once), the Up next card and the Calendar g
   const cur = GUEST({ tier: 'vip', stay_count: 11 }), nxt = GUEST({ guest_name: 'Ben Cruz', checkin_date: '2026-10-17', checkout_date: '2026-10-19', tier: null, repeat: false, stay_count: 1 });
   for (const role of ['owner', 'cleaner']) {
     const h = await homeHtml(role, { current_guest: cur, next_guest: nxt });
-    assert.match(h, /aria-label="Today in the house"><div class="T_ribbon p-tier-vip" role="note"><svg[^>]*data-i="crown"[^>]*><\/svg><span>VIP · 11 stays<\/span><\/div>/, role);
+    assert.match(h, /<\/h2><\/div><span class="T_chip T_c-vip" role="note"><svg[^>]*data-i="crown"[^>]*><\/svg><span>VIP · 11 stays<\/span><\/span>/, role);
     assert.equal((h.match(/11 stays/g) || []).length, 1, 'the count is said once');
-    assert.match(h, /T_upnext[\s\S]*?<span class="T_badge p-tier-first" role="note"><svg[^>]*data-i="sprout"[^>]*><\/svg><span>First stay<\/span>/, role);
+    assert.match(h, /T_upnext[\s\S]*?<span class="T_chip T_c-first" role="note"><svg[^>]*data-i="sprout"[^>]*><\/svg><span>First stay<\/span>/, role);
   }
   const cal = (await boot({ role: 'owner', hash: '#calendar/house', handlers: baseHandlers('owner', { staff_home_v1: () => HOMEWITH([stayRow('Ana Reyes', '2026-10-13', '2026-10-17')], { current_guest: GUEST({ tier: 'regular', stay_count: 5 }) }) }) })).els['v-calendar'].innerHTML;
-  assert.match(cal, /<span class="T_badge p-tier-regular" role="note"><svg[^>]*data-i="sparkles"[^>]*><\/svg><span>Regular · 5 stays<\/span><\/span>/);
+  assert.match(cal, /<span class="T_chip T_c-regular" role="note"><svg[^>]*data-i="star"[^>]*><\/svg><span>Regular · 5 stays<\/span><\/span>/);
   assert.equal((cal.match(/5 stays/g) || []).length, 1, 'the guest card says it once');
-  const css = read('styles.css'); for (const t of ['returning', 'regular', 'vip', 'first']) assert.match(css, new RegExp('\\.T_badge\\.p-tier-' + t));
+  const css = read('styles.css'); for (const t of ['returning', 'regular', 'vip', 'first']) assert.match(css, new RegExp('\\.T_chip\\.T_c-' + t + '|\\.T_chip \\{'));
 });
 
 // ---------------------------------------------------------------------------------------------- 2. weather warnings
@@ -137,5 +137,5 @@ test('s110 house rules: tokens in all three theme blocks, no raw colour or px fo
   for (const t of ['--v5-hz-haze-t', '--v5-hz-haze-w', '--v5-hz-sun-t', '--v5-hz-sun-w']) assert.equal(tk.split(t + ':').length - 1, 3, t + ' in light, media dark and data-theme dark');
   assert.doesNotMatch(s110, /#[0-9a-fA-F]{3,8}\b|rgba?\(/, 'tokens only'); assert.doesNotMatch(s110, /font-size:\s*[\d.]+px/); assert.doesNotMatch(s110, /white-space:\s*nowrap/);
   assert.doesNotMatch(s110, /gap:\s*(?!0\b|4px|8px|12px|16px|24px)\S+/, 'gaps on the 4/8/12/16/24 scale');
-  assert.equal(JSON.parse(read('package.json')).version, '3.4.26'); assert.match(read('app.js'), /version: '3\.4\.26'/); assert.match(read('sw.js'), /CACHE_NAME = 'cs-shell-v51'/);
+  assert.equal(JSON.parse(read('package.json')).version, '3.4.27'); assert.match(read('app.js'), /version: '3.4.27'/); assert.match(read('sw.js'), /CACHE_NAME = 'cs-shell-v52'/);
 });

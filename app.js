@@ -20,7 +20,7 @@
     url: 'https://qkgfhsdppslwunarczeq.supabase.co',
     key: 'sb_publishable_JFuRYZ9csmQULcMRmHXDSg_Abo9UeCj',
     propertyId: '6ae230f4-c189-4547-84b1-cb6e0b2cc9bd',
-    version: '3.4.26'
+    version: '3.4.27'
   };
   var LINKS = {
     checklist: 'https://cascadereservations-del.github.io/CH-Cleaners-Checklist/',
@@ -151,20 +151,18 @@
     return H_nm.out;
   }
   function A_houseT() { var v = A_notices(); return v ? v.times : CS.A_houseTimes(null); } // 12:00 noon / 2:00 pm, from notices_v1.house_times, one fallback in lib.js
-  // s95: chip beside the guest name, benefits line under it, older returning pill only as fallback (CS.tierParts, lib.js).
-  function tierP(g, compact) { return CS.tierParts(g, compact, pill); }
   // The Today card (glass). Check-out time falls back to the house time, never a hard-coded one.
   function todayCard() {
     var p = state.payload, st = CS.todayCardState(p, p.today);
     if (!st.guest) return '<section class="card glass A_card F_span" aria-label="Today in the house"><span class="cap up">' + esc(st.label) + '</span><p class="sub">The house is free tonight. The next stay will show here.</p></section>';
-    var g = st.guest, tp = tierP(st.guest, true), ht = A_houseT(), nl = CS.notableLine(g);
+    var g = st.guest, ht = A_houseT(), nl = CS.notableLine(g);
     var outLater = st.kind === 'house' && g.checkout_date && g.checkout_date > p.today, outT = CS.fmtTime(g.checkout_time) || ht.outLabel; // s105: a past check-out date falls back to the old stay-dates line
     var key = st.kind === 'house' ? (outLater ? 'Out ' + (g.checkout_date === CS.addDays(p.today, 1) ? 'tomorrow' : CS.dayLabel(g.checkout_date)) + (g.checkout_date === CS.addDays(p.today, 1) ? ' ' : ', ') + outT : 'Out ' + outT) : 'In ' + (CS.fmtTime(g.checkin_time) || ht.inLabel); // s96: the time that matters comes first
     var tcls = ' T_tier-' + (CS.tierLabel(g.tier) ? g.tier : 'first') + (st.kind === 'house' ? ' T_now' : ' T_arr'); // s109: tier colour on the whole card; the guest in the house leads
-    return '<section class="card glass A_card F_span T_card' + tcls + '" aria-label="Today in the house">' + A_ribbon(g) + '<div class="row-between"><span class="cap up T_lbl">' + esc(st.kind === 'house' ? 'Now · in the house' : st.label) + '</span>' + (st.pill ? pill(st.pill.tone, toneIcon(st.pill.tone), st.pill.text) : '') + '</div>' +
-      '<div class="T_who"><div class="T_id"><div class="T_namerow"><h2 class="A_name">' + esc(g.guest_name || 'Guest') + '</h2></div>' + // s105: name, the key day/time line and the ID state fill the height of the face square; Good to know, perks and the rest span the card
+    return '<section class="card glass A_card F_span T_card' + tcls + '" aria-label="Today in the house"><div class="row-between"><span class="cap up T_lbl">' + esc(st.kind === 'house' ? 'Now · in the house' : st.label) + '</span>' + (st.pill ? pill(st.pill.tone, toneIcon(st.pill.tone), st.pill.text) : '') + '</div>' +
+      '<div class="T_who"><div class="T_id"><div class="T_namerow"><h2 class="A_name' + A_nm(g) + '">' + esc(g.guest_name || 'Guest') + '</h2></div>' + A_badge(g) + // s105: name, the key day/time line and the ID state fill the height of the face square; Good to know, perks and the rest span the card
       '<p class="sub num T_when"><strong class="A_key">' + esc(A_nb(key)) + '</strong> · ' + esc(outLater ? A_nb(CS.plural(g.nights != null ? g.nights : CS.daysBetween(g.checkin_date, g.checkout_date), 'night')) : A_stayDates(g)) + '</p>' + A_idPill(g) + '</div>' + A_face(g) + '</div>' +
-      A_grid(g, st.kind) + A_goodToKnow(g, st.kind) + A_perks(g, st.kind, tp) + (nl ? '<p class="help T_ask">' + esc(nl) + '</p>' : '') +
+      A_staying(g) + A_grid(g, st.kind) + A_goodToKnow(g, st.kind) + A_perks(g, st.kind) + (nl ? '<p class="help T_ask">' + esc(nl) + '</p>' : '') +
       '<a class="A_more" href="#calendar/' + (st.kind === 'house' ? 'house' : 'next') + '">Open guest card' + ICON('chev', 's16') + '</a></section>';
   }
   // s97 SPEC-47b / s98 SPEC-47c: the face sits on the RIGHT of the guest header in an 88 px rounded square. Until the server has located the face (id_face_box, stored-frame 0-1)
@@ -277,13 +275,13 @@
       (wx.action ? '<p class="W_act">' + ICON('check', 's16') + '<span>' + esc(wx.action) + '</span></p>' : '') + (wx.asOf ? '<p class="help">as of ' + esc(wx.asOf) + '</p>' : '') +
       '<a class="btn btn-ghost btn-sm" href="#weather">Open the forecast</a></div></details>';
   }
-  // s105 SPEC-46: the tier ribbon at the top of the Today card (first stays get none; it replaces the small chip beside the name) and the perks checklist (CS.tierPerks); both are for every role, they are not contact data.
-  // s110: the ribbon and the compact tag both come from CS.tierBadge (glyph per tier, "Returning · 2 stays", "First stay"), so the stay count is said once.
-  function A_ribbon(g) { var r = CS.tierBadge(g); return r ? '<div class="T_ribbon p-tier-' + r.tier + '" role="note">' + ICON(r.icon, 's16') + '<span>' + esc(r.text) + '</span></div>' : ''; }
-  function A_badge(g) { var r = CS.tierBadge(g); return r ? '<span class="T_badge p-tier-' + r.tier + '" role="note">' + ICON(r.icon, 's16') + '<span>' + esc(r.text) + '</span></span>' : ''; }
-  function A_perks(g, kind, tp) {
+  // s119 v4: ONE tier chip per card (CS.tierBadge derives the stay number once; the ribbon and the server's benefits line are gone, so a card cannot say first stay and returning together).
+  function A_badge(g) { var r = CS.tierBadge(g); return r ? '<span class="T_chip T_c-' + r.tier + '" role="note">' + ICON(r.icon, 's16') + '<span>' + esc(r.text) + '</span></span>' : ''; }
+  // the guest name by tier: Regular bronze, VIP gold gradient; first and returning stay plain
+  function A_nm(g) { var r = CS.tierBadge(g); return r && r.tier === 'regular' ? ' nm3' : r && r.tier === 'vip' ? ' nm4' : ''; }
+  function A_perks(g, kind) {
     var perks = CS.tierPerks(g.tier, { id: !!g.id_photo_path, phase: kind === 'house' ? 'house' : 'arrival' });
-    if (!perks.length) return tp.line; // the server's benefits line is only the fallback
+    if (!perks.length) return '';
     var title = kind === 'house' ? 'Perks to give' : 'Prepare before arrival';
     return '<div class="T_perks" role="group" aria-label="' + title + '"><span class="cap up">' + title + '</span><ul>' + perks.map(function (x) { return '<li>' + ICON('check', 's16') + '<span>' + esc(x) + '</span></li>'; }).join('') + '</ul></div>';
   }
@@ -294,8 +292,8 @@
     var p = state.payload, np = p && CS.nextPrep(p, p.today); if (!np) return '';
     var n = np.guest, tier = CS.tierLabel(n.tier) ? n.tier : 'first', when = 'Arrives ' + np.day + ' ' + (CS.fmtTime(n.checkin_time) || A_houseT().inLabel);
     return '<section class="card A_card F_span T_card T_upnext T_tier-' + tier + '" aria-label="Next arrival"><div class="row-between"><span class="cap up T_lbl">Up next · incoming</span>' + pill('info', 'clock', when) + '</div>' +
-      '<div class="T_namerow"><h3 class="T_nname">' + esc(np.name) + '</h3>' + A_badge(n) + '</div>' +
-      A_grid(n, 'next') + A_perks(n, 'arriving', { line: '' }) + '<a class="A_more" href="#calendar/next">Open guest card' + ICON('chev', 's16') + '</a></section>';
+      '<div class="T_namerow"><h3 class="T_nname' + A_nm(n) + '">' + esc(np.name) + '</h3>' + A_badge(n) + '</div>' +
+      A_staying(n) + A_grid(n, 'next') + A_perks(n, 'arriving') + '<a class="A_more" href="#calendar/next">Open guest card' + ICON('chev', 's16') + '</a></section>';
   }
   // s109: the facts of a stay as a compact 2-column grid (dates, guests, ID, phone for owner/admin, channel), so the card uses its width.
   function A_grid(g, kind) {
@@ -628,10 +626,10 @@
   function guestBlock(g, kind) {
     var label = kind === 'house' ? 'In the house' : 'Next arrival';
     var st = kind === 'house' ? pill('ok', 'check', g.checkin_date === state.payload.today ? 'Arrived today' : 'Checked in') : pill('info', 'info', 'Arrives ' + CS.dayLabel(g.checkin_date));
-    var tp = tierP(g, false), src = CS.sourceLabel(g.source), earlier = CS.earlierLine(g), withLine = CS.canSeeGuestContact(state.access && state.access.role) ? CS.companionsLine(g) : null; // D-319: owner/admin only, even if the server sent it
+    var src = CS.sourceLabel(g.source), earlier = CS.earlierLine(g), withLine = CS.canSeeGuestContact(state.access && state.access.role) ? CS.companionsLine(g) : null; // D-319: owner/admin only, even if the server sent it
     var tint = kind === 'house' ? 'G_stay' : 'G_in'; // s93: arriving = green, in the house = blue (the house guest always checks out after today, so no third tint)
     var info = '<div class="card glass ' + tint + '" id="' + (kind === 'house' ? 'house' : 'next') + '"><div class="row-between"><span class="cap up">' + label + '</span>' + st + '</div>' +
-      '<div class="T_namerow T_gap"><h3 class="ttl">' + esc(g.guest_name || 'Guest') + '</h3>' + A_badge(g) + '</div>' + A_perks(g, kind === 'house' ? 'house' : 'arriving', tp) + (CS.notableLine(g) ? '<p class="help T_ask">' + esc(CS.notableLine(g)) + '</p>' : '') + (withLine ? '<p class="sub T_with">' + esc(withLine) + '</p>' : '') +
+      '<div class="T_namerow T_gap"><h3 class="ttl' + A_nm(g) + '">' + esc(g.guest_name || 'Guest') + '</h3>' + A_badge(g) + '</div>' + A_perks(g, kind === 'house' ? 'house' : 'arriving') + (CS.notableLine(g) ? '<p class="help T_ask">' + esc(CS.notableLine(g)) + '</p>' : '') + (withLine ? '<p class="sub T_with">' + esc(withLine) + '</p>' : '') +
       '<div class="row-wrap" style="margin-top:6px">' + (src ? '<span class="pill p-neutral">' + esc(src) + '</span>' : '') + '</div>' +
       '<p class="sub num" style="margin:8px 0 0">' + esc(datesLine(g)) + '</p>' + (earlier ? '<p class="help num" style="margin:2px 0 0">' + esc(earlier) + '</p>' : '') + contactBlock(g) +
       H_readyBlock(g.arrival_ready, g, true) + (canAddDetails() && g.uid ? '<a class="btn btn-secondary btn-sm" href="./guest/#' + encodeURIComponent(g.uid) + '" style="margin-top:12px">' + ICON('idcard', 's16') + 'Add guest details</a>' : '') +
@@ -1211,7 +1209,7 @@
     var S = state.sheet; if (!S || (!state.payload && S.kind !== 'attn')) return; // the pill's list can say "Loading" and "No connection" before there is a payload
     var e = sheetEls(), had = e.sheet.contains(document.activeElement);
     e.sheet.setAttribute('data-F-kind', S.kind); e.sheet.setAttribute('data-E-swipe', E_sheetTwin(S.kind)); // the pull-down's tap twin: the button with this data-act is on the sheet
-    $('cs-body').innerHTML = E_sheetPage(S, (S.kind === 'attn' ? E_attnSheet() : S.kind === 'day' ? daySheet(S) : S.kind === 'add' ? addReminderCard() : S.kind === 'news' ? A_newsSheet() : S.kind === 'nadd' ? A_noticeAddForm() : S.kind === 'rate' ? A_rateConfirm() : S.kind === 'tour' ? H_tourSheet(S) : warnSheet(S)) +
+    $('cs-body').innerHTML = E_sheetPage(S, (S.kind === 'attn' ? E_attnSheet() : S.kind === 'day' ? daySheet(S) : S.kind === 'add' ? addReminderCard() : S.kind === 'news' ? A_newsSheet() : S.kind === 'nadd' ? A_noticeAddForm() : S.kind === 'stay' ? A_stayForm() : S.kind === 'rate' ? A_rateConfirm() : S.kind === 'tour' ? H_tourSheet(S) : warnSheet(S)) +
       (S.err ? '<div class="errbox" style="margin-top:12px">' + ICON('alert') + '<span>' + esc(S.err) + '</span></div>' : '') +
       (S.msg ? '<div class="okbox" style="margin-top:12px">' + ICON('check') + '<span>' + esc(S.msg) + '</span></div>' : '') + (S.hint ? '<p class="help" role="status" style="margin:8px 0 0">' + esc(S.hint) + '</p>' : '') +
       '');
@@ -1329,11 +1327,12 @@
     var day = S.kind === 'day' && state.payload, nav = function (dir, act, label, icon) { return '<button class="iconbtn H_daynav" type="button" data-act="' + act + '" aria-label="' + label + '"' + (CS.H_dayStep(S.key, dir, state.payload.today) ? '' : ' disabled') + '>' + ICON(icon, 's24') + '</button>'; };
     return '<div class="F_sheethead' + (day ? ' H_dayhead' : '') + '">' + (day ? nav(-1, 'day-prev', 'Previous day', 'back') : '') + title + (day ? nav(1, 'day-next', 'Next day', 'chev') : '') + '<button class="btn btn-secondary btn-sm F_close" type="button" data-F-close="1" data-act="' + E_sheetTwin(S.kind) + '">' + ICON('close', 's16') + 'Close</button></div>' + ask + html.slice(title.length);
   }
-  function E_sheetTwin(kind) { return kind === 'tour' ? 'tour-skip' : kind === 'add' ? 'task-add-cancel' : kind === 'nadd' ? 'notice-add-cancel' : kind === 'rate' ? 'rate-back' : 'sheet-close'; }
+  function E_sheetTwin(kind) { return kind === 'tour' ? 'tour-skip' : kind === 'add' ? 'task-add-cancel' : kind === 'nadd' ? 'notice-add-cancel' : kind === 'stay' ? 'stay-cancel' : kind === 'rate' ? 'rate-back' : 'sheet-close'; }
   function E_dirty() {
     var S = state.sheet, a = state.add, b = state.nadd, f = state.rateForm; if (!S) return false;
     if (S.kind === 'add') return !!(a && (String(a.title).trim() || a.due || a.who || String(a.note).trim()));
     if (S.kind === 'nadd') return !!(b && (String(b.title).trim() || b.start || b.hours || String(b.detail).trim()));
+    if (S.kind === 'stay') return !!(state.stay && state.stay.names.trim() !== state.stay.init.trim());
     if (S.kind === 'rate') return false; // the confirm sheet restates what was typed on the screen behind it: Escape, the scrim and Close all just close it
     if (S.kind === 'day') { var fld = $('df-label'), live = fld && typeof fld.value === 'string' ? fld.value : ''; return !!(S.formOpen && (String(S.form.label).trim() || String(live).trim())); } // a note being typed on a day
     return false;
@@ -2028,6 +2027,63 @@
       (a.err ? '<div class="errbox" role="alert">' + ICON('alert') + '<span>' + esc(a.err) + '</span></div>' : '') +
       '<div class="row-wrap"><button class="btn btn-primary" type="button" data-act="notice-add-save"' + (a.busy ? ' disabled' : '') + '>' + (a.busy ? 'Saving…' : 'Add notice') + '</button><button class="btn btn-ghost" type="button" data-act="notice-add-cancel">Cancel</button></div></div>';
   }
+  // ---------------------------------------------------------------- s119: who is staying (staff_home_v1 `staying`, set_stay_staying_v1, confirm_stay_staying_suggestion_v1)
+  // Nothing is drawn while the server does not send `staying` (the SQL release may come later than this app). Any staff role may type; Cassy's suggestion is only ever a suggestion until someone taps Use these.
+  function A_inits(n) { var w = String(n || '').trim().split(/\s+/).filter(Boolean); return esc(((w[0] || '?').charAt(0) + (w.length > 1 ? w[w.length - 1].charAt(0) : '')).toUpperCase()); }
+  function A_av(n) { return '<span class="S_av on" aria-hidden="true">' + A_inits(n) + '<span class="S_tk">' + ICON('check', 's12') + '</span></span>'; }
+  function A_staying(g) {
+    var v = CS.stayingView(g, state.payload && state.payload.today); if (!v) return '';
+    var open = function (txt, ic) { return '<button class="S_lnk" type="button" data-act="stay-open" data-uid="' + esc(v.uid) + '">' + ICON(ic, 's16') + txt + '</button>'; };
+    if (v.mode === 'empty') return open('Add who is staying', 'plus');
+    var change = open('Change who is staying', 'note');
+    if (v.mode === 'booker') return '<div class="S_who"><div class="S_line">' + A_av(v.booker) + '<span><b>Staying:</b> ' + esc(v.names[0]) + '</span></div>' + change + '</div>';
+    if (v.mode === 'with') return '<div class="S_who"><div class="S_line">' + A_av(v.names[0]) + '<span><b>' + (v.tonight ? 'Staying tonight' : 'Staying') + ':</b> ' + esc(v.names.join(', ')) + '</span></div>' + change + '</div>';
+    return '<div class="S_who" role="group" aria-label="Who is in the house"><div class="S_person muted"><span class="S_av" aria-hidden="true">' + A_inits(v.booker) + '</span><span class="S_n">Booked by ' + esc(v.booker) + '</span><span class="S_mk q">Not staying</span></div>' +
+      '<span class="S_k">' + (v.tonight ? 'Staying tonight' : 'Staying') + '</span>' + v.names.map(function (n) { return '<div class="S_person">' + A_av(n) + '<span class="S_n">' + esc(n) + '</span><span class="S_mk">Staying</span></div>'; }).join('') + change + '</div>';
+  }
+  function A_stayGuest(uid) { var p = state.payload; return p ? [p.current_guest, p.next_guest].filter(function (g) { return g && g.uid === uid; })[0] || null : null; }
+  function A_stayOpen(uid) {
+    var g = A_stayGuest(uid), v = g && CS.stayingView(g, state.payload.today); if (!v) return;
+    state.stay = { uid: uid, names: v.names.join(', '), init: v.names.join(', '), sug: v.suggestion, version: v.version, tonight: v.tonight, err: '', busy: false, key: 'stay-' + (window.crypto && crypto.randomUUID ? crypto.randomUUID() : Date.now() + '-' + Math.random().toString(16).slice(2)) };
+    openSheet('stay', 'stay-open'); if ($('stay-names') && $('stay-names').focus) $('stay-names').focus();
+  }
+  function A_stayForm() {
+    var a = state.stay, sug = a.sug.length;
+    return '<h2 class="ttl" id="cs-h" tabindex="-1">Edit who is staying</h2>' +
+      (sug ? '<div class="S_sg" role="group" aria-label="Cassy suggestion"><div class="S_sgh">' + ICON('sparkles', 's16') + 'Cassy read this in the guest message</div><div class="S_sgv">' + esc(a.sug.join(', ')) + '</div>' +
+        '<div class="S_two"><button class="btn btn-primary" type="button" data-act="stay-use"' + (a.busy ? ' disabled' : '') + '>Use these</button><button class="btn btn-secondary" type="button" data-act="stay-no"' + (a.busy ? ' disabled' : '') + '>Not right</button></div><span class="help">Nothing is saved until you choose.</span></div>' : '') +
+      '<div class="stack" style="margin-top:10px"><div class="field"><label for="stay-names">' + (sug ? 'Or type it yourself' : a.tonight ? 'Who is staying tonight?' : 'Who is staying?') + '</label><div class="input"><input id="stay-names" maxlength="300" autocomplete="off" aria-describedby="stay-help" value="' + esc(a.names) + '"></div><span class="help" id="stay-help">Names, separated by commas</span></div>' +
+      (a.err ? '<div class="errbox" role="alert">' + ICON('alert') + '<span>' + esc(a.err) + '</span></div>' : '') +
+      '<button class="btn btn-primary btn-block" type="button" data-act="stay-save"' + (a.busy ? ' disabled' : '') + '>' + (a.busy ? 'Saving…' : 'Save') + '</button><button class="btn btn-ghost btn-block" type="button" data-act="stay-cancel">Cancel</button></div>';
+  }
+  function A_stayDraw() { if (state.sheet && state.sheet.kind === 'stay') { var had = document.activeElement && document.activeElement.id === 'stay-names'; drawSheet(); var f = had ? $('stay-names') : null; if (f && f.focus) f.focus(); } }
+  // kind 'save' = the typed names; kind 'confirm' with accept true/false = the Cassy suggestion. The demo only changes the page in memory and never calls the server.
+  function A_staySend(kind, accept) {
+    var a = state.stay; if (!a || a.busy) return;
+    var names = kind === 'save' ? CS.stayNames(a.names) : [], g = A_stayGuest(a.uid);
+    if (kind === 'save' && !names.length) { a.err = 'Type at least one name, or choose Cancel.'; A_stayDraw(); return; }
+    var offline = 'Needs a connection. Nothing was saved, and what you typed is still here.';
+    if (!DEMO && navigator.onLine === false) { a.err = offline; A_stayDraw(); E_vibe('error'); return; }
+    var done = function (msg) { state.stay = null; closeSheet(); toast(msg); E_vibe('tap'); };
+    if (DEMO) {
+      if (g && g.staying) { var use = kind === 'save' ? names : accept ? a.sug : CS.stayNames(g.staying.names); g.staying = { names: use.join(', '), source: kind === 'save' ? 'staff' : accept ? 'cassy' : g.staying.source, suggestion: null, version: (+g.staying.version || 0) + 1 }; }
+      done('Demo only. Nothing is saved.'); if (current === 'home') renderHome(); return;
+    }
+    a.busy = true; a.err = ''; A_stayDraw();
+    var call = kind === 'save' ? sb.rpc('set_stay_staying_v1', { p_property: pid(), p_uid: a.uid, p_names: names.join(', '), p_source: 'staff', p_expected_version: a.version, p_reason: 'Typed in the staff app', p_idempotency_key: a.key })
+      : sb.rpc('confirm_stay_staying_suggestion_v1', { p_property: pid(), p_uid: a.uid, p_accept: !!accept, p_expected_version: a.version, p_reason: accept ? 'Staff accepted the suggestion' : 'Staff said the suggestion was not right' });
+    Promise.resolve(call).then(function (r) {
+      if (r.error) throw r.error;
+      if (r.data && r.data.ok === false) throw { message: r.data.error || 'not ok', code: r.data.code };
+      return loadHome().then(function () { done(kind === 'save' || accept ? 'Saved.' : 'Suggestion cleared.'); });
+    }).catch(function (e) {
+      a.busy = false; E_vibe('error');
+      var m = String((e && e.message) || ''), stale = /version|stale|conflict/i.test(m) || (e && e.code === '40001');
+      a.err = CS.rpcMissing(e) ? 'Available after the next update.' : e && e.code === '42501' ? 'You do not have access to change this.' : stale ? 'Someone changed this just now. Check the names and save again.' : E_netErr(e) ? offline : 'That did not save. Check your signal and try again.';
+      A_stayDraw();
+      if (stale) loadHome().then(function () { var gg = A_stayGuest(a.uid), vv = gg && CS.stayingView(gg, state.payload.today); if (vv && state.stay === a) { a.version = vv.version; a.sug = vv.suggestion; A_stayDraw(); } });
+    });
+  }
   function A_noticeAddDraw() { if (state.sheet && state.sheet.kind === 'nadd') drawSheet(); }
   function A_noticeAddSave() {
     var a = state.nadd; if (!a || a.busy || !CS.canSeeGuestContact(role())) return;
@@ -2334,6 +2390,11 @@
     else if (a === 'fb-hide') { state.fbOpen = false; renderCalendar(); }
     else if (a === 'notice-add-open') { if (CS.canSeeGuestContact(role()) && state.notices && !state.noticesAbsent) { state.nadd = { type: 'water', title: '', date: t.getAttribute('data-date') || '', start: '', hours: '', detail: '', err: '', busy: false }; openSheet('nadd', 'notice-add-open'); } }
     else if (a === 'notice-add-cancel') { state.nadd = null; closeSheet(); }
+    else if (a === 'stay-open') A_stayOpen(t.getAttribute('data-uid'));
+    else if (a === 'stay-cancel') { state.stay = null; closeSheet(); }
+    else if (a === 'stay-save') A_staySend('save');
+    else if (a === 'stay-use') A_staySend('confirm', true);
+    else if (a === 'stay-no') A_staySend('confirm', false);
     else if (a === 'notice-add-save') A_noticeAddSave();
     else if (a === 'notice-tell') { var nt = CS.canSeeGuestContact(role()) ? A_noticeByKey(t.getAttribute('data-nkey')) : null; var gm = nt ? CS.A_guestMessage(nt) : null; if (nt && !gm) toast('Check the notice text first.'); else if (gm) copyText(gm).then(function () { toast('Message copied. Paste it to the guest.'); E_vibe('tap'); }, function () { toast('Copy did not work on this phone.'); }); }
     else if (a === 'notice-cal') { var nd0 = t.getAttribute('data-date'), np = nd0.split('-'); if (CS.monthInRange(+np[0], +np[1], state.payload.today)) state.month = { y: +np[0], m: +np[1] }; state.calTab = 'calendar'; if (location.hash !== '#calendar') { closeSheet(); state.dayAfter = nd0; location.hash = '#calendar'; } else { render('calendar'); openSheet('day', nd0); state.sheet.view = 'calendar'; } } // from another screen the day sheet opens once the calendar has settled, so a Home redraw cannot close it
@@ -2389,6 +2450,7 @@
     if (id === 'sr-q') { state.H_q = ev.target.value; H_searchDraw(); }
     if (state.sheet && id === 'df-label') state.sheet.form.label = ev.target.value; else if (state.sheet && id === 'df-kind') state.sheet.form.kind = ev.target.value;
     if (state.reply && id === 'rp-text') { state.reply.text = ev.target.value; state.reply.err = ''; } else if (state.reply && id === 'rp-name') state.reply.name = ev.target.value;
+    if (state.stay && id === 'stay-names') { state.stay.names = ev.target.value; state.stay.err = ''; }
     var na = state.nadd; if (na && /^n-(type|title|date|start|hours|detail)$/.test(id || '')) { na[{ 'n-type': 'type', 'n-title': 'title', 'n-date': 'date', 'n-start': 'start', 'n-hours': 'hours', 'n-detail': 'detail' }[id]] = ev.target.value; na.err = ''; }
     if (a && id === 't-title') a.title = ev.target.value; else if (a && id === 't-due') a.due = ev.target.value; else if (a && id === 't-note') a.note = ev.target.value; else if (a && id === 't-who') a.who = ev.target.value;
     else if (f && /^r-(from|regular|general|transport|note)$/.test(id || '')) { f[id.slice(2)] = ev.target.value; f.err = ''; syncRate(); }

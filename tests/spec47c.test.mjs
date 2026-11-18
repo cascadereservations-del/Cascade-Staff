@@ -11,7 +11,7 @@ test('header: the face is inside the name row; the benefits line, the time line 
   const h = await home(GUEST({ id_face_box: BOX }));
   const who = /<div class="T_who">([\s\S]*?)<\/div><button class="T_face"[^>]*><\/button><\/div>/.exec(h);
   assert.ok(who, 'T_who = name column then the face, then closes');
-  assert.match(who[1], /^<div class="T_id"><div class="T_namerow"><h2 class="A_name">Ana Reyes<\/h2>/); assert.doesNotMatch(who[1], /T_line/);
+  assert.match(who[1], /^<div class="T_id"><div class="T_namerow"><h2 class="A_name[^"]*">Ana Reyes<\/h2>/); assert.doesNotMatch(who[1], /T_line/);
   assert.ok(who[1].indexOf('A_name') < who[1].indexOf('T_when') && who[1].indexOf('T_when') < who[1].indexOf('class="pill'), 'name, the time line, the ID pill: all beside the face (s105)');
   const after = h.slice(h.indexOf(who[0]) + who[0].length);
   assert.ok(after.indexOf('T_gtk') < after.indexOf('T_perks'), 'order: Good to know, then the perks, full width under the face');
@@ -49,9 +49,9 @@ test('css: tier-coloured placeholder in the same 88 px slot, 10 px rhythm, name 
 
 test('untiered returning guest: the tag says it once at the top (s110), the name row holds only the name', async () => {
   const h = await home(GUEST({ tier: null, tier_line: null, repeat: true, stay_count: 3, id_face_box: BOX }));
-  const row = /<div class="T_namerow">([\s\S]*?)<\/div><p class="sub num T_when/.exec(h); assert.ok(row, 'name row closes right before the time line');
+  const row = /<div class="T_namerow">([\s\S]*?)<\/div><span class="T_chip/.exec(h); assert.ok(row, 'name row closes right before the time line');
   assert.equal(row[1], '<h2 class="A_name">Ana Reyes</h2>'); assert.doesNotMatch(row[1], /pill/);
-  assert.equal((h.match(/Returning · 3 stays/g) || []).length, 1, 'shown once');
+  assert.equal((h.match(/Returning · 3rd stay/g) || []).length, 1, 'shown once');
 });
 test('owner tap on the initial loads the photo once and opens the full view; the cleaner gets a bare span', async () => {
   let signs = 0; const full = el(), attrs = {}; full.setAttribute = (k, x) => { attrs[k] = x; }; full.getAttribute = (k) => attrs[k] || null; full.querySelector = () => ({ className: '', textContent: '' });

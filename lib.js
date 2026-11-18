@@ -532,20 +532,34 @@
   }
   // s110: one tag per guest tier with its own glyph and the total stays (stay_count includes the current stay). First stay only when the data says so
   // (tier first, repeat false, or one stay); an unknown tier with no count and no repeat flag gives null, never a guessed label.
-  var BADGE = { first: ['First stay', 'sprout'], returning: ['Returning', 'repeat'], regular: ['Regular', 'sparkles'], vip: ['VIP', 'crown'] };
+  var BADGE = { first: ['First stay', 'sprout'], returning: ['Returning', 'repeat'], regular: ['Regular', 'star'], vip: ['VIP', 'crown'] };
   function tierBadge(g) {
     if (!g) return null;
     var n = Math.round(+g.stay_count); n = n > 0 ? n : 0;
     var t = Object.prototype.hasOwnProperty.call(BADGE, g.tier) ? g.tier : null;
-    if (t === 'first' && n > 1) t = null; // the count wins over a stale tier
+    // s119: the stay number is derived once and wins over a stale tier or a repeat flag, so the chip can never say first stay and returning together.
+    if (t === 'first' && n > 1) t = null;
     if (!t) {
-      if (g.repeat === false) t = 'first';
-      else if (n > 1 || (g.repeat === true && !n)) t = 'returning';
-      else if ((n === 1 && g.repeat !== true) || g.tier === 'first') t = 'first';
+      if (n > 1 || (g.repeat === true && !n)) t = 'returning';
+      else if (g.repeat === false || (n === 1 && g.repeat !== true) || g.tier === 'first') t = 'first';
       else return null;
     }
-    var first = t === 'first', c = first ? 1 : n;
-    return { tier: t, icon: BADGE[t][1], word: BADGE[t][0], count: c || null, text: first ? 'First stay' : BADGE[t][0] + (c ? ' · ' + plural(c, 'stay') : '') };
+    var first = t === 'first', c = first ? 1 : n, tail = !c ? '' : t === 'returning' ? ordinal(c) + ' stay' : plural(c, 'stay');
+    return { tier: t, icon: BADGE[t][1], word: BADGE[t][0], count: c || null, text: first ? 'First stay' : BADGE[t][0] + (tail ? ' · ' + tail : '') };
+  }
+  // s119: the staying line. g.staying = { names, source, suggestion, version } from staff_home_v1; absent (older server) gives null and the card draws nothing new.
+  // names and suggestion are comma-separated text (an array is accepted); the result lists are trimmed, de-duplicated and capped.
+  function stayNames(v) {
+    var a = Array.isArray(v) ? v : typeof v === 'string' ? v.split(/[,;\n]/) : [], seen = {}, out = [];
+    a.forEach(function (x) { x = String(x == null ? '' : x).replace(/\s+/g, ' ').trim().slice(0, 60); var k = x.toLowerCase(); if (x && !seen[k] && out.length < 8) { seen[k] = 1; out.push(x); } });
+    return out;
+  }
+  function stayingView(g, today) {
+    if (!g || !g.uid || !g.staying || typeof g.staying !== 'object') return null;
+    var st = g.staying, names = stayNames(st.names), sug = stayNames(st.suggestion), booker = String(g.guest_name || '').replace(/\s+/g, ' ').trim().toLowerCase();
+    var inList = names.some(function (x) { return x.toLowerCase() === booker; });
+    var mode = !names.length ? 'empty' : names.length === 1 && inList ? 'booker' : inList ? 'with' : 'other';
+    return { mode: mode, names: names, suggestion: sug, version: st.version == null ? null : st.version, tonight: !!today && g.checkin_date === today, uid: g.uid, booker: g.guest_name || 'Guest' };
   }
   // s105 SPEC-46 section 1: perks to give, from ONE map, cumulative by tier. phase 'arrival' = prepare before arrival, 'house' = what to give during the stay. opts.id: an ID is on file (the no-ID-again line needs it).
   // At most 4 lines: over that, the ID line goes first, then the last ones. No prices, no discounts, no exclamation marks.
@@ -1630,7 +1644,7 @@
     fmtTime: fmtTime, fmt24: fmt24, ordinal: ordinal, plural: plural, agoLabel: agoLabel, clockLabel: clockLabel,
     monthGrid: monthGrid, dayState: dayState, dayStatus: dayStatus, mergeStays: mergeStays, sameGuest: sameGuest, dayMoves: dayMoves, blockWhy: blockWhy, flagName: flagName, FLAG_KINDS: FLAG_KINDS, blockedLines: blockedLines, blockedLineText: blockedLineText,
     canFlagDays: canFlagDays, guestContact: guestContact, canSeeGuestContact: canSeeGuestContact, MESSENGER_INBOX: MESSENGER_INBOX, rpcMissing: rpcMissing, tgLink: tgLink, warningInfo: warningInfo, findingKey: findingKey, initialOf: initialOf, sourceLabel: sourceLabel, stayDates: stayDates, monthInRange: monthInRange,
-    tierRibbon: tierRibbon, tierBadge: tierBadge, wxHazards: wxHazards, wxHourly: wxHourly, nextPrep: nextPrep, utilAlerts: utilAlerts, isInternetNotice: isInternetNotice, tierPerks: tierPerks, faceFrame: faceFrame, parseNotes: parseNotes, returningLabel: returningLabel, tierLabel: tierLabel, tierLine: tierLine, tierParts: tierParts, keyNote: keyNote, TOPIC_LABELS: TOPIC_LABELS, notableLine: notableLine, weatherIcon: weatherIcon, rainAlert: rainAlert, wxCard: wxCard, goodToKnow: goodToKnow, earlierLine: earlierLine, companionsLine: companionsLine, todayCardState: todayCardState,
+    tierRibbon: tierRibbon, tierBadge: tierBadge, stayNames: stayNames, stayingView: stayingView, wxHazards: wxHazards, wxHourly: wxHourly, nextPrep: nextPrep, utilAlerts: utilAlerts, isInternetNotice: isInternetNotice, tierPerks: tierPerks, faceFrame: faceFrame, parseNotes: parseNotes, returningLabel: returningLabel, tierLabel: tierLabel, tierLine: tierLine, tierParts: tierParts, keyNote: keyNote, TOPIC_LABELS: TOPIC_LABELS, notableLine: notableLine, weatherIcon: weatherIcon, rainAlert: rainAlert, wxCard: wxCard, goodToKnow: goodToKnow, earlierLine: earlierLine, companionsLine: companionsLine, todayCardState: todayCardState,
     orderWarnings: orderWarnings, brownoutText: brownoutText, lowStockText: lowStockText, warningSummary: warningSummary,
     weatherLine: weatherLine, rainLine: rainLine, weatherStale: weatherStale, WEATHER_STALE_MIN: WEATHER_STALE_MIN, esc: esc,
     A_HOUSE_FALLBACK: A_HOUSE_FALLBACK, A_houseTimes: A_houseTimes, A_turnoverClock: A_turnoverClock, A_turnoverLine: A_turnoverLine, A_hm: A_hm, A_NOTICE_TYPES: A_NOTICE_TYPES, A_noticesView: A_noticesView, A_noticeFilters: A_noticeFilters, A_dayMarks: A_dayMarks, A_noticeDay: A_noticeDay, A_guestMessage: A_guestMessage, A_CAL_TABS: A_CAL_TABS, A_calTab: A_calTab, A_stayShade: A_stayShade, A_hubGroups: A_hubGroups, A_hubNative: A_hubNative, A_hubRoutes: A_hubRoutes, A_hubRouteOk: A_hubRouteOk, A_hubDoorUrl: A_hubDoorUrl, A_whatsNew: A_whatsNew, A_shortTime: A_shortTime, A_PINNED: A_PINNED, A_noticeAddError: A_noticeAddError, A_NOTICE_HINT: A_NOTICE_HINT, A_flagDup: A_flagDup, A_facebookUrl: A_facebookUrl, A_fbPluginUrl: A_fbPluginUrl, A_noticeAddProblem: A_noticeAddProblem, A_noticeAddArgs: A_noticeAddArgs, A_plainRefusal: A_plainRefusal, A_hour12: A_hour12, A_timeRange: A_timeRange,
