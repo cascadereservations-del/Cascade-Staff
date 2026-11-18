@@ -237,8 +237,8 @@
   function G_lock() { return !!(S.busy || (S.add && S.add.step === 'saving')); } // the form's own save is running: its fields cannot take new text
   var G_ACTS = /^(edit|edit-cancel|vip|save-edit|add-open|add-cancel|add-back|read|save-add|comp-on|id-on|id-yes|detail-retry|stay-save|add-comp|remove-photo|remove-comp|remove-photo-yes|remove-comp-yes|full-rot|rm-shot)$/, G_NOFORM = /^(detail-retry|remove-photo|remove-comp|remove-photo-yes|remove-comp-yes|full-rot)$/; // with a form open, photos and reloads are off too
   /** An rpc call that never throws: { data, error }. */
-  function G_rpc(name, args, cols) {
-    try { var q = S.client.rpc(name, args); if (cols && q && typeof q.select === 'function') q = q.select(cols); return Promise.resolve(q).then(function (r) { return r || { data: null, error: { message: 'no answer' } }; }, function (e) { return { data: null, error: { message: String(e && e.message || e), network: true } }; }); }
+  function G_rpc(name, args, cols, client) { // client: a write that outlives its page (a queued photo turn) passes the one it was tapped on, because S is null once Guests is left
+    try { var q = (client || S.client).rpc(name, args); if (cols && q && typeof q.select === 'function') q = q.select(cols); return Promise.resolve(q).then(function (r) { return r || { data: null, error: { message: 'no answer' } }; }, function (e) { return { data: null, error: { message: String(e && e.message || e), network: true } }; }); }
     catch (e) { return Promise.resolve({ data: null, error: { message: 'no client', network: true } }); }
   }
   /** The staff-guest-details function: { status, j }. Status 0 is no connection. 207 comes back as success with ok:false inside. */
@@ -620,7 +620,7 @@
       D.feat = f.status === 200 && f.j && f.j.features ? f.j.features : f.status === 0 ? { guest_id: true, preferences: true, replace_id: true, remove_id: true } : null;
       var sr = rs[4], own = G_ownComp(); // s120: a missing function, an error or null leaves the card out, never an error line
       D.stay = sr && !sr.error && sr.data ? G_stayFrom(Array.isArray(sr.data) ? sr.data[0] : sr.data, 1 + D.companions.filter(function (x) { return x !== own; }).length) : null;
-      S.stayKept = null; // a failed reload leaves it for Try again (the returns above); a loaded page is the new baseline
+      if (D.stay) S.stayKept = null; // a failed reload leaves it for Try again (the returns above); a loaded page is the new baseline
       if (prev && D.stay && D.stay.uid === prev.uid && prev.draft !== prev.base) { D.stay.draft = prev.draft; D.stay.key = prev.key; D.stay.keyN = prev.keyN; } // a reload of the same stay (a photo removal, a retry) keeps the number staff set and not yet saved
       G_paint(); if (S.seg === 'stay' && D.stay) G_showStay(); else G_focus('G_h');
       S.seg = ''; // the stay segment applies to the first open only; a reload after Add from text or a retry opens the top
@@ -717,25 +717,31 @@
       A.sheet = G_sheetFrom(o.j.proposal, S.d.guest.name); A.step = 'review'; G_paint(); G_focus('G_rh');
     });
   }
+  var G_DETAIL_KEYS = ['phone', 'email', 'stay_preferences', 'birthday', 'tags'];
   function G_saveAdd() {
     var A = S.add, tok = S.token; if (!A || S.d.stale) return;
     if (!S.d.detailsOk) { A.err = 'The details could not load, so nothing can be saved yet. Cancel, then tap Try again.'; G_paint(); G_focus('G_aerr'); return; } // never a details write without the version it was read at
     G_syncSheet();
-    var out = G_addBody(S.gid, A.sheet, A.images, S.d.guest.name, S.d.details ? S.d.details.version : null);
+    var out = G_addBody(S.gid, A.sheet, A.images, S.d.guest.name, S.d.details && !A.noDetails ? S.d.details.version : null); // after the details saved once, a retry sends none and no version, so it cannot conflict with its own save
     var bad = out.error || (out.body && G_check({ birthday: out.body.birthday, tags: out.body.tags, stay_preferences: out.body.stay_preferences }, out.body.reason, G_today(), 30));
     if (bad) { A.err = bad; G_paint(); G_focus('G_aerr'); return; }
+    var sentDetails = G_DETAIL_KEYS.some(function (k) { return out.body[k] != null; });
     var sentIds = A.sheet.ids.filter(function (d) { return d.on && A.images[d.image]; }); // the photos in the body, in order: the server answers one id_photo item for each
     A.step = 'saving'; A.err = ''; G_paint();
     G_call(out.body).then(function (o) {
       if (!G_live(tok) || S.add !== A) return;
       var done = (o.status === 200 || o.status === 207) && o.j.saved, sm = G_fnStale(o);
-      if (done && !o.j.saved.some(function (x) { return x && x.what === 'profile' && !x.ok; })) {
-        A.ok = !!o.j.ok; A.lines = G_saveLines(o.j.saved); A.images = []; A.text = ''; A.sheet = null; // the photos leave memory once saved or refused
+      var pf = done && o.j.saved.some(function (x) { return x && x.what === 'profile' && !x.ok; });
+      if (done && o.j.ok && !pf) {
+        A.ok = true; A.lines = G_saveLines(o.j.saved); if (!A.lines.length) A.lines = ['Nothing new to save.']; A.images = []; A.text = ''; A.sheet = null; // the photos leave memory once saved or refused
         A.step = 'done'; S.haptic(o.j.ok ? 'ok' : 'warn'); G_paint(); G_focus('G_msg'); return;
       }
-      if (done) { // the details did not save: back to the review with the sheet and photos, the failed items listed. A photo that saved is unticked by its place; companions stay ticked, because the server matches a name it already has and adds nobody twice.
+      if (done) { // something did not save: back to the review with the sheet and photos, the failed items listed. A photo that saved is unticked by its place; companions stay ticked, because the server matches a name it already has and adds nobody twice.
         var sv = o.j.saved, idv = sv.filter(function (x) { return x && x.what === 'id_photo'; }), ln = G_saveLines(sv).join(' ');
         if (idv.length === sentIds.length) sentIds.forEach(function (d, i) { if (idv[i].ok) d.on = false; }); // a count that does not match leaves every photo ticked: nothing is lost
+        if (!pf && (!sentDetails || o.j.saved.some(function (x) { return x && x.what === 'profile' && x.ok; }))) { // the details are done or were never sent: the retry carries none
+          A.noDetails = true; G_DETAIL_KEYS.forEach(function (k) { A.sheet[k] = ''; }); S.el.innerHTML = ''; // the redraw reads drawn fields back into the sheet (G_keepForm), so the old ones go first
+        }
         S.haptic('warn'); A.step = 'review';
         if (sm) G_stale(ln); else { A.err = ln; G_paint(); G_focusLate('G_aerr'); }
         return;
@@ -745,7 +751,7 @@
     });
   }
   function G_saveRot(path, d) {
-    var tok = S.token, ep = G_epoch, seq = S.rotSeq = (S.rotSeq || 0) + 1;
+    var tok = S.token, ep = G_epoch, cl = S.client, seq = S.rotSeq = (S.rotSeq || 0) + 1;
     var say = function (m) { if (S && G_live(tok) && seq === S.rotSeq) { S.rotMsg = m; G_paint(); G_focus('G_fullx'); } };
     // A turn is a write from the tap to the answer (G_run reads S.rot). Debounced: quick taps send one write of the last value (the server cannot commit them out of order); once it is out, taps are refused, so two calls are never in flight.
     S.rot = 1; S.rotPath = path;
@@ -758,16 +764,16 @@
     G_rotTimers[path] = setTimeout(function () {
       delete G_rotTimers[path]; if (ep !== G_epoch) return;
       if (G_live(tok)) { S.rot = 2; G_paint(); }
-      G_rotCall(path, d, ep, fin);
+      G_rotCall(path, d, ep, fin, cl);
     }, 600);
   }
   // One call per photo path at a time, across pages: a call that is out keeps only the latest value waiting, and sends it once after the answer.
-  function G_rotCall(path, d, ep, fin) {
-    var b = G_rotBusy[path]; if (b) { b.next = { d: d, fin: fin }; return; }
+  function G_rotCall(path, d, ep, fin, cl) {
+    var b = G_rotBusy[path]; if (b) { b.next = { d: d, fin: fin, cl: cl }; return; }
     b = G_rotBusy[path] = { next: null };
-    G_rpc('set_guest_photo_rotation_v1', { p_path: path, p_rotation: d }).then(function (r) {
+    G_rpc('set_guest_photo_rotation_v1', { p_path: path, p_rotation: d }, null, cl).then(function (r) {
       var n = b.next; if (G_rotBusy[path] === b) delete G_rotBusy[path];
-      if (n && ep === G_epoch) G_rotCall(path, n.d, ep, n.fin); // the waiting turn goes out now; the page that tapped it keeps its lock until then
+      if (n && ep === G_epoch) G_rotCall(path, n.d, ep, n.fin, n.cl); // the waiting turn goes out now; the page that tapped it keeps its lock until then
       fin(r);
     });
   }
@@ -809,10 +815,14 @@
       if (!G_live(tok)) return;
       var sm = G_fnStale(o);
       if ((o.status === 200 || o.status === 207) && o.j.saved) {
-        S.msg = G_saveLines(o.j.saved); G_forget(D, id);
+        G_forget(D, id);
+        if (sm) { // a conflict: stale result first, the green box keeps only what saved (same as Replace)
+          var kept = G_saveLines(o.j.saved.filter(function (x) { return x && (x.ok || x.reason !== 'changed'); }));
+          G_stale(sm); S.msg = kept.length ? kept : null; return;
+        }
+        S.msg = G_saveLines(o.j.saved);
         if (o.j.saved.some(function (x) { return x.what === 'profile'; })) { var m = S.msg; G_loadDetail(); S.msg = m; return; } // the ID flag changed too: reload so "ID: On file" is current; no form can be open while this runs
         if (o.j.ok) { G_refreshCompanions(); return; }
-        if (sm) { G_stale(sm); return; }
       } else if (sm) { G_stale(sm); return; } else S.cerr = G_errText(o.status, o.j.error);
       S.cbusy = ''; G_paint();
     });
@@ -853,7 +863,7 @@
     var D = S.d;
     G_rpc('list_guest_companions_v1', { p_guest_id: S.gid }, G_COMP_COLS).then(function (c) {
       if (!G_live(tok)) return;
-      if (c.error) { G_stale(G_LOST); return; }
+      if (c.error) { S.newc = ''; G_stale(G_LOST); return; }
       S.cbusy = ''; D.cErr = false; D.companions = G_comps(c.data);
       var added = G_howMany(D.companions, name) > had;
       if (added) { S.msg = [name + ' was added.']; S.addComp = false; S.newc = ''; } else S.cerr = G_LOST;

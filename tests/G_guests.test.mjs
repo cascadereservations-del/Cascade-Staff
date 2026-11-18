@@ -1608,3 +1608,117 @@ test('G U8: wording: Someone else changed this guest, The details were changed b
   const b = await mount(detailClient({ rpcs: { list_guest_companions_v1: () => ({ data: COMPS, error: null }), save_guest_profile_v1: () => ({ data: null, error: { code: '40001', message: 'stale version' } }) } }), GID);
   await clickA(b.el, 'edit'); b.el.type('G_f_phone', '0999 1'); await clickA(b.el, 'save-edit'); await tick(); assert.match(b.el.html, /Someone else changed this guest\./); assert.match(b.el.html, COPYRE);
 });
+
+// ======================================================================== U9: last closed list
+const mountOpts = (cl, sub = GID) => ({ client: cl, demo: false, role: 'owner', sub, propertyId: PROP, navigate: () => {}, toast: () => {}, haptic: () => {} });
+const NODET = { ...TWO, phone: null, stay_preferences: null, birthday: null, tags: [] }; // a sheet with no details to save: companions and photos only
+const DETAIL_KEYS = ['phone', 'email', 'stay_preferences', 'birthday', 'tags'];
+const photoFail207 = (profile) => ({ status: 207, j: { ok: false, saved: [{ what: 'companion', ok: true }, { what: 'companion', ok: true }, { what: 'id_photo', ok: true }, { what: 'id_photo', ok: false, reason: 'upload_failed' }, ...(profile ? [profile] : [])] } });
+const retryOk = { status: 200, j: { ok: true, saved: [{ what: 'companion', ok: true }, { what: 'companion', ok: true }, { what: 'id_photo', ok: true }] } };
+
+test('G U9 item 1: a turn queued behind a call that is out is sent after every page is unmounted, with the client it was tapped on', async () => {
+  const st = rotGate(), m = await rotOpen(st.cl);
+  await clickA(m.el, 'full-rot'); await sleep(700); assert.deepEqual(st.sent, [90]);
+  m.M.unmount(); const el2 = new FakeEl(); m.M.mount(el2, mountOpts(st.cl)); await tick();
+  await clickA(el2, 'full', { id: CID }); await tick(); await clickA(el2, 'full-rot'); await sleep(700); assert.deepEqual(st.sent, [90], 'queued behind the call that is out');
+  m.M.unmount(); assert.equal(m.M._state(), null, 'no page is mounted');
+  st.release(); await tick(30); await sleep(20);
+  assert.deepEqual(st.sent, [90, 180], 'the queued 180 went out'); assert.equal(st.max, 1, 'never two in flight');
+});
+
+test('G U9 item 1: a tap followed by leaving Guests inside 600 ms still sends its value once', async () => {
+  const st = rotGate(), m = await rotOpen(st.cl);
+  await clickA(m.el, 'full-rot'); m.M.unmount(); await sleep(700); await tick();
+  assert.deepEqual(st.sent, [90]); st.release(); await tick(30);
+});
+
+test('G U9 item 2: a 207 with the details saved and one photo failed goes back to review; the retry sends the failed photo and the companions, no details, no version', async () => {
+  const saves = []; let n = 0;
+  const cl = reviewClient((b) => { saves.push(b); return n++ === 0 ? photoFail207({ what: 'profile', ok: true }) : retryOk; }, TWO);
+  const { M, el } = await toReviewWith(cl, [IMG('QUFB'), IMG('REVG')]);
+  await clickA(el, 'save-add'); await tick();
+  assert.equal(M._state().add.step, 'review', 'back to review, not a finished screen'); assert.match(M._state().add.err, /ID photo did not upload/);
+  assert.ok(saves[0].phone && saves[0].expected_version === 4, 'the first save carried the details and the version');
+  const s = M._state().add.sheet; assert.deepEqual(plain(s.ids.map((d) => d.on)), [false, true]);
+  assert.deepEqual([s.phone, s.email, s.stay_preferences, s.birthday, s.tags], ['', '', '', '', ''], 'the saved details are cleared from the sheet');
+  await clickA(el, 'save-add'); await tick();
+  for (const k of [...DETAIL_KEYS, 'expected_version']) assert.ok(!(k in saves[1]), 'retry sends no ' + k);
+  assert.deepEqual(saves[1].companions, ['Carla Dizon', 'Dino Lim']); assert.deepEqual(saves[1].ids.map((d) => [d.name, d.image.base64]), [['Dino Lim', 'REVG']]);
+  assert.equal(M._state().add.step, 'done');
+});
+
+test('G U9 item 2: with no details sent and no profile item, one photo failing returns to review and the retry sends only the photo and the companions', async () => {
+  const saves = []; let n = 0;
+  const cl = reviewClient((b) => { saves.push(b); return n++ === 0 ? photoFail207(null) : retryOk; }, NODET);
+  const { M, el } = await toReviewWith(cl, [IMG('QUFB'), IMG('REVG')]);
+  await clickA(el, 'save-add'); await tick();
+  for (const k of DETAIL_KEYS) assert.ok(!(k in saves[0]), 'first save sends no ' + k);
+  assert.equal(M._state().add.step, 'review'); await clickA(el, 'save-add'); await tick();
+  for (const k of [...DETAIL_KEYS, 'expected_version']) assert.ok(!(k in saves[1]), 'retry sends no ' + k);
+  assert.deepEqual(saves[1].companions, ['Carla Dizon', 'Dino Lim']); assert.deepEqual(saves[1].ids.map((d) => d.image.base64), ['REVG']); assert.equal(M._state().add.step, 'done');
+});
+
+test('G U9 item 2: when the profile item failed, the retry still carries the details and the version', async () => {
+  const saves = []; let n = 0;
+  const cl = reviewClient((b) => { saves.push(b); return n++ === 0 ? photoFail207({ what: 'profile', ok: false, reason: 'save_failed' }) : { status: 200, j: { ok: true, saved: [{ what: 'profile', ok: true }] } }; }, TWO);
+  const { M, el } = await toReviewWith(cl, [IMG('QUFB'), IMG('REVG')]);
+  await clickA(el, 'save-add'); await tick(); assert.equal(M._state().add.step, 'review'); assert.equal(M._state().add.sheet.phone, '09175550000', 'the details stay on the sheet');
+  await clickA(el, 'save-add'); await tick();
+  assert.equal(saves[1].phone, '09175550000'); assert.equal(saves[1].expected_version, 4); assert.equal(saves[1].birthday, '1992-03-04'); assert.deepEqual(plain(saves[1].tags), ['anniversary']);
+});
+
+test('G U9 item 3: a lost add whose re-read fails clears the typed name, so reopening Add does not offer it again', async () => {
+  let reads = 0, saves = 0;
+  const cl = detailClient({ rpcs: { list_guest_companions_v1: () => { reads++; return reads === 2 ? REAL_LOST_RPC : { data: reads === 1 ? COMPS : [...COMPS, NEWC('Dino Lim')], error: null }; }, save_guest_companion_v1: () => { saves++; return REAL_LOST_RPC; } } });
+  const { M, el } = await mount(cl, GID); await clickA(el, 'comp-add-open'); el.type('G_newc', 'Dino Lim'); await clickA(el, 'add-comp'); await tick(30);
+  assert.equal(M._state().newc, ''); assert.match(el.html, /Dino Lim/); await clickA(el, 'comp-add-open'); assert.equal(el.val('G_newc'), '', 'the field is empty'); assert.equal(saves, 1);
+});
+
+const stayBad = { data: null, error: { message: 'TypeError: Failed to fetch' } };
+const stayRig = () => { const r = { stay: 'ok' }; r.cl = detailClient({ rpcs: { list_guest_companions_v1: () => ({ data: COMPS, error: null }), staff_guest_stay_v1: () => (r.stay === 'fail' ? stayBad : { data: r.stay === 'B' ? { ...STAY, uid: 'stay-uid-2' } : STAY, error: null }) },
+  fn: (b) => (b.action === 'context' ? CTX : { status: 200, j: { ok: true, saved: [{ what: 'id_photo_removed', ok: true }, { what: 'profile', ok: true }] } }) }); return r; };
+const removePhoto = async (el) => { await clickA(el, 'remove-photo', { id: CID }); await clickA(el, 'remove-photo-yes', { id: CID }); await tick(); };
+
+test('G U9 item 4: the count draft is kept when only the stay read fails, then comes back on the next good read of the same stay', async () => {
+  const r = stayRig(), { M, el } = await mount(r.cl, GID); assert.equal(M._state().stayKept, null, 'a loaded page keeps nothing'); await clickA(el, 'stay-inc'); assert.equal(outN(el), 3);
+  r.stay = 'fail'; await removePhoto(el); assert.equal(M._state().d.stay, null); assert.equal(M._state().stayKept && M._state().stayKept.draft, 3, 'the draft is held for the next read');
+  r.stay = 'ok'; await removePhoto(el); assert.equal(outN(el), 3, 'the same stay gets its draft back'); assert.equal(M._state().stayKept, null);
+});
+
+test('G U9 item 4: a different stay on the next good read drops the held draft and clears it', async () => {
+  const r = stayRig(), { M, el } = await mount(r.cl, GID); await clickA(el, 'stay-inc');
+  r.stay = 'fail'; await removePhoto(el); r.stay = 'B'; await removePhoto(el);
+  assert.equal(outN(el), 2, 'a different stay starts from its own number'); assert.equal(M._state().stayKept, null, 'the held draft is cleared once a stay loads');
+});
+
+test('G U9 item 5: Remove photo with a details conflict reloads through the stale path; the green box holds only the removal', async () => {
+  const cl = detailClient({ fn: (b) => (b.action === 'context' ? CTX : { status: 207, j: { ok: false, saved: [{ what: 'id_photo_removed', ok: true }, { what: 'profile', ok: false, reason: 'changed' }] } }) });
+  const { el } = await mount(cl, GID); await removePhoto(el);
+  assert.equal(nFn(cl, 'context'), 2, 'reloaded once');
+  const ok = /<div class="okbox[^>]*>.*?<\/div>/s.exec(el.html), er = /<div class="errbox[^>]*>.*?<\/div>/s.exec(el.html);
+  assert.ok(ok && /ID photo removed\./.test(ok[0]) && !/changed/.test(ok[0]), 'green box: the removal only'); assert.ok(er && /Someone else changed this guest\./.test(er[0]), 'the conflict is in the red box');
+});
+
+test('G U9 item 6: a save answered ok with nothing in saved says Nothing new to save', async () => {
+  const P = { ...PROPOSAL, phone: null, stay_preferences: null, birthday: null, tags: [], companions: ['Carla Dizon'], ids: [] };
+  const cl = reviewClient(() => ({ status: 200, j: { ok: true, saved: [] } }), P);
+  const { M, el } = await toReviewWith(cl, [IMG('QUFB')]); await clickA(el, 'save-add'); await tick();
+  assert.equal(M._state().add.step, 'done'); assert.deepEqual(plain(M._state().add.lines), ['Nothing new to save.']); assert.match(/<div class="okbox[^>]*>.*?<\/div>/s.exec(el.html)[0], /Nothing new to save\./);
+});
+
+// mutants that survived the first review
+test('G U9 mutant: a photo unticked before Save is not counted among the photos sent, so the one that saved is unticked', async () => {
+  const cl = reviewClient(() => ({ status: 207, j: { ok: false, saved: [{ what: 'id_photo', ok: true }, { what: 'profile', ok: false, reason: 'save_failed' }] } }), TWO);
+  const { M, el } = await toReviewWith(cl, [IMG('QUFB'), IMG('REVG')]);
+  await clickA(el, 'id-on', { i: 0 }); assert.deepEqual(plain(M._state().add.sheet.ids.map((d) => d.on)), [false, true]);
+  await clickA(el, 'save-add'); await tick();
+  assert.deepEqual(plain(M._state().add.sheet.ids.map((d) => d.on)), [false, false], 'the one photo sent saved, so it is unticked');
+});
+
+test('G U9 mutant: reset forgets a rotation call that is out, so the next page sends at once', async () => {
+  const st = rotGate(), m = await rotOpen(st.cl);
+  await clickA(m.el, 'full-rot'); await sleep(700); assert.deepEqual(st.sent, [90]);
+  m.M.reset(); const el2 = new FakeEl(); m.M.mount(el2, mountOpts(st.cl)); await tick();
+  await clickA(el2, 'full', { id: CID }); await tick(); await clickA(el2, 'full-rot'); await sleep(700);
+  assert.equal(st.sent.length, 2, 'the new session did not wait behind the old call'); st.release(); await tick(30); await sleep(20);
+});
