@@ -192,11 +192,31 @@
   function G_val(id) { var e = S && S.el && S.el.querySelector('#' + id); return e ? e.value : ''; }
   function G_chk(id) { var e = S && S.el && S.el.querySelector('#' + id); return !!(e && e.checked); }
   function G_live(tok) { return S && S.token === tok; }
-  function G_paint() { if (S && S.el) { S.el.innerHTML = G_html(); G_title(); } }
+  // The one redraw rule (s120 U5): whatever staff typed in the open details form or the Add from text box is read into state first, and the field that had focus gets it back with its caret, so no late answer can wipe a field.
+  function G_paint() {
+    if (!S || !S.el) return;
+    var a = G_activeField(), id = a && a.id, from = a && a.selectionStart, to = a && a.selectionEnd;
+    G_keepForm();
+    S.el.innerHTML = G_html(); G_title();
+    var e = id && G_q(id); if (!e || !e.focus) return;
+    try { e.focus({ preventScroll: true }); if (from != null && e.setSelectionRange) e.setSelectionRange(from, to); } catch (x) { /* a field type with no caret (a date) keeps focus only */ }
+  }
+  // Only a field that is drawn right now is read, so a form or sheet that has not been drawn yet (just opened, vip just ticked) keeps its state. Reading changes state and nothing else: no check, no close.
+  function G_keepForm() {
+    if (!S.d || S.view !== 'detail') return;
+    var A = S.add;
+    if (S.edit && G_q('G_f_phone')) G_readEdit();
+    if (A && A.sheet && G_q('G_r_phone')) G_syncSheet();
+    else if (A && A.step === 'input' && G_q('G_text')) A.text = G_val('G_text');
+  }
+  function G_activeField() { var d = S && S.el && (S.el.ownerDocument || root.document), a = d && d.activeElement; return a && a.id && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName) && G_q(a.id) === a ? a : null; }
   // The app bar owns the screen's one heading: while the edit form is open it reads Edit details, otherwise the module's own title (the shell restores it on an empty string).
   function G_title() { var t = S.view === 'detail' && S.edit ? 'Edit details' : ''; if (S.ttl !== t) { S.ttl = t; S.setTitle(t); } }
   function G_q(id) { return S && S.el && S.el.querySelector ? S.el.querySelector('#' + id) : null; }
   function G_focus(id) { var e = S && S.el && S.el.querySelector && S.el.querySelector('#' + id); if (e && e.focus) e.focus(); }
+  // For an answer that arrives later: it never pulls focus off a field staff are typing in (the message is still drawn, and its box announces itself).
+  function G_focusLate(id) { if (!G_activeField()) G_focus(id); }
+  function G_one(q) { return Promise.resolve(q).then(function (r) { return r; }, function (e) { return { data: null, error: e || { message: 'network', network: true } }; }); }
   function G_busyOn() { return !!(S && (S.busy || (S.add && S.add.step === 'reading') || (S.add && S.add.step === 'saving'))); }
   /** An rpc call that never throws: { data, error }. */
   function G_rpc(name, args, cols) {
@@ -402,7 +422,7 @@
   }
   function G_stayHtml() { var st = S.d.stay; return st ? '<section class="G_staywrap" id="G_staywrap">' + G_stayInner(st) + '</section>' : ''; }
   // Redraws only the card (More details and the rest of the page stay as they are); the whole page when the card is not on screen.
-  function G_stayPaint() { var w = G_q('G_staywrap'), st = S.d && S.d.stay; if (w && st) w.innerHTML = G_stayInner(st); else if (!S.edit) G_paint(); } // the details form open: leave it alone (typed text, focus); closing it repaints the card from S.d.stay
+  function G_stayPaint() { var w = G_q('G_staywrap'), st = S.d && S.d.stay; if (w && st) w.innerHTML = G_stayInner(st); else G_paint(); } // with the form open the card is not drawn: G_paint keeps the typed text and the focus
   // A stepper tap changes the number, the two buttons, the booked line and the Save row in place, so the live region keeps speaking and nothing else on the page is redrawn.
   function G_stayLive(st) {
     var o = G_q('G_gout'), dec = G_q('G_gdec'), inc = G_q('G_ginc'), bk = G_q('G_gbk'), sv = G_q('G_sv'), mg = G_q('G_stm'); if (!o || !dec || !inc || !bk || !sv || !mg) return false;
@@ -559,7 +579,7 @@
   function G_loadDetail() {
     var tok = S.token, id = S.gid, D = S.d = { loading: true, err: '', guest: null, details: null, companions: [], compAbsent: false, feat: null, urls: {}, urlBusy: '', stay: null };
     S.cOpen = ''; S.addComp = false; S.edit = null; S.add = null; S.msg = null; S.err = ''; S.cerr = ''; S.confirm = null; S.cbusy = ''; G_paint();
-    var one = function (q) { return Promise.resolve(q).then(function (r) { return r; }, function (e) { return { data: null, error: e || { message: 'network', network: true } }; }); };
+    var one = G_one;
     return Promise.all([
       one(S.client.from('guests').select('id,name,phone,email,tier,total_stays,last_stay_date,property_id').eq('id', id).maybeSingle()),
       one(S.client.from('guest_profile_details').select(G_PROFILE_COLS).eq('guest_id', id).maybeSingle()),
@@ -581,6 +601,7 @@
       D.stay = sr && !sr.error && sr.data ? G_stayFrom(Array.isArray(sr.data) ? sr.data[0] : sr.data, 1 + D.companions.filter(function (x) { return x !== own; }).length) : null;
       G_paint(); if (S.seg === 'stay' && D.stay) G_showStay(); else G_focus('G_h');
       S.seg = ''; // the stay segment applies to the first open only; a reload after Add from text or a retry opens the top
+      if (D.late) { var L = D.late; D.late = null; G_stayLate(D, L); } // a save that finished while this page was loading: its answer is read after this page's own read
       G_loadRot(D.companions.map(function (x) { return x.id_photo_path; }).filter(Boolean), tok);
     });
   }
@@ -615,7 +636,7 @@
   function G_readEdit() {
     var E = S.edit;
     E.contact_number = G_val('G_f_phone'); E.birthday = G_val('G_f_bday'); E.stay_preferences = G_val('G_f_pref'); E.tags = G_val('G_f_tags');
-    if (E.vip) E.vip_reason = G_val('G_f_vipr'); E.reason = G_val('G_f_reason');
+    if (E.vip && G_q('G_f_vipr')) E.vip_reason = G_val('G_f_vipr'); E.reason = G_val('G_f_reason');
   }
   function G_saveEdit() {
     if (G_busyOn()) return;
@@ -632,7 +653,7 @@
     G_rpc('save_guest_profile_v1', { p_guest_id: S.gid, p_patch: patch, p_expected_version: p.version == null ? null : p.version, p_reason: E.reason.trim() }).then(function (r) {
       if (!G_live(tok)) return;
       S.busy = false;
-      if (r.error) { E.err = r.error.network ? G_NO_CONN : G_rpcText(r.error); G_paint(); G_focus('G_eerr'); return; }
+      if (r.error) { E.err = r.error.network ? G_NO_CONN : G_rpcText(r.error); G_paint(); G_focusLate('G_eerr'); return; }
       var nv = r.data && r.data.version != null ? r.data.version : (p.version == null ? 1 : p.version + 1);
       var next = {}; Object.keys(p).forEach(function (k) { next[k] = p[k]; });
       Object.keys(patch).forEach(function (k) { next[k] = patch[k]; });
@@ -661,7 +682,7 @@
     A.step = 'reading'; A.err = ''; G_paint();
     G_call({ action: 'extract', guest_id: S.gid, text: A.text || null, images: A.images.map(function (im) { return { base64: im.base64, mime: im.mime }; }) }).then(function (o) {
       if (!G_live(tok) || S.add !== A) return;
-      if (o.status !== 200 || !o.j.ok) { A.step = 'input'; A.err = G_errText(o.status, o.j.error); G_paint(); G_focus('G_aerr'); return; }
+      if (o.status !== 200 || !o.j.ok) { A.step = 'input'; A.err = G_errText(o.status, o.j.error); G_paint(); G_focusLate('G_aerr'); return; }
       A.sheet = G_sheetFrom(o.j.proposal, S.d.guest.name); A.step = 'review'; G_paint(); G_focus('G_rh');
     });
   }
@@ -678,7 +699,7 @@
         A.ok = !!o.j.ok; A.lines = G_saveLines(o.j.saved); A.images = []; A.text = ''; A.sheet = null; // the photos leave memory once saved or refused
         A.step = 'done'; S.haptic(o.j.ok ? 'ok' : 'warn'); G_paint(); G_focus('G_msg'); return;
       }
-      A.step = 'review'; A.err = G_errText(o.status, o.j.error); G_paint(); G_focus('G_aerr');
+      A.step = 'review'; A.err = G_errText(o.status, o.j.error); G_paint(); G_focusLate('G_aerr');
     });
   }
   function G_saveRot(path, d) {
@@ -726,7 +747,7 @@
       if (!G_live(tok)) return;
       S.cbusy = '';
       if ((o.status === 200 || o.status === 207) && o.j.saved) { S.msg = G_saveLines(o.j.saved); G_forget(D, id);
-        if (o.j.saved.some(function (x) { return x.what === 'profile'; })) { var m = S.msg; G_loadDetail(); S.msg = m; return; } // the ID flag changed too: reload so "ID: On file" is current
+        if (o.j.saved.some(function (x) { return x.what === 'profile'; })) { G_refreshProfile(); return; } // the ID flag changed too: read it again in place, so "ID: On file" is current and an open form or sheet stays
         if (o.j.ok) { G_refreshCompanions(); return; } }
       else S.cerr = G_errText(o.status, o.j.error);
       G_paint();
@@ -741,7 +762,16 @@
     return G_rpc('list_guest_companions_v1', { p_guest_id: S.gid }, G_COMP_COLS).then(function (c) {
       if (!G_live(tok) || S.d !== D) return;
       if (!c.error) { D.cErr = false; D.companions = (c.data || []).map(function (x) { return { id: x.id, name: x.name, id_type: x.id_type || null, id_photo_path: x.id_photo_path || null }; }); } else if (!G_absent(c.error)) D.cErr = true;
-      G_paint(); G_focus('G_msg');
+      G_paint(); G_focusLate('G_msg');
+    });
+  }
+  // Reads the profile again without G_loadDetail: that resets the page, an open form and an open Add from text box with it.
+  function G_refreshProfile() {
+    var tok = S.token, D = S.d;
+    return G_one(S.client.from('guest_profile_details').select(G_PROFILE_COLS).eq('guest_id', S.gid).maybeSingle()).then(function (p) {
+      if (!G_live(tok) || S.d !== D) return;
+      if (!p.error) { D.details = p.data || null; D.detailsOk = true; }
+      return G_refreshCompanions();
     });
   }
   function G_addComp() {
@@ -779,12 +809,32 @@
     if (!G_stayLive(st)) { G_paint(); G_focus(by > 0 ? 'G_ginc' : 'G_gdec'); }
   }
   function G_stayUndo() { var st = S.d && S.d.stay; if (!st || st.busy) return; st.draft = st.base; st.err = ''; st.msg = ''; if (!G_stayLive(st)) G_paint(); G_focus('G_ginc'); }
-  function G_stayDone(st, msg, isErr) { st.busy = false; st.msg = isErr ? '' : msg; st.err = isErr ? msg : ''; G_stayPaint(); G_focus('G_stmsg'); }
+  function G_stayDone(st, msg, isErr) { st.busy = false; st.msg = isErr ? '' : msg; st.err = isErr ? msg : ''; G_stayPaint(); G_focusLate('G_stmsg'); }
   /** The card as the server holds it now, or null (nothing, an error, or the screen moved on). */
   function G_stayRead(tok, fallback) {
     return G_rpc('staff_guest_stay_v1', { p_property: S.pid || G_FALLBACK_PROPERTY, p_guest_id: S.gid }).then(function (q) {
       return G_live(tok) && !q.error && q.data ? G_stayFrom(Array.isArray(q.data) ? q.data[0] : q.data, fallback) : null;
     });
+  }
+  var G_OTHER = 'The card now shows a different stay from the one you changed. Check its number before you save again.';
+  /** After a write that may have saved: reads the card again, then hands it to ok(fresh) or none(). A reloaded page gets the answer through G_stayLate; a different stay on the card is said plainly, never described as the one saved. */
+  function G_stayAfter(tok, D, st, gone, ok, none) {
+    G_stayRead(tok, st.base).then(function (fresh) {
+      if (!G_live(tok)) return;
+      if (S.d !== D) { G_stayLate(S.d, { uid: st.uid, fresh: fresh, gone: gone }); return; }
+      if (D.stay !== st) return;
+      if (fresh && fresh.uid !== st.uid && !gone) { D.stay = fresh; G_stayDone(fresh, G_OTHER, true); return; }
+      if (fresh) ok(fresh); else none();
+    });
+  }
+  // The page was reloaded while a save was in flight, so its card may have been read before the write. The read taken after the write wins, and the page says what is on file.
+  function G_stayLate(P, L) {
+    if (!P) return;
+    if (P.loading) { P.late = L; return; }
+    var cur = P.stay, f = L.fresh; if (!cur || cur.uid !== L.uid) return; // another stay is on the page now: nothing to say about this one
+    if (L.gone) { if (f) { P.stay = f; G_stayDone(f, G_GONE, true); } else { P.stay = null; S.err = G_GONE; G_paint(); G_focusLate('G_err'); } return; }
+    if (!f) { G_stayDone(cur, 'A save finished while this page reloaded, and the latest count could not load. Reload the page to see it.', true); return; }
+    P.stay = f; if (f.uid !== L.uid) G_stayDone(f, G_OTHER, true); else G_stayDone(f, 'The number on file is now ' + G_gtext(f.base) + '.', false);
   }
   function G_staySave() {
     var D = S.d, st = D && D.stay; if (!st || st.busy || !G_canSave(st)) return;
@@ -798,38 +848,30 @@
       var refused = !!e && !stale && !gone && (G_REFUSED.indexOf(c) >= 0 || G_absent(e));
       // The server moved, or may have: Today reads again. Once per save, on success, replay, a conflict, a gone stay and any answer that cannot prove nothing changed, even when the person has left this page.
       if (!refused) { try { onChange(); } catch (x) { /* a refresh that fails must not break the save */ } }
-      if (!G_live(tok) || D.stay !== st) return;
+      if (!G_live(tok)) return;
+      if (S.d !== D) { if (!refused) G_stayAfter(tok, D, st, gone, null, null); return; } // the page was reloaded in between: its card may predate this write, so it is read again (G_stayLate)
+      if (D.stay !== st) return;
       if (stale) { // someone else moved it: show the number now on file, keep nothing of ours
-        G_stayRead(tok, st.base).then(function (fresh) {
-          if (!G_live(tok) || D.stay !== st) return;
-          if (fresh) { D.stay = fresh; G_stayDone(fresh, 'This stay was updated by someone else. It now shows ' + G_gtext(fresh.base) + '. Set it again if it is still wrong.', true); }
-          else { st.draft = st.base; G_stayDone(st, 'This stay was updated by someone else, and the latest count could not load. Reload the page to see it.', true); }
-        });
+        G_stayAfter(tok, D, st, false,
+          function (fresh) { D.stay = fresh; G_stayDone(fresh, 'This stay was updated by someone else. It now shows ' + G_gtext(fresh.base) + '. Set it again if it is still wrong.', true); },
+          function () { st.draft = st.base; G_stayDone(st, 'This stay was updated by someone else, and the latest count could not load. Reload the page to see it.', true); });
         return;
       }
       if (gone) { // the stay left the calendar: read the card again; with no stay left the card goes and the page says why
-        G_stayRead(tok, st.base).then(function (fresh) {
-          if (!G_live(tok) || D.stay !== st) return;
-          if (fresh) { D.stay = fresh; G_stayDone(fresh, G_GONE, true); } else { D.stay = null; S.err = G_GONE; G_paint(); G_focus('G_err'); }
-        });
+        G_stayAfter(tok, D, st, true, function (fresh) { D.stay = fresh; G_stayDone(fresh, G_GONE, true); }, function () { D.stay = null; S.err = G_GONE; G_paint(); G_focusLate('G_err'); });
         return;
       }
       if (refused) { G_stayDone(st, (G_absent(e) ? 'Changing the number of guests is not available yet.' : c === '42501' ? 'You are not allowed to change this.' : 'Choose 1, 2 or 3 guests.') + ' Nothing was changed.', true); return; }
       if (e) { // a 5xx, a gateway error or a dropped answer may have saved: read the card again, and keep the key and the number so a second tap is safe
-        G_stayRead(tok, st.base).then(function (fresh) {
-          if (!G_live(tok) || D.stay !== st) return;
-          if (fresh) { fresh.key = st.key; fresh.keyN = st.keyN; fresh.draft = n; D.stay = fresh; G_stayDone(fresh, 'The save could not be confirmed. The card shows what is on file now. If it is not what you set, tap Save again. Saving twice does not count twice.', true); }
-          else G_stayDone(st, 'The save could not be confirmed, and the card could not be read again. Check your signal, then tap Save again. Saving twice does not count twice.', true);
-        });
+        G_stayAfter(tok, D, st, false,
+          function (fresh) { fresh.key = st.key; fresh.keyN = st.keyN; fresh.draft = n; D.stay = fresh; G_stayDone(fresh, 'The save could not be confirmed. On file now: ' + G_gtext(fresh.base) + '. If that is not what you set, tap Save again.', true); }, // the stepper still shows the number staff set, so the message names the number on file
+          function () { G_stayDone(st, 'The save could not be confirmed, and the card could not be read again. Check your signal, then tap Save again. Saving twice does not count twice.', true); });
         return;
       }
       var j = r.data || {}, got = G_clampGuests(j.guest_count) || n, ver = +j.version > 0 ? Math.round(+j.version) : st.version + 1;
       var settle = function (t, g, v, moved) { t.base = t.count = g; t.draft = g; t.version = v; t.key = null; t.keyN = null; S.haptic('ok'); G_stayDone(t, moved ? 'Your save went through earlier, and the number has since changed to ' + G_gtext(g) + '. The card shows what is on file now.' : said(g)); };
       if (j.replay === true) { // an earlier try already saved this: read the card again so what is shown is what the server holds
-        G_stayRead(tok, st.base).then(function (fresh) {
-          if (!G_live(tok) || D.stay !== st) return;
-          if (fresh) { D.stay = fresh; settle(fresh, fresh.base, fresh.version, fresh.base !== n); } else settle(st, got, ver);
-        });
+        G_stayAfter(tok, D, st, false, function (fresh) { D.stay = fresh; settle(fresh, fresh.base, fresh.version, fresh.base !== n); }, function () { settle(st, got, ver); });
         return;
       }
       settle(st, got, ver);
