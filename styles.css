@@ -1363,7 +1363,7 @@ html[data-plain="1"] .tabbar, html[data-plain="1"] .toast, html[data-plain="1"] 
 .T_chip.T_c-returning { --bgc: var(--v5-t2-bg); --fgc: var(--v5-t2-fg); --edge: var(--v5-t2-edge); font-weight: 600; }
 .T_chip.T_c-regular { --bgc: var(--v5-t3-bg); --fgc: var(--v5-t3-fg); --edge: var(--v5-t3-edge); font-weight: 600; }
 .T_chip.T_c-vip { --bgc: var(--v5-t4-bg); --fgc: var(--v5-t4-fg); --edge: var(--v5-t4-edge); font-weight: 700; }
-.T_chip svg.i { width: 18px; height: 18px; stroke-width: 1.75; }
+.T_chip svg.i { width: 18px; height: 18px; stroke-width: 1.75; flex: none; }
 .T_chip.T_c-vip svg.i { fill: currentColor; fill-opacity: .9; }
 .T_id > .T_chip { margin: 2px 0; }
 .nm3 { color: var(--v5-nm3); }

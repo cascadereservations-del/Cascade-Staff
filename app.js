@@ -1127,11 +1127,11 @@
   function closeSheet() {
     var S = state.sheet; if (!S) return; state.sheet = null;
     var appEl = $('app'); if (appEl && appEl.removeAttribute) appEl.removeAttribute('inert');
-    var e = sheetEls(), attr = S.kind === 'day' ? 'data-day' : S.kind === 'warn' ? 'data-warn' : 'data-act';
+    var e = sheetEls(), attr = S.kind === 'day' ? 'data-day' : S.kind === 'warn' ? 'data-warn' : 'data-act', who = S.kind === 'stay' && S.uid ? S.uid : null;
     e.sheet.classList.remove('on'); e.sheet.setAttribute('aria-hidden', 'true'); e.scrim.classList.remove('on');
     var want = S.kind === 'add' ? 'task-add-open' : S.kind === 'nadd' ? 'notice-add-open' : S.kind === 'news' ? 'whatsnew' : S.kind === 'attn' ? 'attn-open' : S.key;
     E_sheetReset(e.sheet, e.scrim);
-    var back = Array.prototype.filter.call(document.querySelectorAll('[' + attr + ']'), function (b) { return b.getAttribute(attr) === want; })[0];
+    var back = Array.prototype.filter.call(document.querySelectorAll('[' + attr + ']'), function (b) { return b.getAttribute(attr) === want && (!who || b.getAttribute('data-uid') === who); })[0]; // a stay sheet goes back to the opener of THAT stay
     if (back) back.focus(); else if (S.opener && S.opener.isConnected !== false && S.opener.focus && S.opener !== document.body) S.opener.focus(); // back to what opened it
   }
   // Escape and a tap on the scrim never throw away something typed: they say how to leave, and keep the focus where the person was typing
@@ -2033,7 +2033,8 @@
   function A_av(n) { return '<span class="S_av on" aria-hidden="true">' + A_inits(n) + '<span class="S_tk">' + ICON('check', 's12') + '</span></span>'; }
   function A_staying(g) {
     var v = CS.stayingView(g, state.payload && state.payload.today); if (!v) return '';
-    var open = function (txt, ic) { return '<button class="S_lnk" type="button" data-act="stay-open" data-uid="' + esc(v.uid) + '">' + ICON(ic, 's16') + txt + '</button>'; };
+    // read-only roles see the names and no link (submit_cleaning is the write permission)
+    var open = !CS.canEditStaying(role()) ? function () { return ''; } : function (txt, ic) { return '<button class="S_lnk" type="button" data-act="stay-open" data-uid="' + esc(v.uid) + '">' + ICON(ic, 's16') + txt + '</button>'; };
     if (v.mode === 'empty') return open('Add who is staying', 'plus');
     var change = open('Change who is staying', 'note');
     if (v.mode === 'booker') return '<div class="S_who"><div class="S_line">' + A_av(v.booker) + '<span><b>Staying:</b> ' + esc(v.names[0]) + '</span></div>' + change + '</div>';
@@ -2042,10 +2043,11 @@
       '<span class="S_k">' + (v.tonight ? 'Staying tonight' : 'Staying') + '</span>' + v.names.map(function (n) { return '<div class="S_person">' + A_av(n) + '<span class="S_n">' + esc(n) + '</span><span class="S_mk">Staying</span></div>'; }).join('') + change + '</div>';
   }
   function A_stayGuest(uid) { var p = state.payload; return p ? [p.current_guest, p.next_guest].filter(function (g) { return g && g.uid === uid; })[0] || null : null; }
+  function A_stayKey() { return 'stay-' + (window.crypto && crypto.randomUUID ? crypto.randomUUID() : Date.now() + '-' + Math.random().toString(16).slice(2)); }
   function A_stayOpen(uid) {
-    var g = A_stayGuest(uid), v = g && CS.stayingView(g, state.payload.today); if (!v) return;
-    state.stay = { uid: uid, names: v.names.join(', '), init: v.names.join(', '), sug: v.suggestion, version: v.version, tonight: v.tonight, err: '', busy: false, key: 'stay-' + (window.crypto && crypto.randomUUID ? crypto.randomUUID() : Date.now() + '-' + Math.random().toString(16).slice(2)) };
-    openSheet('stay', 'stay-open'); if ($('stay-names') && $('stay-names').focus) $('stay-names').focus();
+    var g = A_stayGuest(uid), v = g && CS.stayingView(g, state.payload.today); if (!v || !CS.canEditStaying(role())) return;
+    state.stay = { uid: uid, names: v.names.join(', '), init: v.names.join(', '), sug: v.suggestion, version: v.version, tonight: v.tonight, err: '', busy: false, key: A_stayKey(), keyNames: null };
+    openSheet('stay', 'stay-open'); state.sheet.uid = uid; if ($('stay-names') && $('stay-names').focus) $('stay-names').focus();
   }
   function A_stayForm() {
     var a = state.stay, sug = a.sug.length;
@@ -2062,15 +2064,17 @@
     var a = state.stay; if (!a || a.busy) return;
     var names = kind === 'save' ? CS.stayNames(a.names) : [], g = A_stayGuest(a.uid);
     if (kind === 'save' && !names.length) { a.err = 'Type at least one name, or choose Cancel.'; A_stayDraw(); return; }
+    var tooMuch = kind === 'save' && CS.stayNamesProblem(names); if (tooMuch) { a.err = tooMuch; A_stayDraw(); return; }
+    if (kind === 'save') { var joined = names.join(', '); if (a.keyNames != null && a.keyNames !== joined) a.key = A_stayKey(); a.keyNames = joined; } // the same names retried keep their key; different names get a new one
     var offline = 'Needs a connection. Nothing was saved, and what you typed is still here.';
     if (!DEMO && navigator.onLine === false) { a.err = offline; A_stayDraw(); E_vibe('error'); return; }
     var done = function (msg) { state.stay = null; closeSheet(); toast(msg); E_vibe('tap'); };
     if (DEMO) {
-      if (g && g.staying) { var use = kind === 'save' ? names : accept ? a.sug : CS.stayNames(g.staying.names); g.staying = { names: use.join(', '), source: kind === 'save' ? 'staff' : accept ? 'cassy' : g.staying.source, suggestion: null, version: (+g.staying.version || 0) + 1 }; }
+      if (g && g.staying) { var use = kind === 'save' ? names : accept ? a.sug : CS.stayNames(g.staying.names); g.staying = { names: use.join(', '), source: kind === 'save' || accept ? 'staff' : g.staying.source, suggestion: null, version: (+g.staying.version || 0) + 1 }; }
       done('Demo only. Nothing is saved.'); if (current === 'home') renderHome(); return;
     }
     a.busy = true; a.err = ''; A_stayDraw();
-    var call = kind === 'save' ? sb.rpc('set_stay_staying_v1', { p_property: pid(), p_uid: a.uid, p_names: names.join(', '), p_source: 'staff', p_expected_version: a.version, p_reason: 'Typed in the staff app', p_idempotency_key: a.key })
+    var call = kind === 'save' ? sb.rpc('set_stay_staying_v1', { p_property: pid(), p_uid: a.uid, p_names: names.join(', '), p_source: CS.canSeeGuestContact(role()) ? 'admin' : 'staff', p_expected_version: a.version, p_reason: 'Typed in the staff app', p_idempotency_key: a.key })
       : sb.rpc('confirm_stay_staying_suggestion_v1', { p_property: pid(), p_uid: a.uid, p_accept: !!accept, p_expected_version: a.version, p_reason: accept ? 'Staff accepted the suggestion' : 'Staff said the suggestion was not right' });
     Promise.resolve(call).then(function (r) {
       if (r.error) throw r.error;
@@ -2078,10 +2082,12 @@
       return loadHome().then(function () { done(kind === 'save' || accept ? 'Saved.' : 'Suggestion cleared.'); });
     }).catch(function (e) {
       a.busy = false; E_vibe('error');
-      var m = String((e && e.message) || ''), stale = /version|stale|conflict/i.test(m) || (e && e.code === '40001');
-      a.err = CS.rpcMissing(e) ? 'Available after the next update.' : e && e.code === '42501' ? 'You do not have access to change this.' : stale ? 'Someone changed this just now. Check the names and save again.' : E_netErr(e) ? offline : 'That did not save. Check your signal and try again.';
+      var m = String((e && (e.error || e.message)) || ''), known = CS.stayErrorText(e), reused = /idempotency_key_reused/.test(m), stale = /version|stale|conflict/i.test(m) || (e && e.code === '40001');
+      a.err = CS.rpcMissing(e) ? 'Available after the next update.' : e && e.code === '42501' ? 'You do not have access to change this.' : known ? known : stale ? 'Someone changed this just now. Check the names and save again.' : E_netErr(e) ? 'That did not save. Check your signal and try again.' : 'That did not save. Please try again in a moment.';
+      if (reused) { a.key = A_stayKey(); a.keyNames = null; }
       A_stayDraw();
-      if (stale) loadHome().then(function () { var gg = A_stayGuest(a.uid), vv = gg && CS.stayingView(gg, state.payload.today); if (vv && state.stay === a) { a.version = vv.version; a.sug = vv.suggestion; A_stayDraw(); } });
+      // the server holds something newer or different: reload, then show what it has now (its names after a stale version)
+      if (stale || reused || /no_pending_suggestion|stay_not_found/.test(m) || (e && e.code === 'P0002')) loadHome().then(function () { var gg = A_stayGuest(a.uid), vv = gg && CS.stayingView(gg, state.payload.today); if (vv && state.stay === a) { a.version = vv.version; a.sug = vv.suggestion; if (stale) a.names = vv.names.join(', '); A_stayDraw(); } });
     });
   }
   function A_noticeAddDraw() { if (state.sheet && state.sheet.kind === 'nadd') drawSheet(); }

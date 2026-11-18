@@ -544,15 +544,34 @@
       else if (g.repeat === false || (n === 1 && g.repeat !== true) || g.tier === 'first') t = 'first';
       else return null;
     }
-    var first = t === 'first', c = first ? 1 : n, tail = !c ? '' : t === 'returning' ? ordinal(c) + ' stay' : plural(c, 'stay');
+    var first = t === 'first', c = first ? 1 : n, tail = !c || (!first && c === 1) ? '' : t === 'returning' ? ordinal(c) + ' stay' : plural(c, 'stay'); // one stay under a non-first tier: the word alone, never '1st stay'
     return { tier: t, icon: BADGE[t][1], word: BADGE[t][0], count: c || null, text: first ? 'First stay' : BADGE[t][0] + (tail ? ' · ' + tail : '') };
   }
   // s119: the staying line. g.staying = { names, source, suggestion, version } from staff_home_v1; absent (older server) gives null and the card draws nothing new.
   // names and suggestion are comma-separated text (an array is accepted); the result lists are trimmed, de-duplicated and capped.
+  var STAY_MAX = 300, STAY_NAME_MAX = 60, STAY_COUNT_MAX = 8;
   function stayNames(v) {
     var a = Array.isArray(v) ? v : typeof v === 'string' ? v.split(/[,;\n]/) : [], seen = {}, out = [];
-    a.forEach(function (x) { x = String(x == null ? '' : x).replace(/\s+/g, ' ').trim().slice(0, 60); var k = x.toLowerCase(); if (x && !seen[k] && out.length < 8) { seen[k] = 1; out.push(x); } });
+    a.forEach(function (x) { x = String(x == null ? '' : x).replace(/\s+/g, ' ').trim(); var k = x.toLowerCase(); if (x && !seen[k]) { seen[k] = 1; out.push(x); } });
     return out;
+  }
+  // Plain message when the typed names would not fit (8 names, 60 characters each, 300 joined with ', '); null when fine. Nothing is cut silently.
+  function stayNamesProblem(names) {
+    if (names.length > STAY_COUNT_MAX) return 'Up to ' + STAY_COUNT_MAX + ' names can be saved. Please remove some.';
+    if (names.some(function (x) { return x.length > STAY_NAME_MAX; })) return 'Each name can be up to ' + STAY_NAME_MAX + ' characters.';
+    return names.join(', ').length > STAY_MAX ? 'Names can be up to ' + STAY_MAX + ' characters. Please shorten the list.' : null;
+  }
+  // Roles that may write who is staying (submit_cleaning permission); the others see the names read-only.
+  function canEditStaying(role) { return role === 'owner' || role === 'admin' || role === 'inspector' || role === 'cleaner'; }
+  // The calm line for each answer the server can give to a staying call (ok:false error text or RPC error); null = not one of ours.
+  function stayErrorText(e) {
+    var m = String((e && (e.error || e.message)) || ''), c = e && e.code;
+    if (/no_pending_suggestion/.test(m)) return 'That suggestion is no longer there.';
+    if (/names_too_long/.test(m)) return 'Names can be up to ' + STAY_MAX + ' characters.';
+    if (/stay_not_found/.test(m) || c === 'P0002') return 'This stay is no longer on the calendar.';
+    if (/names_contact/.test(m)) return 'Please leave phone numbers and e-mail addresses out. Type names only.';
+    if (/idempotency_key_reused/.test(m)) return 'That did not go through. Please try saving again.';
+    return null;
   }
   function stayingView(g, today) {
     if (!g || !g.uid || !g.staying || typeof g.staying !== 'object') return null;
@@ -1644,7 +1663,7 @@
     fmtTime: fmtTime, fmt24: fmt24, ordinal: ordinal, plural: plural, agoLabel: agoLabel, clockLabel: clockLabel,
     monthGrid: monthGrid, dayState: dayState, dayStatus: dayStatus, mergeStays: mergeStays, sameGuest: sameGuest, dayMoves: dayMoves, blockWhy: blockWhy, flagName: flagName, FLAG_KINDS: FLAG_KINDS, blockedLines: blockedLines, blockedLineText: blockedLineText,
     canFlagDays: canFlagDays, guestContact: guestContact, canSeeGuestContact: canSeeGuestContact, MESSENGER_INBOX: MESSENGER_INBOX, rpcMissing: rpcMissing, tgLink: tgLink, warningInfo: warningInfo, findingKey: findingKey, initialOf: initialOf, sourceLabel: sourceLabel, stayDates: stayDates, monthInRange: monthInRange,
-    tierRibbon: tierRibbon, tierBadge: tierBadge, stayNames: stayNames, stayingView: stayingView, wxHazards: wxHazards, wxHourly: wxHourly, nextPrep: nextPrep, utilAlerts: utilAlerts, isInternetNotice: isInternetNotice, tierPerks: tierPerks, faceFrame: faceFrame, parseNotes: parseNotes, returningLabel: returningLabel, tierLabel: tierLabel, tierLine: tierLine, tierParts: tierParts, keyNote: keyNote, TOPIC_LABELS: TOPIC_LABELS, notableLine: notableLine, weatherIcon: weatherIcon, rainAlert: rainAlert, wxCard: wxCard, goodToKnow: goodToKnow, earlierLine: earlierLine, companionsLine: companionsLine, todayCardState: todayCardState,
+    tierRibbon: tierRibbon, tierBadge: tierBadge, stayNames: stayNames, stayNamesProblem: stayNamesProblem, canEditStaying: canEditStaying, stayErrorText: stayErrorText, stayingView: stayingView, wxHazards: wxHazards, wxHourly: wxHourly, nextPrep: nextPrep, utilAlerts: utilAlerts, isInternetNotice: isInternetNotice, tierPerks: tierPerks, faceFrame: faceFrame, parseNotes: parseNotes, returningLabel: returningLabel, tierLabel: tierLabel, tierLine: tierLine, tierParts: tierParts, keyNote: keyNote, TOPIC_LABELS: TOPIC_LABELS, notableLine: notableLine, weatherIcon: weatherIcon, rainAlert: rainAlert, wxCard: wxCard, goodToKnow: goodToKnow, earlierLine: earlierLine, companionsLine: companionsLine, todayCardState: todayCardState,
     orderWarnings: orderWarnings, brownoutText: brownoutText, lowStockText: lowStockText, warningSummary: warningSummary,
     weatherLine: weatherLine, rainLine: rainLine, weatherStale: weatherStale, WEATHER_STALE_MIN: WEATHER_STALE_MIN, esc: esc,
     A_HOUSE_FALLBACK: A_HOUSE_FALLBACK, A_houseTimes: A_houseTimes, A_turnoverClock: A_turnoverClock, A_turnoverLine: A_turnoverLine, A_hm: A_hm, A_NOTICE_TYPES: A_NOTICE_TYPES, A_noticesView: A_noticesView, A_noticeFilters: A_noticeFilters, A_dayMarks: A_dayMarks, A_noticeDay: A_noticeDay, A_guestMessage: A_guestMessage, A_CAL_TABS: A_CAL_TABS, A_calTab: A_calTab, A_stayShade: A_stayShade, A_hubGroups: A_hubGroups, A_hubNative: A_hubNative, A_hubRoutes: A_hubRoutes, A_hubRouteOk: A_hubRouteOk, A_hubDoorUrl: A_hubDoorUrl, A_whatsNew: A_whatsNew, A_shortTime: A_shortTime, A_PINNED: A_PINNED, A_noticeAddError: A_noticeAddError, A_NOTICE_HINT: A_NOTICE_HINT, A_flagDup: A_flagDup, A_facebookUrl: A_facebookUrl, A_fbPluginUrl: A_fbPluginUrl, A_noticeAddProblem: A_noticeAddProblem, A_noticeAddArgs: A_noticeAddArgs, A_plainRefusal: A_plainRefusal, A_hour12: A_hour12, A_timeRange: A_timeRange,

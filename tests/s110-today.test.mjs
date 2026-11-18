@@ -11,7 +11,7 @@ test('s110 CS.tierBadge: a glyph and the total stays per tier; first stay only w
   assert.equal(b({ tier: 'regular', stay_count: 5 }).text, 'Regular · 5 stays'); assert.equal(b({ tier: 'regular', stay_count: 5 }).icon, 'star');
   assert.equal(b({ tier: 'vip', stay_count: 11 }).text, 'VIP · 11 stays'); assert.equal(b({ tier: 'vip', stay_count: 11 }).icon, 'crown');
   assert.equal(b({ tier: 'vip' }).text, 'VIP', 'a known tier with no count: the word alone');
-  assert.equal(b({ tier: 'returning', stay_count: 1 }).text, 'Returning · 1st stay', 'ordinal');
+  assert.equal(b({ tier: 'returning', stay_count: 2 }).text, 'Returning · 2nd stay', 'ordinal'); assert.equal(b({ tier: 'returning', stay_count: 1 }).text, 'Returning', 'one stay under a non-first tier: no ordinal tail'); assert.equal(b({ tier: 'regular', stay_count: 1 }).text, 'Regular'); assert.equal(b({ tier: 'vip', stay_count: 1 }).text, 'VIP');
   assert.equal(b({ tier: null, repeat: false }).text, 'First stay'); assert.equal(b({ tier: null, stay_count: 1 }).text, 'First stay');
   assert.equal(b({ tier: null, repeat: true, stay_count: 3 }).text, 'Returning · 3rd stay', 'no tier, a repeat flag and a count');
   assert.equal(b({ tier: null, repeat: true }).text, 'Returning');
