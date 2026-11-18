@@ -491,7 +491,7 @@
         '<div class="input"><input id="G_cn' + i + '" value="' + G_esc(c.name) + '" aria-label="Companion name" maxlength="80"' + ro + '></div></div>';
     }).join('') + '</div>' : '';
     var ids = s.ids.length ? '<div class="card list G_list">' + s.ids.map(function (d, i) {
-      var im = A.images[d.image], sd = d.saved ? ' disabled' : dis, sr = d.saved ? ' readonly' : ro; // a saved photo is finished: nothing on its row can change
+      var im = A.images[d.image], sd = d.saved ? ' disabled' : dis, sr = d.saved ? ' disabled' : ro; // a saved photo is finished: nothing on its row can change
       return '<div class="G_chkrow G_idrow"><button class="chk" type="button" role="checkbox" aria-checked="' + (!d.saved && !!d.on) + '" aria-label="' + (d.saved ? 'ID photo saved' : 'Keep this ID photo') + '" data-act="id-on" data-i="' + i + '"' + sd + '>' + (root.ICON ? root.ICON('check', 's16') : '') + '</button>' +
         (im ? '<img class="G_idimg" src="' + G_esc(im.src) + '" alt="ID photo">' : '') + '<div class="G_idform">' + (d.saved ? '<span class="help">Saved</span>' : '') +
         '<div class="input"><select id="G_io' + i + '" aria-label="Whose ID" data-act-change="id-own" data-i="' + i + '"' + sd + '><option value="own"' + (d.own ? ' selected' : '') + '>' + G_esc('The guest (' + g.name + ')') + '</option><option value="comp"' + (d.own ? '' : ' selected') + '>A companion</option></select></div>' +

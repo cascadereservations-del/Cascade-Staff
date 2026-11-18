@@ -1809,6 +1809,8 @@ test('G U11 item 2: Cancel after a partial save is disabled while saving, and en
   assert.ok(s.M._state().d.stale, 'stale'); assert.ok(tagsOf(s.el, 'data-act', 'add-cancel').length === 1 && !dis(s.el, 'add-cancel'), 'Cancel works on a stale page');
 });
 
+const rowTag = (el, i) => tagsOf(el, 'data-act', 'id-on')[i];
+
 test('G U11 item 3: a photo that saved shows Saved, disabled and unticked, cannot be ticked again, and keeps its place', async () => {
   const saves = []; let n = 0;
   const cl = reviewClient((b) => { saves.push(b); return n++ === 0 ? part1() : { status: 207, j: { ok: false, saved: [{ what: 'id_photo', ok: false, reason: 'upload_failed' }] } }; }, TWO);
@@ -1823,6 +1825,29 @@ test('G U11 item 3: a photo that saved shows Saved, disabled and unticked, canno
   await clickA(el, 'id-on', { i: 0 }); assert.equal(M._state().add.sheet.ids[0].on, false, 'a tap on the saved row ticks nothing');
   await clickA(el, 'save-add'); await tick();
   assert.equal(saves[1].ids.length, 1, 'only the failed photo is sent again'); assert.equal(M._state().add.sheet.ids.length, 2);
+});
+
+test('G U13: on review the saved row name is disabled and keeps its value, the failed row stays editable with its own label', async () => {
+  const cl = reviewClient(() => part1(), TWO);
+  const { M, el } = await toReviewWith(cl); await clickA(el, 'save-add'); await tick();
+  assert.match(el.html, /<input id="G_in0"[^>]*disabled/, 'saved name locked'); assert.doesNotMatch(el.html, /<input id="G_in0"[^>]*readonly/, 'not a focusable readonly field');
+  assert.doesNotMatch(el.html, /<input id="G_in1"[^>]*(readonly|disabled)/, 'failed name editable');
+  assert.match(rowTag(el, 1), /aria-label="Keep this ID photo"/); assert.equal(M._state().add.sheet.ids[0].name, 'Carla Dizon');
+});
+
+test('G U13: while a retry saves, the unsaved row is locked too', async () => {
+  let n = 0, release; const gate = new Promise((r) => { release = r; });
+  const cl = reviewClient(() => (n++ === 0 ? part1() : gate.then(() => ({ data: retryOk.j, error: null }))), TWO);
+  const { M, el } = await toReviewWith(cl); await clickA(el, 'save-add'); await tick();
+  await clickA(el, 'save-add'); assert.equal(M._state().add.step, 'saving');
+  assert.match(el.html, /<select id="G_io1"[^>]*disabled/); assert.match(el.html, /<select id="G_it1"[^>]*disabled/); assert.match(el.html, /<input id="G_in1"[^>]*readonly/); assert.match(rowTag(el, 1), /disabled/);
+  release(); await tick();
+});
+
+test('G U13: a saved photo of the guest that reads another name has its Yes tick locked', async () => {
+  const OWN = { ...TWO, ids: [{ image: 0, name: 'Someone Else', id_type: 'passport', own: true }, TWO.ids[1]] };
+  const { el } = await toReviewWith(reviewClient(() => part1(), OWN)); await clickA(el, 'save-add'); await tick();
+  const yes = tagsOf(el, 'data-act', 'id-yes'); assert.equal(yes.length, 1); assert.match(yes[0], /disabled/);
 });
 
 // mutants that survived the review
