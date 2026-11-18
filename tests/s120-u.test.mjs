@@ -45,6 +45,10 @@ test('goodToKnow idKnown reads the same whether staff_home_v1 sends guest_id or 
   assert.deepEqual([CS.goodToKnow(live, true).idKnown, CS.goodToKnow(live, true).id], [true, false], 'absent key: the old behaviour, a No ID yet pill');
   assert.equal(CS.goodToKnow({ ...live, guest_id: GID }, true).idKnown, true, 'present');
   assert.equal(CS.goodToKnow({ ...live, guest_id: null }, true).idKnown, false, 'explicitly unlinked: says nothing');
+  const owner = { ...live, guest_id: null, arrival_ready: { id: false, paid: null, door_code: null } }; // the owner/admin shape for a stay with no guest record
+  assert.deepEqual([CS.goodToKnow(owner, true).idKnown, CS.goodToKnow(owner, true).id], [false, false], 'unlinked with arrival_ready.id false: no pill');
+  assert.equal(CS.goodToKnow({ ...owner, guest_id: GID }, true).idKnown, true, 'linked, same arrival_ready: No ID yet may show');
+  assert.equal(CS.goodToKnow({ ...owner, arrival_ready: { id: true } }, true).idKnown, true, 'unlinked but the server says the ID is on file');
   assert.equal(CS.goodToKnow({ ...live, guest_id: GID, id_photo_path: 'p/a.jpg' }, true).id, true);
 });
 

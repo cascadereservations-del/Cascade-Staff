@@ -18,7 +18,7 @@
   var G_ID_TYPES = [['passport', 'Passport'], ['drivers_license', 'Driver’s license'], ['national_id', 'National ID'], ['other', 'Other ID']];
   var G_MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
   var G_NO_CONN = 'No connection, so nothing was sent. Check your signal and tap again.';
-  var G_SEL = 'id,name,phone,email,tier,total_stays,last_stay_date,guest_profile_details(id_on_file,birthday,contact_number,vip)';
+  var G_SEL = 'id,name,phone,email,tier,total_stays,last_stay_date,guest_profile_details(id_on_file,birthday,contact_number,vip),guest_companions(id_photo_path)'; // companions: only whether a photo exists, read by G_idState; never drawn
   var G_COMP_COLS = 'id,name,id_type,id_photo_path'; // never id_number, notes or contact_number
   var G_PROFILE_COLS = 'guest_id,preferred_channel,language,stay_preferences,tags,vip,vip_reason,version,contact_number,birthday,id_on_file'; // never id_number
 
@@ -248,7 +248,7 @@
   function G_glyph(k) { return '<span class="G_gl" aria-hidden="true">' + ({ i: 'ℹ', ok: '✓', no: '!', x: '×', star: '★', cake: '✦' }[k] || '') + '</span>'; }
   function G_pill(tone, icon, text) { return '<span class="pill p-' + tone + '">' + (root.ICON ? root.ICON(icon, 's16') : '') + G_esc(text) + '</span>'; }
   // One ID rule, the one Today uses (s_arrival_ready_v1.id): the profile flag is true, or any companion has an ID photo. profile and comps are null when they are unknown (not loaded, read failed);
-  // the answer is then true or null, never false, and null draws no pill. The list cannot see companions, so it asks with comps null. Only the two approved pills exist.
+  // the answer is then true or null, never false, and null draws no pill. The list reads the companion photo flags with its rows (guest_companions): an array is known, anything else is passed as null. Only the two approved pills exist.
   function G_idState(profile, comps) {
     if (profile && profile.id_on_file === true) return true;
     if (comps && comps.some(function (c) { return c && c.id_photo_path; })) return true;
@@ -275,7 +275,7 @@
     var rows = L.rows.map(function (g) {
       var d = G_detailOf(g), flags = [], bd = G_daysToBirthday(d.birthday, today);
       flags.push(G_tierChip(g.tier, g.total_stays, d.vip));
-      flags.push(G_idPill(G_idState(d, null)));
+      flags.push(G_idPill(G_idState(d, Array.isArray(g.guest_companions) ? g.guest_companions : null)));
       if (!g.phone && !g.email && !d.contact_number) flags.push('<span class="pill p-warn">' + G_glyph('no') + 'No contact</span>');
       if (d.vip) flags.push('<span class="pill p-brand">' + G_glyph('star') + 'VIP</span>');
       if (bd !== null && bd <= G_BDAY_DAYS) flags.push('<span class="pill p-info">' + G_glyph('cake') + (bd === 0 ? 'Birthday today' : 'Birthday in ' + bd + (bd === 1 ? ' day' : ' days')) + '</span>');
@@ -402,7 +402,7 @@
   }
   function G_stayHtml() { var st = S.d.stay; return st ? '<section class="G_staywrap" id="G_staywrap">' + G_stayInner(st) + '</section>' : ''; }
   // Redraws only the card (More details and the rest of the page stay as they are); the whole page when the card is not on screen.
-  function G_stayPaint() { var w = G_q('G_staywrap'), st = S.d && S.d.stay; if (w && st) w.innerHTML = G_stayInner(st); else G_paint(); }
+  function G_stayPaint() { var w = G_q('G_staywrap'), st = S.d && S.d.stay; if (w && st) w.innerHTML = G_stayInner(st); else if (!S.edit) G_paint(); } // the details form open: leave it alone (typed text, focus); closing it repaints the card from S.d.stay
   // A stepper tap changes the number, the two buttons, the booked line and the Save row in place, so the live region keeps speaking and nothing else on the page is redrawn.
   function G_stayLive(st) {
     var o = G_q('G_gout'), dec = G_q('G_gdec'), inc = G_q('G_ginc'), bk = G_q('G_gbk'), sv = G_q('G_sv'), mg = G_q('G_stm'); if (!o || !dec || !inc || !bk || !sv || !mg) return false;
@@ -824,11 +824,11 @@
         return;
       }
       var j = r.data || {}, got = G_clampGuests(j.guest_count) || n, ver = +j.version > 0 ? Math.round(+j.version) : st.version + 1;
-      var settle = function (t, g, v) { t.base = t.count = g; t.draft = g; t.version = v; t.key = null; t.keyN = null; S.haptic('ok'); G_stayDone(t, said(g)); };
+      var settle = function (t, g, v, moved) { t.base = t.count = g; t.draft = g; t.version = v; t.key = null; t.keyN = null; S.haptic('ok'); G_stayDone(t, moved ? 'Your save went through earlier, and the number has since changed to ' + G_gtext(g) + '. The card shows what is on file now.' : said(g)); };
       if (j.replay === true) { // an earlier try already saved this: read the card again so what is shown is what the server holds
         G_stayRead(tok, st.base).then(function (fresh) {
           if (!G_live(tok) || D.stay !== st) return;
-          if (fresh) { D.stay = fresh; settle(fresh, fresh.base, fresh.version); } else settle(st, got, ver);
+          if (fresh) { D.stay = fresh; settle(fresh, fresh.base, fresh.version, fresh.base !== n); } else settle(st, got, ver);
         });
         return;
       }
@@ -902,10 +902,10 @@
   function G_demoRows() { // built at mount so the dates sit around today
     var t = G_today(), at = function (n) { return G_iso(Date.parse(t + 'T00:00:00Z') + n * 86400000); };
     return [
-      { id: G_DEMO_IDS[0], name: 'Demo Guest One', tier: 'returning', total_stays: 2, last_stay_date: at(-1), phone: '0900-000-0000', guest_profile_details: { id_on_file: true, birthday: null, vip: false },
+      { id: G_DEMO_IDS[0], name: 'Demo Guest One', tier: 'returning', total_stays: 2, last_stay_date: at(-1), phone: '0900-000-0000', guest_profile_details: { id_on_file: true, birthday: null, vip: false }, guest_companions: [{ id_photo_path: 'demo/id-1.jpg' }, { id_photo_path: null }],
         stay: { uid: 'demo-stay-1', checkin_date: at(-1), checkout_date: at(2), booked_guests: 2, guest_count: null, version: 0 },
         people: [{ id: 'demo-c1', name: 'Demo Guest One', id_type: null, id_photo_path: 'demo/id-1.jpg' }, { id: 'demo-c2', name: 'Demo Companion', id_type: null, id_photo_path: null }] },
-      { id: G_DEMO_IDS[1], name: 'Demo Guest Two', tier: 'vip', total_stays: 8, last_stay_date: at(2), guest_profile_details: { id_on_file: false, birthday: null, vip: true },
+      { id: G_DEMO_IDS[1], name: 'Demo Guest Two', tier: 'vip', total_stays: 8, last_stay_date: at(2), guest_profile_details: { id_on_file: false, birthday: null, vip: true }, guest_companions: [{ id_photo_path: null }],
         stay: { uid: 'demo-stay-2', checkin_date: at(2), checkout_date: at(5), booked_guests: 3, guest_count: 2, version: 1 },
         people: [{ id: 'demo-c3', name: 'Demo Friend', id_type: null, id_photo_path: null }] }
     ];
