@@ -26,12 +26,11 @@ test('s109 utility strip: today and tomorrow only, one word per kind, time range
 });
 
 test('D-360 freebie: returning, regular and VIP guests only, before arrival; a first stay or an unknown tier gets none', () => {
-  const F = 'Returning-guest freebie: 2 Kit Kats or an extra bottle of water';
+  const F = 'Returning-guest freebie: 1 chocolate, 2 Kit Kats, 1 extra bottle of water or 2 extra coffee sachets';
   for (const t of ['returning', 'regular', 'vip']) assert.ok(CS.tierPerks(t, { phase: 'arrival' }).includes(F), String(t));
   for (const t of [null, 'first', 'gold']) assert.ok(!CS.tierPerks(t, { phase: 'arrival' }).includes(F), String(t));
   assert.doesNotMatch(read('lib.js'), /Standard freebie/);
   assert.deepEqual(CS.tierPerks(null, { phase: 'house' }), []);
-  assert.doesNotMatch(read('lib.js'), /coffee sachets/);
 });
 
 test('s109 Cassy reply: info rows show their text in full and copy it; the help line warns Wi-Fi and the address are for booked guests', () => {

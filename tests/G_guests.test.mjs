@@ -1722,3 +1722,61 @@ test('G U9 mutant: reset forgets a rotation call that is out, so the next page s
   await clickA(el2, 'full', { id: CID }); await tick(); await clickA(el2, 'full-rot'); await sleep(700);
   assert.equal(st.sent.length, 2, 'the new session did not wait behind the old call'); st.release(); await tick(30); await sleep(20);
 });
+
+// ======================================================================== U10: last fixes
+const noEmailTables = { guests: { data: { ...GUEST, email: null }, error: null }, guest_profile_details: { data: PROFILE, error: null } };
+const withEmail = { ...TWO, email: 'new@example.test' };
+
+test('G U10 item 1: after a 207 with something saved there is no Back on review; Cancel asks nothing and reloads once', async () => {
+  let n = 0; const cl = reviewClient(() => (n++ === 0 ? photoFail207({ what: 'profile', ok: true }) : retryOk), TWO);
+  const m = await toReviewWith(cl); let asked = 0; m.win.confirm = () => { asked++; return false; };
+  await clickA(m.el, 'save-add'); await tick();
+  assert.equal(m.M._state().add.step, 'review'); assert.ok(!/data-act="add-back"/.test(m.el.html), 'no Back'); assert.match(m.el.html, /data-act="add-cancel"/);
+  const before = nFn(cl, 'context'); await clickA(m.el, 'add-cancel'); await tick();
+  assert.equal(asked, 0, 'no confirm'); assert.equal(nFn(cl, 'context'), before + 1, 'exactly one reload'); assert.equal(m.M._state().add, null);
+});
+
+test('G U10 item 1: a 207 where nothing saved keeps Back and the confirm on Cancel', async () => {
+  const cl = reviewClient(() => ({ status: 207, j: { ok: false, saved: [{ what: 'profile', ok: false, reason: 'save_failed' }] } }), TWO);
+  const m = await toReviewWith(cl); let asked = 0; m.win.confirm = () => { asked++; return false; };
+  await clickA(m.el, 'save-add'); await tick(); assert.match(m.el.html, /data-act="add-back"/); assert.ok(!/data-act="add-cancel"/.test(m.el.html));
+});
+
+test('G U10 item 2: a failed email stays in the field and goes again, without the version', async () => {
+  const saves = []; let n = 0;
+  const cl = reviewClient((b) => { saves.push(b); return n++ === 0 ? { status: 207, j: { ok: false, saved: [{ what: 'profile', ok: true }, { what: 'email', ok: false, reason: 'save_failed' }, { what: 'companion', ok: true }, { what: 'companion', ok: true }, { what: 'id_photo', ok: true }, { what: 'id_photo', ok: true }] } } : { status: 200, j: { ok: true, saved: [{ what: 'email', ok: true }] } }; }, withEmail, { tables: noEmailTables });
+  const { M, el } = await toReviewWith(cl); assert.equal(M._state().add.sheet.email, 'new@example.test');
+  await clickA(el, 'save-add'); await tick();
+  const s = M._state().add.sheet; assert.equal(s.email, 'new@example.test', 'the email stays'); assert.deepEqual([s.phone, s.stay_preferences, s.birthday, s.tags], ['', '', '', '']);
+  await clickA(el, 'save-add'); await tick();
+  assert.equal(saves.length, 2); assert.equal(saves[1].email, 'new@example.test'); assert.ok(!('expected_version' in saves[1])); assert.ok(!('phone' in saves[1])); assert.equal(M._state().add.step, 'done');
+});
+
+test('G U10 item 2: an email that saved is cleared with the rest', async () => {
+  const cl = reviewClient(() => ({ status: 207, j: { ok: false, saved: [{ what: 'profile', ok: true }, { what: 'email', ok: true }, { what: 'id_photo', ok: false, reason: 'upload_failed' }] } }), withEmail, { tables: noEmailTables });
+  const { M, el } = await toReviewWith(cl); await clickA(el, 'save-add'); await tick(); assert.equal(M._state().add.sheet.email, '');
+});
+
+test('G U10 item 3: no Nothing is noted yet once the details are done', async () => {
+  const noPref = { tables: { guests: { data: GUEST, error: null }, guest_profile_details: { data: { ...PROFILE, stay_preferences: null }, error: null } } };
+  let n = 0; const cl = reviewClient(() => (n++ === 0 ? photoFail207({ what: 'profile', ok: true }) : retryOk), TWO, noPref);
+  const { M, el } = await toReviewWith(cl); assert.match(el.html, /Nothing is noted yet\./);
+  await clickA(el, 'save-add'); await tick(); assert.ok(M._state().add.noDetails); assert.doesNotMatch(el.html, /Nothing is noted yet\./);
+});
+
+test('G U10 item 4: a photo turn queued behind a call that is out is dropped once the session ends', async () => {
+  const st = rotGate(), m = await rotOpen(st.cl);
+  await clickA(m.el, 'full-rot'); await sleep(700); assert.deepEqual(st.sent, [90]);
+  m.M.unmount(); const el2 = new FakeEl(); m.M.mount(el2, mountOpts(st.cl)); await tick();
+  await clickA(el2, 'full', { id: CID }); await tick(); await clickA(el2, 'full-rot'); await sleep(700);
+  m.M.reset(); st.release(); await tick(30); await sleep(20);
+  assert.deepEqual(st.sent, [90], 'the queued turn was not sent after sign-out');
+});
+
+test('G U10 item 4: details sent with no profile item in the answer keep the sheet and the version', async () => {
+  const saves = []; let n = 0;
+  const cl = reviewClient((b) => { saves.push(b); return n++ === 0 ? { status: 207, j: { ok: false, saved: [{ what: 'id_photo', ok: false, reason: 'upload_failed' }] } } : { status: 200, j: { ok: true, saved: [{ what: 'profile', ok: true }] } }; }, TWO);
+  const { M, el } = await toReviewWith(cl); await clickA(el, 'save-add'); await tick();
+  assert.equal(M._state().add.sheet.phone, '09175550000', 'the sheet keeps the details'); assert.ok(!M._state().add.noDetails);
+  await clickA(el, 'save-add'); await tick(); assert.equal(saves[1].phone, '09175550000'); assert.equal(saves[1].expected_version, 4);
+});

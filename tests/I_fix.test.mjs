@@ -113,7 +113,10 @@ test('I_fix count confirm: a first count says it is one-way; a controlled item g
   const e = await setup({ role: 'owner', flags: null, client: cl() });
   await e.mount(''); await e.open('i1'); await e.begin('count'); await e.input('I_f_qty', '9'); await e.submit();
   assert.match(e.sheet(), /Set Toilet paper to 9\?/);
-  assert.match(e.sheet(), /After this, Toilet paper is counted in the app\. Telegram \/count will skip it\./);
+  assert.match(e.sheet(), /This count keeps usage learning\. Telegram \/count still works for this item\./); assert.doesNotMatch(e.sheet(), /will skip it/, 'an active consumable stays in usage learning');
+  await e.act('back'); await e.act('back'); await e.act('close');
+  await e.open('i3'); await e.begin('count'); await e.input('I_f_qty', '9'); await e.submit();
+  assert.match(e.sheet(), /After this, Bath towels is counted in the app\. Telegram \/count will skip it\./); assert.doesNotMatch(e.sheet(), /keeps usage learning/);
   await e.act('back'); await e.act('back'); await e.act('close');
   await e.open('c1'); await e.begin('count'); await e.input('I_f_qty', '3'); await e.submit();
   assert.match(e.sheet(), /Set Controlled soap to 3\?/);

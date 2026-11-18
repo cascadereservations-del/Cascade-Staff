@@ -105,7 +105,7 @@ const M = [
   ['undo not_found is an error', [[" && !(a.kind === 'undo' && r.data.reason === 'not_found')", ""]]],
   ['walk key per item only', [["var kk = it.id + '|' + n;", "var kk = it.id;"]]],
   ['close after too late re-sends', [["if (a.kind === 'undo' && a.err === 'tooLate') return closeSheet();", ""]]],
-  ['first count undo wording', [["(snap && snap.controlled === false ? ' It stays counted in the app.' : '')", "''"]]],
+  ['first count undo wording', [["(snap && snap.controlled === false && !snap.learns ? ' It stays counted in the app.' : '')", "''"]]],
   ['bought recon says try again', [["a.err === 'recon' || a.err === 'short' ? ERR[a.err] : 'Try again.'", "'Try again.'"]]],
   ['history server words', [["counted: 'Counted', received:", "counted: 'Count', received:"]]],
   ['last bought without unit', [["esc(uq(lb.qty, unitOf(it)))", "esc(fmt(lb.qty))"]]],

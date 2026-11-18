@@ -355,3 +355,13 @@ test('I_scan fix L5: a cleaner and finance see no Unlink, and a hand-made click 
   assert.match(o.toasts[o.toasts.length - 1], /not available right now/);
   await o.open('i1'); assert.doesNotMatch(o.sheet(), /data-act="unlink"/);
 });
+
+test('I_scan new item (s120 U10): a counted consumable keeps usage learning; a non-consumable still moves to the app', async () => {
+  const say = async (cons) => {
+    const e = await make('owner'); await e.mount(''); await e.act('scan'); await typeCode(e, '555000778'); await e.act('scan-new');
+    await e.input('I_f_name', 'Spare keys'); await e.input('I_f_category', 'Miscellaneous'); await e.input('I_f_unit', 'pieces'); await e.input('I_f_cons', cons); await e.input('I_f_qty', '3'); await e.submit(); return e.sheet();
+  };
+  const y = await say('yes'), n = await say('no');
+  assert.match(y, /Counted now: 3\. This count keeps usage learning\. Telegram \/count still works for this item\./); assert.doesNotMatch(y, /will skip it/);
+  assert.match(n, /Telegram \/count will skip it/); assert.doesNotMatch(n, /keeps usage learning/);
+});

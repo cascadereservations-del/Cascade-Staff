@@ -8,6 +8,7 @@
 
   var PROPERTY_ID = '6ae230f4-c189-4547-84b1-cb6e0b2cc9bd'; // same constant as the shell's CFG.propertyId; opts.propertyId wins
   var DEMO_NOTE = 'Demo only, nothing was saved.';
+  var LEARNS = 'This count keeps usage learning. Telegram /count still works for this item.';
   // Owner decision 2026-10-13: counts move to the app (a first count is one-way). s85: Used some is on for the cleaner (Lloyd: staff had no way to update the amount or record use). Read once; the test hook is window.I_STOCK_FLAGS.
   var I_FLAGS = { count: true, usage: true };
   if (root.I_STOCK_FLAGS) { I_FLAGS.count = !!root.I_STOCK_FLAGS.count; I_FLAGS.usage = !!root.I_STOCK_FLAGS.usage; }
@@ -1019,7 +1020,7 @@
     if (a.kind === 'count') {
       var n = parseQty(v.qty, true), d = n == null || it.qty == null ? null : Math.round((n - it.qty) * 100) / 100;
       return head(c ? 'Set ' + it.name + ' to ' + fmt(n) + '?' : 'Count ' + it.name, c ? null : 'Count what is in the storeroom.') + '<form data-i-form>' +
-        (c ? '<p class="I_conf">Now ' + (it.qty == null ? 'not counted' : esc(uq(it.qty, it.unit))) + (d != null ? ', a change of ' + (d > 0 ? '+' : '') + fmt(d) : '') + '.</p>' + (it.controlled ? '' : '<p class="I_conf">After this, ' + esc(it.name) + ' is counted in the app. Telegram /count will skip it.</p>')
+        (c ? '<p class="I_conf">Now ' + (it.qty == null ? 'not counted' : esc(uq(it.qty, it.unit))) + (d != null ? ', a change of ' + (d > 0 ? '+' : '') + fmt(d) : '') + '.</p>' + (it.controlled ? '' : '<p class="I_conf">' + (it.consumable && it.active ? LEARNS : 'After this, ' + esc(it.name) + ' is counted in the app. Telegram /count will skip it.') + '</p>')
           : stepper('qty', 'Counted (' + esc(unitOf(it)) + ')', v.qty, true) + textField('note', 'Note (optional)', v.note || '', 'maxlength="200" placeholder="Where you counted"') + (a.bad ? '<div class="field"><span class="err">' + gi('alert', 's16') + ' Enter a number such as 12 or 2.5.</span></div>' : '')) +
         actions(a, c ? 'Yes, set it' : 'Continue') + '</form>';
     }
@@ -1201,7 +1202,7 @@
     var v = a.vals || {}, c = a.step === 'confirm', cats = categories();
     return head(c ? 'Add ' + String(v.name || '').trim() + ' as a new item?' : 'New item', c ? null : 'Code ' + shortCode(a.code) + ' will be linked to it.') + '<form data-i-form>' +
       (c ? '<p class="I_conf">' + esc(v.category === CASSY ? 'Cassy will choose the category' : v.category) + ', counted in ' + esc(String(v.unit || '').trim() || 'pc') + (v.cons === 'yes' ? ', a consumable' : '') + '.</p><p class="I_conf">Code ' + esc(a.code) + ' will be linked to it.</p>' +
-          (String(v.qty || '').trim() !== '' ? '<p class="I_conf">Counted now: ' + esc(v.qty) + '. After this, ' + esc(String(v.name).trim()) + ' is counted in the app. Telegram /count will skip it.</p>' : '') +
+          (String(v.qty || '').trim() !== '' ? '<p class="I_conf">Counted now: ' + esc(v.qty) + '. ' + (v.cons === 'yes' ? LEARNS : 'After this, ' + esc(String(v.name).trim()) + ' is counted in the app. Telegram /count will skip it.') + '</p>' : '') +
           (String(v.reorder || '').trim() !== '' ? '<p class="I_conf">Reorder at ' + esc(v.reorder) + '.</p>' : '')
         : textField('name', 'Name', v.name || '', 'maxlength="80"') + selectField('category', 'Category', (catOK() ? [[CASSY, 'Let Cassy choose']] : [['', 'Choose one']]).concat(cats.map(function (x) { return [x, x]; })), v.category || (catOK() ? CASSY : '')) +
           textField('unit', 'Unit', v.unit || '', 'maxlength="20"') + selectField('cons', 'Is it a consumable?', [['no', 'No'], ['yes', 'Yes']], v.cons || 'no') +
@@ -1465,7 +1466,7 @@
   function bodyOf(e) { try { return e && e.context && typeof e.context.json === 'function' ? Promise.resolve(e.context.json()).catch(function () { return null; }) : null; } catch (x) { return null; } }
   var NEWK = { used: 1, unlink: 1, low: 1, link: 1, price: 1, levels: 1, create: 1, report: 1, undo: 1, photo: 1, photoremove: 1, optusual: 1, labels: 1, rename: 1, sort: 1 }; // actions that hide for the visit when the server says "not here"
   function commit(a) {
-    var me = M, it = itemOf(a) || { name: a.rowName || (a.entry && a.entry.name) || '' }, call = build(a), rep = a.kind === 'report', snap = it && { qty: it.qty, cost: it.cost, reorder: it.reorder, par: it.par, controlled: it.controlled, location: it.location, unit: it.unit, category: it.category, photo: it.photo };
+    var me = M, it = itemOf(a) || { name: a.rowName || (a.entry && a.entry.name) || '' }, call = build(a), rep = a.kind === 'report', snap = it && { qty: it.qty, cost: it.cost, reorder: it.reorder, par: it.par, controlled: it.controlled, learns: it.consumable && it.active, location: it.location, unit: it.unit, category: it.category, photo: it.photo };
     if (me.demo) { toast(rep ? 'Demo only, nothing was sent.' : DEMO_NOTE); finish(); return; }
     if (!online()) { a.err = 'offline'; drawLayer(); return; }
     if (!me.client) { a.err = 'missing'; drawLayer(); return; }
@@ -1808,7 +1809,7 @@
       if (r && r.error) throw r.error;
       if (r && r.data && r.data.ok === false) throw { message: 'failed' };
       a.sending = false; delete a.keys[kk]; K.at = 0;
-      var e = undoFor({ kind: 'count', vals: a.vals }, it, r && r.data || {}, { qty: it.qty, controlled: it.controlled }); if (e) pushUndoEntry(e);
+      var e = undoFor({ kind: 'count', vals: a.vals }, it, r && r.data || {}, { qty: it.qty, controlled: it.controlled, learns: it.consumable && it.active }); if (e) pushUndoEntry(e);
       a.saved[it.id] = { before: it.qty, after: n, undo: e };
       walkNext(a, 'Saved');
     }).catch(function (e) {
@@ -1831,7 +1832,7 @@
     var last = a.i === a.ids.length - 1;
     return head('Item ' + (a.i + 1) + ' of ' + a.ids.length, a.cat) + '<p class="I_wname">' + esc(it.name) + '</p>' + (it.location ? '<p class="help I_kept">Kept in ' + esc(it.location) + '</p>' : '') + '<p class="help">' + esc(it.unit) + ' · ' + (it.counted ? 'Last counted ' + esc(dateLabel(it.counted)) : 'Not counted in the app yet') + '</p>' +
       '<form data-i-form>' + stepper('qty', 'Counted (' + esc(unitOf(it)) + ')', a.vals.qty, true) + (a.bad ? '<div class="field"><span class="err">' + gi('alert', 's16') + ' Enter a number such as 12 or 2.5.</span></div>' : '') +
-      (a.flash ? '<div class="okbox" role="status">' + gi('check') + '<span>' + esc(a.flash) + '</span></div>' : '') + (it.controlled ? '' : '<p class="help">The first count here moves this item to counting in the app.</p>') + errBox(a) +
+      (a.flash ? '<div class="okbox" role="status">' + gi('check') + '<span>' + esc(a.flash) + '</span></div>' : '') + (it.controlled || (it.consumable && it.active) ? '' : '<p class="help">The first count here moves this item to counting in the app.</p>') + errBox(a) +
       '<div class="I_btns"><button class="btn btn-primary btn-block" type="submit"' + (a.sending ? ' disabled' : '') + '>' + (a.sending ? 'Saving…' : last ? 'Finish' : 'Next') + '</button>' +
       '<button class="btn btn-secondary btn-block" type="button" data-act="w-same"' + (a.sending ? ' disabled' : '') + '>Same as before</button><button class="btn btn-ghost btn-block" type="button" data-act="w-stop"' + (a.sending ? ' disabled' : '') + '>Stop here</button></div></form>';
   }
@@ -1924,7 +1925,7 @@
     var id = 'u' + (++K.uidn), n = it.name, e = { id: id, itemId: it.id || null, name: n, at: nowMs(), kind: a.kind }, v = a.vals || {};
     if (a.kind === 'count' && d.movementId) {
       var cn = parseQty(v.qty, true); e.say = 'Counted ' + n + ': ' + fmt(cn); e.line = 'counted ' + fmt(cn);
-      e.confirm = 'Put ' + n + ' back to ' + (snap && snap.qty != null ? fmt(snap.qty) : 'its old amount') + '?' + (snap && snap.controlled === false ? ' It stays counted in the app.' : ''); e.call = { fn: 'inventory_undo_v1', args: { p_movement_id: d.movementId, p_purchase_id: null } };
+      e.confirm = 'Put ' + n + ' back to ' + (snap && snap.qty != null ? fmt(snap.qty) : 'its old amount') + '?' + (snap && snap.controlled === false && !snap.learns ? ' It stays counted in the app.' : ''); e.call = { fn: 'inventory_undo_v1', args: { p_movement_id: d.movementId, p_purchase_id: null } };
     } else if (a.kind === 'used' && usedMovement(d)) {
       var un = parseQty(v.qty); e.say = 'Logged ' + uq(un, unitOf(it)) + ' of ' + n + ' as used'; e.line = 'logged ' + fmt(un) + ' as used'; e.confirm = 'Put the ' + uq(un, unitOf(it)) + ' of ' + n + ' back?';
       e.call = { fn: 'inventory_undo_v1', args: { p_movement_id: usedMovement(d), p_purchase_id: null } };

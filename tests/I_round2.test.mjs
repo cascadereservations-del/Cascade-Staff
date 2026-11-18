@@ -84,10 +84,14 @@ test('I_round2 R2-6: Close after a too-late Undo sends nothing more', async () =
 });
 
 test('I_round2 R2-7: undoing a first count says the item stays counted in the app; a controlled item does not', async () => {
-  const e = await make();
+  const e = await make('owner', {}, { cat: { items: [item('i1', 'Toilet paper', 4, 12, { consumable: false })] } });
   await e.mount(''); await e.open('i1'); await e.begin('count'); await e.input('I_f_qty', '12'); await press(e, 2);
   await e.act('undo', { 'data-id': uid(e) });
   assert.match(e.sheet(), /It stays counted in the app\./);
+  const l = await make('owner', {}, { cat: { items: [item('i1', 'Toilet paper', 4, 12)] } }); // an active consumable keeps learning: nothing moves to the app
+  await l.mount(''); await l.open('i1'); await l.begin('count'); await l.input('I_f_qty', '12'); await press(l, 2);
+  await l.act('undo', { 'data-id': uid(l) });
+  assert.doesNotMatch(l.sheet(), /stays counted/);
   const c = await make();
   await c.mount(''); await c.open('i3'); await c.begin('count'); await c.input('I_f_qty', '12'); await press(c, 2);
   await c.act('undo', { 'data-id': uid(c) });
@@ -145,11 +149,22 @@ test('I_round2 r3 F1: the Bought done screen keeps its rows and Undo all after t
 });
 
 test('I_round2 r3 F2: undoing a first count in the group walk says the item stays counted in the app', async () => {
-  const cat = { items: [item('b3', 'Hand soap', 2, 3, { category: 'Bath', countedAt: null })] };
+  const cat = { items: [item('b3', 'Hand soap', 2, 3, { category: 'Bath', countedAt: null, consumable: false })] };
   const e = await make('owner', {}, { cat });
   await e.mount(''); await e.act('walk', { 'data-cat': 'Bath' }); await e.input('I_f_qty', '9'); await press(e);
   await e.act('undo', { 'data-id': /data-act="undo" data-id="(u\d+)"/.exec(e.sheet())[1] });
   assert.match(e.sheet(), /It stays counted in the app\./);
+});
+
+test('I_s120 U10: the walk hides the move-to-app line for an active consumable and shows it for anything else; the undo adds no stays-counted line', async () => {
+  const run = async (consumable) => {
+    const e = await make('owner', {}, { cat: { items: [item('b3', 'Hand soap', 2, 3, { category: 'Bath', countedAt: null, consumable })] } });
+    await e.mount(''); await e.act('walk', { 'data-cat': 'Bath' }); const walk = e.sheet(); await e.input('I_f_qty', '9'); await press(e);
+    await e.act('undo', { 'data-id': /data-act="undo" data-id="(u\d+)"/.exec(e.sheet())[1] }); return { walk, undo: e.sheet() };
+  };
+  const c = await run(true), n = await run(false);
+  assert.doesNotMatch(c.walk, /moves this item to counting in the app/); assert.doesNotMatch(c.undo, /stays counted/);
+  assert.match(n.walk, /The first count here moves this item to counting in the app\./); assert.match(n.undo, /It stays counted in the app\./);
 });
 
 test('I_round2 r3 F3: a write that shows an Undo bar adds no shell toast; the Undo itself still toasts', async () => {

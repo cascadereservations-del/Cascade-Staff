@@ -464,7 +464,7 @@
     var A = S.add, D = S.d, g = D.guest, f = D.details || {};
     var head = '<div class="card glass G_card"><div class="card-head"><h3>Add details</h3></div><p class="G_line">' + G_esc(g.name) + '</p></div>';
     if (A.step === 'done') {
-      return head + '<div class="' + (A.ok ? 'okbox' : 'infobox') + ' G_note" role="status" id="G_msg" tabindex="-1">' + G_glyph(A.ok ? 'ok' : 'i') + '<span>' + A.lines.map(G_esc).join('<br>') + '</span></div>' +
+      return head + '<div class="okbox G_note" role="status" id="G_msg" tabindex="-1">' + G_glyph('ok') + '<span>' + A.lines.map(G_esc).join('<br>') + '</span></div>' +
         '<button class="btn btn-primary btn-block" type="button" data-act="add-done">Back to the guest</button>';
     }
     if (A.step === 'review' || A.step === 'saving') return head + G_reviewHtml();
@@ -503,14 +503,14 @@
       G_field('G_r_phone', 'Phone', s.phone, 'inputmode="tel" maxlength="20"', f.contact_number && s.phone && s.phone !== f.contact_number ? 'Replaces ' + f.contact_number + ' on file.' : '') +
       G_field('G_r_email', 'Email', s.email, 'inputmode="email" maxlength="120"' + (g.email ? ' disabled' : ''), g.email ? 'An email is already on file. It is kept.' : '') +
       '<div class="field"><label for="G_r_pref">Preferences to add</label><textarea class="ta" id="G_r_pref" rows="3" maxlength="600"' + ro + '>' + G_esc(s.stay_preferences) + '</textarea>' +
-        '<span class="help">' + (f.stay_preferences ? 'Added under what is already noted.' : 'Nothing is noted yet.') + '</span></div>' +
+        (A.noDetails ? '' : '<span class="help">' + (f.stay_preferences ? 'Added under what is already noted.' : 'Nothing is noted yet.') + '</span>') + '</div>' +
       G_field('G_r_bday', 'Birthday', s.birthday, 'type="date" max="' + G_today() + '"', f.birthday && s.birthday && s.birthday !== f.birthday ? 'Replaces ' + G_date(f.birthday) + ' on file.' : '') +
       G_field('G_r_tags', 'Tags to add', s.tags, 'maxlength="400"', 'Separate tags with commas. Tags on file stay.') +
       (s.guests || s.nationality ? '<div class="infobox G_note">' + G_glyph('i') + '<span>' + G_esc([s.guests ? 'The message says ' + s.guests + (s.guests === '1' ? ' guest.' : ' guests.') : '', s.nationality ? 'Nationality: ' + s.nationality + '.' : ''].filter(Boolean).join(' ')) + ' For your information. It is not saved.</span></div>' : '') +
       (comps ? '<div class="cap up G_cap">Companions to add</div>' + comps : '') + (ids ? '<div class="cap up G_cap">ID photos to keep</div>' + ids : '') +
       G_field('G_r_reason', 'Reason for the change', s.reason, 'maxlength="500"', 'Kept in the guest’s history.') +
       '<button class="btn btn-primary btn-block" type="button" data-act="save-add"' + (busy || S.d.stale ? ' disabled' : '') + '>' + (busy ? 'Saving…' : 'Save to the guest record') + '</button>' +
-      (S.d.stale ? '<button class="btn btn-ghost btn-block" type="button" data-act="add-cancel">Cancel</button>' : '<button class="btn btn-ghost btn-block" type="button" data-act="add-back"' + (busy ? ' disabled' : '') + '>Back</button>');
+      (S.d.stale || A.landed ? '<button class="btn btn-ghost btn-block" type="button" data-act="add-cancel">Cancel</button>' : '<button class="btn btn-ghost btn-block" type="button" data-act="add-back"' + (busy ? ' disabled' : '') + '>Back</button>');
   }
   /** The model's proposal as an editable sheet. */
   function G_sheetFrom(p, guestName) {
@@ -692,7 +692,7 @@
     else if (A) { D.stale = true; A.step = 'review'; A.err = msg + ' ' + G_COPY; G_paint(); G_focusLate('G_aerr'); }
     else { G_loadDetail(); S.err = msg; }
   }
-  function G_openAdd() { if (!S.d.detailsOk) return; S.add = { step: 'input', text: '', images: [], preparing: 0, err: '', sheet: null, ok: false, lines: [] }; S.msg = null; G_paint(); G_focus('G_text'); }
+  function G_openAdd() { if (!S.d.detailsOk) return; S.add = { step: 'input', text: '', images: [], preparing: 0, err: '', sheet: null, lines: [] }; S.msg = null; G_paint(); G_focus('G_text'); }
   function G_closeAdd(reload) { var had = S.add; S.add = null; if (had) { had.images = []; had.text = ''; had.sheet = null; } if (reload) G_loadDetail(); else G_paint(); }
   function G_addFiles(list) {
     var A = S.add, tok = S.token; if (!A) return;
@@ -733,14 +733,16 @@
       var done = (o.status === 200 || o.status === 207) && o.j.saved, sm = G_fnStale(o);
       var pf = done && o.j.saved.some(function (x) { return x && x.what === 'profile' && !x.ok; });
       if (done && o.j.ok && !pf) {
-        A.ok = true; A.lines = G_saveLines(o.j.saved); if (!A.lines.length) A.lines = ['Nothing new to save.']; A.images = []; A.text = ''; A.sheet = null; // the photos leave memory once saved or refused
-        A.step = 'done'; S.haptic(o.j.ok ? 'ok' : 'warn'); G_paint(); G_focus('G_msg'); return;
+        A.lines = G_saveLines(o.j.saved); if (!A.lines.length) A.lines = ['Nothing new to save.']; A.images = []; A.text = ''; A.sheet = null; // the photos leave memory once saved or refused
+        A.step = 'done'; S.haptic('ok'); G_paint(); G_focus('G_msg'); return;
       }
-      if (done) { // something did not save: back to the review with the sheet and photos, the failed items listed. A photo that saved is unticked by its place; companions stay ticked, because the server matches a name it already has and adds nobody twice.
+      if (done) { A.landed = A.landed || o.j.saved.some(function (x) { return x && x.ok; }); // something is on the record: Back would re-send it, so leaving reloads the page
+        // something did not save: back to the review with the sheet and photos, the failed items listed. A photo that saved is unticked by its place; companions stay ticked, because the server matches a name it already has and adds nobody twice.
         var sv = o.j.saved, idv = sv.filter(function (x) { return x && x.what === 'id_photo'; }), ln = G_saveLines(sv).join(' ');
         if (idv.length === sentIds.length) sentIds.forEach(function (d, i) { if (idv[i].ok) d.on = false; }); // a count that does not match leaves every photo ticked: nothing is lost
         if (!pf && (!sentDetails || o.j.saved.some(function (x) { return x && x.what === 'profile' && x.ok; }))) { // the details are done or were never sent: the retry carries none
-          A.noDetails = true; G_DETAIL_KEYS.forEach(function (k) { A.sheet[k] = ''; }); S.el.innerHTML = ''; // the redraw reads drawn fields back into the sheet (G_keepForm), so the old ones go first
+          var em = A.sheet.email, emFail = sv.some(function (x) { return x && x.what === 'email' && !x.ok && x.reason !== 'email_kept'; }); // a failed email stays in the field, and goes again
+          A.noDetails = true; G_DETAIL_KEYS.forEach(function (k) { A.sheet[k] = ''; }); if (emFail) A.sheet.email = em; S.el.innerHTML = ''; // the redraw reads drawn fields back into the sheet (G_keepForm), so the old ones go first
         }
         S.haptic('warn'); A.step = 'review';
         if (sm) G_stale(ln); else { A.err = ln; G_paint(); G_focusLate('G_aerr'); }
@@ -981,7 +983,7 @@
     else if (a === 'remove-comp-yes') G_removeComp(id);
     else if (a === 'add-comp') G_addComp();
     else if (a === 'add-open') G_openAdd();
-    else if (a === 'add-cancel') { if (A && !S.d.stale && (A.text || A.images.length || G_val('G_text')) && root.confirm && !root.confirm('Leave without reading? What you pasted will be dropped.')) return; G_closeAdd(!!S.d.stale); }
+    else if (a === 'add-cancel') { if (A && !S.d.stale && !A.landed && (A.text || A.images.length || G_val('G_text')) && root.confirm && !root.confirm('Leave without reading? What you pasted will be dropped.')) return; G_closeAdd(!!S.d.stale || !!(A && A.landed)); }
     else if (a === 'add-done') G_closeAdd(true);
     else if (a === 'add-back') { if (A) { G_syncSheet(); A.step = 'input'; A.err = ''; G_paint(); } }
     else if (a === 'rm-shot' && A) { A.images.splice(G_idx(t), 1); A.err = ''; G_paint(); }

@@ -159,9 +159,9 @@ test('s111 Guest tiers: thresholds, glyphs, every perk per tier (arrival and hou
   const g = CS.tierGuide();
   assert.deepEqual(g.map((t) => [t.tier, t.word, t.icon, t.rule]), [['first', 'First stay', 'sprout', '1st stay. The standard amenities.'], ['returning', 'Returning', 'repeat', 'From the 2nd stay.'], ['regular', 'Regular', 'star', '4 or more stays, or 10 or more nights.'], ['vip', 'VIP', 'crown', '7 or more stays, or 20 or more nights.']]);
   assert.deepEqual(g[0].perks, [], 'a first stay gets the standard amenities, no perks (D-360)');
-  assert.deepEqual(g[1].perks, ['Returning-guest freebie: 2 Kit Kats or an extra bottle of water', 'First hour of early check-in or late check-out free, if the calendar allows']);
-  assert.deepEqual(g[2].perks, ['Returning-guest freebie: 2 Kit Kats or an extra bottle of water', 'Up to 2 hours early or late free, if the calendar allows', 'Set saved preferences before arrival (pillows, AC temperature)']);
-  assert.deepEqual(g[3].perks, ['Returning-guest freebie: 2 Kit Kats or an extra bottle of water', 'Up to 2 hours early or late free, if the calendar allows', 'Set saved preferences before arrival (pillows, AC temperature)', 'Handwritten welcome note', 'Mid-stay refresh, any stay length', 'First call on the dates they ask about']);
+  assert.deepEqual(g[1].perks, ['Returning-guest freebie: 1 chocolate, 2 Kit Kats, 1 extra bottle of water or 2 extra coffee sachets', 'First hour of early check-in or late check-out free, if the calendar allows']);
+  assert.deepEqual(g[2].perks, ['Returning-guest freebie: 1 chocolate, 2 Kit Kats, 1 extra bottle of water or 2 extra coffee sachets', 'Up to 2 hours early or late free, if the calendar allows', 'Set saved preferences before arrival (pillows, AC temperature)']);
+  assert.deepEqual(g[3].perks, ['Returning-guest freebie: 1 chocolate, 2 Kit Kats, 1 extra bottle of water or 2 extra coffee sachets', 'Up to 2 hours early or late free, if the calendar allows', 'Set saved preferences before arrival (pillows, AC temperature)', 'Handwritten welcome note', 'Mid-stay refresh, any stay length', 'First call on the dates they ask about']);
   assert.doesNotMatch(JSON.stringify(g), /₱|PHP|price|discount|!|No need to ask for ID/);
 });
 test('s111 Guest tiers (s114 shape): a card after the guest cards on Today, closed until tapped, the same for every role, with the tier badge styles', async () => {
@@ -175,7 +175,7 @@ test('s111 Guest tiers (s114 shape): a card after the guest cards on Today, clos
 });
 
 test('s111 release pins and tokens: version unchanged, chart tokens in all three theme blocks, no raw colours or px type in the new CSS', () => {
-  assert.equal(JSON.parse(read('package.json')).version, '3.4.36'); assert.match(read('sw.js'), /CACHE_NAME = 'cs-shell-v61'/);
+  assert.equal(JSON.parse(read('package.json')).version, '3.4.37'); assert.match(read('sw.js'), /CACHE_NAME = 'cs-shell-v62'/);
   const tok = read('tokens.css'); for (const k of ['chart-line', 'chart-area', 'chart-band', 'chart-grid', 'chart-axis', 'chart-avg']) assert.equal((tok.match(new RegExp('--v5-' + k + ':', 'g')) || []).length, 3, k);
   const css = read('kpi/K_kpi.css'); const s111 = css.slice(css.indexOf('s113, the chart standard'), css.indexOf('/* supply and consumption'));
   assert.doesNotMatch(s111, /#[0-9a-f]{3,6}\b|rgb\(|nowrap|font-size:\s*\d+px|font:[^;]*\d+px/i);

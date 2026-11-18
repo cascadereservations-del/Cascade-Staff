@@ -597,7 +597,7 @@
   // At most 4 lines: over that, the ID line goes first, then the last ones. No prices, no discounts, no exclamation marks.
   var PERKS = {
     id: ['No need to ask for ID again, one is on file', 'returning', 'arrival'],
-    std: ['Returning-guest freebie: 2 Kit Kats or an extra bottle of water', 'returning', 'arrival'], // D-360 (Lloyd 2026-11-08): returning, regular and VIP guests only; a first stay gets the standard amenities, no freebie
+    std: ['Returning-guest freebie: 1 chocolate, 2 Kit Kats, 1 extra bottle of water or 2 extra coffee sachets', 'returning', 'arrival'], // D-360 (Lloyd 2026-11-08): returning, regular and VIP guests only; a first stay gets the standard amenities, no freebie
     early1: ['First hour of early check-in or late check-out free, if the calendar allows', 'returning', 'both', 'regular'],
     early2: ['Up to 2 hours early or late free, if the calendar allows', 'regular', 'both'],
     prefs: ['Set saved preferences before arrival (pillows, AC temperature)', 'regular', 'arrival'],
