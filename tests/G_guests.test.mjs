@@ -121,10 +121,10 @@ function detailClient(over = {}) {
     fn: (b) => (b.action === 'context' ? { status: 200, j: { ok: true, features: FEAT, stay: null } } : { status: 200, j: { ok: true, saved: [] } }), ...over });
 }
 async function mount(cl, sub = '', role = 'owner', extra = {}) {
-  const { M, touched, fetched, revoked } = load(); const el = new FakeEl(); const toasts = [];
+  const { M, touched, fetched, revoked, win } = load(); const el = new FakeEl(); const toasts = [];
   M.mount(el, { client: cl, demo: false, role, sub, propertyId: PROP, navigate: () => {}, toast: (m) => toasts.push(m), haptic: () => {}, ...extra });
   await tick();
-  return { M, el, touched, toasts, fetched, revoked };
+  return { M, el, touched, toasts, fetched, revoked, win };
 }
 const click = (el, act, attrs = {}) => { const node = { getAttribute: (k) => (k === 'data-act' ? act : k in attrs ? attrs[k] : k === 'data-' + k ? null : attrs['data-' + k.replace(/^data-/, '')] ?? null) }; return el.l.click[0]({ target: { closest: () => node } }); };
 const clickA = (el, act, attrs) => { const a = { 'data-act': act }; for (const [k, v] of Object.entries(attrs || {})) a['data-' + k] = v; return el.l.click[0]({ target: { closest: () => ({ getAttribute: (k) => (k in a ? a[k] : null) }) } }); };
@@ -974,7 +974,12 @@ test('G U3: a saved turn that arrives late turns the photos in place: no page re
 });
 
 // ------------------------------------------------------------------------------------------------ s120 U6: one write or reload at a time; nothing is queued, nothing can change underneath a save
-const dis = (el, act) => new RegExp('data-act="' + act + '"[^>]*\\sdisabled[ >]').test(el.html);
+// s120 U7: every control with that data-act (or data-pick) must be disabled, not any one of them; none drawn is not disabled either.
+const tagsOf = (el, attr, v) => [...el.html.matchAll(new RegExp('<(?:button|a|label|input)\\b[^>]*\\b' + attr + '="' + v + '"[^>]*>', 'g'))].map((m) => m[0]);
+const isOff = (t) => /\sdisabled(?=[\s>])/.test(t);
+const dis = (el, act) => { const t = tagsOf(el, 'data-act', act); return t.length > 0 && t.every(isOff); };
+const disPick = (el, pick) => { const t = tagsOf(el, 'data-pick', pick); return t.length > 0 && t.every(isOff); };
+const ena = (el, act) => { const t = tagsOf(el, 'data-act', act); return t.length > 0 && t.every((x) => !isOff(x)); };
 const nCalls = (cl, name) => cl.calls.filter((c) => c[0] === name).length;
 const nFn = (cl, action) => cl.fcalls.filter((c) => c[1].action === action).length;
 const FETCH_ERR = { data: null, error: { message: 'TypeError: Failed to fetch' } };
@@ -1057,7 +1062,9 @@ test('G U6: the running state clears after success, a failure and a thrown error
   for (const [name, h] of Object.entries(modes)) { // Edit details
     const cl = detailClient({ rpcs: { list_guest_companions_v1: () => ({ data: COMPS, error: null }), save_guest_profile_v1: h } }), { M, el } = await mount(cl, GID);
     await clickA(el, 'edit'); el.type('G_f_phone', '0999 ' + name); await clickA(el, 'save-edit'); await tick();
-    assert.equal(M._state().busy, false, 'edit ' + name); assert.doesNotMatch(el.html, / disabled[ >]/, 'edit ' + name);
+    assert.equal(M._state().busy, false, 'edit ' + name);
+    if (name === 'thrown') { assert.ok(dis(el, 'save-edit'), 'a lost answer locks Save (stale), it is not stuck busy'); await clickA(el, 'edit-cancel'); await tick(); assert.doesNotMatch(el.html, / disabled[ >]/, 'Cancel reloads and frees the page'); continue; }
+    assert.doesNotMatch(el.html, / disabled[ >]/, 'edit ' + name);
     if (name === 'ok') { await clickA(el, 'edit'); await tick(); assert.match(el.html, /G_f_phone/); }
   }
   const stays = { ok: SAVED_OK, refused: () => ({ data: null, error: { code: '42501', message: 'permission denied' } }), unclear: () => FAILED, thrown: () => { throw new Error('boom'); } };
@@ -1074,7 +1081,7 @@ test('G U6: the running state clears after success, a failure and a thrown error
   }
   const cl = detailClient({ fn: (b) => { if (b.action === 'context') return { status: 200, j: { ok: true, features: FEAT } }; throw new Error('boom'); } }), { M, el } = await mount(cl, GID); // photo removal
   await clickA(el, 'remove-photo', { id: CID }); await clickA(el, 'remove-photo-yes', { id: CID }); await tick();
-  assert.equal(M._state().cbusy, ''); assert.doesNotMatch(el.html, / disabled[ >]/); assert.match(el.html, /No connection/);
+  assert.equal(M._state().cbusy, ''); assert.doesNotMatch(el.html, / disabled[ >]/); assert.match(el.html, /The connection dropped, so this may have saved/); // a thrown call has no HTTP status
 });
 
 test('G U6: the saved stay is gone and the card re-read is a different stay: the page says so, and the card shows the next stay', async () => {
@@ -1142,4 +1149,342 @@ test('G U6: Rotate is disabled and does nothing while a count save runs', async 
   await clickA(el, 'full', { id: CID }); await tick();
   assert.ok(dis(el, 'full-rot')); await clickA(el, 'full-rot'); await new Promise((r) => setTimeout(r, 700));
   assert.equal(nCalls(cl, 'set_guest_photo_rotation_v1'), 0); release(); await tick();
+});
+
+// ------------------------------------------------------------------------------------------------ s120 U7: the fixes that protect data
+// The real client's dropped answer is { error: { message: 'TypeError: Failed to fetch' } }: no HTTP status, no database code, no `network` flag. New tests use that shape only.
+const LOSTRE = /The connection dropped, so this may have saved\. Check the page before trying again\./;
+const COPYRE = /Copy anything you need, then tap Cancel to see the latest details\./;
+const LOSTFN = () => Promise.resolve({ data: null, error: { message: 'TypeError: Failed to fetch' } });
+const IMG = (b64 = 'QUJD') => ({ base64: b64, mime: 'image/jpeg', src: 'data:image/jpeg;base64,' + b64 });
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const pickEv = (pick, id) => ({ target: { getAttribute: (k) => ({ 'data-pick': pick, 'data-id': id })[k] ?? null, files: [{}], value: 'x' } });
+const offline = (win) => Object.defineProperty(win, 'navigator', { configurable: true, value: { onLine: false } });
+function withImage(win) { // opt in: the page can shrink a photo, and the test decides when
+  const imgs = [];
+  Object.defineProperty(win, 'Image', { configurable: true, value: class { set src(v) { imgs.push(this); } } });
+  Object.defineProperty(win, 'document', { configurable: true, value: { createElement: () => ({ getContext: () => ({ fillRect() {}, drawImage() {} }), toDataURL: () => 'data:image/jpeg;base64,QUJD' }) } });
+  return { fire: () => imgs.splice(0).forEach((i) => { i.naturalWidth = 800; i.naturalHeight = 600; i.onload(); }) };
+}
+const CTX = { status: 200, j: { ok: true, features: FEAT } };
+const IDS_PROPOSAL = { ...PROPOSAL, ids: [{ image: 1, name: 'Ben Cruz', id_type: 'passport', own: false }] }; // the ID belongs to the SECOND photo
+const reviewClient = (onSave, proposal = IDS_PROPOSAL, extra = {}) => detailClient({ fn: (b) => (b.action === 'context' ? CTX : b.action === 'extract' ? { status: 200, j: { ok: true, proposal } } : onSave(b)), ...extra });
+const toReviewWith = async (cl, imgs = [IMG('QUFB'), IMG('REVG')]) => { const m = await mount(cl, GID); await clickA(m.el, 'add-open'); m.M._state().add.images.push(...imgs); m.el.type('G_text', 'Hi, Ben Cruz is with me'); await clickA(m.el, 'read'); await tick(); assert.match(m.el.html, /Check before saving/); return m; };
+
+test('G U7: while Add from text reads, photo Remove and both pickers are disabled and refused, so the ID stays with the right person', async () => {
+  const [gate, release] = gateOf(), saves = [];
+  const cl = detailClient({ fn: (b) => (b.action === 'context' ? CTX : b.action === 'extract' ? gate.then(() => ({ data: { ok: true, proposal: IDS_PROPOSAL }, error: null })) : (saves.push(b), { status: 200, j: { ok: true, saved: [{ what: 'profile', ok: true }, { what: 'id_photo', ok: true }] } })) });
+  const { M, el } = await mount(cl, GID);
+  await clickA(el, 'add-open'); M._state().add.images.push(IMG('QUFB'), IMG('REVG')); el.type('G_text', 'Hi'); await clickA(el, 'read'); await tick();
+  assert.equal(M._state().add.step, 'reading'); assert.equal(tagsOf(el, 'data-act', 'rm-shot').length, 2); assert.ok(dis(el, 'rm-shot'), 'every Remove is disabled'); assert.equal(tagsOf(el, 'data-pick', 'shot').length, 2); assert.ok(disPick(el, 'shot'), 'both pickers are disabled');
+  await clickA(el, 'rm-shot', { i: 0 }); await el.l.change[0](pickEv('shot')); await tick();
+  assert.equal(M._state().add.images.length, 2, 'Remove did nothing'); assert.equal(M._state().add.preparing, 0, 'the pick did not start'); assert.equal(M._state().add.err, '');
+  release(); await tick(); assert.match(el.html, /Check before saving/);
+  await clickA(el, 'save-add'); await tick();
+  assert.equal(saves.length, 1); assert.deepEqual(saves[0].ids.map((d) => [d.name, d.image.base64]), [['Ben Cruz', 'REVG']], 'the ID is still the second photo and still Ben Cruz');
+});
+
+test('G U7: while Add from text saves, a late photo pick does nothing', async () => {
+  const [gate, release] = gateOf();
+  const { M, el } = await toReviewWith(reviewClient(() => gate.then(() => ({ data: { ok: true, saved: [{ what: 'profile', ok: true }] }, error: null }))));
+  await clickA(el, 'save-add'); await tick(); assert.equal(M._state().add.step, 'saving');
+  await el.l.change[0](pickEv('shot')); await tick(); assert.equal(M._state().add.preparing, 0); assert.equal(M._state().add.images.length, 2);
+  release(); await tick();
+});
+
+// ---- rotation counts as a write
+const rotOpen = async (cl) => { const m = await mount(cl, GID); await tick(); await clickA(m.el, 'show-id', { id: CID }); await tick(); await clickA(m.el, 'full', { id: CID }); await tick(); return m; };
+const rotCl = (set) => rotDetail({ staff_guest_stay_v1: () => ({ data: STAY, error: null }), set_guest_photo_rotation_v1: set });
+
+test('G U7: Rotate is a write from the tap: quick taps merge into one call, a tap while the call is out is refused, and two calls are never in flight', async () => {
+  const [gate, release] = gateOf(); let inflight = 0, max = 0; const sent = [];
+  const cl = rotCl((a) => { sent.push(a.p_rotation); inflight++; max = Math.max(max, inflight); return gate.then(() => { inflight--; return { data: { ok: true, path: a.p_path, rotation: a.p_rotation }, error: null }; }); });
+  const { M, el } = await rotOpen(cl);
+  await clickA(el, 'full-rot'); await clickA(el, 'full-rot'); await tick();
+  assert.equal(M._state().rot, 1, 'waiting to send'); assert.ok(dis(el, 'edit') && dis(el, 'add-open') && dis(el, 'remove-photo'), 'the wait already counts as a write'); assert.ok(ena(el, 'full-rot'), 'Rotate itself still takes a merging tap');
+  await clickA(el, 'edit'); assert.equal(M._state().edit, null, 'Edit details does nothing during the wait');
+  await sleep(700); assert.equal(M._state().rot, 2, 'the call is out'); assert.deepEqual(sent, [180], 'two taps made one call'); assert.ok(dis(el, 'full-rot'));
+  await clickA(el, 'full-rot'); await sleep(700); assert.deepEqual(sent, [180], 'a tap while the call is out sends nothing'); assert.equal(max, 1);
+  release(); await tick(); assert.ok(!M._state().rot); assert.ok(ena(el, 'full-rot') && ena(el, 'edit'));
+  await clickA(el, 'full-rot'); await sleep(700); await tick(); assert.deepEqual(sent, [180, 270], 'the refused tap was not turned, so the next one is 270'); assert.equal(max, 1, 'never two in flight');
+});
+
+test('G U7: the rotation flag clears after a refusal, a lost answer and a thrown error, and when the page is left', async () => {
+  for (const [name, h] of Object.entries({ refused: () => ({ data: null, error: { code: '42501', message: 'x' } }), lost: LOSTFN, thrown: () => { throw new Error('boom'); } })) {
+    const { M, el } = await rotOpen(rotCl(h)); await clickA(el, 'full-rot'); await sleep(700); await tick();
+    assert.ok(!M._state().rot, name); assert.ok(ena(el, 'edit') && ena(el, 'full-rot'), name); assert.match(el.html, /Could not save/, name);
+  }
+  const a = await rotOpen(rotCl(() => ({ data: { ok: true }, error: null }))); await clickA(a.el, 'full-rot'); assert.equal(a.M._state().rot, 1);
+  a.M.unmount(); const b = await rotOpen(rotCl(() => ({ data: { ok: true }, error: null })));
+  assert.ok(!b.M._state().rot, 'a new page starts clear'); assert.ok(ena(b.el, 'edit') && ena(b.el, 'full-rot')); await sleep(700);
+});
+
+// ---- a lost answer is not "nothing changed"
+test('G U7: a lost answer to Save details locks Save, keeps the typed text, says what to do, and Cancel reloads the page', async () => {
+  const cl = detailClient({ rpcs: { list_guest_companions_v1: () => ({ data: COMPS, error: null }), save_guest_profile_v1: () => FETCH_ERR } });
+  const { M, el } = await mount(cl, GID);
+  await clickA(el, 'edit'); el.type('G_f_phone', '0999 typed'); await clickA(el, 'save-edit'); await tick();
+  assert.match(el.html, LOSTRE); assert.match(el.html, COPYRE); assert.ok(M._state().d.stale); assert.ok(dis(el, 'save-edit')); assert.ok(ena(el, 'edit-cancel')); assert.equal(el.val('G_f_phone'), '0999 typed', 'the text stays');
+  await clickA(el, 'save-edit'); await tick(); assert.equal(nCalls(cl, 'save_guest_profile_v1'), 1, 'a locked Save sends nothing');
+  await clickA(el, 'edit-cancel'); await tick();
+  assert.equal(nCalls(cl, 'list_guest_companions_v1'), 2, 'Cancel reloaded the page'); assert.doesNotMatch(el.html, /G_f_phone/); assert.ok(!M._state().d.stale); assert.doesNotMatch(el.html, / disabled[ >]/);
+});
+
+test('G U7: a version conflict while editing locks Save the same way and keeps the text; Cancel reloads', async () => {
+  const cl = detailClient({ rpcs: { list_guest_companions_v1: () => ({ data: COMPS, error: null }), save_guest_profile_v1: () => ({ data: null, error: { code: '40001', message: 'stale version' } }) } });
+  const { el } = await mount(cl, GID);
+  await clickA(el, 'edit'); el.type('G_f_pref', 'Typed note'); await clickA(el, 'save-edit'); await tick();
+  assert.match(el.html, /Someone changed this guest while you were editing\./); assert.match(el.html, COPYRE); assert.ok(dis(el, 'save-edit')); assert.equal(el.val('G_f_pref'), 'Typed note');
+  await clickA(el, 'edit-cancel'); await tick(); assert.equal(nCalls(cl, 'list_guest_companions_v1'), 2); assert.ok(ena(el, 'edit'));
+});
+
+test('G U7: offline for certain (navigator.onLine false) is still "nothing was sent": no lock, the form stays usable', async () => {
+  const cl = detailClient({ rpcs: { list_guest_companions_v1: () => ({ data: COMPS, error: null }), save_guest_profile_v1: () => FETCH_ERR } });
+  const { M, el, win } = await mount(cl, GID); offline(win);
+  await clickA(el, 'edit'); el.type('G_f_phone', '0999 typed'); await clickA(el, 'save-edit'); await tick();
+  assert.match(el.html, /No connection, so nothing was sent/); assert.doesNotMatch(el.html, LOSTRE); assert.ok(!M._state().d.stale); assert.ok(ena(el, 'save-edit'));
+  const c2 = detailClient({ fn: (b) => (b.action === 'context' ? CTX : LOSTFN()) }), m2 = await mount(c2, GID); offline(m2.win);
+  await clickA(m2.el, 'remove-photo', { id: CID }); await clickA(m2.el, 'remove-photo-yes', { id: CID }); await tick();
+  assert.match(m2.el.html, /No connection/); assert.doesNotMatch(m2.el.html, LOSTRE); assert.equal(nFn(c2, 'context'), 1, 'no reload'); assert.equal(m2.M._state().cbusy, '');
+});
+
+test('G U7: a lost answer to Add a companion re-reads the people: the name there clears the field, the name missing keeps it', async () => {
+  for (const landed of [true, false]) {
+    let reads = 0; const NEW = { id: 'n1', guest_id: GID, name: 'Dino Lim', id_type: null, id_number: null, id_photo_path: null };
+    const cl = detailClient({ rpcs: { list_guest_companions_v1: () => ({ data: reads++ === 0 || !landed ? COMPS : [...COMPS, NEW], error: null }), save_guest_companion_v1: () => FETCH_ERR } });
+    const { M, el } = await mount(cl, GID); await clickA(el, 'comp-add-open'); el.type('G_newc', 'Dino Lim'); await clickA(el, 'add-comp'); await tick();
+    assert.equal(nCalls(cl, 'list_guest_companions_v1'), 2, 'the people were read again'); assert.equal(M._state().cbusy, '');
+    if (landed) { assert.match(el.html, /Dino Lim was added\./); assert.doesNotMatch(el.html, /id="G_newc"/); assert.equal(M._state().newc, ''); assert.doesNotMatch(el.html, LOSTRE); }
+    else { assert.equal(el.val('G_newc'), 'Dino Lim', 'kept'); assert.match(el.html, LOSTRE); assert.doesNotMatch(el.html, / disabled[ >]/); }
+  }
+});
+
+test('G U7: Remove person: a refusal unlocks, a lost answer reloads at once and keeps the sentence, and a success says so', async () => {
+  let mode = 'refused';
+  const cl = detailClient({ rpcs: { list_guest_companions_v1: () => ({ data: COMPS, error: null }), delete_guest_companion_v1: () => (mode === 'refused' ? { data: null, error: { code: '42501', message: 'permission denied' } } : mode === 'lost' ? FETCH_ERR : { data: { ok: true }, error: null }) } });
+  const { M, el } = await mount(cl, GID);
+  await clickA(el, 'remove-comp', { id: CID2 }); await clickA(el, 'remove-comp-yes', { id: CID2 }); await tick();
+  assert.equal(M._state().cbusy, ''); assert.doesNotMatch(el.html, / disabled[ >]/); assert.match(el.html, /not allowed|permission/i); assert.equal(nCalls(cl, 'list_guest_companions_v1'), 1, 'a refusal does not reload');
+  mode = 'lost'; await clickA(el, 'remove-comp', { id: CID2 }); await clickA(el, 'remove-comp-yes', { id: CID2 }); await tick();
+  assert.equal(nCalls(cl, 'list_guest_companions_v1'), 2, 'reloaded at once'); assert.match(el.html, LOSTRE); assert.doesNotMatch(el.html, / disabled[ >]/);
+  mode = 'ok'; await clickA(el, 'remove-comp', { id: CID2 }); await clickA(el, 'remove-comp-yes', { id: CID2 }); await tick(); assert.match(el.html, /The person was removed/);
+});
+
+test('G U7: Remove photo: a lost answer reloads at once and keeps the sentence; companion_not_found does the same with its own sentence', async () => {
+  for (const [r, say] of [[LOSTFN, LOSTRE], [() => ({ status: 404, j: { error: 'companion_not_found' } }), /no longer on this guest/]]) {
+    const cl = detailClient({ fn: (b) => (b.action === 'context' ? CTX : r()) }), { M, el } = await mount(cl, GID);
+    await clickA(el, 'remove-photo', { id: CID }); await clickA(el, 'remove-photo-yes', { id: CID }); await tick();
+    assert.equal(nFn(cl, 'context'), 2, 'reloaded at once'); assert.match(el.html, say); assert.equal(M._state().cbusy, ''); assert.doesNotMatch(el.html, / disabled[ >]/);
+  }
+});
+
+test('G U7: a lost answer to Replace photo reloads at once and keeps the sentence; a 207 with the photo saved re-reads the people', async () => {
+  const a = await mount(detailClient({ fn: (b) => (b.action === 'context' ? CTX : LOSTFN()) }), GID), ia = withImage(a.win);
+  await a.el.l.change[0](pickEv('replace', CID)); ia.fire(); await tick();
+  assert.match(a.el.html, LOSTRE); assert.equal(a.M._state().cbusy, '');
+  const cl = detailClient({ fn: (b) => (b.action === 'context' ? CTX : { status: 207, j: { ok: false, saved: [{ what: 'id_photo', ok: true }, { what: 'profile', ok: false, reason: 'save_failed' }] } }) }), b = await mount(cl, GID), ib = withImage(b.win);
+  await b.el.l.change[0](pickEv('replace', CID)); ib.fire(); await tick();
+  assert.equal(nCalls(cl, 'list_guest_companions_v1'), 2, 'the list was read again'); assert.equal(b.M._state().cbusy, ''); assert.match(b.el.html, /ID photo saved\./); assert.match(b.el.html, /The details did not save/);
+  const c = detailClient({ fn: (x) => (x.action === 'context' ? CTX : { status: 207, j: { ok: false, saved: [{ what: 'id_photo', ok: false, reason: 'upload_failed' }] } }) }), d = await mount(c, GID), id = withImage(d.win);
+  await d.el.l.change[0](pickEv('replace', CID)); id.fire(); await tick(); assert.equal(nCalls(c, 'list_guest_companions_v1'), 1, 'nothing saved, so no re-read'); assert.equal(d.M._state().cbusy, '');
+});
+
+test('G U7: leaving the page while a replacement photo is being prepared sends nothing', async () => {
+  const cl = detailClient(), m = await mount(cl, GID), im = withImage(m.win);
+  await m.el.l.change[0](pickEv('replace', CID)); assert.equal(m.M._state().cbusy, CID);
+  m.M.unmount(); const cl2 = detailClient(), m2 = await mount(cl2, '0a1b2c3d-0000-4000-8000-000000000002'); im.fire(); await tick();
+  assert.equal(nFn(cl, 'replace_id'), 0); assert.equal(nFn(cl2, 'replace_id'), 0, 'nor against the guest now open'); assert.equal(m2.M._state().cbusy, '');
+});
+
+test('G U7: a lost answer to Add from text save keeps the sheet and photos, locks Save, and Cancel reloads the guest', async () => {
+  const cl = reviewClient(() => LOSTFN()), { M, el } = await toReviewWith(cl);
+  el.type('G_r_pref', 'Typed note'); await clickA(el, 'save-add'); await tick();
+  assert.match(el.html, LOSTRE); assert.match(el.html, COPYRE); assert.ok(dis(el, 'save-add')); assert.equal(el.val('G_r_pref'), 'Typed note'); assert.equal(M._state().add.images.length, 2); assert.ok(M._state().d.stale);
+  assert.equal(tagsOf(el, 'data-act', 'add-back').length, 0, 'Back is replaced by Cancel'); await clickA(el, 'save-add'); await tick(); assert.equal(cl.fcalls.filter((c) => c[1].action === 'save').length, 1);
+  await clickA(el, 'add-cancel'); await tick(); assert.equal(M._state().add, null); assert.equal(nFn(cl, 'context'), 2, 'reloaded'); assert.doesNotMatch(el.html, /G_text|G_r_pref/); assert.ok(ena(el, 'add-open'));
+});
+
+// ---- 207 with failed details
+test('G U7: a 207 where the details failed returns to review with the failed items listed, keeps the sheet and photos, and does not add what saved twice', async () => {
+  const saves = []; let n = 0;
+  const cl = reviewClient((b) => { saves.push(b); return n++ === 0 ? { status: 207, j: { ok: false, saved: [{ what: 'profile', ok: false, reason: 'save_failed' }, { what: 'companion', ok: true }, { what: 'id_photo', ok: true }] } } : { status: 200, j: { ok: true, saved: [{ what: 'profile', ok: true }] } }; });
+  const { M, el } = await toReviewWith(cl);
+  await clickA(el, 'save-add'); await tick();
+  const A = M._state().add; assert.equal(A.step, 'review'); assert.ok(A.sheet); assert.equal(A.images.length, 2); assert.match(el.html, /Check before saving/); assert.match(el.html, /The details did not save\./); assert.match(el.html, /Companion added\./);
+  assert.equal(A.sheet.companions[0].on, false); assert.equal(A.sheet.ids[0].on, false); assert.ok(!M._state().d.stale);
+  await clickA(el, 'save-add'); await tick();
+  assert.equal(saves.length, 2); assert.equal(saves[1].companions, undefined, 'the companion that saved is not sent again'); assert.equal(saves[1].ids, undefined, 'nor the ID');
+  assert.equal(M._state().add.step, 'done'); assert.deepEqual(plain(M._state().add.images), []); assert.equal(M._state().add.sheet, null, 'a full success clears them');
+});
+
+test('G U7: a 207 where the details failed because someone else changed them locks Save with the Cancel hint', async () => {
+  const cl = reviewClient(() => ({ status: 207, j: { ok: false, saved: [{ what: 'profile', ok: false, reason: 'changed' }] } })), { M, el } = await toReviewWith(cl);
+  await clickA(el, 'save-add'); await tick();
+  assert.match(el.html, /was changed by someone else/); assert.match(el.html, COPYRE); assert.ok(dis(el, 'save-add')); assert.equal(M._state().add.images.length, 2);
+});
+
+test('G U7: Read that fails, or loses its answer, unlocks the page with the text kept, and can be tried again', async () => {
+  for (const first of [{ status: 500, j: { error: 'read_failed' } }, 'lost']) {
+    let n = 0; const cl = detailClient({ fn: (b) => (b.action === 'context' ? CTX : n++ === 0 ? (first === 'lost' ? LOSTFN() : first) : { status: 200, j: { ok: true, proposal: PROPOSAL } }) });
+    const { M, el } = await mount(cl, GID); await clickA(el, 'add-open'); el.type('G_text', 'Hi there'); await clickA(el, 'read'); await tick();
+    assert.equal(M._state().add.step, 'input'); assert.equal(el.val('G_text'), 'Hi there'); assert.ok(ena(el, 'read') && ena(el, 'add-cancel')); assert.match(el.html, /id="G_aerr"/);
+    await clickA(el, 'read'); await tick(); assert.match(el.html, /Check before saving/);
+  }
+});
+
+// ---- the profile could not be read
+test('G U7: when the profile could not be read, Edit is hidden, Try again is offered, and no save is ever sent with a null version', async () => {
+  let ok = false;
+  const cl = detailClient({ tables: { guests: { data: GUEST, error: null }, guest_profile_details: () => (ok ? { data: PROFILE, error: null } : { data: null, error: { message: 'TypeError: Failed to fetch' } }) } });
+  const { M, el } = await mount(cl, GID);
+  assert.equal(tagsOf(el, 'data-act', 'edit').length, 0, 'no Edit button and no editable row'); assert.match(el.html, /could not load, so they cannot be changed yet/); assert.ok(ena(el, 'detail-retry'));
+  await clickA(el, 'edit'); assert.equal(M._state().edit, null); assert.equal(nCalls(cl, 'save_guest_profile_v1'), 0);
+  ok = true; await clickA(el, 'detail-retry'); await tick(); assert.ok(ena(el, 'edit')); await clickA(el, 'edit'); el.type('G_f_phone', '0999 1'); await clickA(el, 'save-edit'); await tick();
+  assert.equal(cl.calls.find((c) => c[0] === 'save_guest_profile_v1')[1].p_expected_version, 4);
+});
+
+// ---- regressions from this branch
+test('G U7: a photo removal that reloads keeps an unsaved guest-count draft for the same stay', async () => {
+  const cl = detailClient({ rpcs: { list_guest_companions_v1: () => ({ data: COMPS, error: null }), staff_guest_stay_v1: () => ({ data: STAY, error: null }) },
+    fn: (b) => (b.action === 'context' ? CTX : { status: 200, j: { ok: true, saved: [{ what: 'id_photo_removed', ok: true }, { what: 'profile', ok: true }] } }) });
+  const { el } = await mount(cl, GID); await clickA(el, 'stay-inc'); assert.equal(outN(el), 3);
+  await clickA(el, 'remove-photo', { id: CID }); await clickA(el, 'remove-photo-yes', { id: CID }); await tick();
+  assert.equal(nCalls(cl, 'staff_guest_stay_v1'), 2, 'the page reloaded'); assert.equal(outN(el), 3, 'the draft survived'); assert.match(el.html, /data-act="stay-save"/);
+});
+
+test('G U7: a photo removal that succeeds but whose reload fails still says the photo was removed', async () => {
+  let g = 0;
+  const cl = detailClient({ tables: { guests: () => (g++ === 0 ? { data: GUEST, error: null } : { data: null, error: { message: 'TypeError: Failed to fetch' } }), guest_profile_details: { data: PROFILE, error: null } },
+    fn: (b) => (b.action === 'context' ? CTX : { status: 200, j: { ok: true, saved: [{ what: 'id_photo_removed', ok: true }, { what: 'profile', ok: true }] } }) });
+  const { el } = await mount(cl, GID); await clickA(el, 'remove-photo', { id: CID }); await clickA(el, 'remove-photo-yes', { id: CID }); await tick();
+  assert.match(el.html, /ID photo removed\./); assert.match(el.html, /could not load/); assert.ok(ena(el, 'detail-retry'));
+});
+
+test('G U7: collapsing Add a companion keeps the typed name for when it opens again', async () => {
+  const { M, el } = await mount(detailClient(), GID);
+  await clickA(el, 'comp-add-open'); el.type('G_newc', 'Dino Lim'); await clickA(el, 'comp-add-open'); assert.doesNotMatch(el.html, /id="G_newc"/);
+  await clickA(el, 'comp-add-open'); assert.equal(el.val('G_newc'), 'Dino Lim'); assert.equal(M._state().newc, 'Dino Lim');
+});
+
+// ---- disabled looks disabled
+test('G U7: disabled rows, photo pickers and ticks are dimmed and inert exactly like a disabled button, and the CSS parses', () => {
+  const norm = (s) => s.split(';').map((x) => x.trim().replace(/\s+/g, ' ')).filter(Boolean);
+  const m = /\.btn\[disabled\]\s*\{([^}]*)\}/.exec(fs.readFileSync(path.join(root, 'styles.css'), 'utf8')); assert.ok(m, '.btn[disabled] exists');
+  const mine = CSS.match(/[^{}]*\{[^}]*\}/g).find((r) => /\.G_frm\[disabled\]/.test(r)); assert.ok(mine, 'a rule covers the disabled rows');
+  const sel = mine.slice(0, mine.indexOf('{')), decl = norm(mine.slice(mine.indexOf('{') + 1, mine.lastIndexOf('}')));
+  for (const s of ['.G_frm[disabled]', '.G_pick:has(input:disabled)', '.chk[disabled]']) assert.ok(sel.includes(s), s);
+  for (const d of norm(m[1])) assert.ok(decl.includes(d), 'same as .btn[disabled]: ' + d);
+  assert.ok(decl.some((d) => /^cursor:/.test(d)), 'and the same cursor'); assert.equal((CSS.match(/\{/g) || []).length, (CSS.match(/\}/g) || []).length, 'braces balance'); assert.doesNotMatch(CSS, /\r/);
+});
+
+// ---- mutation survivors: every control the running states disable, and every click the guard refuses
+test('G U7: during a count save every control that would start another write is disabled, including the confirm button and the photo pickers', async () => {
+  const mk = () => { const [gate, release] = gateOf(); return { release, cl: detailClient({ rpcs: { list_guest_companions_v1: () => ({ data: COMPS, error: null }), staff_guest_stay_v1: () => ({ data: STAY, error: null }), set_stay_guest_count_v1: () => gate.then(SAVED_OK) } }) }; };
+  const a = mk(), { el } = await mount(a.cl, GID);
+  await clickA(el, 'comp-open', { id: CID }); await clickA(el, 'comp-add-open'); el.type('G_newc', 'Dino Lim'); await clickA(el, 'stay-inc'); await clickA(el, 'stay-save'); await clickA(el, 'confirm-no'); await tick(); // the redraw while the save runs is what draws the controls disabled
+  for (const act of ['edit', 'add-open', 'stay-save', 'stay-undo']) assert.ok(dis(el, act), act);
+  assert.ok(disPick(el, 'replace'), 'the Replace photo pickers'); await clickA(el, 'comp-open', { id: CID2 }); assert.ok(dis(el, 'remove-comp'), 'Remove person'); assert.ok(disPick(el, 'replace'));
+  await clickA(el, 'add-comp'); assert.equal(nCalls(a.cl, 'save_guest_companion_v1'), 0, 'Add companion is refused too');
+  await clickA(el, 'remove-comp-yes', { id: CID2 }); assert.equal(nCalls(a.cl, 'delete_guest_companion_v1'), 0);
+  a.release(); await tick(); await clickA(el, 'remove-comp', { id: CID2 }); assert.ok(ena(el, 'remove-comp-yes'), 'free again');
+  const b = mk(), m2 = await mount(b.cl, GID); await clickA(m2.el, 'comp-open', { id: CID }); await clickA(m2.el, 'remove-photo', { id: CID }); assert.ok(ena(m2.el, 'remove-photo-yes'));
+  await clickA(m2.el, 'stay-inc'); await clickA(m2.el, 'stay-save'); await clickA(m2.el, 'comp-add-open'); await tick(); assert.ok(dis(m2.el, 'remove-photo-yes'), 'the confirm button'); b.release(); await tick();
+  // while a photo removal runs, the count Save is refused, not queued
+  const [g2, r2] = gateOf(); const c2 = detailClient({ rpcs: { list_guest_companions_v1: () => ({ data: COMPS, error: null }), staff_guest_stay_v1: () => ({ data: STAY, error: null }), set_stay_guest_count_v1: SAVED_OK }, fn: (x) => (x.action === 'context' ? CTX : g2.then(() => ({ data: { ok: true, saved: [{ what: 'id_photo_removed', ok: true }] }, error: null }))) });
+  const m3 = await mount(c2, GID); await clickA(m3.el, 'stay-inc'); await clickA(m3.el, 'remove-photo', { id: CID }); await clickA(m3.el, 'remove-photo-yes', { id: CID }); await clickA(m3.el, 'stay-save'); await tick();
+  assert.equal(nCalls(c2, 'set_stay_guest_count_v1'), 0); r2(); await tick();
+});
+
+test('G U7: Retry buttons and Add ID photo are drawn disabled when the page is redrawn while a write runs', async () => {
+  for (const kind of ['people', 'profile', 'noid']) {
+    const [gate, release] = gateOf();
+    const cl = detailClient({ tables: { guests: { data: GUEST, error: null }, guest_profile_details: kind === 'profile' ? { data: null, error: { message: 'TypeError: Failed to fetch' } } : { data: PROFILE, error: null } },
+      rpcs: { list_guest_companions_v1: () => (kind === 'people' ? FETCH_ERR : { data: kind === 'noid' ? [COMPS[1]] : COMPS, error: null }), staff_guest_stay_v1: () => ({ data: STAY, error: null }), set_stay_guest_count_v1: () => gate.then(SAVED_OK) } });
+    const { el } = await mount(cl, GID); const act = kind === 'noid' ? 'add-open' : 'detail-retry'; assert.ok(ena(el, act), kind);
+    await clickA(el, 'stay-inc'); await clickA(el, 'stay-save'); await clickA(el, 'confirm-no'); await tick(); assert.ok(dis(el, act), kind); release(); await tick();
+  }
+});
+
+test('G U7: while reading, Read and Cancel are disabled; while saving, the ticks and the sheet controls do nothing; a country email on file stays locked', async () => {
+  const [gate, release] = gateOf(); let ex = 0;
+  const cl = detailClient({ fn: (b) => (b.action === 'context' ? CTX : b.action === 'extract' ? (ex++, gate.then(() => ({ data: { ok: true, proposal: PROPOSAL }, error: null }))) : { status: 200, j: { ok: true, saved: [] } }) });
+  const { M, el } = await mount(cl, GID); await clickA(el, 'add-open'); el.type('G_text', 'Hi'); await clickA(el, 'read'); await tick();
+  assert.ok(dis(el, 'read') && dis(el, 'add-cancel')); await clickA(el, 'read'); await clickA(el, 'add-cancel'); await tick(); assert.equal(ex, 1, 'a second Read is refused'); assert.ok(M._state().add);
+  release(); await tick(); assert.match(el.html, /id="G_r_email"[^>]*\sdisabled/, 'the email already on file is locked');
+  const [g2, r2] = gateOf(); const own = { ...PROPOSAL, ids: [{ image: 0, name: 'Zed Quill', id_type: 'passport', own: true }] };
+  const c2 = reviewClient(() => g2.then(() => ({ data: { ok: true, saved: [{ what: 'profile', ok: true }] }, error: null })), own), m2 = await toReviewWith(c2, [IMG('QUFB')]);
+  const sh = () => m2.M._state().add.sheet; assert.equal(sh().ids[0].yes, true);
+  await clickA(m2.el, 'save-add'); await tick(); assert.equal(m2.M._state().add.step, 'saving');
+  for (const a of ['id-on', 'id-yes', 'comp-on']) await clickA(m2.el, a, { i: 0 });
+  assert.equal(sh().ids[0].on, true); assert.equal(sh().ids[0].yes, true); assert.equal(sh().companions[0].on, true, 'comp-on'); assert.ok(dis(m2.el, 'comp-on') && dis(m2.el, 'save-add') && dis(m2.el, 'add-back'));
+  r2(); await tick();
+});
+
+test('G U7: with a form open the photo viewer cannot turn a photo, and a photo cannot be turned for a guest whose page is another photo', async () => {
+  const cl = rotCl(() => ({ data: { ok: true }, error: null })), { M, el } = await rotOpen(cl);
+  await clickA(el, 'edit'); assert.ok(M._state().edit); await clickA(el, 'full-rot'); await sleep(700); assert.equal(nCalls(cl, 'set_guest_photo_rotation_v1'), 0); assert.ok(!M._state().rot);
+  const two = [{ ...COMPS[0] }, { ...COMPS[1], id_photo_path: CID2 + '/b.jpg' }];
+  const c2 = rotDetail({ list_guest_companions_v1: () => ({ data: two, error: null }), staff_guest_stay_v1: () => ({ data: STAY, error: null }), set_guest_photo_rotation_v1: (a) => ({ data: { ok: true, path: a.p_path, rotation: a.p_rotation }, error: null }) });
+  const m2 = await mount(c2, GID); await tick(); await clickA(m2.el, 'show-id', { id: CID }); await tick(); await clickA(m2.el, 'show-id', { id: CID2 }); await tick(); await clickA(m2.el, 'full', { id: CID }); await clickA(m2.el, 'full-rot'); await clickA(m2.el, 'full-close'); await clickA(m2.el, 'full', { id: CID2 });
+  assert.equal(m2.M._state().rot, 1); assert.ok(dis(m2.el, 'full-rot'), 'a turn waiting for photo A does not merge a tap on photo B'); await sleep(700); await tick();
+  assert.equal(nCalls(c2, 'set_guest_photo_rotation_v1'), 1);
+});
+
+test('G U7: a database refusal that carries a status or a conflict code is a definite answer or a conflict, never a lost one', async () => {
+  const cases = [[{ message: 'Internal Server Error', status: 500 }, false], [{ code: '40001', message: 'conflict' }, true], [{ code: 'P0001', message: 'stale version' }, true]];
+  for (const [error, conflict] of cases) {
+    const cl = detailClient({ rpcs: { list_guest_companions_v1: () => ({ data: COMPS, error: null }), save_guest_profile_v1: () => ({ data: null, error }) } });
+    const { M, el } = await mount(cl, GID); await clickA(el, 'edit'); el.type('G_f_phone', '0999 1'); await clickA(el, 'save-edit'); await tick();
+    assert.equal(!!M._state().d.stale, conflict, error.message + error.code); assert.doesNotMatch(el.html, LOSTRE);
+    if (conflict) assert.match(el.html, /Someone changed this guest/); else assert.ok(ena(el, 'save-edit'));
+  }
+});
+
+test('G U7: a conflict answer from the function reloads at once with the changed sentence, for removal and for replace, 207 or not', async () => {
+  const run = async (resp, act) => {
+    const cl = detailClient({ fn: (b) => (b.action === 'context' ? CTX : resp) }), m = await mount(cl, GID), im = withImage(m.win);
+    if (act === 'replace') { await m.el.l.change[0](pickEv('replace', CID)); im.fire(); } else { await clickA(m.el, 'remove-photo', { id: CID }); await clickA(m.el, 'remove-photo-yes', { id: CID }); }
+    await tick(); return { cl, el: m.el };
+  };
+  for (const act of ['remove', 'replace']) for (const resp of [{ status: 409, j: { error: 'changed' } }, { status: 207, j: { ok: false, saved: [{ what: act === 'remove' ? 'id_photo_removed' : 'id_photo', ok: false, reason: 'changed' }] } }]) {
+    const { cl, el } = await run(resp, act); assert.equal(nFn(cl, 'context'), 2, act + ' ' + resp.status + ': reloaded'); assert.match(el.html, /changed (this guest|by someone else)/, act + ' ' + resp.status);
+  }
+});
+
+test('G U7: Add a companion: a conflict reloads; a lost answer where the name was already there, or the re-read fails, keeps the field', async () => {
+  const cl = detailClient({ rpcs: { list_guest_companions_v1: () => ({ data: COMPS, error: null }), save_guest_companion_v1: () => ({ data: null, error: { code: '40001', message: 'stale version' } }) } });
+  const a = await mount(cl, GID); await clickA(a.el, 'comp-add-open'); a.el.type('G_newc', 'Dino Lim'); await clickA(a.el, 'add-comp'); await tick();
+  assert.equal(nCalls(cl, 'list_guest_companions_v1'), 2, 'reloaded'); assert.match(a.el.html, /Someone changed this guest/); assert.equal(a.M._state().cbusy, '');
+  const b = await mount(detailClient({ rpcs: { list_guest_companions_v1: () => ({ data: COMPS, error: null }), save_guest_companion_v1: () => FETCH_ERR } }), GID);
+  await clickA(b.el, 'comp-add-open'); b.el.type('G_newc', 'Ben Cruz'); await clickA(b.el, 'add-comp'); await tick();
+  assert.equal(b.el.val('G_newc'), 'Ben Cruz', 'the person was there before, so nothing was added'); assert.match(b.el.html, LOSTRE); assert.doesNotMatch(b.el.html, /Ben Cruz was added/);
+  let n = 0; const c = await mount(detailClient({ rpcs: { list_guest_companions_v1: () => (n++ === 0 ? { data: COMPS, error: null } : FETCH_ERR), save_guest_companion_v1: () => FETCH_ERR } }), GID);
+  await clickA(c.el, 'comp-add-open'); c.el.type('G_newc', 'Dino Lim'); await clickA(c.el, 'add-comp'); await tick();
+  assert.equal(c.el.val('G_newc'), 'Dino Lim', 'a failed re-read does not claim the add'); assert.match(c.el.html, LOSTRE); assert.doesNotMatch(c.el.html, /Dino Lim was added/);
+});
+
+test('G U7: a 207 where every item failed leaves them ticked, so Save can try them again', async () => {
+  const cl = reviewClient(() => ({ status: 207, j: { ok: false, saved: [{ what: 'profile', ok: false, reason: 'save_failed' }, { what: 'companion', ok: false, reason: 'save_failed' }, { what: 'id_photo', ok: false, reason: 'upload_failed' }] } })), { M, el } = await toReviewWith(cl);
+  await clickA(el, 'save-add'); await tick(); const s = M._state().add.sheet; assert.equal(s.companions[0].on, true); assert.equal(s.ids[0].on, true); assert.match(el.html, /did not upload/);
+});
+
+test('G U7: Cancel on Add from text asks only when something would be lost', async () => {
+  const cl = detailClient(), { M, el, win } = await mount(cl, GID); let asked = 0, yes = false; Object.defineProperty(win, 'confirm', { configurable: true, value: () => { asked++; return yes; } });
+  await clickA(el, 'add-open'); await clickA(el, 'add-cancel'); assert.equal(asked, 0, 'nothing typed: no question'); assert.equal(M._state().add, null);
+  await clickA(el, 'add-open'); el.type('G_text', 'Hi'); await clickA(el, 'add-cancel'); assert.equal(asked, 1); assert.ok(M._state().add, 'a No keeps it');
+  yes = true; await clickA(el, 'add-cancel'); assert.equal(M._state().add, null);
+});
+
+test('G U7: a reload after a photo removal drops the count draft when the stay changed underneath', async () => {
+  let n = 0;
+  const cl = detailClient({ rpcs: { list_guest_companions_v1: () => ({ data: COMPS, error: null }), staff_guest_stay_v1: () => ({ data: n++ === 0 ? STAY : { ...STAY, uid: 'stay-uid-2', guest_count: 1, version: 8 }, error: null }) },
+    fn: (b) => (b.action === 'context' ? CTX : { status: 200, j: { ok: true, saved: [{ what: 'id_photo_removed', ok: true }, { what: 'profile', ok: true }] } }) });
+  const { el } = await mount(cl, GID); await clickA(el, 'stay-inc'); assert.equal(outN(el), 3);
+  await clickA(el, 'remove-photo', { id: CID }); await clickA(el, 'remove-photo-yes', { id: CID }); await tick(); assert.equal(outN(el), 1, 'the other stay shows its own number'); assert.doesNotMatch(el.html, /data-act="stay-save"/);
+});
+
+test('G U7: Show more guests is disabled while the next page loads', async () => {
+  const [gate, release] = gateOf(); let n = 0; const row = { ...GUEST, guest_profile_details: { id_on_file: false, birthday: null, vip: false }, guest_companions: [] };
+  const cl = client({ tables: { guests: () => (n++ === 0 ? { data: [row], count: 40, error: null } : gate.then(() => ({ data: [{ ...row, id: 'g2' }], count: 40, error: null }))) }, rpcs: { staff_guest_stays_v1: () => ({ data: [], error: null }) } });
+  const { el } = await mount(cl, ''); assert.ok(ena(el, 'more')); await clickA(el, 'more'); await tick(); assert.ok(dis(el, 'more')); release(); await tick();
 });

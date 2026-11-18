@@ -135,3 +135,5 @@ button.G_frm:active { background: var(--muted); }
 .G_staywrap { display: grid; gap: 12px; scroll-margin-top: calc(var(--appbar-h) + 12px); }
 .G_cap { scroll-margin-top: calc(var(--appbar-h) + 12px); }
 .G_cl small:empty, .G_sv:empty { display: none; }
+/* s120 U7: a disabled row, photo picker or tick looks like a disabled button (same as .btn[disabled] in styles.css) */
+.G_frm[disabled], .G_pick:has(input:disabled), .G_root .chk[disabled] { opacity: .45; pointer-events: none; cursor: default; }
