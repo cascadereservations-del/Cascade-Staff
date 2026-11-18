@@ -492,7 +492,7 @@
     }).join('') + '</div>' : '';
     var ids = s.ids.length ? '<div class="card list G_list">' + s.ids.map(function (d, i) {
       var im = A.images[d.image];
-      return '<div class="G_chkrow G_idrow"><button class="chk" type="button" role="checkbox" aria-checked="' + !!d.on + '" aria-label="Keep this ID photo" data-act="id-on" data-i="' + i + '"' + dis + '>' + (root.ICON ? root.ICON('check', 's16') : '') + '</button>' +
+      return '<div class="G_chkrow G_idrow"><button class="chk" type="button" role="checkbox" aria-checked="' + (!d.saved && !!d.on) + '" aria-label="Keep this ID photo" data-act="id-on" data-i="' + i + '"' + (d.saved ? ' disabled' : dis) + '>' + (root.ICON ? root.ICON('check', 's16') : '') + '</button>' + (d.saved ? '<span class="help">Saved</span>' : '') +
         (im ? '<img class="G_idimg" src="' + G_esc(im.src) + '" alt="ID photo">' : '') + '<div class="G_idform">' +
         '<div class="input"><select id="G_io' + i + '" aria-label="Whose ID" data-act-change="id-own" data-i="' + i + '"' + dis + '><option value="own"' + (d.own ? ' selected' : '') + '>' + G_esc('The guest (' + g.name + ')') + '</option><option value="comp"' + (d.own ? '' : ' selected') + '>A companion</option></select></div>' +
         (d.own ? '' : '<div class="input"><input id="G_in' + i + '" value="' + G_esc(d.name) + '" aria-label="Name on the ID" maxlength="80"' + ro + '></div>') +
@@ -510,7 +510,7 @@
       (comps ? '<div class="cap up G_cap">Companions to add</div>' + comps : '') + (ids ? '<div class="cap up G_cap">ID photos to keep</div>' + ids : '') +
       G_field('G_r_reason', 'Reason for the change', s.reason, 'maxlength="500"', 'Kept in the guest’s history.') +
       '<button class="btn btn-primary btn-block" type="button" data-act="save-add"' + (busy || S.d.stale ? ' disabled' : '') + '>' + (busy ? 'Saving…' : 'Save to the guest record') + '</button>' +
-      (S.d.stale || A.landed ? '<button class="btn btn-ghost btn-block" type="button" data-act="add-cancel">Cancel</button>' : '<button class="btn btn-ghost btn-block" type="button" data-act="add-back"' + (busy ? ' disabled' : '') + '>Back</button>');
+      (S.d.stale || A.landed ? '<button class="btn btn-ghost btn-block" type="button" data-act="add-cancel"' + (busy && !S.d.stale ? ' disabled' : '') + '>Cancel</button>' : '<button class="btn btn-ghost btn-block" type="button" data-act="add-back"' + (busy ? ' disabled' : '') + '>Back</button>');
   }
   /** The model's proposal as an editable sheet. */
   function G_sheetFrom(p, guestName) {
@@ -556,7 +556,7 @@
     });
     if (ids.length) body.ids = ids;
     var has = ['phone', 'email', 'stay_preferences', 'birthday', 'tags', 'companions', 'ids'].some(function (k) { return body[k] != null; });
-    return has ? { body: body } : { error: 'There is nothing to save. Fill a field or keep a photo, or tap Back.' };
+    return has ? { body: body } : { error: S.add && S.add.landed ? 'There is nothing more to save. Fill a field or keep a photo, or tap Cancel.' : 'There is nothing to save. Fill a field or keep a photo, or tap Back.' };
   }
 
   // ------------------------------------------------------------------------------------------------ data
@@ -739,7 +739,7 @@
       if (done) { A.landed = A.landed || o.j.saved.some(function (x) { return x && x.ok; }); // something is on the record: Back would re-send it, so leaving reloads the page
         // something did not save: back to the review with the sheet and photos, the failed items listed. A photo that saved is unticked by its place; companions stay ticked, because the server matches a name it already has and adds nobody twice.
         var sv = o.j.saved, idv = sv.filter(function (x) { return x && x.what === 'id_photo'; }), ln = G_saveLines(sv).join(' ');
-        if (idv.length === sentIds.length) sentIds.forEach(function (d, i) { if (idv[i].ok) d.on = false; }); // a count that does not match leaves every photo ticked: nothing is lost
+        if (idv.length === sentIds.length) sentIds.forEach(function (d, i) { if (idv[i].ok) { d.on = false; d.saved = true; } }); // a count that does not match leaves every photo ticked: nothing is lost
         if (!pf && (!sentDetails || o.j.saved.some(function (x) { return x && x.what === 'profile' && x.ok; }))) { // the details are done or were never sent: the retry carries none
           var em = A.sheet.email, emFail = sv.some(function (x) { return x && x.what === 'email' && !x.ok && x.reason !== 'email_kept'; }); // a failed email stays in the field, and goes again
           A.noDetails = true; G_DETAIL_KEYS.forEach(function (k) { A.sheet[k] = ''; }); if (emFail) A.sheet.email = em; S.el.innerHTML = ''; // the redraw reads drawn fields back into the sheet (G_keepForm), so the old ones go first
@@ -992,7 +992,7 @@
     else if (A && A.sheet) {
       G_syncSheet();
       if (a === 'comp-on') { var c = A.sheet.companions[G_idx(t)]; c.on = !c.on; G_paint(); }
-      else if (a === 'id-on') { var d = A.sheet.ids[G_idx(t)]; d.on = !d.on; G_paint(); }
+      else if (a === 'id-on') { var d = A.sheet.ids[G_idx(t)]; if (!d.saved) d.on = !d.on; G_paint(); }
       else if (a === 'id-yes') { var y = A.sheet.ids[G_idx(t)]; y.yes = !y.yes; G_paint(); }
     }
   }

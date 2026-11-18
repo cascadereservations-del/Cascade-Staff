@@ -1780,3 +1780,56 @@ test('G U10 item 4: details sent with no profile item in the answer keep the she
   assert.equal(M._state().add.sheet.phone, '09175550000', 'the sheet keeps the details'); assert.ok(!M._state().add.noDetails);
   await clickA(el, 'save-add'); await tick(); assert.equal(saves[1].phone, '09175550000'); assert.equal(saves[1].expected_version, 4);
 });
+
+// ======================================================================== U11: last closed list
+const NOTHING_MORE = /There is nothing more to save\. Fill a field or keep a photo, or tap Cancel\./;
+const part1 = () => photoFail207({ what: 'profile', ok: true }); // companions and photo 1 saved, photo 2 failed, details saved
+
+test('G U11 item 1: once something has saved, an empty retry says Cancel, not Back; before any save the text is unchanged', async () => {
+  let n = 0; const cl = reviewClient(() => (n++ === 0 ? part1() : retryOk), TWO);
+  const { M, el } = await toReviewWith(cl); await clickA(el, 'save-add'); await tick(); assert.ok(M._state().add.landed);
+  await clickA(el, 'comp-on', { i: 0 }); await clickA(el, 'comp-on', { i: 1 }); await clickA(el, 'id-on', { i: 1 });
+  await clickA(el, 'save-add'); await tick();
+  assert.equal(n, 1, 'nothing was sent'); assert.match(M._state().add.err, NOTHING_MORE); assert.doesNotMatch(M._state().add.err, /Back/);
+  const fresh = await toReviewWith(reviewClient(() => retryOk, NODET), []); const A = fresh.M._state().add;
+  await clickA(fresh.el, 'comp-on', { i: 0 }); await clickA(fresh.el, 'comp-on', { i: 1 });
+  await clickA(fresh.el, 'save-add'); await tick(); assert.ok(!A.landed);
+  assert.equal(A.err, 'There is nothing to save. Fill a field or keep a photo, or tap Back.');
+});
+
+test('G U11 item 2: Cancel after a partial save is disabled while saving, and enabled again after; a stale page keeps it enabled', async () => {
+  let n = 0, release; const gate = new Promise((r) => { release = r; });
+  const cl = reviewClient(() => (n++ === 0 ? part1() : gate.then(() => ({ data: retryOk.j, error: null }))), TWO);
+  const { M, el } = await toReviewWith(cl); await clickA(el, 'save-add'); await tick();
+  assert.ok(M._state().add.landed); assert.equal(dis(el, 'add-cancel'), false, 'enabled while reviewing');
+  await clickA(el, 'save-add'); assert.equal(M._state().add.step, 'saving'); assert.ok(dis(el, 'add-cancel'), 'disabled while saving');
+  release(); await tick(); assert.equal(M._state().add.step, 'done');
+  const st = reviewClient(() => ({ status: 207, j: { ok: false, saved: [{ what: 'id_photo', ok: true }, { what: 'profile', ok: false, reason: 'changed' }] } }), TWO);
+  const s = await toReviewWith(st); await clickA(s.el, 'save-add'); await tick();
+  assert.ok(s.M._state().d.stale, 'stale'); assert.ok(tagsOf(s.el, 'data-act', 'add-cancel').length === 1 && !dis(s.el, 'add-cancel'), 'Cancel works on a stale page');
+});
+
+test('G U11 item 3: a photo that saved shows Saved, disabled and unticked, cannot be ticked again, and keeps its place', async () => {
+  const saves = []; let n = 0;
+  const cl = reviewClient((b) => { saves.push(b); return n++ === 0 ? part1() : { status: 207, j: { ok: false, saved: [{ what: 'id_photo', ok: false, reason: 'upload_failed' }] } }; }, TWO);
+  const { M, el } = await toReviewWith(cl); await clickA(el, 'save-add'); await tick();
+  const ids = M._state().add.sheet.ids; assert.equal(ids.length, 2); assert.deepEqual(plain(ids.map((d) => !!d.saved)), [true, false]);
+  const rows = tagsOf(el, 'data-act', 'id-on'); assert.equal(rows.length, 2);
+  assert.ok(/disabled/.test(rows[0]) && /aria-checked="false"/.test(rows[0]), 'saved row disabled and unticked'); assert.ok(!/disabled/.test(rows[1]), 'the failed photo can be ticked');
+  assert.equal((el.html.match(/>Saved</g) || []).length, 1, 'one Saved label');
+  await clickA(el, 'id-on', { i: 0 }); assert.equal(M._state().add.sheet.ids[0].on, false, 'a tap on the saved row ticks nothing');
+  await clickA(el, 'save-add'); await tick();
+  assert.equal(saves[1].ids.length, 1, 'only the failed photo is sent again'); assert.equal(M._state().add.sheet.ids.length, 2);
+});
+
+// mutants that survived the review
+test('G U11 mutant: a failed email the server kept (email_kept) is not put back in the field', async () => {
+  const cl = reviewClient(() => ({ status: 207, j: { ok: false, saved: [{ what: 'profile', ok: true }, { what: 'email', ok: false, reason: 'email_kept' }, { what: 'id_photo', ok: false, reason: 'upload_failed' }] } }), withEmail, { tables: noEmailTables });
+  const { M, el } = await toReviewWith(cl); await clickA(el, 'save-add'); await tick(); assert.equal(M._state().add.sheet.email, '');
+});
+
+test('G U11 mutant: landed stays true when a later retry saves nothing, so Cancel stays and Back does not return', async () => {
+  let n = 0; const cl = reviewClient(() => (n++ === 0 ? part1() : { status: 207, j: { ok: false, saved: [{ what: 'id_photo', ok: false, reason: 'upload_failed' }] } }), TWO);
+  const { M, el } = await toReviewWith(cl); await clickA(el, 'save-add'); await tick(); await clickA(el, 'save-add'); await tick();
+  assert.equal(n, 2); assert.ok(M._state().add.landed); assert.ok(!/data-act="add-back"/.test(el.html)); assert.match(el.html, /data-act="add-cancel"/);
+});
