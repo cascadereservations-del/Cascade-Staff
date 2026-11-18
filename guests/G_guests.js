@@ -27,7 +27,7 @@
   var S = null, G_seq = 0;
   // Photo links live for the sign-in session only, in memory (never written to storage): a path keeps its signed URL until 5 minutes before it
   // expires, so reopening a guest neither signs nor downloads again. G_rot is the per-session turn (0/90/180/270) of a path; G_reset clears both.
-  var G_SIGN_SEC = 300, G_TTL = 30 * 60000, G_epoch = 0, G_cache = {}, G_inflight = {}, G_rot = {}, G_rotSaved = {}, G_rotTimers = {};
+  var G_SIGN_SEC = 300, G_TTL = 30 * 60000, G_epoch = 0, G_cache = {}, G_inflight = {}, G_rot = {}, G_rotSaved = {}, G_rotTimers = {}, G_rotBusy = {}; // G_rotBusy: path -> { next } while that photo's call is out; module level, so leaving and coming back cannot start a second call
   function G_cached(path) { var h = G_cache[path]; return h && h.exp > Date.now() ? h.url : ''; }
   function G_drop(path) { var h = G_cache[path]; if (h) { try { root.URL.revokeObjectURL(h.url); } catch (e) { /* nothing to free */ } } delete G_cache[path]; }
   function G_sign(client, path) {
@@ -42,7 +42,7 @@
     }).then(function (o) { if (G_inflight[path] === p) delete G_inflight[path]; return o; }, function () { if (G_inflight[path] === p) delete G_inflight[path]; return { url: '' }; });
     G_inflight[path] = p; return p;
   }
-  function G_reset() { G_unmount(); G_epoch++; Object.keys(G_cache).forEach(G_drop); G_cache = {}; G_inflight = {}; G_rot = {}; G_rotSaved = {}; Object.keys(G_rotTimers).forEach(function (k) { clearTimeout(G_rotTimers[k]); }); G_rotTimers = {}; }
+  function G_reset() { G_unmount(); G_epoch++; Object.keys(G_cache).forEach(G_drop); G_cache = {}; G_inflight = {}; G_rot = {}; G_rotSaved = {}; Object.keys(G_rotTimers).forEach(function (k) { clearTimeout(G_rotTimers[k]); }); G_rotTimers = {}; G_rotBusy = {}; }
 
   // ------------------------------------------------------------------------------------------------ pure helpers (tested)
   function G_esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
@@ -137,7 +137,7 @@
       bad_reason: 'Add a reason of 3 to 500 characters.',
       bad_name: 'A name is missing or has numbers in it.',
       companion_not_found: 'That person is no longer on this guest’s record.',
-      changed: 'Someone changed this guest while you were editing.',
+      changed: 'Someone else changed this guest.',
       denied: 'You do not have permission to save this.'
     };
     if (code && t[code]) return t[code];
@@ -163,9 +163,9 @@
   function G_absent(err) { if (!err) return false; var c = String(err.code || ''); return c === 'PGRST202' || c === '42883' || c === '42P01' || c === 'PGRST205' || err.status === 404; }
   function G_saveLines(saved) {
     var L = { companion: 'Companion added.', id_photo: 'ID photo saved.', id_photo_removed: 'ID photo removed.', profile: 'Details saved.', email: 'Email saved.' };
-    var W = { denied: 'was not allowed', changed: 'was changed by someone else', save_failed: 'did not save', upload_failed: 'did not upload', email_kept: 'was kept: an email is already on file' };
+    var W = { denied: '% not allowed', changed: '% changed by someone else', save_failed: 'did not save', upload_failed: 'did not upload', email_kept: '% kept: an email is already on file' }; // % is was, or were for the details
     var N = { companion: 'The companion', id_photo: 'The ID photo', id_photo_removed: 'Removing the ID photo', profile: 'The details', email: 'The email' };
-    return (saved || []).map(function (s) { return s.ok ? (L[s.what] || 'Saved.') : (N[s.what] || 'One item') + ' ' + (W[s.reason] || 'did not save') + '.'; });
+    return (saved || []).map(function (s) { return s.ok ? (L[s.what] || 'Saved.') : (N[s.what] || 'One item') + ' ' + (W[s.reason] || 'did not save').replace('%', s.what === 'profile' ? 'were' : 'was') + '.'; });
   }
   /** One short sentence for a person's stay, for the list rows. */
   function G_stayLine(g, st, today) {
@@ -223,7 +223,7 @@
   function G_offline() { var n = root.navigator; return !!n && n.onLine === false; }
   function G_noAnswer(err) { return !!err && !err.code && !(err.status > 0); }
   function G_lost(err) { return G_noAnswer(err) && !G_offline(); }
-  function G_rpcStale(err) { return String(err.code || '') === '40001' || /stale version/i.test(String(err.message || '')) ? G_errText(0, 'changed') : G_lost(err) ? G_LOST : ''; }
+  function G_rpcStale(err) { var c = String(err.code || ''), m = String(err.message || ''); return c === '40001' || /stale version/i.test(m) ? G_errText(0, 'changed') : c === 'P0002' && /companion not found/i.test(m) ? G_errText(0, 'companion_not_found') : G_lost(err) ? G_LOST : ''; } // a missing guest (P0002) keeps its own sentence in G_rpcText
   function G_fnStale(o) {
     var j = o.j || {}, e = j.error;
     if (e === 'changed' || e === 'companion_not_found') return G_errText(o.status, e);
@@ -345,14 +345,14 @@
     if (S.edit) return '<div class="G_detail">' + back + notice + G_err(S.err) + name + G_editHtml() + '</div>'; // mockup 4: the name and the form, nothing else
     var idChip = G_idPill(G_idState(D.detailsOk ? p : null, D.compAbsent || D.cErr ? null : D.companions));
     var canAdd = !!(D.feat && D.feat.guest_id && D.feat.preferences);
-    var idBlock = noComp ? '' : '<div class="cap up G_cap">Guest ID</div>' + (own ? '<div class="G_frame' + (own.id_photo_path ? '' : ' G_noid') + '">' + G_idPhoto(own, true) + '</div>' + G_idControls(own) :
-      '<div class="G_frame G_noid"><span class="G_none">No ID photo yet</span></div>' + (canAdd ? '<div class="G_btns"><button class="btn btn-primary btn-sm" type="button" data-act="add-open"' + G_off() + '>' + G_ic('camera') + 'Add ID photo</button></div>' : ''));
+    var addOk = !!D.detailsOk, idBlock = noComp ? '' : '<div class="cap up G_cap">Guest ID</div>' + (own ? '<div class="G_frame' + (own.id_photo_path ? '' : ' G_noid') + '">' + G_idPhoto(own, true) + '</div>' + G_idControls(own) :
+      '<div class="G_frame G_noid"><span class="G_none">No ID photo yet</span></div>' + (canAdd && addOk ? '<div class="G_btns"><button class="btn btn-primary btn-sm" type="button" data-act="add-open"' + G_off() + '>' + G_ic('camera') + 'Add ID photo</button></div>' : ''));
     var head = '<div class="G_hero">' + idBlock + name + '<p class="G_line">' + G_esc(G_heroLine(g, D.stay, today)) + '</p>' +
       (bd !== null && bd <= G_BDAY_DAYS ? '<p class="G_line">' + G_glyph('cake') + G_esc(bd === 0 ? 'Birthday today' : 'Birthday in ' + bd + (bd === 1 ? ' day' : ' days')) + '</p>' : '') +
       '<div class="G_chipsrow">' + idChip + (p.vip ? '<span class="pill p-brand">' + G_glyph('star') + 'VIP</span>' : '') + G_tierChip(g.tier, g.total_stays, p.vip) + '</div>' +
       (D.detailsOk ? '<button class="btn btn-secondary btn-sm" type="button" data-act="edit"' + G_off() + '>Edit details</button>' : '<p class="help" role="status">The details could not load, so they cannot be changed yet.</p><button class="btn btn-secondary btn-sm" type="button" data-act="detail-retry"' + G_off() + '>Try again</button>') + '</div>'; // never an edit form without the version it was read at
     // The Add button has its slot from the first paint: the function probe decides whether it is shown, never whether space is kept.
-    var addSlot = '<div class="G_slot">' + (canAdd ? '<button class="btn btn-secondary btn-block" type="button" data-act="add-open"' + G_off() + '>' + G_ic('image') + 'Add from text, screenshot or photo</button>' : '') + '</div>';
+    var addSlot = '<div class="G_slot">' + (canAdd && addOk ? '<button class="btn btn-secondary btn-block" type="button" data-act="add-open"' + G_off() + '>' + G_ic('image') + 'Add from text, screenshot or photo</button>' : '') + '</div>';
     return '<div class="G_detail">' + back + notice + G_err(S.err) + head + G_stayHtml() + G_infoHtml(g, p, phone, D.detailsOk) + G_companionsHtml() + addSlot + '</div>';
   }
   function G_row(label, value, edit) {
@@ -476,8 +476,8 @@
     return head + G_err(A.err, 'G_aerr') +
       '<div class="field"><label for="G_text">Guest’s message (optional)</label><textarea class="ta" id="G_text" rows="6" maxlength="' + G_MAX_TEXT + '" placeholder="Paste what the guest sent: names, phone, allergies, a birthday">' + G_esc(A.text) + '</textarea></div>' +
       '<div class="field"><span class="lbl">Photos (optional)</span>' + (shots ? '<div class="G_shots">' + shots + '</div>' : '') +
-      (room ? '<div class="G_btns"><label class="btn btn-secondary">Take a photo<input class="sr" type="file" accept="image/*" capture="environment" data-pick="shot" aria-label="Take a photo"' + G_off() + '></label>' +
-        '<label class="btn btn-secondary">Choose photos<input class="sr" type="file" accept="image/*" multiple data-pick="shot" aria-label="Choose photos"' + G_off() + '></label></div>' : '') +
+      (room ? '<div class="G_btns"><label class="btn btn-secondary G_pick">Take a photo<input class="sr" type="file" accept="image/*" capture="environment" data-pick="shot" aria-label="Take a photo"' + G_off() + '></label>' +
+        '<label class="btn btn-secondary G_pick">Choose photos<input class="sr" type="file" accept="image/*" multiple data-pick="shot" aria-label="Choose photos"' + G_off() + '></label></div>' : '') +
       (A.preparing ? '<p class="help" role="status">Preparing the photos…</p>' : '<p class="help">Chat screenshots and ID photos, up to ' + G_MAX_IMAGES + '. Screenshots are read and then dropped. Only an ID photo you keep is stored.</p>') + '</div>' +
       '<button class="btn btn-primary btn-block" type="button" data-act="read"' + (busy || A.preparing ? ' disabled' : '') + '>' + (busy ? 'Reading…' : 'Read the details') + '</button>' +
       '<button class="btn btn-ghost btn-block" type="button" data-act="add-cancel"' + (busy ? ' disabled' : '') + '>Cancel</button>' +
@@ -597,7 +597,8 @@
   function G_paintResults() { var box = S && S.el && S.el.querySelector && S.el.querySelector('#G_results'); if (box) box.innerHTML = G_resultsHtml(); else G_paint(); }
 
   function G_loadDetail() {
-    var tok = S.token, id = S.gid, prev = S.d && S.d.stay, D = S.d = { loading: true, err: '', guest: null, details: null, companions: [], compAbsent: false, feat: null, urls: {}, urlBusy: '', stay: null };
+    var tok = S.token, id = S.gid, prev = (S.d && S.d.stay) || S.stayKept, D = S.d = { loading: true, err: '', guest: null, details: null, companions: [], compAbsent: false, feat: null, urls: {}, urlBusy: '', stay: null };
+    S.stayKept = prev || null; // so a reload that fails still hands the count draft to Try again
     S.cOpen = ''; S.addComp = false; S.edit = null; S.add = null; S.msg = null; S.err = ''; S.cerr = ''; S.confirm = null; S.cbusy = ''; G_paint();
     var one = G_one;
     return Promise.all([
@@ -619,6 +620,7 @@
       D.feat = f.status === 200 && f.j && f.j.features ? f.j.features : f.status === 0 ? { guest_id: true, preferences: true, replace_id: true, remove_id: true } : null;
       var sr = rs[4], own = G_ownComp(); // s120: a missing function, an error or null leaves the card out, never an error line
       D.stay = sr && !sr.error && sr.data ? G_stayFrom(Array.isArray(sr.data) ? sr.data[0] : sr.data, 1 + D.companions.filter(function (x) { return x !== own; }).length) : null;
+      S.stayKept = null; // a failed reload leaves it for Try again (the returns above); a loaded page is the new baseline
       if (prev && D.stay && D.stay.uid === prev.uid && prev.draft !== prev.base) { D.stay.draft = prev.draft; D.stay.key = prev.key; D.stay.keyN = prev.keyN; } // a reload of the same stay (a photo removal, a retry) keeps the number staff set and not yet saved
       G_paint(); if (S.seg === 'stay' && D.stay) G_showStay(); else G_focus('G_h');
       S.seg = ''; // the stay segment applies to the first open only; a reload after Add from text or a retry opens the top
@@ -690,7 +692,7 @@
     else if (A) { D.stale = true; A.step = 'review'; A.err = msg + ' ' + G_COPY; G_paint(); G_focusLate('G_aerr'); }
     else { G_loadDetail(); S.err = msg; }
   }
-  function G_openAdd() { S.add = { step: 'input', text: '', images: [], preparing: 0, err: '', sheet: null, ok: false, lines: [] }; S.msg = null; G_paint(); G_focus('G_text'); }
+  function G_openAdd() { if (!S.d.detailsOk) return; S.add = { step: 'input', text: '', images: [], preparing: 0, err: '', sheet: null, ok: false, lines: [] }; S.msg = null; G_paint(); G_focus('G_text'); }
   function G_closeAdd(reload) { var had = S.add; S.add = null; if (had) { had.images = []; had.text = ''; had.sheet = null; } if (reload) G_loadDetail(); else G_paint(); }
   function G_addFiles(list) {
     var A = S.add, tok = S.token; if (!A) return;
@@ -717,10 +719,12 @@
   }
   function G_saveAdd() {
     var A = S.add, tok = S.token; if (!A || S.d.stale) return;
+    if (!S.d.detailsOk) { A.err = 'The details could not load, so nothing can be saved yet. Cancel, then tap Try again.'; G_paint(); G_focus('G_aerr'); return; } // never a details write without the version it was read at
     G_syncSheet();
     var out = G_addBody(S.gid, A.sheet, A.images, S.d.guest.name, S.d.details ? S.d.details.version : null);
     var bad = out.error || (out.body && G_check({ birthday: out.body.birthday, tags: out.body.tags, stay_preferences: out.body.stay_preferences }, out.body.reason, G_today(), 30));
     if (bad) { A.err = bad; G_paint(); G_focus('G_aerr'); return; }
+    var sentIds = A.sheet.ids.filter(function (d) { return d.on && A.images[d.image]; }); // the photos in the body, in order: the server answers one id_photo item for each
     A.step = 'saving'; A.err = ''; G_paint();
     G_call(out.body).then(function (o) {
       if (!G_live(tok) || S.add !== A) return;
@@ -729,10 +733,9 @@
         A.ok = !!o.j.ok; A.lines = G_saveLines(o.j.saved); A.images = []; A.text = ''; A.sheet = null; // the photos leave memory once saved or refused
         A.step = 'done'; S.haptic(o.j.ok ? 'ok' : 'warn'); G_paint(); G_focus('G_msg'); return;
       }
-      if (done) { // the details did not save: back to the review with the sheet and photos, the failed items listed. What did save is unticked, so a second Save cannot add it twice.
+      if (done) { // the details did not save: back to the review with the sheet and photos, the failed items listed. A photo that saved is unticked by its place; companions stay ticked, because the server matches a name it already has and adds nobody twice.
         var sv = o.j.saved, idv = sv.filter(function (x) { return x && x.what === 'id_photo'; }), ln = G_saveLines(sv).join(' ');
-        if (sv.some(function (x) { return x && x.what === 'companion' && x.ok; })) A.sheet.companions.forEach(function (c) { c.on = false; });
-        if (idv.length && idv.every(function (x) { return x.ok; })) A.sheet.ids.forEach(function (d) { d.on = false; });
+        if (idv.length === sentIds.length) sentIds.forEach(function (d, i) { if (idv[i].ok) d.on = false; }); // a count that does not match leaves every photo ticked: nothing is lost
         S.haptic('warn'); A.step = 'review';
         if (sm) G_stale(ln); else { A.err = ln; G_paint(); G_focusLate('G_aerr'); }
         return;
@@ -746,16 +749,27 @@
     var say = function (m) { if (S && G_live(tok) && seq === S.rotSeq) { S.rotMsg = m; G_paint(); G_focus('G_fullx'); } };
     // A turn is a write from the tap to the answer (G_run reads S.rot). Debounced: quick taps send one write of the last value (the server cannot commit them out of order); once it is out, taps are refused, so two calls are never in flight.
     S.rot = 1; S.rotPath = path;
+    var fin = function (r) {
+      if (G_live(tok)) S.rot = 0; // success, a refusal and a lost answer all end here
+      if (r.error || !r.data || r.data.ok === false) return say('Could not save');
+      if (ep === G_epoch) G_rotSaved[path] = d; say('Saved for everyone');
+    };
     clearTimeout(G_rotTimers[path]);
     G_rotTimers[path] = setTimeout(function () {
       delete G_rotTimers[path]; if (ep !== G_epoch) return;
       if (G_live(tok)) { S.rot = 2; G_paint(); }
-      G_rpc('set_guest_photo_rotation_v1', { p_path: path, p_rotation: d }).then(function (r) {
-        if (G_live(tok)) S.rot = 0; // success, a refusal and a lost answer all end here
-        if (r.error || !r.data || r.data.ok === false) return say('Could not save');
-        if (ep === G_epoch) G_rotSaved[path] = d; say('Saved for everyone');
-      });
+      G_rotCall(path, d, ep, fin);
     }, 600);
+  }
+  // One call per photo path at a time, across pages: a call that is out keeps only the latest value waiting, and sends it once after the answer.
+  function G_rotCall(path, d, ep, fin) {
+    var b = G_rotBusy[path]; if (b) { b.next = { d: d, fin: fin }; return; }
+    b = G_rotBusy[path] = { next: null };
+    G_rpc('set_guest_photo_rotation_v1', { p_path: path, p_rotation: d }).then(function (r) {
+      var n = b.next; if (G_rotBusy[path] === b) delete G_rotBusy[path];
+      if (n && ep === G_epoch) G_rotCall(path, n.d, ep, n.fin); // the waiting turn goes out now; the page that tapped it keeps its lock until then
+      fin(r);
+    });
   }
   function G_showId(id) {
     var D = S.d, c = D.companions.filter(function (x) { return x.id === id; })[0], tok = S.token; if (!c || !c.id_photo_path || D.urlBusy) return;
@@ -778,9 +792,13 @@
       if (!o || !G_live(tok)) return;
       var sm = G_fnStale(o);
       if ((o.status === 200 || o.status === 207) && o.j.saved) {
-        S.msg = G_saveLines(o.j.saved); S.haptic(o.j.ok ? 'ok' : 'warn'); G_forget(D, id);
+        S.haptic(o.j.ok ? 'ok' : 'warn'); G_forget(D, id);
+        if (sm) { // a conflict: the page reloads through the stale path; the green box keeps only what saved, and the conflict is said in the red one
+          var kept = G_saveLines(o.j.saved.filter(function (x) { return x && (x.ok || x.reason !== 'changed'); }));
+          G_stale(sm); S.msg = kept.length ? kept : null; return;
+        }
+        S.msg = G_saveLines(o.j.saved);
         if (o.j.ok || o.j.saved.some(function (x) { return x && x.what === 'id_photo' && x.ok; })) { G_refreshCompanions(); return; } // the busy mark stays on until the list is read again
-        if (sm) { G_stale(sm); return; }
       } else if (sm) { G_stale(sm); return; } else S.cerr = G_errText(o.status, o.j.error);
       S.cbusy = ''; G_paint();
     });
@@ -815,7 +833,7 @@
   function G_addComp() {
     var name = G_val('G_newc').replace(/\s+/g, ' ').trim(), tok = S.token, D = S.d;
     if (name.length < 2 || /\d{4,}/.test(name)) { S.cerr = 'Type the companion’s full name.'; G_paint(); G_focus('G_newc'); return; }
-    var had = D.companions.some(function (x) { return G_exact(x.name, name); });
+    var had = G_howMany(D.companions, name);
     S.cbusy = 'new'; S.cerr = ''; G_paint();
     G_rpc('save_guest_companion_v1', { p_guest_id: S.gid, p_companion_id: null, p_patch: { name: name }, p_expected_version: null, p_reason: G_REASON_COMP }).then(function (r) {
       if (!G_live(tok)) return;
@@ -828,13 +846,16 @@
       S.msg = [name + ' was added.']; S.addComp = false; S.newc = ''; G_refreshCompanions();
     });
   }
-  // The add may have happened although the answer was lost: read the people again. The name there (and not there before) means it did, and the field clears; otherwise the field keeps the name.
+  function G_howMany(list, name) { return (list || []).filter(function (x) { return G_exact(x.name, name); }).length; }
+  // The add may have happened although the answer was lost: read the people again. More people with that name than before means it did, and the field clears; the same number keeps the name (also when the name was already on file).
+  // When the re-read fails too, nobody knows: the page goes stale (it reloads, and Add stays out of reach until a reload works), so a second tap can never add twice.
   function G_checkAdded(name, had, tok) {
     var D = S.d;
     G_rpc('list_guest_companions_v1', { p_guest_id: S.gid }, G_COMP_COLS).then(function (c) {
       if (!G_live(tok)) return;
-      S.cbusy = ''; if (!c.error) { D.cErr = false; D.companions = G_comps(c.data); }
-      var added = !c.error && !had && D.companions.some(function (x) { return G_exact(x.name, name); });
+      if (c.error) { G_stale(G_LOST); return; }
+      S.cbusy = ''; D.cErr = false; D.companions = G_comps(c.data);
+      var added = G_howMany(D.companions, name) > had;
       if (added) { S.msg = [name + ' was added.']; S.addComp = false; S.newc = ''; } else S.cerr = G_LOST;
       G_paint(); G_focusLate(added ? 'G_msg' : 'G_cerr');
     });

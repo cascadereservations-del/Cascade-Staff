@@ -162,7 +162,7 @@ test('G: search pattern, birthday maths, stay map, tags and patch', () => {
   assert.equal(t.sameName('Ana Reyes', 'Ana Maria Reyes'), true);
   assert.equal(t.sameName('Ben Cruz', 'Ana Maria Reyes'), false);
   assert.equal(t.absent({ code: 'PGRST202' }), true); assert.equal(t.absent({ code: '40001' }), false);
-  assert.match(t.rpcText({ code: '40001', message: 'stale version' }), /Someone changed this guest/);
+  assert.match(t.rpcText({ code: '40001', message: 'stale version' }), /Someone else changed this guest/);
   assert.match(t.errText(0, ''), /No connection/);
   assert.match(t.errText(429, ''), /Too many/);
   assert.equal(/!/.test(Object.values({ a: t.errText(400, 'bad_field'), b: t.errText(403, ''), c: t.rpcText({ code: '42501' }) }).join(' ')), false); // no exclamation marks
@@ -323,7 +323,7 @@ test('G: a stale version keeps the form and says who to reload for; no overwrite
   const { el } = await mount(cl, GID);
   await clickA(el, 'edit'); setNodes(el, { G_f_phone: '0999', G_f_bday: '1990-10-20', G_f_pref: 'Quiet room', G_f_tags: 'anniversary', G_f_reason: 'Phone fix' });
   await clickA(el, 'save-edit'); await tick();
-  assert.match(el.html, /Someone changed this guest/); assert.match(el.html, /Contact number/); assert.match(el.html, /value="0999"|0999/);
+  assert.match(el.html, /Someone else changed this guest/); assert.match(el.html, /Contact number/); assert.match(el.html, /value="0999"|0999/);
 });
 
 test('G: Add from text: extract body, review sheet, save body with expected_version and reason; a 207 lists what failed', async () => {
@@ -345,7 +345,7 @@ test('G: Add from text: extract body, review sheet, save body with expected_vers
   await clickA(el, 'save-add'); await tick();
   const sv = cl.fcalls.filter((c) => c[1].action === 'save').pop()[1];
   assert.deepEqual(sv, { action: 'save', guest_id: GID, reason: 'From the chat', expected_version: 4, phone: '09175550000', stay_preferences: 'Allergic to nuts', birthday: '1992-03-04', tags: ['anniversary', 'nuts'], companions: ['Carla Dizon'] });
-  assert.match(el.html, /Companion added\./); assert.match(el.html, /The details was changed by someone else|The details was changed by someone else, reload and try again\./);
+  assert.match(el.html, /Companion added\./); assert.match(el.html, /The details were changed by someone else/);
 });
 
 test('G: Add from text refuses an empty read and a future birthday before calling the function', async () => {
@@ -1234,7 +1234,7 @@ test('G U7: a version conflict while editing locks Save the same way and keeps t
   const cl = detailClient({ rpcs: { list_guest_companions_v1: () => ({ data: COMPS, error: null }), save_guest_profile_v1: () => ({ data: null, error: { code: '40001', message: 'stale version' } }) } });
   const { el } = await mount(cl, GID);
   await clickA(el, 'edit'); el.type('G_f_pref', 'Typed note'); await clickA(el, 'save-edit'); await tick();
-  assert.match(el.html, /Someone changed this guest while you were editing\./); assert.match(el.html, COPYRE); assert.ok(dis(el, 'save-edit')); assert.equal(el.val('G_f_pref'), 'Typed note');
+  assert.match(el.html, /Someone else changed this guest\./); assert.match(el.html, COPYRE); assert.ok(dis(el, 'save-edit')); assert.equal(el.val('G_f_pref'), 'Typed note');
   await clickA(el, 'edit-cancel'); await tick(); assert.equal(nCalls(cl, 'list_guest_companions_v1'), 2); assert.ok(ena(el, 'edit'));
 });
 
@@ -1311,16 +1311,16 @@ test('G U7: a 207 where the details failed returns to review with the failed ite
   const { M, el } = await toReviewWith(cl);
   await clickA(el, 'save-add'); await tick();
   const A = M._state().add; assert.equal(A.step, 'review'); assert.ok(A.sheet); assert.equal(A.images.length, 2); assert.match(el.html, /Check before saving/); assert.match(el.html, /The details did not save\./); assert.match(el.html, /Companion added\./);
-  assert.equal(A.sheet.companions[0].on, false); assert.equal(A.sheet.ids[0].on, false); assert.ok(!M._state().d.stale);
+  assert.equal(A.sheet.companions[0].on, true, 'the server matches names it has, so a resend adds nobody twice'); assert.equal(A.sheet.ids[0].on, false); assert.ok(!M._state().d.stale);
   await clickA(el, 'save-add'); await tick();
-  assert.equal(saves.length, 2); assert.equal(saves[1].companions, undefined, 'the companion that saved is not sent again'); assert.equal(saves[1].ids, undefined, 'nor the ID');
+  assert.equal(saves.length, 2); assert.deepEqual(saves[1].companions, ['Carla Dizon'], 'the companion is sent again; the server matches it by name'); assert.equal(saves[1].ids, undefined, 'the ID that saved is not');
   assert.equal(M._state().add.step, 'done'); assert.deepEqual(plain(M._state().add.images), []); assert.equal(M._state().add.sheet, null, 'a full success clears them');
 });
 
 test('G U7: a 207 where the details failed because someone else changed them locks Save with the Cancel hint', async () => {
   const cl = reviewClient(() => ({ status: 207, j: { ok: false, saved: [{ what: 'profile', ok: false, reason: 'changed' }] } })), { M, el } = await toReviewWith(cl);
   await clickA(el, 'save-add'); await tick();
-  assert.match(el.html, /was changed by someone else/); assert.match(el.html, COPYRE); assert.ok(dis(el, 'save-add')); assert.equal(M._state().add.images.length, 2);
+  assert.match(el.html, /were changed by someone else/); assert.match(el.html, COPYRE); assert.ok(dis(el, 'save-add')); assert.equal(M._state().add.images.length, 2);
 });
 
 test('G U7: Read that fails, or loses its answer, unlocks the page with the text kept, and can be tried again', async () => {
@@ -1436,7 +1436,7 @@ test('G U7: a database refusal that carries a status or a conflict code is a def
     const cl = detailClient({ rpcs: { list_guest_companions_v1: () => ({ data: COMPS, error: null }), save_guest_profile_v1: () => ({ data: null, error }) } });
     const { M, el } = await mount(cl, GID); await clickA(el, 'edit'); el.type('G_f_phone', '0999 1'); await clickA(el, 'save-edit'); await tick();
     assert.equal(!!M._state().d.stale, conflict, error.message + error.code); assert.doesNotMatch(el.html, LOSTRE);
-    if (conflict) assert.match(el.html, /Someone changed this guest/); else assert.ok(ena(el, 'save-edit'));
+    if (conflict) assert.match(el.html, /Someone else changed this guest/); else assert.ok(ena(el, 'save-edit'));
   }
 });
 
@@ -1454,13 +1454,13 @@ test('G U7: a conflict answer from the function reloads at once with the changed
 test('G U7: Add a companion: a conflict reloads; a lost answer where the name was already there, or the re-read fails, keeps the field', async () => {
   const cl = detailClient({ rpcs: { list_guest_companions_v1: () => ({ data: COMPS, error: null }), save_guest_companion_v1: () => ({ data: null, error: { code: '40001', message: 'stale version' } }) } });
   const a = await mount(cl, GID); await clickA(a.el, 'comp-add-open'); a.el.type('G_newc', 'Dino Lim'); await clickA(a.el, 'add-comp'); await tick();
-  assert.equal(nCalls(cl, 'list_guest_companions_v1'), 2, 'reloaded'); assert.match(a.el.html, /Someone changed this guest/); assert.equal(a.M._state().cbusy, '');
+  assert.equal(nCalls(cl, 'list_guest_companions_v1'), 2, 'reloaded'); assert.match(a.el.html, /Someone else changed this guest/); assert.equal(a.M._state().cbusy, '');
   const b = await mount(detailClient({ rpcs: { list_guest_companions_v1: () => ({ data: COMPS, error: null }), save_guest_companion_v1: () => FETCH_ERR } }), GID);
   await clickA(b.el, 'comp-add-open'); b.el.type('G_newc', 'Ben Cruz'); await clickA(b.el, 'add-comp'); await tick();
   assert.equal(b.el.val('G_newc'), 'Ben Cruz', 'the person was there before, so nothing was added'); assert.match(b.el.html, LOSTRE); assert.doesNotMatch(b.el.html, /Ben Cruz was added/);
   let n = 0; const c = await mount(detailClient({ rpcs: { list_guest_companions_v1: () => (n++ === 0 ? { data: COMPS, error: null } : FETCH_ERR), save_guest_companion_v1: () => FETCH_ERR } }), GID);
   await clickA(c.el, 'comp-add-open'); c.el.type('G_newc', 'Dino Lim'); await clickA(c.el, 'add-comp'); await tick();
-  assert.equal(c.el.val('G_newc'), 'Dino Lim', 'a failed re-read does not claim the add'); assert.match(c.el.html, LOSTRE); assert.doesNotMatch(c.el.html, /Dino Lim was added/);
+  assert.match(c.el.html, LOSTRE); assert.doesNotMatch(c.el.html, /Dino Lim was added/, 'a failed re-read does not claim the add'); assert.equal(c.M._state().cbusy, '');
 });
 
 test('G U7: a 207 where every item failed leaves them ticked, so Save can try them again', async () => {
@@ -1487,4 +1487,124 @@ test('G U7: Show more guests is disabled while the next page loads', async () =>
   const [gate, release] = gateOf(); let n = 0; const row = { ...GUEST, guest_profile_details: { id_on_file: false, birthday: null, vip: false }, guest_companions: [] };
   const cl = client({ tables: { guests: () => (n++ === 0 ? { data: [row], count: 40, error: null } : gate.then(() => ({ data: [{ ...row, id: 'g2' }], count: 40, error: null }))) }, rpcs: { staff_guest_stays_v1: () => ({ data: [], error: null }) } });
   const { el } = await mount(cl, ''); assert.ok(ena(el, 'more')); await clickA(el, 'more'); await tick(); assert.ok(dis(el, 'more')); release(); await tick();
+});
+
+// ======================================================================== U8: closing fixes from the U7 review
+const REAL_LOST_RPC = { data: null, error: { message: 'TypeError: Failed to fetch' } }; // the real shape of a dropped answer
+const NEWC = (name) => ({ id: 'n-' + name, guest_id: GID, name, id_type: null, id_number: null, id_photo_path: null });
+
+test('G U8: a lost add whose re-read also fails locks Add until a reload works; a forced tap sends nothing', async () => {
+  let ok = false, reads = 0;
+  const cl = detailClient({ rpcs: { list_guest_companions_v1: () => (reads++ === 0 || ok ? { data: COMPS, error: null } : FETCH_ERR), save_guest_companion_v1: () => FETCH_ERR } });
+  const { M, el } = await mount(cl, GID); await clickA(el, 'comp-add-open'); el.type('G_newc', 'Dino Lim'); await clickA(el, 'add-comp'); await tick();
+  assert.equal(nCalls(cl, 'save_guest_companion_v1'), 1); assert.match(el.html, LOSTRE); assert.equal(M._state().cbusy, '');
+  assert.equal(tagsOf(el, 'data-act', 'add-comp').length, 0, 'no Add button until the page reads again');
+  await clickA(el, 'add-comp'); await clickA(el, 'add-comp'); await tick(); assert.equal(nCalls(cl, 'save_guest_companion_v1'), 1, 'a forced tap sends nothing');
+  ok = true; await clickA(el, 'detail-retry'); await tick(); assert.ok(tagsOf(el, 'data-act', 'comp-add-open').length > 0, 'the page works again after a good reload');
+});
+
+test('G U8: a lost add of a name already on file clears the field when the count went up, and keeps it when it did not', async () => {
+  for (const landed of [true, false]) {
+    let reads = 0;
+    const cl = detailClient({ rpcs: { list_guest_companions_v1: () => ({ data: reads++ === 0 || !landed ? COMPS : [...COMPS, NEWC('Ben Cruz')], error: null }), save_guest_companion_v1: () => REAL_LOST_RPC } });
+    const { M, el } = await mount(cl, GID); await clickA(el, 'comp-add-open'); el.type('G_newc', 'Ben Cruz'); await clickA(el, 'add-comp'); await tick();
+    if (landed) { assert.match(el.html, /Ben Cruz was added\./); assert.equal(M._state().newc, ''); assert.doesNotMatch(el.html, LOSTRE); }
+    else { assert.equal(el.val('G_newc'), 'Ben Cruz'); assert.match(el.html, LOSTRE); assert.doesNotMatch(el.html, /Ben Cruz was added/); }
+  }
+});
+
+const rotGate = () => {
+  const [gate, release] = gateOf(); const st = { sent: [], inflight: 0, max: 0, release };
+  st.cl = rotCl((a) => { st.sent.push(a.p_rotation); st.inflight++; st.max = Math.max(st.max, st.inflight); return gate.then(() => { st.inflight--; return { data: { ok: true, path: a.p_path, rotation: a.p_rotation }, error: null }; }); });
+  return st;
+};
+test('G U8: leaving and coming back while a rotation call is out never starts a second call; the latest value goes out once afterwards', async () => {
+  const st = rotGate(), m = await rotOpen(st.cl);
+  await clickA(m.el, 'full-rot'); await sleep(700); assert.deepEqual(st.sent, [90], 'the first call is out');
+  m.M.unmount(); const el2 = new FakeEl();
+  m.M.mount(el2, { client: st.cl, demo: false, role: 'owner', sub: GID, propertyId: PROP, navigate: () => {}, toast: () => {}, haptic: () => {} }); await tick();
+  await clickA(el2, 'full', { id: CID }); await tick(); await clickA(el2, 'full-rot'); await clickA(el2, 'full-rot'); await sleep(700);
+  assert.deepEqual(st.sent, [90], 'a tap on the new page while the call is out sends nothing yet'); assert.equal(st.max, 1);
+  assert.ok(m.M._state().rot, 'the new page still counts the turn as a write');
+  m.M.unmount(); const el3 = new FakeEl();
+  m.M.mount(el3, { client: st.cl, demo: false, role: 'owner', sub: GID, propertyId: PROP, navigate: () => {}, toast: () => {}, haptic: () => {} }); await tick();
+  await clickA(el3, 'full', { id: CID }); await tick(); await clickA(el3, 'full-rot'); await sleep(700); assert.deepEqual(st.sent, [90], 'still one call out');
+  st.release(); await tick(30); await sleep(20);
+  assert.deepEqual(st.sent, [90, 0], 'only the latest value (a third page turned it to 0) is sent, once, after the answer'); assert.equal(st.max, 1, 'never two in flight'); assert.ok(!m.M._state().rot, 'the lock clears at the end'); assert.match(el3.html, /Saved for everyone/);
+});
+
+test('G U8: Remove person for a companion that is already gone says so and reloads once; a missing guest keeps its own sentence and does not reload', async () => {
+  const run = async (message) => {
+    const cl = detailClient({ rpcs: { list_guest_companions_v1: () => ({ data: COMPS, error: null }), delete_guest_companion_v1: () => ({ data: null, error: { code: 'P0002', message } }) } });
+    const { el } = await mount(cl, GID); await clickA(el, 'remove-comp', { id: CID2 }); await clickA(el, 'remove-comp-yes', { id: CID2 }); await tick(); return { cl, el };
+  };
+  const a = await run('companion not found'); assert.match(a.el.html, /That person is no longer on this guest/); assert.equal(nCalls(a.cl, 'list_guest_companions_v1'), 2, 'one reload'); assert.doesNotMatch(a.el.html, /This guest is no longer on file/);
+  const b = await run('guest not found'); assert.match(b.el.html, /This guest is no longer on file/); assert.equal(nCalls(b.cl, 'list_guest_companions_v1'), 1, 'no reload'); assert.doesNotMatch(b.el.html, /That person is no longer/);
+});
+
+const TWO = { ...PROPOSAL, companions: ['Carla Dizon', 'Dino Lim'], ids: [{ image: 0, name: 'Carla Dizon', id_type: 'passport', own: false }, { image: 1, name: 'Dino Lim', id_type: 'passport', own: false }] };
+test('G U8: a 207 with two companions and two photos, one of each failing: the retry resends both companions and only the photo that failed', async () => {
+  const saves = []; let n = 0;
+  const cl = reviewClient((b) => { saves.push(b); return n++ === 0 ? { status: 207, j: { ok: false, saved: [{ what: 'companion', ok: true }, { what: 'companion', ok: false, reason: 'save_failed' }, { what: 'id_photo', ok: true }, { what: 'id_photo', ok: false, reason: 'upload_failed' }, { what: 'profile', ok: false, reason: 'save_failed' }] } } : { status: 200, j: { ok: true, saved: [{ what: 'profile', ok: true }] } }; }, TWO);
+  const { M, el } = await toReviewWith(cl, [IMG('QUFB'), IMG('REVG')]);
+  await clickA(el, 'save-add'); await tick(); const s = M._state().add.sheet;
+  assert.deepEqual(plain(s.companions.map((c) => c.on)), [true, true], 'companions stay ticked: the server matches names it already has'); assert.deepEqual(plain(s.ids.map((d) => d.on)), [false, true], 'only the photo that saved is unticked');
+  await clickA(el, 'save-add'); await tick();
+  assert.deepEqual(saves[0].ids.map((d) => d.name), ['Carla Dizon', 'Dino Lim']); assert.deepEqual(saves[1].companions, ['Carla Dizon', 'Dino Lim']);
+  assert.equal(saves[1].ids.length, 1); assert.equal(saves[1].ids[0].name, 'Dino Lim'); assert.equal(saves[1].ids[0].image.base64, 'REVG', 'the photo that failed, and no other');
+  assert.equal(M._state().add.step, 'done');
+});
+
+test('G U8: a 207 whose id_photo items do not match the photos sent unticks none, so nothing is lost', async () => {
+  const cl = reviewClient(() => ({ status: 207, j: { ok: false, saved: [{ what: 'id_photo', ok: true }, { what: 'profile', ok: false, reason: 'save_failed' }] } }), TWO), { M, el } = await toReviewWith(cl, [IMG('QUFB'), IMG('REVG')]);
+  await clickA(el, 'save-add'); await tick(); assert.deepEqual(plain(M._state().add.sheet.ids.map((d) => d.on)), [true, true]);
+});
+
+test('G U8: when the profile could not be read there is no Add from text and no Add ID photo, and a forced tap opens nothing', async () => {
+  const bad = () => ({ data: null, error: { message: 'TypeError: Failed to fetch' } });
+  const cl = detailClient({ tables: { guests: { data: GUEST, error: null }, guest_profile_details: bad } }), { M, el } = await mount(cl, GID);
+  assert.equal(tagsOf(el, 'data-act', 'add-open').length, 0); assert.ok(ena(el, 'detail-retry'), 'Try again is offered'); await clickA(el, 'add-open'); assert.equal(M._state().add, null);
+  const c2 = detailClient({ tables: { guests: { data: GUEST, error: null }, guest_profile_details: bad }, rpcs: { list_guest_companions_v1: () => ({ data: [COMPS[1]], error: null }) } }), n2 = await mount(c2, GID);
+  assert.match(n2.el.html, /No ID photo yet/, 'the guest has no ID row, where Add ID photo would be drawn'); assert.equal(tagsOf(n2.el, 'data-act', 'add-open').length, 0, 'and it is not drawn');
+});
+test('G U8: G_saveAdd sends nothing while the profile was not read', async () => {
+  const { M, el } = await toReviewWith(reviewClient(() => ({ status: 200, j: { ok: true, saved: [{ what: 'profile', ok: true }] } }))); const cl = M._state().client; M._state().d.detailsOk = false;
+  await clickA(el, 'save-add'); await tick(); assert.equal(cl.fcalls.filter((c) => c[1].action === 'save').length, 0); assert.equal(M._state().add.step, 'review'); assert.ok(M._state().add.err.length > 0);
+});
+
+test('G U8: a photo replace that saved, with a details conflict, reloads through the stale path and the green box holds only the saved photo', async () => {
+  const cl = detailClient({ fn: (b) => (b.action === 'context' ? CTX : { status: 207, j: { ok: false, saved: [{ what: 'id_photo', ok: true }, { what: 'profile', ok: false, reason: 'changed' }] } }) }), m = await mount(cl, GID), im = withImage(m.win);
+  await m.el.l.change[0](pickEv('replace', CID)); im.fire(); await tick();
+  assert.equal(nFn(cl, 'context'), 2, 'reloaded'); const ok = /<div class="okbox[^>]*>.*?<\/div>/s.exec(m.el.html), er = /<div class="errbox[^>]*>.*?<\/div>/s.exec(m.el.html);
+  assert.ok(ok && /ID photo saved\./.test(ok[0]) && !/changed/.test(ok[0]), 'green box: the photo only'); assert.ok(er && /Someone else changed this guest\./.test(er[0]), 'the conflict is in the red box'); assert.doesNotMatch(m.el.html, COPYRE);
+});
+
+test('G U8: the unsaved count survives a removal whose reload fails, then Try again, while the stay is the same', async () => {
+  for (const same of [true, false]) {
+    let mode = 'ok';
+    const cl = detailClient({ tables: { guests: () => (mode === 'fail' ? { data: null, error: { message: 'TypeError: Failed to fetch' } } : { data: GUEST, error: null }), guest_profile_details: { data: PROFILE, error: null } },
+      rpcs: { list_guest_companions_v1: () => ({ data: COMPS, error: null }), staff_guest_stay_v1: () => ({ data: same || mode === 'ok' ? STAY : { ...STAY, uid: 'stay-uid-2' }, error: null }) },
+      fn: (b) => (b.action === 'context' ? CTX : { status: 200, j: { ok: true, saved: [{ what: 'id_photo_removed', ok: true }, { what: 'profile', ok: true }] } }) });
+    const { el } = await mount(cl, GID); await clickA(el, 'stay-inc'); assert.equal(outN(el), 3);
+    mode = 'fail'; await clickA(el, 'remove-photo', { id: CID }); await clickA(el, 'remove-photo-yes', { id: CID }); await tick(); assert.match(el.html, /could not load/);
+    mode = 'retry'; await clickA(el, 'detail-retry'); await tick();
+    if (same) { assert.equal(outN(el), 3, 'the draft survived the failed reload'); assert.match(el.html, /data-act="stay-save"/); } else assert.equal(outN(el), 2, 'a different stay drops the draft');
+  }
+});
+
+test('G U8: both Add from text pickers carry G_pick, so they dim like the other pickers; the rule changes no layout', async () => {
+  const [gate, release] = gateOf();
+  const cl = detailClient({ fn: (b) => (b.action === 'context' ? CTX : gate.then(() => ({ status: 200, j: { ok: true, proposal: PROPOSAL } }))) }), { el } = await mount(cl, GID);
+  await clickA(el, 'add-open'); const labels = [...el.html.matchAll(/<label class="([^"]*)">[^]*?data-pick="shot"[^>]*>/g)]; assert.equal(labels.length, 2); for (const l of labels) assert.match(l[1], /\bG_pick\b/);
+  el.type('G_text', 'hi'); await clickA(el, 'read'); assert.equal(tagsOf(el, 'data-pick', 'shot').filter((t) => / disabled[ >]/.test(t)).length, 2, 'both are disabled while reading'); release(); await tick();
+  const rule = [...CSS.matchAll(/(^|\n)\.G_pick\s*\{([^}]*)\}/g)].map((m) => m[2]).join(''); assert.doesNotMatch(rule, /width|height|margin|padding|display|flex|grid/);
+});
+
+test('G U8: wording: Someone else changed this guest, The details were changed by someone else, and the Copy hint only with a form open', async () => {
+  const t = load().M._t; assert.equal(t.errText(0, 'changed'), 'Someone else changed this guest.'); assert.equal(t.rpcText({ code: '40001' }), 'Someone else changed this guest.');
+  assert.deepEqual(t.saveLines([{ what: 'profile', ok: false, reason: 'changed' }, { what: 'companion', ok: false, reason: 'denied' }]), ['The details were changed by someone else.', 'The companion was not allowed.']);
+  const a = await mount(detailClient({ rpcs: { list_guest_companions_v1: () => ({ data: COMPS, error: null }), delete_guest_companion_v1: () => ({ data: null, error: { code: '40001', message: 'stale version' } }) } }), GID);
+  await clickA(a.el, 'remove-comp', { id: CID2 }); await clickA(a.el, 'remove-comp-yes', { id: CID2 }); await tick(); assert.match(a.el.html, /Someone else changed this guest\./); assert.doesNotMatch(a.el.html, COPYRE); assert.doesNotMatch(a.el.html, /while you were editing/);
+  const b = await mount(detailClient({ rpcs: { list_guest_companions_v1: () => ({ data: COMPS, error: null }), save_guest_profile_v1: () => ({ data: null, error: { code: '40001', message: 'stale version' } }) } }), GID);
+  await clickA(b.el, 'edit'); b.el.type('G_f_phone', '0999 1'); await clickA(b.el, 'save-edit'); await tick(); assert.match(b.el.html, /Someone else changed this guest\./); assert.match(b.el.html, COPYRE);
 });
