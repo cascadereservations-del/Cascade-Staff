@@ -38,7 +38,7 @@ export async function boot({ activeEl, winInit, tour, tourDelay, role, hash, han
   const registered = [];
   const nav = Object.assign({ userAgent: 'test' }, navExtra || {}); if (serviceWorker !== false) nav.serviceWorker = { register: (u) => { registered.push(u); return Promise.resolve(); } };
   const ctx = { window: win, document: docObj, location, history: { replaceState(a, b, h) { location.hash = h; } }, navigator: nav, localStorage: win.localStorage, matchMedia: win.matchMedia,
-    fetch: () => Promise.resolve({ ok: false }), setTimeout, clearTimeout, console, URL, AbortController, Image: function () {}, Date: FixedDate, Math, JSON, Promise, crypto: { randomUUID: () => 'uuid' } };
+    fetch: () => Promise.resolve({ ok: false }), setTimeout: longTimerUnref, clearTimeout, console, URL, AbortController, Image: function () {}, Date: FixedDate, Math, JSON, Promise, crypto: { randomUUID: () => 'uuid' } };
   if (ctxExtra) Object.assign(ctx, ctxExtra); // s91: photo tests replace Image and URL
   if (tourDelay != null) win.H_TOUR_DELAY = tourDelay;
   if (winInit) winInit(win);
@@ -57,3 +57,6 @@ export const NOTICES_RAW = (extra) => Object.assign({ generated_at: '2026-10-15T
   notices: [{ id: 'n1', type: 'power', title: 'Brownout 1:00 to 4:00 pm', date: '2026-10-16', start_time: '13:00', end_time: '16:00', source: 'socoteco', detail: null }, { id: 'n2', type: 'water', title: 'No water', date: '2026-10-20', start_time: '09:00', end_time: '15:00', source: 'gscwd', detail: 'Pipe repair' }],
   house: [], inbox_open: 0, sources: { water_page: 'https://www.facebook.com/gscwaterdistrict/', power_page: 'https://www.facebook.com/socoteco2.EC/' } }, extra || {});
 export const baseHandlers = (role, over) => Object.assign({ current_staff_access: () => ACCESS(role), staff_home_v1: () => HOMEWITH([]), tasks_list_v1: () => NOTASKS, notices_v1: () => ({ error: null, data: NOTICES_RAW({ role }) }) }, over || {});
+
+// s120R10: the app's 5 minute auto-close timers (A_autoClose) kept the process alive after the tests passed; a timer of a minute or more no longer holds it open.
+function longTimerUnref(fn, ms, ...a) { const t = setTimeout(fn, ms, ...a); if (ms >= 60000 && t && t.unref) t.unref(); return t; }

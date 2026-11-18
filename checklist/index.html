@@ -2580,6 +2580,15 @@ body.mode-quick .detail-text { display: none; }
   border: 1.5px solid var(--border);
 }
 
+/* s120R10: a button that cannot be tapped looks muted (not the primary colour at low opacity), keeps its text readable and shows no pointer */
+.modal-btn:disabled, .modal-actions .modal-btn:disabled {
+  background: var(--surface-raised);
+  color: var(--text-secondary);
+  border: 1.5px dashed var(--border);
+  opacity: 1;
+  cursor: default;
+}
+
 /* ═══════════════════════════════════════════════════════════════
    SUCCESS SCREEN
 ═══════════════════════════════════════════════════════════════ */
@@ -6532,10 +6541,10 @@ function goToPhase(newPhase, skipGate = false) {
   updateStepper();
   updateBottomBar();
   if (typeof refreshCheckAllButtons === 'function') refreshCheckAllButtons();
-  ls(PHASE_KEY, String(newPhase));
+  if (!_draftHold) ls(PHASE_KEY, String(newPhase));            // s120R10: a Resume still restoring writes nothing, here or on the server; resumeDraft does both once it has succeeded
   saveDraft();
   K_headerPhoto(newPhase);
-  K_reportProgress(newPhase);                                  // shell hand-off; never awaited, never blocks
+  if (!_draftHold) K_reportProgress(newPhase);                 // shell hand-off; never awaited, never blocks
   if (!skipGate && going_forward) K_phaseDone(PHASE_LABELS[oldPhase]);
 }
 
@@ -7821,8 +7830,8 @@ function openPhotoDB() {
       const req = indexedDB.open(PHOTO_DB_NAME, 1);
       req.onupgradeneeded = () => { req.result.createObjectStore(PHOTO_STORE); };
       req.onsuccess = () => resolve(req.result);
-      req.onerror = () => resolve(null);
-    } catch { resolve(null); }
+      req.onerror = () => { _photoDbPromise = null; resolve(null); };   // s120R10: a failed open is not remembered, the next call tries again
+    } catch { _photoDbPromise = null; resolve(null); }
   });
   return _photoDbPromise;
 }
@@ -7849,15 +7858,35 @@ async function idbGetPhoto(id) {
   });
 }
 
-async function idbDeletePhoto(id) {
+/* s120R10: for Resume only. idbGetPhoto turns a storage error into "no blob"; this one rejects on a failed open or read, and resolves null only when the read worked and the blob is not there. */
+async function idbReadPhoto(id) {
   const db = await openPhotoDB();
-  if (!db) return;
-  await new Promise(resolve => {
-    const tx = db.transaction(PHOTO_STORE, 'readwrite');
-    tx.objectStore(PHOTO_STORE).delete(id);
-    tx.oncomplete = () => resolve();
-    tx.onerror = () => resolve();
+  if (!db) throw new Error('photo storage is not available');
+  return new Promise((resolve, reject) => {
+    try {
+      const tx = db.transaction(PHOTO_STORE, 'readonly');
+      const req = tx.objectStore(PHOTO_STORE).get(id);
+      req.onsuccess = () => resolve(req.result || null);
+      req.onerror = () => reject(req.error || new Error('photo read failed'));
+      tx.onabort = () => reject(tx.error || new Error('photo read aborted'));
+    } catch (e) { reject(e); }
   });
+}
+
+/* s120R10: never rejects and never hangs. Resolves true when the blob is gone, false when it is not (a failed delete only leaves a blob behind). */
+async function idbDeletePhoto(id) {
+  try {
+    const db = await openPhotoDB();
+    if (!db) return false;
+    return await new Promise(resolve => {
+      try {
+        const tx = db.transaction(PHOTO_STORE, 'readwrite');
+        tx.objectStore(PHOTO_STORE).delete(id);
+        tx.oncomplete = () => resolve(true);
+        tx.onerror = tx.onabort = () => resolve(false);
+      } catch { resolve(false); }
+    });
+  } catch { return false; }
 }
 
 async function resolvePhotoDataUrl(photo) {
@@ -7967,7 +7996,24 @@ async function uploadPhotoRecord(photo, slotKey, onStatus) {
   // s120R9: the stored draft must hold the URL before the blob goes. Save first; delete only if the save stuck. If it did not, the blob stays and the next save stores both.
   let stored = false;
   try { stored = saveDraft() === true; } catch (e) { console.error('save failed', e); }
-  if (spent) { if (stored) await idbDeletePhoto(spent); else photo.idbId = spent; }
+  // s120R10: a blob that could not be deleted keeps its id in the stored draft too (clearDraft and the sweep after the next save still find it).
+  if (spent) {
+    if (!stored || !(await idbDeletePhoto(spent))) { photo.idbId = spent; if (stored) { try { saveDraft(); } catch (e) { console.error('save failed', e); } } }
+  }
+}
+
+/* s120R10: after a save that stuck, try again to delete the blob of any uploaded photo that still names one. */
+let _blobSweeping = false;
+async function S120R_sweepBlobs() {
+  if (_blobSweeping) return;
+  const left = [...(state.meterPhotos || []), ...['preclean', 'bedroom', 'kitchen', 'afterclean'].flatMap(k => state[`${k}Photos`] || [])].filter(p => p && p.uploaded && p.idbId);
+  if (!left.length) return;
+  _blobSweeping = true;
+  try {
+    let gone = false;
+    for (const p of left) { const id = p.idbId; if (id && await idbDeletePhoto(id)) { if (p.idbId === id) p.idbId = null; gone = true; } }
+    if (gone) saveDraft();
+  } finally { _blobSweeping = false; }
 }
 
 // Draft snapshot for one photo record — never base64/blob, just enough to
@@ -7992,7 +8038,7 @@ async function restorePhotoFromMeta(meta) {
     // _blob only ever lived in memory, so a page reload always loses it —
     // idbId is the only thing that can survive to be restored from.
     if (meta.idbId) {
-      const blob = await idbGetPhoto(meta.idbId);
+      const blob = await idbReadPhoto(meta.idbId);   // s120R10: a storage error rejects (Resume fails, nothing is touched); only a confirmed absent blob marks the photo failed
       if (blob) { photo.idbId = meta.idbId; photo.objectUrl = URL.createObjectURL(blob); }
       else photo.status = 'failed'; // the blob didn't survive — nothing left to retry from
     } else {
@@ -9791,6 +9837,7 @@ function saveDraft() {
 
   const stored = lsJSON(DRAFT_KEY, draft) === true;
   flashAutosave();
+  if (stored) S120R_sweepBlobs().catch(() => {});   // s120R10: a blob that could not be deleted earlier is tried again after a save that stuck
   return stored;
 }
 
@@ -9924,11 +9971,12 @@ const S120R_BOOT_FAIL = 'This page did not finish loading. Reload it before you 
 const S120R_RESUME_LIMIT = 20000;
 const S120R_CARRY_KEY = 'ch_s120_carry';
 function S120R_setInert(on) {
-  Array.from(document.querySelectorAll('body > *')).forEach(n => { if (n.id !== 'draft-modal' && n.id !== 'toast-area' && n.tagName !== 'SCRIPT') n.inert = on; });
+  Array.from(document.querySelectorAll('body > *')).forEach(n => { if (n.id !== 'draft-modal' && n.tagName !== 'SCRIPT') n.inert = on; });
 }
 /* ask = the question; wait = restoring (buttons off); fail = could not restore (Try again or Start fresh) */
 function S120R_draftView(view) {
   const set = (id, fn) => { const n = el(id); if (n) fn(n); };
+  setTimeout(() => { if (view === 'wait') return; const m = document.getElementById('draft-modal'); const b = m && m.classList.contains('open') && Array.from(m.querySelectorAll('.modal-actions button')).find(n => !n.hidden && !n.disabled); if (b) b.focus(); }, 0);   // first enabled button: the question, then the failure view
   const note = view === 'wait' ? 'Restoring your saved work...' : view === 'fail' ? 'Your saved work could not be restored. It is still safe on this phone.' : '';
   set('draft-modal-body', n => { n.hidden = view !== 'ask'; });
   set('draft-modal-note', n => { n.hidden = view === 'ask'; n.textContent = note; });
@@ -9949,6 +9997,7 @@ async function resumeDraft(draft) {
     S120R_setInert(false);
     el('draft-modal')?.classList.remove('open');
     saveDraft();   // the restored state, photo records included, is stored once
+    if (state.phase > 0) { ls(PHASE_KEY, String(state.phase)); K_reportProgress(state.phase); }   // the restored phase, reported once, now that the Resume has succeeded
     showToast('Session resumed', 'success');
   });
 }
@@ -9974,8 +10023,22 @@ function carryOverSends(draft) {
 /* Start fresh after a Resume was tried: the page is half restored, so it starts again clean. The sends that still count wait in the carry key; the next boot puts them back. */
 function S120R_freshAfterFailedResume(draft) {
   const keep = S120R_liveSend(draft.restock) || S120R_liveSend(draft.linen);
-  ls(S120R_CARRY_KEY, keep ? JSON.stringify({ restock: draft.restock || null, linen: draft.linen || null, supplyLogSaved: !!draft.supplyLogSaved }) : null);
-  clearDraft();
+  const carry = keep ? JSON.stringify({ restock: draft.restock || null, linen: draft.linen || null, supplyLogSaved: !!draft.supplyLogSaved }) : null;
+  // s120R10: with storage full the carry key may not fit beside the old draft. Hold it in memory, clear the draft, write the key, and only reload when it stuck.
+  const raw = localStorage.getItem(DRAFT_KEY), stale = lsJSON(DRAFT_KEY);
+  let stuck = true;
+  try {
+    localStorage.removeItem(DRAFT_KEY);
+    if (carry) { localStorage.setItem(S120R_CARRY_KEY, carry); stuck = localStorage.getItem(S120R_CARRY_KEY) === carry; } else localStorage.removeItem(S120R_CARRY_KEY);
+  } catch { stuck = false; }
+  if (!stuck) {   // nothing is lost: the draft goes back and the cleaner is told
+    try { if (raw) localStorage.setItem(DRAFT_KEY, raw); } catch { /* it was there a moment ago */ }
+    console.error('the carried sends could not be stored');
+    S120R_draftView('fail');
+    const n = el('draft-modal-note'); if (n) n.textContent = 'There is not enough space on this phone to start fresh. Your saved work is still safe.';
+    return;
+  }
+  clearDraft(stale);   // the draft key is already gone; this sweeps its photo blobs
   location.reload();
 }
 function S120R_startFresh(draft) {
@@ -9990,12 +10053,11 @@ function S120R_startFresh(draft) {
   } finally { releaseHold(() => { if (kept) saveDraft(); }); }   // the hold is cleared on every path
 }
 
-function clearDraft() {
+function clearDraft(stale = lsJSON(DRAFT_KEY)) {
   // A discarded draft ("Start fresh") or one whose unfinished photos got
   // silently dropped from a submission can still reference IndexedDB blobs
   // (WP2). Sweep every group's idbId before the draft itself disappears —
   // otherwise those rows never get deleted.
-  const stale = lsJSON(DRAFT_KEY);
   if (stale) {
     ['meterPhotoMeta', 'precleanPhotoMeta', 'bedroomPhotoMeta', 'kitchenPhotoMeta', 'aftercleanPhotoMeta'].forEach(field => {
       (stale[field] || []).forEach(meta => { if (meta?.idbId) idbDeletePhoto(meta.idbId); });
@@ -10211,10 +10273,9 @@ async function runPreSubmitFlush(fromTap) {
   let done = 0;
   await Promise.all(pending.map(({ key, idx, photo }) => new Promise(resolve => {
     enqueuePhotoUpload(async () => {
-      await uploadPhotoRecord(photo, `${key}_${idx}`, null);
-      done++;
-      updateFlushOverlay(done, pending.length);
-      resolve();
+      try { await uploadPhotoRecord(photo, `${key}_${idx}`, null); }
+      catch (e) { console.error('photo flush failed', e); }   // s120R10: one photo never keeps the overlay up; the report goes with what is uploaded
+      finally { done++; updateFlushOverlay(done, pending.length); resolve(); }
     });
   })));
 
@@ -12585,6 +12646,9 @@ async function init() {
   // Check for saved draft — LAST so all DOM is ready
   checkAndShowDraftModal();
 }
+
+/* s120R10: a test opens the page with window.__s120Test set before it loads; nothing else ever does, so a cleaner's page exposes nothing. */
+if (window.__s120Test) window.__s120 = { get state() { return state; }, saveDraft, runPreSubmitFlush, S120R_flushAll, S120R_resumePreSubmit };
 
 /* ═══════════════════════════════════════════════════════════════
    BOOT

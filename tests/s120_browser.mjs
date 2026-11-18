@@ -46,6 +46,13 @@ export async function browser() {
   })();
   return shared;
 }
+/* The browser tests run, or they fail: a missing Playwright or Chromium is a red test, never a silent skip. S120_ALLOW_NO_BROWSER=1 turns that into a skip (a machine that cannot have one). */
+export async function browserSuite(test, assert) {
+  const have = await browser();
+  const allowed = process.env.S120_ALLOW_NO_BROWSER === '1';
+  if (!have && !allowed) test('a real browser is available for the browser tests', () => assert.fail('Playwright or a Chromium was not found. Set PW_CORE and PW_CHROME, or set S120_ALLOW_NO_BROWSER=1 to skip these tests.'));
+  return (name, fn) => test(name, { skip: have ? false : 'Playwright or a Chromium was not found (S120_ALLOW_NO_BROWSER=1)', timeout: 90000 }, fn);
+}
 export async function closeBrowser() {
   if (!shared) return;
   const s = await shared; shared = null;
@@ -78,16 +85,31 @@ export async function openPage({ draft, blobs = [], viewport = { width: 375, hei
     try { if (!localStorage.getItem('ch_staff_session_v1')) localStorage.setItem('ch_staff_session_v1', JSON.stringify(session)); } catch { /* ignore */ }
     if (draft) { try { if (!localStorage.getItem('__seeded')) { localStorage.setItem('ch_draft_v6', draft); localStorage.setItem('__seeded', '1'); } } catch { /* ignore */ } }
     // every blob delete and every draft write goes on one list, in order, so a test can say which came first
-    window.__ops = [];
+    window.__s120Test = true;   // makes the page expose its state and a few functions as window.__s120 (see the end of checklist/index.html)
+    window.__ops = []; window.__drafts = []; window.__atSend = [];
     const del = IDBObjectStore.prototype.delete;
-    IDBObjectStore.prototype.delete = function (k) { window.__ops.push('delete:' + k); return del.call(this, k); };
+    IDBObjectStore.prototype.delete = function (k) {
+      window.__ops.push('delete:' + k);
+      if (window.__failDelete === 'abort') { this.transaction.abort(); return undefined; }   // the transaction aborts: no complete, no error event on the request
+      return del.call(this, k);
+    };
+    const txn = IDBDatabase.prototype.transaction;
+    IDBDatabase.prototype.transaction = function (store, mode) { if (window.__failDelete === 'throw' && mode === 'readwrite') throw new DOMException('transaction failed', 'InvalidStateError'); return txn.apply(this, arguments); };
     const set = Storage.prototype.setItem;
     Storage.prototype.setItem = function (k, v) { if (k === 'ch_draft_v6' && window.__failSave) throw new DOMException('full', 'QuotaExceededError');
-      if (k === 'ch_draft_v6') window.__ops.push('draft:' + (String(v).match(/"url":"https:[^"]*"/g) || []).length); return set.call(this, k, v); };
-    // test switches: __gate holds every blob read until it settles; __failRestore makes a restored photo throw; __failSave makes every draft write fail; __bootBreak makes the page's first form step throw
+      // storage full: the carry key fits only once the old draft is gone ('until-cleared'), or never ('always')
+      if (k === 'ch_s120_carry' && (window.__fullCarry === 'always' || (window.__fullCarry === 'until-cleared' && localStorage.getItem('ch_draft_v6') !== null))) throw new DOMException('full', 'QuotaExceededError');
+      if (k === 'ch_draft_v6') { window.__drafts.push(String(v)); window.__ops.push('draft:' + (String(v).match(/"url":"https:[^"]*"/g) || []).length); } return set.call(this, k, v); };
+    // what the stored draft held at the moment each upload or send request left the page
+    const ofetch = window.fetch;
+    window.fetch = function (u) { try { const url = String((u && u.url) || u); if (url.includes('/rpc/record_') || url.includes('/upload-photo')) { window.__atSend.push({ url, draft: localStorage.getItem('ch_draft_v6') }); window.__ops.push('req:' + url.split('/').pop()); } } catch (e) { /* ignore */ } return ofetch.apply(this, arguments); };
+    const iopen = IDBFactory.prototype.open;
+    IDBFactory.prototype.open = function () { if (!window.__failOpen) return iopen.apply(this, arguments); const req = {}; setTimeout(() => { if (req.onerror) req.onerror({ target: req }); }, 0); return req; };
+    // test switches: __failOpen / __failGet make the blob store fail to open / read; __failDelete = 'throw' | 'abort' makes a blob delete fail; __fullCarry = 'until-cleared' | 'always' makes the carry key not fit; __gate holds every blob read until it settles; __failRestore makes a restored photo throw; __failSave makes every draft write fail; __bootBreak makes the page's first form step throw
     const get = IDBObjectStore.prototype.get;
     IDBObjectStore.prototype.get = function (k) {
       const req = get.call(this, k);
+      if (window.__failGet) return { get result() { return undefined; }, get error() { return null; }, set onsuccess(fn) { /* never */ }, set onerror(fn) { setTimeout(() => fn({ target: this }), 0); } };
       if (!window.__gate) return req;
       const gate = window.__gate;
       return { get result() { return req.result; }, set onsuccess(fn) { req.onsuccess = () => gate.then(() => fn({ target: req })); }, set onerror(fn) { req.onerror = fn; } };

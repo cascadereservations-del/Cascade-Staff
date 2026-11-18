@@ -3,10 +3,9 @@
 // The draft, the session and the server are made up here; the page never reaches a real server. Without Playwright and a Chromium the file skips and says so.
 import test, { after } from 'node:test';
 import assert from 'node:assert/strict';
-import { browser, closeBrowser, openPage, draftOf, MANILA_TODAY } from './s120_browser.mjs';
+import { browserSuite, closeBrowser, openPage, draftOf, MANILA_TODAY } from './s120_browser.mjs';
 
-const have = await browser();
-const t0 = (name, fn) => test(name, { skip: have ? false : 'Playwright or a Chromium was not found (set PW_CORE and PW_CHROME)', timeout: 90000 }, fn);
+const t0 = await browserSuite(test, assert);   // no Chromium = a failing test, unless S120_ALLOW_NO_BROWSER=1
 after(async () => { await closeBrowser(); });
 
 const FAIL = 'Your saved work could not be restored. It is still safe on this phone.';
@@ -161,7 +160,7 @@ t0('R9 item 2-3: a Restock waiting during a slow Resume is not sent until the ho
     await t.page.waitForFunction(() => !document.getElementById('draft-modal').classList.contains('open'), null, { timeout: 15000 });
     await t.page.waitForTimeout(1500);
     assert.equal(posts(t, '/rpc/record_inventory_usage').length, 1, 'one send after the release');
-    assert.ok((await toasts(t)).includes('Session resumed') || true);
+    assert.ok((await toasts(t)).includes('Session resumed'), 'the cleaner is told the session is back');
   } finally { await t.close(); }
 });
 
@@ -310,16 +309,20 @@ for (const width of [320, 375]) {
 
 /* ---- a draft written by the live page (c5350f1) still restores, and nothing is lost or re-sent ---- */
 t0('R9 regression: a draft written by the live page c5350f1 restores with nothing lost and nothing re-sent', async () => {
-  // c5350f1 kept no sendStartedAt and no hold; sent answers carried only their flags
-  const old = draftOf({ supplyLogSaved: true, restock: restockOf({ sent: true, waiting: false, sendStartedAt: undefined }), linen: linenOf({ sent: true, waiting: false, sendStartedAt: undefined }), confirmItems: { check_2_4: 'confirmed' } });
+  // exactly what c5350f1 writes: supplyLogSaved and supplySaved (the s99g record), and no restock or linen key at all (checked against `git show c5350f1:checklist/index.html`, saveDraft)
+  const old = draftOf({ supplyLogSaved: true, supplySaved: { sid: 'sub-test-1', rows: { id0: 2 } }, confirmItems: { check_2_4: 'confirmed' } });
+  delete old.restock; delete old.linen;
+  assert.equal('restock' in old || 'linen' in old, false, 'the fixture has neither key');
   const t = await open({ draft: old, blobs: BLOBS });
   try {
     await t.page.click('#btn-draft-resume');
     await t.page.waitForFunction(() => !document.getElementById('draft-modal').classList.contains('open'), null, { timeout: 15000 });
     await t.page.waitForTimeout(1500);
     const d = parse(await t.stored());
-    assert.equal(d.restock.key, 'rk-test'); assert.equal(d.restock.sent, true);
-    assert.equal(d.linen.key, 'lk-test'); assert.equal(d.linen.sent, true);
+    // the s99g record means the old sheet already sent it: the Restock is saved, sent and legacy, with no key, so it is never sent again; the old "no stains" tick becomes the linen answer
+    assert.deepEqual([d.restock.saved, d.restock.sent, d.restock.legacy, d.restock.key], [true, true, true, null], 'a legacy Restock is final');
+    assert.equal(d.linen.answer, 'none', 'the old linen tick is kept as "no stains"');
+    assert.equal(d.supplyLogSaved, true);
     assert.equal(photoUrls(d).length, photoUrls(old).length, 'every photo record is kept');
     assert.equal(d.submissionId, 'sub-test-1');
     assert.equal(sends(t).length, 0, 'nothing already sent goes out again');

@@ -47,6 +47,7 @@ function world({ online = false } = {}) {
     + block + NL + fns + NL
     + 'const DRAFT_KEY = "ch_draft_v6", DRAFT_VERSION = 5, PHASE_COUNT = 7;\n'
     + 'let _susItems = [], _susLoaded = false;\n'
+    + 'const PHASE_KEY = "ch_phase", K_reportProgress = () => {};\n'
     + 'const ls = (k, v) => { if (v === null) delete w.store[k]; else w.store[k] = v; }, startElapsedTimer = () => {};\n'
     + 'const fetchWithRetry = (u, o) => fetch(u, o);\n'
     + 'const lsJSON = (k, v) => { if (v === undefined) return w.store[k] ? JSON.parse(w.store[k]) : null; w.store[k] = JSON.stringify(v); if (k === "ch_draft_v6") w.saves.push(JSON.parse(w.store[k])); };\n'

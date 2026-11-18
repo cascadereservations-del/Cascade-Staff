@@ -75,6 +75,7 @@ function world({ online = true } = {}) {
     + 'const DRAFT_KEY = "ch_draft_v6", DWELL_KEY = "ch_dwell", DRAFT_VERSION = 5, PHASE_COUNT = 7, SUBMITTED_IDS_KEY = "ids";\n'
     + 'let _susItems = [], _susLoaded = false, _draftRestoring = false;\n'
     + 'const fetchWithRetry = (u, o) => fetch(u, o);\n'
+    + 'const PHASE_KEY = "ch_phase", K_reportProgress = () => {};\n'
     + 'const ls = (k, v) => { if (v === null) delete w.store[k]; else w.store[k] = v; }, idbDeletePhoto = () => {}, startElapsedTimer = () => {};\n'
     + 'const lsJSON = (k, v) => { if (v === undefined) return w.store[k] ? JSON.parse(w.store[k]) : null; if (w.lsThrow) throw new Error("storage full"); w.store[k] = JSON.stringify(v); if (k === "ch_draft_v6") w.saves.push(w.store[k]); };\n'
     + 'const K_migrateDraft = d => d, ARRIVE_ITEMS = [], CHEMICAL_ITEMS = [], BEDROOM_ITEMS = [], KITCHEN_ITEMS = [], FINAL_CLEANING_ITEMS = [], K_KILLER_ITEMS = [], K_PHASE_FROM_V1 = {};\n'

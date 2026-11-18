@@ -7,4 +7,4 @@ const cut = (html, from, to) => {
   return html.slice(i, j);
 };
 export const holdSnippet = html => cut(html, 'let _draftHold = false;', 'function enqueuePhotoUpload(');
-export const resumeSnippet = html => cut(html, 'const S120R_BOOT_FAIL', 'function clearDraft() {');
+export const resumeSnippet = html => cut(html, 'const S120R_BOOT_FAIL', 'function clearDraft(');
