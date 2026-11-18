@@ -405,6 +405,8 @@ for (const scheme of ['light', 'dark']) {
       await slow(t);
       await t.page.click('#btn-draft-resume');
       await t.page.waitForFunction(() => document.getElementById('btn-draft-resume').disabled);
+      // Under load the colours are read mid-transition otherwise; the settled colours are what the cleaner sees.
+      await t.page.evaluate(() => Promise.allSettled(document.getAnimations().map(a => a.finished)));
       const off = await live('btn-draft-resume'), offFresh = await live('btn-draft-fresh');
       for (const b of [off, offFresh]) {
         assert.equal(b.disabled, true);
