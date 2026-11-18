@@ -261,7 +261,7 @@ test('F2/F3/F1b: partial save repaints head and copy; a later offline failure sa
 });
 
 test('F1: resetApp clears the skip reason, hides the skip row and drops its used class', () => {
-  const reset = cut('function resetApp()', '  _susChanging');
+  const reset = cut('function resetApp()', '  state.linen            = S120R_newLinen();');
   assert.match(reset, /el\('meter-skip-why'\)[\s\S]*value = ''/);
   assert.match(reset, /skipRow\.hidden = true; skipRow\.classList\.remove\('used'\)/);
 });
