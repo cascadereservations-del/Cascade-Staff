@@ -42,6 +42,16 @@ test('display name: display_name, then name, then the e-mail local part', () => 
   assert.equal(CS.greetingName({ user_metadata: { display_name: '   ' } }), '');
   assert.equal(CS.greetingName({ email: 'honey@staff.cascade.invalid', user_metadata: { display_name: 'Honey' } }), 'Honey');
 });
+test('greetingName keeps a kinship title with the name (no-break space)', () => {
+  assert.equal(CS.greetingName({ user_metadata: { display_name: 'Mama Saning' } }), 'Mama\u00A0Saning');
+  assert.equal(CS.greetingName({ user_metadata: { display_name: 'mama saning' } }), 'mama\u00A0saning');
+  assert.equal(CS.greetingName({ user_metadata: { display_name: '  Lola  Nena  Cruz ' } }), 'Lola\u00A0Nena');
+  assert.equal(CS.greetingName({ user_metadata: { display_name: 'Mama' } }), 'Mama');
+  assert.equal(CS.greetingName({ user_metadata: { display_name: 'Demo User' } }), 'Demo');
+  assert.equal(CS.greetingName({ user_metadata: { display_name: 'Tita Ann' } }), 'Tita\u00A0Ann');
+  assert.equal(CS.greetingName({}), '');
+  assert.equal(CS.greetingName(undefined), '');
+});
 
 test('assertNoMoney refuses money and contact keys at any depth, and passes the real payload shape', () => {
   for (const k of ['amount', 'total_amount', 'deposit', 'guest_phone', 'email', 'priceTotal', 'fee', 'fees', 'payout', 'phone_e164']) {
