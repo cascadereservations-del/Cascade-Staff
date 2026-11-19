@@ -70,7 +70,7 @@ test('s116 Turnover today tag: every role, only when a checkout is today; the Tu
   for (const role of ['owner', 'cleaner']) assert.doesNotMatch(await homeHtml(role, { current_guest: GUEST() }), /A_turntag|A_turnnow/, role);
 });
 
-test('s116 the demo carries a guest whose ID photo name differs; release is 3.4.37 / cs-shell-v62', () => {
+test('s116 the demo carries a guest whose ID photo name differs; release is 3.4.38 / cs-shell-v63', () => {
   assert.match(read('demo.js'), /id_photo_name: 'Demo Companion One'/);
-  assert.equal(JSON.parse(read('package.json')).version, '3.4.37'); assert.match(read('app.js'), /version: '3.4.37'/); assert.match(read('sw.js'), /CACHE_NAME = 'cs-shell-v62'/); assert.match(read('app.js'), /var PC_SHELL = 'cs-shell-v62';/);
+  assert.equal(JSON.parse(read('package.json')).version, '3.4.38'); assert.match(read('app.js'), /version: '3.4.38'/); assert.match(read('sw.js'), /CACHE_NAME = 'cs-shell-v63'/); assert.match(read('app.js'), /var PC_SHELL = 'cs-shell-v63';/);
 });

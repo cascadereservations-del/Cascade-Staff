@@ -92,3 +92,12 @@ test('I_running-low Back from the confirm returns to the card', async () => {
   const e = await make('cleaner'); await e.mount(''); await e.open('i1'); await e.begin('low'); await e.act('back');
   assert.match(e.sheet(), /data-kind="low"/);
 });
+
+test('I_running-low an item that is out says out, not running low, in the confirm and the toast (s124)', async () => {
+  const e = await make('cleaner'); await e.mount(''); await e.open('i2'); await e.begin('low'); // Hand soap qty 0
+  assert.match(e.sheet(), /Tell the owner Hand soap is out\?/);
+  await e.submit();
+  assert.match(e.undo(), /Hand soap flagged as out/); assert.doesNotMatch(e.undo(), /running low/);
+  const o = await make('owner'); await o.mount(''); await o.open('i2'); await o.begin('low'); await o.submit();
+  assert.match(o.undo(), /Hand soap flagged as out/);
+});

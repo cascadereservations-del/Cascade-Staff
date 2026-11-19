@@ -994,7 +994,7 @@
     if (a.kind === 'photo' || a.kind === 'photoremove') return renderPhoto(a, it);
     if (a.kind === 'optusual') return renderOptUsual(a, it);
     if (a.kind === 'unlink') return head('Unlink code ' + shortCode(a.code) + ' from ' + it.name + '?') + '<form data-i-form><p class="I_conf">Scanning this code will no longer open ' + esc(it.name) + '.</p>' + actions(a, 'Yes, unlink it') + '</form>';
-    if (a.kind === 'low') return head(canManage(M.role) ? 'Add ' + it.name + ' to the shopping list?' : 'Tell the owner ' + it.name + ' is running low?') + '<form data-i-form><p class="I_conf">It goes on the shopping list for ' + esc(uq(lowQty(it), it.purchaseUnit || unitOf(it))) + '.</p>' + actions(a, canManage(M.role) ? 'Yes, add it' : 'Yes, tell them') + '</form>';
+    if (a.kind === 'low') return head(canManage(M.role) ? 'Add ' + it.name + ' to the shopping list?' : 'Tell the owner ' + it.name + (level(it) === 'out' ? ' is out?' : ' is running low?')) + '<form data-i-form><p class="I_conf">It goes on the shopping list for ' + esc(uq(lowQty(it), it.purchaseUnit || unitOf(it))) + '.</p>' + actions(a, canManage(M.role) ? 'Yes, add it' : 'Yes, tell them') + '</form>';
     if (a.kind === 'link') return head('Link code ' + shortCode(a.code) + ' to ' + it.name + '?') + '<form data-i-form><p class="I_conf">Scanning this code will open ' + esc(it.name) + '.</p>' + actions(a, 'Yes, link it') + '</form>';
     if (a.kind === 'menu') {
       var info = M.itemInfo[it.id], shopRows = (K.shop || []).filter(function (r) { return r.itemId === it.id; }), cover = it.cover != null ? fmt(it.cover) + ' days' : it.coverEst != null ? 'about ' + fmt(it.coverEst) + ' days (an estimate)' : '', lasts = it.cover != null ? fmt(it.cover) : it.coverEst != null ? fmt(it.coverEst) : null;
@@ -1944,7 +1944,7 @@
       var cnm = String(v.name || '').trim(); e.itemId = d.item_id; e.name = cnm; e.say = 'Added ' + cnm; e.line = 'added this item'; e.confirm = 'Remove ' + cnm + ' again?'; e.call = { fn: 'inventory_item_update_v1', args: { p_item_id: d.item_id, p_patch: { active: false } } };
       if (a.code) { e.confirm = 'Remove ' + cnm + ' and free code ' + shortCode(a.code) + '?'; e.next = e.call; e.call = { fn: 'inventory_code_detach_v1', args: { p_property_id: M.pid, p_code: a.code } }; } // the code goes first, so it is free to use again
     } else if ((a.kind === 'shop' || a.kind === 'low') && d.id) {
-      e.say = a.kind === 'low' ? n + ' flagged as running low' : 'Added ' + n + ' to the shopping list'; e.line = a.kind === 'low' ? 'said it is running low' : 'added it to the shopping list'; e.confirm = 'Take ' + n + ' off the shopping list?';
+      var gone = level(it) === 'out'; e.say = a.kind === 'low' ? n + (gone ? ' flagged as out' : ' flagged as running low') : 'Added ' + n + ' to the shopping list'; e.line = a.kind === 'low' ? (gone ? 'said it is out' : 'said it is running low') : 'added it to the shopping list'; e.confirm = 'Take ' + n + ' off the shopping list?';
       e.call = { fn: 'save_shopping_item_v1', args: { p_property_id: M.pid, p_item: { id: d.id, status: 'cancelled' }, p_idempotency_key: newKey('undo') } };
     } else if (a.kind === 'levels' && snap) {
       var up = { reorder_below: snap.reorder == null ? null : snap.reorder, par_qty: snap.par == null ? null : snap.par }, was = levelsCall(it, v).args.p_patch, more = false;
