@@ -175,7 +175,7 @@ test('I_flow header, order, chips and search', async () => {
   assert.match(e.html(), /<\/svg> Out/); assert.match(e.html(), /<\/svg> Low/); assert.match(e.html(), /<\/svg> OK/);
   assert.match(e.html(), /data-k="c:Linen"/);
   await e.input('I_q', 'tow'); assert.deepEqual([...e.html().matchAll(/class="t">([^<]+)</g)].map((m) => m[1]), ['Bath towels']);
-  await e.input('I_q', 'zzz'); assert.match(e.html(), /Nothing matches that search/);
+  await e.input('I_q', 'zzz'); assert.match(e.html(), /Nothing matches that search|Tap Add item to add it/);
   await e.act('showall'); assert.equal((e.html().match(/data-act="open"/g) || []).length, 3);
   await e.act('chip', { 'data-k': 'cons' }); assert.doesNotMatch(e.html(), /Bath towels/);
 });

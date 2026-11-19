@@ -50,7 +50,7 @@ test('I_categorise a new item defaults to Let Cassy choose: created as Uncategor
   const e = await make('owner', { fn: { 'inventory-categorise': () => ({ data: { ok: true, remaining: 0, results: [{ item_id: 'new-1', name: 'Mop', before: 'Uncategorised', after: 'Cleaning', confidence: 0.9 }] }, error: null }) } });
   await e.mount(''); await e.act('scan'); await e.input('I_f_code', '555'); await e.submit(); await e.act('scan-new');
   assert.match(e.sheet(), /<option value="__cassy" selected>Let Cassy choose/);
-  await e.input('I_f_name', 'Mop'); await e.submit(); assert.match(e.sheet(), /Cassy will choose the category/); await e.submit();
+  await e.input('I_f_name', 'Broom'); await e.submit(); assert.match(e.sheet(), /Cassy will choose/); await e.submit();
   assert.equal(e.client.rpcCalls('inventory_item_create_v1')[0][2].p_item.category, 'Uncategorised');
   assert.equal(j(e.client.fnCalls('inventory-categorise')[0][2]), j({ item_id: 'new-1' }));
   assert.match(bar(e), /Cassy put Mop in Cleaning/);
@@ -62,17 +62,17 @@ test('I_categorise a new item defaults to Let Cassy choose: created as Uncategor
 
 test('I_categorise a chosen category is sent as it is and Cassy is not asked', async () => {
   const e = await make(); await e.mount(''); await e.act('scan'); await e.input('I_f_code', '556'); await e.submit(); await e.act('scan-new');
-  await e.input('I_f_name', 'Mop'); await e.input('I_f_category', 'Cleaning'); await e.submit(); await e.submit();
+  await e.input('I_f_name', 'Broom'); await e.input('I_f_category', 'Cleaning'); await e.submit(); await e.submit();
   assert.equal(e.client.rpcCalls('inventory_item_create_v1')[0][2].p_item.category, 'Cleaning'); assert.equal(e.client.fnCalls('inventory-categorise').length, 0);
 });
 
 test('I_categorise probe-and-hide: a 404 from inventory-categorise hides Let Cassy choose and Sort for the visit, with no error box', async () => {
   const e = await make('owner', { fn: { 'inventory-categorise': () => ({ data: null, error: { name: 'FunctionsHttpError', context: { status: 404 } } }) } });
   await e.mount(''); await e.act('scan'); await e.input('I_f_code', '557'); await e.submit(); await e.act('scan-new');
-  await e.input('I_f_name', 'Mop'); await e.submit(); await e.submit();
+  await e.input('I_f_name', 'Broom'); await e.submit(); await e.submit();
   assert.doesNotMatch(e.html(), /role="alert"/);
   await e.act('scan'); await e.input('I_f_code', '558'); await e.submit(); await e.act('scan-new');
-  assert.match(e.sheet(), /<option value="" selected>Choose one/); assert.doesNotMatch(e.sheet(), /Let Cassy choose/);
+  assert.match(e.sheet(), /<option value="" selected>Choose a category/); assert.doesNotMatch(e.sheet(), /Let Cassy choose/);
   await e.act('close'); await e.act('tidy'); assert.doesNotMatch(e.sheet(), /Sort uncategorised/);
 });
 

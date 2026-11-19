@@ -209,3 +209,16 @@ div.I_row { cursor: default; }
 .I_diff dt { color: var(--fg-2); font-size: var(--v5-t-2); align-self: baseline; }
 .I_diff dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
 .I_diff s { color: var(--fg-2); text-decoration-thickness: 1px; }
+/* s125 Add item (D-386): the search row gets a third column; the sheet has its own faint champagne background and a thin gold top edge (opaque, nobody types over blur) */
+.I_srow.I_srow3 { grid-template-columns: minmax(0, 1fr) auto auto; }
+.I_srow .I_addbtn { white-space: nowrap; min-height: 44px; }
+.sheet.I_sheet.I_new {
+  background: linear-gradient(color-mix(in srgb, var(--v5-gold-soft) 50%, transparent), color-mix(in srgb, var(--v5-gold-soft) 50%, transparent)), var(--v5-surf-2);
+  -webkit-backdrop-filter: none; backdrop-filter: none;
+  box-shadow: inset 0 3px 0 var(--v5-gold), 0 -16px 48px var(--v5-gl-sh2);
+}
+@media (prefers-contrast: more) { .sheet.I_sheet.I_new { background: var(--v5-surf); } }
+.I_sheet .I_form { display: grid; gap: 12px; min-width: 0; }
+.I_dup { display: grid; grid-template-columns: minmax(0, 1fr); gap: .5rem; align-items: start; padding: .625rem .75rem; border-radius: .5rem; background: var(--v5-info-w); color: var(--v5-info-t); font-size: var(--v5-t-2); }
+.I_dup .btn { justify-self: start; min-height: 44px; }
+.I_prod { display: grid; gap: .625rem; padding: .75rem; border: 1px solid var(--v5-sep); border-radius: .75rem; }

@@ -115,7 +115,7 @@ test('I_scan new item: form, confirm, then inventory_item_create_v1 with the exa
   assert.match(e.sheet(), /Miscellaneous/); assert.match(e.sheet(), /<option value="__cassy" selected>Let Cassy choose/);
   await e.input('I_f_name', 'Spare keys'); await e.input('I_f_category', 'Miscellaneous'); await e.input('I_f_unit', 'pieces'); await e.input('I_f_qty', '3'); await e.input('I_f_reorder', '1');
   await e.submit();
-  assert.match(e.sheet(), /Add Spare keys as a new item\?/); assert.match(e.sheet(), /Telegram \/count will skip it/);
+  assert.match(e.sheet(), /Add Spare keys\?/); assert.match(e.sheet(), /Telegram \/count will skip it/);
   assert.equal(e.client.rpcCalls('inventory_item_create_v1').length, 0);
   await e.submit();
   const c = e.client.rpcCalls('inventory_item_create_v1');
@@ -131,8 +131,8 @@ test('I_scan new item: a missing name or category stays on the form; the optiona
   const e = await make('owner');
   await e.mount(''); await e.act('scan'); await typeCode(e, '555000777'); await e.act('scan-new');
   await e.submit();
-  assert.match(e.sheet(), /Give it a name and a category/);
-  await e.input('I_f_name', 'Candle'); await e.input('I_f_category', 'Living Area'); await e.input('I_f_unit', ''); await e.submit(); await e.submit();
+  assert.match(e.sheet(), /Type a name, at least 2 letters/);
+  await e.input('I_f_name', 'Candle'); await e.input('I_f_category', 'Living Area'); await e.submit(); await e.submit();
   const a = e.client.rpcCalls('inventory_item_create_v1')[0][2];
   assert.deepEqual({ ...a.p_item }, { name: 'Candle', category: 'Living Area', unit: 'pc', consumable: false });
 });
@@ -141,7 +141,7 @@ test('I_scan new item: a name that already exists is refused with an Open button
   const e = await make('owner', { mock: { rpc: { inventory_item_create_v1: () => ({ data: { ok: false, reason: 'name_exists', item_id: 'i2' }, error: null }) } } });
   await e.mount(''); await e.act('scan'); await typeCode(e, '555000777'); await e.act('scan-new');
   await e.input('I_f_name', 'Hand soap'); await e.input('I_f_category', 'Kitchen'); await e.submit(); await e.submit();
-  assert.match(e.sheet(), /An item with that name already exists\./); assert.match(e.sheet(), /data-id="i2"/);
+  assert.match(e.sheet(), /already on the list/); assert.match(e.sheet(), /data-id="i2"/);
 });
 
 test('I_scan link a barcode from the item card (link mode): a code that is new is confirmed and attached to that item', async () => {

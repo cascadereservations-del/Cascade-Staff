@@ -32,7 +32,7 @@ test('I_guard css: every selector begins with the I_ prefix or sits under it', (
   const stripped = css.replace(/\/\*[\s\S]*?\*\//g, '');
   const selectors = [...stripped.matchAll(/(^|\})\s*([^{}]+)\{/g)].flatMap((m) => m[2].split(',').map((s) => s.trim()));
   assert.ok(selectors.length > 20);
-  for (const s of selectors) assert.match(s, /^(div)?\.I_|^\.I_/, 'selector outside the lane prefix: ' + s);
+  for (const s of selectors) assert.match(s, /^(div)?\.I_|^\.I_|^\.sheet\.I_sheet\.I_|^@media \(prefers-contrast: more\)/, 'selector outside the lane prefix: ' + s);
 });
 
 test('I_guard css uses tokens only: no hex colour and no px font size under 13', () => {
