@@ -18,7 +18,7 @@ function server(o = {}) {
   return { handler: (rec, route) => {
     if (rec.url.includes('/rest/v1/inventory_items')) return json(rec.url.includes('is_consumable=eq.true') ? ITEMS : LINEN);
     if (rec.url.includes('/functions/v1/upload-photo')) return o.upload === 'fail' ? json({ ok: false }, 500) : json({ ok: true, path: 'p/' + Math.random(), signedUrl: 'https://drive.example.test/up-' + Math.random() });
-    if (rec.url.includes('/rpc/record_inventory_usage') || rec.url.includes('/rpc/record_linen_stains_v1')) return json({ ok: true });
+    if (rec.url.includes('/rpc/record_restock_v1') || rec.url.includes('/rpc/record_linen_stains_v1')) return json({ ok: true });
     if (o.holdPrev && rec.url.includes('/last-readings')) { (o.prevRoutes ||= []).push(route); return 'held'; }
     return null;
   } };

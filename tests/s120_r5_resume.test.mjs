@@ -88,7 +88,7 @@ for (const phase of [0, 4]) {
       w.reload();
       await w.api.resumeDraft(w.api.loadDraft());   // R8: the resume ends when every restore has settled
       const s = w.api.getState();
-      assert.equal(Object.values(s.restock.top).length, 6, `round ${round}: six Restock answers survive`);
+      assert.equal(Object.values(s.restock.top).length, 5, `round ${round}: five Restock answers survive`);
       assert.equal(s.restock.top[idOf('Tea')], 2);
       assert.deepEqual([s.restock.saved, s.restock.sent, s.restock.legacy, s.supplyLogSaved], [true, false, false, true], `round ${round}: still saved, still unsent, never legacy`);
       assert.equal(s.linen.rows.length, 1, `round ${round}: the linen row survives`);
@@ -98,15 +98,15 @@ for (const phase of [0, 4]) {
       assert.equal(stored.linen.rows.length, 1, `round ${round}: and the linen row`);
       assert.equal(stored.phase, phase, `round ${round}: and the phase`);
     }
-    assert.equal(w.post('record_inventory_usage').length, 0, 'offline: nothing was sent');
+    assert.equal(w.post('record_restock_v1').length, 0, 'offline: nothing was sent');
     w.nav.onLine = true;
     const r = await w.api.flush(false);
     assert.deepEqual(r.pending, []);
-    assert.equal(w.post('record_inventory_usage').length, 1, 'online: Restock goes once');
+    assert.equal(w.post('record_restock_v1').length, 1, 'online: Restock goes once');
     assert.equal(w.post('record_linen_stains_v1').length, 1, 'and linen goes once');
     assert.equal(w.api.getState().restock.sent, true);
     await w.api.flush(false);
-    assert.equal(w.post('record_inventory_usage').length, 1, 'never twice');
+    assert.equal(w.post('record_restock_v1').length, 1, 'never twice');
   });
 }
 
@@ -143,7 +143,7 @@ test('R5 item 1: resuming a draft that lost its Restock leaves the gate closed a
   await w.api.flush(true);
   const s = w.api.getState();
   assert.deepEqual([s.supplyLogSaved, s.restock.saved, s.restock.sent, s.restock.legacy], [false, false, false, false]);
-  assert.equal(w.post('record_inventory_usage').length, 0);
+  assert.equal(w.post('record_restock_v1').length, 0);
 });
 
 /* ---- item 2: the Submit cue ---- */
@@ -195,6 +195,6 @@ test('R5 item 3b: resuming online with a saved, unsent Restock sends it once and
   w.store.ch_draft_v6 = JSON.stringify({ _v: 5, _k: 2, _saved: 1, phase: 0, supplyLogSaved: true, restock: R, linen: null, cleaningType: 'turnover', checklist: {}, confirmItems: {}, confirmNotes: {} });
   w.api.resumeDraft(w.api.loadDraft());
   for (let i = 0; i < 5; i++) await new Promise(r => setImmediate(r));   // let the send the resume itself started finish; no flush is called here
-  assert.equal(w.post('record_inventory_usage').length, 1, 'exactly one call');
+  assert.equal(w.post('record_restock_v1').length, 1, 'exactly one call');
   assert.equal(w.api.getState().restock.sent, true);
 });

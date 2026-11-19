@@ -20,7 +20,7 @@ function server(o = {}) {
     if (o.hook) { const r = o.hook(rec, route); if (r) return r; }
     if (rec.url.includes('/rest/v1/inventory_items')) return json(rec.url.includes('is_consumable=eq.true') ? ITEMS : LINEN);
     if (rec.url.includes('/functions/v1/upload-photo')) return o.upload === 'fail' ? json({ ok: false }, 500) : json({ ok: true, path: 'p/' + Math.random(), signedUrl: 'https://drive.example.test/up-' + Math.random() });
-    if (rec.url.includes('/rpc/record_inventory_usage')) return o.restock === 'fail' ? json({ message: 'down' }, 500) : json({ ok: true });
+    if (rec.url.includes('/rpc/record_restock_v1')) return o.restock === 'fail' ? json({ message: 'down' }, 500) : json({ ok: true });
     if (rec.url.includes('/rpc/record_linen_stains_v1')) return json({ ok: true });
     return null;
   } };

@@ -24,29 +24,22 @@ const pure = new Function(block + '\nreturn { S120R_classify, S120R_restockMissi
 
 test('s120R: the sheet groups every live consumable exactly once, in the order the brief names', () => {
   const c = pure.S120R_classify(ITEMS);
-  assert.deepEqual(c.top.map(i => i.name), ['Bottled Water', 'Coffee (3-in-1)', 'Tea', 'Sugar & Creamer Sticks', 'Bathroom tissue', 'Laundry Detergent']);
+  assert.deepEqual(c.top.map(i => i.name), ['Bottled Water', 'Coffee (3-in-1)', 'Tea', 'Sugar & Creamer Sticks', 'Bathroom tissue']);   // s121: detergent left the main rows
+  assert.ok(c.other.some(i => i.name === 'Laundry Detergent'));
   assert.equal(c.kit.name, 'Toiletries (toothbrush, toothpaste, soap)');
   assert.deepEqual(c.chips.map(i => i.name), ['Kitchen towel']);
   assert.equal(c.top.length + 1 + c.chips.length + c.other.length, ITEMS.length);
   assert.ok(c.other.some(i => i.name === 'Body Wash') && !c.other.some(i => i.name === 'Tea'));
 });
 
-test('s120R: nothing is prefilled; every top row and the kit must be answered, 0 counts as an answer', () => {
+test('s121 R6: the sheet starts at the standard amounts, so a fresh sheet is complete and only a number over the stock blocks Save', () => {
   const c = pure.S120R_classify(ITEMS);
   const rs = pure.S120R_newRestock();
-  assert.equal(pure.S120R_restockMissing(rs, c, 'turnover').length, 7, 'six top rows and the kit');
-  c.top.forEach(i => { rs.top[i.id] = 0; });
-  assert.deepEqual(pure.S120R_restockMissing(rs, c, 'turnover'), ['Guest kit']);
-  rs.kit = { a: 'yes', n: null };
-  assert.deepEqual(pure.S120R_restockMissing(rs, c, 'turnover'), ['Guest kit'], 'Yes needs a count');
-  rs.kit = { a: 'yes', n: 2 };
-  assert.deepEqual(pure.S120R_restockMissing(rs, c, 'turnover'), []);
-  rs.kit = { a: 'no', n: null };
-  assert.deepEqual(pure.S120R_restockMissing(rs, c, 'turnover'), []);
+  assert.deepEqual(pure.S120R_restockMissing(rs, c, 'turnover'), [], 'the defaults are the answers');
   assert.deepEqual(pure.S120R_restockMissing(pure.S120R_newRestock(), c, 'emergency'), [], 'an emergency visit is exempt');
   const none = pure.S120R_newRestock(); none.none = true;
   assert.deepEqual(pure.S120R_restockMissing(none, c, 'mid_stay'), [], 'nothing used is an answer for a mid-stay');
-  assert.equal(pure.S120R_restockMissing(none, c, 'turnover').length, 7, 'R3 item 6: but not for any other type');
+  assert.deepEqual(pure.S120R_restockMissing(none, c, 'turnover'), [], 'a standard sheet is complete for any other type');
 });
 
 test('s120R: rows sent are positive amounts only, one usage_key per session and item, no ml', () => {
@@ -157,7 +150,7 @@ function harness(t, items, opts = {}) {
     + 'const lsJSON = (k, v) => { if (v === undefined) return cache[k] || null; cache[k] = v; };\n'
     + 'const updateBottomBar = () => { log.bar++; }; const closeSupplyUsageSheet = () => {}; const showToast = (m) => { log.toasts.push(m); };\n'
     + 'function S120R_renderRestock() { log.renders++; }\n'
-    + 'return { flush: S120R_flushAll, save: S120R_saveRestock, click: S120R_onRestockClick, unsave: S120R_unsave, commit: S120R_commit, refresh: S120R_refreshStatus, typeChanged: typeof S120R_typeChanged === "function" ? S120R_typeChanged : null, items: () => _susItems };');
+    + 'return { flush: S120R_flushAll, save: S120R_saveRestock, click: S120R_onRestockClick, setCtx: S120R_setCtx, normCtx: S120R_normCtx, unsave: S120R_unsave, commit: S120R_commit, refresh: S120R_refreshStatus, typeChanged: typeof S120R_typeChanged === "function" ? S120R_typeChanged : null, items: () => _susItems };');
   return fn(t.state, t.el, t.fetch, async () => ({}), () => 'uuid-' + (++n), () => '2026-11-18', () => { log.saves++; }, 'https://x.test', 'prop-1', log, opts.cache || {});
 }
 const linenFound = () => ({ answer: 'found', rows: [{ item_id: 'i1', name: 'Bath Towel', qty: 1, outcome: 'needs_replacing' }], key: null, sent: false, tried: false, failed: '', legacyNote: '', unavailable: false });
@@ -186,7 +179,7 @@ test('s120R: offline the linen and restock stay in the draft, then send once wit
   const linenCall = t.calls.filter(c => c.url.endsWith('/rpc/record_linen_stains_v1')).pop();
   assert.equal(linenCall.body.p_idempotency_key, linenKey, 'the retry used the same key');
   assert.deepEqual(linenCall.body.p_rows, [{ item_id: 'i1', qty: 1, outcome: 'needs_replacing' }]);
-  const useCall = t.calls.filter(c => c.url.endsWith('/rpc/record_inventory_usage')).pop();
+  const useCall = t.calls.filter(c => c.url.endsWith('/rpc/record_restock_v1')).pop();
   assert.deepEqual(useCall.body.p_rows, [{ item_id: idOf('Tea'), used_qty: 2, usage_key: 's120-' + restockKey + '-' + idOf('Tea') }]);
   assert.equal(useCall.body.p_session_date, '2026-11-18');
   const before = t.calls.length;
@@ -219,7 +212,7 @@ test('s120R: item 1 - a saved Restock with no list is never sent and never count
   const rs = t.state.restock = restockSaved();
   const r = await h.flush(false);   // no list, no cache
   assert.deepEqual(r.pending, ['restock']);
-  assert.equal(rs.sent, false); assert.equal(t.calls.filter(c => c.url.includes('record_inventory_usage')).length, 0);
+  assert.equal(rs.sent, false); assert.equal(t.calls.filter(c => c.url.includes('record_restock_v1')).length, 0);
   // Save on an empty list is refused outright
   const rs2 = t.state.restock = pure.S120R_newRestock();
   await h.save(false);
@@ -236,10 +229,11 @@ test('s120R: item 1 - a saved Restock with no list is never sent and never count
 test('s120R: item 1 - a saved sheet that lost its answers un-saves before anything is sent', async () => {
   const t = sender(); t.mode = 'online';
   const h = harness(t, ITEMS);
-  const rs = t.state.restock = restockSaved();   // saved, but nothing answered
+  h.setCtx(h.normCtx({ ok: true, stock: [], remembered: {}, upkeep_due: { dish_soap: true, dish_sponge: false }, next_tier: null }));
+  const rs = t.state.restock = restockSaved();   // saved, but a due dish question was never answered
   t.state.supplyLogSaved = true;
   const r = await h.flush(false);
-  assert.ok(r.unanswered.includes('Bottled Water'));
+  assert.ok(r.unanswered.some(x => /dish soap/i.test(x)), JSON.stringify(r.unanswered));
   assert.deepEqual([rs.saved, t.state.supplyLogSaved, rs.sent], [false, false, false]);
   assert.equal(t.calls.length, 0);
 });
@@ -315,7 +309,7 @@ test('s120R: the page wires it in: draft keeps linen and restock, Submit flushes
   assert.match(html, /const DRAFT_VERSION\s+= 5;/, 'old drafts are migrated, not discarded');
   assert.ok(!/LIQUID_ML_PER_UNIT|QUICK_ITEM_NAMES/.test(html), 'item 14: dead constants are gone');
   const sw = readFileSync(new URL('../checklist/sw.js', import.meta.url), 'utf8');
-  assert.match(sw, /const CACHE_NAME = 'ch-shell-v11-restock-linen';/);
+  assert.match(sw, /const CACHE_NAME = 'ch-shell-v12-restock-defaults';/);
 });
 
 
@@ -375,12 +369,12 @@ test('R3 item 6: Save sets nothing-used from the button used; a type other than 
 test('R3 item 7: a locked sheet is resent as it stands, even if a row is no longer answered', async () => {
   const t = sender(); t.mode = 'online';
   const h = harness(t, ITEMS);
-  const rs = t.state.restock = restockSaved(); rs.tried = true; rs.key = 'K9'; rs.top[idOf('Tea')] = 2;   // the other rows and the kit were never answered
+  const rs = t.state.restock = restockSaved(); rs.tried = true; rs.key = 'K9'; pure.S120R_classify(ITEMS).top.forEach(i => { rs.top[i.id] = 0; }); rs.kit = { a: 'no', n: null }; rs.top[idOf('Tea')] = 2;   // Save writes every answer; only Tea was above 0
   t.state.supplyLogSaved = true;
   const r = await h.flush(false);
   assert.deepEqual(r.unanswered, [], 'a locked sheet is not un-saved');
   assert.equal(rs.saved, true);
-  const call = t.calls.find(c => c.url.endsWith('record_inventory_usage'));
+  const call = t.calls.find(c => c.url.endsWith('record_restock_v1'));
   assert.deepEqual(call.body.p_rows, [{ item_id: idOf('Tea'), used_qty: 2, usage_key: 's120-K9-' + idOf('Tea') }], 'same answers, same key');
   assert.equal(rs.sent, true);
 });
@@ -440,12 +434,13 @@ test('R3 item 9: the submit modal counts the stain photo only when linen is Issu
 test('R3 item 11: the Restock sheet shows the approved wording', () => {
   const listEl = { innerHTML: '', closest: () => null, scrollTop: 0 };
   const els = { 'sus-list': listEl, 'sus-save-btn': {}, 'sus-none-btn': {}, 'sus-status': {} };
-  const state = { restock: pure.S120R_newRestock(), cleaningType: 'turnover' };
+  const state = { restock: Object.assign(pure.S120R_newRestock(), { extraOpen: true }), cleaningType: 'turnover' };
   const f = new Function('state', 'el', 'esc', 'document', '_susItems',
     block + NL + ['S120R_focusKey', 'S120R_focusBack', 'S120R_renderRestock'].map(fnText).join(NL) + '\nreturn S120R_renderRestock;')(state, id => els[id], s => String(s), { activeElement: null }, ITEMS.map(i => Object.assign({ unit: 'pc' }, i)));
   f();
-  assert.ok(listEl.innerHTML.includes('Anything extra?'));
-  assert.ok(listEl.innerHTML.includes('Optional. A seasonal treat like chocolates goes under Something else.'));
+  assert.ok(listEl.innerHTML.includes('Anything extra'));
+  assert.ok(listEl.innerHTML.includes('Other extras'));
+  assert.ok(listEl.innerHTML.includes('These are the standard amounts. Change a number only if you used a different amount.'));
   assert.ok(listEl.innerHTML.includes('Optional. Refills, cans and bags, only if you opened one.'));
   assert.ok(listEl.innerHTML.includes('Other items'));
 });

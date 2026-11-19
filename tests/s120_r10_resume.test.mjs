@@ -17,7 +17,7 @@ const BLOBS = ['idb-m0', 'idb-p1', 'idb-p2'];
 const parse = s => JSON.parse(s);
 const posts = (t, name) => t.calls.filter(c => c.method === 'POST' && c.url.includes(name));
 const uploads = t => posts(t, '/upload-photo');
-const sends = t => t.calls.filter(c => c.method === 'POST' && (c.url.includes('/rpc/record_inventory_usage') || c.url.includes('/rpc/record_linen_stains_v1')));
+const sends = t => t.calls.filter(c => c.method === 'POST' && (c.url.includes('/rpc/record_restock_v1') || c.url.includes('/rpc/record_linen_stains_v1')));
 const photoMetas = d => ['meterPhotoMeta', 'precleanPhotoMeta', 'bedroomPhotoMeta', 'kitchenPhotoMeta', 'aftercleanPhotoMeta'].flatMap(k => d[k]).filter(Boolean);
 
 /* the made-up server: o.upload = 'ok' | anything else (fails), o.send = 500 | anything else (ok). The caller may change o while the page runs. */
@@ -25,7 +25,7 @@ function server(o = {}) {
   return { handler: rec => {
     if (rec.url.includes('/rest/v1/inventory_items')) return json(rec.url.includes('is_consumable=eq.true') ? ITEMS : LINEN);
     if (rec.url.includes('/functions/v1/upload-photo')) return o.upload === 'ok' ? json({ ok: true, path: 'p/' + Math.random(), signedUrl: 'https://drive.example.test/up-' + Math.random() }) : json({ ok: false }, 500);
-    if (rec.url.includes('/rpc/record_inventory_usage') || rec.url.includes('/rpc/record_linen_stains_v1')) return o.send === 500 ? json({ message: 'down' }, 500) : json({ ok: true });
+    if (rec.url.includes('/rpc/record_restock_v1') || rec.url.includes('/rpc/record_linen_stains_v1')) return o.send === 500 ? json({ message: 'down' }, 500) : json({ ok: true });
     return null;
   } };
 }
@@ -279,7 +279,7 @@ t0('R10 D5: removing a section photo deletes its blob only after a save that sti
 });
 
 /* the stamp is the send's own time: set once, stored before the request goes out, never moved by a later try */
-for (const [which, rpc] of [['linen', 'record_linen_stains_v1'], ['restock', 'record_inventory_usage']]) {
+for (const [which, rpc] of [['linen', 'record_linen_stains_v1'], ['restock', 'record_restock_v1']]) {
   const draftFor = stamp => which === 'linen'
     ? quiet({ restock: {}, linen: { sent: false, tried: true, waiting: false, sendStartedAt: stamp } })
     : quiet({ restock: { sent: false, tried: true, waiting: true, sendStartedAt: stamp } });

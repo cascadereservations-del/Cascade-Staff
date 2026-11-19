@@ -9,8 +9,11 @@
   ║  - Linen check: No stains, or Found stains: tap the piece,    ║
     set how many, say cleaned / needs replacing / replaced. No   
     typing; the report note is written from the answers.         
-  - Restock sheet: no prefill. Every top row, and the guest kit, 
-    must be answered. Saved through record_inventory_usage.      
+  - Restock sheet (v9): no prefill. Saved through record_inventory_usage.
+  - v9.1 (s121 lane R6, D-376/D-377): standard amounts prefilled,
+    remembered water/coffee/kit counts, stock limits, treats by tier,
+    dish soap/sponge questions. Saved through record_restock_v1.
+    Header: soft gradient, contrast-checked.
   - Both answer sets live in the draft and are sent once, with   
     a key, when online and before submit.                        
   ║                                                              ║
@@ -532,6 +535,18 @@
 .s120-linen .confirm-btn:disabled:not(.confirmed):not(.issue){background:var(--surface-raised);color:var(--text-muted);border-color:var(--border);opacity:.7;}
 .s120-linen .confirm-btn:disabled.confirmed,.s120-linen .confirm-btn:disabled.issue{opacity:.85;}
 .s120-x:disabled{opacity:.35;}
+/* s121 R6 (D-376): restock defaults, changed rows, remind chip and the welcome treat panel */
+.sus-item.m-chg{background:var(--warning-bg);border-radius:10px;}
+.sus-item.m-chg .sus-item-stock,.sus-item.m-chg .sus-step-val{color:var(--warning);}
+.s120-remind{margin-top:var(--space-2);font-size:var(--font-size-xs);}
+.s120-treat{border:1px solid var(--tl,#C6E6DE);background:var(--tb,#EEF8F5);color:var(--tf,#0B4F44);border-radius:12px;padding:var(--space-3) var(--space-4);margin:var(--space-2) 0 var(--space-3);}
+.s120-treat .s120-hint,.s120-treat .sus-item-stock,.s120-treat .sus-item-name{color:inherit;}
+.s120-treat .s120-chip{background:#fff;color:#2b1d0f;}
+.s120-treat .s120-chip.on{border-color:currentColor;background:#fff;font-weight:700;}
+.s120-treat-head{font-weight:700;font-size:var(--font-size-sm);}
+.s120-t-returning{--tb:#EEF8F5;--tl:#C6E6DE;--tf:#0B4F44;}
+.s120-t-regular{--tb:#F0F5FD;--tl:#CDDDF5;--tf:#173F7A;}
+.s120-t-vip{--tb:#FBF3E0;--tl:#EBD6A6;--tf:#5C3A00;}
 </style>
 
 <!-- The Lucide CDN script and its emoji fallback map were removed on
@@ -669,14 +684,14 @@ body.submitting { pointer-events: none; }
   left: 0;
   right: 0;
   height: var(--top-bar-height);
-  background: var(--mahogany);
+  background: linear-gradient(180deg, #3F2B1A 0%, #2C1D10 100%);   /* s121 D-377 Soft gradient */
   color: var(--earthen-ivory);
   display: flex;
   align-items: center;
   justify-content: space-between;
   padding: 0 var(--space-4);
   z-index: 100;
-  box-shadow: 0 2px 12px rgba(10,9,8,0.35), 0 1px 4px rgba(10,9,8,0.20);
+  box-shadow: inset 0 -1px 0 rgba(201,150,58,.24), 0 3px 12px rgba(42,27,10,.16);
   gap: var(--space-3);
 }
 
@@ -685,7 +700,7 @@ body.submitting { pointer-events: none; }
   font-variant-numeric: lining-nums tabular-nums;
   font-size: 1.05rem;
   font-weight: 600;
-  color: var(--earthen-gold);
+  color: #E3BC6E;
   white-space: nowrap;
   flex-shrink: 0;
   letter-spacing: 0.01em;
@@ -945,13 +960,15 @@ body.submitting { pointer-events: none; }
 /* Per-phase accent. Five distinguishable headers, but all inside the
    manual's mahogany family now — phase 0 used to be teal and phase 2 green,
    which read as a different product next to the manual's dark surfaces. */
-#phase-0 .phase-header { background: linear-gradient(150deg, #2E1F12 0%, #1C1006 100%); }
-#phase-1 .phase-header { background: linear-gradient(150deg, #34240F 0%, #1F1207 100%); }
-#phase-2 .phase-header { background: linear-gradient(150deg, #2A2612 0%, #1A1408 100%); }
-#phase-3 .phase-header { background: linear-gradient(150deg, #382713 0%, #221406 100%); }
-#phase-4 .phase-header { background: linear-gradient(150deg, #302311 0%, #1E1207 100%); }
-#phase-5 .phase-header { background: linear-gradient(150deg, #2A1B0A 0%, #1C1006 100%); }
-#phase-6 .phase-header { background: linear-gradient(150deg, #261A0C 0%, #1A0F06 100%); }
+#phase-0 .phase-header { background: radial-gradient(120% 130% at 100% 0%, rgba(201,150,58,.26) 0%, rgba(201,150,58,0) 58%), linear-gradient(150deg, #513A26 0%, #32210F 100%); }
+#phase-1 .phase-header { background: radial-gradient(120% 130% at 100% 0%, rgba(201,150,58,.26) 0%, rgba(201,150,58,0) 58%), linear-gradient(150deg, #583F22 0%, #362411 100%); }
+#phase-2 .phase-header { background: radial-gradient(120% 130% at 100% 0%, rgba(201,150,58,.26) 0%, rgba(201,150,58,0) 58%), linear-gradient(150deg, #4C4424 0%, #2F2812 100%); }
+#phase-3 .phase-header { background: radial-gradient(120% 130% at 100% 0%, rgba(201,150,58,.26) 0%, rgba(201,150,58,0) 58%), linear-gradient(150deg, #5C4226 0%, #392712 100%); }
+#phase-4 .phase-header { background: radial-gradient(120% 130% at 100% 0%, rgba(201,150,58,.26) 0%, rgba(201,150,58,0) 58%), linear-gradient(150deg, #543D23 0%, #342310 100%); }
+#phase-5 .phase-header { background: radial-gradient(120% 130% at 100% 0%, rgba(201,150,58,.26) 0%, rgba(201,150,58,0) 58%), linear-gradient(150deg, #4F3820 0%, #31200E 100%); }
+#phase-6 .phase-header { background: radial-gradient(120% 130% at 100% 0%, rgba(201,150,58,.26) 0%, rgba(201,150,58,0) 58%), linear-gradient(150deg, #4A3520 0%, #2E1E0E 100%); }
+
+.phase-header:not(.K_hasimg) { box-shadow: inset 0 1px 0 rgba(249,246,240,.12), 0 8px 20px rgba(42,27,10,.14); }
 
 .phase-header h1 {
   font-family: var(--font-display);
@@ -977,7 +994,7 @@ body.submitting { pointer-events: none; }
 
 .phase-header .phase-tagline {
   font-size: var(--font-size-sm);
-  color: rgba(234,224,213,0.65);
+  color: rgba(249, 246, 240, .86);
   margin-top: var(--space-2);
   font-weight: 500;
 }
@@ -5929,7 +5946,7 @@ const KITCHEN_ITEMS = [
           'Sink basin scrubbed, faucet polished to a shine, every counter wiped clean and dry'] },
   { id: 'check_7_6',  text: 'Inspect utensils and cookware; report chips or missing items', flag: true,
     detail: 'Note the quantity of anything damaged or missing.' },
-  { id: 'check_7_7',  text: 'Replace the dish sponge; refill supplies to standard', triggersInventory: true,
+  { id: 'check_7_7',  text: 'Check the dish sponge', triggersInventory: true,
     covers: ['check_6_5'],
     detail: 'Shampoo, soap, toilet paper, dish soap, paper towels, and the towel and linen set: the full set for the next guest\'s party. Check the inventory app for minimum levels.' },
 ];
@@ -11353,7 +11370,19 @@ function registerServiceWorker() {
 // shortcut: linen membership is a name match over the active non-consumable items; upgrade to an is_linen column if the list grows beyond sheets and towels.
 const S120R_LINEN_RE = /sheet|duvet|comforter|towel|pillow|protector|sofa cover|rug|floor mat/i;
 const S120R_OUTCOMES = [['cleaned', 'Stain came out'], ['needs_replacing', 'Needs replacing'], ['replaced', 'Replaced now']];
-const S120R_TOP = [/^bottled water/i, /^coffee/i, /^tea$/i, /^sugar/i, /^bathroom tissue/i, /^laundry detergent/i];
+const S120R_TOP = [/^bottled water/i, /^coffee/i, /^tea$/i, /^sugar/i, /^bathroom tissue/i];
+// s121 R6 (D-376): the standard amount per top row, same order as S120R_TOP. mem = remembered between reports (water, coffee); the rest are for one report only and start at 0.
+const S120R_STD = [{ std: 1, mem: true, hint: 'Standard amount.' }, { std: 4, mem: true, hint: 'Standard amount.' }, { std: 0, hint: 'Optional. Add only if tea was put out.' },
+  { std: 0, hint: 'Kept in a jar. Add the sticks used to refill it.' }, { std: 0, hint: 'Optional. Add only the rolls guests used.' }];
+const S120R_KIT_STD = 2;
+const S120R_TREATS = {
+  choc: { label: 'Chocolates', n: 1 }, kitkat: { label: 'Kit Kats', n: 2 },
+  water: { label: 'Bottled water', n: 1, top: 0 }, coffee: { label: 'Extra coffee', n: 2, top: 1 },
+};
+const S120R_TIERS = { returning: ['Returning', 'a returning guest'], regular: ['Regular', 'a regular guest'], vip: ['VIP', 'VIP'] };
+const S120R_CTX_KEY = 'ch_s121_restock_ctx';
+const S120R_UPKEEP = [['dish_soap', 'Dish soap', 'Dish soap: refilled today?', 'No refill recorded in the last 3 reports.'], ['dish_sponge', 'Dish sponge', 'Dish sponge: replaced today?', 'No new sponge recorded in the last 3 reports.']];
+const S120R_esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const S120R_KIT = /^toiletries \(toothbrush/i;
 const S120R_CHIPS = [/^kitchen towel/i];
 const S120R_LINEN_UNAVAILABLE_NOTE = 'Linen stains found. The piece list could not load on this phone, so the pieces were not recorded. The host will check the shelf.';
@@ -11364,8 +11393,68 @@ function S120R_guestCount() { return null; }
 function S120R_certainOffline() { return typeof navigator !== 'undefined' && navigator.onLine === false; }
 
 function S120R_newLinen() { return { answer: null, rows: [], key: null, sent: false, tried: false, failed: '', legacyNote: '', unavailable: false, waiting: false, sendStartedAt: null }; }
+
+/* ── s121 R6: the context the server sends when the sheet opens (stock, remembered amounts, dish questions, next guest's tier) ── */
+let _s120ctx = null;
+function S120R_normCtx(d) {
+  if (!d || d.ok !== true) return null;
+  const stock = {}, remembered = {};
+  (Array.isArray(d.stock) ? d.stock : []).forEach(s => { if (s && s.item_id != null) stock[s.item_id] = Math.max(0, Math.floor(Number(s.on_hand)) || 0); });
+  Object.keys(d.remembered || {}).forEach(k => { const n = Number(d.remembered[k]); if (Number.isInteger(n) && n >= 0 && n <= 99) remembered[k] = n; });
+  const u = d.upkeep_due || {};
+  return { stock, remembered, upkeepDue: { dish_soap: u.dish_soap === true, dish_sponge: u.dish_sponge === true }, tier: S120R_TIERS[d.next_tier] ? d.next_tier : null };
+}
+function S120R_setCtx(c) { _s120ctx = c || null; }
+function S120R_getCtx() { return _s120ctx; }
+const S120R_stockOf = id => (_s120ctx && Object.prototype.hasOwnProperty.call(_s120ctx.stock, id)) ? _s120ctx.stock[id] : null;   // null = not known: no number, no limit
+const S120R_cap = id => { const s = S120R_stockOf(id); return s == null ? 99 : s; };
+const S120R_treatAllowed = () => !!(_s120ctx && S120R_TIERS[_s120ctx.tier]);
+
+/* The stock item a water or coffee treat takes from (chocolates and Kit Kats take none). */
+function S120R_treatUse(R, cls) {
+  const t = R && R.treat, def = t && S120R_TREATS[t.k];
+  if (!def || def.top == null) return null;
+  const it = (cls.top || []).find(i => S120R_TOP[def.top].test(i.name || ''));
+  return it ? { id: it.id, n: Number(t.n) || 0 } : null;
+}
+/* One main row: what the cleaner sees and what Save will send. */
+function S120R_topRow(R, item) {
+  const d = S120R_STD[S120R_TOP.findIndex(re => re.test(item.name || ''))] || { std: 0, hint: '' };
+  const stock = S120R_stockOf(item.id);
+  const raw = d.mem && _s120ctx && _s120ctx.remembered[item.id] != null ? _s120ctx.remembered[item.id] : d.std;
+  const start = stock == null ? raw : Math.min(raw, stock);
+  return { item, id: item.id, std: d.std, mem: !!d.mem, hint: d.hint, raw, start, stock, val: R.top[item.id] != null ? R.top[item.id] : start, touched: R.top[item.id] != null };
+}
+function S120R_topModel(R, cls) {
+  const tu = S120R_treatUse(R, cls);
+  return (cls.top || []).map(item => {
+    const m = S120R_topRow(R, item);
+    const held = tu && tu.id === m.id ? tu.n : 0;
+    m.max = m.stock == null ? 99 : Math.max(0, m.stock - held);
+    m.locked = m.stock === 0; m.short = m.stock != null && m.stock > 0 && m.stock < m.raw; m.over = m.val > m.max;
+    return m;
+  });
+}
+function S120R_kitModel(R, cls) {
+  const item = cls.kit; if (!item) return null;
+  const stock = S120R_stockOf(item.id);
+  const raw = _s120ctx && _s120ctx.remembered[item.id] != null ? _s120ctx.remembered[item.id] : S120R_KIT_STD;
+  const start = stock == null ? raw : Math.min(raw, stock);
+  const a = R.kit.a || 'yes', val = R.kit.n != null ? R.kit.n : start, max = stock == null ? 99 : stock;
+  return { item, id: item.id, a, std: S120R_KIT_STD, raw, start, stock, val, max, touched: R.kit.n != null, locked: stock === 0, short: stock != null && stock > 0 && stock < raw, over: val > max };
+}
+function S120R_treatModel(R, cls) {
+  const t = R && R.treat, def = t && S120R_TREATS[t.k];
+  if (!def) return null;
+  const use = S120R_treatUse(R, cls), val = Number(t.n) || 0;
+  let max = 99;
+  if (use) { const s = S120R_stockOf(use.id); if (s != null) { const main = S120R_topRow(R, (cls.top || []).find(i => i.id === use.id)); max = Math.max(0, s - main.val); } }
+  return { k: t.k, def, val, max, over: val > max, use };
+}
+
 function S120R_newRestock() {
-  return { top: {}, kit: { a: null, n: null }, extras: {}, other: {}, elseText: '', none: false, saved: false, sent: false, tried: false, key: null, failed: '', unavailable: false, legacy: false, waiting: false, sendStartedAt: null };
+  return { top: {}, kit: { a: null, n: null }, extras: {}, other: {}, elseText: '', none: false, saved: false, sent: false, tried: false, key: null, failed: '', unavailable: false, legacy: false, waiting: false, sendStartedAt: null,
+    upkeep: { dish_soap: null, dish_sponge: null }, treat: null, short: null, remember: {}, reminded: {} };
 }
 
 /* Split the live consumables into the sheet's groups. Every consumable lands in exactly one group. */
@@ -11434,6 +11523,13 @@ function S120R_migrateRestock(draft) {
     out.extras = Object.assign({}, r.extras); out.other = Object.assign({}, r.other);
     out.elseText = r.elseText || ''; out.none = !!r.none; out.saved = !!r.saved; out.sent = !!r.sent; out.tried = !!r.tried; out.key = r.key || null; out.failed = r.failed || '';
     out.unavailable = !!r.unavailable; out.legacy = !!r.legacy; out.waiting = !!r.waiting; out.sendStartedAt = Number(r.sendStartedAt) || null;
+    // s121 R6: every new field is optional, so a draft written by the s120 sheet loads with nothing extra to send
+    const u = r.upkeep || {};
+    out.upkeep = { dish_soap: u.dish_soap === 'yes' || u.dish_soap === 'no' ? u.dish_soap : null, dish_sponge: u.dish_sponge === 'yes' || u.dish_sponge === 'no' ? u.dish_sponge : null };
+    out.treat = r.treat && S120R_TREATS[r.treat.k] ? { k: r.treat.k, n: Math.max(1, Math.min(99, Math.floor(Number(r.treat.n)) || S120R_TREATS[r.treat.k].n)) } : null;
+    out.short = Array.isArray(r.short) && r.short.length ? r.short.map(s => ({ item_id: s.item_id, name: String(s.name || ''), on_hand: Math.max(0, Number(s.on_hand) || 0), asked: Number(s.asked) || 0 })) : null;
+    out.remember = {}; Object.keys(r.remember || {}).forEach(k => { const n = Number(r.remember[k]); if (Number.isInteger(n) && n >= 0 && n <= 99) out.remember[k] = n; });
+    out.reminded = {}; Object.keys(r.reminded || {}).forEach(k => { if (r.reminded[k]) out.reminded[k] = true; });
     return out;
   }
   // an old draft that had already saved its supply log: the old sheet sent it, so it is never sent again, and it is not "nothing used" (we do not know what it held)
@@ -11442,25 +11538,46 @@ function S120R_migrateRestock(draft) {
   return out;
 }
 
-/* Which top rows / kit are still unanswered (names). `cls` = S120R_classify output. */
+/* Which rows block Save (names): a number above what is in stock, and a dish question still open. A row at its standard amount is answered. */
 function S120R_restockMissing(rs, cls, cleaningType) {
   if (cleaningType === 'emergency' || !rs || (rs.none && cleaningType === 'mid_stay') || rs.legacy || rs.unavailable) return [];
-  const miss = [];
-  (cls.top || []).forEach(i => { if (rs.top[i.id] == null) miss.push(i.name); });
-  if (cls.kit && !(rs.kit.a === 'no' || (rs.kit.a === 'yes' && rs.kit.n >= 1))) miss.push('Guest kit');
+  const miss = [], over = (name, stock) => miss.push(name + ', only ' + stock + ' left');
+  const tops = S120R_topModel(rs, cls);
+  tops.forEach(m => { if (m.over) over(m.item.name, m.stock); });
+  const k = S120R_kitModel(rs, cls); if (k && k.a === 'yes' && k.over) over('Guest kit', k.stock);
+  const tm = S120R_treatModel(rs, cls); if (tm && tm.use && tm.over && !tops.some(m => m.over && m.id === tm.use.id)) over(tm.def.label, S120R_stockOf(tm.use.id));
+  (cls.chips || []).forEach(i => { if ((rs.extras[i.id] || 0) > S120R_cap(i.id)) over(i.name, S120R_stockOf(i.id)); });
+  (cls.other || []).forEach(i => { if ((rs.other[i.id] || 0) > S120R_cap(i.id)) over(i.name, S120R_stockOf(i.id)); });
+  const due = _s120ctx && _s120ctx.upkeepDue;
+  S120R_UPKEEP.forEach(([kind, name]) => { if (due && due[kind] && !rs.upkeep[kind]) miss.push(name); });
   return miss;
 }
 
-/* The rows record_inventory_usage takes: positive amounts only, one usage_key per session and item. */
+/* The rows record_restock_v1 takes: positive amounts only, one usage_key per session and item; a water or coffee treat is its own row with the suffix -treat. */
 function S120R_restockRows(rs, cls, cleaningType) {
   if (!rs || (rs.none && cleaningType === 'mid_stay') || rs.legacy || rs.unavailable) return [];
   const rows = [];
-  const add = (id, n) => { n = Number(n); if (id && Number.isInteger(n) && n > 0) rows.push({ item_id: id, used_qty: n, usage_key: 's120-' + rs.key + '-' + id }); };
-  (cls.top || []).forEach(i => add(i.id, rs.top[i.id]));
-  if (cls.kit && rs.kit.a === 'yes') add(cls.kit.id, rs.kit.n);
+  const add = (id, n, suffix) => { n = Number(n); if (id && Number.isInteger(n) && n > 0) rows.push({ item_id: id, used_qty: n, usage_key: 's120-' + rs.key + '-' + id + (suffix || '') }); };
+  S120R_topModel(rs, cls).forEach(m => add(m.id, m.val));
+  const k = S120R_kitModel(rs, cls); if (k && k.a === 'yes') add(k.id, k.val);
   (cls.chips || []).forEach(i => add(i.id, rs.extras[i.id]));
-  (cls.other || []).forEach(i => add(i.id, rs.other[i.id]));
+  (cls.other || []).forEach(i => add(i.id, rs.other[i.id] != null ? rs.other[i.id] : rs.top[i.id]));   // detergent left the main rows: a count typed on the s120 sheet is kept
+  const tu = S120R_treatUse(rs, cls); if (tu) add(tu.id, tu.n, '-treat');
   return rows;
+}
+/* The dish answers: sent even when no stock row is, and never under a key that another answer used. */
+function S120R_upkeepRows(rs) {
+  const out = [];
+  S120R_UPKEEP.forEach(([kind]) => { const a = rs && rs.upkeep && rs.upkeep[kind]; if (a === 'yes' || a === 'no') out.push({ kind, changed: a === 'yes', check_key: 's120-' + rs.key + '-' + kind + '-' + a }); });
+  return out;
+}
+/* Save: what is on screen becomes what is sent, and only a number the cleaner changed on water, coffee or the kit is remembered. */
+function S120R_materialize(R, cls) {
+  const remember = {};
+  S120R_topModel(R, cls).forEach(m => { if (m.mem && m.touched && m.val !== m.start) remember[m.id] = m.val; R.top[m.id] = m.val; });
+  const k = S120R_kitModel(R, cls);
+  if (k) { if (k.a === 'yes' && k.touched && k.val !== k.start) remember[k.id] = k.val; R.kit.a = k.a; R.kit.n = k.a === 'yes' ? k.val : null; }
+  R.remember = remember; R.short = null;
 }
 
 function S120R_linenRows(l) {
@@ -11472,6 +11589,8 @@ function S120R_reportLines(linen, restock) {
   const out = [];
   if (restock && restock.elseText && restock.elseText.trim()) out.push({ section: 'Restock', text: 'Restock, something else: ' + restock.elseText.trim() });
   if (restock && restock.unavailable) out.push({ section: 'Restock', text: S120R_RESTOCK_UNAVAILABLE_LINE });
+  const tr = restock && restock.treat, td = tr && S120R_TREATS[tr.k];
+  if (td && td.top == null) out.push({ section: 'Restock', text: 'Welcome treat: ' + td.label + (tr.n > 1 ? ' x' + tr.n : '') });   // not on the stock list, so the report is its only record
   if (linen && linen.failed) out.push({ section: 'Linen', text: 'Linen stock was not updated (' + linen.failed + '). The host will check the shelf.' });
   if (restock && restock.failed) out.push({ section: 'Restock', text: 'Restock was not recorded (' + restock.failed + '). The host will check the shelf.' });
   if (linen && linen.unconfirmed && !linen.sent && !linen.failed) out.push({ section: 'Linen', text: 'Linen check could not be confirmed as recorded. The host will check the linen.' });
@@ -11485,14 +11604,98 @@ function S120R_failKind(status) {
 }
 /* The server's reason in plain words for the report line; the same key sent with other rows is the one code a cleaner could meet. */
 function S120R_failText(msg) {
-  return msg === 'idempotency_key_reused' ? 'this send had different answers from one already recorded, so nothing more was written' : msg;
+  return (msg === 'idempotency_key_reused' || msg === 'check_key_conflict') ? 'this send had different answers from one already recorded, so nothing more was written' : msg;
 }
-function S120R_stepperHtml(val, data, off) {
-  const d = off ? ' disabled' : '';
+function S120R_stepperHtml(val, data, off, max) {
+  const lim = max !== undefined, d = off ? ' disabled' : '';
+  const dm = off || (val != null && val <= 0) ? ' disabled' : '', dp = off || (val != null && val >= max) ? ' disabled' : '';
   return `<div class="sus-stepper" role="group" ${data}>
-    <button class="sus-step-btn" type="button" data-d="-1" aria-label="One less"${d}>−</button>
+    <button class="sus-step-btn" type="button" data-d="-1" aria-label="One less"${lim ? dm : d}>−</button>
     <div class="sus-step-val">${val == null ? '–' : val}</div>
-    <button class="sus-step-btn" type="button" data-d="1" aria-label="One more"${d}>+</button></div>`;
+    <button class="sus-step-btn" type="button" data-d="1" aria-label="One more"${lim ? dp : d}>+</button></div>`;
+}
+/* The whole Restock sheet body as one string (no DOM here, so the wording can be tested). */
+function S120R_restockHtml(R, cls, type, locked) {
+  const E = S120R_esc, ctx = _s120ctx;
+  const stockNote = s => s == null ? '' : ' ' + s + ' in stock.';
+  const reminded = id => !!(R.reminded && R.reminded[id]);
+  const remindBtn = id => `<button type="button" class="s120-chip s120-remind" data-remind="${E(id)}"${reminded(id) ? ' disabled' : ''}>${reminded(id) ? 'Admin reminded' : 'Remind admin'}</button>`;
+  const row = (id, name, val, max, note, o) => {
+    o = o || {};
+    return `<div class="sus-item${o.chg ? ' m-chg' : ''}" role="listitem"><div class="sus-item-info"><div class="sus-item-name">${E(name)}</div>${note ? `<div class="sus-item-stock">${E(note)}</div>` : ''}${o.remind ? remindBtn(id) : ''}</div>
+      ${locked ? `<div class="sus-step-val">${val == null ? '–' : val}</div>` : S120R_stepperHtml(val, `data-k="${o.kind}" data-id="${E(id)}" aria-label="${E(name)}"`, false, max)}</div>`;
+  };
+  const head = t => `<div class="sus-section-label">${t}</div>`;
+  // the note under a stock row, by what the number is: locked, over the stock, short at the start, changed, or plain
+  const note = (m, plain, changedNote) => {
+    if (m.locked) return { text: 'None left in inventory. This item cannot be recorded.', remind: true };
+    if (m.over) return { text: 'Only ' + m.stock + ' left in inventory. Lower this number.' };
+    if (m.short && !m.touched) return { text: 'Only ' + m.stock + ' left in inventory. Standard is ' + m.raw + '.', remind: true };
+    if (m.val !== m.std) return { text: changedNote, chg: true };
+    return { text: plain + stockNote(m.stock) };
+  };
+  let h = '';
+  if (R.legacy) h += `<p class="s120-hint">Saved earlier on the older sheet. It cannot be changed here; tell the host if something is wrong.</p>`;
+  else if (R.sent) h += `<p class="s120-hint">${R.none ? 'Saved: nothing used this stay.' : 'Saved and sent. It cannot be changed here; tell the host if something is wrong.'}</p>`;
+  else if (R.tried) h += `<p class="s120-hint">${R.waiting ? 'Saved on this phone. It will send when the connection returns.' : 'Saved and sending.'} The answers are locked until they are sent, so the report and the stock agree; tell the host if something is wrong.</p>`;
+  else if (R.unavailable) h += `<p class="s120-hint">Saved: the list could not load, so the host will check the shelf. Answer the rows below and Save to replace that.</p>`;
+  else if (type === 'mid_stay') h += `<p class="s120-hint">Log what this stay used up. If you used nothing, tap Nothing used this stay. Otherwise change a number only if you used a different amount.</p>`;
+  else h += `<p class="s120-hint">These are the standard amounts. Change a number only if you used a different amount.</p>`;
+  if (R.short && R.short.length && !locked) h += `<p class="s120-hint s120-need" role="alert">Nothing was recorded. ${R.short.map(s => 'Only ' + s.on_hand + ' left in inventory for ' + E(s.name) + '.').join(' ')} Lower the number and tap Save.</p>`;
+  if (R.legacy || (R.none && (R.sent || R.tried))) return h;
+  const tops = S120R_topModel(R, cls);
+  if (tops.length) {
+    h += head('Used this stay') + tops.map(m => {
+      const n = note(m, m.hint, m.mem ? 'Changed. Standard is ' + m.std + '. This number stays for the next report.' : 'For this report only. It goes back to 0 next time.');
+      return row(m.id, m.item.name, m.val, m.max, n.text, { kind: 'top', chg: n.chg, remind: n.remind });
+    }).join('');
+  }
+  const k = S120R_kitModel(R, cls);
+  if (k) {
+    h += head('Guest kit') + `<div class="sus-item" role="listitem"><div class="sus-item-info"><div class="sus-item-name">Put out new guest kits?</div><div class="sus-item-stock">Toothbrush, toothpaste and soap in one kit.</div></div>
+      <div class="s120-outs" role="group" aria-label="Put out new guest kits?">
+        <button type="button" class="confirm-btn ${k.a === 'yes' ? 'confirmed' : ''}" data-kit="yes" aria-pressed="${k.a === 'yes'}" ${locked ? 'disabled' : ''}>Yes</button>
+        <button type="button" class="confirm-btn ${k.a === 'no' ? 'issue' : ''}" data-kit="no" aria-pressed="${k.a === 'no'}" ${locked ? 'disabled' : ''}>No</button></div></div>`;
+    if (k.a === 'yes') { const n = note(k, 'One kit for each guest.', 'Changed. Standard is ' + k.std + '. This number stays for the next report.'); h += row(k.id, 'Guest kit', k.val, k.max, n.text, { kind: 'kit', chg: n.chg, remind: n.remind }); }
+  }
+  const due = ctx && ctx.upkeepDue;
+  const ups = S120R_UPKEEP.filter(([kind]) => (due && due[kind]) || R.upkeep[kind]);
+  if (ups.length) {
+    h += head('Not changed in the last 3 reports') + ups.map(([kind, , title, sub]) => `<div class="sus-item" role="listitem"><div class="sus-item-info"><div class="sus-item-name">${title}</div><div class="sus-item-stock">${sub}</div></div>
+      <div class="s120-outs" role="group" aria-label="${title}">
+        <button type="button" class="confirm-btn ${R.upkeep[kind] === 'yes' ? 'confirmed' : ''}" data-up="${kind}:yes" aria-pressed="${R.upkeep[kind] === 'yes'}" ${locked ? 'disabled' : ''}>Yes</button>
+        <button type="button" class="confirm-btn ${R.upkeep[kind] === 'no' ? 'confirmed' : ''}" data-up="${kind}:no" aria-pressed="${R.upkeep[kind] === 'no'}" ${locked ? 'disabled' : ''}>No</button></div></div>`).join('');
+  }
+  const allowed = S120R_treatAllowed(), open = R.extraOpen != null ? !!R.extraOpen : (allowed || !!R.treat);
+  h += `<button type="button" class="sus-optional-toggle" id="s120-extra-toggle" aria-expanded="${open}">${open ? '▴' : '▾'} Anything extra</button>`;
+  if (open) {
+    h += '<div class="sus-optional-section open">';
+    if (allowed || R.treat) {   // a treat already chosen stays visible and changeable, even when a fresh context has no tier
+      const tk = allowed ? ctx.tier : 'none', tier = S120R_TIERS[tk] || ['kept', 'the next guest'], tm = S120R_treatModel(R, cls);
+      h += `<div class="s120-treat s120-t-${tk}"><div class="s120-treat-head">Welcome treat · ${tier[0]}</div>
+        <p class="s120-hint">${allowed ? 'Shown because the next guest is ' + tier[1] + '.' : 'Chosen earlier; the guest tier could not be read now.'} Choose one. For this guest only. The usual numbers stay.</p>
+        <div class="s120-chips">${Object.keys(S120R_TREATS).map(key => {
+          const def = S120R_TREATS[key], it = def.top == null ? null : (cls.top || []).find(i => S120R_TOP[def.top].test(i.name || ''));
+          const off = locked || (def.top != null && (!it || S120R_stockOf(it.id) === 0) && !(R.treat && R.treat.k === key));   // the chosen chip can always be tapped off
+          return `<button type="button" class="s120-chip ${R.treat && R.treat.k === key ? 'on' : ''}" data-treat="${key}" aria-pressed="${!!(R.treat && R.treat.k === key)}" ${off ? 'disabled' : ''}>${def.label}</button>`;
+        }).join('')}</div>`;
+      if (tm) {
+        const s = tm.use ? S120R_stockOf(tm.use.id) : null;
+        h += row('treat', 'Welcome treat amount', tm.val, tm.max, tm.use ? (tm.over ? 'Only ' + s + ' left in inventory. Lower this number.' : 'Taken from stock.' + stockNote(s)) : 'Recorded on this report. Not on the stock list.', { kind: 'treat' });
+      }
+      h += '</div>';
+    }
+    h += head('Other extras') + `<p class="s120-hint">Optional.</p><div class="s120-chips">${(cls.chips || []).map(i => `<button type="button" class="s120-chip ${R.extras[i.id] != null ? 'on' : ''}" data-chip="${E(i.id)}" aria-pressed="${R.extras[i.id] != null}" ${locked ? 'disabled' : ''}>${E(i.name)}</button>`).join('')}
+      <button type="button" class="s120-chip ${R.elseOpen || R.elseText ? 'on' : ''}" data-else="1" aria-pressed="${!!(R.elseOpen || R.elseText)}" ${locked ? 'disabled' : ''}>Something else</button></div>`;
+    h += (cls.chips || []).filter(i => R.extras[i.id] != null).map(i => row(i.id, i.name, R.extras[i.id], S120R_cap(i.id), stockNote(S120R_stockOf(i.id)).trim(), { kind: 'extra' })).join('');
+    if (R.elseOpen || R.elseText) h += `<input type="text" class="s120-else" id="s120-else" maxlength="200" aria-label="What else did you use? The host reads this; it does not change stock." placeholder="What else? The host reads this; it does not change stock." value="${E(R.elseText)}" ${locked ? 'disabled' : ''}>`;
+    h += '</div>';
+  }
+  if ((cls.other || []).length) {
+    h += `<p class="s120-hint">Optional. Refills, cans and bags, only if you opened one.</p><button type="button" class="sus-optional-toggle" id="s120-other-toggle" aria-expanded="${!!R.otherOpen}">${R.otherOpen ? '▲ Hide other items' : '▾ Other items'}</button>`;
+    if (R.otherOpen) h += `<div class="sus-optional-section open">${cls.other.map(i => row(i.id, i.name, R.other[i.id] != null ? R.other[i.id] : (R.top[i.id] || 0), S120R_cap(i.id), (S120R_unitLine(i.unit) + stockNote(S120R_stockOf(i.id))).trim(), { kind: 'other' })).join('')}</div>`;
+  }
+  return h;
 }
 function S120R_step(val, d, max) { return val == null ? (d > 0 ? 1 : 0) : Math.max(0, Math.min(max, val + d)); }
 const S120R_CACHE_CONS = 'ch_s120_consumables', S120R_CACHE_LINEN = 'ch_s120_linen';
@@ -11541,7 +11744,7 @@ async function S120R_rpc(name, body) {
   try {
     // fetchWithRetry: a timeout and one more try; the idempotency key (linen) and usage_key (restock) make a repeat harmless
     const resp = await fetchWithRetry(`${SUPABASE_URL}/rest/v1/rpc/${name}`, { method: 'POST', headers: await staffHeaders(true), body: JSON.stringify(body) }, 1, 20000);
-    if (resp.ok) return { ok: true };
+    if (resp.ok) { let data = null; try { data = JSON.parse(await resp.text()); } catch { data = null; } return { ok: true, data }; }   // s121: short_stock and check_key_conflict are HTTP 200 with ok:false in the body
     const text = await resp.text().catch(() => '');
     let msg = '';
     try { msg = (JSON.parse(text).message || '').slice(0, 120); } catch { msg = ''; }
@@ -11572,18 +11775,34 @@ async function S120R_sendRestock() {
   const cls = S120R_classify(_susItems);
   if (!R.key) R.key = uuid();
   const rows = S120R_restockRows(R, cls, state.cleaningType);
-  if (!rows.length) return { ok: true, noop: true };   // nothing to record; this never marks the restock as sent
+  const upkeep = S120R_upkeepRows(R);
+  if (!rows.length && !upkeep.length) return { ok: true, noop: true };   // nothing to record; this never marks the restock as sent
   if (!R.sendStartedAt) R.sendStartedAt = Date.now();   // the send's own time, stored before the request goes out; carry-over reads only this
   if (!S120R_certainOffline()) R.tried = true;
   R.waiting = false;
   saveDraft();
-  const r = await S120R_rpc('record_inventory_usage', {
+  const r = await S120R_rpc('record_restock_v1', {
     p_property_id: PROPERTY_ID, p_session_date: el('cleaningDate')?.value || todayManila(),
-    p_logged_by: (el('cleanerName')?.value || '').trim() || 'cleaner', p_notes: 'Restock from the cleaning checklist', p_rows: rows,
+    p_logged_by: (el('cleanerName')?.value || '').trim() || 'cleaner', p_notes: 'Restock from the cleaning checklist', p_rows: rows, p_upkeep: upkeep, p_remember: R.remember || {},
   });
+  if (r.ok && r.data && r.data.ok === false) {   // the server read it and wrote nothing
+    if (r.data.error === 'short_stock') return S120R_shortStock(R, r.data);
+    R.failed = S120R_failText(String(r.data.error || 'refused').slice(0, 120)); R.tried = false; R.sendStartedAt = null; saveDraft();
+    return { ok: false, kind: 'refused', msg: R.failed };
+  }
   if (r.ok) { R.sent = true; R.failed = ''; } else if (r.kind === 'refused') { R.failed = r.msg; R.tried = false; } else R.waiting = true;
   saveDraft();
   return r;
+}
+
+/* The server found less in inventory than asked: nothing was written. Every entry stays, the real numbers replace the old ones, and Save is asked for again. */
+function S120R_shortStock(R, data) {
+  const list = (Array.isArray(data.short) ? data.short : []).map(x => ({ item_id: x.item_id, name: String(x.name || ''), on_hand: Math.max(0, Number(x.on_hand) || 0), asked: Number(x.asked) || 0 }));
+  R.short = list; R.tried = false; R.waiting = false; R.saved = false; R.sendStartedAt = null;
+  state.supplyLogSaved = false; el('supply-usage-trigger-card')?.classList.remove('sus-done');
+  const c = S120R_getCtx(); if (c) list.forEach(x => { c.stock[x.item_id] = x.on_hand; });
+  saveDraft();
+  return { ok: false, kind: 'short' };
 }
 
 /* Send what is complete and not yet sent, one run at a time. A second call (a double tap, the online event, Submit) waits for the first.
@@ -11611,7 +11830,11 @@ async function S120R_flushOnce(onlyRestock, atSubmit) {
       else {
         const miss = R.tried ? [] : S120R_restockMissing(R, S120R_classify(_susItems), state.cleaningType);   // a locked sheet is resent as it stands: it may already have reached the server
         if (miss.length) { R.saved = false; state.supplyLogSaved = false; el('supply-usage-trigger-card')?.classList.remove('sus-done'); unanswered.push(...miss); }
-        else { const r = await S120R_sendRestock(); if (!r.ok && r.kind === 'retry') pending.push('restock'); }
+        else {
+          const r = await S120R_sendRestock();
+          if (r.kind === 'short') { unanswered.push(...(R.short || []).map(x => x.name + ', only ' + x.on_hand + ' left')); if (typeof S120R_openRestock === 'function') S120R_openRestock(); }   // the sheet reopens with the real numbers
+          else if (!r.ok && r.kind === 'retry') pending.push('restock');
+        }
       }
     }
   } catch (e) {   // name what is still unsent, so both the stop message and the unconfirmed flags are right
@@ -11629,6 +11852,22 @@ async function S120R_flushOnce(onlyRestock, atSubmit) {
 function S120R_commit() {
   const L = state.linen;
   if (L && S120R_linenComplete(L) && !L.sent && (L.answer !== 'found' || L.unavailable)) { L.sent = true; saveDraft(); }
+}
+
+/* ── context and reminders (s121 R6) ─────────────────────────── */
+async function S120R_loadContext() {
+  const r = await S120R_rpc('restock_context_v1', { p_property_id: PROPERTY_ID });
+  const c = r.ok ? S120R_normCtx(r.data) : null;
+  if (c) { S120R_setCtx(c); try { lsJSON(S120R_CTX_KEY, r.data); } catch (e) { /* storage full: the next open asks again */ } return c; }
+  if (!S120R_getCtx()) S120R_setCtx(S120R_normCtx(lsJSON(S120R_CTX_KEY)));   // offline or refused: the last answer, or none (then no number and no limit)
+  return S120R_getCtx();
+}
+async function S120R_remindAdmin(id) {
+  const R = state.restock; if (!R) return false;
+  const r = await S120R_rpc('restock_remind_admin_v1', { p_property_id: PROPERTY_ID, p_item_id: id });
+  if (r.ok && !(r.data && r.data.ok === false)) { R.reminded = R.reminded || {}; R.reminded[id] = true; saveDraft(); S120R_renderRestock(); return true; }
+  showToast('The reminder could not be sent. Try again when you are online.', 'error', 4000);
+  return false;
 }
 
 /* ── item lists ─────────────────────────────────────────────── */
@@ -11655,7 +11894,7 @@ async function S120R_loadLinenItems() {
 function S120R_focusKey(root) {
   const a = document.activeElement;
   if (!root || !a || a === root || !root.contains(a)) return null;
-  const attr = ['data-ans', 'data-pick', 'data-del', 'data-out', 'data-d', 'data-kit', 'data-chip', 'data-else', 'data-unav', 'data-unavail'].find(k => a.hasAttribute(k));
+  const attr = ['data-ans', 'data-pick', 'data-del', 'data-out', 'data-d', 'data-kit', 'data-chip', 'data-else', 'data-unav', 'data-unavail', 'data-up', 'data-treat', 'data-remind'].find(k => a.hasAttribute(k));
   let sel = attr ? `[${attr}="${a.getAttribute(attr)}"]` : (a.id ? '#' + a.id : null);
   if (!sel) return null;
   const box = a.closest('[data-qty],[data-k]');
@@ -11683,7 +11922,7 @@ function S120R_refreshStatus() {
     else if (R && R.saved && R.tried && R.waiting) t = 'Saved on this phone. It will send when the connection returns; the answers stay locked until then.';
     else if (R && R.saved && R.tried) t = 'Saved. Sending now; the answers are locked until it is sent.';
     else if (R && R.saved) {
-      if (S120R_restockRows(R, S120R_classify(_susItems), state.cleaningType).length === 0) { t = 'Saved.'; cls = 'ok'; }
+      if (S120R_restockRows(R, S120R_classify(_susItems), state.cleaningType).length === 0 && S120R_upkeepRows(R).length === 0) { t = 'Saved.'; cls = 'ok'; }
       else t = 'Saved on this phone. Not sent yet; it sends when you are online and before you submit.';
     }
     n.textContent = t; n.className = 's120-status ' + cls;
@@ -11796,6 +12035,8 @@ function S120R_openRestock() {
   if (!state.restock) state.restock = S120R_newRestock();
   const none = el('sus-none-btn'); if (none) none.style.display = state.cleaningType === 'mid_stay' ? '' : 'none';
   S120R_setSheetButtons(true);   // Save and None stay off until the list has rendered
+  if (!S120R_getCtx()) S120R_setCtx(S120R_normCtx(lsJSON(S120R_CTX_KEY)));   // the last copy shows at once; the fresh one redraws the sheet when it arrives
+  S120R_loadContext().then(() => { if (_susItems.length && el('supply-usage-sheet')?.classList.contains('open')) S120R_renderRestock(); }).catch(() => {});
   if (_susItems.length || state.restock.sent) return S120R_renderRestock();
   const loading = el('sus-loading');
   if (loading) { loading.style.display = 'block'; loading.textContent = 'Loading supplies…'; }
@@ -11818,34 +12059,7 @@ function S120R_renderRestock() {
   const R = state.restock, locked = !!(R.sent || R.tried), cls = S120R_classify(_susItems);
   const scroller = listEl.closest('.sus-panel') || listEl; const keep = scroller.scrollTop;
   const fk = S120R_focusKey(listEl);
-  const row = (it, kind, val, note, label) => `<div class="sus-item" role="listitem"><div class="sus-item-info"><div class="sus-item-name">${esc(label || it.name)}</div>${note ? `<div class="sus-item-stock">${esc(note)}</div>` : ''}</div>
-      ${locked ? `<div class="sus-step-val">${val == null ? '–' : val}</div>` : S120R_stepperHtml(val, `data-k="${kind}" data-id="${esc(it.id)}" aria-label="${esc(label || it.name)}"`)}</div>`;
-  const head = t => `<div class="sus-section-label">${t}</div>`;
-  let h = '';
-  if (R.legacy) h += `<p class="s120-hint">Saved earlier on the older sheet. It cannot be changed here; tell the host if something is wrong.</p>`;
-  else if (R.sent) h += `<p class="s120-hint">${R.none ? 'Saved: nothing used this stay.' : 'Saved and sent. It cannot be changed here; tell the host if something is wrong.'}</p>`;
-  else if (R.tried) h += `<p class="s120-hint">${R.waiting ? 'Saved on this phone. It will send when the connection returns.' : 'Saved and sending.'} The answers are locked until they are sent, so the report and the stock agree; tell the host if something is wrong.</p>`;
-  else if (R.unavailable) h += `<p class="s120-hint">Saved: the list could not load, so the host will check the shelf. Answer the rows below and Save to replace that.</p>`;
-  else if (state.cleaningType === 'mid_stay') h += `<p class="s120-hint">Log what this stay used up. If you used nothing, tap Nothing used this stay.</p>`;
-  else h += `<p class="s120-hint">Log what this stay used up. Every row needs an answer; 0 is an answer.</p>`;
-  if (cls.top.length) h += head('Used this stay') + cls.top.map(i => row(i, 'top', R.top[i.id])).join('');
-  if (cls.kit) {
-    const g = S120R_guestCount();
-    h += head('Guest kit') + `<div class="sus-item" role="listitem"><div class="sus-item-info"><div class="sus-item-name">Put out new guest kits?</div><div class="sus-item-stock">Toothbrush, toothpaste and soap in one kit.${g ? ' Guests this stay: ' + g : ''}</div></div>
-      <div class="s120-outs" role="group" aria-label="Put out new guest kits?">
-        <button type="button" class="confirm-btn ${R.kit.a === 'yes' ? 'confirmed' : ''}" data-kit="yes" aria-pressed="${R.kit.a === 'yes'}" ${locked ? 'disabled' : ''}>Yes</button>
-        <button type="button" class="confirm-btn ${R.kit.a === 'no' ? 'issue' : ''}" data-kit="no" aria-pressed="${R.kit.a === 'no'}" ${locked ? 'disabled' : ''}>No</button></div></div>`;
-    if (R.kit.a === 'yes') h += row(cls.kit, 'kit', R.kit.n, 'One kit for each guest', 'Guest kit');
-  }
-  h += head('Anything extra?') + `<p class="s120-hint">Optional. A seasonal treat like chocolates goes under Something else.</p><div class="s120-chips">${cls.chips.map(i => `<button type="button" class="s120-chip ${R.extras[i.id] != null ? 'on' : ''}" data-chip="${esc(i.id)}" aria-pressed="${R.extras[i.id] != null}" ${locked ? 'disabled' : ''}>${esc(i.name)}</button>`).join('')}
-      <button type="button" class="s120-chip ${R.elseOpen || R.elseText ? 'on' : ''}" data-else="1" aria-pressed="${!!(R.elseOpen || R.elseText)}" ${locked ? 'disabled' : ''}>Something else</button></div>`;
-  h += cls.chips.filter(i => R.extras[i.id] != null).map(i => row(i, 'extra', R.extras[i.id])).join('');
-  if (R.elseOpen || R.elseText) h += `<input type="text" class="s120-else" id="s120-else" maxlength="200" aria-label="What else did you use? The host reads this; it does not change stock." placeholder="What else? The host reads this; it does not change stock." value="${esc(R.elseText)}" ${locked ? 'disabled' : ''}>`;
-  if (cls.other.length) {
-    h += `<p class="s120-hint">Optional. Refills, cans and bags, only if you opened one.</p><button type="button" class="sus-optional-toggle" id="s120-other-toggle" aria-expanded="${!!R.otherOpen}">${R.otherOpen ? '▲ Hide other items' : '▾ Other items'}</button>`;
-    if (R.otherOpen) h += `<div class="sus-optional-section open">${cls.other.map(i => row(i, 'other', R.other[i.id] || 0, S120R_unitLine(i.unit))).join('')}</div>`;
-  }
-  listEl.innerHTML = h;
+  listEl.innerHTML = S120R_restockHtml(R, cls, state.cleaningType, locked);
   S120R_focusBack(listEl, fk);
   const ready = _susItems.length > 0;
   const save = el('sus-save-btn'); if (save) { save.disabled = locked || !ready; save.textContent = locked ? 'Saved' : 'Save'; }
@@ -11863,25 +12077,34 @@ function S120R_unsave(R) {
 }
 
 function S120R_onRestockClick(ev) {
-  const R = state.restock; if (!R || R.sent || R.tried) return;
+  const R = state.restock; if (!R) return;
   const t = ev.target.closest('button'); if (!t || t.disabled) return;
+  if (t.dataset.remind) { S120R_remindAdmin(t.dataset.remind); return; }   // a reminder is not an answer, so it works on a locked sheet too
+  if (R.sent || R.tried) return;
   if (t.dataset.unavail) return S120R_markRestockUnavailable();
-  const snap = () => JSON.stringify([R.top, R.kit, R.extras, R.other, R.elseText]);
+  const cls = S120R_classify(_susItems);
+  const snap = () => JSON.stringify([R.top, R.kit, R.extras, R.other, R.elseText, R.upkeep, R.treat]);
   const before = snap();
   if (t.dataset.d) {
     const box = t.closest('[data-k]'); if (!box) return;
     const k = box.dataset.k, id = box.dataset.id, d = Number(t.dataset.d);
-    if (k === 'top') R.top[id] = S120R_step(R.top[id], d, 99);
-    else if (k === 'kit') R.kit.n = S120R_step(R.kit.n, d, 99);
-    else if (k === 'extra') R.extras[id] = Math.max(1, S120R_step(R.extras[id], d, 99));
-    else if (k === 'other') R.other[id] = S120R_step(R.other[id] || 0, d, 99);
+    if (k === 'top') { const m = S120R_topModel(R, cls).find(x => x.id === id); if (!m) return; R.top[id] = S120R_step(m.val, d, m.max); }
+    else if (k === 'kit') { const m = S120R_kitModel(R, cls); if (!m) return; R.kit.n = S120R_step(m.val, d, m.max); }
+    else if (k === 'treat') { const m = S120R_treatModel(R, cls); if (!m) return; R.treat.n = Math.max(1, S120R_step(m.val, d, Math.max(1, m.max))); }
+    else if (k === 'extra') R.extras[id] = Math.max(1, S120R_step(R.extras[id], d, Math.max(1, S120R_cap(id))));
+    else if (k === 'other') R.other[id] = S120R_step(R.other[id] != null ? R.other[id] : (R.top[id] || 0), d, S120R_cap(id));
   } else if (t.dataset.kit) {
     R.kit.a = t.dataset.kit; if (R.kit.a === 'no') R.kit.n = null;
-    if (R.kit.a === 'yes' && R.kit.n == null) R.kit.n = S120R_guestCount();
+  } else if (t.dataset.up) {
+    const [kind, a] = t.dataset.up.split(':'); if (R.upkeep && kind in R.upkeep) R.upkeep[kind] = R.upkeep[kind] === a ? null : a;
+  } else if (t.dataset.treat) {
+    const key = t.dataset.treat; if (!S120R_TREATS[key]) return;
+    R.treat = R.treat && R.treat.k === key ? null : { k: key, n: S120R_TREATS[key].n };   // one choice at most
   } else if (t.dataset.chip) {
     if (R.extras[t.dataset.chip] != null) delete R.extras[t.dataset.chip]; else R.extras[t.dataset.chip] = 1;
   } else if (t.dataset.else) { R.elseOpen = !R.elseOpen; if (!R.elseOpen) R.elseText = ''; }
   else if (t.id === 's120-other-toggle') R.otherOpen = !R.otherOpen;   // a fold, not an answer
+  else if (t.id === 's120-extra-toggle') R.extraOpen = !(R.extraOpen != null ? R.extraOpen : S120R_treatAllowed());
   else return;
   if (snap() !== before) S120R_unsave(R); else saveDraft();
   S120R_renderRestock();
@@ -11904,6 +12127,7 @@ async function S120R_saveRestock(none) {
   const miss = none ? [] : S120R_restockMissing(R, cls, state.cleaningType);
   if (miss.length) { showToast('Still to answer: ' + miss.join(', '), 'error', 5000); return; }
   R.none = !!none;
+  if (!none) S120R_materialize(R, cls);   // what is on screen, standard amounts included, is what is sent
   R.unavailable = false; R.failed = '';
   R.saved = true; state.supplyLogSaved = true; if (!R.key) R.key = uuid();
   el('supply-usage-trigger-card')?.classList.add('sus-done');
@@ -11943,6 +12167,7 @@ function initInventoryUsage() {
   el('sus-list')?.addEventListener('click', S120R_onRestockClick);
   el('sus-list')?.addEventListener('input', ev => { const R = state.restock; if (ev.target.id === 's120-else' && R && !R.sent && !R.tried && R.elseText !== ev.target.value) { R.elseText = ev.target.value; S120R_unsave(R); } });
   window.addEventListener('online', () => { S120R_flushAll(true); });
+  S120R_loadContext().catch(() => {});   // warms the offline copy before the cleaner opens the sheet
   S120R_refreshStatus();
 
   // Keyboard: close on Escape

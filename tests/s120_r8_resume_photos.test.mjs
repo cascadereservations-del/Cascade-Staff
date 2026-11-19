@@ -296,7 +296,7 @@ test('R8 item 4: offline Submit, back online, the cleaner taps confirm while the
   await settle();
   assert.equal(w.proceeded, 0, 'the report was not sent');
   assert.equal(w.msg(), FIRST, 'the stop message shows');
-  assert.equal(w.post('record_inventory_usage').length, 1, 'one send, not two');
+  assert.equal(w.post('record_restock_v1').length, 1, 'one send, not two');
   await w.tap();
   assert.equal(w.proceeded, 1, 'a real second tap, after the stop, lets the report go');
 });

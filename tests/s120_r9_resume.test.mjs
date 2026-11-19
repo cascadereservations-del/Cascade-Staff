@@ -17,7 +17,7 @@ const json = (body, status = 200) => ({ status, contentType: 'application/json',
 const HOUR = 3600000;
 const posts = (t, name) => t.calls.filter(c => c.method === 'POST' && c.url.includes(name));
 const uploads = t => posts(t, '/upload-photo');
-const sends = t => t.calls.filter(c => c.method === 'POST' && (c.url.includes('/rpc/record_inventory_usage') || c.url.includes('/rpc/record_linen_stains_v1')));
+const sends = t => t.calls.filter(c => c.method === 'POST' && (c.url.includes('/rpc/record_restock_v1') || c.url.includes('/rpc/record_linen_stains_v1')));
 const linenKeys = t => posts(t, '/rpc/record_linen_stains_v1').map(c => JSON.parse(c.body).p_idempotency_key);
 
 /* the answers the made-up server gives: item lists, and upload / send results the test can change */
@@ -26,7 +26,7 @@ function server(o = {}) {
     handler: (rec) => {
       if (rec.url.includes('/rest/v1/inventory_items')) return json(rec.url.includes('is_consumable=eq.true') ? ITEMS : LINEN);
       if (rec.url.includes('/functions/v1/upload-photo')) return o.upload === 'ok' ? json({ ok: true, path: 'p/' + Math.random(), signedUrl: 'https://drive.example.test/up-' + Math.random() }) : json({ ok: false }, 500);
-      if (rec.url.includes('/rpc/record_inventory_usage') || rec.url.includes('/rpc/record_linen_stains_v1')) return o.send === 500 ? json({ message: 'down' }, 500) : json({ ok: true });
+      if (rec.url.includes('/rpc/record_restock_v1') || rec.url.includes('/rpc/record_linen_stains_v1')) return o.send === 500 ? json({ message: 'down' }, 500) : json({ ok: true });
       return null;
     },
   };
@@ -152,14 +152,14 @@ t0('R9 item 2-3: a Restock waiting during a slow Resume is not sent until the ho
     await slow(t);
     await t.page.click('#btn-draft-resume');
     await idle(t, 1200);
-    assert.equal(posts(t, '/rpc/record_inventory_usage').length, 0, 'no Restock request while the restore waits');
+    assert.equal(posts(t, '/rpc/record_restock_v1').length, 0, 'no Restock request while the restore waits');
     await t.page.evaluate(() => window.dispatchEvent(new Event('online')));
     await idle(t, 400);
-    assert.equal(posts(t, '/rpc/record_inventory_usage').length, 0, 'the online event does not send it either');
+    assert.equal(posts(t, '/rpc/record_restock_v1').length, 0, 'the online event does not send it either');
     await release(t);
     await t.page.waitForFunction(() => !document.getElementById('draft-modal').classList.contains('open'), null, { timeout: 15000 });
     await t.page.waitForTimeout(1500);
-    assert.equal(posts(t, '/rpc/record_inventory_usage').length, 1, 'one send after the release');
+    assert.equal(posts(t, '/rpc/record_restock_v1').length, 1, 'one send after the release');
     assert.ok((await toasts(t)).includes('Session resumed'), 'the cleaner is told the session is back');
   } finally { await t.close(); }
 });

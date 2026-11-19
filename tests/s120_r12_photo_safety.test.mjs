@@ -24,7 +24,7 @@ function server(o = {}) {
       if (o.upload === 'first-held' && !o.firstSeen) { o.firstSeen = true; o.releaseFirst = () => route.fulfill(okBody); return 'held'; }
       return o.upload === 'fail' ? json({ ok: false }, 500) : okBody;
     }
-    if (rec.url.includes('/rpc/record_inventory_usage') || rec.url.includes('/rpc/record_linen_stains_v1')) return json({ ok: true });
+    if (rec.url.includes('/rpc/record_restock_v1') || rec.url.includes('/rpc/record_linen_stains_v1')) return json({ ok: true });
     if (o.holdAuth && rec.url.includes('/auth/v1/token')) { o.authRoute = route; return 'held'; }
     return null;
   } };

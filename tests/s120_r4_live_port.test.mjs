@@ -140,7 +140,7 @@ test('rule 5: consumption_per_booking never reaches the list, a screen, the cach
 });
 
 test('rule 5: a fractional amount in a draft cannot be sent either, and no page code reads consumption_per_booking', () => {
-  const cls = pure.S120R_classify(ITEMS), rs = pure.S120R_newRestock(); rs.key = 'K';
+  const cls = pure.S120R_classify(ITEMS), rs = pure.S120R_newRestock(); rs.key = 'K'; rs.kit = { a: 'no', n: null }; cls.top.forEach(i => { rs.top[i.id] = 0; });   // s121: an untouched row sends its standard amount, so zero them first
   rs.top[idOf('Tea')] = 3.8462; rs.top[idOf('Coffee (3-in-1)')] = 2; rs.other[idOf('Demo Soap')] = 0.5;
   assert.deepEqual(pure.S120R_restockRows(rs, cls, 'turnover').map(r => [r.item_id, r.used_qty]), [[idOf('Coffee (3-in-1)'), 2]]);
   assert.ok(!/consumption_per_booking|per_booking/.test(html), 'nothing in checklist/index.html reads it');

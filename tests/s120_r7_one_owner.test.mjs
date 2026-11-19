@@ -180,7 +180,7 @@ test('R7 item 5: Start fresh the same day keeps a sent Restock and linen (same k
   assert.deepEqual([stored.restock.sent, stored.supplyLogSaved, stored.linen.sent], [true, true, true], 'and it is saved');
   assert.equal(w.api.hold(), false);
   await w.api.flush(false, true);
-  assert.equal(w.post('record_inventory_usage').length, 0); assert.equal(w.post('record_linen_stains_v1').length, 0);
+  assert.equal(w.post('record_restock_v1').length, 0); assert.equal(w.post('record_linen_stains_v1').length, 0);
 });
 
 for (const mode of ['tried', 'waiting']) {
@@ -193,7 +193,7 @@ for (const mode of ['tried', 'waiting']) {
     assert.equal(s.restock.key, 'rk-1'); assert.equal(s.linen.key, 'lk-1');
     await w.api.load();
     await w.api.flush(false, true);
-    const r = w.post('record_inventory_usage'), l = w.post('record_linen_stains_v1');
+    const r = w.post('record_restock_v1'), l = w.post('record_linen_stains_v1');
     assert.equal(r.length, 1); assert.ok(r[0].body.p_rows.every(x => x.usage_key.startsWith('s120-rk-1-')), 'restock keeps its key');
     assert.equal(l.length, 1); assert.equal(l[0].body.p_idempotency_key, 'lk-1', 'linen keeps its key');
   });
@@ -217,7 +217,7 @@ test('R7 item 5: Start fresh discards an answer never sent and never tried, and 
   await b.api.load();
   s.restock = mk('S120R_newRestock'); classify().top.forEach(i => { s.restock.top[i.id] = 1; }); s.restock.kit = { a: 'no', n: null }; s.restock.saved = true; s.supplyLogSaved = true;
   await b.api.flush(true);
-  const sent = b.post('record_inventory_usage');
+  const sent = b.post('record_restock_v1');
   assert.equal(sent.length, 1); assert.ok(sent.every(c => c.body.p_rows.every(x => !x.usage_key.includes('rk-1'))), 'a new cleaning gets a new key');
 });
 
@@ -279,7 +279,7 @@ test('R7 item 8: the server recovers on the second tap: the report goes, the key
   await w.tap();
   assert.equal(w.proceeded, 1); assert.equal(w.state.restock.sent, true); assert.ok(!w.state.restock.unconfirmed);
   assert.deepEqual(new Function(block + '\nreturn S120R_reportLines;')()(w.state.linen, w.state.restock), []);
-  assert.ok(w.post('record_inventory_usage').every(c => c.body.p_rows.every(x => x.usage_key.startsWith('s120-rk-1-'))));
+  assert.ok(w.post('record_restock_v1').every(c => c.body.p_rows.every(x => x.usage_key.startsWith('s120-rk-1-'))));
 });
 
 test('R7 item 7: an automatic resubmit when the connection returns never counts as the second tap', async () => {
