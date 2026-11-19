@@ -309,7 +309,7 @@ test('s120R: the page wires it in: draft keeps linen and restock, Submit flushes
   assert.match(html, /const DRAFT_VERSION\s+= 5;/, 'old drafts are migrated, not discarded');
   assert.ok(!/LIQUID_ML_PER_UNIT|QUICK_ITEM_NAMES/.test(html), 'item 14: dead constants are gone');
   const sw = readFileSync(new URL('../checklist/sw.js', import.meta.url), 'utf8');
-  assert.match(sw, /const CACHE_NAME = 'ch-shell-v12-restock-defaults';/);
+  assert.match(sw, /const CACHE_NAME = 'ch-shell-v13-hero-glass';/);
 });
 
 
