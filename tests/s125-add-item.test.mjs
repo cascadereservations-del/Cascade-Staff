@@ -1,4 +1,4 @@
-// s125 (staff 3.4.40): everyone can add a new inventory item, saved at once with a 30 minute Undo (D-386). Contract: docs/s125/CONTRACT-add-item.md, L2 Staff.
+// s125 (staff 3.4.41): everyone can add a new inventory item, saved at once with a 30 minute Undo (D-386). Contract: docs/s125/CONTRACT-add-item.md, L2 Staff.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -229,12 +229,12 @@ test('s125 18: scanning an unknown code keeps New item for managers only, opens 
   await c.act('scan-new'); assert.doesNotMatch(c.sheet(), /I_new/);
 });
 
-test('s125 19: the CSS carries the approved pieces and the version is 3.4.40 with cs-shell-v65', () => {
+test('s125 19: the CSS carries the approved pieces and the version is 3.4.41 with cs-shell-v66', () => {
   const css = fs.readFileSync(path.join(here, '..', 'stock', 'I_stock.css'), 'utf8');
   assert.match(css, /\.sheet\.I_sheet\.I_new \{/); assert.match(css, /box-shadow: inset 0 3px 0 var\(--v5-gold\)/); assert.match(css, /\.I_srow\.I_srow3 \{ grid-template-columns: minmax\(0, 1fr\) auto auto; \}/);
   assert.match(css, /prefers-contrast: more\) \{ \.sheet\.I_sheet\.I_new/);
-  assert.match(fs.readFileSync(path.join(here, '..', 'sw.js'), 'utf8'), /cs-shell-v65/);
-  assert.match(fs.readFileSync(path.join(here, '..', 'package.json'), 'utf8'), /"version": "3\.4\.40"/);
+  assert.match(fs.readFileSync(path.join(here, '..', 'sw.js'), 'utf8'), /cs-shell-v66/);
+  assert.match(fs.readFileSync(path.join(here, '..', 'package.json'), 'utf8'), /"version": "3.4.41"/);
 });
 
 test('s125 20 (A4): a create whose answer was lost and replays as name_exists with the new item id opens it as already added, with no Undo line', async () => {

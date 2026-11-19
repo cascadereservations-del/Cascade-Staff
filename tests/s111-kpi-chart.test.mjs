@@ -165,7 +165,7 @@ test('s111 Guest tiers: thresholds, glyphs, every perk per tier (arrival and hou
   assert.doesNotMatch(JSON.stringify(g), /₱|PHP|price|discount|!|No need to ask for ID/);
 });
 test('s111 Guest tiers (s114 shape): a card after the guest cards on Today, closed until tapped, the same for every role, with the tier badge styles', async () => {
-  for (const role of ['cleaner', 'laundry', 'owner']) {
+  for (const role of ['cleaner', 'owner']) {
     const h = (await boot({ role, hash: '#home', handlers: baseHandlers(role) })).els['v-home'].innerHTML;
     const m = /<details class="card glass A_card F_span T_tiers" id="T_tiers"><summary class="T_tsum">[\s\S]*?<span>Guest tiers: how many stays for each<\/span>[\s\S]*?<\/details>/.exec(h); assert.ok(m, role + ' closed by default');
     for (const t of ['first', 'returning', 'regular', 'vip']) assert.match(m[0], new RegExp('<span class="T_badge p-tier-' + t + '"><svg[^>]*data-i="[a-z]+"'), role + ' ' + t);
@@ -175,7 +175,7 @@ test('s111 Guest tiers (s114 shape): a card after the guest cards on Today, clos
 });
 
 test('s111 release pins and tokens: version unchanged, chart tokens in all three theme blocks, no raw colours or px type in the new CSS', () => {
-  assert.equal(JSON.parse(read('package.json')).version, '3.4.40'); assert.match(read('sw.js'), /CACHE_NAME = 'cs-shell-v65'/);
+  assert.equal(JSON.parse(read('package.json')).version, '3.4.41'); assert.match(read('sw.js'), /CACHE_NAME = 'cs-shell-v66'/);
   const tok = read('tokens.css'); for (const k of ['chart-line', 'chart-area', 'chart-band', 'chart-grid', 'chart-axis', 'chart-avg']) assert.equal((tok.match(new RegExp('--v5-' + k + ':', 'g')) || []).length, 3, k);
   const css = read('kpi/K_kpi.css'); const s111 = css.slice(css.indexOf('s113, the chart standard'), css.indexOf('/* supply and consumption'));
   assert.doesNotMatch(s111, /#[0-9a-f]{3,6}\b|rgb\(|nowrap|font-size:\s*\d+px|font:[^;]*\d+px/i);

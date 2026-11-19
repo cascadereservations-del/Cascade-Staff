@@ -42,7 +42,7 @@ const KPI = (admin) => Object.assign({ ok: true, month: '2026-10-01',
 // ---------------------------------------------------------------------------------------------- 1. role helpers
 test('s110 laundry role: staff layout, own tab set, no checklist door, no guest contact, KPIs money only for owner/admin/finance', () => {
   assert.equal(CS.layoutForRole('laundry'), 'staff'); assert.equal(CS.isLaundry('laundry'), true); assert.equal(CS.isLaundry('cleaner'), false);
-  assert.deepEqual(CS.tabKeys('laundry'), ['home', 'calendar', 'stock', 'kpis', 'more']);
+  assert.deepEqual(CS.tabKeys('laundry'), ['home', 'stock']);
   for (const r of ['owner', 'admin', 'finance', 'cleaner', 'inspector', 'maintenance']) assert.deepEqual(CS.tabKeys(r), ['home', 'calendar', 'tasks', 'kpis', 'more'], r);
   assert.equal(CS.doorAllowed('checklist', 'laundry'), false); assert.deepEqual(CS.doorsForRole('laundry'), ['manual', 'guide']);
   assert.equal(CS.canSeeGuestContact('laundry'), false); assert.equal(CS.accessVerdict({ role: 'laundry', disabled: false, session_current: true }).ok, true);
@@ -79,7 +79,7 @@ async function kpiScreen(role, payload) {
 }
 test('s110 KPIs tab: owner and finance get Utility, Inventory and Admin; cleaner, inspector and laundry get two segments and never a peso', async () => {
   for (const role of ['owner', 'finance']) { const { html, calls } = await kpiScreen(role, KPI(true)); assert.match(html, /data-seg="admin"/, role); assert.match(html, /data-seg="utility"[\s\S]*data-seg="inventory"/); assert.ok(calls.some((c) => c[0] === 'kpi_tab_v1' && c[1].p_month === null), 'kpi_tab_v1 asked for the current month'); }
-  for (const role of ['cleaner', 'inspector', 'laundry']) {
+  for (const role of ['cleaner', 'inspector']) {
     const { html, app } = await kpiScreen(role, KPI(true)); // even a payload that wrongly carries the admin key
     assert.doesNotMatch(html, /data-seg="admin"/, role); assert.match(html, /412 kWh/); assert.doesNotMatch(html, /₱|PHP|11\.25|4,635|429/, role + ': no money anywhere');
     assert.match(html, /role="tablist"/); assert.equal((html.match(/role="tab"/g) || []).length, 2);
@@ -151,11 +151,11 @@ test('s110 Today: the Inventory card with three big buttons for staff and admin 
 test('s110 Laundry: Today without Turnover, nudges, clean-done card, checklist door or cleaning fee; Inventory tab; calendar privacy; no money', async () => {
   const app = await homeFor('laundry'); const h = app.els['v-home'].innerHTML.replace(/<p class="A_turntag"[\s\S]*?<\/p>/, ''); // s116: the turnover-today tag is for every role, laundry included; the Turnover section still is not
   assert.doesNotMatch(h, /Turnover today|aria-label="Turnover|Walk through first|Start cleaning|H_cleandone|Clean done|slot-paid-notice|slot-owed|Cleaning fee|Start or continue/i);
-  assert.doesNotMatch(h, /door\/checklist|CH-Cleaners-Checklist|data-primary="start-cleaning"/); assert.match(h, /id="K_inv"/); assert.match(h, /Today in the house|Up next|Calendar/);
+  assert.doesNotMatch(h, /door\/checklist|CH-Cleaners-Checklist|data-primary="start-cleaning"/); assert.match(h, /id="K_inv"/); assert.match(h, /Today in the house|Up next/);
   assert.doesNotMatch(h, /₱|PHP/);
-  assert.deepEqual([...app.els.tabbar.innerHTML.matchAll(/href="(#[a-z]+)"/g)].map((m) => m[1]), ['#home', '#calendar', '#stock', '#kpis', '#more']);
+  assert.deepEqual([...app.els.tabbar.innerHTML.matchAll(/href="(#[a-z]+)"/g)].map((m) => m[1]), ['#home', '#stock']);
   assert.match(app.els.tabbar.innerHTML, />Inventory</);
-  const cal = (await homeFor('laundry', '#calendar')).els['v-calendar'].innerHTML; assert.doesNotMatch(cal, /tel:|mailto:|id_photo|0900|₱|PHP/);
+  const cal = (await homeFor('laundry', '#calendar/house')).els['v-calendar'].innerHTML; assert.doesNotMatch(cal, /tel:|mailto:|id_photo|0900|₱|PHP/);
   const loaded = []; const st = await boot({ role: 'laundry', hash: '#stock', winInit: (w) => { w.H_loadAsset = (m) => { loaded.push(m.src); w[m.global] = { mount() {} }; return Promise.resolve(); }; }, handlers: baseHandlers('laundry') });
   assert.ok(loaded.includes('stock/I_stock.js'), 'laundry may open the stock screen'); const sv = st.els['v-stock'].innerHTML;
   assert.match(sv, /href="#supply\/use"/); assert.match(sv, /href="#supply"/); assert.doesNotMatch(sv, /Check inventory/, 'she is already on it'); assert.match(st.els.tabbar.innerHTML, /href="#stock" aria-current="page"/);
@@ -329,7 +329,7 @@ test('s110 photos: over 20 MB is refused before decoding, the canvas is released
 test('s110 laundry tab bar on the guest and pay pages: Inventory where Tasks would be, from the saved role', () => {
   const store = (r) => ({ getItem: (k) => (k === 'cs_role' ? r : null), setItem() {}, removeItem() {} });
   assert.equal(CS.recalledRole(store('laundry')), 'laundry'); assert.equal(CS.recalledRole(store('hacker')), ''); assert.equal(CS.recalledRole(null), '');
-  const keys = [...P.P_tabs('', (n) => '', (x) => x, CS.tabKeys('laundry')).matchAll(/href="\.\.\/(#[a-z]+)"/g)].map((m) => m[1]); assert.deepEqual(keys, ['#home', '#calendar', '#stock', '#kpis', '#more']);
+  const keys = [...P.P_tabs('', (n) => '', (x) => x, CS.tabKeys('laundry')).matchAll(/href="\.\.\/(#[a-z]+)"/g)].map((m) => m[1]); assert.deepEqual(keys, ['#home', '#stock']);
   assert.deepEqual([...P.P_tabs('', (n) => '', (x) => x).matchAll(/href="\.\.\/(#[a-z]+)"/g)].map((m) => m[1]), ['#home', '#calendar', '#tasks', '#kpis', '#more'], 'no role: the standard bar');
   assert.match(P.P_shell('Title', '', { icon: (n) => '', esc: (x) => x, keys: CS.tabKeys('laundry') }), /Inventory/);
   const stored = {}; CS.rememberRole({ setItem: (k, v) => { stored[k] = v; }, removeItem: (k) => { delete stored[k]; } }, 'laundry'); assert.deepEqual(stored, { cs_role: 'laundry' });
@@ -337,14 +337,14 @@ test('s110 laundry tab bar on the guest and pay pages: Inventory where Tasks wou
   // the real guest page, run against a window with a saved laundry role (no Supabase: the page draws its shell and stops)
   const root = { innerHTML: '' }, win = { CS, ICON: (n) => '<i data-i="' + n + '"></i>', localStorage: store(null), sessionStorage: store('laundry'), location: { hash: '#x', search: '' }, document: { getElementById: () => root } };
   win.window = win; const ctx = vm.createContext(win); vm.runInContext(read('guest/guest-lib.js'), ctx); vm.runInContext(read('guest/guest.js'), ctx);
-  assert.deepEqual([...root.innerHTML.matchAll(/class="tab" href="\.\.\/(#[a-z]+)"/g)].map((m) => m[1]), ['#home', '#calendar', '#stock', '#kpis', '#more']); assert.match(root.innerHTML, />Inventory</);
+  assert.deepEqual([...root.innerHTML.matchAll(/class="tab" href="\.\.\/(#[a-z]+)"/g)].map((m) => m[1]), ['#home', '#stock']); assert.match(root.innerHTML, />Inventory</);
   assert.match(read('pay/pay.js'), /keys: tabKeys\(\)/); assert.doesNotMatch(read('pay/C_admin.js'), /tabKeys|recalledRole/, 'the admin pay page touches no storage (payout hygiene)');
   assert.match(read('app.js'), /CS\.rememberRole\(store\('sessionStorage'\), state\.access\.role\)/);
 });
 
 // ---------------------------------------------------------------------------------------------- 11. Amendment 1: internet outages and the admin month
 test('s110 KPIs: Internet outages row for every role, from utility.internet_cuts; no row on an older server', async () => {
-  for (const role of ['cleaner', 'laundry', 'owner']) {
+  for (const role of ['cleaner', 'owner']) {
     const { html } = await kpiScreen(role, KPI(true)); assert.match(html, /Internet outages/, role); assert.match(html, /K_ic-purple/); assert.match(html, /data-i="wifioff"/);
     assert.match(html, /<b>2<\/b><span>3 h total<\/span>/, role + ': count and hours');
   }
@@ -366,7 +366,7 @@ test('s110 Admin segment: the month at a glance for owner, admin and finance onl
   const K = loadModule('kpi/K_kpi.js', makeWin()).K_Kpi.lib;
   for (const role of ['cleaner', 'laundry', 'inspector', 'maintenance']) { assert.equal(K.normalize(KPI(true), role).admin, null, role); }
   assert.deepEqual(clone(K.normalize(KPI(true), 'finance').admin.occupancy), { pct: 0.73, sold: 22, sellable: 30 });
-  for (const role of ['cleaner', 'laundry']) {
+  for (const role of ['cleaner']) {
     const { html } = await kpiScreen(role, KPI(true)); assert.doesNotMatch(html, /₱|Net this month|Occupancy|Average rate|Direct bookings|38,420|2,814/, role + ': no money anywhere');
     const c = adminKpi(role); await tick(); await clickK(c.el, 'seg', { 'data-seg': 'admin' }); assert.doesNotMatch(c.el.innerHTML, /₱|Net this month|Occupancy/, role);
   }

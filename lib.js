@@ -188,7 +188,9 @@
   var STAFF_ROLES = ['cleaner', 'inspector', 'maintenance', 'laundry'];
   function isLaundry(role) { return role === 'laundry'; }
   // s110: the tab bar by role. KPIs sits after Tasks; laundry swaps Tasks for Inventory (her own tasks are not part of this release).
-  function tabKeys(role) { return isLaundry(role) ? ['home', 'calendar', 'stock', 'kpis', 'more'] : ['home', 'calendar', 'tasks', 'kpis', 'more']; }
+  function tabKeys(role) { return isLaundry(role) ? ['home', 'stock'] : ['home', 'calendar', 'tasks', 'kpis', 'more']; } // s126: laundry sees Today and Inventory only
+  // s126: where a laundry link to a hidden screen lands: Today. Calendar stays open only for the guest card (house, next) and Notices. Other roles: unchanged.
+  function laundryView(role, v, sub) { return isLaundry(role) && (['kpis', 'more', 'hub', 'search', 'tasks', 'reply'].indexOf(v) >= 0 || (v === 'calendar' && ['house', 'next', 'notices'].indexOf(sub) < 0)) ? 'home' : v; }
   // s110: who sees the Admin segment of the KPIs tab (money): owner, admin and finance.
   function kpiAdmin(role) { return ADMIN_ROLES.indexOf(role) >= 0; }
   function layoutForRole(role) {
@@ -1380,6 +1382,7 @@
   // ---- what's new: only what this person can use ----
   function A_whatsNew(role, flags) {
     flags = flags || {};
+    if (isLaundry(role)) return [{ title: 'A simpler app', text: 'Laundry: just Today and Inventory. Sign out is at the bottom of Today.' }]; // s126
     var admin = layoutForRole(role) === 'admin', mgr = canSeeGuestContact(role), items = [
       ['Undo works every time', 'After you mark a task done, Undo brings it back, even on a slow connection.'],
       ['Earlier months', 'The calendar goes back a year. ' + (mgr ? 'Days before last week are dashed: older stays are in the admin dashboard.' : 'Days before last week are dashed: older stays are not shown here.')],
@@ -1812,7 +1815,7 @@
     staffAuthPassword: staffAuthPassword, staffLoginEmail: staffLoginEmail, deriveDisplayName: deriveDisplayName, greetingName: greetingName,
     signinKind: signinKind, signinList: signinList, resolveTeam: resolveTeam, signinForTeam: signinForTeam, typedEntry: typedEntry, keypadPress: keypadPress, signinCredentials: signinCredentials, signinAsKind: signinAsKind,
     authStorage: authStorage, trustedFromStorage: trustedFromStorage, rememberName: rememberName, rememberRole: rememberRole, recalledRole: recalledRole, recalledName: recalledName, doorTarget: doorTarget, doorLink: doorLink, doorRule: doorRule, doorFramed: doorFramed, doorAllowed: doorAllowed, doorsForRole: doorsForRole, foldedDoorUrls: foldedDoorUrls, framedParentTarget: framedParentTarget, FOLD_DOORS: FOLD_DOORS,
-    layoutForRole: layoutForRole, isLaundry: isLaundry, tabKeys: tabKeys, kpiAdmin: kpiAdmin, accessVerdict: accessVerdict, assertNoMoney: assertNoMoney, moneyKeys: moneyKeys,
+    layoutForRole: layoutForRole, isLaundry: isLaundry, tabKeys: tabKeys, laundryView: laundryView, kpiAdmin: kpiAdmin, accessVerdict: accessVerdict, assertNoMoney: assertNoMoney, moneyKeys: moneyKeys,
     manilaToday: manilaToday, manilaParts: manilaParts, addDays: addDays, daysBetween: daysBetween, weekdayIndex: weekdayIndex,
     dayLabel: dayLabel, dayLong: dayLong, dayShort: dayShort, monthTitle: monthTitle, monthShortYear: monthShortYear, greeting: greeting,
     fmtTime: fmtTime, fmt24: fmt24, ordinal: ordinal, plural: plural, agoLabel: agoLabel, clockLabel: clockLabel,

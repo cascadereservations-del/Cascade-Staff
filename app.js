@@ -20,7 +20,7 @@
     url: 'https://qkgfhsdppslwunarczeq.supabase.co',
     key: 'sb_publishable_JFuRYZ9csmQULcMRmHXDSg_Abo9UeCj',
     propertyId: '6ae230f4-c189-4547-84b1-cb6e0b2cc9bd',
-    version: '3.4.40'
+    version: '3.4.41'
   };
   var LINKS = {
     checklist: 'https://cascadereservations-del.github.io/CH-Cleaners-Checklist/',
@@ -238,7 +238,7 @@
       failed: { tasks: !!state.tasksErr && !state.tasksDenied, notices: state.noticesFailed, bookings: state.bookingsFailed }, lastAt: state.loadedAt ? new Date(state.loadedAt).toISOString() : '',
       ready: { payload: !!p, tasks: !!state.tasks || !!state.tasksErr, bookings: state.bookingsDone, notices: state.noticesDone || state.noticesAbsent },
       clashes: p && money ? A_clashPairs() : null, info: money, oldest: state.bookingsOldest || '',
-      tasks: state.tasks ? state.tasks.tasks.filter(function (t) { return !(t.source === 'verifier_findings' && B_gone['f:' + t.id]); }) : [], clashDays: p && money ? A_clashList() : [], bookings: state.bookings, inbox: v ? v.inbox : null,
+      tasks: state.tasks && !CS.isLaundry(role()) ? state.tasks.tasks.filter(function (t) { return !(t.source === 'verifier_findings' && B_gone['f:' + t.id]); }) : [], clashDays: p && money ? A_clashList() : [], bookings: state.bookings, inbox: v ? v.inbox : null,
       pay: money ? state.payWait : 0, review: money ? state.reviewN : 0, house: v ? v.house.filter(function (h) { return !(h.kind === 'finding' && B_gone['f:' + h.id]); }) : [],
       warnings: p ? (p.warnings || []).filter(function (w) { var k = w.kind === 'verifier' ? CS.findingKey(w, state.tasks && state.tasks.tasks) : null; return !(k && B_gone['f:' + k]); }) : [], notices: v ? v.list.filter(function (n) { return !B_gone[n.key]; }) : [] };
   }
@@ -378,6 +378,8 @@
     } else el.innerHTML = A_hero() + rest;
   }
   // Sign out lives on More only (a wet-hand mis-tap away from the tab bar); the footer says how fresh the screen is.
+  // s126: laundry has no More tab, so Sign out sits at the foot of Today (a full-width 64 px row, the signed-in name under it).
+  function A_signOutRow() { return '<nav class="card glass list F_span" aria-label="Account"><button class="rowi" type="button" data-act="signout"><span class="lead">' + ICON('logout') + '</span><span class="mid"><span class="t">Sign out</span><span class="s">' + esc(state.name || '') + '</span></span></button></nav>'; }
   function footerLine() { return '<div class="help F_span" style="text-align:center;margin-top:16px">Updated ' + esc(state.loadedAt ? CS.agoLabel(new Date(state.loadedAt).toISOString()) : 'just now') + ' · v' + CFG.version + '</div>'; }
 
   // The turnover: guest out, clean, guest in, against the 12:00 noon to 2:00 pm window. Slide (or tap) to start opens the checklist door; no second PIN from here.
@@ -610,7 +612,7 @@
     if (staff) {
       // Today, Turnover, the paid notice (under Turnover: Turnover and Slide to start never move when it lands), Notices, then the doors
       var laundry = CS.isLaundry(role()); // s110: no turnover, clean-done card, paid slots, checklist door or cleaning fee for the laundry role
-      body = '<div class="A_body">' + errBanner() + H_alertsCard() + A_turnTag() + PC_todayCard() + A_utilBar() + (wxTop ? wxCard : '') + S_sec('Guests') + todayCard() + nextCard() + A_tierGuide() + (laundry ? '' : S_sec('Turnover') + A_turnoverCard(true)) + (wxTop ? '' : wxCard) + (laundry ? '' : H_cleanDoneCard() + '<div id="slot-paid-notice" class="A_slot" hidden></div><div id="slot-owed" class="A_slot" hidden></div>') + K_invCard() + A_noticesCard() + S_sec('Shortcuts') +
+      body = '<div class="A_body">' + errBanner() + H_alertsCard() + A_turnTag() + PC_todayCard() + (laundry ? '' : A_utilBar()) + (wxTop ? wxCard : '') + S_sec('Guests') + todayCard() + nextCard() + (laundry ? '' : A_tierGuide()) + (laundry ? '' : S_sec('Turnover') + A_turnoverCard(true)) + (wxTop ? '' : wxCard) + (laundry ? '' : H_cleanDoneCard() + '<div id="slot-paid-notice" class="A_slot" hidden></div><div id="slot-owed" class="A_slot" hidden></div>') + K_invCard() + A_noticesCard() + (laundry ? A_signOutRow() : S_sec('Shortcuts') +
         A_navCard('Work', row({ icon: 'cloud', title: 'Weather', sub: 'Today and the next few hours', href: '#weather' }) + doorRow('checklist', 'clip', 'Start or continue today’s turnover') +
           (LINKS.pay && !laundry ? row({ icon: 'cash', title: 'Cleaning fee', sub: state.payHint || 'Ask for payment for your cleans and expenses', href: H_payUrl(), subId: 'pay-sub' }) : '') +
           row({ icon: 'calendar', title: 'Calendar', sub: 'Who is staying, who is next', href: '#calendar', count: n || '' }) +
@@ -618,7 +620,7 @@
           (doorDef('manual') && CS.doorAllowed('manual', role()) ? row({ icon: 'book', title: 'House manual', sub: 'How we do things · when something breaks', door: 'manual' }) : '')) +
         A_navCard('Ask Cassy', row({ icon: 'chat', title: 'Cassy · OPS', sub: 'Report, ask, log an expense', tg: LINKS.tgOps, external: true }) + H_cassyGpt() +
           (canReply() ? row({ icon: 'sparkles', title: 'Cassy reply', sub: 'Draft a warm reply to a guest message', href: '#reply' }) : '') +
-          row({ icon: 'help', title: 'Quick guide', sub: 'Two minutes on telling Cassy what happened', href: LINKS.quick })) + footerLine() + '</div>';
+          row({ icon: 'help', title: 'Quick guide', sub: 'Two minutes on telling Cassy what happened', href: LINKS.quick }))) + footerLine() + '</div>';
     } else {
       var bk = CS.bookingsToConfirmRow(role(), state.bookings, A_hubLink('bookings/inquiries')), inbox = v ? v.inbox : null;
       // only owner and admin have an inbox; the reserve is kept while notices load, and dropped on failure, when absent, and for finance
@@ -1049,6 +1051,7 @@
     return window.K_BookCal.render({ y: m.y, m: m.m, today: state.payload.today, stays: staysOf(), rows: H_allCal(), full: mgr, names: mgr ? K_names.list : null }) + H_olderLine(m, state.payload.today, true);
   }
   function calTabs(cur) {
+    if (CS.isLaundry(role())) return ''; // s126: laundry has no Calendar tab to switch to; she reaches the guest card and Notices by links
     var t = [['calendar', '#calendar', 'Calendar'], ['notices', '#calendar/notices', 'Notices']]; // tap only: the old sub-tab swipe is gone
     return '<nav class="A_tabs card glass" aria-label="View">' + t.map(function (x) { return '<a href="' + x[1] + '" data-act="cal-tab" data-tab="' + x[0] + '"' + (x[0] === cur ? ' aria-current="page"' : '') + '>' + x[2] + '</a>'; }).join('') + '</nav>';
   }
@@ -1118,7 +1121,7 @@
       (n.sub ? '<span class="s">' + esc(n.sub) + '</span>' : '') + (n.detail ? '<span class="A_det">' + esc(n.detail) + '</span>' : '') + '</div></div>' +
       (tell || n.date || n.url ? '<div class="acts">' + (tell ? '<button class="btn btn-secondary btn-sm" type="button" data-act="notice-tell" data-nkey="' + esc(n.key) + '">Tell the guest</button>' : '') +
         (n.url ? H_noticeLink(n.url) : '') +
-        (n.date ? '<button class="btn btn-ghost btn-sm" type="button" data-act="notice-cal" data-date="' + esc(n.date) + '">Open on calendar</button>' : '') + '</div>' : '') + '</section>';
+        (n.date && !CS.isLaundry(role()) ? '<button class="btn btn-ghost btn-sm" type="button" data-act="notice-cal" data-date="' + esc(n.date) + '">Open on calendar</button>' : '') + '</div>' : '') + '</section>';
   }
   function A_houseRow(h) {
     var mgr = CS.canSeeGuestContact(role()), inv = h.kind === 'low_stock' ? A_hubLink('inventory') : null;
@@ -1324,9 +1327,10 @@
   // MF4: three cards, once per phone (cs_seen_v3), Skip at any time; also from More. Never in the demo's own start.
   var H_TOUR = [['Today', 'Today shows who is here and what is next.'],
     ['Calendar', 'Tap a day for who is staying. Swipe the grid left or right for the next month. The Notices tab has the weather, power and water.'], ['Tasks', '']];
+  function H_tourSteps() { return CS.isLaundry(role()) ? [['Today', 'Today shows who is here and what is next. Inventory, next to it, is for stock: see what is low and record what you use.']] : H_TOUR; } // s126: laundry has no Calendar or Tasks tab
   function H_tourSheet(S) {
-    var i = S.step || 0, t = H_TOUR[i], last = i === H_TOUR.length - 1, txt = i === 2 ? 'Tap a task’s box when it is done, or swipe it left. ' + (state.layout === 'staff' ? 'Your cleaning fee is under Work on Today.' : 'Pay staff is under Admin on Today.') : t[1];
-    return '<h2 class="ttl" id="cs-h" tabindex="-1">' + esc(t[0]) + '</h2><p class="sub" style="margin-top:8px">' + esc(txt) + '</p><p class="help" style="margin:8px 0 0">' + (i + 1) + ' of ' + H_TOUR.length + '</p>' +
+    var i = S.step || 0, t = H_tourSteps()[i], last = i === H_tourSteps().length - 1, txt = i === 2 ? 'Tap a task’s box when it is done, or swipe it left. ' + (state.layout === 'staff' ? 'Your cleaning fee is under Work on Today.' : 'Pay staff is under Admin on Today.') : t[1];
+    return '<h2 class="ttl" id="cs-h" tabindex="-1">' + esc(t[0]) + '</h2><p class="sub" style="margin-top:8px">' + esc(txt) + '</p><p class="help" style="margin:8px 0 0">' + (i + 1) + ' of ' + H_tourSteps().length + '</p>' +
       '<div class="row-wrap" style="margin-top:14px"><button class="btn btn-primary" type="button" data-act="tour-next">' + (last ? 'Done' : 'Next') + '</button>' + (last ? '' : '<button class="btn btn-ghost" type="button" data-act="tour-skip">Skip</button>') + '</div>';
   }
   function H_tourMaybe() {
@@ -2089,7 +2093,7 @@
   // Runs once per device after sign-in (CS.phoneCheckDue, key cs_phone_check) and from More > This phone > Check this phone. Every row comes from a real probe
   // (CS.phoneCheckRows); Fix all runs the fixers in order from the one tap (CS.phoneFixPlan: alerts first, so the permission prompt rides the tap), then probes again.
   // The camera is opened only when its permission is 'prompt', and every track is stopped at once. Nothing changes Trust this device.
-  var PC_SHELL = 'cs-shell-v65'; // the service worker's cache for this version (sw.js CACHE_NAME; a test keeps them equal)
+  var PC_SHELL = 'cs-shell-v66'; // the service worker's cache for this version (sw.js CACHE_NAME; a test keeps them equal)
   var PC = { open: false, busy: false, rows: null, msg: '', camPerm: null };
   function PC_ls() { return store('localStorage'); }
   function PC_cameraPerm() {
@@ -2405,6 +2409,7 @@
     if (v === 'notices') { history.replaceState(null, '', '#calendar/notices'); parts = ['calendar', 'notices']; v = 'calendar'; } // 3.2: the alerts open the Notices tab; #notices is its short name
     if (v === 'stock?low') { if (K_invMay('stock')) state.H_lowOnce = true; history.replaceState(null, '', '#stock'); parts = ['stock']; v = 'stock'; } // one-shot: this visit opens Items on Low, plain #stock keeps the restored view
     if (VIEWS.indexOf(v) < 0 || v === 'signin') v = 'home';
+    var lv = CS.laundryView(role(), v, parts[1]); if (lv !== v) { v = lv; parts = ['home']; } // s126: laundry has Today and Inventory only; the server stays the real gate
     if (v === 'door' && !(doorDef(parts[1]) && CS.doorFramed(parts[1], state.layout, trustOn) && CS.doorAllowed(parts[1], state.access && state.access.role))) v = 'home'; // role decides; the server stays the real gate
     if (v === 'payrates' && !CS.canEditRates(state.access && state.access.role)) v = 'home';
     if (v === 'reply' && !canReply()) v = 'home';
@@ -2636,7 +2641,7 @@
     else if (a === 'reply-copy-recent') { var rr = (state.replyRecent || [])[+t.getAttribute('data-i')]; if (rr) copyText(rr.text).then(function () { toast('Copied'); }, function () { toast('Copy did not work on this phone.'); }); }
     else if (a === 'clean-done-hide') { state.cleanDone = null; if (current === 'home') renderHome(); }
     else if (a === 'tour-open') { openSheet('tour', 'tour-open'); state.sheet.step = 0; drawSheet(); }
-    else if (a === 'tour-next') { var TS = state.sheet; if (TS && TS.kind === 'tour') { if ((TS.step || 0) >= H_TOUR.length - 1) closeSheet(); else { TS.step = (TS.step || 0) + 1; drawSheet(); } } }
+    else if (a === 'tour-next') { var TS = state.sheet; if (TS && TS.kind === 'tour') { if ((TS.step || 0) >= H_tourSteps().length - 1) closeSheet(); else { TS.step = (TS.step || 0) + 1; drawSheet(); } } }
     else if (a === 'tour-skip') closeSheet();
     else if (a === 'id-full') { var im = t.querySelector && t.querySelector('img'), ip = t.getAttribute && t.getAttribute('data-idpath'); if (CS.canSeeGuestContact(role())) { if (im) H_idFull(im.src); else if (ip) A_idOpen(ip); } }
     else if (a === 'id-rot') H_idRotate();

@@ -139,7 +139,7 @@ test('s113 Settings: a Phone check row for every role with the last result, and 
   assert.equal(CS.phoneCheckSummary(lsWith({ cs_phone_check: '{bad' })), 'Not checked on this phone yet');
   const ls = lsWith(); CS.phoneCheckSave(ls, CS.phoneCheckRows({ alerts: { support: 'ready', permission: 'default' }, install: { standalone: true }, camera: { has: true, perm: 'granted' }, storage: { api: true, persisted: true }, update: { sw: true, controller: true, waiting: false, cacheOk: true }, trusted: false }));
   assert.equal(JSON.parse(ls.m.cs_phone_check).need, 2, 'alerts and trust need a tap'); assert.equal(CS.phoneCheckSummary(ls), '2 need a tap');
-  for (const role of ['cleaner', 'inspector', 'maintenance', 'laundry', 'finance', 'owner']) {
+  for (const role of ['cleaner', 'inspector', 'maintenance', 'finance', 'owner']) {
     const h = (await boot({ role, hash: '#more', ls: lsWith({ cs_phone_check: JSON.stringify({ v: 1, need: 0, open: [] }) }), handlers: baseHandlers(role) })).els['v-more'].innerHTML;
     assert.match(h, /<div class="A_label">Settings<\/div><nav class="card glass list" aria-label="Settings"><button class="rowi" type="button" data-act="pc-open" id="H_pcrow">[\s\S]*?<span class="t">Phone check<\/span><span class="s">Alerts, camera, storage, updates · All good<\/span>/, role);
     assert.match(h, /data-act="tiers-open" data-tier="">[\s\S]*?<span class="t">Guest tiers guide<\/span>/, role); assert.match(h, /This phone<\/div>[\s\S]*Check this phone/, role + ': the This phone entry stays');
@@ -178,7 +178,7 @@ test('s113 tier badges: on the Now and Up next cards (and the Calendar guest car
   const css = read('styles.css'); assert.match(css, /button\.T_badge \{[^}]*cursor: pointer;/); assert.match(css, /button\.T_badge::after \{ content: ""; position: absolute; inset: -8px -4px; \}/);
 });
 test('s114 Today guide card: "Guest tiers: how many stays for each", closed by default on every phone, open after a tap, auto-closes after 5 minutes; the Weather card auto-closes too unless rain is near or a warning is up', async () => {
-  const app = await boot({ role: 'laundry', hash: '#home', handlers: baseHandlers('laundry') });
+  const app = await boot({ role: 'cleaner', hash: '#home', handlers: baseHandlers('cleaner') });
   const h = app.els['v-home'].innerHTML, m = /<details class="card glass A_card F_span T_tiers" id="T_tiers">[\s\S]*?<\/details>/.exec(h); assert.ok(m, 'closed by default');
   assert.match(m[0], /<span>Guest tiers: how many stays for each<\/span>/); assert.match(m[0], /<table class="T_ttab">/); assert.equal((m[0].match(/<tr class="T_tr"/g) || []).length, 4);
   assert.match(m[0], /<span class="T_badge p-tier-vip"><svg[^>]*><\/svg><span>VIP<\/span><\/span><\/th><td>7 stays or 20 nights<\/td><td><ul class="T_tperks">[\s\S]*Handwritten welcome note[\s\S]*Mid-stay refresh/, 'arrival and house perks together');
@@ -196,6 +196,6 @@ test('s114 Today guide card: "Guest tiers: how many stays for each", closed by d
 
 // ---------------------------------------------------------------------------------------------- release
 test('s113 release: 3.4.30, cs-shell-v64 in sw.js and PC_SHELL, the new test file is the contract name', () => {
-  assert.equal(JSON.parse(read('package.json')).version, '3.4.40'); assert.match(read('app.js'), /version: '3.4.40'/);
-  assert.match(read('sw.js'), /CACHE_NAME = 'cs-shell-v65'/); assert.match(read('app.js'), /var PC_SHELL = 'cs-shell-v65';/);
+  assert.equal(JSON.parse(read('package.json')).version, '3.4.41'); assert.match(read('app.js'), /version: '3.4.41'/);
+  assert.match(read('sw.js'), /CACHE_NAME = 'cs-shell-v66'/); assert.match(read('app.js'), /var PC_SHELL = 'cs-shell-v66';/);
 });
