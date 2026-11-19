@@ -30,7 +30,7 @@
     return spaced.replace(/\b\w/g, function (c) { return c.toUpperCase(); }) || 'Staff';
   }
 
-  // Greeting name: the profile's display first name only. An e-mail/handle fallback is never greeted (returns '').
+  // Greeting name: the profile's display first name, or a kinship title plus the next word. An e-mail/handle fallback is never greeted (returns '').
   function greetingName(user) {
     user = user || {};
     var um = user.user_metadata || {}, am = user.app_metadata || {};
@@ -41,7 +41,9 @@
     if (!w || /[\d@._]/.test(w)) return '';
     if (w.toLowerCase() === local && !/@staff\.cascade\.invalid$/.test(email)) return '';
     // kinship title + a second word: greet with both, joined by a no-break space so the hero never strands the name
-    if (ws[1] && /^(mama|papa|lola|lolo|tita|tito|ate|kuya|nanay|tatay|manang|manong)$/i.test(w)) return w + '\u00A0' + ws[1];
+    // the second word passes the same guards (no handle, phone number or e-mail part); otherwise the bare title
+    var w2 = ws[1] || '';
+    if (w2 && !/[\d@._]/.test(w2) && (w2.toLowerCase() !== local || /@staff\.cascade\.invalid$/.test(email)) && /^(mama|papa|lola|lolo|tita|tito|ate|kuya|nanay|tatay|manang|manong)$/i.test(w)) return w + '\u00A0' + w2;
     return w;
   }
 
