@@ -159,6 +159,24 @@ t0('R15 item 2: photos that uploaded leave no marker', async () => {
   } finally { await t.close(); }
 });
 
+t0('R15 follow-up: an uploaded condition photo survives a reload and Resume and goes with the report', async () => {
+  const t = await open({ srv: { upload: 'ok' } });
+  try {
+    await resume(t);
+    await t.page.setInputFiles('#conditionPhoto', [await jpeg(t, 1)]);
+    await until(t, () => __s120.state.conditionPhotoUrl);
+    const url = await t.page.evaluate(() => __s120.state.conditionPhotoUrl);
+    await t.page.waitForTimeout(300);
+    await t.page.reload({ waitUntil: 'domcontentloaded' });
+    await t.page.waitForSelector('#draft-modal.open', { timeout: 15000 });
+    await resume(t);
+    assert.equal(await t.page.evaluate(() => __s120.state.conditionPhotoUrl), url);
+    await tap(t);
+    await t.page.waitForSelector('#success-screen.visible', { timeout: 30000 });
+    assert.ok(submits(t)[0].body.includes(url), 'the report carries the condition photo');
+  } finally { await t.close(); }
+});
+
 t0('R15 item 3: restock failing, tap, tap, the report POST fails, the signal drops, Retry, a new photo, the signal returns and the upload fails: no report until a further tap, and the message stays', async () => {
   const srv = { upload: 'ok', restock: 'fail' };
   const t = await open({ srv, over: { supplyLogSaved: true, restock: restockOf({ sent: false, waiting: true }), ...LOCK } });

@@ -9871,6 +9871,7 @@ function saveDraft() {
     if (flag.photoData && !flag.photoUrl) draft.issueFlags[id].photoHeld = true;   // s120R15: the photo itself is not stored; this tells Resume it was held
   });
   if (state.conditionPhotoData && !state.conditionPhotoUrl) draft.conditionPhotoHeld = true;
+  if (state.conditionPhotoUrl) { draft.conditionPhotoUrl = state.conditionPhotoUrl; draft.conditionPhotoFileId = state.conditionPhotoFileId; }   // s120R16: an uploaded photo stays with the report after a reload
 
   const stored = lsJSON(DRAFT_KEY, draft) === true;
   flashAutosave();
@@ -9949,6 +9950,7 @@ function applyDraft(draft) {
   }
 
   if (draft.conditionPhotoHeld) state.photosDropped = (state.photosDropped || 0) + 1;   // s120R15
+  if (draft.conditionPhotoUrl) { state.conditionPhotoUrl = draft.conditionPhotoUrl; state.conditionPhotoFileId = draft.conditionPhotoFileId || null; }   // s120R16
   // Restore condition
   if (draft.conditionStatus) {
     if (draft.conditionStatus === 'clear')  el('cond-clear-btn')?.click();
