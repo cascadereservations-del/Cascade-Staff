@@ -16,7 +16,7 @@ const fnText = name => {
   return html.slice(s, html.indexOf('\n}\n', s) + 3);
 };
 const block = html.slice(html.indexOf('/* S120R:BEGIN'), html.indexOf('/* S120R:END */'));
-const guardLine = (/let _preSubmitRunning = false;/.exec(html) || [''])[0];
+const guardLine = html.slice(html.indexOf('/* S120R14:BEGIN'), html.indexOf('/* S120R14:END */')) + NL + (/let _preSubmitRunning = false;/.exec(html) || [''])[0];   // s120 R14: the photo record and its helpers sit just before the guard
 const initSrc = html.slice(html.indexOf('async function init() {'));
 const bootLine = (/\n\s*(_draftHold\s*=\s*!!loadDraft\(\);)/.exec(initSrc.slice(0, initSrc.indexOf('await '))) || [])[1] || '';
 

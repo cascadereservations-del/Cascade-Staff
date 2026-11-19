@@ -6363,7 +6363,6 @@ const state = {
   submissionId:       null,
   isSubmitting:       false,
   pendingOnlineRetry: false,
-  preSubmitPhotosStalled: false,    // s120R13: Submit stopped once because a photo did not upload; the next tap lets the report go without it
   preSubmitStalled:   false,        // s120R7: Submit stopped once while online with a send that keeps failing; the next tap lets the report go
   pendingPreSubmit:   false,        // s120R: the pre-submit send could not finish offline; the online event runs it again
   weekendMandatory:   false,
@@ -6534,6 +6533,7 @@ function goToPhase(newPhase, skipGate = false) {
   if (newEl) {
     // Brief delay so exit animation starts first
     setTimeout(() => {
+      if (state.phase !== newPhase) return;   // s120 R14: a later move already chose another step
       newEl.classList.add('active');
       newEl.scrollTop = 0;
     }, 20);
@@ -9761,7 +9761,7 @@ function initOfflineDetection() {
         }
       } catch { /* non-fatal */ }
       state.pendingOnlineRetry = false;
-      setTimeout(() => proceedWithSubmission(), 1000);
+      setTimeout(S120R_onlineRetry, 1000);
     }
   });
 
@@ -10256,7 +10256,48 @@ function initSubmitModal() {
 // every photo whose bytes moved to IndexedDB after capture. Routes through
 // the same concurrency-2 queue as capture-time uploads (uploadPhotoRecord)
 // rather than a separate ad hoc batch loop.
+/* S120R14:BEGIN (tests load this block as it stands) */
 const S120R_photoHeld = p => !!(p && !p.uploaded && (p.data || p.idbId || p._blob));   // s120R13: a photo that still has bytes to send
+/* s120 R14: one rule for every photo. A photo that did not upload goes missing only after the cleaner was told about that photo. The record lives in the page only (never in the draft) and is emptied in resetApp.
+   Photo records are kept by object; a damage or condition photo (a plain string on the state) by its id and the length and tail of its data. */
+let S120R_told = { w: new WeakSet(), s: new Set() };
+const S120R_tail = d => d.length + ':' + d.slice(-48);
+const S120R_isTold = k => typeof k === 'string' ? S120R_told.s.has(k) : S120R_told.w.has(k);
+const S120R_setTold = k => { if (typeof k === 'string') S120R_told.s.add(k); else S120R_told.w.add(k); };
+/* every photo that still has to upload: { key, run (uploads it), isUp (true once it is up) } */
+function S120R_notUploaded() {
+  const out = [];
+  const add = (key, run, isUp) => out.push({ key, run, isUp });
+  const rec = (p, name) => { if (S120R_photoHeld(p)) add(p, () => uploadPhotoRecord(p, name, null), () => !!p.uploaded); };
+  ['preclean', 'afterclean', 'bedroom', 'kitchen'].forEach(key => (state[`${key}Photos`] || []).forEach((p, idx) => rec(p, `${key}_${idx}`)));
+  (state.meterPhotos || []).forEach((p, idx) => rec(p, `meter_${idx}`));
+  Object.entries(state.issueFlags || {}).forEach(([id, f]) => {
+    if (!(f && f.photoData && !f.photoUrl)) return;
+    const d = f.photoData;
+    add('issue:' + id + ':' + S120R_tail(d), async () => {
+      const r = await uploadPhotoDrive(id, d, `issue_${id}_${Date.now()}.jpg`);   // the same upload and the same fields as handleIssuePhoto
+      const cur = state.issueFlags[id];
+      if (r && cur && cur.photoData === d) { cur.photoUrl = r.fileUrl; cur.photoFileId = r.fileId; cur.photoData = null; saveDraft(); }
+    }, () => !!(state.issueFlags[id] && state.issueFlags[id].photoUrl));
+  });
+  if (state.conditionPhotoData && !state.conditionPhotoUrl) {
+    const d = state.conditionPhotoData;
+    add('cond:' + S120R_tail(d), async () => {
+      const r = await uploadPhotoDrive('condition', d, `condition_${todayManila()}_${Date.now()}.jpg`);   // as the condition photo handler
+      if (r && state.conditionPhotoData === d) { state.conditionPhotoUrl = r.fileUrl; state.conditionPhotoFileId = r.fileId; state.conditionPhotoData = null; saveDraft(); }
+    }, () => !!state.conditionPhotoUrl);
+  }
+  return out;
+}
+/* the online retry of a report whose send failed offline: it goes through the same flush as a tap, so photos upload first. It waits for a Resume or another run instead of doing nothing. */
+function S120R_onlineRetry() {
+  if (_draftHold) { _heldWork.push(S120R_onlineRetry); return; }
+  if (_preSubmitRunning) { setTimeout(S120R_onlineRetry, 500); return; }
+  if (state.isSubmitting) return;
+  try { if (state.submissionId && JSON.parse(localStorage.getItem(SUBMITTED_IDS_KEY) || '[]').includes(state.submissionId)) return; } catch { /* non-fatal */ }
+  runPreSubmitFlush('retry');
+}
+/* S120R14:END */
 let _preSubmitRunning = false;   // s120R8: one run at a time; a tap during an automatic run is not the second tap
 async function runPreSubmitFlush(fromTap) {
   if (_preSubmitRunning || _draftHold) return;
@@ -10283,6 +10324,8 @@ async function runPreSubmitFlush(fromTap) {
     showToast('Restock still needs an answer.', 'error', 6000);
     return;
   }
+  const passes = fromTap === true || fromTap === 'retry';   // a tap or the online retry may send past a stop the cleaner has seen; an automatic run never does
+  let restockMsg = '';
   if (sent.pending.length) {
     state.pendingPreSubmit = true;
     if (S120R_certainOffline()) {
@@ -10290,59 +10333,47 @@ async function runPreSubmitFlush(fromTap) {
       showToast('Not sent yet: ' + sent.pending.join(' and ') + '. Your answers are kept on this phone. Connect, then tap Submit again.', 'error', 8000);
       return;
     }
-    // Online but the send keeps failing: the first stop says so; the next TAP in this page session lets the report go without it (an automatic resubmit never does).
-    if (!(fromTap === true && state.preSubmitStalled)) {
+    // Online but the send keeps failing: the first stop says so; the next pass lets the report go without it. The photos are checked below, so one stop covers both.
+    if (!(passes && state.preSubmitStalled)) {
       state.preSubmitStalled = true;
-      const m = 'Not sent yet: ' + sent.pending.join(' and ') + '. Tap Submit again to send the report without it. The host will be told.';
-      say(m); showToast(m, 'error', 8000);
-      return;
+      restockMsg = 'Not sent yet: ' + sent.pending.join(' and ') + '. Tap Submit again to send the report without it. The host will be told.';
+    } else {
+      if (sent.pending.includes('linen check') && state.linen) state.linen.unconfirmed = true;   // the key stays: a later resend records it normally
+      if (sent.pending.includes('restock') && state.restock) state.restock.unconfirmed = true;
     }
-    if (sent.pending.includes('linen check') && state.linen) state.linen.unconfirmed = true;   // the key stays: a later resend records it normally
-    if (sent.pending.includes('restock') && state.restock) state.restock.unconfirmed = true;
   } else state.preSubmitStalled = false;
-  state.pendingPreSubmit = false;
-  const sectionKeys = ['preclean', 'afterclean', 'bedroom', 'kitchen'];
+  if (!restockMsg) state.pendingPreSubmit = false;
 
-  const pending = [];
-  sectionKeys.forEach(key => {
-    (state[`${key}Photos`] || []).forEach((p, idx) => {
-      if (p && !p.uploaded && (p.data || p.idbId || p._blob)) pending.push({ key, idx, photo: p });
-    });
-  });
-  state.meterPhotos.forEach((p, idx) => {
-    if (p && !p.uploaded && (p.data || p.idbId || p._blob)) pending.push({ key: 'meter', idx, photo: p });
-  });
-
-  if (pending.length === 0) {
-    state.preSubmitPhotosStalled = false;
-    await proceedWithSubmission();
+  const pending = S120R_notUploaded();
+  if (pending.length) {
+    showFlushOverlay(pending.length);
+    let done = 0;
+    await Promise.all(pending.map(({ run }) => new Promise(resolve => {
+      enqueuePhotoUpload(async () => {
+        try { await run(); }
+        catch (e) { console.error('photo flush failed', e); }   // s120R10: one photo never keeps the overlay up; the report goes with what is uploaded
+        finally { done++; updateFlushOverlay(done, pending.length); resolve(); }
+      });
+    })));
+    hideFlushOverlay();
+  }
+  // s120 R14: a photo that still did not upload is never lost quietly. It goes missing only after the cleaner was told about that photo; the stop keeps the draft and the blobs.
+  const left = pending.filter(i => !i.isUp());
+  const fresh = left.filter(i => !S120R_isTold(i.key));
+  let photoMsg = '';
+  if (left.length && (fresh.length || !passes)) {
+    left.forEach(i => S120R_setTold(i.key));
+    const n = fresh.length || left.length;
+    photoMsg = n === 1
+      ? '1 photo did not upload. Check the signal and tap Submit to try again. If it still fails, the report goes without it.'
+      : n + ' photos did not upload. Check the signal and tap Submit to try again. If they still fail, the report goes without them.';
+  }
+  if (restockMsg || photoMsg) {   // one stop for both, restock first
+    say([restockMsg, photoMsg].filter(Boolean).join(' '));
+    if (restockMsg) showToast(restockMsg, 'error', 8000);
+    if (photoMsg) showToast(photoMsg, 'error wrap', 8000);
     return;
   }
-
-  showFlushOverlay(pending.length);
-
-  let done = 0;
-  await Promise.all(pending.map(({ key, idx, photo }) => new Promise(resolve => {
-    enqueuePhotoUpload(async () => {
-      try { await uploadPhotoRecord(photo, `${key}_${idx}`, null); }
-      catch (e) { console.error('photo flush failed', e); }   // s120R10: one photo never keeps the overlay up; the report goes with what is uploaded
-      finally { done++; updateFlushOverlay(done, pending.length); resolve(); }
-    });
-  })));
-
-  hideFlushOverlay();
-  // s120R13: a photo that still did not upload is never lost quietly. The first stop keeps the draft and the blobs; the next TAP lets the report go without it (an automatic run never does).
-  const notUp = pending.filter(({ photo }) => !photo.uploaded).length;
-  if (notUp) {
-    if (!(fromTap === true && state.preSubmitPhotosStalled)) {
-      state.preSubmitPhotosStalled = true;
-      const m = notUp === 1
-        ? '1 photo did not upload. Check the signal and tap Submit to try again. If it still fails, the report goes without it.'
-        : notUp + ' photos did not upload. Check the signal and tap Submit to try again. If they still fail, the report goes without them.';
-      say(m); showToast(m, 'error wrap', 8000);
-      return;
-    }
-  } else state.preSubmitPhotosStalled = false;
   await proceedWithSubmission();
   } finally { _preSubmitRunning = false; }
 }
@@ -10897,13 +10928,7 @@ function buildPayload() {
       userAgent:          navigator.userAgent,
       app_version:        '7.8',
       session_duration_s: state.startTimestamp ? Math.floor((Date.now() - state.startTimestamp) / 1000) : null,
-      photos_failed:      [
-        ...(state.meterPhotos      || []),
-        ...(state.precleanPhotos   || []),
-        ...(state.aftercleanPhotos || []),
-        ...(state.bedroomPhotos    || []),
-        ...(state.kitchenPhotos    || []),
-      ].filter(S120R_photoHeld).length,   // s120R13: held in IndexedDB or memory counts too
+      photos_failed:      S120R_notUploaded().length,   // s120 R14: every photo still held, damage and condition photos included
       upload_retry_count: state.uploadRetryCount || 0,
     },
     submissionId:   state.submissionId,
@@ -11024,7 +11049,7 @@ async function proceedWithSubmission() {
       // K_: tell the Cascade Staff shell that framed us (same origin only); the shell shows its own done card
       K_handBack(data,
         Object.values(state.issueFlags).filter(f => f && f.note).length + K_gatedAll().filter(i => state.confirmItems[i.id] === 'issue' && K_isUrgentIssue(i)).length,
-        [...state.meterPhotos, ...state.precleanPhotos, ...state.aftercleanPhotos, ...state.bedroomPhotos, ...state.kitchenPhotos].filter(p => p && !S120R_photoHeld(p)).length);   // s120R13: photos that never uploaded are not counted
+        Object.values(payload.photos || {}).reduce((n, a) => n + (a ? a.length : 0), 0));   // s120 R14: the photos in the report that was sent, not the state after the POST
     } else {
       // submit-cleaning returns `message` (e.g. a security refusal says what to do);
       // older paths return `msg`. Reading only `msg` showed her 'Server returned
@@ -11134,7 +11159,7 @@ function resetApp() {
   setCleaningType('turnover');
   _susLoaded = false;
   _susItems  = [];
-  state.pendingPreSubmit = false; state.preSubmitStalled = false; state.preSubmitPhotosStalled = false;
+  state.pendingPreSubmit = false; state.preSubmitStalled = false; S120R_told = { w: new WeakSet(), s: new Set() };
   el('s120-restock-status') && (el('s120-restock-status').textContent = '');
   el('sus-status') && (el('sus-status').textContent = '');
 

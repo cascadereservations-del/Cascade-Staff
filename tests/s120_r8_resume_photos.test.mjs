@@ -22,7 +22,7 @@ const block = html.slice(html.indexOf('/* S120R:BEGIN'), html.indexOf('/* S120R:
 const initSrc = html.slice(html.indexOf('async function init() {'));
 const bootLine = (/\n\s*(_draftHold\s*=\s*!!loadDraft\(\);)/.exec(initSrc.slice(0, initSrc.indexOf('await '))) || [])[1] || '';
 const consts = '';
-const guardLine = lineOf(/let _preSubmitRunning = false;/);
+const guardLine = html.slice(html.indexOf('/* S120R14:BEGIN'), html.indexOf('/* S120R14:END */')) + NL + lineOf(/let _preSubmitRunning = false;/);   // s120 R14: the photo record and its helpers sit just before the guard
 
 const RESUME_FAIL = 'Your saved work could not be restored. It is still safe on this phone.';
 const BOOT_FAIL = 'This page did not finish loading. Reload it before you continue.';
