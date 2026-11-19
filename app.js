@@ -154,16 +154,21 @@
   // The Today card (glass). Check-out time falls back to the house time, never a hard-coded one.
   function todayCard() {
     var p = state.payload, st = CS.todayCardState(p, p.today);
-    if (!st.guest) return '<section class="card glass A_card F_span" aria-label="Today in the house"><span class="cap up">' + esc(st.label) + '</span><p class="sub">The house is free tonight. The next stay will show here.</p></section>';
+    var free = st.kind === 'next' || st.kind === 'none' ? A_vacant(st.kind) : ''; // s126 (D-388): an empty night is its own card; the next guest sits below it, labelled as next
+    if (!st.guest) return free;
     var g = st.guest, ht = A_houseT(), nl = CS.notableLine(g);
     var outLater = st.kind === 'house' && g.checkout_date && g.checkout_date > p.today, outT = CS.fmtTime(g.checkout_time) || ht.outLabel; // s105: a past check-out date falls back to the old stay-dates line
     var key = st.kind === 'house' ? (outLater ? 'Out ' + (g.checkout_date === CS.addDays(p.today, 1) ? 'tomorrow' : CS.dayLabel(g.checkout_date)) + (g.checkout_date === CS.addDays(p.today, 1) ? ' ' : ', ') + outT : 'Out ' + outT) : 'In ' + (CS.fmtTime(g.checkin_time) || ht.inLabel); // s96: the time that matters comes first
     var tcls = ' T_tier-' + (CS.tierLabel(g.tier) ? g.tier : 'first') + (st.kind === 'house' ? ' T_now' : ' T_arr'); // s109: tier colour on the whole card; the guest in the house leads
-    return '<section class="card glass A_card F_span T_card' + tcls + '" aria-label="Today in the house"><div class="row-between"><span class="cap up T_lbl">' + esc(st.kind === 'house' ? 'Now · in the house' : st.label) + '</span>' + (st.pill ? pill(st.pill.tone, toneIcon(st.pill.tone), st.pill.text) : '') + '</div>' +
+    return free + '<section class="card glass A_card F_span T_card' + tcls + '" aria-label="Today in the house"><div class="row-between"><span class="cap up T_lbl">' + esc(st.kind === 'house' ? 'Now · in the house' : st.label) + '</span>' + (st.pill ? pill(st.pill.tone, toneIcon(st.pill.tone), st.pill.text) : '') + '</div>' +
       '<div class="T_who"><div class="T_id"><div class="T_namerow"><h2 class="A_name' + A_nm(g) + '">' + esc(g.guest_name || 'Guest') + '</h2></div>' + A_badge(g) + A_prog(g) + A_ownerLine(g) + // s105: name, the key day/time line and the ID state fill the height of the face square; Good to know, perks and the rest span the card
       '<p class="sub num T_when"><strong class="A_key">' + esc(A_nb(key)) + '</strong> · ' + esc(outLater ? A_nb(CS.plural(g.nights != null ? g.nights : CS.daysBetween(g.checkin_date, g.checkout_date), 'night')) : A_stayDates(g)) + '</p>' + A_idPill(g) + '</div>' + A_face(g) + '</div>' +
       A_staying(g) + A_grid(g, st.kind) + A_goodToKnow(g, st.kind) + A_perks(g, st.kind) + (nl ? '<p class="help T_ask">' + esc(nl) + '</p>' : '') +
       '<a class="A_more" href="#calendar/' + (st.kind === 'house' ? 'house' : 'next') + '">Open guest card' + ICON('chev', 's16') + '</a></section>';
+  }
+  // s126 (D-388): nobody stays tonight. The moon is decoration; the heading is the words. No guest name here: the next guest has its own card below.
+  function A_vacant(kind) {
+    return '<section class="card A_card F_span V_free" aria-label="Today in the house"><div class="V_ico" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M20 14.5A8 8 0 0 1 9.5 4 8 8 0 1 0 20 14.5z"/></svg></div><span class="cap up">Tonight</span><h2 class="V_title">No guest tonight</h2><p class="sub">' + (kind === 'next' ? 'The house is free. Nobody is staying tonight.' : 'The house is free. Nobody is staying tonight, and no next stay is booked yet.') + '</p></section>';
   }
   // s97 SPEC-47b / s98 SPEC-47c: the face sits on the RIGHT of the guest header in an 88 px rounded square. Until the server has located the face (id_face_box, stored-frame 0-1)
   // the square is the guest's first initial on the tier colour, never the ID; with a box it is the zoomed face. The space is reserved from the first paint. Same in-memory

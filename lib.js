@@ -788,7 +788,7 @@
     var cur = payload && payload.current_guest, nxt = payload && payload.next_guest;
     if (cur) return { kind: 'house', guest: cur, label: 'Today · in the house', pill: { tone: 'ok', text: cur.checkin_date === today ? 'Arrived today' : 'Checked in' } };
     if (nxt && nxt.checkin_date === today) return { kind: 'arriving', guest: nxt, label: 'Today · arriving', pill: { tone: 'info', text: 'Arrives today' } };
-    if (nxt) return { kind: 'next', guest: nxt, label: 'No guest tonight', pill: { tone: 'neutral', text: 'Next ' + dayLabel(nxt.checkin_date) } };
+    if (nxt) return { kind: 'next', guest: nxt, label: 'Next guest · arrives ' + dayShort(nxt.checkin_date), pill: { tone: 'neutral', text: 'In ' + plural(Math.max(1, daysBetween(today, nxt.checkin_date)), 'day') } }; // s126 (D-388): the empty night has its own card (app.js A_vacant); this one is only the next guest
     return { kind: 'none', guest: null, label: 'No guest tonight', pill: null };
   }
 
