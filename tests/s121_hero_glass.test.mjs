@@ -19,7 +19,7 @@ test('without blur support the solid .84 base stays, and reduced transparency ge
   assert.match(html, /@media \(prefers-reduced-transparency: reduce\) \{\n  html\.K_folded \.phase-header\.K_hasimg \.K_panel \{ background: rgba\(20,12,5,0\.94\); -webkit-backdrop-filter: none; backdrop-filter: none;/);
 });
 test('the service worker cache name changed so phones refresh', () => {
-  assert.match(sw, /const CACHE_NAME = 'ch-shell-v13-hero-glass';/);
+  assert.match(sw, /const CACHE_NAME = 'ch-shell-v14-held-photos';/);
 });
 
 const run = await browserSuite(test, assert);

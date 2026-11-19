@@ -332,7 +332,7 @@ test('R6 9 and 10: task 7.7 reads Check the dish sponge, the typical amounts are
   assert.ok(!html.includes('record_inventory_usage\', {'), 'Save goes through record_restock_v1');
   assert.match(fnText('S120R_sendRestock'), /record_restock_v1/);
   const sw = readFileSync(new URL('../checklist/sw.js', import.meta.url), 'utf8');
-  assert.match(sw, /const CACHE_NAME = 'ch-shell-v13-hero-glass';/);
+  assert.match(sw, /const CACHE_NAME = 'ch-shell-v14-held-photos';/);
   const css = html.slice(0, html.lastIndexOf('</style>'));
   assert.match(css, /#top-bar \{[^}]*linear-gradient\(180deg, ?#3F2B1A 0%, ?#2C1D10 100%\)/);
   assert.match(css, /#property-name \{[^}]*color: #E3BC6E/);

@@ -113,7 +113,7 @@ t0('R12 item 2: under a real quota limit a new section photo and a new meter pho
     assert.equal(await t.page.evaluate(() => __s120.state.meterPhotos[0]), null, 'the meter slot is empty');
     assert.equal(await t.page.evaluate(() => __s120.K_afterPhotosOk()), false, 'the after-clean minimum asks again');
     const said = await toastText(t);
-    assert.ok(said.includes('2 photos could not be kept. Please retake them.'), 'the cleaner is told: ' + said);
+    assert.ok(said.includes('Retake these photos: ') && said.includes('Electric meter') && said.includes('After-cleaning'), 'the cleaner is told: ' + said);
     assert.equal(said.includes('Session resumed'), false);
     const d = parse(await t.stored());
     assert.deepEqual([d.meterPhotoMeta[0], d.aftercleanPhotoMeta.length], [null, 0], 'the saved draft no longer holds them');
@@ -128,7 +128,7 @@ t0('R12 item 2: five after-clean photos with one that was only in memory leave f
     await t.page.click('#btn-draft-resume'); await closed(t);
     assert.equal(await t.page.evaluate(() => __s120.state.aftercleanPhotos.length), 4);
     assert.equal(await t.page.evaluate(() => __s120.K_afterPhotosOk()), false, 'four is under the minimum');
-    assert.ok((await toastText(t)).includes('1 photo could not be kept. Please retake it.'));
+    assert.ok((await toastText(t)).includes('Retake the After-cleaning photo.'));
   } finally { await t.close(); }
   const u = await open({ draft: five(0), blobs: ['idb-a0', 'idb-a1', 'idb-a2', 'idb-a3', 'idb-a4'], server: { upload: 'fail' } });
   try {

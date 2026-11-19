@@ -92,7 +92,7 @@ t0('R10 item 1 (R12 item 2): a blob that is confirmed absent empties only that p
     const d = parse(await stored(t));
     assert.equal(d.meterPhotoMeta[0], null, 'the photo with no blob is gone from the draft');
     assert.equal(await t.page.evaluate(() => __s120.state.meterPhotos[0]), null, 'and from its slot, so the meter step asks for it again');
-    assert.equal(await t.page.evaluate(() => document.getElementById('toast-area').textContent.includes('1 photo could not be kept. Please retake it.')), true, 'the cleaner is told');
+    assert.equal(await t.page.evaluate(() => document.getElementById('toast-area').textContent.includes('Retake the Electric meter photo.')), true, 'the cleaner is told');
     assert.equal(await t.page.evaluate(() => document.getElementById('toast-area').textContent.includes('Session resumed')), false);
     assert.equal(photoMetas(d).filter(p => p.url).length, 3, 'p1, p2 and the already uploaded p3 hold URLs');
   } finally { await t.close(); }

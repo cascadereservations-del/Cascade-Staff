@@ -128,13 +128,13 @@ t0('R15 item 2: a damage photo and a condition photo that did not upload, then a
     await t.page.reload({ waitUntil: 'domcontentloaded' });
     await t.page.waitForSelector('#draft-modal.open', { timeout: 15000 });
     await resume(t);
-    assert.ok((await toastText(t)).includes('2 photos could not be kept. Please retake them.'), await toastText(t));
+    assert.ok((await toastText(t)).includes('Retake these photos: Flush and smell-check the toilet, Condition.'), await toastText(t));   // s124: the toast names each photo
     assert.equal(await t.page.evaluate(() => __s120.state.issueFlags.check_7_5.note), 'Cracked tile by the door');
     assert.equal(await t.page.evaluate(() => !!__s120.state.issueFlags.check_7_5.photoData), false);
-    // the marker goes with the photo: nothing is held now, so the next stored draft carries none
+    // s124: the marker stays until the photo is retaken, so a second reload still knows it is owed
     const again = JSON.parse(await t.stored());
-    assert.equal(again.issueFlags.check_7_5.photoHeld, undefined);
-    assert.equal(again.conditionPhotoHeld, undefined);
+    assert.equal(again.issueFlags.check_7_5.photoHeld, true);
+    assert.equal(again.conditionPhotoHeld, true);
   } finally { await t.close(); }
 });
 t0('R15 item 2: an old draft without the marker and an uploaded damage photo restore without the message', async () => {
