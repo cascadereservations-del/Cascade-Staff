@@ -159,5 +159,5 @@ test('I_s107 B8 a cleaner sees Running low on a low row not yet listed, Use othe
   const c = await make('cleaner', { shop: [SHOP[0]] }); await c.mount('');
   const kind = (id) => (new RegExp('data-act="quick" data-kind="([a-z]+)" data-id="' + id + '"').exec(c.html()) || [])[1];
   assert.equal(kind('a2'), 'low'); assert.equal(kind('a1'), 'used'); assert.equal(kind('a3'), 'used');
-  assert.match(c.html(), />Running low</); assert.match(c.html(), />Use</);
+  assert.match(c.html(), />It is out</); assert.match(c.html(), />Use</); // s124: a2 is out, so the label says out
 });

@@ -863,10 +863,10 @@
   // The most common action for this row, one tap from the list: the cleaner records use, an owner adds a low item to the shopping list, anyone allowed counts.
   function quickFor(it) {
     var lv = level(it);
-    if (allowed('used')) return lv !== 'ok' && allowed('low', it) ? { kind: 'low', t: 'Running low' } : { kind: 'used', t: 'Use' }; // s107 B8: a cleaner who sees it low says so; otherwise records use
+    if (allowed('used')) return lv !== 'ok' && allowed('low', it) ? { kind: 'low', t: lv === 'out' ? 'It is out' : 'Running low' } : { kind: 'used', t: 'Use' }; // s107 B8: a cleaner who sees it low says so; otherwise records use
     if (lv !== 'ok' && canManage(M.role) && allowed('low', it)) return { kind: 'low', t: 'Add to list' };
     if (allowed('count')) return { kind: 'count', t: 'Count' };
-    if (lv !== 'ok' && allowed('low', it)) return { kind: 'low', t: 'Running low' };
+    if (lv !== 'ok' && allowed('low', it)) return { kind: 'low', t: lv === 'out' ? 'It is out' : 'Running low' };
     return null;
   }
   // 'Low · 4 of 12 rolls': the level in a word and a glyph, then the amount; below the reorder level it is shown against that level.
@@ -1225,7 +1225,7 @@
   function menuActions(it, a) {
     var m = M.role, listed = (K.shop || []).some(function (r) { return r.itemId === it.id; }), lv = level(it), all = {}, order = [];
     var add = function (kind, text, act, file) { all[kind] = { kind: kind, text: text, act: act || 'begin', file: !!file }; order.push(kind); };
-    if (!listed && allowed('low', it)) add('low', canManage(m) ? 'Add to list' : 'Running low');
+    if (!listed && allowed('low', it)) add('low', canManage(m) ? 'Add to list' : level(it) === 'out' ? 'It is out' : 'Running low');
     if (allowed('count')) add('count', 'Count it');
     if (allowed('used')) add('used', 'Record use');
     if (allowed('price')) add('price', 'Change price');

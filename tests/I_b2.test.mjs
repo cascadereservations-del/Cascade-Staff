@@ -94,7 +94,7 @@ test('I_b2 each row carries one quick action by role: owner adds low items to th
   assert.match(o.html(), /Add to list/);
   const c = await make('cleaner'); await c.mount('');
   assert.equal(qaOf(c.html(), 'i1'), 'used'); // low but already on the list: Use
-  assert.equal(qaOf(c.html(), 'i3'), 'low'); assert.match(c.html(), /Running low, Bath towels/); // s107 B8: out and not listed: Running low
+  assert.equal(qaOf(c.html(), 'i3'), 'low'); assert.match(c.html(), /It is out, Bath towels/); // s107 B8 + s124: out and not listed: It is out
   const f = await make('finance'); await f.mount('');
   assert.doesNotMatch(f.html(), /data-kind="count"|data-kind="used"/); // finance neither counts nor records use
   assert.match(o.html(), /<button class="rowi I_row I_irow" type="button" data-act="open" data-id="i1"/); // the open hook is unchanged
