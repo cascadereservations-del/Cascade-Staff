@@ -7828,37 +7828,42 @@ function openPhotoDB() {
   _photoDbPromise = new Promise(resolve => {
     try {
       const req = indexedDB.open(PHOTO_DB_NAME, 1);
+      const stuck = setTimeout(() => { _photoDbPromise = null; }, PHOTO_IDB_LIMIT);   // s120R12: an open that has not answered by the limit is not remembered either; the next call opens again
       req.onupgradeneeded = () => { req.result.createObjectStore(PHOTO_STORE); };
-      req.onsuccess = () => resolve(req.result);
-      req.onerror = () => { _photoDbPromise = null; resolve(null); };   // s120R10: a failed open is not remembered, the next call tries again
+      req.onsuccess = () => { clearTimeout(stuck); resolve(req.result); };
+      req.onerror = () => { clearTimeout(stuck); _photoDbPromise = null; resolve(null); };   // s120R10: a failed open is not remembered, the next call tries again
     } catch { _photoDbPromise = null; resolve(null); }
   });
   return _photoDbPromise;
 }
 
-/* s120R11: no photo storage call waits forever or loses a photo silently. Runs op() and settles with its value, or with `fallback` if it throws, rejects or has not settled in PHOTO_IDB_LIMIT ms; a late result changes nothing. */
+/* s120R11: no photo storage call waits forever or loses a photo silently. Runs op() and settles with its value, or with `fallback` if it throws, rejects or has not settled in PHOTO_IDB_LIMIT ms; a late result changes nothing.
+   s120R12: onLimit runs when the limit is what settled it, so a write that is still waiting can be cancelled. */
 const PHOTO_IDB_LIMIT = 3000;
-function idbBounded(op, fallback, ms = PHOTO_IDB_LIMIT) {
+const KEEP_OPEN_MSG = 'Keep this page open until the photo shows Uploaded.';
+function idbBounded(op, fallback, ms = PHOTO_IDB_LIMIT, onLimit = null) {
   return new Promise(resolve => {
-    const timer = setTimeout(() => resolve(fallback), ms);
+    const timer = setTimeout(() => { try { if (onLimit) onLimit(); } catch { /* nothing to cancel */ } resolve(fallback); }, ms);
     Promise.resolve().then(op).then(v => { clearTimeout(timer); resolve(v); }, () => { clearTimeout(timer); resolve(fallback); });
   });
 }
 
-/* resolves true once the blob is stored, false on a failed open, a quota abort, a thrown error or the time limit: the caller then keeps the photo in memory (_blob) */
+/* resolves true once the blob is stored, false on a failed open, a quota abort, a thrown error or the time limit: the caller then keeps the photo in memory (_blob).
+   s120R12: at the limit the write is cancelled (abort, or never started if the open was late), so no blob is stored that no draft names. */
 function idbPutPhoto(id, blob) {
+  let tx = null, late = false;
   return idbBounded(async () => {
     const db = await openPhotoDB();
-    if (!db) return false;
+    if (!db || late) return false;
     return new Promise(resolve => {
       try {
-        const tx = db.transaction(PHOTO_STORE, 'readwrite');
+        tx = db.transaction(PHOTO_STORE, 'readwrite');
         tx.objectStore(PHOTO_STORE).put(blob, id);
         tx.oncomplete = () => resolve(true);
         tx.onerror = tx.onabort = () => resolve(false);
       } catch { resolve(false); }
     });
-  }, false);
+  }, false, PHOTO_IDB_LIMIT, () => { late = true; if (tx) tx.abort(); });
 }
 
 /* the upload read: null when the blob is not there, the read failed or it did not settle in time (the in-memory _blob is the next try) */
@@ -7931,6 +7936,7 @@ const photoUploadQueue = { items: [], active: 0 };
 /* s120R9: Resume is all or nothing. While the draft is held (the Resume question is open, or a Resume has not finished), nothing that writes or sends starts:
    it waits here and runs once, in order, when the hold is released. A hold that is never released (a failed Resume) runs none of it. */
 let _draftHold = false;
+let _carryApplied = false;   // s120R12: set once the carry key's sends are in the page; a stored save after that may remove the key (saveDraft)
 let _heldWork = [];
 function afterHold(fn) {
   if (_draftHold) _heldWork.push(fn);
@@ -8021,8 +8027,8 @@ async function uploadPhotoRecord(photo, slotKey, onStatus) {
   }
 }
 
-/* s120R11: a slow delete that settles after the report went must not bring the draft back: save only while the draft key still exists and the success screen is not up. */
-const S120R_draftOpen = () => ls(DRAFT_KEY) !== null && !el('success-screen')?.classList.contains('visible');
+/* s120R11: a slow delete that settles after the report went must not bring the draft back: save only while the draft key still exists (s120R12: saveDraft itself refuses once the success screen is up). */
+const S120R_draftOpen = () => ls(DRAFT_KEY) !== null;
 
 /* s120R10: after a save that stuck, try again to delete the blob of any uploaded photo that still names one. */
 let _blobSweeping = false;
@@ -8059,13 +8065,9 @@ async function restorePhotoFromMeta(meta) {
   if (!meta.uploaded) {
     // _blob only ever lived in memory, so a page reload always loses it —
     // idbId is the only thing that can survive to be restored from.
-    if (meta.idbId) {
-      const blob = await idbReadPhoto(meta.idbId);   // s120R10: a storage error rejects (Resume fails, nothing is touched); only a confirmed absent blob marks the photo failed
-      if (blob) { photo.idbId = meta.idbId; photo.objectUrl = URL.createObjectURL(blob); }
-      else photo.status = 'failed'; // the blob didn't survive — nothing left to retry from
-    } else {
-      photo.status = 'failed'; // never made it into IndexedDB either — same, nothing to retry from
-    }
+    const blob = meta.idbId ? await idbReadPhoto(meta.idbId) : null;   // s120R10: a storage error rejects (Resume fails, nothing is touched)
+    if (!blob) { state.photosDropped = (state.photosDropped || 0) + 1; return null; }   // s120R12: not uploaded and not stored: nothing to retry from, so the slot is emptied and the cleaner retakes it
+    photo.idbId = meta.idbId; photo._blob = blob; photo.objectUrl = URL.createObjectURL(blob);   // s120R12: _blob too, so a slow read at upload time still has the bytes
   }
   return photo;
 }
@@ -8372,6 +8374,7 @@ function initMeterPhotos() {
         const fname   = `${label}_${todayManila()}_${Date.now()}.jpg`;
         const id      = uuid();
         const stored  = await idbPutPhoto(id, blob);
+        if (!stored) showToast(KEEP_OPEN_MSG, 'warning', 6000);   // s120R12: held in memory only until it uploads
 
         // A retake replaces whatever was already in this slot — release its
         // storage first so retakes don't leak an IndexedDB row or object URL.
@@ -8808,6 +8811,7 @@ function initSectionPhotos() {
         const fname  = `${label}${slotId ? '_' + slotId : ''}_${todayManila()}_${Date.now()}.jpg`;
         const id     = uuid();
         const stored = await idbPutPhoto(id, blob);
+        if (!stored) showToast(KEEP_OPEN_MSG, 'warning', 6000);   // s120R12: held in memory only until it uploads
         const photo = {
           // idbPutPhoto can fail silently (quota, blocked storage); _blob is
           // the same-session in-memory fallback resolvePhotoDataUrl() uses then.
@@ -9804,7 +9808,7 @@ function initMessengerButtons() {
 /* While the draft is held (declared with the upload queue) the stored draft is read-only: the page holds an empty state and a save would write it over the real draft.
    Returns true only when the draft really reached storage. */
 function saveDraft() {
-  if (_draftHold) return false;
+  if (_draftHold || el('success-screen')?.classList.contains('visible')) return false;   // s120R12: after the report went, a late save (a slow upload or delete finishing) must not bring the draft back
   const draft = {
     _v:              DRAFT_VERSION,
     _k:              2,                 // K_: 1 = the s82 line set and phase numbers; 2 = EcoFlow merged into check_9_4 (3.1.1)
@@ -9860,6 +9864,7 @@ function saveDraft() {
   const stored = lsJSON(DRAFT_KEY, draft) === true;
   flashAutosave();
   if (stored) S120R_sweepBlobs().catch(() => {});   // s120R10: a blob that could not be deleted earlier is tried again after a save that stuck
+  if (stored && _carryApplied) ls(S120R_CARRY_KEY, null);   // s120R12: the stored draft holds the carried keys now; a key left behind would bring them back after the report
   return stored;
 }
 
@@ -10009,6 +10014,7 @@ function S120R_draftView(view) {
 async function resumeDraft(draft) {
   _draftHold = true;   // already on from the question; set again so no caller can resume without it
   S120R_draftView('wait');
+  state.photosDropped = 0;
   let timer;
   const run = (async () => { await applyDraft(draft); })();
   const limit = new Promise((_, no) => { timer = setTimeout(() => no(new Error('restore did not finish in time')), S120R_RESUME_LIMIT); });
@@ -10020,7 +10026,9 @@ async function resumeDraft(draft) {
     el('draft-modal')?.classList.remove('open');
     saveDraft();   // the restored state, photo records included, is stored once
     if (state.phase > 0) { ls(PHASE_KEY, String(state.phase)); K_reportProgress(state.phase); }   // the restored phase, reported once, now that the Resume has succeeded
-    showToast('Session resumed', 'success');
+    const lost = state.photosDropped || 0;   // s120R12: photos that were only ever in memory are gone; say so
+    if (lost) showToast(lost === 1 ? '1 photo could not be kept. Please retake it.' : lost + ' photos could not be kept. Please retake them.', 'warning', 8000);
+    else showToast('Session resumed', 'success');
   });
 }
 function S120R_initFailed(e) { console.error('init failed', e); showToast(S120R_BOOT_FAIL, 'error wrap', 86400000); }   // the hold stays as init left it: the stored draft is untouched
@@ -10039,7 +10047,7 @@ function carryOverSends(draft) {
   let kept = false;
   if (S120R_liveSend(draft.restock)) { state.restock = S120R_migrateRestock(draft); state.supplyLogSaved = !!draft.supplyLogSaved; if (state.restock.saved) el('supply-usage-trigger-card')?.classList.add('sus-done'); kept = true; }
   if (S120R_liveSend(draft.linen)) { state.linen = S120R_migrateLinen(draft); if (state.cleaningType !== 'emergency') S120R_syncLinen(); kept = true; }
-  if (kept) { try { renderConfirmItems(); S120R_refreshStatus(); } catch (e) { /* the cards repaint on the next tap */ } }
+  if (kept) { _carryApplied = true; try { renderConfirmItems(); S120R_refreshStatus(); } catch (e) { /* the cards repaint on the next tap */ } }
   return kept;
 }
 /* s120R11: the carry key for Start fresh. With storage full it may not fit beside the old draft: hold it in memory, clear the draft, write the key, and only go on when it stuck.
@@ -10077,7 +10085,7 @@ function S120R_startFresh(draft) {
     state.startTimestamp = Date.now();
     startElapsedTimer();
     kept = carryOverSends(draft);
-  } finally { releaseHold(() => { if (!kept || saveDraft() === true) ls(S120R_CARRY_KEY, null); }); }   // the hold is cleared on every path; the carry key goes once a stored draft holds the keys
+  } finally { releaseHold(() => { if (kept) saveDraft(); else ls(S120R_CARRY_KEY, null); }); }   // the hold is cleared on every path; saveDraft removes the carry key once a stored draft holds the keys
   return true;
 }
 
@@ -10123,7 +10131,7 @@ function checkAndShowDraftModal() {
   if (!draft || !modal) {
     const carry = lsJSON(S120R_CARRY_KEY);   // left by Start fresh after a failed Resume
     const kept = !!carry && carryOverSends(carry);
-    releaseHold(() => { if (!kept || saveDraft() === true) ls(S120R_CARRY_KEY, null); });   // s120R11: the carry key goes only once the keys are in a stored draft
+    releaseHold(() => { if (kept) saveDraft(); else ls(S120R_CARRY_KEY, null); });   // s120R11: the carry key goes only once the keys are in a stored draft (saveDraft removes it)
     return;
   }
   _draftHold = true;   // the stored draft is read-only until the cleaner answers
@@ -12681,7 +12689,7 @@ async function init() {
 }
 
 /* s120R10: a test opens the page with window.__s120Test set before it loads; nothing else ever does, so a cleaner's page exposes nothing. */
-if (window.__s120Test) window.__s120 = { get state() { return state; }, saveDraft, runPreSubmitFlush, S120R_flushAll, S120R_resumePreSubmit };
+if (window.__s120Test) window.__s120 = { get state() { return state; }, saveDraft, runPreSubmitFlush, S120R_flushAll, S120R_resumePreSubmit, K_afterPhotosOk };
 
 /* ═══════════════════════════════════════════════════════════════
    BOOT

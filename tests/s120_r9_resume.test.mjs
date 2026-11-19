@@ -147,7 +147,7 @@ t0('R9 item 4: a restore that never settles shows the failure after 20 seconds; 
 });
 
 t0('R9 item 2-3: a Restock waiting during a slow Resume is not sent until the hold is released, then once', async () => {
-  const t = await open({ draft: withSends({ linen: { sent: true } }), blobs: [] });
+  const t = await open({ draft: withSends({ linen: { sent: true } }), blobs: BLOBS });   // s120R12: the photos' blobs are there; a photo with none is dropped and the message would say so
   try {
     await slow(t);
     await t.page.click('#btn-draft-resume');

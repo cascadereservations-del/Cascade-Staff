@@ -100,6 +100,13 @@ export async function openPage({ draft, blobs = [], viewport = { width: 375, hei
       if (window.__failDelete === 'throw' && mode === 'readwrite') throw new DOMException('transaction failed', 'InvalidStateError');
       // __hangTx = 'write' | 'read' | 'all': a transaction that never fires an event (a store call that never settles)
       const h = window.__hangTx; if (h && (h === 'all' || (h === 'write') === (mode === 'readwrite'))) { const req = { set onsuccess(f) {}, set onerror(f) {} }; const os = { put() { return req; }, get() { return req; }, delete() { return req; } }; return { objectStore() { return os; }, set oncomplete(f) {}, set onerror(f) {}, set onabort(f) {}, abort() {} }; }
+      // __holdReal = ms: once the Resume question is closed, the first read starts a REAL readwrite transaction on the store and keeps it busy for that long; every later transaction on the store waits behind it
+      if (window.__holdReal && !window.__holdStarted && mode !== 'readwrite' && !document.getElementById('draft-modal')?.classList.contains('open')) {
+        window.__holdStarted = true;
+        const os = txn.call(this, store, 'readwrite').objectStore(store), end = Date.now() + window.__holdReal;
+        const tick = () => { if (Date.now() < end) os.get('__none').onsuccess = tick; };
+        tick();
+      }
       return txn.apply(this, arguments);
     };
     const set = Storage.prototype.setItem;
@@ -111,7 +118,13 @@ export async function openPage({ draft, blobs = [], viewport = { width: 375, hei
     const ofetch = window.fetch;
     window.fetch = function (u) { try { const url = String((u && u.url) || u); if (url.includes('/rpc/record_') || url.includes('/upload-photo')) { window.__atSend.push({ url, draft: localStorage.getItem('ch_draft_v6') }); window.__ops.push('req:' + url.split('/').pop()); } } catch (e) { /* ignore */ } return ofetch.apply(this, arguments); };
     const iopen = IDBFactory.prototype.open;
-    IDBFactory.prototype.open = function () { if (!window.__failOpen) return iopen.apply(this, arguments); const req = {}; setTimeout(() => { if (req.onerror) req.onerror({ target: req }); }, 0); return req; };
+    IDBFactory.prototype.open = function () { if (window.__hangOpen > 0) { window.__hangOpen--; return {}; }   // __hangOpen = n: the next n opens never answer
+      if (window.__slowOpen) {   // __slowOpen = ms: the next open answers that late (it is a real open that only starts then)
+        const ms = window.__slowOpen, args = arguments, self = this, fake = {}; window.__slowOpen = 0;
+        setTimeout(() => { const real = iopen.apply(self, args); Object.defineProperty(fake, 'result', { get: () => real.result }); real.onupgradeneeded = e => fake.onupgradeneeded && fake.onupgradeneeded(e); real.onsuccess = e => fake.onsuccess && fake.onsuccess(e); real.onerror = e => fake.onerror && fake.onerror(e); }, ms);
+        return fake;
+      }
+      if (!window.__failOpen) return iopen.apply(this, arguments); const req = {}; setTimeout(() => { if (req.onerror) req.onerror({ target: req }); }, 0); return req; };
     // test switches: __hangTx = 'write' | 'read' | 'all' makes a blob transaction that never settles; __failOpen / __failGet make the blob store fail to open / read; __failDelete = 'throw' | 'abort' makes a blob delete fail; __fullCarry = 'until-cleared' | 'always' makes the carry key not fit; __gate holds every blob read until it settles; __failRestore makes a restored photo throw; __failSave makes every draft write fail; __bootBreak makes the page's first form step throw
     // __slowComplete = ms: every transaction reports 'complete' that many ms late (a slow delete that does finish)
     const od = Object.getOwnPropertyDescriptor(IDBTransaction.prototype, 'oncomplete');
@@ -120,6 +133,8 @@ export async function openPage({ draft, blobs = [], viewport = { width: 375, hei
     IDBObjectStore.prototype.get = function (k) {
       const req = get.call(this, k);
       if (window.__failGet) return { get result() { return undefined; }, get error() { return null; }, set onsuccess(fn) { /* never */ }, set onerror(fn) { setTimeout(() => fn({ target: this }), 0); } };
+      // __slowRead = ms: a read made after the Resume question is closed (an upload's read) answers that late
+      if (window.__slowRead && !document.getElementById('draft-modal')?.classList.contains('open')) { const ms = window.__slowRead; return { get result() { return req.result; }, set onsuccess(fn) { req.onsuccess = () => setTimeout(() => fn({ target: req }), ms); }, set onerror(fn) { req.onerror = fn; } }; }
       if (!window.__gate) return req;
       const gate = window.__gate;
       return { get result() { return req.result; }, set onsuccess(fn) { req.onsuccess = () => gate.then(() => fn({ target: req })); }, set onerror(fn) { req.onerror = fn; } };

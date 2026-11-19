@@ -83,15 +83,17 @@ for (const how of ['__failOpen', '__failGet']) {
   });
 }
 
-t0('R10 item 1: a blob that is confirmed absent marks only that photo failed and loses its id; Resume still succeeds', async () => {
+t0('R10 item 1 (R12 item 2): a blob that is confirmed absent empties only that photo slot and says so; Resume still succeeds', async () => {
   const t = await open({ draft: draftOf(), blobs: ['idb-p1', 'idb-p2'], server: { upload: 'ok' } });   // idb-m0 is not in the store
   try {
     await t.page.click('#btn-draft-resume');
     await closed(t);
     await until(t, () => window.__ops.filter(o => o.startsWith('delete')).length === 2);
     const d = parse(await stored(t));
-    assert.equal(d.meterPhotoMeta[0].status, 'failed');
-    assert.equal(d.meterPhotoMeta[0].idbId, null, 'the photo with no blob has no id');
+    assert.equal(d.meterPhotoMeta[0], null, 'the photo with no blob is gone from the draft');
+    assert.equal(await t.page.evaluate(() => __s120.state.meterPhotos[0]), null, 'and from its slot, so the meter step asks for it again');
+    assert.equal(await t.page.evaluate(() => document.getElementById('toast-area').textContent.includes('1 photo could not be kept. Please retake it.')), true, 'the cleaner is told');
+    assert.equal(await t.page.evaluate(() => document.getElementById('toast-area').textContent.includes('Session resumed')), false);
     assert.equal(photoMetas(d).filter(p => p.url).length, 3, 'p1, p2 and the already uploaded p3 hold URLs');
   } finally { await t.close(); }
 });
@@ -151,13 +153,17 @@ t0('R10 item 3: a failed Resume reports nothing and leaves ch_phase as it was', 
 
 /* ---- item 4: tests for the mutants R9 let live ---- */
 const noneRecord = (over = {}) => ({ name: 'm0.jpg', url: '', fileId: '', uploaded: false, status: 'failed', idbId: null, slot: null, takenAt: null, ...over });
+/* s120R12: a record with no blob is dropped on restore, so a failed photo during a slow Resume is made in the page: an uploaded meter photo that is turned into one that failed with its bytes in memory */
+const doneRecord = () => noneRecord({ url: 'https://drive.example.test/m0.jpg', fileId: 'f-m0', uploaded: true, status: 'done' });
+const forceFailed = t => t.page.evaluate(() => { const p = __s120.state.meterPhotos[0]; p.uploaded = false; p.status = 'failed'; p.url = null; p.fileId = null; p._blob = new Blob([new Uint8Array(64).fill(7)], { type: 'image/jpeg' }); });
 
 t0('R10 H4: the online event during a slow Resume does not requeue a failed photo until the hold is released', async () => {
-  const t = await open({ draft: draftOf({ meterPhotoMeta: [noneRecord(), null] }), blobs: BLOBS });   // the meter photo has no blob: it comes back failed at once; the section photos keep the restore slow
+  const t = await open({ draft: draftOf({ meterPhotoMeta: [doneRecord(), null] }), blobs: BLOBS });   // the meter photo needs no read, so it is back at once; the section photos keep the restore slow
   try {
     await slow(t);
     await t.page.click('#btn-draft-resume');
-    await until(t, () => __s120.state.meterPhotos[0] && __s120.state.meterPhotos[0].status === 'failed');
+    await until(t, () => __s120.state.meterPhotos[0]);
+    await forceFailed(t);
     await t.page.evaluate(() => window.dispatchEvent(new Event('online')));
     await idle(t, 500);
     assert.equal(await t.page.evaluate(() => __s120.state.meterPhotos[0].status), 'failed', 'not requeued while the draft is held');
@@ -197,11 +203,12 @@ t0('R10 H6: the resumed pre-submit run is queued during the hold and runs once a
 });
 
 t0('R10 H8: the first save after a Resume holds the restored state; held work (a requeued failed photo) runs after it', async () => {
-  const t = await open({ draft: draftOf({ meterPhotoMeta: [noneRecord(), null] }), blobs: BLOBS });
+  const t = await open({ draft: draftOf({ meterPhotoMeta: [doneRecord(), null] }), blobs: BLOBS });
   try {
     await slow(t);
     await t.page.click('#btn-draft-resume');
-    await until(t, () => __s120.state.meterPhotos[0] && __s120.state.meterPhotos[0].status === 'failed');
+    await until(t, () => __s120.state.meterPhotos[0]);
+    await forceFailed(t);
     await t.page.evaluate(() => window.dispatchEvent(new Event('online')));   // waits in the held work
     await release(t);
     await closed(t);

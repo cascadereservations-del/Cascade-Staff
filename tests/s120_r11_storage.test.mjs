@@ -179,6 +179,23 @@ t0('R11 item 4 and 5: Start fresh with no room for the carry key keeps the draft
   } finally { await t.close(); }
 });
 
+t0('R12 item 7: Start fresh whose new draft cannot be stored keeps the carry key, and a reload restores the keys from it', async () => {
+  const t = await open({ draft: freshDraft(), blobs: BLOBS, server: {} });
+  try {
+    await t.page.evaluate(() => { window.__failSave = true; });
+    await t.page.click('#btn-draft-fresh');
+    await closed(t);
+    await t.page.waitForTimeout(700);
+    const kept = await t.page.evaluate(() => localStorage.getItem('ch_s120_carry'));
+    assert.ok(kept && kept.includes('rk-test') && kept.includes('lk-test'), 'the carry key still holds the keys: ' + kept);
+    assert.equal(await stored(t), null, 'no draft was stored');
+    await t.page.reload({ waitUntil: 'domcontentloaded' });   // storage works again on the new page
+    await t.page.waitForFunction(() => window.__s120 && window.__s120.state && window.__s120.state.restock, null, { timeout: 15000 });
+    assert.equal(await t.page.evaluate(() => __s120.state.restock.key), 'rk-test', 'the reload restored Restock');
+    assert.equal(await t.page.evaluate(() => __s120.state.linen.key), 'lk-test', 'and the linen check');
+  } finally { await t.close(); }
+});
+
 t0('R11 item 5: after a failed Resume the refused Start fresh also works on the second tap', async () => {
   const t = await open({ draft: freshDraft(), blobs: BLOBS, server: {} });
   try {
