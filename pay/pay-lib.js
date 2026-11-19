@@ -181,7 +181,7 @@
     var r = String(referrer || ''), o = String(origin || '');
     return (!!o && !!r && (r === o || r.indexOf(o + '/') === 0)) || P_fromShell(hash);
   }
-  // keys: CS.tabKeys(role) when the role is known (laundry has Inventory where the others have Tasks); left out, the standard five.
+  // keys: CS.tabKeys(role) when the role is known (laundry has Today and Inventory only); left out, the standard five.
   function P_tabs(hash, ICON, esc, keys) {
     var n = P_hashCounts(hash);
     var all = { home: ['home', '../#home', 'Today', 'house', 0, ''], calendar: ['calendar', '../#calendar', 'Calendar', 'calendar', n.cal, ' warnings'], tasks: ['tasks', '../#tasks', 'Tasks', 'tasks', n.tasks, ' due'],

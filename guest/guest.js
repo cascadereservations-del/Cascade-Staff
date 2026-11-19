@@ -21,7 +21,7 @@
   // step: load | input | reading | review | saving | done
   var S = { step: 'load', err: '', ctx: null, text: '', images: [], preparing: 0, sheet: null, result: null };
 
-  // The tab bar for the role the app saw last (laundry has Inventory where the others have Tasks); no saved role: the standard five.
+  // The tab bar for the role the app saw last (laundry has Today and Inventory only); no saved role: the standard five.
   function tabsHtml() {
     var TABS = { home: ['Today', 'house'], calendar: ['Calendar', 'calendar'], tasks: ['Tasks', 'tasks'], stock: ['Inventory', 'box'], kpis: ['KPIs', 'dash'], more: ['More', 'more'] };
     var role = CS.recalledRole(store('sessionStorage'));

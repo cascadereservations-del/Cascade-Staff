@@ -1159,7 +1159,7 @@
   }
   function calNotices() {
     var v = A_notices();
-    if (state.noticesAbsent) return '<div class="card glass"><p class="sub">Notices are not set up yet. Brownouts and the weather still show under Stays, in Warnings.</p><a class="btn btn-secondary btn-sm" href="#calendar/' + (CS.isLaundry(role()) ? 'notices' : 'warnings') + '" style="margin-top:10px">See warnings</a></div>';
+    if (state.noticesAbsent) return CS.isLaundry(role()) ? '<div class="card glass"><p class="sub">Notices are not set up yet. Brownouts and the weather still show on Today.</p></div>' : '<div class="card glass"><p class="sub">Notices are not set up yet. Brownouts and the weather still show under Stays, in Warnings.</p><a class="btn btn-secondary btn-sm" href="#calendar/warnings" style="margin-top:10px">See warnings</a></div>';
     if (!v) return state.noticesLoading ? '<div class="stack"><div class="skel" style="height:120px"></div><div class="skel" style="height:96px"></div></div>' : '<div class="errbox" role="alert">' + ICON('alert') + '<span>No connection. <button class="btn btn-ghost btn-sm" type="button" data-act="refresh">Try again</button></span></div>';
     var f = state.noticeFilter, filters = CS.A_noticeFilters(v), W = v.weather, html = '';
     if (!filters.some(function (x) { return x[0] === f; })) f = 'all';
@@ -1329,7 +1329,7 @@
     var b = $('cs-body'); if (b && b.classList && !E_reduced()) { b.classList.add('H_fade'); setTimeout(function () { b.classList.remove('H_fade'); }, 160); }
     return true;
   }
-  // MF4: three cards, once per phone (cs_seen_v3), Skip at any time; also from More. Never in the demo's own start.
+  // MF4: three cards, once per phone (cs_seen_v3; laundry has her own key, cs_seen_laundry_v1), Skip at any time; also from More. Never in the demo's own start.
   var H_TOUR = [['Today', 'Today shows who is here and what is next.'],
     ['Calendar', 'Tap a day for who is staying. Swipe the grid left or right for the next month. The Notices tab has the weather, power and water.'], ['Tasks', '']];
   function H_tourSteps() { return CS.isLaundry(role()) ? [['Today', 'Today shows who is here and what is next. Inventory, next to it, is for stock: see what is low and record what you use.']] : H_TOUR; } // s126: laundry has no Calendar or Tasks tab
@@ -1415,8 +1415,9 @@
     if (att.empty) return html + '<div class="card glass empty" style="margin-top:12px"><div class="disc">' + ICON('checks') + '</div><h2 class="hd">Nothing to look at</h2><p>' +
       (staff ? 'Your tasks and today’s warnings are clear.' : 'Tasks, bookings, the inbox and warnings are all clear.') + '</p></div>';
     att.sections.forEach(function (sec) {
-      html += '<div class="cap up" style="margin:14px 0 6px">' + esc(sec.label) + '</div><div class="card list">' + sec.shown.map(E_rowHtml).join('');
-      if (sec.more) { var all = E_ALL[sec.key]; if (sec.key === 'warn' && CS.isLaundry(role())) all = E_ALL.notice; html += '<a class="rowi E_more" href="' + all[0] + '" data-act="' + (all[1] ? 'attn-tasks' : 'sheet-close') + '"' + (all[1] ? ' data-filter="' + all[1] + '"' : '') + '><span class="mid"><span class="t">See all ' + sec.more + '</span></span><span class="chev">' + ICON('chev') + '</span></a>'; }
+      var lw = sec.key === 'warn' && CS.isLaundry(role()); // s126: laundry has no Warnings screen, so the sheet lists every warning and draws no See all row
+      html += '<div class="cap up" style="margin:14px 0 6px">' + esc(sec.label) + '</div><div class="card list">' + (lw ? sec.rows : sec.shown).map(E_rowHtml).join('');
+      if (sec.more && !lw) { var all = E_ALL[sec.key]; html += '<a class="rowi E_more" href="' + all[0] + '" data-act="' + (all[1] ? 'attn-tasks' : 'sheet-close') + '"' + (all[1] ? ' data-filter="' + all[1] + '"' : '') + '><span class="mid"><span class="t">See all ' + sec.more + '</span></span><span class="chev">' + ICON('chev') + '</span></a>'; }
       html += '</div>';
     });
     return html;

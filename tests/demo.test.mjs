@@ -225,3 +225,12 @@ test('s112 demo: weather-proxy answers for Cascade by default and "Near you" for
   const pos = await new Promise((r) => D.geo.getCurrentPosition(r));
   assert.ok(Math.abs(pos.coords.latitude - 6.1545) < 0.05 && Math.abs(pos.coords.longitude - 125.1852) < 0.05);
 });
+
+test('s126 demo ?empty: no current guest (next stays) or none at all; impossible without ?demo; links keep it', () => {
+  assert.equal(D.emptyFrom('?demo&empty'), 'next'); assert.equal(D.emptyFrom('?demo&empty=none'), 'none'); assert.equal(D.emptyFrom('?demo&role=cleaner'), '');
+  assert.equal(D.emptyFrom('?empty'), '', 'no ?demo, no switch'); assert.equal(D.emptyFrom('?empty=none&demo=0'), '');
+  const st = (e) => CS.todayCardState(D.build('owner', NOW, e).home, TODAY);
+  assert.equal(st('').kind, 'house'); assert.equal(st('next').kind, 'next'); assert.equal(st('next').guest.guest_name, 'Demo Guest Two'); assert.equal(st('none').kind, 'none');
+  const h = D.build('cleaner', NOW, 'none').home; assert.equal(h.current_guest, null); assert.equal(h.next_guest, null); assert.doesNotMatch(JSON.stringify(h.calendar), /Demo Guest (One|Two)/);
+  assert.equal(D.demoHref('./quick/', 'owner', '&empty=none'), './quick/?demo&role=owner&empty=none');
+});

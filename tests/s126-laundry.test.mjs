@@ -1,7 +1,7 @@
 // s126 (Staff 3.4.41): the laundry role sees only Today and Inventory. Every other role is unchanged.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { CS, read, boot, HOMEWITH, baseHandlers, stayRow, TODAY } from './_a_harness.mjs';
+import { CS, read, boot, HOMEWITH, baseHandlers, stayRow, TODAY, NOTICES_RAW } from './_a_harness.mjs';
 
 const ROLES = ['owner', 'admin', 'finance', 'cleaner', 'inspector', 'maintenance'];
 const home = (role, hash = '#home', extra) => boot({ role, hash, handlers: baseHandlers(role, Object.assign({ staff_home_v1: () => HOMEWITH([stayRow('Ana Reyes', TODAY, '2026-10-17', { checkin_time: '14:00', checkout_time: '12:00' })]) }, extra || {})) });
@@ -80,13 +80,25 @@ test('s126 r1 redirect: a hidden hash is replaced by #home (once); kept screens 
   assert.equal((await home('cleaner', '#tasks')).location.hash, '#tasks');
 });
 
-test('s126 r1 links: laundry warnings links point at Notices; a cleaner keeps #calendar/warnings', async () => {
-  const nA = { notices_v1: () => ({ error: null, data: null }) };
-  assert.doesNotMatch(read('app.js'), /href="#calendar\/warnings" style/, 'See warnings is built per role');
+test('s126 r1 links: laundry sees every warning in the sheet and no See all row; a cleaner keeps See all and #calendar/warnings', async () => {
   const W = (n) => Array.from({ length: n }, (_, i) => ({ kind: 'power', key: 'w' + i, title: 'Warning ' + i, date: TODAY }));
-  const run = async (role) => { const app = await boot({ role, hash: '#home', handlers: baseHandlers(role, { staff_home_v1: () => HOMEWITH([], { warnings: W(9) }), ...nA }) }); await app.click({ 'data-act': 'attn-open' }); return JSON.stringify(Object.values(app.els).map((e) => e.innerHTML)); };
-  const l = await run('laundry'); assert.doesNotMatch(l, /href="#calendar\/warnings"/);
-  assert.match(read('app.js'), /sec\.key === 'warn' && CS\.isLaundry\(role\(\)\)\) all = E_ALL\.notice/);
+  const sheet = async (role) => { const app = await boot({ role, hash: '#home', handlers: baseHandlers(role, { staff_home_v1: () => HOMEWITH([], { warnings: W(9) }) }) }); await app.click({ 'data-act': 'attn-open' }); return app.els['cs-body'].innerHTML; };
+  const l = await sheet('laundry');
+  for (let i = 0; i < 9; i++) assert.match(l, new RegExp('Warning ' + i + '<'), 'laundry sheet lists warning ' + i);
+  assert.doesNotMatch(l, /E_more|See all|#calendar\/warnings/, 'no See all row for laundry');
+  const c = await sheet('cleaner');
+  assert.match(c, /<a class="rowi E_more" href="#calendar\/warnings"[^>]*><span class="mid"><span class="t">See all 9</, 'a cleaner keeps See all 9 to Warnings');
+  assert.doesNotMatch(c, /Warning 8</, 'a cleaner sees only the first rows');
+});
+
+test('s126 r1 links: "Notices are not set up" gives laundry a plain card with no link; a cleaner keeps See warnings to #calendar/warnings', async () => {
+  const absent = { notices_v1: () => ({ error: { code: 'PGRST202', message: 'Could not find the function' }, data: null }) };
+  const page = async (role) => { const app = await boot({ role, hash: '#calendar/notices', handlers: baseHandlers(role, absent) }); return app.els['v-calendar'].innerHTML; };
+  const l = await page('laundry');
+  assert.match(l, /<div class="card glass"><p class="sub">Notices are not set up yet\. Brownouts and the weather still show on Today\.<\/p><\/div>/);
+  assert.doesNotMatch(l, /href=|See warnings|Stays|Warnings/, 'no link, no screen she cannot open');
+  const c = await page('cleaner');
+  assert.match(c, /Notices are not set up yet\. Brownouts and the weather still show under Stays, in Warnings\./); assert.match(c, /<a class="btn btn-secondary btn-sm" href="#calendar\/warnings"[^>]*>See warnings<\/a>/);
 });
 
 test('s126 r1 pill: a failed tasks read never says "Could not update" for laundry; a cleaner still does', async () => {
@@ -103,11 +115,24 @@ test('s126 r1 tour: laundry sees it once under her own key even when cs_seen_v3 
   const c = await tour('cleaner', { cs_seen_v3: '1' }); assert.notEqual(c.app.els['cal-sheet'] && c.app.els['cal-sheet'].getAttribute('aria-hidden'), 'false'); assert.equal(c.ls.getItem('cs_seen_laundry_v1'), null);
 });
 
-test('s126 r1 privacy: laundry #calendar/next and #calendar/notices show no tel:, mailto:, ID photo or peso amount', async () => {
-  const guest = { guest_name: 'Ana Reyes', phone: '+639171234567', email: 'ana@guest.example', id_photo_url: 'https://x.example/id.jpg', id_photo_path: 'ids/ana.jpg', total_payout: 5000, amount: 5000 };
-  const extra = { staff_home_v1: () => HOMEWITH([stayRow('Ana Reyes', TODAY, '2026-10-17', guest), stayRow('Ben Cruz', '2026-10-18', '2026-10-20', guest)], { current_guest: guest, next_guest: Object.assign({ checkin_date: '2026-10-18' }, guest) }) };
-  for (const hash of ['#calendar/next', '#calendar/notices']) {
-    const c = (await home('laundry', hash, extra)).els['v-calendar'].innerHTML; assert.match(c, /\S/, hash);
-    assert.doesNotMatch(c, /tel:|mailto:|id_photo|id-photo|ID photo|₱|PHP|\+639|ana@guest/i, hash);
+const ANA = { guest_name: 'Ana Reyes', checkin_date: TODAY, checkout_date: '2026-10-17', id_photo_path: 'ids/ana.jpg' };
+const staffHomeOf = (g) => ({ staff_home_v1: () => HOMEWITH([stayRow('Ana Reyes', TODAY, '2026-10-17')], { current_guest: g, next_guest: Object.assign({}, g, { checkin_date: '2026-10-18', checkout_date: '2026-10-20' }) }), notices_v1: () => ({ error: null, data: NOTICES_RAW({ role: 'laundry' }) }) });
+const PAGES = [['#calendar/house', /In the house/], ['#calendar/next', /Next arrival/], ['#calendar/notices', /Brownout 1:00 to 4:00 pm/]];
+
+test('s126 r1 privacy (a): a payload that carries a phone, e-mail or amount is refused for laundry on the three kept screens; only the blocked banner shows', async () => {
+  for (const [hash, extra] of PAGES.flatMap((p) => [{ phone: '+639171234567' }, { email: 'ana@guest.example' }, { total_payout: 5000 }, { amount: 5000 }].map((x) => [p[0], x]))) { // one dirty key at a time: contact alone must be refused too
+    const c = (await home('laundry', hash, staffHomeOf(Object.assign({}, extra, ANA)))).els['v-calendar'].innerHTML;
+    assert.match(c, /This page was blocked because the data carried an amount or a contact detail/, hash + ' ' + Object.keys(extra));
+    assert.doesNotMatch(c, /Ana Reyes|In the house|Next arrival|tel:|mailto:|ana@guest|₱|PHP|\+63/, hash + ': nothing of the payload is drawn');
   }
+});
+
+test('s126 r1 privacy (b): a clean payload really draws the guest card and Notices for laundry, with no tel:, mailto:, peso or +63 (the ID photo stays: D-302)', async () => {
+  for (const [hash, heading] of PAGES) {
+    const c = (await home('laundry', hash, staffHomeOf(ANA))).els['v-calendar'].innerHTML;
+    assert.match(c, heading, hash + ' draws its content'); assert.doesNotMatch(c, /This page was blocked/, hash);
+    assert.doesNotMatch(c, /tel:|mailto:|₱|PHP|\+63/, hash);
+    if (hash !== '#calendar/notices') assert.match(c, /Ana Reyes/, hash + ' names the guest');
+  }
+  assert.match((await home('laundry', '#calendar/house', staffHomeOf(ANA))).els['v-calendar'].innerHTML, /data-idpath="ids\/ana\.jpg"/, 'every staff account gets the ID photo (D-302)');
 });

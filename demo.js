@@ -19,16 +19,20 @@
   function roleFrom(search) {
     try { var r = new URLSearchParams(String(search || '')).get('role'); return VIEWS.indexOf(r) >= 0 ? r : 'owner'; } catch (e) { return 'owner'; }
   }
+  // ?demo&empty = no guest in the house tonight (the next guest stays); ?demo&empty=none = no next guest either. Without ?demo it is always '' (s126).
+  function emptyFrom(search) {
+    try { if (!isDemo(search)) return ''; var v = new URLSearchParams(String(search || '')).get('empty'); return v == null ? '' : v === 'none' ? 'none' : 'next'; } catch (e) { return ''; }
+  }
   var active = isDemo(root.location && root.location.search);
 
   // ---- links: keep ?demo&role= on every in-app link so a click never leaves demo mode ---------------------------------------
   // null = leave the link alone (an anchor on the page, another site, a tg: or mailto: link, or already a demo link).
-  function demoHref(href, role) {
+  function demoHref(href, role, keep) {
     href = String(href == null ? '' : href);
     if (!href || href.charAt(0) === '#' || /^([a-z][a-z0-9+.-]*:|\/\/)/i.test(href)) return null;
     var h = href.indexOf('#'), hash = h >= 0 ? href.slice(h) : '', rest = h >= 0 ? href.slice(0, h) : href;
     if (/[?&]demo(=|&|$)/.test(rest)) return null;
-    return rest + (rest.indexOf('?') >= 0 ? '&' : '?') + 'demo&role=' + role + hash;
+    return rest + (rest.indexOf('?') >= 0 ? '&' : '?') + 'demo&role=' + role + (keep || '') + hash;
   }
   // Where the role switcher goes: the same screen on the app root, else the app home.
   function switchUrl(loc, role, rootPath) {
@@ -62,7 +66,7 @@
   }
 
   // ---- fixtures: every date is relative to today (Manila), every name and number is made up ------------------------------------
-  function build(role, now) {
+  function build(role, now, empty) {
     var r = role === 'cleaner' || role === 'admin' || role === 'laundry' ? role : 'owner', admin = r !== 'cleaner' && r !== 'laundry', today = CS.manilaToday(now), stamp = (now instanceof Date ? now : new Date()).toISOString();
     var d = function (n) { return CS.addDays(today, n); }, at = function (n, hm) { return d(n) + 'T' + hm + ':00+08:00'; };
     var guest = function (o) { // the server sends a cleaner no companions, phone, e-mail or Messenger link
@@ -99,6 +103,10 @@
         { kind: 'inventory', title: 'Low stock: Demo towels', severity: 'warn', detail: { qty: 4, unit: 'pcs', reorder_below: 6 } },
         { kind: 'verifier', title: 'Demo check: Airbnb block runs past the last guest night', severity: 'alert', key: 'V1m:demo', detail: { check_id: 'V1m' } }]
     };
+    if (empty) { // s126: an empty night for the vacant card; the stays leave the calendar too, so nothing else says someone is in the house
+      home.current_guest = null; home.calendar = home.calendar.filter(function (x) { return x.guest_name !== 'Demo Guest One'; });
+      if (empty === 'none') { home.next_guest = null; home.calendar = home.calendar.filter(function (x) { return x.guest_name !== 'Demo Guest Two'; }); }
+    }
     if (!admin) home.warnings = home.warnings.filter(function (w) { return w.kind !== 'verifier'; }); // the server sends a cleaner no system checks
     // notices_v1 (Lane B builds it): house times 12:00 noon / 2:00 pm, weather with a rain watch, power and water notices, house items and the inbox count for owner and admin only.
     var hr = function (h, pct, mm) { return { time: at(0, (h < 10 ? '0' : '') + h + ':00'), rain_chance_pct: pct, mm: mm, code: pct > 50 ? 61 : 2 }; };
@@ -169,8 +177,8 @@
     'record_inventory_usage', 'record_inventory_receipt_v1', 'inventory_receipt_confirm_v1', 'inventory_receipt_undo_v1', 'inventory_receipt_cancel_v1', 'inventory_item_photo_set_v1', 'utility_rate_set_v1', 'admin_resolve_report_block_v1', 'admin_request_meter_resend_v1', 'kpi_target_set_v1']; // s110: stock, rate and meter-check writes say "nothing was saved"
   var clone = function (x) { return JSON.parse(JSON.stringify(x)); };
   function admin_(v) { return v === 'owner' || v === 'admin'; }
-  function client(role, now) {
-    var view = VIEWS.indexOf(role) >= 0 ? role : 'owner', D = function () { return build(view, now); }, doneSet = {}, acked = {}, closed = {}; // doneSet: this page load only, so a task marked done leaves the list and Undo brings it back, like the live app
+  function client(role, now, empty) {
+    var view = VIEWS.indexOf(role) >= 0 ? role : 'owner', D = function () { return build(view, now, empty == null ? emptyFrom(root.location && root.location.search) : empty); }, doneSet = {}, acked = {}, closed = {}; // doneSet: this page load only, so a task marked done leaves the list and Undo brings it back, like the live app
     var done = function (data) { return Promise.resolve({ data: clone(data), error: null }); };
     function rpc(name, args) {
       var X = D();
@@ -265,7 +273,7 @@
 
   function mount() {
     var doc = root.document; if (!doc || !active || doc.getElementById('demo-bar')) return;
-    var role = roleFrom(root.location.search), st = doc.createElement('style'), bar = doc.createElement('div');
+    var role = roleFrom(root.location.search), em = emptyFrom(root.location.search), keep = em ? '&empty' + (em === 'none' ? '=none' : '') : '', st = doc.createElement('style'), bar = doc.createElement('div');
     st.textContent = STYLE; doc.head.appendChild(st);
     bar.id = 'demo-bar'; bar.className = 'demo-bar'; bar.setAttribute('role', 'region'); bar.setAttribute('aria-label', 'Demo controls'); bar.innerHTML = barHtml(role);
     doc.body.insertBefore(bar, doc.body.firstChild); doc.documentElement.classList.add('demo-on');
@@ -275,14 +283,14 @@
       root.location.assign(switchUrl(root.location, b.getAttribute('data-demo-role'), rootPath()));
     });
     // every in-app link keeps ?demo&role=, including the ones the app draws later
-    var fix = function () { Array.prototype.forEach.call(doc.querySelectorAll('a[href]'), function (a) { var h = demoHref(a.getAttribute('href'), role); if (h) a.setAttribute('href', h); }); }, queued = false;
+    var fix = function () { Array.prototype.forEach.call(doc.querySelectorAll('a[href]'), function (a) { var h = demoHref(a.getAttribute('href'), role, keep); if (h) a.setAttribute('href', h); }); }, queued = false;
     fix();
     new MutationObserver(function () { if (queued) return; queued = true; (root.requestAnimationFrame || root.setTimeout)(function () { queued = false; fix(); }); }).observe(doc.body, { childList: true, subtree: true });
   }
   if (active && root.document) { if (root.document.body) mount(); else root.document.addEventListener('DOMContentLoaded', mount); }
 
   return {
-    active: active, ROLES: ROLES, VIEWS: VIEWS, NOTE: NOTE, WRITES: WRITES, isDemo: isDemo, roleFrom: roleFrom, role: function () { return roleFrom(root.location && root.location.search); },
+    active: active, ROLES: ROLES, VIEWS: VIEWS, NOTE: NOTE, WRITES: WRITES, isDemo: isDemo, roleFrom: roleFrom, emptyFrom: emptyFrom, role: function () { return roleFrom(root.location && root.location.search); },
     onNote: function (fn) { hook = fn; }, demoHref: demoHref, switchUrl: switchUrl, barHtml: barHtml, build: build, client: client, fetch: demoFetch, toast: toast, idPlaceholder: idPlaceholder, geo: geo
   };
 });

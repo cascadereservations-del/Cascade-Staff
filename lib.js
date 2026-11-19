@@ -118,7 +118,7 @@
     try { for (var i = 0; session && i < session.length; i++) if (/^sb-.+-auth-token$/.test(session.key(i))) return false; } catch (e) {}
     return true;
   }
-  // s110: the sub-pages (guest/, pay/) draw the tab bar for the role the app saw last (laundry has Inventory where the others have Tasks). Unknown or blocked storage: the standard bar.
+  // s110: the sub-pages (guest/, pay/) draw the tab bar for the role the app saw last (laundry has Today and Inventory only). Unknown or blocked storage: the standard bar.
   var ROLE_KEY = 'cs_role';
   function rememberRole(storage, role) { try { if (!storage) return; if (role) storage.setItem(ROLE_KEY, String(role)); else storage.removeItem(ROLE_KEY); } catch (e) {} }
   function recalledRole(storage) { var r = ''; try { r = (storage && storage.getItem(ROLE_KEY)) || ''; } catch (e) {} return ADMIN_ROLES.indexOf(r) >= 0 || STAFF_ROLES.indexOf(r) >= 0 ? r : ''; }
