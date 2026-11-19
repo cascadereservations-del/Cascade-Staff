@@ -1243,7 +1243,7 @@
   function dupHtml(a) {
     var d = dupOf(a.vals.name) || (a.err === 'exists' && a.takenId ? itemById(a.takenId) : null);
     if (!d) return a.err === 'exists' ? '<div class="I_dup"><span>An item with that name is already on the list.</span></div>' : '';
-    return '<div class="I_dup"><span><b>' + esc(d.name) + '</b> is already on the list.</span><button class="btn btn-secondary btn-sm" type="button" data-act="open-taken" data-id="' + esc(d.id) + '">Open it</button></div>';
+    return '<div class="I_dup"><span><b>' + esc(d.name) + '</b> is already on the list. Is it the same?</span><button class="btn btn-secondary btn-sm" type="button" data-act="open-taken" data-id="' + esc(d.id) + '">Open ' + esc(d.name) + '</button></div>';
   }
   function niProds(v) { // the product rows the person started: any of name, shop or link filled in
     var out = [], n, np = Math.max(1, Math.min(3, +v.np || 1));
@@ -1311,7 +1311,7 @@
   }
   function niErrBox(a) {
     if (!a.err || a.err === 'exists') return '';
-    var t = a.err === 'offline' || a.err === 'other' ? 'That did not go through, so nothing was added. Try again in a moment.' : ERR[a.err] || ERR.other;
+    var t = a.err === 'offline' || a.err === 'other' ? 'Could not add it. Nothing was lost. Check the signal and try again.' : ERR[a.err] || ERR.other;
     return '<div class="errbox" role="alert">' + gi('alert') + '<span>' + esc(t) + '</span></div>';
   }
   function renderCreate(a) {
@@ -1562,7 +1562,7 @@
     if (kind === 'link') return K.v84 && canManage(m) && !M.denied.link;
     if (kind === 'history') return K.v84 && !M.demo && !K.denied.inventory_item_history_v1;
     if (kind === 'unlink') return K.v84 && canManage(m) && !M.denied.unlink;
-    if (kind === 'create') return K.v84 && !M.denied.create && !!K.items; // s125: every role that sees Stock; the server decides (a refusal hides the button for the visit)
+    if (kind === 'create') return (canManage(m) || m === 'cleaner' || m === 'inspector') && K.v84 && !M.denied.create && !!K.items; // s125: every role that sees Stock; the server decides (a refusal hides the button for the visit)
     if (kind === 'report') return !M.denied.report;
     if (kind === 'optusual') return canManage(m) && !M.denied.optusual;
     if (kind === 'photo') return !M.denied.photo; // every role (D-330 answer 1); the server decides
@@ -1725,7 +1725,7 @@
     if (a.kind === 'undo' && (why === 'too_late' || why === 'not_yours' || why === 'stock_moved' || (a.entry.change && (why === 'already_undone' || why === 'not_found' || why === 'changed_since')))) { a.err = why === 'changed_since' ? 'changedSince' : a.entry.change && why !== 'not_yours' && why !== 'stock_moved' ? 'changeGone' : 'tooLate'; K.undos = K.undos.filter(function (u) { return u !== a.entry; }); return drawLayer(); }
     if (why === 'finance_only') { K.noFinance = true; a.vals.to = 'ops'; a.step = 'form'; a.err = 'financeOnly'; return drawLayer(); }
     a.err = errKind(e, online());
-    if (a.kind === 'create' && (a.err === 'offline' || a.err === 'other')) a.lost = true;
+    if (a.kind === 'create' && (a.err === 'offline' || (a.err === 'other' && !why && !(e && (e.code || e.status || (e.context && e.context.status)))))) a.lost = true; // A4: only a lost answer (no network, or no server answer at all) may replay as already added; a 4xx or any server answer never does
     var dk = a.kind === 'undo' ? a.entry.call.fn : a.kind === 'photoremove' ? 'photo' : a.kind;
     if (a.err === 'missing' && NEWK[a.kind]) { me.denied[dk] = true; if (a.kind === 'sort') me.denied.cat = true; if (a.itemId && !rep && a.kind !== 'create') { a.kind = 'menu'; a.vals = null; a.step = null; } else me.act = null; a.err = null; toast(ERR.missing); if (rep || !a.itemId) draw(); return drawLayer(); } // not here yet: hide it, no error box
     if (!rep && (a.err === 'offline' || a.err === 'other')) { me.loading = false; load(); } // the write may have landed: look again
@@ -2172,7 +2172,7 @@
       e.say = 'Linked a barcode to ' + n; e.line = 'linked a barcode'; e.confirm = 'Unlink code ' + shortCode(a.code) + ' from ' + n + '?'; e.call = { fn: 'inventory_code_detach_v1', args: { p_property_id: M.pid, p_code: a.code } };
     } else if (a.kind === 'unlink' && a.code) {
       e.say = 'Unlinked a barcode from ' + n; e.line = 'unlinked a barcode'; e.confirm = 'Link code ' + shortCode(a.code) + ' to ' + n + ' again?'; e.call = attachCall(M.pid, it, a.code, null);
-    } else if (a.kind === 'create' && d.item_id) {
+    } else if (a.kind === 'create' && d.item_id) { // the update_v1 {active:false} entry below is the pre-s125 fallback; the change_id block after the chain replaces it whenever change_id is present
       var cnm = String(v.name || '').trim(); e.itemId = d.item_id; e.name = cnm; e.say = 'Added ' + cnm; e.line = 'added this item'; e.confirm = 'Remove ' + cnm + ' again?'; e.call = { fn: 'inventory_item_update_v1', args: { p_item_id: d.item_id, p_patch: { active: false } } }; e.ttl = NEW_UNDO_MS;
       if (a.code) { e.confirm = 'Remove ' + cnm + ' and free code ' + shortCode(a.code) + '?'; e.next = e.call; e.call = { fn: 'inventory_code_detach_v1', args: { p_property_id: M.pid, p_code: a.code } }; } // the code goes first, so it is free to use again
     } else if ((a.kind === 'shop' || a.kind === 'low') && d.id) {
@@ -2200,7 +2200,9 @@
       return catUndo(d.results, d.remaining);
     } else return null;
     if (/^(price|levels|photo|photoremove|create)$/.test(a.kind) && d.change_id) { // s124: the server keeps the change, so Undo is one call for every role; a price is never named
-      e.call = changeUndoCall(d.change_id); e.change = true; delete e.next; delete e.more;
+      e.call = changeUndoCall(d.change_id); e.change = true; delete e.more;
+      if (a.kind === 'create' && a.code) e.next = { fn: 'inventory_code_detach_v1', args: { p_property_id: M.pid, p_code: a.code } }; // Undo runs first, so a refusal never frees the code
+      else delete e.next;
       if (a.kind === 'price') e.confirm = 'Put the price of ' + n + ' back as it was?';
     } else if (a.kind === 'price' && !canPrice(M.role)) return null; // a role without prices knows no old amount to put back
     return e;

@@ -95,7 +95,7 @@ test('s125 6: the check step has a busy state that disables the button; a retry 
   release(); await p;
   const f = await make('cleaner', { inventory_item_create_v1: () => { throw { code: 'XX000', message: 'boom' }; } });
   await f.mount(''); await f.act('add-new'); await fill(f); await f.submit(); await f.submit();
-  assert.match(f.sheet(), /nothing was added/); await f.submit();
+  assert.match(f.sheet(), /Could not add it\. Nothing was lost\. Check the signal and try again\./); assert.doesNotMatch(f.sheet(), /nothing was added/i); await f.submit();
   const k = creates(f).map((x) => x[2].p_idempotency_key); assert.equal(k.length, 2); assert.equal(k[0], k[1]);
 });
 
@@ -104,8 +104,8 @@ test('s125 7: the same name is caught as you type (case and spaces ignored) with
   await e.input('I_f_name', '  hand SOAP '); await e.input('I_f_category', 'Kitchen');
   await e.submit();
   assert.match(e.sheet(), /That name is already on the list\./); assert.equal(creates(e).length, 0);
-  assert.match(e.root.byId.I_dup.innerHTML || e.sheet(), /is already on the list\./);
-  assert.match(e.sheet(), /data-act="open-taken" data-id="i2">Open it</);
+  assert.match(e.root.byId.I_dup.innerHTML || e.sheet(), /<b>Hand soap<\/b> is already on the list\. Is it the same\?/);
+  assert.match(e.sheet(), /data-act="open-taken" data-id="i2">Open Hand soap</);
   const s = await make('cleaner', { inventory_item_create_v1: bad({ reason: 'name_exists', item_id: 'i2' }) }); await s.mount(''); await s.act('add-new');
   await fill(s, 'Hand soaps'); await s.submit(); await s.submit();
   assert.match(s.sheet(), /<h2 [^>]*>New item<\/h2>/); assert.match(s.sheet(), /already on the list/); assert.match(s.sheet(), /data-act="open-taken" data-id="i2"/);
@@ -241,7 +241,33 @@ test('s125 20 (A4): a create whose answer was lost and replays as name_exists wi
   let n = 0;
   const e = await make('cleaner', { inventory_item_create_v1: () => { if (++n === 1) throw { name: 'TypeError', message: 'Failed to fetch' }; return { data: { ok: false, reason: 'name_exists', item_id: 'i2' }, error: null }; } });
   await e.mount(''); await e.act('add-new'); await fill(e, 'Spare keys'); await e.submit(); await e.submit();
-  assert.match(e.sheet(), /nothing was added|did not go through/); await e.submit();
+  assert.match(e.sheet(), /Could not add it\./); await e.submit();
   assert.equal(e.navs[e.navs.length - 1], '#stock/item/i2'); assert.doesNotMatch(e.sheet(), /Added by you/); assert.doesNotMatch(e.sheet(), /data-act="undo"/);
   const k = creates(e).map((x) => x[2].p_idempotency_key); assert.equal(k[0], k[1]);
+});
+
+test('s125 21: a scan-new create with a code: Undo calls change_undo first, then detaches the code; a changed_since refusal never frees the code', async () => {
+  const e = await make('owner'); await e.mount(''); await e.act('scan'); await e.input('I_f_code', '555000777'); await e.submit();
+  await e.act('scan-new'); await fill(e); await e.submit(); await e.submit();
+  await e.act('undo', { 'data-id': undoId(e.sheet()) }); assert.match(e.sheet(), /free code/);
+  await e.submit();
+  const u = e.client.rpcCalls('inventory_item_change_undo_v1'), d = e.client.rpcCalls('inventory_code_detach_v1');
+  assert.deepEqual(u[0][2], { p_change_id: 'chg-n1' }); assert.equal(d.length, 1); assert.equal(d[0][2].p_code, '555000777');
+  const f = await make('owner', { inventory_item_change_undo_v1: bad({ reason: 'changed_since' }) }); await f.mount(''); await f.act('scan'); await f.input('I_f_code', '555000777'); await f.submit();
+  await f.act('scan-new'); await fill(f); await f.submit(); await f.submit();
+  await f.act('undo', { 'data-id': undoId(f.sheet()) }); await f.submit();
+  assert.equal(f.client.rpcCalls('inventory_item_change_undo_v1').length, 1); assert.equal(f.client.rpcCalls('inventory_code_detach_v1').length, 0);
+});
+
+test('s125 22: Add item shows for cleaner and inspector (and owner), never for finance, laundry or maintenance', async () => {
+  for (const role of ['cleaner', 'inspector', 'owner', 'admin']) { const e = await make(role); await e.mount(''); assert.match(e.html(), /data-act="add-new"/, role); }
+  for (const role of ['finance', 'laundry', 'maintenance']) { const e = await make(role); await e.mount(''); assert.doesNotMatch(e.html(), /data-act="add-new"/, role); }
+});
+
+test('s125 23: a 22023 refusal is a server answer, not a lost one: a later name_exists is shown, not treated as already added', async () => {
+  let n = 0;
+  const e = await make('cleaner', { inventory_item_create_v1: () => { if (++n === 1) throw { code: '22023', message: 'invalid' }; return { data: { ok: false, reason: 'name_exists', item_id: 'i2' }, error: null }; } });
+  await e.mount(''); await e.act('add-new'); await fill(e, 'Hand soaps'); await e.submit(); await e.submit(); await e.submit();
+  assert.match(e.sheet(), /<h2 [^>]*>New item<\/h2>/); assert.match(e.sheet(), /already on the list/);
+  assert.notEqual(e.navs[e.navs.length - 1], '#stock/item/i2');
 });
