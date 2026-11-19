@@ -86,7 +86,7 @@ function world({ online = true } = {}) {
     + 'const isPhaseValid = () => state.meterPhotos.filter(Boolean).length === 2 && state.precleanPhotos.length === 3 && state.bedroomPhotos.length === 1 && state.kitchenPhotos.length === 2 && state.aftercleanPhotos.length === 4;\n'
     + 'const METER_PHOTO_API = [0, 1].map(i => ({ restoreFromDraft: async meta => { await gate(); if (w.failMeter) throw new Error("idb read failed"); if (meta) state.meterPhotos[i] = rebuilt(meta); } }));\n'
     + 'const SECTION_PHOTO_API = {}; ["preclean", "bedroom", "kitchen", "afterclean"].forEach(k => { SECTION_PHOTO_API[k] = { restoreFromDraft: async list => { if (!Array.isArray(list)) return; for (const m of list) { await gate(); if (w.failSection) throw new Error("idb read failed"); state[k + "Photos"].push(rebuilt(m)); } } }; });\n'
-    + 'const proceedWithSubmission = () => { w.proceeded++; }, enqueuePhotoUpload = f => f(), uploadPhotoRecord = async () => {}, showFlushOverlay = () => {}, updateFlushOverlay = () => {}, hideFlushOverlay = () => {};\n'
+    + 'const proceedWithSubmission = () => { w.proceeded++; }, enqueuePhotoUpload = f => f(), uploadPhotoRecord = async p => { p.uploaded = true; },   /* s120R13: a flush that works marks the photo uploaded; a photo still unsent now stops Submit */  showFlushOverlay = () => {}, updateFlushOverlay = () => {}, hideFlushOverlay = () => {};\n'
     + 'const goToPhase = ph => { state.phase = ph; saveDraft(); };\n'
     + 'function boot() { ' + bootLine + ' }\n'
     + 'return { saveDraft, resumeDraft, loadDraft, flush: S120R_flushAll, load: S120R_loadItems, setState: s => { state = s; }, getState: () => state, setCleaningType, run: runPreSubmitFlush,\n'

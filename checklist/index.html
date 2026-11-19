@@ -5210,7 +5210,7 @@ html.K_folded .phase-header.K_hasimg .K_zone { background: rgba(22,13,6,0.74); b
     <strong id="success-cleaner-name"></strong> · <span id="success-date"></span><br>
     Time taken: <strong id="success-elapsed"></strong>
   </div>
-  <p class="success-telegram-note"><svg class="ch-ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-phone"/></svg> Report + photos sent to Telegram OPS group</p>
+  <p class="success-telegram-note"><svg class="ch-ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-phone"/></svg> <span id="success-note-text">Report + photos sent to Telegram OPS group</span></p>
   <div class="success-actions">
     <button class="success-action-btn reset" id="success-btn-reset" type="button">
       ↺ Start New Report
@@ -6363,6 +6363,7 @@ const state = {
   submissionId:       null,
   isSubmitting:       false,
   pendingOnlineRetry: false,
+  preSubmitPhotosStalled: false,    // s120R13: Submit stopped once because a photo did not upload; the next tap lets the report go without it
   preSubmitStalled:   false,        // s120R7: Submit stopped once while online with a send that keeps failing; the next tap lets the report go
   pendingPreSubmit:   false,        // s120R: the pre-submit send could not finish offline; the online event runs it again
   weekendMandatory:   false,
@@ -7841,6 +7842,11 @@ function openPhotoDB() {
    s120R12: onLimit runs when the limit is what settled it, so a write that is still waiting can be cancelled. */
 const PHOTO_IDB_LIMIT = 3000;
 const KEEP_OPEN_MSG = 'Keep this page open until the photo shows Uploaded.';
+/* s120R13: one keep-open notice at a time, wrapped inside the screen */
+function keepOpenToast() {
+  if (Array.from(el('toast-area')?.children || []).some(n => n.textContent === KEEP_OPEN_MSG)) return;
+  showToast(KEEP_OPEN_MSG, 'warning wrap', 6000);
+}
 function idbBounded(op, fallback, ms = PHOTO_IDB_LIMIT, onLimit = null) {
   return new Promise(resolve => {
     const timer = setTimeout(() => { try { if (onLimit) onLimit(); } catch { /* nothing to cancel */ } resolve(fallback); }, ms);
@@ -8374,7 +8380,7 @@ function initMeterPhotos() {
         const fname   = `${label}_${todayManila()}_${Date.now()}.jpg`;
         const id      = uuid();
         const stored  = await idbPutPhoto(id, blob);
-        if (!stored) showToast(KEEP_OPEN_MSG, 'warning', 6000);   // s120R12: held in memory only until it uploads
+        if (!stored) keepOpenToast();   // s120R12: held in memory only until it uploads
 
         // A retake replaces whatever was already in this slot — release its
         // storage first so retakes don't leak an IndexedDB row or object URL.
@@ -8811,7 +8817,7 @@ function initSectionPhotos() {
         const fname  = `${label}${slotId ? '_' + slotId : ''}_${todayManila()}_${Date.now()}.jpg`;
         const id     = uuid();
         const stored = await idbPutPhoto(id, blob);
-        if (!stored) showToast(KEEP_OPEN_MSG, 'warning', 6000);   // s120R12: held in memory only until it uploads
+        if (!stored) keepOpenToast();   // s120R12: held in memory only until it uploads
         const photo = {
           // idbPutPhoto can fail silently (quota, blocked storage); _blob is
           // the same-session in-memory fallback resolvePhotoDataUrl() uses then.
@@ -10024,10 +10030,12 @@ async function resumeDraft(draft) {
   releaseHold(() => {
     S120R_setInert(false);
     el('draft-modal')?.classList.remove('open');
+    // s120R13: a dropped photo must not stay behind the cleaner; phases 1 (meter + pre-clean), 4 (kitchen) and 5 (after-clean) hold photo minimums
+    if (state.photosDropped) { const back = [1, 4, 5].find(n => n < state.phase && !isPhaseValid(n)); if (back != null) goToPhase(back, true); }
     saveDraft();   // the restored state, photo records included, is stored once
     if (state.phase > 0) { ls(PHASE_KEY, String(state.phase)); K_reportProgress(state.phase); }   // the restored phase, reported once, now that the Resume has succeeded
     const lost = state.photosDropped || 0;   // s120R12: photos that were only ever in memory are gone; say so
-    if (lost) showToast(lost === 1 ? '1 photo could not be kept. Please retake it.' : lost + ' photos could not be kept. Please retake them.', 'warning', 8000);
+    if (lost) showToast(lost === 1 ? '1 photo could not be kept. Please retake it.' : lost + ' photos could not be kept. Please retake them.', 'warning wrap', 8000);
     else showToast('Session resumed', 'success');
   });
 }
@@ -10248,6 +10256,7 @@ function initSubmitModal() {
 // every photo whose bytes moved to IndexedDB after capture. Routes through
 // the same concurrency-2 queue as capture-time uploads (uploadPhotoRecord)
 // rather than a separate ad hoc batch loop.
+const S120R_photoHeld = p => !!(p && !p.uploaded && (p.data || p.idbId || p._blob));   // s120R13: a photo that still has bytes to send
 let _preSubmitRunning = false;   // s120R8: one run at a time; a tap during an automatic run is not the second tap
 async function runPreSubmitFlush(fromTap) {
   if (_preSubmitRunning || _draftHold) return;
@@ -10305,7 +10314,8 @@ async function runPreSubmitFlush(fromTap) {
   });
 
   if (pending.length === 0) {
-    proceedWithSubmission();
+    state.preSubmitPhotosStalled = false;
+    await proceedWithSubmission();
     return;
   }
 
@@ -10321,7 +10331,19 @@ async function runPreSubmitFlush(fromTap) {
   })));
 
   hideFlushOverlay();
-  proceedWithSubmission();
+  // s120R13: a photo that still did not upload is never lost quietly. The first stop keeps the draft and the blobs; the next TAP lets the report go without it (an automatic run never does).
+  const notUp = pending.filter(({ photo }) => !photo.uploaded).length;
+  if (notUp) {
+    if (!(fromTap === true && state.preSubmitPhotosStalled)) {
+      state.preSubmitPhotosStalled = true;
+      const m = notUp === 1
+        ? '1 photo did not upload. Check the signal and tap Submit to try again. If it still fails, the report goes without it.'
+        : notUp + ' photos did not upload. Check the signal and tap Submit to try again. If they still fail, the report goes without them.';
+      say(m); showToast(m, 'error wrap', 8000);
+      return;
+    }
+  } else state.preSubmitPhotosStalled = false;
+  await proceedWithSubmission();
   } finally { _preSubmitRunning = false; }
 }
 
@@ -10881,7 +10903,7 @@ function buildPayload() {
         ...(state.aftercleanPhotos || []),
         ...(state.bedroomPhotos    || []),
         ...(state.kitchenPhotos    || []),
-      ].filter(p => p && p.data && !p.uploaded).length,
+      ].filter(S120R_photoHeld).length,   // s120R13: held in IndexedDB or memory counts too
       upload_retry_count: state.uploadRetryCount || 0,
     },
     submissionId:   state.submissionId,
@@ -10995,13 +11017,14 @@ async function proceedWithSubmission() {
         state.meterPhotos[1]?.fingerprint || null,
       ]);
       clearDraft();
+      ls(S120R_CARRY_KEY, null);   // s120R13: the report is in; a carried key left behind would bring Restock back on the next report
       ls(DWELL_KEY, null);
       if (state.dwellInterval) clearInterval(state.dwellInterval);
-      showSuccessScreen();
+      showSuccessScreen(payload.diagnostics.photos_failed);
       // K_: tell the Cascade Staff shell that framed us (same origin only); the shell shows its own done card
       K_handBack(data,
         Object.values(state.issueFlags).filter(f => f && f.note).length + K_gatedAll().filter(i => state.confirmItems[i.id] === 'issue' && K_isUrgentIssue(i)).length,
-        [...state.meterPhotos, ...state.precleanPhotos, ...state.aftercleanPhotos, ...state.bedroomPhotos, ...state.kitchenPhotos].filter(Boolean).length);
+        [...state.meterPhotos, ...state.precleanPhotos, ...state.aftercleanPhotos, ...state.bedroomPhotos, ...state.kitchenPhotos].filter(p => p && !S120R_photoHeld(p)).length);   // s120R13: photos that never uploaded are not counted
     } else {
       // submit-cleaning returns `message` (e.g. a security refusal says what to do);
       // older paths return `msg`. Reading only `msg` showed her 'Server returned
@@ -11035,7 +11058,9 @@ async function proceedWithSubmission() {
 /* ═══════════════════════════════════════════════════════════════
    SUCCESS SCREEN
 ═══════════════════════════════════════════════════════════════ */
-function showSuccessScreen() {
+function showSuccessScreen(photosFailed = 0) {
+  const note = el('success-note-text');   // s120R13: say so when photos were left out
+  if (note) note.textContent = photosFailed ? 'Report sent. ' + photosFailed + (photosFailed === 1 ? ' photo' : ' photos') + ' could not be sent.' : 'Report + photos sent to Telegram OPS group';
   const cleanerName = (el('cleanerName')?.value || '').trim() || '—';
   const cleaningDate = el('cleaningDate')?.value || '';
   const fmtDate = cleaningDate
@@ -11109,7 +11134,7 @@ function resetApp() {
   setCleaningType('turnover');
   _susLoaded = false;
   _susItems  = [];
-  state.pendingPreSubmit = false; state.preSubmitStalled = false;
+  state.pendingPreSubmit = false; state.preSubmitStalled = false; state.preSubmitPhotosStalled = false;
   el('s120-restock-status') && (el('s120-restock-status').textContent = '');
   el('sus-status') && (el('sus-status').textContent = '');
 
