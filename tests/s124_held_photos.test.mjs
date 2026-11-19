@@ -32,7 +32,7 @@ async function open(over) {
 const tap = t => t.page.evaluate(() => __s120.runPreSubmitFlush(true));
 const statusText = t => t.page.evaluate(() => document.getElementById('submit-status')?.textContent || '');
 const failedOf = t => JSON.parse(submits(t)[0].body).diagnostics.photos_failed;
-const held = { issueFlags: { check_7_5: { note: 'Smell by the bin', photoUrl: '', photoFileId: '', photoHeld: true } }, conditionPhotoHeld: true };
+const held = { issueFlags: { check_7_5: { note: 'Smell by the bin', photoUrl: '', photoFileId: '', photoHeld: true } }, conditionStatus: 'issue', conditionNote: 'Crack in the wall', conditionPhotoHeld: true };
 
 t0('L3: a damage photo and a condition photo held at a reload stop the first Submit and name both', async () => {
   const t = await open(held);
@@ -79,6 +79,53 @@ t0('L3: a held photo survives a second reload', async () => {
     const stored = JSON.parse(await t.stored());
     assert.equal(stored.issueFlags.check_7_5.photoHeld, true);
     assert.equal(stored.conditionPhotoHeld, true);
+  } finally { await t.close(); }
+});
+
+t0('L3: a lone held condition photo reads as a sentence with a lower-case condition', async () => {
+  const t = await open({ conditionStatus: 'issue', conditionNote: 'Crack in the wall', conditionPhotoHeld: true });
+  try {
+    await tap(t);
+    assert.ok((await statusText(t)).startsWith('Retake the condition photo.'), await statusText(t));
+  } finally { await t.close(); }
+});
+
+t0('L3: un-flagging an issue that has a lost photo means Submit no longer stops', async () => {
+  const t = await open({ issueFlags: { check_7_5: { note: 'Smell by the bin', photoUrl: '', photoFileId: '', photoHeld: true } } });
+  try {
+    await t.page.evaluate(() => { const s = __s120.state; s.confirmItems.check_7_5 = 'confirmed'; delete s.issueFlags.check_7_5; });   // what K_syncFlag does for Confirmed
+    await tap(t);
+    await t.page.waitForSelector('#success-screen.visible', { timeout: 30000 });
+    assert.equal(submits(t).length, 1);
+  } finally { await t.close(); }
+});
+
+t0('L3: stop, reload again, then the first tap stops and the second sends with both photos counted', async () => {
+  const t = await open(held);
+  try {
+    await tap(t);
+    assert.equal(submits(t).length, 0);
+    await t.page.waitForTimeout(600);
+    await t.page.reload({ waitUntil: 'domcontentloaded' });
+    await t.page.waitForSelector('#draft-modal.open', { timeout: 15000 });
+    await t.page.click('#btn-draft-resume');
+    await t.page.waitForFunction(() => !document.getElementById('draft-modal').classList.contains('open'), null, { timeout: 15000 });
+    await tap(t);
+    assert.equal(submits(t).length, 0, 'the first tap after the reload stops again');
+    assert.ok((await statusText(t)).includes('Retake these photos'), await statusText(t));
+    await tap(t);
+    await t.page.waitForSelector('#success-screen.visible', { timeout: 30000 });
+    assert.equal(failedOf(t), 2);
+  } finally { await t.close(); }
+});
+
+t0('L3: condition switched to all clear after a lost condition photo: Submit does not stop and nothing is counted', async () => {
+  const t = await open({ conditionStatus: 'issue', conditionNote: 'Crack in the wall', conditionPhotoHeld: true });
+  try {
+    await t.page.evaluate(() => document.getElementById('cond-clear-btn').click());
+    await tap(t);
+    await t.page.waitForSelector('#success-screen.visible', { timeout: 30000 });
+    assert.equal(failedOf(t), 0);
   } finally { await t.close(); }
 });
 

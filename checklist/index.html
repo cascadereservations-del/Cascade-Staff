@@ -8893,6 +8893,7 @@ function initCondition() {
 
   function setCondition(status) {
     state.conditionStatus = status;
+    if (status !== 'issue') state.conditionPhotoLost = false;   // s124: no condition photo is owed once the unit is all clear
     clearBtn?.classList.toggle('selected-clear',  status === 'clear');
     issueBtn?.classList.toggle('selected-issue', status === 'issue');
     clearBtn?.setAttribute('aria-pressed', String(status === 'clear'));
@@ -10066,8 +10067,7 @@ async function resumeDraft(draft) {
     saveDraft();   // the restored state, photo records included, is stored once
     if (state.phase > 0) { ls(PHASE_KEY, String(state.phase)); K_reportProgress(state.phase); }   // the restored phase, reported once, now that the Resume has succeeded
     const lost = state.photosDropped || 0;   // s120R12: photos that were only ever in memory are gone; say so
-    const nm = [...new Set((state.droppedNames || []).filter(Boolean))].map(n => { const c = state.droppedNames.filter(x => x === n).length; return c > 1 ? n + ' (' + c + ')' : n; });   // s124: the toast names each photo
-    if (lost) showToast((state.droppedNames || []).filter(Boolean).length === lost ? (nm.length === 1 && lost === 1 ? 'Retake the ' + nm[0] + ' photo.' : 'Retake these photos: ' + nm.join(', ') + '.') : (lost === 1 ? '1 photo could not be kept. Please retake it.' : lost + ' photos could not be kept. Please retake them.'), 'warning wrap', 8000);
+    if (lost) showToast((state.droppedNames || []).filter(Boolean).length === lost ? S124R_retakeLine(state.droppedNames.filter(Boolean)) : (lost === 1 ? '1 photo could not be kept. Please retake it.' : lost + ' photos could not be kept. Please retake them.'), 'warning wrap', 8000);
     else showToast('Session resumed', 'success');
   });
 }
@@ -10291,9 +10291,14 @@ function initSubmitModal() {
 /* s124: what a cleaner calls a photo, for the retake and stop messages */
 const S124R_SECTION = { preclean: 'Before-cleaning', afterclean: 'After-cleaning', bedroom: 'Bedroom', kitchen: 'Kitchen' };
 function S124R_issueLabel(id) {
-  const it = [...K_KILLER_ITEMS, ...ARRIVE_ITEMS, ...CHEMICAL_ITEMS, ...BEDROOM_ITEMS, ...KITCHEN_ITEMS, ...FINAL_CLEANING_ITEMS].find(i => i && i.id === id);
-  const t = it && it.text ? String(it.text).split(/[;,.]/)[0].trim() : '';
+  const it = [...K_KILLER_ITEMS, ...ARRIVE_ITEMS, ...CHEMICAL_ITEMS, ...BEDROOM_ITEMS, ...KITCHEN_ITEMS, ...FINAL_CLEANING_ITEMS, ...POWER_CHECK_ITEMS, ...weeklyItemsForSession()].find(i => i && i.id === id);
+  const t = it && it.text ? String(it.text).split(/[;,.:]/)[0].trim() : '';
   return t ? (t.length > 40 ? t.slice(0, 40).trim() + '...' : t) : 'damage';
+}
+/* s124: the Submit stop names each photo once, a repeat as "Kitchen sink (2)"; one photo reads as a sentence */
+function S124R_retakeLine(labels) {
+  const names = [...new Set(labels)].map(n => { const c = labels.filter(x => x === n).length; return c > 1 ? n + ' (' + c + ')' : n; });
+  return names.length === 1 && labels.length === 1 ? 'Retake the ' + (names[0] === 'Condition' ? 'condition' : names[0]) + ' photo.' : 'Retake these photos: ' + names.join(', ') + '.';
 }
 /* S120R14:BEGIN (tests load this block as it stands) */
 const S120R_photoHeld = p => !!(p && !p.uploaded && (p.data || p.idbId || p._blob));   // s120R13: a photo that still has bytes to send
@@ -10323,7 +10328,7 @@ function S120R_notUploaded() {
   Object.entries(state.issueFlags || {}).forEach(([id, f]) => {
     if (f && f.photoLost && !f.photoData && !f.photoUrl) add('lost:issue:' + id, async () => {}, () => { const c = state.issueFlags[id]; return !(c && c.photoLost && !c.photoData && !c.photoUrl); }, S124R_issueLabel(id));
   });
-  if (state.conditionPhotoLost && !state.conditionPhotoData && !state.conditionPhotoUrl) add('lost:cond', async () => {}, () => !(state.conditionPhotoLost && !state.conditionPhotoData && !state.conditionPhotoUrl), 'Condition');
+  if (state.conditionStatus === 'issue' && state.conditionPhotoLost && !state.conditionPhotoData && !state.conditionPhotoUrl) add('lost:cond', async () => {}, () => !(state.conditionPhotoLost && !state.conditionPhotoData && !state.conditionPhotoUrl), 'Condition');
   if (state.conditionPhotoData && !state.conditionPhotoUrl) {
     const d = state.conditionPhotoData;
     add('cond:' + S120R_tail(d), async () => {
@@ -10408,8 +10413,7 @@ async function runPreSubmitFlush(fromTap) {
   let photoMsg = '';
   if (lostLeft.length && (lostLeft.some(i => !S120R_isTold(i.key)) || !passes)) {
     lostLeft.forEach(i => S120R_setTold(i.key));
-    const names = lostLeft.map(i => i.label);
-    photoMsg = (names.length === 1 ? 'Retake the ' + names[0] + ' photo.' : 'Retake these photos: ' + names.join(', ') + '.') + ' Then tap Submit. If it cannot be retaken, tap Submit again and the report goes without it.';
+    photoMsg = S124R_retakeLine(lostLeft.map(i => i.label)) + ' Then tap Submit. If it cannot be retaken, tap Submit again and the report goes without it.';
   }
   if (left.length && (fresh.length || !passes)) {
     left.forEach(i => S120R_setTold(i.key));

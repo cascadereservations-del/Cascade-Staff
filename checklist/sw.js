@@ -1,5 +1,5 @@
 // sw.js — Cascade Hideaway Cleaning Checklist
-// Service Worker  v1.6  |  2026-11-19 (CACHE_NAME ch-shell-v14-held-photos: s121 hero glass on top of lane R6, phones evict the old shell). Earlier: 2026-11-19 (ch-shell-v12-restock-defaults: s121 lane R6, Restock defaults and soft header). Earlier: 2026-11-18 (ch-shell-v11-restock-linen: s120 lane R4). Earlier: 2026-10-13 (CACHE_NAME ch-shell-v8: s82 lane K, six-screen checklist; phones evict the old shell)
+// Service Worker  v1.6  |  2026-11-19 (CACHE_NAME ch-shell-v14-held-photos: s124 L3 held photos, phones evict the old shell). Earlier: 2026-11-19 (ch-shell-v12-restock-defaults: s121 lane R6, Restock defaults and soft header). Earlier: 2026-11-18 (ch-shell-v11-restock-linen: s120 lane R4). Earlier: 2026-10-13 (CACHE_NAME ch-shell-v8: s82 lane K, six-screen checklist; phones evict the old shell)
 //
 // v1.2: Navigation is NETWORK-FIRST with a 3s timeout, not
 //       stale-while-revalidate. SWR always served the PREVIOUS deploy on the
