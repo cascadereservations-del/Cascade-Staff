@@ -141,7 +141,7 @@ t0('R13 item 2: Resume at Lock up with a dropped electric meter photo goes back 
     assert.equal(c.phase, 1);
     assert.ok(c.cue.includes('electric meter photo'), c.cue);
     assert.equal(c.submitOff, true);
-    assert.ok((await toastText(t)).includes('1 photo could not be kept. Please retake it.'));
+    assert.ok((await toastText(t)).includes('Retake the Electric meter photo.'));
   } finally { await t.close(); }
 });
 t0('R13 item 2: Resume at Lock up with a dropped pre-clean photo goes back to the first step and the cue names it', async () => {
@@ -229,11 +229,11 @@ t0('R13 item 4: a slow /last-readings and a second tap give one report', async (
 
 /* ---- items 5 and 6 ---- */
 const toastBoxes = t => t.page.evaluate(() => Array.from(document.querySelectorAll('#toast-area .toast')).map(n => { const r = n.getBoundingClientRect(); return { text: n.textContent, left: r.left, right: r.right, width: innerWidth }; }));
-t0('R13 item 5: at 320 px the "3 photos could not be kept" toast stays inside the screen', async () => {
+t0('R13 item 5: at 320 px the three-photo retake toast stays inside the screen', async () => {
   const t = await open({ draft: atLock({ meterPhotoMeta: [dropped('m0.jpg'), up('m1.jpg')], precleanPhotoMeta: [up('p0.jpg'), up('p1.jpg'), up('p2.jpg'), dropped('p3.jpg'), dropped('p4.jpg')] }), viewport: { width: 320, height: 640 }, server: { upload: 'ok' } });
   try {
     await t.page.click('#btn-draft-resume'); await closed(t);
-    const b = (await toastBoxes(t)).find(x => x.text.includes('could not be kept'));
+    const b = (await toastBoxes(t)).find(x => x.text.includes('Retake these photos'));
     assert.ok(b, 'the toast is showing');
     assert.ok(b.left >= 0 && b.right <= b.width, JSON.stringify(b));
   } finally { await t.close(); }

@@ -8087,14 +8087,14 @@ function photoMeta(p) {
 // their remote URL; still-pending ones fetch the blob back from IndexedDB
 // and re-enter the upload queue — this is the "resumes after an app kill"
 // half of the contract (the other half is the `online` listener below).
-async function restorePhotoFromMeta(meta) {
+async function restorePhotoFromMeta(meta, label) {
   if (!meta) return null;
   const photo = { name: meta.name, url: meta.url || null, fileId: meta.fileId || null, uploaded: meta.uploaded, data: null, idbId: meta.uploaded ? (meta.idbId || null) : null, objectUrl: null, status: meta.uploaded ? 'done' : 'queued', slot: meta.slot || null, takenAt: meta.takenAt ? Date.parse(meta.takenAt) || null : null };
   if (!meta.uploaded) {
     // _blob only ever lived in memory, so a page reload always loses it —
     // idbId is the only thing that can survive to be restored from.
     const blob = meta.idbId ? await idbReadPhoto(meta.idbId) : null;   // s120R10: a storage error rejects (Resume fails, nothing is touched)
-    if (!blob) { state.photosDropped = (state.photosDropped || 0) + 1; return null; }   // s120R12: not uploaded and not stored: nothing to retry from, so the slot is emptied and the cleaner retakes it
+    if (!blob) { state.photosDropped = (state.photosDropped || 0) + 1; (state.droppedNames = state.droppedNames || []).push(label || 'photo'); return null; }   // s120R12: not uploaded and not stored: nothing to retry from, so the slot is emptied and the cleaner retakes it
     photo.idbId = meta.idbId; photo._blob = blob; photo.objectUrl = URL.createObjectURL(blob);   // s120R12: _blob too, so a slow read at upload time still has the bytes
   }
   return photo;
@@ -8378,7 +8378,7 @@ function initMeterPhotos() {
     }
 
     async function restoreMeterFromDraft(meta) {
-      const photo = await restorePhotoFromMeta(meta);
+      const photo = await restorePhotoFromMeta(meta, i === 0 ? 'Electric meter' : 'Water meter');
       if (!photo) return;
       state.meterPhotos[i] = photo;
       if (photo.uploaded && photo.fileId) afterHold(() => S94_precheck(i));   // a draft-restored, already-uploaded photo is checked again after a reload
@@ -8801,7 +8801,7 @@ function initSectionPhotos() {
       if (!Array.isArray(metaList) || !metaList.length) return;
       const photos = state[`${key}Photos`];
       for (const meta of metaList) {
-        const photo = await restorePhotoFromMeta(meta);
+        const photo = await restorePhotoFromMeta(meta, S124R_SECTION[key] || 'Section');
         if (!photo) continue;
         photos.push(photo);
         appendThumbWrap(photo);
@@ -8915,7 +8915,7 @@ function initCondition() {
     if (!file) return;
     try {
       const dataUrl = await compressImage(file);
-      state.conditionPhotoData = dataUrl; state.conditionPhotoUrl = null; state.conditionPhotoFileId = null;   // s120R15: a retake is not uploaded yet
+      state.conditionPhotoData = dataUrl; state.conditionPhotoUrl = null; state.conditionPhotoFileId = null; state.conditionPhotoLost = false;   // s120R15: a retake is not uploaded yet
       saveDraft();   // the marker for a photo held but not uploaded
       const preview = el('condition-photo-preview');
       if (preview) { preview.src = dataUrl; preview.classList.add('visible'); }
@@ -9253,7 +9253,7 @@ async function handleIssuePhoto(itemId, input, wrapEl) {
     const dataUrl = await compressImage(file);
     if (!state.issueFlags[itemId]) state.issueFlags[itemId] = {};
     const flag = state.issueFlags[itemId];
-    flag.photoData = dataUrl; flag.photoUrl = null; flag.photoFileId = null;   // s120R15: a retake is not uploaded yet; the old upload must not stand in for it
+    flag.photoData = dataUrl; flag.photoUrl = null; flag.photoFileId = null; flag.photoLost = false;   // s120R15: a retake is not uploaded yet; the old upload must not stand in for it
 
     const preview = el(`issue-preview-${itemId}`);
     if (preview) { preview.src = dataUrl; preview.classList.add('visible'); }
@@ -9890,9 +9890,9 @@ function saveDraft() {
       photoUrl: flag.photoUrl || '',
       photoFileId: flag.photoFileId || '',
     };
-    if (flag.photoData && !flag.photoUrl) draft.issueFlags[id].photoHeld = true;   // s120R15: the photo itself is not stored; this tells Resume it was held
+    if ((flag.photoData && !flag.photoUrl) || flag.photoLost) draft.issueFlags[id].photoHeld = true;   // s120R15: the photo itself is not stored; this tells Resume it was held
   });
-  if (state.conditionPhotoData && !state.conditionPhotoUrl) draft.conditionPhotoHeld = true;
+  if ((state.conditionPhotoData && !state.conditionPhotoUrl) || state.conditionPhotoLost) draft.conditionPhotoHeld = true;
   if (state.conditionPhotoUrl) { draft.conditionPhotoUrl = state.conditionPhotoUrl; draft.conditionPhotoFileId = state.conditionPhotoFileId; }   // s120R16: an uploaded photo stays with the report after a reload
 
   const stored = lsJSON(DRAFT_KEY, draft) === true;
@@ -9967,11 +9967,11 @@ function applyDraft(draft) {
   if (draft.issueFlags) {
     Object.entries(draft.issueFlags).forEach(([id, flag]) => {
       state.issueFlags[id] = { note: flag.note, photoUrl: flag.photoUrl, photoFileId: flag.photoFileId, photoData: null };
-      if (flag.photoHeld) state.photosDropped = (state.photosDropped || 0) + 1;   // s120R15: held but never uploaded: counted, so Resume says to retake it
+      if (flag.photoHeld) { state.photosDropped = (state.photosDropped || 0) + 1; state.issueFlags[id].photoLost = true; (state.droppedNames = state.droppedNames || []).push(S124R_issueLabel(id)); }   // s120R15: held but never uploaded: counted, so Resume says to retake it. s124: and it stays a pending photo until it is retaken
     });
   }
 
-  if (draft.conditionPhotoHeld) state.photosDropped = (state.photosDropped || 0) + 1;   // s120R15
+  if (draft.conditionPhotoHeld) { state.photosDropped = (state.photosDropped || 0) + 1; state.conditionPhotoLost = true; (state.droppedNames = state.droppedNames || []).push('Condition'); }   // s120R15, s124
   if (draft.conditionPhotoUrl) { state.conditionPhotoUrl = draft.conditionPhotoUrl; state.conditionPhotoFileId = draft.conditionPhotoFileId || null; }   // s120R16
   // Restore condition
   if (draft.conditionStatus) {
@@ -10051,7 +10051,7 @@ function S120R_draftView(view) {
 async function resumeDraft(draft) {
   _draftHold = true;   // already on from the question; set again so no caller can resume without it
   S120R_draftView('wait');
-  state.photosDropped = 0;
+  state.photosDropped = 0; state.droppedNames = [];
   let timer;
   const run = (async () => { await applyDraft(draft); })();
   const limit = new Promise((_, no) => { timer = setTimeout(() => no(new Error('restore did not finish in time')), S120R_RESUME_LIMIT); });
@@ -10066,7 +10066,8 @@ async function resumeDraft(draft) {
     saveDraft();   // the restored state, photo records included, is stored once
     if (state.phase > 0) { ls(PHASE_KEY, String(state.phase)); K_reportProgress(state.phase); }   // the restored phase, reported once, now that the Resume has succeeded
     const lost = state.photosDropped || 0;   // s120R12: photos that were only ever in memory are gone; say so
-    if (lost) showToast(lost === 1 ? '1 photo could not be kept. Please retake it.' : lost + ' photos could not be kept. Please retake them.', 'warning wrap', 8000);
+    const nm = [...new Set((state.droppedNames || []).filter(Boolean))].map(n => { const c = state.droppedNames.filter(x => x === n).length; return c > 1 ? n + ' (' + c + ')' : n; });   // s124: the toast names each photo
+    if (lost) showToast((state.droppedNames || []).filter(Boolean).length === lost ? (nm.length === 1 && lost === 1 ? 'Retake the ' + nm[0] + ' photo.' : 'Retake these photos: ' + nm.join(', ') + '.') : (lost === 1 ? '1 photo could not be kept. Please retake it.' : lost + ' photos could not be kept. Please retake them.'), 'warning wrap', 8000);
     else showToast('Session resumed', 'success');
   });
 }
@@ -10287,6 +10288,13 @@ function initSubmitModal() {
 // every photo whose bytes moved to IndexedDB after capture. Routes through
 // the same concurrency-2 queue as capture-time uploads (uploadPhotoRecord)
 // rather than a separate ad hoc batch loop.
+/* s124: what a cleaner calls a photo, for the retake and stop messages */
+const S124R_SECTION = { preclean: 'Before-cleaning', afterclean: 'After-cleaning', bedroom: 'Bedroom', kitchen: 'Kitchen' };
+function S124R_issueLabel(id) {
+  const it = [...K_KILLER_ITEMS, ...ARRIVE_ITEMS, ...CHEMICAL_ITEMS, ...BEDROOM_ITEMS, ...KITCHEN_ITEMS, ...FINAL_CLEANING_ITEMS].find(i => i && i.id === id);
+  const t = it && it.text ? String(it.text).split(/[;,.]/)[0].trim() : '';
+  return t ? (t.length > 40 ? t.slice(0, 40).trim() + '...' : t) : 'damage';
+}
 /* S120R14:BEGIN (tests load this block as it stands) */
 const S120R_photoHeld = p => !!(p && !p.uploaded && (p.data || p.idbId || p._blob));   // s120R13: a photo that still has bytes to send
 /* s120 R14: one rule for every photo. A photo that did not upload goes missing only after the cleaner was told about that photo. The record lives in the page only (never in the draft) and is emptied in resetApp.
@@ -10298,7 +10306,7 @@ const S120R_setTold = k => { if (typeof k === 'string') S120R_told.s.add(k); els
 /* every photo that still has to upload: { key, run (uploads it), isUp (true once it is up) } */
 function S120R_notUploaded() {
   const out = [];
-  const add = (key, run, isUp) => out.push({ key, run, isUp });
+  const add = (key, run, isUp, label) => out.push({ key, run, isUp, label });
   const rec = (p, name) => { if (S120R_photoHeld(p)) add(p, () => uploadPhotoRecord(p, name, null), () => !!p.uploaded); };
   ['preclean', 'afterclean', 'bedroom', 'kitchen'].forEach(key => (state[`${key}Photos`] || []).forEach((p, idx) => rec(p, `${key}_${idx}`)));
   (state.meterPhotos || []).forEach((p, idx) => rec(p, `meter_${idx}`));
@@ -10311,6 +10319,11 @@ function S120R_notUploaded() {
       if (r && cur && cur.photoData === d) { cur.photoUrl = r.fileUrl; cur.photoFileId = r.fileId; cur.photoData = null; saveDraft(); }
     }, () => !!(state.issueFlags[id] && state.issueFlags[id].photoUrl));
   });
+  /* s124: a photo restored after a reload with no bytes left (damage and condition photos are not stored) is still owed: it blocks like any other, and counts in photos_failed if it never comes back. label = the name the cleaner is told */
+  Object.entries(state.issueFlags || {}).forEach(([id, f]) => {
+    if (f && f.photoLost && !f.photoData && !f.photoUrl) add('lost:issue:' + id, async () => {}, () => { const c = state.issueFlags[id]; return !(c && c.photoLost && !c.photoData && !c.photoUrl); }, S124R_issueLabel(id));
+  });
+  if (state.conditionPhotoLost && !state.conditionPhotoData && !state.conditionPhotoUrl) add('lost:cond', async () => {}, () => !(state.conditionPhotoLost && !state.conditionPhotoData && !state.conditionPhotoUrl), 'Condition');
   if (state.conditionPhotoData && !state.conditionPhotoUrl) {
     const d = state.conditionPhotoData;
     add('cond:' + S120R_tail(d), async () => {
@@ -10389,15 +10402,21 @@ async function runPreSubmitFlush(fromTap) {
     hideFlushOverlay();
   }
   // s120 R14: a photo that still did not upload is never lost quietly. It goes missing only after the cleaner was told about that photo; the stop keeps the draft and the blobs.
-  const left = pending.filter(i => !i.isUp());
+  const leftAll = pending.filter(i => !i.isUp());
+  const left = leftAll.filter(i => !i.label), lostLeft = leftAll.filter(i => i.label);   // s124: lost = nothing left to upload, only a retake
   const fresh = left.filter(i => !S120R_isTold(i.key));
   let photoMsg = '';
+  if (lostLeft.length && (lostLeft.some(i => !S120R_isTold(i.key)) || !passes)) {
+    lostLeft.forEach(i => S120R_setTold(i.key));
+    const names = lostLeft.map(i => i.label);
+    photoMsg = (names.length === 1 ? 'Retake the ' + names[0] + ' photo.' : 'Retake these photos: ' + names.join(', ') + '.') + ' Then tap Submit. If it cannot be retaken, tap Submit again and the report goes without it.';
+  }
   if (left.length && (fresh.length || !passes)) {
     left.forEach(i => S120R_setTold(i.key));
     const n = fresh.length || left.length;
-    photoMsg = n === 1
+    photoMsg = (photoMsg ? photoMsg + ' ' : '') + (n === 1
       ? '1 photo did not upload. Check the signal and tap Submit to try again. If it still fails, the report goes without it.'
-      : n + ' photos did not upload. Check the signal and tap Submit to try again. If they still fail, the report goes without them.';
+      : n + ' photos did not upload. Check the signal and tap Submit to try again. If they still fail, the report goes without them.');
   }
   if (restockMsg || photoMsg) {   // one stop for both, restock first
     say([restockMsg, photoMsg].filter(Boolean).join(' '));
