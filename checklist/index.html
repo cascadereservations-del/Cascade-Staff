@@ -5,6 +5,15 @@
   ║  index.html  v7.8  |  2026-06-15                             ║
   ║  Author: Lloyd Ligason                                        ║
   ║                                                              ║
+  ║  CHANGELOG v9.0 - Linen check and Restock (s120 lane R, D-374):║
+  ║  - Linen check: No stains, or Found stains: tap the piece,    ║
+    set how many, say cleaned / needs replacing / replaced. No   
+    typing; the report note is written from the answers.         
+  - Restock sheet: no prefill. Every top row, and the guest kit, 
+    must be answered. Saved through record_inventory_usage.      
+  - Both answer sets live in the draft and are sent once, with   
+    a key, when online and before submit.                        
+  ║                                                              ║
   ║  CHANGELOG v8.9 - Shorter, safer checklist (s82 lane K, 10-13):║
   ║  - 37 tick lines became 19; merged lines keep one id and list ║
   ║    the rest in `covers` (docs/K_checklist-mapping.md).        ║
@@ -494,6 +503,35 @@
   src: url('fonts/cormorant-garamond-700.woff2') format('woff2');
   unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
 }
+/* s120R: linen check rows and restock sheet extras, in the checklist's own look */
+.s120-hint{font-size:var(--font-size-sm);color:var(--text-muted);line-height:1.5;margin:var(--space-2) 0;}
+.s120-need{color:var(--error);}
+.s120-chips{display:flex;flex-wrap:wrap;gap:var(--space-2);margin:var(--space-2) 0;}
+.s120-chip{min-height:44px;padding:0 var(--space-4);border:1.5px solid var(--border,#d9d2c7);border-radius:999px;background:transparent;color:inherit;font:inherit;font-size:var(--font-size-sm);cursor:pointer;}
+.s120-chip.on{border-color:var(--success,#2f7d4f);background:rgba(47,125,79,.1);}
+.s120-chip:disabled{opacity:.5;}
+.s120-row{border-top:1px solid var(--border,#e4ded4);padding:var(--space-3) 0;}
+.s120-row-head{display:flex;align-items:center;gap:var(--space-3);justify-content:space-between;flex-wrap:wrap;}
+.s120-row-name{font-weight:600;flex:1 1 140px;}
+.s120-outs{display:flex;gap:var(--space-2);flex-wrap:wrap;margin-top:var(--space-2);}
+.s120-outs .confirm-btn{flex:1 1 90px;min-height:44px;}
+.s120-x{min-width:44px;min-height:44px;border:none;background:transparent;font-size:22px;color:var(--text-muted);cursor:pointer;}
+.s120-link{background:none;border:none;color:inherit;text-decoration:underline;min-height:44px;cursor:pointer;font:inherit;}
+.s120-else{width:100%;min-height:44px;margin:var(--space-2) 0;font:inherit;padding:0 var(--space-3);}
+.s120-status{font-size:var(--font-size-sm);margin:var(--space-2) 0;color:var(--text-muted);}
+.s120-status.ok{color:var(--success,#2f7d4f);}
+.s120-status.warn{color:var(--error,#b3261e);}   /* red is for a failed or refused send only */
+.s120-status:empty,.s120-hint:empty{display:none;}
+/* R3: the linen block sits inside the card, so it takes the card's own side padding */
+.confirm-item > .s120-linen{padding:0 var(--space-5) var(--space-2);}
+.confirm-item > .s120-status{padding:0 var(--space-5);margin:var(--space-2) 0 var(--space-4);}
+/* R3: the stain photo button looks like the app's other photo buttons (those only style inside .issue-expand), in the neutral colour: a stain photo is optional, not a fault */
+.s120-linen .issue-photo-btn{display:inline-flex;align-items:center;gap:var(--space-2);font-family:var(--font-body);font-size:var(--font-size-xs);font-weight:600;color:var(--text-secondary);background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:var(--space-2) var(--space-3);cursor:pointer;min-height:44px;position:relative;overflow:hidden;}
+/* R3: a locked control reads as locked: the unchosen ones go flat and grey, the chosen answer keeps its colour */
+.s120-linen .confirm-btn:disabled,.s120-linen .s120-chip:disabled,.s120-x:disabled{cursor:not-allowed;}
+.s120-linen .confirm-btn:disabled:not(.confirmed):not(.issue){background:var(--surface-raised);color:var(--text-muted);border-color:var(--border);opacity:.7;}
+.s120-linen .confirm-btn:disabled.confirmed,.s120-linen .confirm-btn:disabled.issue{opacity:.85;}
+.s120-x:disabled{opacity:.35;}
 </style>
 
 <!-- The Lucide CDN script and its emoji fallback map were removed on
@@ -848,10 +886,10 @@ body.submitting { pointer-events: none; }
 }
 
 /* s94: why Next or Submit is blocked; a tap on the dead button scrolls to the first missing item */
-#nav-cue { position: fixed; left: 0; right: 0; bottom: var(--bottom-bar-height); z-index: 99; box-sizing: border-box; padding: 0.5rem var(--space-4); background: var(--earthen-ivory, #faf6ee); border-top: 1px solid var(--border); color: var(--text-primary); font-size: 0.875rem; line-height: 1.35; cursor: pointer; text-align: center; }
+#nav-cue { position: fixed; left: 0; right: 0; bottom: var(--bottom-bar-height); z-index: 99; box-sizing: border-box; min-height: 44px; display: flex; align-items: center; justify-content: center; overflow-wrap: anywhere; padding: 0.5rem var(--space-4); background: var(--earthen-ivory, #faf6ee); border-top: 1px solid var(--border); color: var(--text-primary); font-size: 0.875rem; line-height: 1.35; cursor: pointer; text-align: center; }
 #nav-cue[hidden] { display: none; }
 #btn-next:disabled, #btn-submit:disabled { pointer-events: none; }
-.phase::after { content: ''; display: block; height: 5.5rem; }
+.phase::after { content: ''; display: block; height: 8.5rem; }   /* the bottom bar and the cue above it (s120R8: cue is at least 44px) */
 @media (min-width: 960px) { #nav-cue { max-width: 820px; left: 50%; right: auto; width: 820px; transform: translateX(-50%); } }
 .s94-precheck { margin-top: var(--space-2); font-size: 0.875rem; line-height: 1.35; color: var(--text-secondary); }
 .s94-precheck[hidden] { display: none; }
@@ -2460,6 +2498,7 @@ body.mode-quick .detail-text { display: none; }
 }
 
 .toast.exit { animation: toastOut 0.2s ease forwards; }
+.toast.wrap { white-space: normal; border-radius: 16px; text-align: center; width: min(22rem, calc(100vw - 2rem)); line-height: 1.4; }   /* a lasting message (the boot failure) stays inside the screen */
 .toast.success { background: var(--success); }
 .toast.error   { background: var(--error); }
 
@@ -2539,6 +2578,15 @@ body.mode-quick .detail-text { display: none; }
   background: var(--surface-raised);
   color: var(--text-secondary);
   border: 1.5px solid var(--border);
+}
+
+/* s120R10: a button that cannot be tapped looks muted (not the primary colour at low opacity), keeps its text readable and shows no pointer */
+.modal-btn:disabled, .modal-actions .modal-btn:disabled {
+  background: var(--surface-raised);
+  color: var(--text-secondary);
+  border: 1.5px dashed var(--border);
+  opacity: 1;
+  cursor: default;
 }
 
 /* ═══════════════════════════════════════════════════════════════
@@ -3251,7 +3299,7 @@ body.mode-quick .detail-text { display: none; }
   justify-content: center;
   gap: var(--space-2);
   width: 100%;
-  min-height: 40px;
+  min-height: 44px;
   background: transparent;
   border: 1.5px dashed var(--border);
   border-radius: 10px;
@@ -3534,7 +3582,7 @@ body.mode-quick .detail-text { display: none; }
   background: var(--surface-raised);
   border: 1px solid var(--border);
   border-radius: 50%;
-  width: 32px; height: 32px;
+  width: 44px; height: 44px;
   font-size: 1rem;
   color: var(--text-muted);
   cursor: pointer;
@@ -3591,7 +3639,7 @@ body.mode-quick .detail-text { display: none; }
 .sus-step-btn {
   background: var(--surface-raised);
   border: none;
-  width: 36px; height: 36px;
+  width: 44px; height: 44px;
   font-size: 1.2rem;
   font-weight: 700;
   color: var(--earthen-slate);
@@ -4832,14 +4880,15 @@ html.K_folded .phase-header.K_hasimg .K_zone { background: rgba(22,13,6,0.74); b
     </div>
 
     <!-- Feature 4: Log Supply Usage card -->
-    <div class="card supply-usage-trigger-card" id="supply-usage-trigger-card" role="region" aria-label="Log supply usage — required">
-      <div class="card-title"><svg class="ch-ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-box"/></svg> Log Supply Usage</div>
+    <div class="card supply-usage-trigger-card" id="supply-usage-trigger-card" role="region" aria-label="Restock — required">
+      <div class="card-title"><svg class="ch-ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-box"/></svg> Restock</div>
       <p style="font-size:var(--font-size-sm);color:var(--text-muted);line-height:1.55;margin-bottom:var(--space-4);">
-        Record what you used or refilled. Takes 30 seconds — required before you can move to the Finish phase.
+        Log what this stay used up. Takes 30 seconds, and is needed before you can move to the Finish phase.
       </p>
+      <p class="s120-status" id="s120-restock-status" role="status" aria-live="polite"></p>
       <button class="supply-usage-open-btn" id="btn-open-supply-usage" type="button"
-              aria-label="Open supply usage log" aria-haspopup="dialog">
-        <svg class="ch-ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-box"/></svg> Open Supply Log
+              aria-label="Open restock" aria-haspopup="dialog">
+        <svg class="ch-ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-box"/></svg> Open Restock
       </button>
     </div>
 
@@ -5050,25 +5099,19 @@ html.K_folded .phase-header.K_hasimg .K_zone { background: rgba(22,13,6,0.74); b
   <div class="sus-panel">
     <div class="sus-handle"></div>
     <div class="sus-header">
-      <div class="sus-title" id="sus-title-el"><svg class="ch-ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-box"/></svg> Log Supply Usage</div>
-      <button class="sus-close" id="sus-close-btn" type="button" aria-label="Close supply usage log"><svg class="ch-ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-x"/></svg></button>
+      <div class="sus-title" id="sus-title-el"><svg class="ch-ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-box"/></svg> Restock</div>
+      <button class="sus-close" id="sus-close-btn" type="button" aria-label="Close restock"><svg class="ch-ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-x"/></svg></button>
     </div>
-    <div class="sus-list" id="sus-list" role="list" aria-label="Supply items">
+    <p class="s120-hint" id="sus-status" role="status" aria-live="polite"></p>
+    <div class="sus-list" id="sus-list" role="list" aria-label="Restock items">
       <div class="sus-loading" id="sus-loading" aria-live="polite">Loading supplies…</div>
     </div>
     <div class="sus-footer">
-      <div class="sus-note" id="sus-note" role="status" aria-live="polite" style="display:none"></div>
-      <button class="sus-save-btn" id="sus-save-btn" type="button" aria-label="Save supply usage">
-        Save Usage
+      <button class="sus-save-btn" id="sus-save-btn" type="button" aria-label="Save restock">
+        Save
       </button>
-      <button class="sus-none-btn" id="sus-change-btn" type="button" style="display:none">
-        Change
-      </button>
-      <button class="sus-none-btn" id="sus-typical-btn" type="button">
-        Fill typical amounts
-      </button>
-      <button class="sus-none-btn" id="sus-none-btn" type="button" aria-label="Nothing used this session">
-        Nothing used this session
+      <button class="sus-none-btn" id="sus-none-btn" type="button" aria-label="Nothing used this stay">
+        Nothing used this stay
       </button>
     </div>
   </div>
@@ -5105,9 +5148,13 @@ html.K_folded .phase-header.K_hasimg .K_zone { background: rgba(22,13,6,0.74); b
       A saved draft was found from <strong id="draft-time">earlier</strong>.
       Pick up where you left off?
     </p>
+    <p class="modal-body" id="draft-modal-note" role="status" hidden></p>
     <div class="modal-actions">
       <button class="modal-btn secondary" id="btn-draft-fresh" type="button">
         Start fresh
+      </button>
+      <button class="modal-btn primary" id="btn-draft-retry" type="button" hidden>
+        Try again
       </button>
       <button class="modal-btn primary" id="btn-draft-resume" type="button">
         Resume ↺
@@ -5163,7 +5210,7 @@ html.K_folded .phase-header.K_hasimg .K_zone { background: rgba(22,13,6,0.74); b
     <strong id="success-cleaner-name"></strong> · <span id="success-date"></span><br>
     Time taken: <strong id="success-elapsed"></strong>
   </div>
-  <p class="success-telegram-note"><svg class="ch-ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-phone"/></svg> Report + photos sent to Telegram OPS group</p>
+  <p class="success-telegram-note"><svg class="ch-ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-phone"/></svg> <span id="success-note-text">Report + photos sent to Telegram OPS group</span></p>
   <div class="success-actions">
     <button class="success-action-btn reset" id="success-btn-reset" type="button">
       ↺ Start New Report
@@ -5194,11 +5241,6 @@ const AFTERCLEAN_PHOTO_MIN   = 5;   // after-clean: same full coverage required
 const AFTERCLEAN_PHOTO_MAX   = 14;  // after-clean: aim for 12-14 photos
 const MIDSTAY_PHOTO_MIN      = 4;   // mid-stay: cover major areas (bed/living, CR, kitchen, floors)
 const MIDSTAY_PHOTO_MAX      = 8;
-
-// ── Supply log (v6.8) ────────────────────────────────────────────────────
-const LIQUID_ML_PER_UNIT = 100; // 100 ml = 1 inventory unit for liquid refills
-// Names of "quick" items shown with stepper (case-insensitive substring match)
-const QUICK_ITEM_NAMES = ['coffee', 'bottled water', 'toiletries', 'tissue', 'coffee stick'];
 
 // ── Photo quality thresholds (Feature 2) ─────────────────────────────────
 const BLUR_THRESHOLD    = 45;  // C3: lowered from 80 — post-compression Laplacian variance is naturally lower
@@ -5914,7 +5956,7 @@ const FINAL_CLEANING_ITEMS = [
 const K_KILLER_ITEMS = [
   { id: 'check_2_4', phase: 2, only: ['turnover', 'deep_clean', 'mid_stay'], critical: true, urgent: false, photo: true,
     text: 'Strip bed and towels; inspect each for stains and pre-treat',
-    detail: 'Inspect every sheet, pillowcase and towel. Pre-treat each stain with stain remover before washing: stained items that go through the wash untreated can be ruined for good. If you find a stain you cannot lift, choose Issue Found and say which item.' },
+    detail: 'Inspect every sheet, pillowcase and towel. Pre-treat each stain with stain remover before washing: stained items that go through the wash untreated can be ruined for good. Choose Found stains, tap each stained piece, set how many, and say what happened: cleaned, needs replacing or replaced.' },
   { id: 'check_7_5', phase: 4, only: ['turnover', 'deep_clean', 'mid_stay'], critical: true, urgent: false, photo: true,
     text: 'Flush and smell-check the toilet; sniff the AC, bin and fridge. Nothing smells',
     detail: 'Flush several times, wipe the bathroom vent grille with a damp cloth, then sniff the AC, the bin and the fridge. A smell is the first thing a guest mentions: if one persists after cleaning, choose Issue Found.' },
@@ -6296,8 +6338,9 @@ const state = {
   kitchenPhotos:      [],           // [{data, url, fileId, name, uploaded}, ...]
   precleanPhotos:     [],           // Feature 3: pre-clean photos (replaces Messenger)
   aftercleanPhotos:   [],           // Feature 3: after-clean photos (replaces Messenger)
-  supplyLogSaved:     false,        // v6.8: compulsory supply log gate
-  supplySaved:        null,         // s99g: {sid, rows:{item_id:units}} once this report's usage is saved; never re-sent
+  supplyLogSaved:     false,        // v6.8: compulsory supply log gate (s120: true once the restock answers are saved; sending is separate)
+  linen:              null,         // s120R: linen check answers {answer, rows, key, sent}
+  restock:            null,         // s120R: restock answers {top, kit, extras, other, saved, sent, key}
   cleaningType:       'turnover',   // v7.8: 'turnover' | 'mid_stay' | 'deep_clean' | 'emergency'
   cleaningDateStatus: 'unknown',    // 'valid' | 'blocked' | 'warn' | 'unknown' — set by calendar check
   midStayAutoApplied: false,        // true once occupied-unit auto-switch to mid-stay has fired
@@ -6320,6 +6363,8 @@ const state = {
   submissionId:       null,
   isSubmitting:       false,
   pendingOnlineRetry: false,
+  preSubmitStalled:   false,        // s120R7: Submit stopped once while online with a send that keeps failing; the next tap lets the report go
+  pendingPreSubmit:   false,        // s120R: the pre-submit send could not finish offline; the online event runs it again
   weekendMandatory:   false,
   elapsedInterval:    null,
   dwellInterval:      null,
@@ -6405,7 +6450,7 @@ function lsJSON(key, val) {
     try { const v = localStorage.getItem(key); return v ? JSON.parse(v) : null; }
     catch { return null; }
   }
-  try { localStorage.setItem(key, JSON.stringify(val)); } catch { /* quota */ }
+  try { localStorage.setItem(key, JSON.stringify(val)); return true; } catch { return false; /* quota */ }   // s120R9: a save says whether it stuck; a photo blob is deleted only after it did
 }
 
 /* ═══════════════════════════════════════════════════════════════
@@ -6488,6 +6533,7 @@ function goToPhase(newPhase, skipGate = false) {
   if (newEl) {
     // Brief delay so exit animation starts first
     setTimeout(() => {
+      if (state.phase !== newPhase) return;   // s120 R14: a later move already chose another step
       newEl.classList.add('active');
       newEl.scrollTop = 0;
     }, 20);
@@ -6496,10 +6542,10 @@ function goToPhase(newPhase, skipGate = false) {
   updateStepper();
   updateBottomBar();
   if (typeof refreshCheckAllButtons === 'function') refreshCheckAllButtons();
-  ls(PHASE_KEY, String(newPhase));
+  if (!_draftHold) ls(PHASE_KEY, String(newPhase));            // s120R10: a Resume still restoring writes nothing, here or on the server; resumeDraft does both once it has succeeded
   saveDraft();
   K_headerPhoto(newPhase);
-  K_reportProgress(newPhase);                                  // shell hand-off; never awaited, never blocks
+  if (!_draftHold) K_reportProgress(newPhase);                 // shell hand-off; never awaited, never blocks
   if (!skipGate && going_forward) K_phaseDone(PHASE_LABELS[oldPhase]);
 }
 
@@ -6544,7 +6590,7 @@ function isPhaseValid(phase) {
     case 3: return true;             // K_: Bedroom & Living gates nothing
     case 4: return isPhase3Valid() && K_slotsOk() && K_gatedOk(4); // supply log + kitchen photos (Feature 1) + the smell check
     case 5: return K_afterPhotosOk() && K_gatedOk(5); // K_: Finish asks for the after-clean photos and its own gated items
-    case 6: return isPhase4Valid() && K_gatedOk(6);   // K_: Lock up asks for the Confirm & Leave set + the final power and safety check (a killer)
+    case 6: return isPhase4Valid() && K_gatedOk(6) && (state.cleaningType === 'emergency' || state.supplyLogSaved);   // s120R: an unsaved Restock blocks Submit too   // K_: Lock up asks for the Confirm & Leave set + the final power and safety check (a killer)
     default: return true;
   }
 }
@@ -6672,7 +6718,7 @@ function buildNudgeMessage(phase) {
     }
     case 2: {
       const lin = K_gatedForPhase(2).filter(i => !K_answered(i.id));
-      return lin.length ? 'Almost there. Answer the linen check first: Confirmed, or Issue Found.' : null;
+      return lin.length ? 'Almost there. Answer the linen check first: No stains, or Found stains and what happened to each piece.' : null;
     }
     case 4: {
       const missing = [];
@@ -6682,11 +6728,11 @@ function buildNudgeMessage(phase) {
       const noSlot = K_missingSlots();
       if (noSlot.length) missing.push(`${noSlot.length} named photo${noSlot.length>1?'s':''} (${noSlot.map(s => s.label.split(':')[0]).join(', ')})`);
       else if (kitchenPhotosRequired() && ktNeed > 0) missing.push(`${ktNeed} more kitchen photo${ktNeed>1?'s':''}`);
-      if (!state.supplyLogSaved) missing.push('supply log (tap 📦 Log Supply Usage)');
+      if (!state.supplyLogSaved) missing.push('restock (tap Open Restock)');
       const smell = K_gatedForPhase(4).filter(i => !K_answered(i.id)).length;
       if (smell) missing.push(`${smell} check${smell>1?'s':''} to answer (Confirmed, or Issue Found)`);
       if (missing.length === 0) return null;
-      return `Almost ready to finish! Still needed: ${missing.join('; ')}. 💛`;
+      return `Almost ready to finish. Still needed: ${missing.join('; ')}. 💛`;
     }
     case 5: {
       const acNeed = AFTERCLEAN_PHOTO_MIN - state.aftercleanPhotos.length;
@@ -7783,45 +7829,94 @@ function openPhotoDB() {
   _photoDbPromise = new Promise(resolve => {
     try {
       const req = indexedDB.open(PHOTO_DB_NAME, 1);
+      const stuck = setTimeout(() => { _photoDbPromise = null; }, PHOTO_IDB_LIMIT);   // s120R12: an open that has not answered by the limit is not remembered either; the next call opens again
       req.onupgradeneeded = () => { req.result.createObjectStore(PHOTO_STORE); };
-      req.onsuccess = () => resolve(req.result);
-      req.onerror = () => resolve(null);
-    } catch { resolve(null); }
+      req.onsuccess = () => { clearTimeout(stuck); resolve(req.result); };
+      req.onerror = () => { clearTimeout(stuck); _photoDbPromise = null; resolve(null); };   // s120R10: a failed open is not remembered, the next call tries again
+    } catch { _photoDbPromise = null; resolve(null); }
   });
   return _photoDbPromise;
 }
 
-async function idbPutPhoto(id, blob) {
-  const db = await openPhotoDB();
-  if (!db) return false;
+/* s120R11: no photo storage call waits forever or loses a photo silently. Runs op() and settles with its value, or with `fallback` if it throws, rejects or has not settled in PHOTO_IDB_LIMIT ms; a late result changes nothing.
+   s120R12: onLimit runs when the limit is what settled it, so a write that is still waiting can be cancelled. */
+const PHOTO_IDB_LIMIT = 3000;
+const KEEP_OPEN_MSG = 'Keep this page open until the photo shows Uploaded.';
+/* s120R13: one keep-open notice at a time, wrapped inside the screen */
+function keepOpenToast() {
+  if (Array.from(el('toast-area')?.children || []).some(n => n.textContent === KEEP_OPEN_MSG)) return;
+  showToast(KEEP_OPEN_MSG, 'warning wrap', 6000);
+}
+function idbBounded(op, fallback, ms = PHOTO_IDB_LIMIT, onLimit = null) {
   return new Promise(resolve => {
-    const tx = db.transaction(PHOTO_STORE, 'readwrite');
-    tx.objectStore(PHOTO_STORE).put(blob, id);
-    tx.oncomplete = () => resolve(true);
-    tx.onerror = () => resolve(false);
+    const timer = setTimeout(() => { try { if (onLimit) onLimit(); } catch { /* nothing to cancel */ } resolve(fallback); }, ms);
+    Promise.resolve().then(op).then(v => { clearTimeout(timer); resolve(v); }, () => { clearTimeout(timer); resolve(fallback); });
   });
 }
 
-async function idbGetPhoto(id) {
+/* resolves true once the blob is stored, false on a failed open, a quota abort, a thrown error or the time limit: the caller then keeps the photo in memory (_blob).
+   s120R12: at the limit the write is cancelled (abort, or never started if the open was late), so no blob is stored that no draft names. */
+function idbPutPhoto(id, blob) {
+  let tx = null, late = false;
+  return idbBounded(async () => {
+    const db = await openPhotoDB();
+    if (!db || late) return false;
+    return new Promise(resolve => {
+      try {
+        tx = db.transaction(PHOTO_STORE, 'readwrite');
+        tx.objectStore(PHOTO_STORE).put(blob, id);
+        tx.oncomplete = () => resolve(true);
+        tx.onerror = tx.onabort = () => resolve(false);
+      } catch { resolve(false); }
+    });
+  }, false, PHOTO_IDB_LIMIT, () => { late = true; if (tx) tx.abort(); });
+}
+
+/* the upload read: null when the blob is not there, the read failed or it did not settle in time (the in-memory _blob is the next try) */
+function idbGetPhoto(id) {
+  return idbBounded(async () => {
+    const db = await openPhotoDB();
+    if (!db) return null;
+    return new Promise(resolve => {
+      try {
+        const tx = db.transaction(PHOTO_STORE, 'readonly');
+        const req = tx.objectStore(PHOTO_STORE).get(id);
+        req.onsuccess = () => resolve(req.result || null);
+        req.onerror = tx.onabort = () => resolve(null);
+      } catch { resolve(null); }
+    });
+  }, null);
+}
+
+/* s120R10: for Resume only. idbGetPhoto turns a storage error into "no blob"; this one rejects on a failed open or read, and resolves null only when the read worked and the blob is not there. */
+async function idbReadPhoto(id) {
   const db = await openPhotoDB();
-  if (!db) return null;
-  return new Promise(resolve => {
-    const tx = db.transaction(PHOTO_STORE, 'readonly');
-    const req = tx.objectStore(PHOTO_STORE).get(id);
-    req.onsuccess = () => resolve(req.result || null);
-    req.onerror = () => resolve(null);
+  if (!db) throw new Error('photo storage is not available');
+  return new Promise((resolve, reject) => {
+    try {
+      const tx = db.transaction(PHOTO_STORE, 'readonly');
+      const req = tx.objectStore(PHOTO_STORE).get(id);
+      req.onsuccess = () => resolve(req.result || null);
+      req.onerror = () => reject(req.error || new Error('photo read failed'));
+      tx.onabort = () => reject(tx.error || new Error('photo read aborted'));
+    } catch (e) { reject(e); }
   });
 }
 
-async function idbDeletePhoto(id) {
-  const db = await openPhotoDB();
-  if (!db) return;
-  await new Promise(resolve => {
-    const tx = db.transaction(PHOTO_STORE, 'readwrite');
-    tx.objectStore(PHOTO_STORE).delete(id);
-    tx.oncomplete = () => resolve();
-    tx.onerror = () => resolve();
-  });
+/* s120R10: never rejects and never hangs (s120R11: the time limit is the shared one). Resolves true when the blob is gone, false when it is not (a failed delete only leaves a blob behind). */
+function idbDeletePhoto(id) {
+  return idbBounded(async () => {
+    const db = await openPhotoDB();
+    if (!db) return false;
+    return new Promise(resolve => {
+      try {
+        const tx = db.transaction(PHOTO_STORE, 'readwrite');
+        tx.objectStore(PHOTO_STORE).delete(id);
+        tx.oncomplete = () => resolve(true);
+        tx.onerror = tx.onabort = () => resolve(false);
+      } catch { resolve(false); }
+    });
+  }, false);
 }
 
 async function resolvePhotoDataUrl(photo) {
@@ -7844,7 +7939,24 @@ async function resolvePhotoDataUrl(photo) {
 const PHOTO_UPLOAD_CONCURRENCY = 2;
 const photoUploadQueue = { items: [], active: 0 };
 
+/* s120R9: Resume is all or nothing. While the draft is held (the Resume question is open, or a Resume has not finished), nothing that writes or sends starts:
+   it waits here and runs once, in order, when the hold is released. A hold that is never released (a failed Resume) runs none of it. */
+let _draftHold = false;
+let _carryApplied = false;   // s120R12: set once the carry key's sends are in the page; a stored save after that may remove the key (saveDraft)
+let _heldWork = [];
+function afterHold(fn) {
+  if (_draftHold) _heldWork.push(fn);
+  else fn();
+}
+function releaseHold(first) {
+  _draftHold = false;
+  const work = _heldWork; _heldWork = [];
+  try { if (first) first(); }
+  finally { work.forEach(fn => { try { fn(); } catch (e) { console.error('held work failed', e); } }); }
+}
+
 function enqueuePhotoUpload(run) {
+  if (_draftHold) { _heldWork.push(() => enqueuePhotoUpload(run)); return; }
   photoUploadQueue.items.push(run);
   pumpPhotoUploadQueue();
 }
@@ -7893,6 +8005,7 @@ function renderPhotoThumb(wrapEl, photo, onRetry, imgClass = 'photo-thumb') {
 // raw-body path), updating its status and re-rendering its thumbnail at
 // each step. `photo` is the live state.*Photos[idx] / meterPhotos[i] object.
 async function uploadPhotoRecord(photo, slotKey, onStatus) {
+  let spent = null;
   photo.status = 'uploading';
   onStatus?.();
   try {
@@ -7906,12 +8019,35 @@ async function uploadPhotoRecord(photo, slotKey, onStatus) {
     photo.status   = 'done';
     photo.data     = null;
     photo._blob    = null;
-    if (photo.idbId) { await idbDeletePhoto(photo.idbId); photo.idbId = null; }
+    spent = photo.idbId; photo.idbId = null;
   } catch {
     photo.status = 'failed';
   }
   onStatus?.();
-  saveDraft();
+  // s120R9: the stored draft must hold the URL before the blob goes. Save first; delete only if the save stuck. If it did not, the blob stays and the next save stores both.
+  let stored = false;
+  try { stored = saveDraft() === true; } catch (e) { console.error('save failed', e); }
+  // s120R10: a blob that could not be deleted keeps its id in the stored draft too (clearDraft and the sweep after the next save still find it).
+  if (spent) {
+    if (!stored || !(await idbDeletePhoto(spent))) { photo.idbId = spent; if (stored && S120R_draftOpen()) { try { saveDraft(); } catch (e) { console.error('save failed', e); } } }
+  }
+}
+
+/* s120R11: a slow delete that settles after the report went must not bring the draft back: save only while the draft key still exists (s120R12: saveDraft itself refuses once the success screen is up). */
+const S120R_draftOpen = () => ls(DRAFT_KEY) !== null;
+
+/* s120R10: after a save that stuck, try again to delete the blob of any uploaded photo that still names one. */
+let _blobSweeping = false;
+async function S120R_sweepBlobs() {
+  if (_blobSweeping) return;
+  const left = [...(state.meterPhotos || []), ...['preclean', 'bedroom', 'kitchen', 'afterclean'].flatMap(k => state[`${k}Photos`] || [])].filter(p => p && p.uploaded && p.idbId);
+  if (!left.length) return;
+  _blobSweeping = true;
+  try {
+    let gone = false;
+    for (const p of left) { const id = p.idbId; if (id && await idbDeletePhoto(id)) { if (p.idbId === id) p.idbId = null; gone = true; } }
+    if (gone && S120R_draftOpen()) saveDraft();
+  } finally { _blobSweeping = false; }
 }
 
 // Draft snapshot for one photo record — never base64/blob, just enough to
@@ -7931,22 +8067,18 @@ function photoMeta(p) {
 // half of the contract (the other half is the `online` listener below).
 async function restorePhotoFromMeta(meta) {
   if (!meta) return null;
-  const photo = { name: meta.name, url: meta.url || null, fileId: meta.fileId || null, uploaded: meta.uploaded, data: null, idbId: null, objectUrl: null, status: meta.uploaded ? 'done' : 'queued', slot: meta.slot || null, takenAt: meta.takenAt ? Date.parse(meta.takenAt) || null : null };
+  const photo = { name: meta.name, url: meta.url || null, fileId: meta.fileId || null, uploaded: meta.uploaded, data: null, idbId: meta.uploaded ? (meta.idbId || null) : null, objectUrl: null, status: meta.uploaded ? 'done' : 'queued', slot: meta.slot || null, takenAt: meta.takenAt ? Date.parse(meta.takenAt) || null : null };
   if (!meta.uploaded) {
     // _blob only ever lived in memory, so a page reload always loses it —
     // idbId is the only thing that can survive to be restored from.
-    if (meta.idbId) {
-      const blob = await idbGetPhoto(meta.idbId);
-      if (blob) { photo.idbId = meta.idbId; photo.objectUrl = URL.createObjectURL(blob); }
-      else photo.status = 'failed'; // the blob didn't survive — nothing left to retry from
-    } else {
-      photo.status = 'failed'; // never made it into IndexedDB either — same, nothing to retry from
-    }
+    const blob = meta.idbId ? await idbReadPhoto(meta.idbId) : null;   // s120R10: a storage error rejects (Resume fails, nothing is touched)
+    if (!blob) { state.photosDropped = (state.photosDropped || 0) + 1; return null; }   // s120R12: not uploaded and not stored: nothing to retry from, so the slot is emptied and the cleaner retakes it
+    photo.idbId = meta.idbId; photo._blob = blob; photo.objectUrl = URL.createObjectURL(blob);   // s120R12: _blob too, so a slow read at upload time still has the bytes
   }
   return photo;
 }
 
-window.addEventListener('online', () => {
+window.addEventListener('online', () => afterHold(() => {
   const groups = ['meterPhotos', 'precleanPhotos', 'bedroomPhotos', 'kitchenPhotos', 'aftercleanPhotos'];
   groups.forEach(key => {
     (state[key] || []).forEach((p, idx) => {
@@ -7956,7 +8088,7 @@ window.addEventListener('online', () => {
       }
     });
   });
-});
+}));
 
 /* ═══════════════════════════════════════════════════════════════
    FETCH WITH RETRY
@@ -8072,7 +8204,7 @@ async function S94_precheck(i) {
 /* s94: what is still needed on this screen, in plain words. One list feeds the cue line under the nav and the tap-to-scroll.
    Each item: { t: words, id: element to scroll to }. Mirrors the gates in isPhase*Valid; never decides validity itself. */
 function S94_unmet(ph) {
-  const out = [], add = (t, id) => out.push({ t, id });
+  const out = [], add = (t, id, phase) => out.push({ t, id, phase });
   const val = id => (el(id)?.value || '').trim();
   const more = (n, what, id) => add(n + ' more ' + what + (n > 1 ? 's' : ''), id);
   const checks = p => { const u = K_gatedForPhase(p).filter(x => !K_answered(x.id)); if (u.length) add('answer ' + u.length + ' check' + (u.length > 1 ? 's' : ''), 'confirm-wrap-' + u[0].id); };
@@ -8100,11 +8232,12 @@ function S94_unmet(ph) {
       if (n > 0) more(n, 'after-clean photo', 'afterclean-photo-card');
     }
     checks(ph);
+    if (ph === 6 && !state.supplyLogSaved && ct !== 'emergency') add('restock (on the Bathroom & Kitchen step)', 'supply-usage-trigger-card', 4);   // Restock gates Submit too
   } else if (ph === 4) {
     const slots = K_missingSlots(), kn = K_KITCHEN_PHOTO_MIN - state.kitchenPhotos.length;
     if (slots.length) add(slots.length + ' kitchen photo' + (slots.length > 1 ? 's' : ''), 'kitchen-photo-card');
     else if (kitchenPhotosRequired() && kn > 0) more(kn, 'kitchen photo', 'kitchen-photo-card');
-    if (!state.supplyLogSaved && ct !== 'emergency') add('log supply usage', 'supply-usage-trigger-card');
+    if (!state.supplyLogSaved && ct !== 'emergency') add('restock', 'supply-usage-trigger-card');
     checks(4);
   }
   return out;
@@ -8122,14 +8255,22 @@ function S94_renderCue() {
   box.hidden = !list.length;
   box.textContent = list.length ? (last ? 'To submit: ' : 'To continue: ') + list.map(x => x.t).join(' \u00B7 ') : '';
   box._first = list[0] ? list[0].id : null;
+  box._firstPhase = list[0] && list[0].phase != null ? list[0].phase : null;   // an item that lives on another step
 }
 
 function S94_scrollToFirst() {
-  const id = el('nav-cue')?._first, t = id && el(id);
-  if (!t) return;
-  const reduce = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
-  t.scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: 'center' });
-  if (/^(INPUT|TEXTAREA|SELECT|BUTTON)$/.test(t.tagName)) t.focus({ preventScroll: true });
+  const cue = el('nav-cue'), id = cue?._first;
+  const go = () => {
+    const t = id && el(id);
+    if (!t) return;
+    const reduce = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
+    t.scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: 'center' });
+    if (/^(INPUT|TEXTAREA|SELECT|BUTTON)$/.test(t.tagName)) t.focus({ preventScroll: true });
+  };
+  if (id && cue._firstPhase != null && cue._firstPhase !== state.phase) {
+    goToPhase(cue._firstPhase, true);
+    setTimeout(go, 60);   // goToPhase shows the step 20 ms later; a card on a hidden step cannot be scrolled to
+  } else go();
 }
 
 function S94_initCue() {
@@ -8218,7 +8359,7 @@ function initMeterPhotos() {
       const photo = await restorePhotoFromMeta(meta);
       if (!photo) return;
       state.meterPhotos[i] = photo;
-      if (photo.uploaded && photo.fileId) S94_precheck(i);   // a draft-restored, already-uploaded photo is checked again after a reload
+      if (photo.uploaded && photo.fileId) afterHold(() => S94_precheck(i));   // a draft-restored, already-uploaded photo is checked again after a reload
       if (triggerBtn) triggerBtn.classList.add('has-photo');
       renderMeterThumb();
       updatePhotoCounter();
@@ -8239,11 +8380,12 @@ function initMeterPhotos() {
         const fname   = `${label}_${todayManila()}_${Date.now()}.jpg`;
         const id      = uuid();
         const stored  = await idbPutPhoto(id, blob);
+        if (!stored) keepOpenToast();   // s120R12: held in memory only until it uploads
 
         // A retake replaces whatever was already in this slot — release its
         // storage first so retakes don't leak an IndexedDB row or object URL.
         const previous = state.meterPhotos[i];
-        if (previous?.idbId) idbDeletePhoto(previous.idbId);
+        const replacedId = previous?.idbId;   // s120R9: deleted after the draft no longer points at it
         if (previous?.objectUrl) URL.revokeObjectURL(previous.objectUrl);
 
         if (spinEl) spinEl.style.display = 'none';
@@ -8292,7 +8434,7 @@ function initMeterPhotos() {
         updatePhotoCounter();
         updateBottomBar();
         updateProgress(1);
-        saveDraft();
+        if (saveDraft() === true && replacedId) idbDeletePhoto(replacedId);
         renderMeterNudge();
 
         enqueuePhotoUpload(() => uploadPhotoRecord(state.meterPhotos[i], `meter_${i}`, () => { renderMeterThumb(); updatePhotoCounter(); S94_precheck(i); }));
@@ -8619,12 +8761,11 @@ function initSectionPhotos() {
         if (e.target.closest('.photo-status-badge')) return; // badge handles its own click (retry)
         const liveIdx = photos.indexOf(photo);
         if (liveIdx < 0) return;
-        if (photo.idbId) idbDeletePhoto(photo.idbId);
         if (photo.objectUrl) URL.revokeObjectURL(photo.objectUrl);
         photos.splice(liveIdx, 1);
         wrap.remove();
         updateSectionCount();
-        saveDraft();
+        if (saveDraft() === true && photo.idbId) idbDeletePhoto(photo.idbId);   // s120R9: the stored draft stops pointing at the blob first
       });
       thumbsEl.appendChild(wrap);
       photo._wrapEl = wrap;
@@ -8676,6 +8817,7 @@ function initSectionPhotos() {
         const fname  = `${label}${slotId ? '_' + slotId : ''}_${todayManila()}_${Date.now()}.jpg`;
         const id     = uuid();
         const stored = await idbPutPhoto(id, blob);
+        if (!stored) keepOpenToast();   // s120R12: held in memory only until it uploads
         const photo = {
           // idbPutPhoto can fail silently (quota, blocked storage); _blob is
           // the same-session in-memory fallback resolvePhotoDataUrl() uses then.
@@ -8751,14 +8893,15 @@ function initCondition() {
     if (!file) return;
     try {
       const dataUrl = await compressImage(file);
-      state.conditionPhotoData = dataUrl;
+      state.conditionPhotoData = dataUrl; state.conditionPhotoUrl = null; state.conditionPhotoFileId = null;   // s120R15: a retake is not uploaded yet
+      saveDraft();   // the marker for a photo held but not uploaded
       const preview = el('condition-photo-preview');
       if (preview) { preview.src = dataUrl; preview.classList.add('visible'); }
 
       // Fire-and-forget upload
       const fname = `condition_${todayManila()}_${Date.now()}.jpg`;
       uploadPhotoDrive('condition', dataUrl, fname).then(result => {
-        if (result) {
+        if (result && state.conditionPhotoData === dataUrl) {   // s120R15: only the photo that was uploaded
           state.conditionPhotoUrl    = result.fileUrl;
           state.conditionPhotoFileId = result.fileId;
           state.conditionPhotoData   = null; // strip base64
@@ -9087,14 +9230,15 @@ async function handleIssuePhoto(itemId, input, wrapEl) {
   try {
     const dataUrl = await compressImage(file);
     if (!state.issueFlags[itemId]) state.issueFlags[itemId] = {};
-    state.issueFlags[itemId].photoData = dataUrl;
+    const flag = state.issueFlags[itemId];
+    flag.photoData = dataUrl; flag.photoUrl = null; flag.photoFileId = null;   // s120R15: a retake is not uploaded yet; the old upload must not stand in for it
 
     const preview = el(`issue-preview-${itemId}`);
     if (preview) { preview.src = dataUrl; preview.classList.add('visible'); }
 
     const fname = `issue_${itemId}_${Date.now()}.jpg`;
     uploadPhotoDrive(itemId, dataUrl, fname).then(result => {
-      if (result && state.issueFlags[itemId]) {
+      if (result && state.issueFlags[itemId] && state.issueFlags[itemId].photoData === dataUrl) {   // s120R15: only the photo that was uploaded, not an earlier one landing after a retake
         state.issueFlags[itemId].photoUrl    = result.fileUrl;
         state.issueFlags[itemId].photoFileId = result.fileId;
         state.issueFlags[itemId].photoData   = null;
@@ -9153,6 +9297,20 @@ function renderConfirmItems() {
         <img id="issue-preview-${item.id}" class="issue-photo-preview" src="" alt="Photo of the problem">` : ''}
       </div>`;
 
+    if (item.id === 'check_2_4') {   // s120R: the linen check asks which piece and what happened, instead of Confirmed / Issue Found and a typed note
+      if (!state.linen) state.linen = S120R_newLinen();
+      if (!_linenItems.length) _linenItems = lsJSON(S120R_CACHE_LINEN) || [];
+      if (navigator.onLine) S120R_loadLinenItems();
+      div.querySelector('.confirm-buttons')?.remove();
+      div.querySelector('.confirm-note-area')?.remove();
+      const lw = document.createElement('div'); lw.className = 's120-linen'; div.appendChild(lw);
+      const ls120 = document.createElement('p'); ls120.id = 's120-linen-status'; ls120.className = 's120-status warn'; ls120.setAttribute('role', 'status'); ls120.setAttribute('aria-live', 'polite'); div.appendChild(ls120);
+      container.appendChild(div);
+      S120R_renderLinen(div, item); S120R_bindLinen(div, item);
+      const st = state.confirmItems.check_2_4;
+      div.classList.toggle('confirmed', st === 'confirmed'); div.classList.toggle('issue-found', st === 'issue');
+      return;
+    }
     container.appendChild(div);
 
     // Bind buttons
@@ -9170,6 +9328,10 @@ function renderConfirmItems() {
           btn.setAttribute('aria-pressed','false');
         } else {
           state.confirmItems[itemId] = newState;
+          if (newState === 'confirmed' && itemId !== 'check_2_4') {   // an issue that was withdrawn leaves no text behind
+            delete state.confirmNotes[itemId];
+            const nt = div.querySelector(`#conf-note-${itemId}`); if (nt) nt.value = '';
+          }
           div.classList.remove('confirmed','issue-found');
           div.classList.add(newState === 'confirmed' ? 'confirmed' : 'issue-found');
           div.querySelectorAll('.confirm-btn').forEach(b => {
@@ -9588,6 +9750,8 @@ function initOfflineDetection() {
 
   window.addEventListener('online', () => {
     updateOnlineStatus();
+    if (state.pendingOnlineRetry) state.pendingPreSubmit = false;   // s120R15: the retry below is the one automatic run
+    S120R_resumePreSubmit();   // s120R: Submit stopped before the report went because the linen or restock could not be sent
     if (state.pendingOnlineRetry && !state.isSubmitting) {
       // Dedup guard [FD-002]: skip retry if this session already succeeded.
       // The live Apps Script also dedups on submissionId (72h TTL); this is
@@ -9600,7 +9764,7 @@ function initOfflineDetection() {
         }
       } catch { /* non-fatal */ }
       state.pendingOnlineRetry = false;
-      setTimeout(() => proceedWithSubmission(), 1000);
+      setTimeout(S120R_onlineRetry, 1000);
     }
   });
 
@@ -9650,7 +9814,10 @@ function initMessengerButtons() {
 /* ═══════════════════════════════════════════════════════════════
    DRAFT AUTO-SAVE / LOAD
 ═══════════════════════════════════════════════════════════════ */
+/* While the draft is held (declared with the upload queue) the stored draft is read-only: the page holds an empty state and a save would write it over the real draft.
+   Returns true only when the draft really reached storage. */
 function saveDraft() {
+  if (_draftHold || el('success-screen')?.classList.contains('visible')) return false;   // s120R12: after the report went, a late save (a slow upload or delete finishing) must not bring the draft back
   const draft = {
     _v:              DRAFT_VERSION,
     _k:              2,                 // K_: 1 = the s82 line set and phase numbers; 2 = EcoFlow merged into check_9_4 (3.1.1)
@@ -9676,7 +9843,8 @@ function saveDraft() {
     confirmItems:    { ...state.confirmItems },
     confirmNotes:    { ...state.confirmNotes },
     supplyLogSaved:  state.supplyLogSaved,
-    supplySaved:     state.supplySaved,
+    linen:           state.linen,       // s120R: optional keys; DRAFT_VERSION stays 5 so no draft is discarded (old drafts migrate in S120R_restore)
+    restock:         state.restock || null,   // the key is always present: a draft without it is from the older sheet (S120R_migrateRestock)
     cleaningType:    state.cleaningType || 'turnover',
     extraExpenses:   collectExtraExpenses(),
     sessionFolderId: state.sessionFolderId,
@@ -9700,10 +9868,16 @@ function saveDraft() {
       photoUrl: flag.photoUrl || '',
       photoFileId: flag.photoFileId || '',
     };
+    if (flag.photoData && !flag.photoUrl) draft.issueFlags[id].photoHeld = true;   // s120R15: the photo itself is not stored; this tells Resume it was held
   });
+  if (state.conditionPhotoData && !state.conditionPhotoUrl) draft.conditionPhotoHeld = true;
+  if (state.conditionPhotoUrl) { draft.conditionPhotoUrl = state.conditionPhotoUrl; draft.conditionPhotoFileId = state.conditionPhotoFileId; }   // s120R16: an uploaded photo stays with the report after a reload
 
-  lsJSON(DRAFT_KEY, draft);
+  const stored = lsJSON(DRAFT_KEY, draft) === true;
   flashAutosave();
+  if (stored) S120R_sweepBlobs().catch(() => {});   // s120R10: a blob that could not be deleted earlier is tried again after a save that stuck
+  if (stored && _carryApplied) ls(S120R_CARRY_KEY, null);   // s120R12: the stored draft holds the carried keys now; a key left behind would bring them back after the report
+  return stored;
 }
 
 function flashAutosave() {
@@ -9759,11 +9933,8 @@ function applyDraft(draft) {
   state.submissionId      = draft.submissionId      || null; // same photo folder after a reload
   state.numberOfNights    = draft.numberOfNights || 0;
   state.supplyLogSaved    = draft.supplyLogSaved  || false;
-  // s99g: keep what was saved only while it belongs to this same report
-  // legacy draft (saved before s99g, no record of totals): open read-only so it cannot double-log
-  state.supplySaved       = (draft.supplySaved && draft.supplySaved.sid === state.submissionId) ? draft.supplySaved
-                          : (state.supplyLogSaved ? { sid: state.submissionId, rows: {}, legacy: true } : null);
   if (draft.cleaningType) setCleaningType(draft.cleaningType);
+  S120R_restore(draft);
   // v7.8: restore additional expense lines
   if (Array.isArray(draft.extraExpenses) && draft.extraExpenses.length) {
     el('extra-exp-list') && (el('extra-exp-list').innerHTML = '');
@@ -9774,9 +9945,12 @@ function applyDraft(draft) {
   if (draft.issueFlags) {
     Object.entries(draft.issueFlags).forEach(([id, flag]) => {
       state.issueFlags[id] = { note: flag.note, photoUrl: flag.photoUrl, photoFileId: flag.photoFileId, photoData: null };
+      if (flag.photoHeld) state.photosDropped = (state.photosDropped || 0) + 1;   // s120R15: held but never uploaded: counted, so Resume says to retake it
     });
   }
 
+  if (draft.conditionPhotoHeld) state.photosDropped = (state.photosDropped || 0) + 1;   // s120R15
+  if (draft.conditionPhotoUrl) { state.conditionPhotoUrl = draft.conditionPhotoUrl; state.conditionPhotoFileId = draft.conditionPhotoFileId || null; }   // s120R16
   // Restore condition
   if (draft.conditionStatus) {
     if (draft.conditionStatus === 'clear')  el('cond-clear-btn')?.click();
@@ -9813,12 +9987,13 @@ function applyDraft(draft) {
   // fire-and-forget: each restore updates its own thumbnail once the
   // IndexedDB read resolves, which init() has already made possible by
   // calling initMeterPhotos()/initSectionPhotos() before this runs.
+  const restores = [];   // s120R8: resumeDraft waits for these; each restoreFromDraft returns its promise
   if (draft.meterPhotoMeta) {
-    draft.meterPhotoMeta.forEach((meta, i) => { METER_PHOTO_API[i]?.restoreFromDraft(meta); });
+    draft.meterPhotoMeta.forEach((meta, i) => { restores.push(METER_PHOTO_API[i]?.restoreFromDraft(meta)); });
   }
   updatePhotoCounter();
   ['preclean', 'bedroom', 'kitchen', 'afterclean'].forEach(key => {
-    SECTION_PHOTO_API[key]?.restoreFromDraft(draft[`${key}PhotoMeta`]);
+    restores.push(SECTION_PHOTO_API[key]?.restoreFromDraft(draft[`${key}PhotoMeta`]));
   });
 
   // Go to saved phase
@@ -9827,15 +10002,115 @@ function applyDraft(draft) {
   else updateBottomBar();
 
   updateProgress();
-  showToast('Session resumed', 'success');
+  // every restore settles before this resolves; one rejection is thrown after the rest have finished. "Session resumed" is shown by resumeDraft, only once all of it is back.
+  return Promise.allSettled(restores).then(rs => { const bad = rs.find(r => r.status === 'rejected'); if (bad) throw bad.reason; });
 }
 
-function clearDraft() {
+/* Resume is all or nothing. The draft modal stays open and the page behind it is inert until every restore has settled; nothing writes or sends in that time (see afterHold).
+   Success: release the hold, close the modal, save once, say so, then the held uploads and sends start. Failure or the time limit: the modal says so and offers Try again (reload, draft untouched)
+   or Start fresh; the stored draft and every blob stay as they were, and a restore that settles late changes nothing. */
+const S120R_BOOT_FAIL = 'This page did not finish loading. Reload it before you continue.';
+const S120R_RESUME_LIMIT = 20000;
+const S120R_CARRY_KEY = 'ch_s120_carry';
+function S120R_setInert(on) {
+  Array.from(document.querySelectorAll('body > *')).forEach(n => { if (n.id !== 'draft-modal' && n.tagName !== 'SCRIPT') n.inert = on; });
+}
+/* ask = the question; wait = restoring (buttons off); fail = could not restore (Try again or Start fresh) */
+function S120R_draftView(view) {
+  const set = (id, fn) => { const n = el(id); if (n) fn(n); };
+  setTimeout(() => { if (view === 'wait') return; const m = document.getElementById('draft-modal'); const b = m && m.classList.contains('open') && Array.from(m.querySelectorAll('.modal-actions .primary')).find(n => !n.hidden && !n.disabled); if (b) b.focus(); }, 0);   // the safe main button, so Enter can never discard the draft through Start fresh
+  const note = view === 'wait' ? 'Restoring your saved work...' : view === 'fail' ? 'Your saved work could not be restored. It is still safe on this phone.' : '';
+  set('draft-modal-body', n => { n.hidden = view !== 'ask'; });
+  set('draft-modal-note', n => { n.hidden = view === 'ask'; n.textContent = note; });
+  set('btn-draft-resume', n => { n.hidden = view === 'fail'; n.disabled = view !== 'ask'; });
+  set('btn-draft-retry', n => { n.hidden = view !== 'fail'; });
+  set('btn-draft-fresh', n => { n.disabled = view === 'wait'; });
+}
+async function resumeDraft(draft) {
+  _draftHold = true;   // already on from the question; set again so no caller can resume without it
+  S120R_draftView('wait');
+  state.photosDropped = 0;
+  let timer;
+  const run = (async () => { await applyDraft(draft); })();
+  const limit = new Promise((_, no) => { timer = setTimeout(() => no(new Error('restore did not finish in time')), S120R_RESUME_LIMIT); });
+  try { await Promise.race([run, limit]); }
+  catch (e) { console.error('resume failed', e); run.catch(() => {}); S120R_draftView('fail'); return; }   // the hold stays on: nothing was saved, sent or uploaded
+  finally { clearTimeout(timer); }
+  releaseHold(() => {
+    S120R_setInert(false);
+    el('draft-modal')?.classList.remove('open');
+    // s120R13: a dropped photo must not stay behind the cleaner; phases 1 (meter + pre-clean), 4 (kitchen) and 5 (after-clean) hold photo minimums
+    if (state.photosDropped) { const back = [1, 4, 5].find(n => n < state.phase && !isPhaseValid(n)); if (back != null) goToPhase(back, true); }
+    saveDraft();   // the restored state, photo records included, is stored once
+    if (state.phase > 0) { ls(PHASE_KEY, String(state.phase)); K_reportProgress(state.phase); }   // the restored phase, reported once, now that the Resume has succeeded
+    const lost = state.photosDropped || 0;   // s120R12: photos that were only ever in memory are gone; say so
+    if (lost) showToast(lost === 1 ? '1 photo could not be kept. Please retake it.' : lost + ' photos could not be kept. Please retake them.', 'warning wrap', 8000);
+    else showToast('Session resumed', 'success');
+  });
+}
+function S120R_initFailed(e) { console.error('init failed', e); showToast(S120R_BOOT_FAIL, 'error wrap', 86400000); }   // the hold stays as init left it: the stored draft is untouched
+
+/* Start fresh: a Restock or linen send that was sent, or may have reached the server, keeps its object and key, so the cards show their status and a new answer cannot be deducted twice.
+   Only the send's own stamp counts (sendStartedAt, set when the request was first tried and never changed): the same Manila day or under 6 hours (work across midnight). No stamp, no carry-over. */
+function S120R_sendFresh(o) {
+  const at = Number(o && o.sendStartedAt);
+  if (!(at > 0)) return false;
+  const sameDay = new Date(at).toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' }) === todayManila();   // the same call todayManila makes
+  return sameDay || Date.now() - at < 6 * 3600 * 1000;
+}
+const S120R_liveSend = o => !!(o && o.key && (o.sent || o.tried || o.waiting) && S120R_sendFresh(o));
+function carryOverSends(draft) {
+  if (!draft) return false;
+  let kept = false;
+  if (S120R_liveSend(draft.restock)) { state.restock = S120R_migrateRestock(draft); state.supplyLogSaved = !!draft.supplyLogSaved; if (state.restock.saved) el('supply-usage-trigger-card')?.classList.add('sus-done'); kept = true; }
+  if (S120R_liveSend(draft.linen)) { state.linen = S120R_migrateLinen(draft); if (state.cleaningType !== 'emergency') S120R_syncLinen(); kept = true; }
+  if (kept) { _carryApplied = true; try { renderConfirmItems(); S120R_refreshStatus(); } catch (e) { /* the cards repaint on the next tap */ } }
+  return kept;
+}
+/* s120R11: the carry key for Start fresh. With storage full it may not fit beside the old draft: hold it in memory, clear the draft, write the key, and only go on when it stuck.
+   Returns { stale } (the old draft, for the blob sweep) or false: nothing is lost, the draft goes back and the cleaner is told. */
+function S120R_stashCarry(draft) {
+  const keep = S120R_liveSend(draft.restock) || S120R_liveSend(draft.linen);
+  const carry = keep ? { restock: draft.restock || null, linen: draft.linen || null, supplyLogSaved: !!draft.supplyLogSaved } : null;
+  const raw = localStorage.getItem(DRAFT_KEY), stale = lsJSON(DRAFT_KEY);
+  ls(DRAFT_KEY, null);
+  let stuck = true;
+  if (carry) stuck = lsJSON(S120R_CARRY_KEY, carry) !== false; else ls(S120R_CARRY_KEY, null);
+  if (stuck) return { stale };
+  try { if (raw) localStorage.setItem(DRAFT_KEY, raw); } catch { /* it was there a moment ago */ }
+  console.error('the carried sends could not be stored');
+  S120R_draftView('fail');
+  const n = el('draft-modal-note'); if (n) n.textContent = 'There is not enough space on this phone to start fresh. Your saved work is still safe.';
+  return false;
+}
+/* Start fresh after a Resume was tried: the page is half restored, so it starts again clean. The sends that still count wait in the carry key; the next boot puts them back. Returns false when it could not start. */
+function S120R_freshAfterFailedResume(draft) {
+  const r = S120R_stashCarry(draft);
+  if (!r) return false;
+  clearDraft(r.stale);   // the draft key is already gone; this sweeps its photo blobs
+  location.reload();
+  return true;
+}
+function S120R_startFresh(draft) {
+  const r = S120R_stashCarry(draft);   // s120R11: the keys are safe in the carry key before anything is cleared
+  if (!r) return false;
+  let kept = false;
+  try {
+    el('draft-modal')?.classList.remove('open');
+    S120R_setInert(false);
+    clearDraft(r.stale);
+    state.startTimestamp = Date.now();
+    startElapsedTimer();
+    kept = carryOverSends(draft);
+  } finally { releaseHold(() => { if (kept) saveDraft(); else ls(S120R_CARRY_KEY, null); }); }   // the hold is cleared on every path; saveDraft removes the carry key once a stored draft holds the keys
+  return true;
+}
+
+function clearDraft(stale = lsJSON(DRAFT_KEY)) {
   // A discarded draft ("Start fresh") or one whose unfinished photos got
   // silently dropped from a submission can still reference IndexedDB blobs
   // (WP2). Sweep every group's idbId before the draft itself disappears —
   // otherwise those rows never get deleted.
-  const stale = lsJSON(DRAFT_KEY);
   if (stale) {
     ['meterPhotoMeta', 'precleanPhotoMeta', 'bedroomPhotoMeta', 'kitchenPhotoMeta', 'aftercleanPhotoMeta'].forEach(field => {
       (stale[field] || []).forEach(meta => { if (meta?.idbId) idbDeletePhoto(meta.idbId); });
@@ -9856,6 +10131,7 @@ function initNavButtons() {
 }
 
 function onSubmitClick() {
+  if (_draftHold) return;
   if (!isPhase4Valid()) {
     showGateHint(4);
     return;
@@ -9868,34 +10144,38 @@ function onSubmitClick() {
 ═══════════════════════════════════════════════════════════════ */
 function checkAndShowDraftModal() {
   const draft = loadDraft();
-  if (!draft) return;
-
-  // Show draft modal
-  const modal   = el('draft-modal');
-  const timeEl  = el('draft-time');
-  if (!modal) return;
+  const modal = el('draft-modal');
+  if (!draft || !modal) {
+    const carry = lsJSON(S120R_CARRY_KEY);   // left by Start fresh after a failed Resume
+    const kept = !!carry && carryOverSends(carry);
+    releaseHold(() => { if (kept) saveDraft(); else ls(S120R_CARRY_KEY, null); });   // s120R11: the carry key goes only once the keys are in a stored draft (saveDraft removes it)
+    return;
+  }
+  _draftHold = true;   // the stored draft is read-only until the cleaner answers
+  if (modal.parentElement && modal.parentElement !== document.body) document.body.appendChild(modal);   // the page behind it goes inert, so the modal must sit outside it
+  S120R_setInert(true);
 
   const savedDate = new Date(draft._saved);
   const timeStr   = savedDate.toLocaleString('en-PH', {
     timeZone: 'Asia/Manila', weekday: 'short', month: 'short', day: 'numeric',
     hour: 'numeric', minute: '2-digit', hour12: true
   });
+  const timeEl = el('draft-time');
   if (timeEl) timeEl.textContent = timeStr;
 
+  S120R_draftView('ask');
   modal.classList.add('open');
 
-  el('btn-draft-resume')?.addEventListener('click', () => {
-    modal.classList.remove('open');
-    applyDraft(draft);
-  }, { once: true });
-
+  let resumed = false;
+  el('btn-draft-resume')?.addEventListener('click', () => { resumed = true; resumeDraft(draft); }, { once: true });
+  el('btn-draft-retry')?.addEventListener('click', () => location.reload());   // the draft is untouched
+  let freshing = false;   // s120R11: no { once: true }: a refused Start fresh (not enough space) must work on the next tap; a second tap while one is running does nothing
   el('btn-draft-fresh')?.addEventListener('click', () => {
-    modal.classList.remove('open');
-    clearDraft();
-    // Reset state
-    state.startTimestamp = Date.now();
-    startElapsedTimer();
-  }, { once: true });
+    if (freshing) return;
+    freshing = true;
+    let ok = false;
+    try { ok = resumed ? S120R_freshAfterFailedResume(draft) : S120R_startFresh(draft); } finally { if (!ok) freshing = false; }
+  });
 }
 
 /* ═══════════════════════════════════════════════════════════════
@@ -9918,7 +10198,7 @@ function openSubmitModal() {
   if (cleanerEl) cleanerEl.textContent = cleanerName;
 
   // Count issues
-  const issueCount = Object.keys(state.issueFlags).length +
+  const issueCount = S120R_issueFlagCount() +
     K_gatedAll().filter(i => state.confirmItems[i.id] === 'issue' && K_isUrgentIssue(i)).length +
     (state.conditionStatus === 'issue' ? 1 : 0);
 
@@ -9970,7 +10250,7 @@ function initSubmitModal() {
 
   el('btn-submit-confirm')?.addEventListener('click', () => {
     el('submit-modal')?.classList.remove('open');
-    runPreSubmitFlush();
+    runPreSubmitFlush(true);   // a tap; only a tap can be the second one
   });
 }
 
@@ -9985,38 +10265,126 @@ function initSubmitModal() {
 // every photo whose bytes moved to IndexedDB after capture. Routes through
 // the same concurrency-2 queue as capture-time uploads (uploadPhotoRecord)
 // rather than a separate ad hoc batch loop.
-async function runPreSubmitFlush() {
-  const sectionKeys = ['preclean', 'afterclean', 'bedroom', 'kitchen'];
-
-  const pending = [];
-  sectionKeys.forEach(key => {
-    (state[`${key}Photos`] || []).forEach((p, idx) => {
-      if (p && !p.uploaded && (p.data || p.idbId || p._blob)) pending.push({ key, idx, photo: p });
-    });
+/* S120R14:BEGIN (tests load this block as it stands) */
+const S120R_photoHeld = p => !!(p && !p.uploaded && (p.data || p.idbId || p._blob));   // s120R13: a photo that still has bytes to send
+/* s120 R14: one rule for every photo. A photo that did not upload goes missing only after the cleaner was told about that photo. The record lives in the page only (never in the draft) and is emptied in resetApp.
+   Photo records are kept by object; a damage or condition photo (a plain string on the state) by its id and the length and tail of its data. */
+let S120R_told = { w: new WeakSet(), s: new Set() };
+const S120R_tail = d => d.length + ':' + d.slice(-48);
+const S120R_isTold = k => typeof k === 'string' ? S120R_told.s.has(k) : S120R_told.w.has(k);
+const S120R_setTold = k => { if (typeof k === 'string') S120R_told.s.add(k); else S120R_told.w.add(k); };
+/* every photo that still has to upload: { key, run (uploads it), isUp (true once it is up) } */
+function S120R_notUploaded() {
+  const out = [];
+  const add = (key, run, isUp) => out.push({ key, run, isUp });
+  const rec = (p, name) => { if (S120R_photoHeld(p)) add(p, () => uploadPhotoRecord(p, name, null), () => !!p.uploaded); };
+  ['preclean', 'afterclean', 'bedroom', 'kitchen'].forEach(key => (state[`${key}Photos`] || []).forEach((p, idx) => rec(p, `${key}_${idx}`)));
+  (state.meterPhotos || []).forEach((p, idx) => rec(p, `meter_${idx}`));
+  Object.entries(state.issueFlags || {}).forEach(([id, f]) => {
+    if (!(f && f.photoData && !f.photoUrl)) return;
+    const d = f.photoData;
+    add('issue:' + id + ':' + S120R_tail(d), async () => {
+      const r = await uploadPhotoDrive(id, d, `issue_${id}_${Date.now()}.jpg`);   // the same upload and the same fields as handleIssuePhoto
+      const cur = state.issueFlags[id];
+      if (r && cur && cur.photoData === d) { cur.photoUrl = r.fileUrl; cur.photoFileId = r.fileId; cur.photoData = null; saveDraft(); }
+    }, () => !!(state.issueFlags[id] && state.issueFlags[id].photoUrl));
   });
-  state.meterPhotos.forEach((p, idx) => {
-    if (p && !p.uploaded && (p.data || p.idbId || p._blob)) pending.push({ key: 'meter', idx, photo: p });
-  });
-
-  if (pending.length === 0) {
-    proceedWithSubmission();
+  if (state.conditionPhotoData && !state.conditionPhotoUrl) {
+    const d = state.conditionPhotoData;
+    add('cond:' + S120R_tail(d), async () => {
+      const r = await uploadPhotoDrive('condition', d, `condition_${todayManila()}_${Date.now()}.jpg`);   // as the condition photo handler
+      if (r && state.conditionPhotoData === d) { state.conditionPhotoUrl = r.fileUrl; state.conditionPhotoFileId = r.fileId; state.conditionPhotoData = null; saveDraft(); }
+    }, () => !!state.conditionPhotoUrl);
+  }
+  return out;
+}
+/* the online retry of a report whose send failed offline: it goes through the same flush as a tap, so photos upload first. It waits for a Resume or another run instead of doing nothing. */
+function S120R_onlineRetry() {
+  if (_draftHold) { _heldWork.push(S120R_onlineRetry); return; }
+  if (_preSubmitRunning) { setTimeout(S120R_onlineRetry, 500); return; }
+  if (state.isSubmitting) return;
+  try { if (state.submissionId && JSON.parse(localStorage.getItem(SUBMITTED_IDS_KEY) || '[]').includes(state.submissionId)) return; } catch { /* non-fatal */ }
+  runPreSubmitFlush('retry');
+}
+/* S120R14:END */
+let _preSubmitRunning = false;   // s120R8: one run at a time; a tap during an automatic run is not the second tap
+async function runPreSubmitFlush(fromTap) {
+  if (_preSubmitRunning || _draftHold) return;
+  _preSubmitRunning = true;
+  try {   // the flag clears on every path; the body below is not re-indented
+  // s120R: the linen check and the restock must be recorded before the report goes. No connection = they stay on this phone and the submit waits.
+  const say = msg => { const st = el('submit-status'); if (st) { st.className = 'visible error'; st.textContent = msg; } };   // stays on screen, unlike a toast
+  if (state.cleaningType !== 'emergency' && !state.supplyLogSaved) {
+    say('Restock is not saved. Open Restock, answer it and tap Save, then submit.');
+    showToast('Restock is not saved yet.', 'error', 5000);
     return;
   }
+  const sendSt = el('submit-status'), sendBtn = el('btn-submit'), busy = 'Sending linen and restock…';
+  if (sendSt) { sendSt.className = 'visible loading'; sendSt.textContent = busy; }
+  if (sendBtn) sendBtn.disabled = true;   // no second tap while the send is out
+  let sent;
+  try { sent = await S120R_flushAll(false, true); }
+  finally {
+    if (sendSt && sendSt.textContent === busy) { sendSt.className = ''; sendSt.textContent = ''; }
+    updateBottomBar();   // gives Submit back on every path; the report path switches it off again itself
+  }
+  if (sent.unanswered.length) {
+    say('Restock still needs an answer: ' + sent.unanswered.join(', ') + '. Open Restock, answer it and tap Save, then submit.');
+    showToast('Restock still needs an answer.', 'error', 6000);
+    return;
+  }
+  const passes = fromTap === true || fromTap === 'retry';   // a tap or the online retry may send past a stop the cleaner has seen; an automatic run never does
+  let restockMsg = '';
+  if (sent.pending.length) {
+    state.pendingPreSubmit = true;
+    if (S120R_certainOffline()) {
+      say('Not sent yet: ' + sent.pending.join(' and ') + '. Your answers are kept on this phone. The report goes when you are online again, or tap Submit again.');
+      showToast('Not sent yet: ' + sent.pending.join(' and ') + '. Your answers are kept on this phone. Connect, then tap Submit again.', 'error', 8000);
+      return;
+    }
+    // Online but the send keeps failing: the first stop says so; the next pass lets the report go without it. The photos are checked below, so one stop covers both.
+    if (!(passes && state.preSubmitStalled)) {
+      state.preSubmitStalled = true;
+      restockMsg = 'Not sent yet: ' + sent.pending.join(' and ') + '. Tap Submit again to send the report without it. The host will be told.';
+    } else {
+      if (sent.pending.includes('linen check') && state.linen) state.linen.unconfirmed = true;   // the key stays: a later resend records it normally
+      if (sent.pending.includes('restock') && state.restock) state.restock.unconfirmed = true;
+    }
+  } else state.preSubmitStalled = false;
+  if (!restockMsg) state.pendingPreSubmit = false;
 
-  showFlushOverlay(pending.length);
-
-  let done = 0;
-  await Promise.all(pending.map(({ key, idx, photo }) => new Promise(resolve => {
-    enqueuePhotoUpload(async () => {
-      await uploadPhotoRecord(photo, `${key}_${idx}`, null);
-      done++;
-      updateFlushOverlay(done, pending.length);
-      resolve();
-    });
-  })));
-
-  hideFlushOverlay();
-  proceedWithSubmission();
+  const pending = S120R_notUploaded();
+  if (pending.length) {
+    showFlushOverlay(pending.length);
+    let done = 0;
+    await Promise.all(pending.map(({ run }) => new Promise(resolve => {
+      enqueuePhotoUpload(async () => {
+        try { await run(); }
+        catch (e) { console.error('photo flush failed', e); }   // s120R10: one photo never keeps the overlay up; the report goes with what is uploaded
+        finally { done++; updateFlushOverlay(done, pending.length); resolve(); }
+      });
+    })));
+    hideFlushOverlay();
+  }
+  // s120 R14: a photo that still did not upload is never lost quietly. It goes missing only after the cleaner was told about that photo; the stop keeps the draft and the blobs.
+  const left = pending.filter(i => !i.isUp());
+  const fresh = left.filter(i => !S120R_isTold(i.key));
+  let photoMsg = '';
+  if (left.length && (fresh.length || !passes)) {
+    left.forEach(i => S120R_setTold(i.key));
+    const n = fresh.length || left.length;
+    photoMsg = n === 1
+      ? '1 photo did not upload. Check the signal and tap Submit to try again. If it still fails, the report goes without it.'
+      : n + ' photos did not upload. Check the signal and tap Submit to try again. If they still fail, the report goes without them.';
+  }
+  if (restockMsg || photoMsg) {   // one stop for both, restock first
+    say([restockMsg, photoMsg].filter(Boolean).join(' '));
+    if (restockMsg) showToast(restockMsg, 'error', 8000);
+    if (photoMsg) showToast(photoMsg, 'error wrap', 8000);
+    return;
+  }
+  await proceedWithSubmission();
+  } finally { _preSubmitRunning = false; }
 }
 
 function showFlushOverlay(total) {
@@ -10164,7 +10532,7 @@ function buildEmailHtml() {
     return `<tr>
       <td style="width:20px;padding:3px 6px;color:${color};font-weight:700;">${icon}</td>
       <td style="padding:3px 6px;font-size:13px;color:${brand.mocha};">${esc(item.text)}${
-        s === 'issue' && note ? `<br><span style="color:${brand.error};font-size:12px;">⚠ ${esc(note)}</span>` : ''
+        s === 'issue' && note ? `<br><span style="color:${brand.error};font-size:12px;">⚠ ${esc(note)}</span>` : (s === 'confirmed' && item.id === 'check_2_4' && note ? `<br><span style="color:#666;font-size:12px;">${esc(note)}</span>` : '')
       }</td>
     </tr>`;
   }).join('');
@@ -10394,7 +10762,7 @@ function buildPayload() {
     items: K_gatedAll().map(item => ({
       text: state.confirmItems[item.id] === 'issue'
         ? `${K_isUrgentIssue(item) ? '[URGENT] ' : ''}${item.text} — ${state.confirmNotes[item.id] || '(no note)'}`
-        : item.text,
+        : (state.confirmItems[item.id] === 'confirmed' && item.id === 'check_2_4' && state.confirmNotes[item.id] ? `${item.text} — ${state.confirmNotes[item.id]}` : item.text),
       checked:  state.confirmItems[item.id] === 'confirmed',
       critical: !!item.critical,        // K_: the three killers keep the e-mail's Critical Items Summary
     })),
@@ -10422,6 +10790,10 @@ function buildPayload() {
       });
     }
   });
+
+  // s120R: a Confirmed linen result with stains found and cleaned, the restock 'something else' line, and any send the system refused
+  if (state.confirmItems.check_2_4 === 'confirmed' && state.confirmNotes.check_2_4) allNotes.push({ section: 'Linen', text: state.confirmNotes.check_2_4, isUrgent: false });
+  S120R_reportLines(state.linen, state.restock).forEach(l => allNotes.push({ section: l.section, text: l.text, isUrgent: false }));
 
   // WORKAROUND [FD-001]: Code.gs v3.6 has TOTAL_COLS=19 — no dedicated sheet columns
   // for checkInDate (col T) and checkOutDate (col U). Embedding them at the front of
@@ -10565,13 +10937,7 @@ function buildPayload() {
       userAgent:          navigator.userAgent,
       app_version:        '7.8',
       session_duration_s: state.startTimestamp ? Math.floor((Date.now() - state.startTimestamp) / 1000) : null,
-      photos_failed:      [
-        ...(state.meterPhotos      || []),
-        ...(state.precleanPhotos   || []),
-        ...(state.aftercleanPhotos || []),
-        ...(state.bedroomPhotos    || []),
-        ...(state.kitchenPhotos    || []),
-      ].filter(p => p && p.data && !p.uploaded).length,
+      photos_failed:      S120R_notUploaded().length,   // s120 R14: every photo still held, damage and condition photos included
       upload_retry_count: state.uploadRetryCount || 0,
     },
     submissionId:   state.submissionId,
@@ -10586,6 +10952,7 @@ function buildPayload() {
    PROCEED WITH SUBMISSION
 ═══════════════════════════════════════════════════════════════ */
 async function proceedWithSubmission() {
+  if (_draftHold) return;
   if (state.isSubmitting) return;
 
   /* s103 (D-354): the meter-mismatch gate that stood here is gone. A mismatch on an earlier report flags that report
@@ -10612,6 +10979,7 @@ async function proceedWithSubmission() {
     return;
   }
 
+  S120R_commit();   // s120R: past every early return above, Submit really proceeds
   state.isSubmitting = true;
   document.body.classList.add('submitting');
 
@@ -10683,13 +11051,14 @@ async function proceedWithSubmission() {
         state.meterPhotos[1]?.fingerprint || null,
       ]);
       clearDraft();
+      ls(S120R_CARRY_KEY, null);   // s120R13: the report is in; a carried key left behind would bring Restock back on the next report
       ls(DWELL_KEY, null);
       if (state.dwellInterval) clearInterval(state.dwellInterval);
-      showSuccessScreen();
+      showSuccessScreen(payload.diagnostics.photos_failed);
       // K_: tell the Cascade Staff shell that framed us (same origin only); the shell shows its own done card
       K_handBack(data,
         Object.values(state.issueFlags).filter(f => f && f.note).length + K_gatedAll().filter(i => state.confirmItems[i.id] === 'issue' && K_isUrgentIssue(i)).length,
-        [...state.meterPhotos, ...state.precleanPhotos, ...state.aftercleanPhotos, ...state.bedroomPhotos, ...state.kitchenPhotos].filter(Boolean).length);
+        Object.values(payload.photos || {}).reduce((n, a) => n + (a ? a.length : 0), 0));   // s120 R14: the photos in the report that was sent, not the state after the POST
     } else {
       // submit-cleaning returns `message` (e.g. a security refusal says what to do);
       // older paths return `msg`. Reading only `msg` showed her 'Server returned
@@ -10723,7 +11092,9 @@ async function proceedWithSubmission() {
 /* ═══════════════════════════════════════════════════════════════
    SUCCESS SCREEN
 ═══════════════════════════════════════════════════════════════ */
-function showSuccessScreen() {
+function showSuccessScreen(photosFailed = 0) {
+  const note = el('success-note-text');   // s120R13: say so when photos were left out
+  if (note) note.textContent = photosFailed ? 'Report sent. ' + photosFailed + (photosFailed === 1 ? ' photo' : ' photos') + ' could not be sent.' : 'Report + photos sent to Telegram OPS group';
   const cleanerName = (el('cleanerName')?.value || '').trim() || '—';
   const cleaningDate = el('cleaningDate')?.value || '';
   const fmtDate = cleaningDate
@@ -10763,10 +11134,10 @@ function resetApp() {
   state.precleanPhotos   = [];
   state.aftercleanPhotos = [];
   state.supplyLogSaved   = false;
-  state.supplySaved      = null;
   const skipWhy = el('meter-skip-why'); if (skipWhy) skipWhy.value = '';
   const skipRow = el('meter-skip-row'); if (skipRow) { skipRow.hidden = true; skipRow.classList.remove('used'); }
-  _susChanging           = false;
+  state.linen            = S120R_newLinen();
+  state.restock          = S120R_newRestock();
   state.cleaningType    = 'turnover';
   state.cleaningDateStatus = 'unknown';
   state.midStayAutoApplied = false;
@@ -10797,6 +11168,9 @@ function resetApp() {
   setCleaningType('turnover');
   _susLoaded = false;
   _susItems  = [];
+  state.pendingPreSubmit = false; state.preSubmitStalled = false; S120R_told = { w: new WeakSet(), s: new Set() };
+  el('s120-restock-status') && (el('s120-restock-status').textContent = '');
+  el('sus-status') && (el('sus-status').textContent = '');
 
   // Reset dwell card
   const card  = el('dwell-card');
@@ -10967,395 +11341,609 @@ function registerServiceWorker() {
    4-6L water bottle as hardcoded optional extra.
 ═══════════════════════════════════════════════════════════════ */
 
-let _susItems = [];      // full item array from Supabase
-let _susLoaded = false;
-let _susOptionalOpen = false;
-let _susChanging = false;   // s99g: true while a saved log is being changed
+/* ═══════════════════════════════════════════════════════════════
+   S120R: LINEN CHECK + RESTOCK SHEET (s120 lane R, D-374)
+   Linen check: No stains, or Found stains with one row per stained piece (piece, count, outcome).
+   Restock sheet: no prefill; the cleaner answers each top row, the guest kit and anything extra.
+   Both answer sets live in the draft (state.linen, state.restock) and are sent through
+   record_linen_stains_v1 / record_inventory_usage with a key held in the draft, so a resend never
+   counts twice. A set that is complete but not yet sent is shown as such and blocks submit.
+═══════════════════════════════════════════════════════════════ */
+/* S120R:BEGIN (the tests extract and run everything down to S120R:END; no DOM in here) */
+// shortcut: linen membership is a name match over the active non-consumable items; upgrade to an is_linen column if the list grows beyond sheets and towels.
+const S120R_LINEN_RE = /sheet|duvet|comforter|towel|pillow|protector|sofa cover|rug|floor mat/i;
+const S120R_OUTCOMES = [['cleaned', 'Stain came out'], ['needs_replacing', 'Needs replacing'], ['replaced', 'Replaced now']];
+const S120R_TOP = [/^bottled water/i, /^coffee/i, /^tea$/i, /^sugar/i, /^bathroom tissue/i, /^laundry detergent/i];
+const S120R_KIT = /^toiletries \(toothbrush/i;
+const S120R_CHIPS = [/^kitchen towel/i];
+const S120R_LINEN_UNAVAILABLE_NOTE = 'Linen stains found. The piece list could not load on this phone, so the pieces were not recorded. The host will check the shelf.';
+const S120R_RESTOCK_UNAVAILABLE_LINE = 'The restock list could not load on this phone, so nothing was counted. The host will check the shelf.';
+// shortcut: the checklist has no guest-count source (the stay picker carries none), so the kit starts at a dash; wire it here when one exists.
+function S120R_guestCount() { return null; }
+// A send that certainly never left the phone (the browser says it is offline) does not lock the answers; any other first attempt may have reached the server.
+function S120R_certainOffline() { return typeof navigator !== 'undefined' && navigator.onLine === false; }
 
-// v6.8: Hardcoded optional extra items shown in the "other" section
-const SUS_EXTRA_ITEMS = [
-  { id: '__water_bottle__', name: '4–6 Ltr Water Bottle', category: 'Guest request',
-    qty_on_hand: null, reorder_below: null, consumption_per_booking: 0,
-    isExtra: true, isLiquid: false, usedQty: 0 },
-];
-
-function isQuickItem(name) {
-  const n = (name || '').toLowerCase();
-  return QUICK_ITEM_NAMES.some(q => n.includes(q.toLowerCase()));
+function S120R_newLinen() { return { answer: null, rows: [], key: null, sent: false, tried: false, failed: '', legacyNote: '', unavailable: false, waiting: false, sendStartedAt: null }; }
+function S120R_newRestock() {
+  return { top: {}, kit: { a: null, n: null }, extras: {}, other: {}, elseText: '', none: false, saved: false, sent: false, tried: false, key: null, failed: '', unavailable: false, legacy: false, waiting: false, sendStartedAt: null };
 }
 
-function isLiquidItem(name, category) {
-  const combined = ((name || '') + ' ' + (category || '')).toLowerCase();
-  const liquids = ['soap', 'shampoo', 'conditioner', 'gel', 'bleach', 'liquid',
-                   'spray', 'detergent', 'fabric', 'cleaner', 'dishwash', 'alcohol',
-                   'rinse', 'cologne', 'lotion'];
-  return liquids.some(l => combined.includes(l));
+/* Split the live consumables into the sheet's groups. Every consumable lands in exactly one group. */
+function S120R_classify(items) {
+  const left = (items || []).slice();
+  const take = re => { const i = left.findIndex(x => re.test(x.name || '')); return i < 0 ? null : left.splice(i, 1)[0]; };
+  const top = S120R_TOP.map(take).filter(Boolean);
+  const kit = take(S120R_KIT);
+  const chips = S120R_CHIPS.map(take).filter(Boolean);
+  return { top, kit, chips, other: left };
 }
 
-function openSupplyUsageSheet() {
+/* "Counted in bottles" from the item's own unit. Nothing when the unit is unknown. */
+function S120R_unitLine(unit) {
+  const u = String(unit || '').trim().toLowerCase();
+  if (!u) return '';
+  const w = (u === 'pc' || u === 'pcs') ? 'pieces' : /s$/.test(u) ? u : /(x|ch|sh)$/.test(u) ? u + 'es' : u + 's';
+  return 'Counted in ' + w;
+}
+
+function S120R_linenComplete(l) {
+  if (!l || !l.answer) return false;
+  if (l.answer === 'none' || l.answer === 'legacy') return true;
+  if (l.answer === 'found' && l.unavailable) return true;   // the list would not load: the host is told, the stain answer stays true
+  return l.rows.length > 0 && l.rows.every(r => r.item_id && r.qty >= 1 && r.qty <= 99 && !!r.outcome);
+}
+
+/* The state the gate reads and the note the report carries, from the answers alone (no typing). */
+function S120R_linenResult(l) {
+  if (!S120R_linenComplete(l)) return { state: null, note: '' };
+  if (l.answer === 'none') return { state: 'confirmed', note: '' };
+  if (l.answer === 'legacy') return { state: 'issue', note: l.legacyNote || '' };
+  if (l.unavailable) return { state: 'issue', note: S120R_LINEN_UNAVAILABLE_NOTE };
+  const label = r => r.name + (r.qty > 1 ? ' x' + r.qty : '');
+  const by = o => l.rows.filter(r => r.outcome === o).map(label);
+  const nr = by('needs_replacing'), rp = by('replaced'), cl = by('cleaned');
+  const parts = [];
+  if (nr.length) parts.push('Needs replacing: ' + nr.join(', '));
+  if (rp.length) parts.push('Replaced now: ' + rp.join(', '));
+  if (cl.length) parts.push('Stain came out: ' + cl.join(', '));
+  return { state: (nr.length || rp.length) ? 'issue' : 'confirmed', note: 'Linen stains. ' + parts.join('. ') + '.' };
+}
+
+/* An old draft (no linen block) -> the new shape. A ticked Confirmed becomes No stains; an Issue Found with its typed note stays as it was. */
+function S120R_migrateLinen(draft) {
+  const out = S120R_newLinen();
+  const d = draft || {};
+  if (d.linen && typeof d.linen === 'object') {
+    out.answer = d.linen.answer || null;
+    out.rows = Array.isArray(d.linen.rows) ? d.linen.rows.map(r => ({ rid: r.rid || null, item_id: r.item_id, name: r.name || '', qty: Number(r.qty) || 1, outcome: r.outcome || null })) : [];
+    out.key = d.linen.key || null; out.sent = !!d.linen.sent; out.tried = !!d.linen.tried; out.failed = d.linen.failed || ''; out.legacyNote = d.linen.legacyNote || ''; out.unavailable = !!d.linen.unavailable; out.waiting = !!d.linen.waiting; out.sendStartedAt = Number(d.linen.sendStartedAt) || null;
+    return out;
+  }
+  const s = d.confirmItems && d.confirmItems.check_2_4;
+  if (s === 'confirmed') out.answer = 'none';
+  else if (s === 'issue') { out.answer = 'legacy'; out.legacyNote = (d.confirmNotes && d.confirmNotes.check_2_4) || 'Linen issue (older draft)'; }
+  return out;
+}
+
+function S120R_migrateRestock(draft) {
+  const out = S120R_newRestock();
+  const d = draft || {};
+  if (d.restock && typeof d.restock === 'object') {
+    const r = d.restock;
+    out.top = Object.assign({}, r.top); out.kit = { a: (r.kit && r.kit.a) || null, n: (r.kit && r.kit.n) ?? null };
+    out.extras = Object.assign({}, r.extras); out.other = Object.assign({}, r.other);
+    out.elseText = r.elseText || ''; out.none = !!r.none; out.saved = !!r.saved; out.sent = !!r.sent; out.tried = !!r.tried; out.key = r.key || null; out.failed = r.failed || '';
+    out.unavailable = !!r.unavailable; out.legacy = !!r.legacy; out.waiting = !!r.waiting; out.sendStartedAt = Number(r.sendStartedAt) || null;
+    return out;
+  }
+  // an old draft that had already saved its supply log: the old sheet sent it, so it is never sent again, and it is not "nothing used" (we do not know what it held)
+  // only a draft with no restock key at all comes from the older sheet; one written by this version always has the key, so a null there with supplyLogSaved set is a lost Restock: ask again, never call it sent
+  if (!Object.prototype.hasOwnProperty.call(d, 'restock') && (d.supplyLogSaved || d.supplySaved)) { out.saved = true; out.sent = true; out.legacy = true; }   // the s99g draft key means the same
+  return out;
+}
+
+/* Which top rows / kit are still unanswered (names). `cls` = S120R_classify output. */
+function S120R_restockMissing(rs, cls, cleaningType) {
+  if (cleaningType === 'emergency' || !rs || (rs.none && cleaningType === 'mid_stay') || rs.legacy || rs.unavailable) return [];
+  const miss = [];
+  (cls.top || []).forEach(i => { if (rs.top[i.id] == null) miss.push(i.name); });
+  if (cls.kit && !(rs.kit.a === 'no' || (rs.kit.a === 'yes' && rs.kit.n >= 1))) miss.push('Guest kit');
+  return miss;
+}
+
+/* The rows record_inventory_usage takes: positive amounts only, one usage_key per session and item. */
+function S120R_restockRows(rs, cls, cleaningType) {
+  if (!rs || (rs.none && cleaningType === 'mid_stay') || rs.legacy || rs.unavailable) return [];
+  const rows = [];
+  const add = (id, n) => { n = Number(n); if (id && Number.isInteger(n) && n > 0) rows.push({ item_id: id, used_qty: n, usage_key: 's120-' + rs.key + '-' + id }); };
+  (cls.top || []).forEach(i => add(i.id, rs.top[i.id]));
+  if (cls.kit && rs.kit.a === 'yes') add(cls.kit.id, rs.kit.n);
+  (cls.chips || []).forEach(i => add(i.id, rs.extras[i.id]));
+  (cls.other || []).forEach(i => add(i.id, rs.other[i.id]));
+  return rows;
+}
+
+function S120R_linenRows(l) {
+  return l.rows.map(r => ({ item_id: r.item_id, qty: r.qty, outcome: r.outcome }));
+}
+
+/* Lines the report carries beyond the generated linen note, each with its own section. */
+function S120R_reportLines(linen, restock) {
+  const out = [];
+  if (restock && restock.elseText && restock.elseText.trim()) out.push({ section: 'Restock', text: 'Restock, something else: ' + restock.elseText.trim() });
+  if (restock && restock.unavailable) out.push({ section: 'Restock', text: S120R_RESTOCK_UNAVAILABLE_LINE });
+  if (linen && linen.failed) out.push({ section: 'Linen', text: 'Linen stock was not updated (' + linen.failed + '). The host will check the shelf.' });
+  if (restock && restock.failed) out.push({ section: 'Restock', text: 'Restock was not recorded (' + restock.failed + '). The host will check the shelf.' });
+  if (linen && linen.unconfirmed && !linen.sent && !linen.failed) out.push({ section: 'Linen', text: 'Linen check could not be confirmed as recorded. The host will check the linen.' });
+  if (restock && restock.unconfirmed && !restock.sent && !restock.failed) out.push({ section: 'Restock', text: 'Restock could not be confirmed as recorded. The host will check the shelf.' });
+  return out;
+}
+
+/* A failed send: retry later (no connection, server trouble, signed out) or give up (the server refused it). */
+function S120R_failKind(status) {
+  return (status === 0 || status >= 500 || status === 401 || status === 408 || status === 429) ? 'retry' : 'refused';
+}
+/* The server's reason in plain words for the report line; the same key sent with other rows is the one code a cleaner could meet. */
+function S120R_failText(msg) {
+  return msg === 'idempotency_key_reused' ? 'this send had different answers from one already recorded, so nothing more was written' : msg;
+}
+function S120R_stepperHtml(val, data, off) {
+  const d = off ? ' disabled' : '';
+  return `<div class="sus-stepper" role="group" ${data}>
+    <button class="sus-step-btn" type="button" data-d="-1" aria-label="One less"${d}>−</button>
+    <div class="sus-step-val">${val == null ? '–' : val}</div>
+    <button class="sus-step-btn" type="button" data-d="1" aria-label="One more"${d}>+</button></div>`;
+}
+function S120R_step(val, d, max) { return val == null ? (d > 0 ? 1 : 0) : Math.max(0, Math.min(max, val + d)); }
+const S120R_CACHE_CONS = 'ch_s120_consumables', S120R_CACHE_LINEN = 'ch_s120_linen';
+let _linenItems = [];
+let _s120rQueue = Promise.resolve();   // one send at a time: a second tap or the online event waits for the first and then finds nothing left to send
+/* S120R:END */
+
+/* ── state sync ─────────────────────────────────────────────── */
+function S120R_syncLinen() {
+  if (!state.linen) state.linen = S120R_newLinen();
+  const r = S120R_linenResult(state.linen);
+  if (state.linen.answer === 'found' && !state.linen.unavailable && S120R_linenComplete(state.linen) && !state.linen.key) state.linen.key = 's120-linen-' + uuid();   // the key is made when the answer is saved, as Restock does, and stays with it
+  const photo = state.issueFlags.check_2_4;
+  state.confirmItems.check_2_4 = r.state;
+  if (r.state) state.confirmNotes.check_2_4 = r.note; else delete state.confirmNotes.check_2_4;
+  K_syncFlag('check_2_4');
+  // the optional stain photo travels with every state but Issue Found (which keeps its own flag), including while the answers are still incomplete
+  if (r.state !== 'issue' && state.linen.answer !== 'none' && photo && (photo.photoData || photo.photoUrl)) state.issueFlags.check_2_4 = { note: '', photoData: photo.photoData || null, photoUrl: photo.photoUrl || null, photoFileId: photo.photoFileId || null };
+}
+
+/* The submit modal's issue count: the stain photo is an issue only while linen is Issue Found. */
+function S120R_issueFlagCount() {
+  return Object.keys(state.issueFlags).filter(k => k !== 'check_2_4' || state.confirmItems.check_2_4 === 'issue').length;
+}
+
+/* Back online with a Submit that stopped for lack of a connection: run it again only if the report could be submitted now; else the cue says what is missing. */
+function S120R_resumePreSubmit() {
+  if (_draftHold) { _heldWork.push(S120R_resumePreSubmit); return; }
+  if (!state.pendingPreSubmit || state.isSubmitting) return;
+  state.pendingPreSubmit = false;
+  let already = false;
+  try { already = !!(state.submissionId && JSON.parse(localStorage.getItem(SUBMITTED_IDS_KEY) || '[]').includes(state.submissionId)); } catch { /* non-fatal */ }
+  if (already) return;
+  if (isPhaseValid(PHASE_COUNT - 1)) setTimeout(() => runPreSubmitFlush(), 1000);
+  else S94_renderCue();
+}
+
+/* A type other than mid-stay cannot carry "nothing used": the saved answer is dropped and the sheet asks again. */
+function S120R_typeChanged(type) {
+  const R = state.restock;
+  if (R && R.none && type !== 'mid_stay' && !R.sent && !R.tried) S120R_unsave(R);
+}
+
+/* ── network ────────────────────────────────────────────────── */
+async function S120R_rpc(name, body) {
+  try {
+    // fetchWithRetry: a timeout and one more try; the idempotency key (linen) and usage_key (restock) make a repeat harmless
+    const resp = await fetchWithRetry(`${SUPABASE_URL}/rest/v1/rpc/${name}`, { method: 'POST', headers: await staffHeaders(true), body: JSON.stringify(body) }, 1, 20000);
+    if (resp.ok) return { ok: true };
+    const text = await resp.text().catch(() => '');
+    let msg = '';
+    try { msg = (JSON.parse(text).message || '').slice(0, 120); } catch { msg = ''; }
+    return { ok: false, kind: S120R_failKind(resp.status), msg: msg || ('error ' + resp.status) };
+  } catch (e) {
+    return { ok: false, kind: 'retry', msg: 'no connection' };
+  }
+}
+
+async function S120R_sendLinen() {
+  const L = state.linen;
+  if (!L.key) L.key = 's120-linen-' + uuid();
+  if (!L.sendStartedAt) L.sendStartedAt = Date.now();   // the send's own time, stored before the request goes out; carry-over reads only this
+  if (!S120R_certainOffline()) L.tried = true;   // a lost answer may still have been written: lock the answers until it is sent
+  L.waiting = false;
+  saveDraft();
+  const r = await S120R_rpc('record_linen_stains_v1', {
+    p_property: PROPERTY_ID, p_session_date: el('cleaningDate')?.value || todayManila(),
+    p_logged_by: (el('cleanerName')?.value || '').trim() || 'cleaner', p_idempotency_key: L.key, p_rows: S120R_linenRows(L),
+  });
+  if (r.ok) { L.sent = true; L.failed = ''; } else if (r.kind === 'refused') { L.failed = S120R_failText(r.msg); L.tried = false; } else L.waiting = true;   // refused: nothing was written, the answers may change again
+  saveDraft();
+  return r;
+}
+
+async function S120R_sendRestock() {
+  const R = state.restock;
+  const cls = S120R_classify(_susItems);
+  if (!R.key) R.key = uuid();
+  const rows = S120R_restockRows(R, cls, state.cleaningType);
+  if (!rows.length) return { ok: true, noop: true };   // nothing to record; this never marks the restock as sent
+  if (!R.sendStartedAt) R.sendStartedAt = Date.now();   // the send's own time, stored before the request goes out; carry-over reads only this
+  if (!S120R_certainOffline()) R.tried = true;
+  R.waiting = false;
+  saveDraft();
+  const r = await S120R_rpc('record_inventory_usage', {
+    p_property_id: PROPERTY_ID, p_session_date: el('cleaningDate')?.value || todayManila(),
+    p_logged_by: (el('cleanerName')?.value || '').trim() || 'cleaner', p_notes: 'Restock from the cleaning checklist', p_rows: rows,
+  });
+  if (r.ok) { R.sent = true; R.failed = ''; } else if (r.kind === 'refused') { R.failed = r.msg; R.tried = false; } else R.waiting = true;
+  saveDraft();
+  return r;
+}
+
+/* Send what is complete and not yet sent, one run at a time. A second call (a double tap, the online event, Submit) waits for the first.
+   pending = the names of whatever could not be sent and still can (no connection); unanswered = restock rows that are no longer answered.
+   atSubmit: a set the server refused earlier gets one more try. */
+function S120R_flushAll(onlyRestock, atSubmit) {
+  if (_draftHold) return new Promise(done => { _heldWork.push(() => done(S120R_flushAll(onlyRestock, atSubmit))); });   // s120R9: nothing is sent while the draft is held
+  const run = () => S120R_flushOnce(onlyRestock, atSubmit);
+  const p = _s120rQueue.then(run, run);
+  _s120rQueue = p.catch(() => {});
+  return p;
+}
+async function S120R_flushOnce(onlyRestock, atSubmit) {
+  const pending = [], unanswered = [];
+  try {
+    const L = state.linen, R = state.restock;
+    if (atSubmit) { if (L && L.failed) L.failed = ''; if (R && R.failed) R.failed = ''; }
+    if (!onlyRestock && L && S120R_linenComplete(L) && !L.sent && !L.failed && state.cleaningType !== 'emergency' && L.answer === 'found' && !L.unavailable) {
+      const r = await S120R_sendLinen(); if (!r.ok && r.kind === 'retry') pending.push('linen check');
+    }
+    if (R && R.saved && !R.sent && !R.failed && !R.legacy && !R.unavailable) {
+      const none = R.none && state.cleaningType === 'mid_stay';
+      if (_susItems.length === 0 && !none) await S120R_loadItems();
+      if (_susItems.length === 0 && !none) pending.push('restock');   // the list is unknown: it cannot be shown to be answered, and nothing is sent
+      else {
+        const miss = R.tried ? [] : S120R_restockMissing(R, S120R_classify(_susItems), state.cleaningType);   // a locked sheet is resent as it stands: it may already have reached the server
+        if (miss.length) { R.saved = false; state.supplyLogSaved = false; el('supply-usage-trigger-card')?.classList.remove('sus-done'); unanswered.push(...miss); }
+        else { const r = await S120R_sendRestock(); if (!r.ok && r.kind === 'retry') pending.push('restock'); }
+      }
+    }
+  } catch (e) {   // name what is still unsent, so both the stop message and the unconfirmed flags are right
+    const L = state.linen, R = state.restock;
+    if (!onlyRestock && L && !L.sent && S120R_linenComplete(L) && L.answer === 'found' && !L.unavailable && state.cleaningType !== 'emergency' && !pending.includes('linen check')) pending.push('linen check');
+    if (R && R.saved && !R.sent && !R.legacy && !R.unavailable && !(R.none && state.cleaningType === 'mid_stay') && !pending.includes('restock')) pending.push('restock');
+  }
+  el('s120-linen-status')?.closest?.('.confirm-item')?._s120Repaint?.();   // a send changes the lock, and the card is otherwise drawn only on a tap
+  S120R_refreshStatus();
+  try { updateBottomBar(); } catch (e) { /* no page yet */ }
+  return { pending, unanswered };
+}
+
+/* Submit really proceeds: answers that never needed a send (No stains, an older note, the list-unavailable line) are final now. */
+function S120R_commit() {
+  const L = state.linen;
+  if (L && S120R_linenComplete(L) && !L.sent && (L.answer !== 'found' || L.unavailable)) { L.sent = true; saveDraft(); }
+}
+
+/* ── item lists ─────────────────────────────────────────────── */
+
+async function S120R_fetchItems(consumable) {
+  const url = `${SUPABASE_URL}/rest/v1/inventory_items?property_id=eq.${PROPERTY_ID}&is_active=eq.true&is_consumable=eq.${consumable}&select=id,name,category,unit&order=category.asc,name.asc`;
+  const resp = await fetch(url, { headers: { ...(await staffHeaders()), 'Accept': 'application/json' } });
+  if (!resp.ok) throw new Error('HTTP ' + resp.status);
+  return (await resp.json()).map(({ id, name, category, unit }) => ({ id, name, category, unit }));   // s120R4: only these four fields are kept; a learned per-booking decimal never reaches a screen or a payload
+}
+async function S120R_loadItems() {
+  try { _susItems = await S120R_fetchItems(true); lsJSON(S120R_CACHE_CONS, _susItems); }
+  catch (e) { _susItems = lsJSON(S120R_CACHE_CONS) || []; }
+  _susLoaded = _susItems.length > 0;
+  return _susItems;
+}
+async function S120R_loadLinenItems() {
+  try { _linenItems = (await S120R_fetchItems(false)).filter(i => S120R_LINEN_RE.test(i.name || '')); lsJSON(S120R_CACHE_LINEN, _linenItems); }
+  catch (e) { _linenItems = lsJSON(S120R_CACHE_LINEN) || []; }
+  return _linenItems;
+}
+
+/* ── focus kept across a re-render ──────────────────────────── */
+function S120R_focusKey(root) {
+  const a = document.activeElement;
+  if (!root || !a || a === root || !root.contains(a)) return null;
+  const attr = ['data-ans', 'data-pick', 'data-del', 'data-out', 'data-d', 'data-kit', 'data-chip', 'data-else', 'data-unav', 'data-unavail'].find(k => a.hasAttribute(k));
+  let sel = attr ? `[${attr}="${a.getAttribute(attr)}"]` : (a.id ? '#' + a.id : null);
+  if (!sel) return null;
+  const box = a.closest('[data-qty],[data-k]');
+  if (box && root.contains(box)) sel = (box.hasAttribute('data-qty') ? `[data-qty="${box.getAttribute('data-qty')}"]` : `[data-k="${box.getAttribute('data-k')}"][data-id="${box.getAttribute('data-id')}"]`) + ' ' + sel;
+  return sel;
+}
+function S120R_focusBack(root, sel) {
+  if (!root || !sel) return;
+  const n = root.querySelector(sel) || root.querySelector('button:not([disabled])');
+  if (n) n.focus({ preventScroll: true });
+}
+
+/* ── status lines on the card (live regions: they exist before their text changes) ───────────── */
+function S120R_refreshStatus() {
+  const n = el('s120-restock-status');
+  const R = state.restock;
+  if (n) {
+    let t = '', cls = '';
+    if (state.cleaningType === 'emergency') t = 'Not needed for an emergency visit.';
+    else if (R && R.legacy) { t = 'Saved earlier on the older sheet.'; cls = 'ok'; }
+    else if (R && R.saved && R.unavailable) { t = 'Saved: the list could not load, so the host will check the shelf.'; cls = 'warn'; }
+    else if (R && R.saved && R.none && state.cleaningType === 'mid_stay') { t = 'Saved: nothing used this stay.'; cls = 'ok'; }
+    else if (R && R.saved && R.sent) { t = 'Saved and sent.'; cls = 'ok'; }
+    else if (R && R.saved && R.failed) { t = 'Saved here, but the system could not record it. The host will see this in the report.'; cls = 'warn'; }
+    else if (R && R.saved && R.tried && R.waiting) t = 'Saved on this phone. It will send when the connection returns; the answers stay locked until then.';
+    else if (R && R.saved && R.tried) t = 'Saved. Sending now; the answers are locked until it is sent.';
+    else if (R && R.saved) {
+      if (S120R_restockRows(R, S120R_classify(_susItems), state.cleaningType).length === 0) { t = 'Saved.'; cls = 'ok'; }
+      else t = 'Saved on this phone. Not sent yet; it sends when you are online and before you submit.';
+    }
+    n.textContent = t; n.className = 's120-status ' + cls;
+  }
+  const ln = el('s120-linen-status');
+  const L = state.linen;
+  if (ln && L) {
+    let t = '';
+    if (L.answer === 'found' && L.unavailable) t = 'The host will be told stains were found and the list could not load. Nothing is sent.';
+    else if (L.answer === 'found' && !S120R_linenComplete(L)) t = L.rows.length ? 'Choose what happened to every piece to continue.' : 'Tap a piece to start.';
+    else if (L.answer === 'found' && L.sent) t = 'Sent.';
+    else if (L.answer === 'found' && L.failed) t = 'The system could not record this. The host will see it in the report.';
+    else if (L.answer === 'found' && L.tried && L.waiting) t = 'Saved on this phone. It sends when you submit; the answers stay locked until then.';
+    else if (L.answer === 'found' && L.tried) t = 'Sending now. The answers are locked until they are sent.';
+    else if (L.answer === 'found') t = 'Kept on this phone. Not sent yet; it sends before you submit.';
+    ln.textContent = t;
+    ln.className = 's120-status ' + (L.answer === 'found' && L.sent ? 'ok' : (L.answer === 'found' && L.failed ? 'warn' : ''));   // red only for a refused send
+  }
+}
+
+/* ── linen check UI (inside the check_2_4 card) ─────────────── */
+function S120R_renderLinen(div, item) {
+  const L = state.linen, locked = !!(L.sent || L.tried);
+  const found = L.answer === 'found';
+  const chips = _linenItems.map(i => `<button type="button" class="s120-chip" data-pick="${esc(i.id)}" ${locked ? 'disabled' : ''}>${esc(i.name)}</button>`).join('');
+  const rows = L.rows.map((r, n) => `
+    <div class="s120-row" data-n="${n}">
+      <div class="s120-row-head"><span class="s120-row-name">${esc(r.name)}</span>
+        ${S120R_stepperHtml(r.qty, `data-qty="${n}" aria-label="How many ${esc(r.name)}"`, locked)}
+        <button type="button" class="s120-x" data-del="${n}" aria-label="Remove ${esc(r.name)}" ${locked ? 'disabled' : ''}>×</button></div>
+      <div class="s120-outs" role="group" aria-label="What happened to ${esc(r.name)}">
+        ${S120R_OUTCOMES.map(([v, t]) => `<button type="button" class="confirm-btn ${r.outcome === v ? (v === 'cleaned' ? 'confirmed' : 'issue') : ''}" data-out="${n}:${v}" aria-pressed="${r.outcome === v}" ${locked ? 'disabled' : ''}>${t}</button>`).join('')}
+      </div></div>`).join('');
+  const photoHtml = `<div style="position:relative;display:inline-block;margin-top:var(--space-2);">
+      <button class="issue-photo-btn" type="button" aria-label="Add a photo of the stain (optional)">
+        <svg class="ch-ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-camera"/></svg> Add photo (optional)
+        <input type="file" class="issue-photo-input-${item.id}" accept="image/*" aria-label="Photo of the stain"
+               style="position:absolute;inset:0;opacity:0;cursor:pointer;min-height:unset;border:none;padding:0;">
+      </button></div>
+      <img id="issue-preview-${item.id}" class="issue-photo-preview" src="" alt="Photo of the stain">`;
+  const noList = !_linenItems.length;
+  div.querySelector('.s120-linen').innerHTML = `
+    <div class="confirm-buttons" role="group" aria-label="${esc(item.text)}">
+      <button class="confirm-btn ${L.answer === 'none' ? 'confirmed' : ''}" type="button" data-ans="none" aria-pressed="${L.answer === 'none'}" ${locked ? 'disabled' : ''}>No stains</button>
+      <button class="confirm-btn ${found ? 'issue' : ''}" type="button" data-ans="found" aria-pressed="${found}" ${locked ? 'disabled' : ''}>Found stains</button>
+    </div>
+    ${L.answer === 'legacy' ? `<p class="s120-hint">Saved earlier: ${esc(L.legacyNote)}</p><button type="button" class="s120-link" data-ans="found" ${locked ? 'disabled' : ''}>Record it by piece instead</button>` : ''}
+    ${found ? `<p class="s120-hint"><strong>Which piece is stained?</strong><br>Tap each one. Tap again if another of the same piece ended differently.</p>
+      ${noList ? `<p class="s120-hint">The linen list could not load on this phone.</p>
+        <button type="button" class="s120-chip ${L.unavailable ? 'on' : ''}" data-unav="1" aria-pressed="${!!L.unavailable}" ${locked ? 'disabled' : ''}>List unavailable, report it to the host</button>` : `<div class="s120-chips">${chips}</div>`}
+      ${rows}
+      ${photoHtml}` : ''}`;
+  S120R_refreshStatus();
+}
+
+function S120R_bindLinen(div, item) {
+  const L = () => state.linen;
+  const root = () => div.querySelector('.s120-linen');
+  div._s120Repaint = () => { const key = S120R_focusKey(root()); S120R_renderLinen(div, item); S120R_focusBack(root(), key); S120R_bindPhoto(div, item); };
+  const redo = () => {
+    S120R_syncLinen(); div._s120Repaint();
+    div.classList.toggle('confirmed', state.confirmItems.check_2_4 === 'confirmed'); div.classList.toggle('issue-found', state.confirmItems.check_2_4 === 'issue');
+    updateBottomBar(); updateProgress(K_itemPhase(item)); saveDraft();
+  };
+  root().addEventListener('click', async ev => {
+    const t = ev.target.closest('button'); if (!t || t.disabled || L().sent || L().tried) return;
+    const before = JSON.stringify([L().answer, L().rows, L().unavailable]);
+    if (t.dataset.ans) {
+      const a = t.dataset.ans;
+      if (a === 'found' && !_linenItems.length) await S120R_loadLinenItems();
+      L().answer = L().answer === a && a !== 'found' ? null : a;
+      if (a === 'none') { L().rows = []; L().unavailable = false; }
+      L().legacyNote = a === 'found' ? '' : L().legacyNote;
+    } else if (t.dataset.unav) {
+      L().unavailable = !L().unavailable; if (L().unavailable) L().rows = [];   // never forces the false answer: Found stains stays true
+    } else if (t.dataset.pick) {
+      const it = _linenItems.find(i => i.id === t.dataset.pick); if (!it) return;
+      L().unavailable = false;
+      L().rows.push({ rid: uuid(), item_id: it.id, name: it.name, qty: 1, outcome: null });
+    } else if (t.dataset.del != null) L().rows.splice(Number(t.dataset.del), 1);
+    else if (t.dataset.out) { const [n, v] = t.dataset.out.split(':'); const r = L().rows[Number(n)]; if (r) r.outcome = r.outcome === v ? null : v; }
+    else if (t.dataset.d) {
+      const box = t.closest('[data-qty]'); const r = box && L().rows[Number(box.dataset.qty)];
+      if (r) r.qty = Math.max(1, S120R_step(r.qty, Number(t.dataset.d), 99)); else return;
+    } else return;
+    if (JSON.stringify([L().answer, L().rows, L().unavailable]) !== before) L().failed = '';   // a real change clears an old refusal; it is sent afresh
+    redo();
+  });
+  S120R_bindPhoto(div, item);
+}
+function S120R_bindPhoto(div, item) {
+  const inp = div.querySelector(`.issue-photo-input-${item.id}`);
+  if (inp) inp.addEventListener('change', () => handleIssuePhoto(item.id, inp, div));
+  const f = state.issueFlags[item.id];
+  const prev = el(`issue-preview-${item.id}`);
+  const src = f && (f.photoData || f.photoUrl);
+  if (prev && src) { prev.src = src; prev.classList.add('visible'); }
+}
+
+/* ── restock sheet UI ───────────────────────────────────────── */
+function S120R_setSheetButtons(off) {
+  const save = el('sus-save-btn'); if (save) save.disabled = off;
+  const none = el('sus-none-btn'); if (none) none.disabled = off;
+}
+
+function S120R_openRestock() {
   const sheet = el('supply-usage-sheet');
   if (!sheet) return;
   sheet.classList.add('open');
-  susFooter(!!state.supplySaved && !_susChanging); // before any fetch: offline/failed load must not show the unsaved footer
-  if (!_susLoaded) {
-    loadSupplyItems();
-  } else {
-    renderSupplyList(); // re-render in case state changed
-  }
+  if (!state.restock) state.restock = S120R_newRestock();
+  const none = el('sus-none-btn'); if (none) none.style.display = state.cleaningType === 'mid_stay' ? '' : 'none';
+  S120R_setSheetButtons(true);   // Save and None stay off until the list has rendered
+  if (_susItems.length || state.restock.sent) return S120R_renderRestock();
+  const loading = el('sus-loading');
+  if (loading) { loading.style.display = 'block'; loading.textContent = 'Loading supplies…'; }
+  S120R_loadItems().then(items => { if (items.length) S120R_renderRestock(); else S120R_renderRestockUnavailable(); });
 }
+
+/* No list and no saved copy: nothing to answer. The step stays open; the only ways on are to try again online or to tell the host. */
+function S120R_renderRestockUnavailable() {
+  const listEl = el('sus-list'); if (!listEl) return;
+  const R = state.restock;
+  listEl.innerHTML = `<p class="s120-hint s120-need">The supply list could not load on this phone.</p>
+    <p class="s120-hint">Open this again when you are online, or tell the host and carry on.</p>
+    ${R && R.sent ? '' : '<button type="button" class="s120-chip" data-unavail="1">List unavailable, report it to the host</button>'}`;
+  S120R_setSheetButtons(true);
+  const st = el('sus-status'); if (st) st.textContent = 'The supply list could not load.';
+}
+
+function S120R_renderRestock() {
+  const listEl = el('sus-list'); if (!listEl) return;
+  const R = state.restock, locked = !!(R.sent || R.tried), cls = S120R_classify(_susItems);
+  const scroller = listEl.closest('.sus-panel') || listEl; const keep = scroller.scrollTop;
+  const fk = S120R_focusKey(listEl);
+  const row = (it, kind, val, note, label) => `<div class="sus-item" role="listitem"><div class="sus-item-info"><div class="sus-item-name">${esc(label || it.name)}</div>${note ? `<div class="sus-item-stock">${esc(note)}</div>` : ''}</div>
+      ${locked ? `<div class="sus-step-val">${val == null ? '–' : val}</div>` : S120R_stepperHtml(val, `data-k="${kind}" data-id="${esc(it.id)}" aria-label="${esc(label || it.name)}"`)}</div>`;
+  const head = t => `<div class="sus-section-label">${t}</div>`;
+  let h = '';
+  if (R.legacy) h += `<p class="s120-hint">Saved earlier on the older sheet. It cannot be changed here; tell the host if something is wrong.</p>`;
+  else if (R.sent) h += `<p class="s120-hint">${R.none ? 'Saved: nothing used this stay.' : 'Saved and sent. It cannot be changed here; tell the host if something is wrong.'}</p>`;
+  else if (R.tried) h += `<p class="s120-hint">${R.waiting ? 'Saved on this phone. It will send when the connection returns.' : 'Saved and sending.'} The answers are locked until they are sent, so the report and the stock agree; tell the host if something is wrong.</p>`;
+  else if (R.unavailable) h += `<p class="s120-hint">Saved: the list could not load, so the host will check the shelf. Answer the rows below and Save to replace that.</p>`;
+  else if (state.cleaningType === 'mid_stay') h += `<p class="s120-hint">Log what this stay used up. If you used nothing, tap Nothing used this stay.</p>`;
+  else h += `<p class="s120-hint">Log what this stay used up. Every row needs an answer; 0 is an answer.</p>`;
+  if (cls.top.length) h += head('Used this stay') + cls.top.map(i => row(i, 'top', R.top[i.id])).join('');
+  if (cls.kit) {
+    const g = S120R_guestCount();
+    h += head('Guest kit') + `<div class="sus-item" role="listitem"><div class="sus-item-info"><div class="sus-item-name">Put out new guest kits?</div><div class="sus-item-stock">Toothbrush, toothpaste and soap in one kit.${g ? ' Guests this stay: ' + g : ''}</div></div>
+      <div class="s120-outs" role="group" aria-label="Put out new guest kits?">
+        <button type="button" class="confirm-btn ${R.kit.a === 'yes' ? 'confirmed' : ''}" data-kit="yes" aria-pressed="${R.kit.a === 'yes'}" ${locked ? 'disabled' : ''}>Yes</button>
+        <button type="button" class="confirm-btn ${R.kit.a === 'no' ? 'issue' : ''}" data-kit="no" aria-pressed="${R.kit.a === 'no'}" ${locked ? 'disabled' : ''}>No</button></div></div>`;
+    if (R.kit.a === 'yes') h += row(cls.kit, 'kit', R.kit.n, 'One kit for each guest', 'Guest kit');
+  }
+  h += head('Anything extra?') + `<p class="s120-hint">Optional. A seasonal treat like chocolates goes under Something else.</p><div class="s120-chips">${cls.chips.map(i => `<button type="button" class="s120-chip ${R.extras[i.id] != null ? 'on' : ''}" data-chip="${esc(i.id)}" aria-pressed="${R.extras[i.id] != null}" ${locked ? 'disabled' : ''}>${esc(i.name)}</button>`).join('')}
+      <button type="button" class="s120-chip ${R.elseOpen || R.elseText ? 'on' : ''}" data-else="1" aria-pressed="${!!(R.elseOpen || R.elseText)}" ${locked ? 'disabled' : ''}>Something else</button></div>`;
+  h += cls.chips.filter(i => R.extras[i.id] != null).map(i => row(i, 'extra', R.extras[i.id])).join('');
+  if (R.elseOpen || R.elseText) h += `<input type="text" class="s120-else" id="s120-else" maxlength="200" aria-label="What else did you use? The host reads this; it does not change stock." placeholder="What else? The host reads this; it does not change stock." value="${esc(R.elseText)}" ${locked ? 'disabled' : ''}>`;
+  if (cls.other.length) {
+    h += `<p class="s120-hint">Optional. Refills, cans and bags, only if you opened one.</p><button type="button" class="sus-optional-toggle" id="s120-other-toggle" aria-expanded="${!!R.otherOpen}">${R.otherOpen ? '▲ Hide other items' : '▾ Other items'}</button>`;
+    if (R.otherOpen) h += `<div class="sus-optional-section open">${cls.other.map(i => row(i, 'other', R.other[i.id] || 0, S120R_unitLine(i.unit))).join('')}</div>`;
+  }
+  listEl.innerHTML = h;
+  S120R_focusBack(listEl, fk);
+  const ready = _susItems.length > 0;
+  const save = el('sus-save-btn'); if (save) { save.disabled = locked || !ready; save.textContent = locked ? 'Saved' : 'Save'; }
+  const none = el('sus-none-btn'); if (none) none.disabled = locked || !ready;
+  const miss = S120R_restockMissing(R, cls, state.cleaningType);
+  const st = el('sus-status'); if (st) st.textContent = !locked && miss.length ? 'Still to answer: ' + miss.join(', ') + '.' : '';
+  scroller.scrollTop = keep;
+}
+
+/* An answer really changed: the saved copy is no longer what is on screen, so it must be saved again. */
+function S120R_unsave(R) {
+  R.none = false; R.saved = false; R.failed = ''; R.unavailable = false;
+  state.supplyLogSaved = false; el('supply-usage-trigger-card')?.classList.remove('sus-done');
+  saveDraft(); updateBottomBar(); S120R_refreshStatus();
+}
+
+function S120R_onRestockClick(ev) {
+  const R = state.restock; if (!R || R.sent || R.tried) return;
+  const t = ev.target.closest('button'); if (!t || t.disabled) return;
+  if (t.dataset.unavail) return S120R_markRestockUnavailable();
+  const snap = () => JSON.stringify([R.top, R.kit, R.extras, R.other, R.elseText]);
+  const before = snap();
+  if (t.dataset.d) {
+    const box = t.closest('[data-k]'); if (!box) return;
+    const k = box.dataset.k, id = box.dataset.id, d = Number(t.dataset.d);
+    if (k === 'top') R.top[id] = S120R_step(R.top[id], d, 99);
+    else if (k === 'kit') R.kit.n = S120R_step(R.kit.n, d, 99);
+    else if (k === 'extra') R.extras[id] = Math.max(1, S120R_step(R.extras[id], d, 99));
+    else if (k === 'other') R.other[id] = S120R_step(R.other[id] || 0, d, 99);
+  } else if (t.dataset.kit) {
+    R.kit.a = t.dataset.kit; if (R.kit.a === 'no') R.kit.n = null;
+    if (R.kit.a === 'yes' && R.kit.n == null) R.kit.n = S120R_guestCount();
+  } else if (t.dataset.chip) {
+    if (R.extras[t.dataset.chip] != null) delete R.extras[t.dataset.chip]; else R.extras[t.dataset.chip] = 1;
+  } else if (t.dataset.else) { R.elseOpen = !R.elseOpen; if (!R.elseOpen) R.elseText = ''; }
+  else if (t.id === 's120-other-toggle') R.otherOpen = !R.otherOpen;   // a fold, not an answer
+  else return;
+  if (snap() !== before) S120R_unsave(R); else saveDraft();
+  S120R_renderRestock();
+}
+
+/* The way out when the list cannot load: the step completes, the report says so, nothing is sent. */
+function S120R_markRestockUnavailable() {
+  const R = state.restock; if (!R || R.sent || R.tried) return;
+  R.unavailable = true; R.none = false; R.saved = true; R.failed = ''; if (!R.key) R.key = uuid();
+  state.supplyLogSaved = true; el('supply-usage-trigger-card')?.classList.add('sus-done');
+  saveDraft(); updateBottomBar(); S120R_refreshStatus(); closeSupplyUsageSheet();
+  showToast('Saved. The list could not load, so the host will check the shelf.', 'info', 5000);
+}
+
+async function S120R_saveRestock(none) {
+  const R = state.restock; if (!R || R.sent || R.tried) return;
+  if (!_susItems.length) { showToast('The supply list is not loaded. Open this again when you are online.', 'error', 5000); return; }
+  if (none && state.cleaningType !== 'mid_stay') return;
+  const cls = S120R_classify(_susItems);
+  const miss = none ? [] : S120R_restockMissing(R, cls, state.cleaningType);
+  if (miss.length) { showToast('Still to answer: ' + miss.join(', '), 'error', 5000); return; }
+  R.none = !!none;
+  R.unavailable = false; R.failed = '';
+  R.saved = true; state.supplyLogSaved = true; if (!R.key) R.key = uuid();
+  el('supply-usage-trigger-card')?.classList.add('sus-done');
+  saveDraft(); updateBottomBar(); S120R_refreshStatus();
+  closeSupplyUsageSheet();
+  const r = await S120R_flushAll(true);
+  showToast(r.pending.length ? 'Saved on this phone. It will send when you are online.' : (R.failed ? 'Saved. The system could not record it; the host will see it.' : 'Saved.'), r.pending.length || R.failed ? 'info' : 'success', 4000);
+}
+
+/* Draft restore: linen and restock from the draft (old drafts migrated), then re-send anything saved but not yet sent. */
+function S120R_restore(draft) {
+  state.linen = S120R_migrateLinen(draft);
+  state.restock = S120R_migrateRestock(draft);
+  state.supplyLogSaved = !!state.restock.saved;
+  if (state.confirmItems && state.cleaningType !== 'emergency') S120R_syncLinen();
+  if (state.restock.saved) el('supply-usage-trigger-card')?.classList.add('sus-done');
+  if (state.linen.answer === 'found') S120R_loadLinenItems().then(() => { try { renderConfirmItems(); } catch (e) {} });
+  S120R_refreshStatus();
+  if (navigator.onLine && state.restock.saved && !state.restock.sent) S120R_flushAll(true);
+}
+
+let _susItems = [];      // consumables (id, name, category) for the restock sheet
+let _susLoaded = false;
+
+function openSupplyUsageSheet() { S120R_openRestock(); }
 
 function closeSupplyUsageSheet() {
   el('supply-usage-sheet')?.classList.remove('open');
-}
-
-async function loadSupplyItems() {
-  const listEl    = el('sus-list');
-  const loadingEl = el('sus-loading');
-  if (!listEl) return;
-
-  if (loadingEl) { loadingEl.style.display = 'block'; loadingEl.textContent = 'Loading supplies…'; }
-
-  if (!navigator.onLine) {
-    if (loadingEl) loadingEl.textContent = '📵 No connection — open again when online to log supplies.';
-    return;
-  }
-
-  try {
-    const url = `${SUPABASE_URL}/rest/v1/inventory_items?property_id=eq.${PROPERTY_ID}&is_active=eq.true&is_consumable=eq.true&select=id,name,category,qty_on_hand,reorder_below,consumption_per_booking&order=name.asc`;
-    const resp = await fetch(url, {
-      headers: { ...(await staffHeaders()), 'Accept': 'application/json' },
-    });
-    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-    const items = await resp.json();
-
-    _susItems = items.map(item => {
-      const isLiquid = isLiquidItem(item.name, item.category);
-      const isQuick  = isQuickItem(item.name);
-      return {
-        ...item,
-        isLiquid,
-        isQuick,
-        isExtra: false,
-        // s99g (D-351): every item starts at 0; "Fill typical amounts" is the one-tap shortcut.
-        usedQty: 0,
-        usedMl:  0,
-      };
-    });
-    _susLoaded = true;
-    if (_susChanging) susSeedFromSaved();
-    renderSupplyList();
-
-  } catch (err) {
-    if (loadingEl) loadingEl.textContent = `⚠ Could not load supplies: ${err.message || 'network error'}`;
-  }
-}
-
-// s99g: units one item will log (liquids round ml up to whole units, as before).
-function susUnits(i) {
-  if (i.isLiquid) return (i.usedMl || 0) > 0 ? Math.max(1, Math.ceil((i.usedMl || 0) / LIQUID_ML_PER_UNIT)) : 0;
-  return i.usedQty || 0;
-}
-function susSeedFromSaved() {
-  const rows = (state.supplySaved && state.supplySaved.rows) || {};
-  _susItems.forEach(i => {
-    const q = rows[i.id] || 0;
-    if (i.isLiquid) i.usedMl = q * LIQUID_ML_PER_UNIT; else i.usedQty = q;
-  });
-}
-function susTypical() {
-  _susItems.filter(i => i.isQuick).forEach(i => { // visible quick items only; optional items stay 0
-    const c = typeof i.consumption_per_booking === 'number' ? Math.max(0, i.consumption_per_booking) : 1;
-    if (i.isLiquid) i.usedMl = c * LIQUID_ML_PER_UNIT; else i.usedQty = c;
-  });
-  renderSupplyList();
-}
-function susNote(text) { const n = el('sus-note'); if (n) { n.textContent = text || ''; n.style.display = text ? 'block' : 'none'; } }
-function susFooter(readOnly) {
-  const saved = !!state.supplySaved;
-  const show = (id, on) => { const b = el(id); if (b) b.style.display = on ? '' : 'none'; };
-  show('sus-save-btn', !readOnly); show('sus-typical-btn', !readOnly && !saved);
-  show('sus-none-btn', !readOnly && !saved); show('sus-change-btn', readOnly && !(state.supplySaved && state.supplySaved.legacy));
-}
-function renderSupplySavedView(listEl) {
-  const rows = state.supplySaved.rows || {};
-  const ids = Object.keys(rows).filter(k => rows[k] > 0);
-  listEl.innerHTML = '';
-  const head = document.createElement('div');
-  head.className = 'sus-section-label';
-  head.textContent = state.supplySaved.legacy ? 'Usage for this report is already saved.'
-    : ids.length ? 'Saved for this report' : 'Saved: nothing used this report';
-  listEl.appendChild(head);
-  ids.forEach(id => {
-    const it = _susItems.find(x => String(x.id) === String(id));
-    const row = document.createElement('div');
-    row.className = 'sus-item';
-    row.setAttribute('aria-label', `${it ? it.name : 'Item'}, ${rows[id]} used`);
-    row.innerHTML = `<div class="sus-item-info"><div class="sus-item-name">${esc(it ? it.name : 'Item')}</div></div><div class="sus-step-val">${rows[id]}</div>`;
-    listEl.appendChild(row);
-  });
-}
-function susStartChange() {
-  _susChanging = true;
-  susNote('');
-  susSeedFromSaved();
-  renderSupplyList();
-  el('sus-save-btn')?.focus?.();
-}
-
-function renderSupplyList() {
-  const listEl    = el('sus-list');
-  const loadingEl = el('sus-loading');
-  if (!listEl) return;
-  if (loadingEl) loadingEl.style.display = 'none';
-  const readOnly = !!state.supplySaved && !_susChanging;
-  susFooter(readOnly);
-  if (readOnly) { renderSupplySavedView(listEl); return; }
-
-  if (_susItems.length === 0) {
-    listEl.innerHTML = '<div class="sus-empty">No consumable items found.</div>';
-    return;
-  }
-
-  const quickItems    = _susItems.filter(i => i.isQuick);
-  const optionalItems = _susItems.filter(i => !i.isQuick);
-  const allOptional   = [...optionalItems, ...SUS_EXTRA_ITEMS];
-
-  listEl.innerHTML = '';
-
-  // ── Quick items (always visible) ─────────────────────────────────────────
-  if (quickItems.length > 0) {
-    const qLabel = document.createElement('div');
-    qLabel.className = 'sus-section-label';
-    qLabel.textContent = 'Everyday Items';
-    listEl.appendChild(qLabel);
-    quickItems.forEach(item => listEl.appendChild(buildSusRow(item)));
-  }
-
-  // ── "Show other optional items" toggle ────────────────────────────────────
-  if (allOptional.length > 0) {
-    const toggleBtn = document.createElement('button');
-    toggleBtn.className = 'sus-optional-toggle';
-    toggleBtn.type = 'button';
-    toggleBtn.id  = 'sus-optional-toggle';
-    toggleBtn.textContent = _susOptionalOpen
-      ? '▲ Hide optional items'
-      : '▾ Show other optional items';
-    toggleBtn.addEventListener('click', () => {
-      _susOptionalOpen = !_susOptionalOpen;
-      toggleBtn.textContent = _susOptionalOpen ? '▲ Hide optional items' : '▾ Show other optional items';
-      const section = el('sus-optional-section');
-      if (section) section.classList.toggle('open', _susOptionalOpen);
-    });
-    listEl.appendChild(toggleBtn);
-
-    const optSection = document.createElement('div');
-    optSection.className = 'sus-optional-section' + (_susOptionalOpen ? ' open' : '');
-    optSection.id = 'sus-optional-section';
-
-    const optLabel = document.createElement('div');
-    optLabel.className = 'sus-section-label';
-    optLabel.textContent = 'Other / Liquids (optional)';
-    optSection.appendChild(optLabel);
-
-    allOptional.forEach(item => optSection.appendChild(buildSusRow(item)));
-    listEl.appendChild(optSection);
-  }
-}
-
-function buildSusRow(item) {
-  const isLow = !item.isExtra && item.qty_on_hand !== null && item.reorder_below !== null
-                && item.qty_on_hand <= item.reorder_below;
-  const row = document.createElement('div');
-  row.className = 'sus-item';
-  row.setAttribute('role', 'listitem');
-  row.dataset.itemId = item.id;
-
-  const infoHtml = `
-    <div class="sus-item-info">
-      <div class="sus-item-name">${esc(item.name)}</div>
-      <div class="sus-item-stock${isLow ? ' low-stock' : ''}">
-        ${item.category ? esc(item.category) + ' · ' : ''}${item.isExtra ? 'On request' : `Stock: ${item.qty_on_hand ?? '—'}${isLow ? ' ⚠ Low' : ''}`}
-      </div>
-    </div>`;
-
-  let controlHtml;
-  if (item.isLiquid && !item.isQuick) {
-    // Liquid items: ml input + auto-compute units display
-    const mlVal    = item.usedMl || 0;
-    const unitCount = Math.ceil(mlVal / LIQUID_ML_PER_UNIT);
-    const unitsEst  = mlVal > 0 ? `≈${unitCount} unit${unitCount !== 1 ? 's' : ''}` : '';
-    controlHtml = `
-      <div class="sus-item-ml">
-        <input type="number" class="sus-ml-input" min="0" step="50" value="${mlVal}"
-               aria-label="Amount refilled for ${esc(item.name)} in ml"
-               inputmode="numeric">
-        <span class="sus-ml-label">ml</span>
-        <span class="sus-ml-units" id="sus-unit-${item.id.toString().replace(/[^a-z0-9]/gi,'')}">${unitsEst}</span>
-      </div>`;
-  } else {
-    // Stepper for quick items and non-liquid optional items
-    const val = item.usedQty || 0;
-    controlHtml = `
-      <div class="sus-stepper" role="group" aria-label="Quantity for ${esc(item.name)}">
-        <button class="sus-step-btn sus-dec" type="button" ${val <= 0 ? 'disabled' : ''} aria-label="Decrease">−</button>
-        <div class="sus-step-val">${val}</div>
-        <button class="sus-step-btn sus-inc" type="button" aria-label="Increase">+</button>
-      </div>`;
-  }
-
-  row.innerHTML = infoHtml + controlHtml;
-  if ((item.usedQty || 0) === 0 && (item.usedMl || 0) === 0) row.style.opacity = '0.6';
-
-  // Bind stepper
-  row.querySelector('.sus-dec')?.addEventListener('click', () => {
-    const allArr = [..._susItems, ...SUS_EXTRA_ITEMS];
-    const it = allArr.find(x => x.id === item.id);
-    if (!it) return;
-    it.usedQty = Math.max(0, (it.usedQty || 0) - 1);
-    const valEl = row.querySelector('.sus-step-val');
-    const decBtn = row.querySelector('.sus-dec');
-    if (valEl) valEl.textContent = it.usedQty;
-    if (decBtn) decBtn.disabled = it.usedQty <= 0;
-    row.style.opacity = it.usedQty === 0 ? '0.6' : '1';
-  });
-  row.querySelector('.sus-inc')?.addEventListener('click', () => {
-    const allArr = [..._susItems, ...SUS_EXTRA_ITEMS];
-    const it = allArr.find(x => x.id === item.id);
-    if (!it) return;
-    it.usedQty = (it.usedQty || 0) + 1;
-    const valEl = row.querySelector('.sus-step-val');
-    const decBtn = row.querySelector('.sus-dec');
-    if (valEl) valEl.textContent = it.usedQty;
-    if (decBtn) decBtn.disabled = false;
-    row.style.opacity = '1';
-  });
-
-  // Bind ml input
-  const mlInput = row.querySelector('.sus-ml-input');
-  if (mlInput) {
-    mlInput.addEventListener('input', () => {
-      const allArr = [..._susItems, ...SUS_EXTRA_ITEMS];
-      const it = allArr.find(x => x.id === item.id);
-      if (!it) return;
-      const ml = Math.max(0, parseFloat(mlInput.value) || 0);
-      it.usedMl = ml;
-      const safeId = item.id.toString().replace(/[^a-z0-9]/gi, '');
-      const unitsEl = el(`sus-unit-${safeId}`);
-      if (unitsEl) {
-        unitsEl.textContent = ml > 0
-          ? `≈${Math.ceil(ml / LIQUID_ML_PER_UNIT)} unit${Math.ceil(ml / LIQUID_ML_PER_UNIT) !== 1 ? 's' : ''}`
-          : '';
-      }
-    });
-  }
-
-  return row;
-}
-
-async function saveSupplyUsage() {
-  if (state.supplySaved && !_susChanging) return; // read-only view (incl. legacy drafts): nothing to send
-  const saveBtn = el('sus-save-btn');
-  const allArr  = [..._susItems, ...SUS_EXTRA_ITEMS].filter(i => !i.isExtra); // extras have no DB row
-  // s99g: one save per report. Only the extra amount over what is already saved is sent; a lower
-  // number cannot be undone from here (no negative rows).
-  const prior = (state.supplySaved && state.supplySaved.rows) || {};
-  const rows = [];
-  const newTotals = { ...prior };
-  let lowered = false, wanted = 0;
-  const sessionDate = el('cleaningDate')?.value || todayManila();
-  const loggedBy    = (el('cleanerName')?.value || '').trim() || 'cleaner';
-  allArr.forEach(i => {
-    const q = susUnits(i), was = prior[i.id] || 0;
-    if (q > 0) wanted++;
-    if (q > was) {
-      rows.push({
-        item_id:      i.id,
-        used_qty:     q - was,
-        session_date: sessionDate,
-        logged_by:    loggedBy,
-        property_id:  PROPERTY_ID,
-        submitted_by_user_id: staffSession.user.id,
-      });
-      newTotals[i.id] = q;
-    } else if (q < was) lowered = true;
-  });
-
-  if (lowered) susNote('A lower number cannot be undone here. Lloyd will correct it with a stock count.');
-  else susNote('');
-
-  if (!state.supplySaved && wanted === 0) {
-    showToast('Choose what you used, or tap Nothing used', 'error', 4000); return;
-  }
-  if (rows.length === 0) {
-    // nothing more to send: never POST again
-    if (!lowered) { showToast('No change to save', 'success', 2500); _susChanging = false; renderSupplyList(); closeSupplyUsageSheet(); }
-    return;
-  }
-
-  if (!navigator.onLine) {
-    showToast('📵 No connection — usage not saved', 'error', 5000); return;
-  }
-
-  if (saveBtn) { saveBtn.disabled = true; saveBtn.textContent = 'Saving…'; }
-
-  try {
-    const resp = await fetch(`${SUPABASE_URL}/rest/v1/inventory_usage`, {
-      method:  'POST',
-      headers: {
-        ...(await staffHeaders(true)), 'Prefer': 'return=minimal',
-      },
-      body: JSON.stringify(rows),
-    });
-    if (!resp.ok) throw new Error(await resp.text().catch(() => `HTTP ${resp.status}`));
-
-    // Mark supply log as saved (compulsory gate) and remember it for this report
-    if (!state.submissionId) state.submissionId = uuid();
-    state.supplySaved = { sid: state.submissionId, rows: newTotals };
-    state.supplyLogSaved = true;
-    _susChanging = false;
-    try { saveDraft(); } catch (e) {}
-    const card = el('supply-usage-trigger-card');
-    if (card) card.classList.add('sus-done');
-    updateBottomBar();
-
-    showToast(`✓ Usage saved for ${rows.length} item${rows.length !== 1 ? 's' : ''}`, 'success', 3500);
-    renderSupplyList();
-    if (!lowered) closeSupplyUsageSheet();
-    _susLoaded = false; // re-fetch next open for updated stock
-
-  } catch (err) {
-    showToast(`⚠ Save failed: ${err.message || 'network error'}`, 'error', 5000);
-  }
-
-  if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = 'Save Usage'; }
-}
-
-function markSupplyLogNoneUsed() {
-  if (state.supplySaved) { closeSupplyUsageSheet(); return; } // never wipe saved totals
-  // Zero out all items (quick + optional) so save() writes zeros / skips them
-  [..._susItems, ...SUS_EXTRA_ITEMS].forEach(item => {
-    item.usedQty = 0;
-    item.usedMl  = 0;
-  });
-  state.supplyLogSaved = true;
-  if (!state.submissionId) state.submissionId = uuid();
-  state.supplySaved = { sid: state.submissionId, rows: {} };
-  try { saveDraft(); } catch (e) {}
-  const card = el('supply-usage-trigger-card');
-  if (card) card.classList.add('sus-done');
-  updateBottomBar();
-  showToast('✓ Noted — no supplies used this session', 'success', 3000);
-  closeSupplyUsageSheet();
 }
 
 function initInventoryUsage() {
   el('btn-open-supply-usage')?.addEventListener('click', openSupplyUsageSheet);
   el('sus-close-btn')?.addEventListener('click', closeSupplyUsageSheet);
   el('sus-backdrop')?.addEventListener('click', closeSupplyUsageSheet);
-  el('sus-save-btn')?.addEventListener('click', saveSupplyUsage);
-  el('sus-none-btn')?.addEventListener('click', markSupplyLogNoneUsed);
-  el('sus-typical-btn')?.addEventListener('click', susTypical);
-  el('sus-change-btn')?.addEventListener('click', susStartChange);
+  el('sus-save-btn')?.addEventListener('click', () => S120R_saveRestock(false));
+  el('sus-none-btn')?.addEventListener('click', () => S120R_saveRestock(true));
+  el('sus-list')?.addEventListener('click', S120R_onRestockClick);
+  el('sus-list')?.addEventListener('input', ev => { const R = state.restock; if (ev.target.id === 's120-else' && R && !R.sent && !R.tried && R.elseText !== ev.target.value) { R.elseText = ev.target.value; S120R_unsave(R); } });
+  window.addEventListener('online', () => { S120R_flushAll(true); });
+  S120R_refreshStatus();
 
   // Keyboard: close on Escape
   document.addEventListener('keydown', e => {
@@ -11473,6 +12061,7 @@ function setCleaningType(type, opts = {}) {
   if (typeof renderConfirmItems === 'function') renderConfirmItems();
   if (typeof K_renderBedroom === 'function') K_renderBedroom();
   if (typeof refreshKitchenPhotoRequirement === 'function') refreshKitchenPhotoRequirement();
+  S120R_typeChanged(type);   // s120R: "nothing used" is a mid-stay answer only
   updateBottomBar(); updateProgress(0); saveDraft();
 }
 
@@ -12043,6 +12632,7 @@ function initAutofillBanner() {
    MAIN INIT
 ═══════════════════════════════════════════════════════════════ */
 async function init() {
+  _draftHold = !!loadDraft();   // s120R7: set before the first await, so nothing the page does while it boots can save its empty state over the stored draft; checkAndShowDraftModal clears it when there is no question to ask
   registerServiceWorker();
 
   await initStaffAuth();
@@ -12157,13 +12747,16 @@ async function init() {
   checkAndShowDraftModal();
 }
 
+/* s120R10: a test opens the page with window.__s120Test set before it loads; nothing else ever does, so a cleaner's page exposes nothing. */
+if (window.__s120Test) window.__s120 = { get state() { return state; }, saveDraft, runPreSubmitFlush, S120R_flushAll, S120R_resumePreSubmit, K_afterPhotosOk };
+
 /* ═══════════════════════════════════════════════════════════════
    BOOT
 ═══════════════════════════════════════════════════════════════ */
 if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', init);
+  document.addEventListener('DOMContentLoaded', () => init().catch(S120R_initFailed));
 } else {
-  init();
+  init().catch(S120R_initFailed);
 }
 
 })(); // end IIFE
