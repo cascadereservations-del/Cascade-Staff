@@ -129,7 +129,7 @@
     var late = state.tasks ? state.tasks.tasks.some(function (t) { return t.status !== 'done' && CS.taskDue(t.due_at, state.tasks.today) === 'overdue'; }) : false; // red only when something is overdue
     var TAB = { home: ['home', '#home', 'Today', 'house'], calendar: ['calendar', '#calendar', 'Calendar', 'calendar', warnCount()], tasks: ['tasks', '#tasks', 'Tasks', 'tasks', due],
       stock: ['stock', '#stock', 'Inventory', 'box'], kpis: ['kpis', '#kpis', 'KPIs', 'dash'], more: ['more', '#more', 'More', 'more'] };
-    var tabs = CS.tabKeys(role()).map(function (k) { return TAB[k]; }); // s110: Today, Calendar, Tasks, KPIs, More; laundry has Inventory where Tasks would be
+    var tabs = CS.tabKeys(role()).map(function (k) { return TAB[k]; }); // s110: Today, Calendar, Tasks, KPIs, More; laundry has only Today and Inventory (s126)
     $('tabbar').innerHTML = '<div class="H_railhead" aria-hidden="true"><b>C</b><span>' + esc(String(state.name || '').split(/\s+/)[0]) + '</span></div>' + tabs.map(function (t) {
       return '<a class="tab" href="' + esc(t[1]) + '"' + (t[0] === current ? ' aria-current="page"' : '') + '><span class="ico">' + ICON(t[3], 's24') + '</span>' + esc(t[2]) +
         (t[4] ? '<span class="badge' + (t[0] === 'tasks' && late ? ' bad' : '') + '" aria-label="' + t[4] + (t[0] === 'tasks' ? ' due' : ' warnings') + '">' + t[4] + '</span>' : '') + '</a>';
@@ -235,7 +235,7 @@
   function E_input() {
     var p = state.payload, v = A_notices(), money = state.layout === 'admin';
     return { role: role(), today: p ? p.today : CS.manilaToday(), error: !!state.error, errorKind: state.errorKind || 'network',
-      failed: { tasks: !!state.tasksErr && !state.tasksDenied, notices: state.noticesFailed, bookings: state.bookingsFailed }, lastAt: state.loadedAt ? new Date(state.loadedAt).toISOString() : '',
+      failed: { tasks: !CS.isLaundry(role()) && !!state.tasksErr && !state.tasksDenied, notices: state.noticesFailed, bookings: state.bookingsFailed }, lastAt: state.loadedAt ? new Date(state.loadedAt).toISOString() : '',
       ready: { payload: !!p, tasks: !!state.tasks || !!state.tasksErr, bookings: state.bookingsDone, notices: state.noticesDone || state.noticesAbsent },
       clashes: p && money ? A_clashPairs() : null, info: money, oldest: state.bookingsOldest || '',
       tasks: state.tasks && !CS.isLaundry(role()) ? state.tasks.tasks.filter(function (t) { return !(t.source === 'verifier_findings' && B_gone['f:' + t.id]); }) : [], clashDays: p && money ? A_clashList() : [], bookings: state.bookings, inbox: v ? v.inbox : null,
@@ -377,7 +377,7 @@
       h.insertAdjacentHTML('afterend', rest);
     } else el.innerHTML = A_hero() + rest;
   }
-  // Sign out lives on More only (a wet-hand mis-tap away from the tab bar); the footer says how fresh the screen is.
+  // Sign out lives on More (a wet-hand mis-tap away from the tab bar), except for laundry, who has no More; the footer says how fresh the screen is.
   // s126: laundry has no More tab, so Sign out sits at the foot of Today (a full-width 64 px row, the signed-in name under it).
   function A_signOutRow() { return '<nav class="card glass list F_span" aria-label="Account"><button class="rowi" type="button" data-act="signout"><span class="lead">' + ICON('logout') + '</span><span class="mid"><span class="t">Sign out</span><span class="s">' + esc(state.name || '') + '</span></span></button></nav>'; }
   function footerLine() { return '<div class="help F_span" style="text-align:center;margin-top:16px">Updated ' + esc(state.loadedAt ? CS.agoLabel(new Date(state.loadedAt).toISOString()) : 'just now') + ' · v' + CFG.version + '</div>'; }
@@ -606,7 +606,7 @@
   function K_invCard() { var list = K_invActions('home'); return list ? '<section class="card glass A_card K_inv" id="K_inv" aria-label="Inventory"><span class="cap up">Inventory</span>' + list + '</section>' : ''; }
   function renderHome() {
     var el = $('v-home');
-    if (!state.payload) { A_heroPut(el, '<div class="screen" style="min-height:0;padding-top:0"><div class="A_body">' + (state.error ? errBanner() : loadingBlock()) + '</div></div>'); return; }
+    if (!state.payload) { A_heroPut(el, '<div class="screen" style="min-height:0;padding-top:0"><div class="A_body">' + (state.error ? errBanner() : loadingBlock()) + (CS.isLaundry(role()) ? A_signOutRow() : '') + '</div></div>'); return; }
     var staff = state.layout === 'staff', n = warnCount(), v = A_notices(), wxTop = !!(CS.wxCard(state.payload, v) || {}).soon, wxCard = H_wxToday();
     var body;
     if (staff) {
@@ -614,7 +614,7 @@
       var laundry = CS.isLaundry(role()); // s110: no turnover, clean-done card, paid slots, checklist door or cleaning fee for the laundry role
       body = '<div class="A_body">' + errBanner() + H_alertsCard() + A_turnTag() + PC_todayCard() + (laundry ? '' : A_utilBar()) + (wxTop ? wxCard : '') + S_sec('Guests') + todayCard() + nextCard() + (laundry ? '' : A_tierGuide()) + (laundry ? '' : S_sec('Turnover') + A_turnoverCard(true)) + (wxTop ? '' : wxCard) + (laundry ? '' : H_cleanDoneCard() + '<div id="slot-paid-notice" class="A_slot" hidden></div><div id="slot-owed" class="A_slot" hidden></div>') + K_invCard() + A_noticesCard() + (laundry ? A_signOutRow() : S_sec('Shortcuts') +
         A_navCard('Work', row({ icon: 'cloud', title: 'Weather', sub: 'Today and the next few hours', href: '#weather' }) + doorRow('checklist', 'clip', 'Start or continue today’s turnover') +
-          (LINKS.pay && !laundry ? row({ icon: 'cash', title: 'Cleaning fee', sub: state.payHint || 'Ask for payment for your cleans and expenses', href: H_payUrl(), subId: 'pay-sub' }) : '') +
+          (LINKS.pay ? row({ icon: 'cash', title: 'Cleaning fee', sub: state.payHint || 'Ask for payment for your cleans and expenses', href: H_payUrl(), subId: 'pay-sub' }) : '') +
           row({ icon: 'calendar', title: 'Calendar', sub: 'Who is staying, who is next', href: '#calendar', count: n || '' }) +
           row({ icon: 'box', title: 'Inventory', sub: 'Stock levels and what to buy', href: '#stock' }) +
           (doorDef('manual') && CS.doorAllowed('manual', role()) ? row({ icon: 'book', title: 'House manual', sub: 'How we do things · when something breaks', door: 'manual' }) : '')) +
@@ -1154,7 +1154,7 @@
   }
   function calNotices() {
     var v = A_notices();
-    if (state.noticesAbsent) return '<div class="card glass"><p class="sub">Notices are not set up yet. Brownouts and the weather still show under Stays, in Warnings.</p><a class="btn btn-secondary btn-sm" href="#calendar/warnings" style="margin-top:10px">See warnings</a></div>';
+    if (state.noticesAbsent) return '<div class="card glass"><p class="sub">Notices are not set up yet. Brownouts and the weather still show under Stays, in Warnings.</p><a class="btn btn-secondary btn-sm" href="#calendar/' + (CS.isLaundry(role()) ? 'notices' : 'warnings') + '" style="margin-top:10px">See warnings</a></div>';
     if (!v) return state.noticesLoading ? '<div class="stack"><div class="skel" style="height:120px"></div><div class="skel" style="height:96px"></div></div>' : '<div class="errbox" role="alert">' + ICON('alert') + '<span>No connection. <button class="btn btn-ghost btn-sm" type="button" data-act="refresh">Try again</button></span></div>';
     var f = state.noticeFilter, filters = CS.A_noticeFilters(v), W = v.weather, html = '';
     if (!filters.some(function (x) { return x[0] === f; })) f = 'all';
@@ -1337,7 +1337,7 @@
     var delay = typeof window.H_TOUR_DELAY === 'number' ? window.H_TOUR_DELAY : 1500;
     setTimeout(function () {
       if (DEMO || !state.layout || state.sheet || ($('a2hs') && $('a2hs').classList.contains('on'))) return; // not over the Add to Home Screen hint: it starts on the next open
-      var ls = store('localStorage'); try { if (!ls || ls.getItem('cs_seen_v3') === '1') return; ls.setItem('cs_seen_v3', '1'); } catch (e) { return; }
+      var ls = store('localStorage'), sk = CS.isLaundry(role()) ? 'cs_seen_laundry_v1' : 'cs_seen_v3'; try { if (!ls || ls.getItem(sk) === '1') return; ls.setItem(sk, '1'); } catch (e) { return; }
       openSheet('tour', 'tour-open'); state.sheet.step = 0; drawSheet();
     }, delay);
   }
@@ -1411,7 +1411,7 @@
       (staff ? 'Your tasks and today’s warnings are clear.' : 'Tasks, bookings, the inbox and warnings are all clear.') + '</p></div>';
     att.sections.forEach(function (sec) {
       html += '<div class="cap up" style="margin:14px 0 6px">' + esc(sec.label) + '</div><div class="card list">' + sec.shown.map(E_rowHtml).join('');
-      if (sec.more) { var all = E_ALL[sec.key]; html += '<a class="rowi E_more" href="' + all[0] + '" data-act="' + (all[1] ? 'attn-tasks' : 'sheet-close') + '"' + (all[1] ? ' data-filter="' + all[1] + '"' : '') + '><span class="mid"><span class="t">See all ' + sec.more + '</span></span><span class="chev">' + ICON('chev') + '</span></a>'; }
+      if (sec.more) { var all = E_ALL[sec.key]; if (sec.key === 'warn' && CS.isLaundry(role())) all = E_ALL.notice; html += '<a class="rowi E_more" href="' + all[0] + '" data-act="' + (all[1] ? 'attn-tasks' : 'sheet-close') + '"' + (all[1] ? ' data-filter="' + all[1] + '"' : '') + '><span class="mid"><span class="t">See all ' + sec.more + '</span></span><span class="chev">' + ICON('chev') + '</span></a>'; }
       html += '</div>';
     });
     return html;
@@ -2409,7 +2409,7 @@
     if (v === 'notices') { history.replaceState(null, '', '#calendar/notices'); parts = ['calendar', 'notices']; v = 'calendar'; } // 3.2: the alerts open the Notices tab; #notices is its short name
     if (v === 'stock?low') { if (K_invMay('stock')) state.H_lowOnce = true; history.replaceState(null, '', '#stock'); parts = ['stock']; v = 'stock'; } // one-shot: this visit opens Items on Low, plain #stock keeps the restored view
     if (VIEWS.indexOf(v) < 0 || v === 'signin') v = 'home';
-    var lv = CS.laundryView(role(), v, parts[1]); if (lv !== v) { v = lv; parts = ['home']; } // s126: laundry has Today and Inventory only; the server stays the real gate
+    var lv = CS.laundryView(role(), v, parts[1]); if (lv !== v) { v = lv; parts = ['home']; history.replaceState(null, '', '#home'); } // s126: laundry has Today and Inventory only; the server stays the real gate
     if (v === 'door' && !(doorDef(parts[1]) && CS.doorFramed(parts[1], state.layout, trustOn) && CS.doorAllowed(parts[1], state.access && state.access.role))) v = 'home'; // role decides; the server stays the real gate
     if (v === 'payrates' && !CS.canEditRates(state.access && state.access.role)) v = 'home';
     if (v === 'reply' && !canReply()) v = 'home';

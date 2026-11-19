@@ -189,7 +189,7 @@
   var ADMIN_ROLES = ['owner', 'admin', 'finance'];
   var STAFF_ROLES = ['cleaner', 'inspector', 'maintenance', 'laundry'];
   function isLaundry(role) { return role === 'laundry'; }
-  // s110: the tab bar by role. KPIs sits after Tasks; laundry swaps Tasks for Inventory (her own tasks are not part of this release).
+  // s110: the tab bar by role. KPIs sits after Tasks; laundry has Today and Inventory only (s126).
   function tabKeys(role) { return isLaundry(role) ? ['home', 'stock'] : ['home', 'calendar', 'tasks', 'kpis', 'more']; } // s126: laundry sees Today and Inventory only
   // s126: where a laundry link to a hidden screen lands: Today. Calendar stays open only for the guest card (house, next) and Notices. Other roles: unchanged.
   function laundryView(role, v, sub) { return isLaundry(role) && (['kpis', 'more', 'hub', 'search', 'tasks', 'reply'].indexOf(v) >= 0 || (v === 'calendar' && ['house', 'next', 'notices'].indexOf(sub) < 0)) ? 'home' : v; }
