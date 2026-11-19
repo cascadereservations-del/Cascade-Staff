@@ -108,7 +108,7 @@ test('I_round2 R2-10: History uses the server words and the unit on Last bought'
   const hist = { ok: true, usage: { cleans_30d: 0, per_clean: null, cleans_14d: 0 }, changes: [{ at: '2026-10-12T03:00:00Z', kind: 'counted', before: 1, after: 2, who: 'Lloyd' }, { at: '2026-10-11T03:00:00Z', kind: 'received', before: 2, after: 5, who: 'Lloyd' }, { at: '2026-10-10T03:00:00Z', kind: 'used', before: 5, after: 4, who: 'Honey' }, { at: '2026-10-09T03:00:00Z', kind: 'adjusted', before: 4, after: 3, who: 'Lloyd' }], last_bought: { at: '2026-10-12T03:00:00Z', qty: 12 } };
   const e = await make('owner', { inventory_item_history_v1: () => ({ data: hist, error: null }) });
   await e.mount(''); await e.open('i1'); await e.act('history-open');
-  for (const w of ['Counted 1 → 2', 'Received 2 → 5', 'Used 5 → 4', 'Adjusted 4 → 3']) assert.match(e.sheet(), new RegExp(w));
+  for (const w of ['<b>Counted</b><span>1 → 2 rolls', '<b>Received</b><span>2 → 5 rolls', '<b>Used</b><span>5 → 4 rolls', '<b>Adjusted</b><span>4 → 3 rolls']) assert.match(e.sheet(), new RegExp(w));
   assert.match(e.sheet(), /Oct 12, 12 rolls/);
 });
 

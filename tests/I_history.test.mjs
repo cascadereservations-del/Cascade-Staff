@@ -28,9 +28,10 @@ test('I_history the History button opens the sheet through inventory_item_histor
 
 test('I_history changes read as date, word, before to after and a first name; the last purchase is listed', async () => {
   const e = await make('owner'); await e.mount(''); await e.open('i1'); await e.act('history-open');
-  assert.match(e.sheet(), /Oct 12 · Counted 9 → 12 · Marifel(?! Santos)/);
-  assert.match(e.sheet(), /Oct 5 · Received 12 → 24 · Lloyd/);
-  assert.match(e.sheet(), /Oct 4 · Telegram count 10 → 12 · Honey/);
+  const row = (d, w, t, who) => new RegExp(d + '</span><span class="I_hwhat"><b>' + w + '</b><span>' + t + '</span></span><span class="I_hwho">' + who + '</span>');
+  assert.match(e.sheet(), row('Oct 12', 'Counted', '9 → 12 rolls', 'Marifel(?! Santos)'));
+  assert.match(e.sheet(), row('Oct 5', 'Received', '12 → 24 rolls', 'Lloyd'));
+  assert.match(e.sheet(), row('Oct 4', 'Telegram count', '10 → 12 rolls', 'Honey'));
   assert.match(e.sheet(), /Last bought[\s\S]*Oct 5, 12/);
 });
 
@@ -78,7 +79,7 @@ test('I_history Use 24 fills the box and writes nothing until the confirm', asyn
   await e.submit();
   assert.equal(e.client.rpcCalls('inventory_item_update_v1').length, 0);
   await e.submit();
-  assert.deepEqual({ ...e.client.rpcCalls('inventory_item_update_v1')[0][2].p_patch }, { reorder_below: 12, par_qty: 24 });
+  assert.deepEqual({ ...e.client.rpcCalls('inventory_item_update_v1')[0][2].p_patch }, { par_qty: 24 });
 });
 
 test('I_history only owner and admin get the suggestion (Edit levels is theirs)', async () => {

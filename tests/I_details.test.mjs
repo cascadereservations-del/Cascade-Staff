@@ -32,11 +32,11 @@ test('I_details Edit details: Kept in with the places already used, Unit select 
 test('I_details one inventory_item_update_v1 call carries location, unit and category (changed ones) with the levels; Undo puts the old values back', async () => {
   const e = await make('owner'); await e.mount(''); await e.open('i1'); await e.begin('levels');
   await e.input('I_f_location', 'Linen closet'); await e.input('I_f_unit', 'pack'); await e.input('I_f_category', 'Linen'); await e.submit();
-  assert.match(e.sheet(), /Kept in: Linen closet/); assert.match(e.sheet(), /Unit: pack/); assert.match(e.sheet(), /Category: Linen/);
+  assert.match(e.sheet(), /<dt>Kept in<\/dt><dd><s>Hall cabinet<\/s> → Linen closet<\/dd>/); assert.match(e.sheet(), /<dt>Unit<\/dt><dd><s>rolls<\/s> → pack<\/dd>/); assert.match(e.sheet(), /<dt>Category<\/dt><dd><s>Bathroom<\/s> → Linen<\/dd>/);
   assert.equal(updates(e).length, 0);
   await e.submit();
   assert.equal(updates(e).length, 1);
-  assert.equal(j(updates(e)[0][2]), j({ p_item_id: 'i1', p_patch: { reorder_below: 12, par_qty: null, location: 'Linen closet', unit: 'pack', category: 'Linen' } }));
+  assert.equal(j(updates(e)[0][2]), j({ p_item_id: 'i1', p_patch: { location: 'Linen closet', unit: 'pack', category: 'Linen' } }));
   assert.match(e.undo(), /Details saved for Toilet paper/);
   await e.act('undo', { 'data-id': /data-id="(u\d+)"/.exec(e.undo())[1] }); await e.submit();
   assert.equal(j(updates(e)[1][2].p_patch), j({ reorder_below: 12, par_qty: null, location: 'Hall cabinet', unit: 'rolls', category: 'Bathroom' }));
@@ -44,7 +44,7 @@ test('I_details one inventory_item_update_v1 call carries location, unit and cat
 
 test('I_details an unchanged Kept in, Unit and Category are not sent; clearing Kept in sends an empty string', async () => {
   const e = await make('owner'); await e.mount(''); await e.open('i1'); await e.begin('levels'); await e.input('I_f_reorder', '10'); await e.submit(); await e.submit();
-  assert.equal(j(updates(e)[0][2].p_patch), j({ reorder_below: 10, par_qty: null }));
+  assert.equal(j(updates(e)[0][2].p_patch), j({ reorder_below: 10 }));
   const c = await make('owner'); await c.mount(''); await c.open('i1'); await c.begin('levels'); await c.input('I_f_location', ''); await c.submit(); await c.submit();
   assert.equal(updates(c)[0][2].p_patch.location, '');
 });
@@ -80,7 +80,7 @@ test('I_details a tap on Where to buy opens the price history through I_Supplier
 test('I_details cleaner rendered HTML holds no PHP, ₱, cost, price, lastPrice or priceUp anywhere (list, card, photo sheet, supplier chip); the shop name and place are allowed', async () => {
   const sup = { pick: async () => null, openPriceHistory() {}, mountList() {} };
   const c = await setup({ role: 'cleaner', suppliers: sup, doc: {}, client: mockClient({ catalogue: stripCost(raw('cleaner')), fn: { 'upload-photo': () => ({ data: { ok: true, urls: { [P1]: 'https://stay.example/sign/' + P1 + '?token=t' } }, error: null }) } }) });
-  const bad = /PHP|₱|cost|price|lastPrice|priceUp/i;
+  const bad = /PHP|₱|cost|Price per|lastPrice|priceUp/i;
   await c.mount('');
   assert.doesNotMatch(c.html(), bad); assert.match(c.html(), /Suppliers/);
   await c.open('i1'); assert.doesNotMatch(c.html() + c.sheet(), bad); assert.match(c.sheet(), /SM Savemore/);

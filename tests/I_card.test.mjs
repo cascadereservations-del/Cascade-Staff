@@ -5,7 +5,7 @@ import { setup, mockClient, item } from './I_harness.mjs';
 
 const cat = () => ({ items: [item('i1', 'Toilet paper', 4, 12, { par: 36, codes: ['A1', 'A2'] }), item('i2', 'Hand soap', 0, 3, { category: 'Kitchen', unitCost: 95 }), item('i3', 'Bath towels', 14, null, { category: 'Linen', consumable: false })] });
 const make = (role, mock = {}) => setup({ role, client: mockClient({ catalogue: cat(), ...mock }) });
-const MONEY = /₱|PHP|unit cost|Unit cost|price|7391|7,391/i;
+const MONEY = /₱|PHP|unit cost|Unit cost|Price per|priceUp|lastPrice|7391|7,391/i;
 const miss = { data: null, error: { code: 'PGRST202', message: 'Could not find the function' } };
 const kinds = (s) => [...s.matchAll(/data-kind="(\w+)"/g)].map((m) => m[1]);
 
@@ -20,15 +20,15 @@ test('I_card Buy up to shows the level, or twice the reorder level when none is 
   assert.match(c.sheet(), /Buy up to/); assert.doesNotMatch(c.sheet(), /Barcodes/);
 });
 
-test('I_card Change price: owner, admin and finance see it; a cleaner never does, and a hand-made click does nothing', async () => {
+test('I_card Change price: owner, admin and finance see it; a cleaner sees it too but types a new price blind (s124)', async () => {
   for (const role of ['owner', 'admin', 'finance']) {
     const e = await make(role); await e.mount(''); await e.open('i1');
     assert.ok(kinds(e.sheet()).includes('price'), role);
   }
   const c = await make('cleaner'); await c.mount(''); await c.open('i1');
-  assert.ok(!kinds(c.sheet()).includes('price'));
+  assert.ok(kinds(c.sheet()).includes('price'));
   await c.begin('price');
-  assert.doesNotMatch(c.sheet(), /Price per|Change price/);
+  assert.match(c.sheet(), /New price each \(PHP\)/); assert.doesNotMatch(c.sheet(), /Price per/);
   assert.equal(c.client.rpcCalls('inventory_item_price_set_v1').length, 0);
 });
 
@@ -84,7 +84,7 @@ test('I_card Edit levels: a buy-up-to below the reorder level is not sent; an em
   await e.input('I_f_par', '5'); await e.submit();
   assert.match(e.sheet(), /Buy up to should be the same as or more than the reorder level/);
   await e.input('I_f_par', ''); await e.submit(); await e.submit();
-  assert.deepEqual({ ...e.client.rpcCalls('inventory_item_update_v1')[0][2].p_patch }, { reorder_below: 12, par_qty: null });
+  assert.deepEqual({ ...e.client.rpcCalls('inventory_item_update_v1')[0][2].p_patch }, { par_qty: null }); // only what changed
 });
 
 test('I_card probe-and-hide: a missing price RPC hides Change price only, with a calm toast and no error box', async () => {
@@ -98,7 +98,7 @@ test('I_card probe-and-hide: a missing price RPC hides Change price only, with a
 
 test('I_card probe-and-hide: a refusal (42501) on Edit levels removes it for the visit', async () => {
   const e = await make('owner', { rpc: { inventory_item_update_v1: () => ({ data: null, error: { code: '42501', message: 'permission denied' } }) } });
-  await e.mount(''); await e.open('i1'); await e.begin('levels'); await e.submit(); await e.submit();
+  await e.mount(''); await e.open('i1'); await e.begin('levels'); await e.input('I_f_reorder', '11'); await e.submit(); await e.submit();
   assert.match(e.sheet(), /not available to you/);
   assert.ok(!kinds(e.sheet()).includes('levels')); assert.ok(kinds(e.sheet()).includes('price'));
 });

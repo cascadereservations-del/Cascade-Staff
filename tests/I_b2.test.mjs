@@ -109,8 +109,8 @@ test('I_b2 the quick action opens the card straight on the form with the current
   await c.act('quick', { 'data-id': 'i1', 'data-kind': 'used' });
   assert.match(c.sheet(), /Record use: Toilet paper/);
   const x = await make('cleaner'); await x.mount('');
-  await x.act('quick', { 'data-id': 'i1', 'data-kind': 'price' }); // a hand-made click for something not allowed does nothing
-  assert.doesNotMatch(x.sheet(), /Change price|Price per/);
+  await x.act('quick', { 'data-id': 'i1', 'data-kind': 'recv' }); // a hand-made click for something not allowed does nothing
+  assert.doesNotMatch(x.sheet(), /Stock received|How many/);
 });
 
 test('I_b2 rows say what needs action and the summary says it in plain words', async () => {

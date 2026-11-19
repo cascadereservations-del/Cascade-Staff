@@ -82,7 +82,7 @@ test('I_staff a 42501 in the cleaner group count ends the walk with a calm toast
 test('I_staff the cleaner never sees a price, cost or peso sign through Count, Record use and the undo line', async () => {
   const e = await make('cleaner');
   await e.mount('');
-  const bad = /₱|PHP|Unit cost|7391|7,391|Change price|Stock received|Edit levels|data-kind="(recv|price|levels|link)"|data-act="bought-open"|Unlink/;
+  const bad = /₱|PHP|Unit cost|7391|7,391|Stock received|Edit levels|data-kind="(recv|link)"|data-act="bought-open"|Unlink/;
   assert.doesNotMatch(e.html(), bad);
   await e.open('i1'); assert.doesNotMatch(e.sheet(), bad);
   for (const k of ['count', 'used']) { await e.begin(k); assert.doesNotMatch(e.sheet(), bad); await e.submit(); assert.doesNotMatch(e.sheet(), bad); await e.submit(); await e.open('i1'); assert.doesNotMatch(e.sheet(), bad); }

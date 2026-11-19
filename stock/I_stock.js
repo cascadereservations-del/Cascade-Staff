@@ -26,6 +26,7 @@
   function canManage(role) { return role === 'owner' || role === 'admin'; }
   function canPrice(role) { return role === 'owner' || role === 'admin' || role === 'finance'; } // the server sends unitCost only to these three
   function canCount(role) { return role === 'owner' || role === 'admin' || role === 'cleaner'; } // s85: the cleaner counts too; the server decides (42501 hides Count for the visit)
+  function canEdit(role) { return canManage(role) || role === 'cleaner'; } // s124: the cleaner edits details and sets a new price blind; the server decides
   function canUse(role) { return role === 'cleaner'; } // record_inventory_usage needs submit_cleaning
   function manilaToday(ms) { return new Date(ms + 8 * 3600000).toISOString().slice(0, 10); }
   function dateLabel(iso) { var a = String(iso || '').slice(0, 10).split('-'); return a.length === 3 && +a[1] ? MONTHS[+a[1] - 1] + ' ' + +a[2] : ''; }
@@ -40,6 +41,7 @@
       cover: num(raw.coverageDays), coverEst: num(raw.estCoverageDays), controlled: !!raw.movementControlled,
       counted: raw.countedAt ? String(raw.countedAt) : null, par: num(raw.par), codes: Array.isArray(raw.codes) ? raw.codes.map(String) : [],
       photo: raw.photo ? String(raw.photo) : null, location: raw.location ? String(raw.location) : '',
+      updatedAt: raw.updatedAt ? String(raw.updatedAt) : null, updatedBy: raw.updatedBy ? String(raw.updatedBy).split(' ')[0] : null, // s124: who last changed the item (first name), from the latest change row
       supplier: raw.supplier && raw.supplier.name ? { id: raw.supplier.id ? String(raw.supplier.id) : null, name: String(raw.supplier.name), location: raw.supplier.location ? String(raw.supplier.location) : '' } : null // s86: name and place for every role, never a price
     };
     if (canPrice(role)) { it.cost = num(raw.unitCost); it.lastPrice = num(raw.lastPrice); it.priceUp = num(raw.priceUp); }
@@ -144,6 +146,8 @@
     exists: 'An item with that name already exists.',
     financeOnly: 'Finance lists are not open to you right now. The OPS list has no prices.',
     levels: 'Buy up to should be the same as or more than the reorder level.',
+    nochange: 'Nothing has changed yet.',
+    changedSince: 'Someone changed it after you. Count or edit it again.',
     tooLate: 'This can no longer be undone here. Count the item to correct it.',
     already: 'Someone already marked this as bought. The list is refreshed.',
     photofail: 'That photo could not be prepared. Try another one.',
@@ -174,7 +178,10 @@
   function priceCall(it, v) { var c = String(v.cost || '').trim() === '' ? null : parseQty(v.cost); return { fn: 'inventory_item_price_set_v1', args: { p_item_id: it.id, p_unit_cost: c } }; }
   // s86 4.6: Edit details. Levels always go; kept in, unit and category go only when they changed (one patch, one call). An empty Kept in is sent as '' (the server stores null).
   function levelsCall(it, v) {
-    var r = String(v.reorder || '').trim(), p = String(v.par || '').trim(), patch = { reorder_below: r === '' ? null : parseQty(r, true), par_qty: p === '' ? null : parseQty(p, true) };
+    var r = String(v.reorder || '').trim(), p = String(v.par || '').trim(), rn = r === '' ? null : parseQty(r, true), pn = p === '' ? null : parseQty(p, true), patch = {};
+    if ('name' in v && String(v.name || '').trim() !== it.name) patch.name = String(v.name || '').trim();
+    if (rn !== it.reorder) patch.reorder_below = rn;
+    if (pn !== it.par) patch.par_qty = pn;
     if ('location' in v && String(v.location || '').trim() !== String(it.location || '')) patch.location = String(v.location || '').trim();
     if ('unit' in v && String(v.unit || '').trim() !== it.unit) patch.unit = String(v.unit || '').trim();
     if ('category' in v && String(v.category || '').trim() !== it.category) patch.category = String(v.category || '').trim();
@@ -182,6 +189,7 @@
   }
   // s86 4.4 / 4.5 / 4.6 / 9.5: exact RPC names and keys from SPEC-inventory-db 2.7 and 3.2.
   function setUsualCall(optId) { return { fn: 'inventory_item_option_set_usual_v1', args: { p_option_id: optId } }; }
+  function changeUndoCall(id) { return { fn: 'inventory_item_change_undo_v1', args: { p_change_id: id } }; } // s124: one undo for details, price and photo, whoever made the change
   function photoSetCall(itemId, path) { return { fn: 'inventory_item_photo_set_v1', args: { p_item_id: itemId, p_path: path } }; }
   function recatCall(pid, ids, cat) { return { fn: 'inventory_items_recategorize_v1', args: { p_property_id: pid, p_item_ids: ids, p_category: cat } }; }
   function mintCall(pid, ids) { return { fn: 'inventory_code_mint_v1', args: { p_property_id: pid, p_item_ids: ids } }; }
@@ -974,7 +982,7 @@
     if (a.kind === 'shopset') {
       return head((a.status === 'approved' ? 'Approve ' : 'Remove ') + a.rowName + (a.status === 'approved' ? '?' : ' from the list?')) + '<form data-i-form>' + actions(a, a.status === 'approved' ? 'Yes, approve it' : 'Yes, remove it') + '</form>';
     }
-    if (a.kind === 'undo') return head(a.entry.confirm) + '<form data-i-form>' + (a.err === 'tooLate' ? errBox(a) : '') + (a.err === 'tooLate' ? '' : errBox(a)) + actions(a, a.err === 'tooLate' ? 'Close' : 'Yes, undo it') + '</form>';
+    if (a.kind === 'undo') return head(a.entry.confirm) + '<form data-i-form>' + errBox(a) + actions(a, goneErr(a) ? 'Close' : 'Yes, undo it') + '</form>';
     if (a.kind === 'cconfirm') return head(a.text) + '<form data-i-form>' + actions(a, 'Yes') + '</form>';
     if (a.kind === 'labels') return renderLabels(a);
     if (a.kind === 'tidy') return renderTidy(a);
@@ -1002,7 +1010,7 @@
       // s107 B6: the title and Close stay at the top of the sheet; the level, the one action for this role and the options come before the details
       h = '<div class="F_sheethead I_sh"><h2 class="hd I_sht" id="I_sh_t" tabindex="-1">' + esc(it.name) + '</h2><button class="btn btn-secondary btn-sm F_close" type="button" data-act="close">' + gi('close', 's16') + 'Close</button></div>' +
         '<div class="I_hero">' + photoBlock(it) + '<div class="I_herob"><p class="help I_cat">' + esc(it.category + (it.consumable ? ' · consumable' : '')) + '</p>' +
-        '<p class="I_lvline">' + (it.qty == null ? '' : levelBadge(it) + ' ') + esc(amountText(it)) + (lasts != null ? ' · lasts about ' + esc(lasts) + ' days' : '') + '</p>' +
+        '<p class="I_lvline">' + (it.qty == null ? '' : levelBadge(it) + ' ') + esc(amountText(it)) + (lasts != null ? ' · lasts about ' + esc(lasts) + ' days' : '') + '</p>' + updLine(it) +
         (M.denied.shop || !shopRows.length ? '' : '<p class="I_onlist">' + gi('bag', 's16') + ' On the list' + (listedQ ? ', ' + esc(listedQ) : '') + '</p>') + '</div></div>' +
         (a.note ? '<div class="okbox" role="status"><span>' + esc(a.note) + '</span></div>' : '') + errBox(a) +
         '<div class="I_actbar">' + ac.chosen.map(function (c, n) { return actBtn(c, n === 0 ? 'btn-primary' : 'btn-secondary'); }).join('') + '</div>' + photoRow(it) + lastChange(it) + optionsBlock(it) +
@@ -1044,15 +1052,15 @@
         actions(a, c ? 'Yes, add it' : 'Continue') + '</form>';
     }
     if (a.kind === 'price') {
-      var pc = String(v.cost || '').trim() === '' ? null : parseQty(v.cost);
-      return head(c ? (pc == null ? 'Clear the price of ' + it.name + '?' : 'Set the price of ' + it.name + ' to PHP ' + pesoNum(pc) + '?') : 'Change price: ' + it.name, c ? null : 'Enter what one costs.') + '<form data-i-form>' +
-        (c ? '<p class="I_conf">Only the owner, admin and finance can see prices.</p>' : textField('cost', 'Price per ' + esc(unitOf(it)) + ' in PHP (leave empty to clear)', v.cost || '', 'inputmode="decimal"') + (a.bad ? '<div class="field"><span class="err">' + gi('alert', 's16') + ' Enter a number such as 95 or 95.50.</span></div>' : '')) +
+      var pc = String(v.cost || '').trim() === '' ? null : parseQty(v.cost), blind = !canPrice(M.role); // s124: a role without prices types a new one and never sees an amount
+      return head(c ? (blind ? 'Save the new price for ' + it.name + '?' : pc == null ? 'Clear the price of ' + it.name + '?' : 'Set the price of ' + it.name + ' to PHP ' + pesoNum(pc) + '?') : 'Change price: ' + it.name, c ? null : 'Enter what one costs.') + '<form data-i-form>' +
+        (c ? '<p class="I_conf">Only the owner, admin and finance can see prices.</p>' : (blind ? textField('cost', 'New price each (PHP)', v.cost || '', 'inputmode="decimal"') + '<p class="help">Prices stay private. You will not see the current price.</p>' : textField('cost', 'Price per ' + esc(unitOf(it)) + ' in PHP (leave empty to clear)', v.cost || '', 'inputmode="decimal"')) + (a.bad ? '<div class="field"><span class="err">' + gi('alert', 's16') + ' Enter a number such as 95 or 95.50.</span></div>' : '')) +
         actions(a, c ? 'Yes, save it' : 'Continue') + '</form>';
     }
     if (a.kind === 'levels') {
       return head(c ? 'Save the details for ' + it.name + '?' : 'Edit details: ' + it.name, c ? null : 'Leave a box empty to clear it.') + '<form data-i-form>' +
-        (c ? '<p class="I_conf">Reorder at ' + esc(String(v.reorder || '').trim() === '' ? 'not set' : v.reorder) + '. Buy up to ' + esc(String(v.par || '').trim() === '' ? 'not set' : v.par) + '.</p>' + detailsChanges(it, v)
-          : levelsSuggest(a, it) + textField('reorder', 'Reorder at (' + esc(unitOf(it)) + ')', v.reorder || '', 'inputmode="decimal"') + textField('par', 'Buy up to (' + esc(unitOf(it)) + ')', v.par || '', 'inputmode="decimal"') + detailsFields(it, v) + (a.bad ? '<div class="field"><span class="err">' + gi('alert', 's16') + ' ' + esc(a.bad === 'levels' ? ERR.levels : 'Enter numbers such as 12 or 2.5.') + '</span></div>' : '')) +
+        (c ? detailsDiff(it, v)
+          : textField('name', 'Name', v.name != null ? v.name : it.name, 'maxlength="80" required') + levelsSuggest(a, it) + textField('reorder', 'Reorder at (' + esc(unitOf(it)) + ')', v.reorder || '', 'inputmode="decimal"') + textField('par', 'Buy up to (' + esc(unitOf(it)) + ')', v.par || '', 'inputmode="decimal"') + detailsFields(it, v) + (a.bad ? '<div class="field"><span class="err">' + gi('alert', 's16') + ' ' + esc(a.bad === 'levels' ? ERR.levels : a.bad === 'nochange' ? ERR.nochange : a.bad === 'name' ? 'The name needs 2 to 80 characters.' : 'Enter numbers such as 12 or 2.5.') + '</span></div>' : '')) +
         actions(a, c ? 'Yes, save them' : 'Continue') + '</form>';
     }
     return null;
@@ -1067,12 +1075,25 @@
   }
   // Edit details (s86 4.6): where it is kept (with the places already used), the unit, the category.
   function detailsFields(it, v) {
-    var locs = {}, units = UNITS.slice(), cats = categories();
+    var locs = {}, units = UNITS.slice(), cats = categories(M.role === 'cleaner');
     (K.items || []).forEach(function (i) { if (i.location) locs[i.location] = 1; });
     if (units.indexOf(it.unit) < 0 && it.unit) units.unshift(it.unit);
     if (cats.indexOf(it.category) < 0) cats.unshift(it.category);
     return (K.hasLoc ? '<div class="field"><label for="I_f_location">Kept in (optional)</label><div class="input"><input id="I_f_location" list="I_locs" autocomplete="off" maxlength="60" placeholder="Hall cabinet" value="' + esc(v.location || '') + '"></div><datalist id="I_locs">' + Object.keys(locs).sort().map(function (l) { return '<option value="' + esc(l) + '"></option>'; }).join('') + '</datalist></div>' : '') +
       selectField('unit', 'Unit', units.map(function (u) { return [u, u]; }), v.unit != null ? v.unit : it.unit) + selectField('category', 'Category', cats.map(function (c) { return [c, c]; }), v.category != null ? v.category : it.category);
+  }
+  // s124: the check step as old -> new rows, only for what changed (the same keys levelsCall sends)
+  function detailsDiff(it, v) {
+    var p = levelsCall(it, v).args.p_patch, rows = [];
+    var one = function (label, oldT, newT) { rows.push('<dt>' + label + '</dt><dd>' + (oldT ? '<s>' + esc(oldT) + '</s> → ' : '') + esc(newT) + '</dd>'); };
+    var qo = function (n) { return n == null ? '' : uq(n, it.unit); }, qn = function (n) { return n == null ? 'Not set' : uq(n, p.unit != null ? p.unit : it.unit); };
+    if ('name' in p) one('Name', it.name, p.name);
+    if ('reorder_below' in p) one('Reorder at', qo(it.reorder), qn(p.reorder_below));
+    if ('par_qty' in p) one('Buy up to', qo(it.par), qn(p.par_qty));
+    if ('location' in p) one('Kept in', it.location, p.location === '' ? 'Cleared' : p.location);
+    if ('unit' in p) one('Unit', it.unit, p.unit);
+    if ('category' in p) one('Category', it.category, p.category);
+    return '<dl class="I_diff">' + rows.join('') + '</dl>';
   }
   function detailsChanges(it, v) {
     var out = [];
@@ -1083,7 +1104,7 @@
   }
   function pesoNum(n) { return fmt(n).replace(/\B(?=(\d{3})+(?!\d))/g, ','); }
   function catOK() { return !K.denied.cat; } // Let Cassy choose hides for the visit when inventory-categorise is not there
-  function categories() { var c = {}; (K.items || []).forEach(function (i) { c[i.category] = 1; }); c.Miscellaneous = 1; return Object.keys(c).sort(); }
+  function categories(existingOnly) { var c = {}; (K.items || []).forEach(function (i) { c[i.category] = 1; }); if (!existingOnly) c.Miscellaneous = 1; return Object.keys(c).sort(); } // s124: a cleaner may only pick a category already in use
 
   /* ---- photo, labels, tidy categories, Cassy (s86 4.4 - 4.6, 9.5) */
   function renderPhoto(a, it) {
@@ -1228,14 +1249,14 @@
     if (!listed && allowed('low', it)) add('low', canManage(m) ? 'Add to list' : level(it) === 'out' ? 'It is out' : 'Running low');
     if (allowed('count')) add('count', 'Count it');
     if (allowed('used')) add('used', 'Record use');
+    if (allowed('levels')) add('levels', 'Edit details');
     if (allowed('price')) add('price', 'Change price');
     if (allowed('recv', it)) add('recv', 'Stock received');
-    if (allowed('levels')) add('levels', 'Edit details');
     if (allowed('link')) add('link', 'Link a barcode', 'begin-link');
     if (!listed && allowed('shop')) add('shop', 'Add to shopping list');
     if (it.photo && allowed('photo')) add('photorem', 'Remove photo', 'photo-remove');
     if (canManage(m) && supOK() && root.I_Suppliers.openItemSuppliers) add('itemsup', 'Suppliers for this item', 'item-sup');
-    if (allowed('history')) add('history', 'History', 'history-open');
+    if (allowed('history')) { add('history', 'History', 'history-open'); all.history.wide = true; }
     var pri = canManage(m) ? (lv !== 'ok' ? ['low', 'count', 'recv'] : ['count', 'recv', 'low']) : allowed('used') ? ['used', 'low', 'count'] : canPrice(m) ? ['price', 'low', 'shop'] : ['low', 'count', 'shop'];
     if (a && a.scanned) pri.unshift(canManage(m) ? 'count' : canPrice(m) ? 'price' : 'low');
     var chosen = [];
@@ -1252,7 +1273,7 @@
       '<label class="btn btn-secondary btn-block I_filebtn">' + gi('image', 's16') + (has ? 'Choose another' : 'Choose a photo') + '<input class="sr" id="I_photo_pick" type="file" accept="image/*" aria-label="' + (has ? 'Choose another photo from your phone' : 'Choose a photo from your phone') + '"></label></div></div>';
   }
   function actBtn(c, cls) {
-    return '<button class="btn ' + cls + ' btn-block" type="button" data-act="' + c.act + '" data-kind="' + c.kind + '">' + c.text + '</button>';
+    return '<button class="btn ' + cls + (c.wide ? ' I_wide' : '') + ' btn-block" type="button" data-act="' + c.act + '" data-kind="' + c.kind + '">' + c.text + '</button>';
   }
   // Running low (s84 1b): the amount to buy back to par (or 2 x reorder level), in packs; 1 when it cannot be worked out.
   function lowQty(it) {
@@ -1363,8 +1384,8 @@
     if (kind === 'addlow') return canManage(m) && !M.denied.shop && !!K.items && !!K.shop; // owner and admin only, like the other shopping row actions
     if (kind === 'shop') return !M.denied.shop;
     if (kind === 'low') return !M.denied.low && !M.denied.shop && !(it && (K.shop || []).some(function (r) { return r.itemId === it.id; }));
-    if (kind === 'price') return K.v84 && canPrice(m) && !M.denied.price;
-    if (kind === 'levels') return K.v84 && canManage(m) && !M.denied.levels;
+    if (kind === 'price') return K.v84 && (canPrice(m) || m === 'cleaner') && !M.denied.price;
+    if (kind === 'levels') return K.v84 && canEdit(m) && !M.denied.levels;
     if (kind === 'link') return K.v84 && canManage(m) && !M.denied.link;
     if (kind === 'history') return K.v84 && !M.demo && !K.denied.inventory_item_history_v1;
     if (kind === 'unlink') return K.v84 && canManage(m) && !M.denied.unlink;
@@ -1380,7 +1401,7 @@
   function begin(kind) {
     if (!allowed(kind, itemById(M.act.itemId))) return;
     var a = M.act, it = itemById(a.itemId), defaults = { count: { qty: it && it.qty != null ? fmt(it.qty) : '0', note: '' }, used: { qty: '1' }, recv: { packs: '1', supplier: K.sup ? K.sup.name : '', supplierId: K.sup && K.sup.id || '', cost: '' }, shop: { qty: '1', note: '' },
-      low: {}, price: { cost: it && it.cost != null ? fmt(it.cost) : '' }, levels: { reorder: it && it.reorder != null ? fmt(it.reorder) : '', par: it && it.par != null ? fmt(it.par) : '', location: it ? it.location : '', unit: it ? it.unit : '', category: it ? it.category : '' } };
+      low: {}, price: { cost: it && it.cost != null && canPrice(M.role) ? fmt(it.cost) : '' }, levels: { name: it ? it.name : '', reorder: it && it.reorder != null ? fmt(it.reorder) : '', par: it && it.par != null ? fmt(it.par) : '', location: it ? it.location : '', unit: it ? it.unit : '', category: it ? it.category : '' } };
     a.kind = kind; a.step = kind === 'low' ? 'confirm' : 'form'; a.vals = defaults[kind]; a.err = null; a.bad = false; a.key = null; a.sig = null; a.focused = false; drawLayer();
     if (kind === 'levels' && allowed('history')) fetchHistory(a.itemId, function (d) { if (M && M.act === a && a.kind === 'levels') { a.sugg = d ? suggestBuyUp(itemById(a.itemId), d) : null; drawLayer(); } });
   }
@@ -1405,19 +1426,28 @@
     if (a.kind === 'count') return parseQty(v.qty, true) != null;
     if (a.kind === 'used' || a.kind === 'shop') return parseQty(v.qty) != null;
     if (a.kind === 'recv') return parseQty(v.packs) != null && (String(v.cost || '').trim() === '' || parseQty(v.cost) != null);
-    if (a.kind === 'price') return String(v.cost || '').trim() === '' || parseQty(v.cost) != null;
-    if (a.kind === 'levels') return optQty(v.reorder) && optQty(v.par) && !(String(v.reorder || '').trim() !== '' && String(v.par || '').trim() !== '' && parseQty(v.par, true) < parseQty(v.reorder, true)) &&
-      (!('location' in v) || String(v.location || '').trim().length <= 60) && (!('unit' in v) || (String(v.unit || '').trim() !== '' && String(v.unit).trim().length <= 20)) && (!('category' in v) || String(v.category || '').trim() !== '');
+    if (a.kind === 'price') return String(v.cost || '').trim() === '' ? canPrice(M.role) : parseQty(v.cost) != null; // blind: the cleaner cannot clear a price
+    if (a.kind === 'levels') return (!('name' in v) || (String(v.name || '').trim().length >= 2 && String(v.name).trim().length <= 80)) && optQty(v.reorder) && optQty(v.par) && !(String(v.reorder || '').trim() !== '' && String(v.par || '').trim() !== '' && parseQty(v.par, true) < parseQty(v.reorder, true)) &&
+      (!('location' in v) || String(v.location || '').trim().length <= 60) && (!('unit' in v) || (String(v.unit || '').trim() !== '' && String(v.unit).trim().length <= 20)) && (!('category' in v) || String(v.category || '').trim() !== '') && !!itemOf(a) && Object.keys(levelsCall(itemOf(a), v).args.p_patch).length > 0;
     if (a.kind === 'rename') { var to = String(v.to || '').trim(); return to.length >= 1 && to.length <= 60 && to !== a.from; }
     if (a.kind === 'labels') return labelIds(a).length > 0;
     if (a.kind === 'create') { var nm = String(v.name || '').trim(); return nm.length >= 2 && nm.length <= 80 && String(v.category || '').trim() !== '' && String(v.unit || '').trim().length <= 20 && optQty(v.qty) && optQty(v.reorder); }
     if (a.kind === 'report') return coolLeft(v) === 0;
     return true;
   }
+  // s124: which message the Edit details form shows: the Buy up to rule, the name length, or nothing changed
+  function levelsBad(a) {
+    var v = a.vals, it = itemOf(a), nm = String(v.name || '').trim();
+    if (optQty(v.reorder) && optQty(v.par) && String(v.reorder || '').trim() !== '' && String(v.par || '').trim() !== '' && parseQty(v.par, true) < parseQty(v.reorder, true)) return 'levels';
+    if ('name' in v && (nm.length < 2 || nm.length > 80)) return 'name';
+    if (it && optQty(v.reorder) && optQty(v.par) && !Object.keys(levelsCall(it, v).args.p_patch).length) return 'nochange';
+    return true;
+  }
+  function goneErr(a) { return a.err === 'tooLate' || a.err === 'changedSince'; } // the Undo can no longer happen: the button becomes Close
   function onSubmit(ev) {
     if (ev && ev.preventDefault) ev.preventDefault();
     var a = M && M.act; if (!a || a.sending || a.kind === 'menu') return;
-    if (a.kind === 'undo' && a.err === 'tooLate') return closeSheet();
+    if (a.kind === 'undo' && goneErr(a)) return closeSheet();
     if (a.kind === 'cconfirm') return cconfirmDone(a, true);
     if (/^o8/.test(a.kind)) return o8Submit(a);
     if (a.kind === 'tidy' || (a.kind === 'photo' && a.step !== 'confirm')) return;
@@ -1426,7 +1456,7 @@
     if (a.kind === 'addlow') return addLowSubmit(a);
     if (a.kind === 'copytext') return closeSheet();
     if (a.kind === 'scan') { if (a.phase === 'look') handleCode((a.vals || {}).code, null); return; }
-    if (a.step !== 'confirm') { if (!valid(a)) { a.bad = a.kind === 'levels' && optQty(a.vals.reorder) && optQty(a.vals.par) ? 'levels' : true; drawLayer(); return; } a.bad = false; a.step = 'confirm'; a.err = null; a.focused = false; drawLayer(); return; }
+    if (a.step !== 'confirm') { if (!valid(a)) { a.bad = a.kind === 'levels' ? levelsBad(a) : true; drawLayer(); return; } a.bad = false; a.step = 'confirm'; a.err = null; a.focused = false; drawLayer(); return; }
     commit(a);
   }
 
@@ -1466,7 +1496,7 @@
   function bodyOf(e) { try { return e && e.context && typeof e.context.json === 'function' ? Promise.resolve(e.context.json()).catch(function () { return null; }) : null; } catch (x) { return null; } }
   var NEWK = { used: 1, unlink: 1, low: 1, link: 1, price: 1, levels: 1, create: 1, report: 1, undo: 1, photo: 1, photoremove: 1, optusual: 1, labels: 1, rename: 1, sort: 1 }; // actions that hide for the visit when the server says "not here"
   function commit(a) {
-    var me = M, it = itemOf(a) || { name: a.rowName || (a.entry && a.entry.name) || '' }, call = build(a), rep = a.kind === 'report', snap = it && { qty: it.qty, cost: it.cost, reorder: it.reorder, par: it.par, controlled: it.controlled, learns: it.consumable && it.active, location: it.location, unit: it.unit, category: it.category, photo: it.photo };
+    var me = M, it = itemOf(a) || { name: a.rowName || (a.entry && a.entry.name) || '' }, call = build(a), rep = a.kind === 'report', snap = it && { name: it.name, qty: it.qty, cost: it.cost, reorder: it.reorder, par: it.par, controlled: it.controlled, learns: it.consumable && it.active, location: it.location, unit: it.unit, category: it.category, photo: it.photo };
     if (me.demo) { toast(rep ? 'Demo only, nothing was sent.' : DEMO_NOTE); finish(); return; }
     if (!online()) { a.err = 'offline'; drawLayer(); return; }
     if (!me.client) { a.err = 'missing'; drawLayer(); return; }
@@ -1481,7 +1511,7 @@
     Promise.resolve().then(a.kind === 'undo' && (a.entry.next || a.entry.more) ? function () { return (a.entry.next ? [a.entry.next] : []).concat(a.entry.more || []).reduce(function (p, nx) { return p.then(function (r1) { if (r1 && r1.error) throw r1.error; if (r1 && r1.data && r1.data.ok === false) throw { message: 'failed', data: r1.data }; return me.client.rpc(nx.fn, nx.args); }); }, run()); } : run).then(function (r) {
       if (me.dead) return;
       if (r && r.error) throw r.error;
-      if (r && r.data && (r.data.ok === false || r.data.error) && !(a.kind === 'undo' && r.data.reason === 'not_found')) throw { message: 'failed', data: r.data };
+      if (r && r.data && (r.data.ok === false || r.data.error) && !(a.kind === 'undo' && !a.entry.change && r.data.reason === 'not_found')) throw { message: 'failed', data: r.data };
       a.sending = false; delete K.keys[a.sig]; a.res = r && r.data || {};
       if (rep) K.cool[a.vals.rkind + '|' + a.vals.to] = nowMs();
       if (a.kind === 'photo' || a.kind === 'photoremove') { var pit = itemById(a.itemId); if (pit) pit.photo = a.kind === 'photo' ? a.newPath || pit.photo : null; relPrev(a); }
@@ -1508,7 +1538,7 @@
     if (why === 'code_taken') { a.err = 'taken'; a.takenId = body.item_id || null; a.takenName = body.item_name || (itemById(body.item_id) || {}).name || ''; return drawLayer(); }
     if (why === 'name_exists') { a.err = 'exists'; a.takenId = body.item_id || null; a.takenName = (itemById(body.item_id) || {}).name || ''; return drawLayer(); }
     if (why === 'bad_code') { a.err = 'badcode'; return drawLayer(); }
-    if (a.kind === 'undo' && (why === 'too_late' || why === 'not_yours' || why === 'stock_moved')) { a.err = 'tooLate'; K.undos = K.undos.filter(function (u) { return u !== a.entry; }); return drawLayer(); }
+    if (a.kind === 'undo' && (why === 'too_late' || why === 'not_yours' || why === 'stock_moved' || (a.entry.change && (why === 'already_undone' || why === 'not_found' || why === 'changed_since')))) { a.err = why === 'changed_since' ? 'changedSince' : 'tooLate'; K.undos = K.undos.filter(function (u) { return u !== a.entry; }); return drawLayer(); }
     if (why === 'finance_only') { K.noFinance = true; a.vals.to = 'ops'; a.step = 'form'; a.err = 'financeOnly'; return drawLayer(); }
     a.err = errKind(e, online());
     var dk = a.kind === 'undo' ? a.entry.call.fn : a.kind === 'photoremove' ? 'photo' : a.kind;
@@ -1762,6 +1792,23 @@
     return a.sugg ? '<p class="help I_sugg">Suggested: buy up to ' + esc(fmt(a.sugg)) + ' <button class="btn btn-secondary I_undobtn" type="button" data-act="use-sugg">Use ' + esc(fmt(a.sugg)) + '</button></p>' : '';
   }
   var CHANGE_WORD = { counted: 'Counted', received: 'Received', used: 'Used', adjusted: 'Adjusted', reconcile: 'Counted', receipt: 'Received', adjustment: 'Adjusted', usage: 'Used', undo: 'Undo', telegram_count: 'Telegram count' };
+  var FIELD_WORD = { name: 'Name', category: 'Category', unit: 'Unit', reorder_below: 'Reorder at', par_qty: 'Buy up to', location: 'Kept in' };
+  // s124: one history row, three columns (when, what, who). Details and price rows come from the change log; a price shows amounts only to roles that may see prices.
+  function histRow(c, it) {
+    var w, d = '', f = c.fields && typeof c.fields === 'object' ? c.fields : {}, nv = function (x) { return x == null || x === '' ? 'not set' : typeof x === 'number' ? fmt(x) : String(x); };
+    if (c.kind === 'details') {
+      w = 'Details';
+      d = Object.keys(f).filter(function (k) { return FIELD_WORD[k]; }).map(function (k) { var b = f[k] || {}; return FIELD_WORD[k] + ' ' + (b.before == null || b.before === '' ? '' : nv(b.before) + ' ') + '→ ' + nv(b.after); }).join(' · ');
+    } else if (c.kind === 'price') {
+      w = 'Price changed'; var uc = f.unit_cost;
+      if (canPrice(M.role) && uc && typeof uc === 'object') d = (uc.before == null ? '' : phpText(uc.before) + ' ') + '→ ' + (uc.after == null ? 'not set' : phpText(uc.after));
+    } else if (c.kind === 'photo') w = 'Photo changed';
+    else {
+      w = CHANGE_WORD[c.kind] || String(c.kind || 'Change').replace(/^./, function (x) { return x.toUpperCase(); });
+      d = (c.before == null ? '' : fmt(c.before) + ' ') + '→ ' + (c.after == null ? '' : fmt(c.after)) + ' ' + unitWord(Number(c.after), unitOf(it));
+    }
+    return '<li><span class="I_hwhen">' + esc(dateLabel(c.at)) + '</span><span class="I_hwhat"><b>' + esc(w) + '</b>' + (d ? '<span>' + esc(d.trim()) + '</span>' : '') + '</span><span class="I_hwho">' + (c.who ? esc(String(c.who).split(' ')[0]) : '') + '</span></li>';
+  }
   function renderHistory(a, it) {
     var h = head(it.name + ': history', it.category);
     if (a.state === 'loading') return h + '<p class="help I_load" role="status">Loading…</p><div class="I_btns"><button class="btn btn-secondary btn-block" type="button" data-act="back">Back</button></div>';
@@ -1774,7 +1821,7 @@
     }
     body += '<h3 class="I_hh">Last changes</h3>';
     var ch = Array.isArray(d.changes) ? d.changes.slice(0, 10) : [];
-    body += ch.length ? '<ul class="I_blines">' + ch.map(function (c) { var w = CHANGE_WORD[c.kind] || String(c.kind || 'Change').replace(/^./, function (x) { return x.toUpperCase(); }); return '<li>' + esc(dateLabel(c.at)) + ' · ' + esc(w) + ' ' + esc(c.before == null ? '' : fmt(c.before)) + ' → ' + esc(c.after == null ? '' : fmt(c.after)) + (c.who ? ' · ' + esc(String(c.who).split(' ')[0]) : '') + '</li>'; }).join('') + '</ul>' : '<p class="help">No changes recorded yet.</p>';
+    body += ch.length ? '<ul class="I_hist">' + ch.map(function (c) { return histRow(c, it); }).join('') + '</ul>' : '<p class="help">No changes recorded yet.</p>';
     var lb = d.last_bought;
     body += '<h3 class="I_hh">Last bought</h3>' + (lb && lb.at ? '<p class="I_conf">' + esc(dateLabel(lb.at)) + (lb.qty != null ? ', ' + esc(uq(lb.qty, unitOf(it))) : '') + (canPrice(M.role) && lb.unit_cost != null ? ', PHP ' + esc(pesoNum(lb.unit_cost)) + ' each' : '') + '</p>' : '<p class="help">No purchase recorded yet.</p>');
     return h + body + '<div class="I_btns"><button class="btn btn-secondary btn-block" type="button" data-act="back">Back</button></div>';
@@ -1948,6 +1995,7 @@
       e.call = { fn: 'save_shopping_item_v1', args: { p_property_id: M.pid, p_item: { id: d.id, status: 'cancelled' }, p_idempotency_key: newKey('undo') } };
     } else if (a.kind === 'levels' && snap) {
       var up = { reorder_below: snap.reorder == null ? null : snap.reorder, par_qty: snap.par == null ? null : snap.par }, was = levelsCall(it, v).args.p_patch, more = false;
+      if ('name' in was) { up.name = snap.name; more = true; }
       if ('location' in was) { up.location = snap.location || ''; more = true; } if ('unit' in was) { up.unit = snap.unit; more = true; } if ('category' in was) { up.category = snap.category; more = true; }
       e.say = (more ? 'Details saved for ' : 'Levels saved for ') + n; e.line = more ? 'changed the details' : 'changed the levels'; e.confirm = 'Put the ' + (more ? 'details' : 'levels') + ' of ' + n + ' back as they were?';
       e.call = { fn: 'inventory_item_update_v1', args: { p_item_id: it.id, p_patch: up } };
@@ -1966,6 +2014,10 @@
     } else if (a.kind === 'sort' && d.results && d.results.length) {
       return catUndo(d.results, d.remaining);
     } else return null;
+    if (/^(price|levels|photo|photoremove)$/.test(a.kind) && d.change_id) { // s124: the server keeps the change, so Undo is one call for every role; a price is never named
+      e.call = changeUndoCall(d.change_id); e.change = true; delete e.next; delete e.more;
+      if (a.kind === 'price') e.confirm = 'Put the price of ' + n + ' back as it was?';
+    } else if (a.kind === 'price' && !canPrice(M.role)) return null; // a role without prices knows no old amount to put back
     return e;
   }
   function usedMovement(d) { var m = d.movementId || (d.movementIds && d.movementIds[0]) || (d.movements && d.movements[0] && (typeof d.movements[0] === 'string' ? d.movements[0] : d.movements[0].movementId || d.movements[0].id)); return m || null; } // record_inventory_usage writes through the ledger; no id in the answer = no Undo
@@ -1976,8 +2028,15 @@
   }
   function pushUndoEntry(e) { K.undos.unshift(e); if (K.undos.length > 20) K.undos.length = 20; }
   function ago(ms) { var m = Math.floor(ms / 60000); return m < 1 ? 'just now' : m + ' min ago'; }
+  function lastEntry(it) { return K.undos.filter(function (u) { return u.itemId === it.id && nowMs() - u.at < UNDO_LINE_MS && !K.denied[u.call.fn]; })[0]; }
+  // s124: "Updated Nov 19 by Honey" under the level; the Last change line replaces it while that shows
+  function updLine(it) {
+    if (!it.updatedBy || lastEntry(it)) return '';
+    var d = dateLabel(it.updatedAt);
+    return '<p class="I_upd">' + gi('clock', 's16') + ' Updated ' + (d ? esc(d) + ' ' : '') + 'by ' + esc(it.updatedBy) + '</p>';
+  }
   function lastChange(it) {
-    var e = K.undos.filter(function (u) { return u.itemId === it.id && nowMs() - u.at < UNDO_LINE_MS && !K.denied[u.call.fn]; })[0];
+    var e = lastEntry(it);
     return e ? '<p class="help I_last">Last change: ' + esc(e.line) + ' by you, ' + ago(nowMs() - e.at) + '. <button class="btn btn-ghost I_undobtn" type="button" data-act="undo" data-id="' + e.id + '">' + gi('refresh', 's16') + ' Undo</button></p>' : '';
   }
   function drawUndo() {

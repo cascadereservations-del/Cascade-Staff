@@ -8,7 +8,7 @@ const SHOP = [
   { id: 's2', item_id: 'i1', item_name: 'Toilet paper', quantity: 2, purchase_unit: 'pack', reason: null, status: 'approved', proposed_by: 'x', proposed_at: '2026-10-11T02:00:00Z', estimated_cost: 8888.25 },
   { id: 's3', item_id: 'i3', item_name: 'Gone item', quantity: 1, purchase_unit: null, reason: null, status: 'rejected', proposed_by: 'x', proposed_at: '2026-10-10T02:00:00Z' }
 ];
-const COST_WORDS = /7391|8888|unitCost|unit_cost|estimated_cost|Unit cost|₱|Secret Supplier|supplier|price|total/i;
+const COST_WORDS = /7391|8888|unitCost|unit_cost|estimated_cost|Unit cost|₱|Secret Supplier|supplier|Price per|PHP|total/i;
 
 for (const role of ['cleaner']) {
   test('I_roles ' + role + ': no cost anywhere, even when the payload carries unitCost, estimated_cost and a supplier', async () => {
