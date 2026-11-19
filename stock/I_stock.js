@@ -30,6 +30,7 @@
   function canUse(role) { return role === 'cleaner'; } // record_inventory_usage needs submit_cleaning
   function manilaToday(ms) { return new Date(ms + 8 * 3600000).toISOString().slice(0, 10); }
   function dateLabel(iso) { var a = String(iso || '').slice(0, 10).split('-'); return a.length === 3 && +a[1] ? MONTHS[+a[1] - 1] + ' ' + +a[2] : ''; }
+  function manilaLabel(iso) { var t = Date.parse(iso); return dateLabel(isNaN(t) ? iso : manilaToday(t)); } // s124: a timestamp shows on its Manila day (17:30 UTC is already tomorrow there)
   function peso(n) { var v = Math.round(Number(n) * 100) / 100; return '₱' + (v % 1 === 0 ? v.toFixed(0) : v.toFixed(2)).replace(/\B(?=(\d{3})+(?!\d))/g, ','); }
 
   // One catalogue row to the shape the screen keeps. unitCost is read ONLY for owner/admin; for anyone else the key is never touched.
@@ -149,6 +150,7 @@
     nochange: 'Nothing has changed yet.',
     changedSince: 'Someone changed it after you. Count or edit it again.',
     tooLate: 'This can no longer be undone here. Count the item to correct it.',
+    changeGone: 'This can no longer be undone here. Edit it again to correct it.',
     already: 'Someone already marked this as bought. The list is refreshed.',
     photofail: 'That photo could not be prepared. Try another one.',
     photobig: 'That photo is too large to send. Try one taken a little further away.',
@@ -176,7 +178,7 @@
   // s84: barcode, price, levels, new item, report. Exact names and keys from SPEC-inventory 3.5 and 4.1.
   function attachCall(pid, it, code, format) { return { fn: 'inventory_code_attach_v1', args: { p_property_id: pid, p_code: code, p_format: format || null, p_item_id: it.id } }; }
   function priceCall(it, v) { var c = String(v.cost || '').trim() === '' ? null : parseQty(v.cost); return { fn: 'inventory_item_price_set_v1', args: { p_item_id: it.id, p_unit_cost: c } }; }
-  // s86 4.6: Edit details. Levels always go; kept in, unit and category go only when they changed (one patch, one call). An empty Kept in is sent as '' (the server stores null).
+  // s86 4.6 / s124: Edit details. Only the keys that changed are sent (name, levels, kept in, unit, category), one patch, one call. An empty Kept in is sent as '' (the server stores null).
   function levelsCall(it, v) {
     var r = String(v.reorder || '').trim(), p = String(v.par || '').trim(), rn = r === '' ? null : parseQty(r, true), pn = p === '' ? null : parseQty(p, true), patch = {};
     if ('name' in v && String(v.name || '').trim() !== it.name) patch.name = String(v.name || '').trim();
@@ -1443,7 +1445,7 @@
     if (it && optQty(v.reorder) && optQty(v.par) && !Object.keys(levelsCall(it, v).args.p_patch).length) return 'nochange';
     return true;
   }
-  function goneErr(a) { return a.err === 'tooLate' || a.err === 'changedSince'; } // the Undo can no longer happen: the button becomes Close
+  function goneErr(a) { return a.err === 'tooLate' || a.err === 'changeGone' || a.err === 'changedSince' || (a.kind === 'undo' && a.err === 'exists' && !!(a.entry && a.entry.change)); } // the Undo can no longer happen: the button becomes Close
   function onSubmit(ev) {
     if (ev && ev.preventDefault) ev.preventDefault();
     var a = M && M.act; if (!a || a.sending || a.kind === 'menu') return;
@@ -1488,7 +1490,7 @@
     return shopSetCall(M.pid, r, a.status, a.key);
   }
   var DONE = { count: function (it) { return 'Counted. ' + it.name + ' is saved.'; }, used: function () { return 'Logged. Thank you.'; }, recv: function (it) { return 'Stock received for ' + it.name + '.'; }, shop: function () { return 'Added to the shopping list.'; }, shopset: function (it, a) { return a.status === 'approved' ? 'Approved.' : 'Removed from the list.'; },
-    undo: function () { return 'Undone.'; }, unlink: function () { return 'Unlinked.'; }, low: function () { return 'Passed on. Thank you.'; }, link: function (it) { return 'Linked. Scanning it now opens ' + it.name + '.'; }, price: function (it) { return 'Price saved for ' + it.name + '.'; }, levels: function (it, a) { return (detailsChanges(it, a.vals || {}) ? 'Details' : 'Levels') + ' saved for ' + it.name + '.'; },
+    undo: function () { return 'Undone.'; }, unlink: function () { return 'Unlinked.'; }, low: function () { return 'Passed on. Thank you.'; }, link: function (it) { return 'Linked. Scanning it now opens ' + it.name + '.'; }, price: function (it) { return 'Price saved for ' + it.name + '.'; }, levels: function (it, a) { var p = levelsCall(it, a.vals || {}).args.p_patch, det = Object.keys(p).some(function (k) { return k !== 'reorder_below' && k !== 'par_qty'; }); return (det ? 'Details' : 'Levels') + ' saved for ' + (p.name || it.name) + '.'; },
     create: function (it, a) { return 'Added ' + String(a.vals.name).trim() + '.'; }, report: function (it, a) { return 'Sent to the ' + (a.vals.to === 'finance' ? 'Finance' : 'OPS') + ' group.'; },
     photo: function (it) { return 'Photo saved for ' + it.name + '.'; }, photoremove: function (it) { return 'Photo removed from ' + it.name + '.'; }, optusual: function (it) { return 'Usual option saved for ' + it.name + '.'; }, labels: function () { return 'Label sheet sent to the Finance group.'; },
     rename: function (it, a) { var n = (a.res && a.res.moved || []).length; return 'Moved ' + n + (n === 1 ? ' item' : ' items') + ' into ' + (mergeTarget(a.from, a.vals.to) || String(a.vals.to).trim()) + '.'; },
@@ -1538,7 +1540,7 @@
     if (why === 'code_taken') { a.err = 'taken'; a.takenId = body.item_id || null; a.takenName = body.item_name || (itemById(body.item_id) || {}).name || ''; return drawLayer(); }
     if (why === 'name_exists') { a.err = 'exists'; a.takenId = body.item_id || null; a.takenName = (itemById(body.item_id) || {}).name || ''; return drawLayer(); }
     if (why === 'bad_code') { a.err = 'badcode'; return drawLayer(); }
-    if (a.kind === 'undo' && (why === 'too_late' || why === 'not_yours' || why === 'stock_moved' || (a.entry.change && (why === 'already_undone' || why === 'not_found' || why === 'changed_since')))) { a.err = why === 'changed_since' ? 'changedSince' : 'tooLate'; K.undos = K.undos.filter(function (u) { return u !== a.entry; }); return drawLayer(); }
+    if (a.kind === 'undo' && (why === 'too_late' || why === 'not_yours' || why === 'stock_moved' || (a.entry.change && (why === 'already_undone' || why === 'not_found' || why === 'changed_since')))) { a.err = why === 'changed_since' ? 'changedSince' : a.entry.change && why !== 'not_yours' && why !== 'stock_moved' ? 'changeGone' : 'tooLate'; K.undos = K.undos.filter(function (u) { return u !== a.entry; }); return drawLayer(); }
     if (why === 'finance_only') { K.noFinance = true; a.vals.to = 'ops'; a.step = 'form'; a.err = 'financeOnly'; return drawLayer(); }
     a.err = errKind(e, online());
     var dk = a.kind === 'undo' ? a.entry.call.fn : a.kind === 'photoremove' ? 'photo' : a.kind;
@@ -1807,7 +1809,7 @@
       w = CHANGE_WORD[c.kind] || String(c.kind || 'Change').replace(/^./, function (x) { return x.toUpperCase(); });
       d = (c.before == null ? '' : fmt(c.before) + ' ') + '→ ' + (c.after == null ? '' : fmt(c.after)) + ' ' + unitWord(Number(c.after), unitOf(it));
     }
-    return '<li><span class="I_hwhen">' + esc(dateLabel(c.at)) + '</span><span class="I_hwhat"><b>' + esc(w) + '</b>' + (d ? '<span>' + esc(d.trim()) + '</span>' : '') + '</span><span class="I_hwho">' + (c.who ? esc(String(c.who).split(' ')[0]) : '') + '</span></li>';
+    return '<li><span class="I_hwhen">' + esc(manilaLabel(c.at)) + '</span><span class="I_hwhat"><b>' + esc(w) + '</b>' + (d ? '<span>' + esc(d.trim()) + '</span>' : '') + '</span><span class="I_hwho">' + (c.who ? esc(String(c.who).split(' ')[0]) : '') + '</span></li>';
   }
   function renderHistory(a, it) {
     var h = head(it.name + ': history', it.category);
@@ -1997,7 +1999,7 @@
       var up = { reorder_below: snap.reorder == null ? null : snap.reorder, par_qty: snap.par == null ? null : snap.par }, was = levelsCall(it, v).args.p_patch, more = false;
       if ('name' in was) { up.name = snap.name; more = true; }
       if ('location' in was) { up.location = snap.location || ''; more = true; } if ('unit' in was) { up.unit = snap.unit; more = true; } if ('category' in was) { up.category = snap.category; more = true; }
-      e.say = (more ? 'Details saved for ' : 'Levels saved for ') + n; e.line = more ? 'changed the details' : 'changed the levels'; e.confirm = 'Put the ' + (more ? 'details' : 'levels') + ' of ' + n + ' back as they were?';
+      e.say = (more ? 'Details saved for ' : 'Levels saved for ') + (was.name || n); e.line = more ? 'changed the details' : 'changed the levels'; e.confirm = 'Put the ' + (more ? 'details' : 'levels') + ' of ' + n + ' back as they were?';
       e.call = { fn: 'inventory_item_update_v1', args: { p_item_id: it.id, p_patch: up } };
     } else if (a.kind === 'photo' || a.kind === 'photoremove') {
       var pb = 'before' in d ? (d.before == null ? null : String(d.before)) : snap && snap.photo != null ? snap.photo : null;
@@ -2032,7 +2034,7 @@
   // s124: "Updated Nov 19 by Honey" under the level; the Last change line replaces it while that shows
   function updLine(it) {
     if (!it.updatedBy || lastEntry(it)) return '';
-    var d = dateLabel(it.updatedAt);
+    var d = manilaLabel(it.updatedAt);
     return '<p class="I_upd">' + gi('clock', 's16') + ' Updated ' + (d ? esc(d) + ' ' : '') + 'by ' + esc(it.updatedBy) + '</p>';
   }
   function lastChange(it) {

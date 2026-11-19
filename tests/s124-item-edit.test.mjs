@@ -88,6 +88,48 @@ test('s124 4: undo refusals read as plain messages and the button turns into Clo
   }
 });
 
+const editName = async (e) => { await e.mount(''); await e.open('i1'); await e.begin('levels'); await e.input('I_f_name', 'Toilet tissue'); await e.submit(); await e.submit(); await e.act('undo', { 'data-id': undoId(e.undo()) }); await e.submit(); };
+
+test('s124 4: a cleaner price save with no change id leaves no Undo bar and no Last change line', async () => {
+  const e = await make('cleaner', { inventory_item_price_set_v1: okd({ item_id: 'i1' }) }); await e.mount(''); await e.open('i1'); await e.begin('price');
+  await e.input('I_f_cost', '95'); await e.submit(); await e.submit();
+  assert.equal(e.client.rpcCalls('inventory_item_price_set_v1').length, 1);
+  assert.doesNotMatch(e.undo(), /data-act="undo"/);
+  await e.open('i1'); assert.doesNotMatch(e.sheet(), /Last change|I_last/);
+});
+
+test('s124 4: a change undo that is already undone or not found says to edit again, and the button is Close', async () => {
+  for (const reason of ['already_undone', 'not_found']) {
+    const e = await make('cleaner', { inventory_item_change_undo_v1: bad({ reason }) }); await editName(e);
+    assert.match(e.sheet(), /This can no longer be undone here\. Edit it again to correct it\./); assert.match(e.sheet(), />Close</);
+    assert.doesNotMatch(e.sheet(), /Count the item/);
+  }
+});
+
+test('s124 4: a change undo refused by the server (42501) hides Undo with a toast', async () => {
+  const e = await make('cleaner', { inventory_item_change_undo_v1: () => ({ data: null, error: { code: '42501', message: 'permission denied', status: 403 } }) }); await editName(e);
+  assert.ok(e.toasts.length > 0); assert.doesNotMatch(e.sheet(), /Yes, undo it/);
+  await e.open('i1'); assert.doesNotMatch(e.sheet(), /I_last|Last change/);
+});
+
+test('s124 4: a change undo whose old name is now taken says so and the button is Close', async () => {
+  const e = await make('cleaner', { inventory_item_change_undo_v1: bad({ reason: 'name_exists', item_id: 'i2' }) }); await editName(e);
+  assert.match(e.sheet(), /An item with that name already exists/); assert.match(e.sheet(), />Close</); assert.doesNotMatch(e.sheet(), /Yes, undo it/);
+});
+
+test('s124 3: saving a new name toasts Details saved for the new name; a levels-only edit says Levels', async () => {
+  const e = await make('cleaner'); await e.mount(''); await e.open('i1'); await e.begin('levels'); await e.input('I_f_name', 'Toilet tissue'); await e.submit(); await e.submit();
+  assert.ok(e.toasts.concat(e.undo()).some((m) => /Details saved for Toilet tissue/.test(m)), String(e.toasts) + e.undo());
+  const l = await make('cleaner'); await l.mount(''); await l.open('i1'); await l.begin('levels'); await l.input('I_f_reorder', '5'); await l.submit(); await l.submit();
+  assert.ok(l.toasts.concat(l.undo()).some((m) => /Levels saved for Toilet paper/.test(m)));
+});
+
+test('s124 5: the Updated line and history day are Manila days (17:30 UTC is next day)', async () => {
+  const e = await make('cleaner', { ...hist([{ at: '2026-11-19T17:30:00Z', kind: 'counted', before: 1, after: 2, who: 'Lloyd' }]) }, raw({ updatedAt: '2026-11-19T17:30:00Z', updatedBy: 'Honey Santos' })); await e.mount(''); await e.open('i1');
+  assert.match(e.sheet(), /Updated Nov 20 by Honey/);
+  await e.act('history-open'); assert.match(e.sheet(), /I_hwhen">Nov 20</);
+});
+
 test('s124 5: the Updated line shows with a name and date, hides without one, and gives way to the Last change line', async () => {
   const e = await make('cleaner', {}, raw({ updatedAt: '2026-10-12T03:00:00Z', updatedBy: 'Honey Santos' })); await e.mount(''); await e.open('i1');
   assert.match(e.sheet(), /<p class="I_upd"><svg[^>]*>.*?<\/svg> Updated Oct 12 by Honey<\/p>/);
