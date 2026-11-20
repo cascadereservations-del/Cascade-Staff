@@ -41,7 +41,7 @@ test('s111 utility tiles (s113 shape): per day, never per night; nights booked f
     if (role === 'owner') { await click({ 'data-kact': 'seg', 'data-seg': 'admin' }); assert.doesNotMatch(el.innerHTML, /per night/i, 'none on Admin either'); }
     await click({ 'data-kact': 'seg', 'data-seg': 'inventory' }); assert.doesNotMatch(el.innerHTML, /per night/i);
   }
-  assert.doesNotMatch(read('kpi/K_kpi.js'), /per night|kwh_per_night|m3_per_night|nights_month/, 'the removed keys are not read');
+  assert.doesNotMatch(read('kpi/K_kpi.js'), /nights_month/, 'the removed key is not read'); // s127 Addendum 1 (Lloyd, 2026-11-20) brings per guest night back, in the usage charts only; the Utility panel stays per day (asserted above on data with no usage_months)
   const empty = mountWith(payload({ kwh_per_day: null, nights_booked: null, per_stay: [], per_month: [] })); await tick();
   assert.match(empty.el.innerHTML, /A day figure needs two readings/); assert.match(empty.el.innerHTML, /Nights booked<\/span><span class="KU_big"><b>Not yet/); assert.doesNotMatch(empty.el.innerHTML, /K_day|K_avg/);
 });

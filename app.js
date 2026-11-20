@@ -367,9 +367,9 @@
     var my = ++H_bSeq;
     Promise.resolve().then(function () { return sb.rpc('today_bills_v1', { p_property_id: pid() }); }).then(function (r) {
       if (my !== H_bSeq) return;
-      if (!r || r.error) { if (r && r.error && CS.rpcMissing(r.error)) state.billsAbsent = true; state.bills = null; return; }
+      if (!r || r.error) { if (r && r.error && CS.rpcMissing(r.error)) state.billsAbsent = true; if (r && r.error && r.error.code === '42501') state.bills = null; return; } // a failed reload keeps the card already shown; a permission refusal removes it; sign-out clears it
       state.bills = CS.billsToday(r.data);
-    }).catch(function () { if (my === H_bSeq) state.bills = null; }).then(function () { if (my === H_bSeq && current === 'home' && state.layout) renderHome(); });
+    }).catch(function () { /* keep the last good card */ }).then(function () { if (my === H_bSeq && current === 'home' && state.layout) renderHome(); });
   }
   // s109: owner/admin/finance: a payment request a staff member has sent stands out at the top of Today until it is paid.
   function A_peso(x) { return '₱' + (Number(x) || 0).toLocaleString('en-PH', { maximumFractionDigits: 2 }); }

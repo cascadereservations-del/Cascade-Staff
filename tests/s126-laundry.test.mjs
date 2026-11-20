@@ -59,7 +59,7 @@ test('s126 laundry words: the tour and What\'s new name no tab she lacks; the to
 });
 
 test('s126 release: 3.4.42 with cs-shell-v67', () => {
-  assert.match(read('app.js'), /version: '3.4.42'/); assert.match(read('sw.js'), /CACHE_NAME = 'cs-shell-v67'/); assert.match(read('package.json'), /"version": "3.4.42"/); assert.match(read('README.md'), /cs-shell-v67/);
+  assert.match(read('app.js'), /version: '3\.4\.42'/); assert.match(read('sw.js'), /CACHE_NAME = 'cs-shell-v67'/); assert.match(read('package.json'), /"version": "3\.4\.42"/); assert.match(read('README.md'), /cs-shell-v67/);
 });
 
 // ---- fix round 1

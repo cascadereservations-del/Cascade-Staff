@@ -181,6 +181,11 @@
     var cy = cycleOf(today), days = Math.max(1, CS.daysBetween(cy.from, cy.last)), mk = function (n) { return new Date(Date.UTC(+today.slice(0, 4), +today.slice(5, 7) - 1 + n, 1)).toISOString().slice(0, 7); };
     var KWH = [372, 380, null, 349, 380, 338], M3 = [5.9, 5.8, null, 6.2, 8.9, 5.5], chg = function (a, i) { for (var j = i - 1; j >= 0; j--) if (a[j] != null) return a[i] != null ? Math.round((a[i] / a[j] - 1) * 100) : null; return null; };
     k.utility.usage_months = KWH.map(function (v, i) { var now = i === KWH.length - 1; return { month: mk(i - (KWH.length - 1)), kwh: v, m3: M3[i], kwh_change_pct: chg(KWH, i), m3_change_pct: chg(M3, i), forecast: now, kwh_so_far: now ? 214 : null, m3_so_far: now ? 3.5 : null }; });
+    // per guest night (Addendum 1): hand-set guest nights, the current month over what is used so far, the change against the previous month that has a figure
+    var GN = [19, 21, 0, 21, 22, 12];
+    var perN = function (a, so, dp) { return a.map(function (v, i) { var u = i === a.length - 1 ? so : v; return u != null && GN[i] > 0 ? Math.round(u / GN[i] * Math.pow(10, dp)) / Math.pow(10, dp) : null; }); };
+    var PK = perN(KWH, 214, 1), PM = perN(M3, 3.5, 2);
+    k.utility.usage_months.forEach(function (m, i) { m.guest_nights = GN[i]; m.kwh_per_night = PK[i]; m.m3_per_night = PM[i]; m.kwh_night_change_pct = chg(PK, i); m.m3_night_change_pct = chg(PM, i); });
     if (!k.admin) return;
     var stay = function (n, name, tier, nights, kwh, m3, path, box) { return { from: CS.addDays(CS.addDays(today, -n), -nights), to: CS.addDays(today, -n), nights: nights, kwh: kwh, m3: m3, cost_php: Math.round(kwh * 1125) / 100, guest_name: name, tier: tier, id_photo_path: path, id_face_box: box }; };
     var box = { x: 0.056, y: 0.26, w: 0.27, h: 0.54, src: 'v' };

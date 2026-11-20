@@ -170,7 +170,9 @@
   }
   function usageMonths(rows) {
     return (Array.isArray(rows) ? rows : []).filter(function (r) { return obj(r) && /^\d{4}-\d{2}/.test(String(r.month || '')); }).map(function (r) {
-      return { month: String(r.month).slice(0, 7), kwh: num(r.kwh), m3: num(r.m3), kwhPct: num(r.kwh_change_pct), m3Pct: num(r.m3_change_pct), forecast: r.forecast === true, kwhSoFar: num(r.kwh_so_far), m3So: num(r.m3_so_far) };
+      // per guest night (Addendum 1): absent on an older server, so `pn` says whether this row carries the keys at all
+      return { month: String(r.month).slice(0, 7), kwh: num(r.kwh), m3: num(r.m3), kwhPct: num(r.kwh_change_pct), m3Pct: num(r.m3_change_pct), forecast: r.forecast === true, kwhSoFar: num(r.kwh_so_far), m3So: num(r.m3_so_far),
+        pn: r.kwh_per_night !== undefined || r.m3_per_night !== undefined, nights: num(r.guest_nights), kwhNight: num(r.kwh_per_night), m3Night: num(r.m3_per_night), kwhNightPct: num(r.kwh_night_change_pct), m3NightPct: num(r.m3_night_change_pct) };
     }).slice(-6);
   }
   // the change arrow: up is warn, down is ok, no value is a dash, a change that rounds to zero is a plain 0%
@@ -188,6 +190,10 @@
   function monthName(m) { var p = monthParts(m); return p && p.m >= 1 && p.m <= 12 ? MONTHS[p.m - 1] : ''; }
   // the stays that fall in this bill's cycle (a stay counts from the day it ended)
   function inCycle(stays, from) { return from ? stays.filter(function (s) { return s.to >= from; }) : []; }
+  // kWh and m3 with thousands separators (fmt rounds like the rest of the file; the sign and decimals are kept)
+  function fmtU(n, d) { var p = fmt(n, d).split('.'); return group(p[0]) + (p[1] ? '.' + p[1] : ''); }
+  // the small per-night number under a month: fixed decimals (0.40, not 0.4); a dash when there is none
+  function nightTxt(v, d) { if (v == null) return '–'; var p = (Math.round(v * Math.pow(10, d)) / Math.pow(10, d)).toFixed(d).split('.'); return group(p[0]) + '.' + p[1]; }
   // one stay use divided by its nights, for the bars: null when the nights or the figure is missing
   function perNight(v, nights) { return v != null && nights != null && nights > 0 ? v / nights : null; }
 
@@ -432,11 +438,11 @@
   }
   function billCard(a) {
     var b = a.bills.e, st = inCycle(a.stays, b.from), per = [], lastDay = b.last ? manilaDay(b.last) : '';
-    if (b.perKwh != null) per.push('Guests use about ' + (b.perPhp != null ? peso(b.perPhp) + ' a day (' + fmt(b.perKwh, 1) + '\u00a0kWh).' : fmt(b.perKwh, 1) + '\u00a0kWh a day.'));
+    if (b.perKwh != null) per.push('Guests use about ' + (b.perPhp != null ? peso(b.perPhp) + ' a day (' + fmtU(b.perKwh, 1) + '\u00a0kWh).' : fmtU(b.perKwh, 1) + '\u00a0kWh a day.'));
     per.push('Updates with every meter reading' + (lastDay ? '; last one ' + dayMonth(lastDay) : '') + '.');
     return '<div class="card glass K_note" id="K_bill"><span class="K_lab">' + esc('This bill' + (b.from && b.to ? ' · ' + dayMonth(b.from) + ' to ' + dayMonth(b.to) : '')) + '</span>' +
-      twoCols([b.soFar != null ? peso(b.soFar) : 'Not yet', [b.kwh != null ? fmt(b.kwh, 0) + '\u00a0kWh' : '', b.days != null ? plural(b.days, 'day') : ''].filter(Boolean).join(' · ')], [b.fPhp != null ? peso(b.fPhp) : 'Not yet', b.fKwh != null ? 'about ' + fmt(b.fKwh, 0) + '\u00a0kWh' : '']) +
-      (st.length ? '<div class="KG_stack" role="group" aria-label="Guests on this bill">' + st.slice(0, 4).map(function (s) { return faceHtml(s, 32); }).join('') + '<span class="K_sub">' + esc(st.length > 4 ? '+ more stays' : plural(st.length, 'stay')) + '</span></div>' : '') +
+      twoCols([b.soFar != null ? peso(b.soFar) : 'Not yet', [b.kwh != null ? fmtU(b.kwh, 0) + '\u00a0kWh' : '', b.days != null ? plural(b.days, 'day') : ''].filter(Boolean).join(' · ')], [b.fPhp != null ? peso(b.fPhp) : 'Not yet', b.fKwh != null ? 'about ' + fmtU(b.fKwh, 0) + '\u00a0kWh' : '']) +
+      (st.length ? '<div class="KG_stack" role="group" aria-label="Guests on this bill">' + st.slice(0, 4).map(function (s) { return faceHtml(s, 32); }).join('') + '<span class="K_sub">' + esc(st.length > 4 ? '+' + (st.length - 4) + ' more ' + (st.length - 4 === 1 ? 'stay' : 'stays') : plural(st.length, 'stay')) + '</span></div>' : '') +
       '<p class="K_sub">' + esc(per.join(' ')) + '</p></div>';
   }
   function changeCard(h) {
@@ -450,14 +456,14 @@
     var wr = a.waterRate, b = a.bills && a.bills.w; if (!wr && !b) return '';
     var min = wr ? wr.min : b && b.min, minM3 = wr ? wr.minM3 : b && b.minM3, next = wr ? wr.next : b && b.next, upto = wr ? wr.nextUpto : b && b.nextUpto, h = '<div class="K_util K_util-w"><h2 class="K_h">💧 Water cost</h2>';
     if (min != null) h += '<div class="K_money" id="K_wrate"><span class="K_lab">Gensan Water District rate</span><span class="K_big">' + esc(peso(min) + ' minimum') + '</span>' +
-      '<span class="K_sub">' + esc((minM3 != null ? 'Covers the first ' + fmt(minM3, 0) + '\u00a0m³.' : '') + (next != null ? (minM3 != null ? ' Then ' : 'Then ') + pesoRate(next) + ' per m³' + (upto != null ? ' up to ' + fmt(upto, 0) + '\u00a0m³' : '') + '.' : '')) + '</span>' + srcLine('', wr && wr.url) + '</div>';
+      '<span class="K_sub">' + esc((minM3 != null ? 'Covers the first ' + fmtU(minM3, 0) + '\u00a0m³.' : '') + (next != null ? (minM3 != null ? ' Then ' : 'Then ') + pesoRate(next) + ' per m³' + (upto != null ? ' up to ' + fmtU(upto, 0) + '\u00a0m³' : '') + '.' : '')) + '</span>' + srcLine('', wr && wr.url) + '</div>';
     if (b) {
       var per = [], inside = b.m3 != null && b.minM3 != null && b.m3 <= b.minM3;
-      if (b.perM3 != null) per.push('Guests use about ' + fmt(b.perM3, 2) + '\u00a0m³ a day.');
+      if (b.perM3 != null) per.push('Guests use about ' + fmtU(b.perM3, 2) + '\u00a0m³ a day.');
       if (inside) per.push(b.fM3 != null && b.fM3 > b.minM3 ? 'Inside the minimum so far; the forecast goes past it.' : 'Still inside the minimum.');
       else if (b.m3 != null && b.minM3 != null) per.push('Past the minimum.' + (b.next != null ? ' The next m³ costs ' + pesoRate(b.next) + '.' : ''));
       h += '<div class="card glass K_note" id="K_wbill"><span class="K_lab">' + esc('This bill' + (b.from ? ' · since ' + dayMonth(b.from) : '')) + '</span>' +
-        twoCols([b.soFar != null ? peso(b.soFar) : 'Not yet', [b.m3 != null ? fmt(b.m3, 1) + '\u00a0m³' : '', b.days != null ? plural(b.days, 'day') : ''].filter(Boolean).join(' · ')], [b.fPhp != null ? peso(b.fPhp) : 'Not yet', b.fM3 != null ? 'about ' + fmt(b.fM3, 1) + '\u00a0m³' : '']) +
+        twoCols([b.soFar != null ? peso(b.soFar) : 'Not yet', [b.m3 != null ? fmtU(b.m3, 1) + '\u00a0m³' : '', b.days != null ? plural(b.days, 'day') : ''].filter(Boolean).join(' · ')], [b.fPhp != null ? peso(b.fPhp) : 'Not yet', b.fM3 != null ? 'about ' + fmtU(b.fM3, 1) + '\u00a0m³' : '']) +
         (per.length ? '<p class="K_sub">' + esc(per.join(' ')) + '</p>' : '') + '</div>';
     }
     return h + '</div>';
@@ -465,25 +471,26 @@
   // The usage hero: this month so far, against the month before at the same pace.
   function usageHero(um) {
     var cur = um[um.length - 1], prev = um.length > 1 ? um[um.length - 2] : null, pn = prev ? monthName(prev.month) : '', e = arrowOf(cur.kwhPct, 0), w = arrowOf(cur.m3Pct, 0);
-    var used = cur.forecast ? cur.kwhSoFar : cur.kwh, usedW = cur.forecast ? cur.m3So : cur.m3, end = cur.forecast && cur.kwh != null ? 'about ' + fmt(cur.kwh, 0) + '\u00a0kWh by month end' : '';
+    var used = cur.forecast ? cur.kwhSoFar : cur.kwh, usedW = cur.forecast ? cur.m3So : cur.m3, end = cur.forecast && cur.kwh != null ? 'about ' + fmtU(cur.kwh, 0) + '\u00a0kWh by month end' : '';
     var base = e && pn ? (e.ico ? e.ico + ' ' + e.n + '% against ' + pn : 'No change against ' + pn) : '', line = base ? base + (cur.forecast ? ' at this pace' : '') + (end ? ', ' + end : '') + '.' : end ? 'At this pace, ' + end + '.' : '';
-    return '<div class="K_money" id="K_use"><span class="K_lab">' + esc(monthName(cur.month) + (cur.forecast ? ' so far' : '')) + '</span><span class="K_big">' + esc(used != null ? fmt(used, 0) + '\u00a0kWh' : 'No reading yet') + '</span>' +
-      (line ? '<span class="K_sub">' + esc(line) + '</span>' : '') + (usedW != null ? '<span class="K_sub">' + esc('💧 Water ' + fmt(usedW, 1) + '\u00a0m³' + (w ? ', ' + arrowText(cur.m3Pct, 0) : '') + '.') + '</span>' : '') + '</div>';
+    return '<div class="K_money" id="K_use"><span class="K_lab">' + esc(monthName(cur.month) + (cur.forecast ? ' so far' : '')) + '</span><span class="K_big">' + esc(used != null ? fmtU(used, 0) + '\u00a0kWh' : 'No reading yet') + '</span>' +
+      (line ? '<span class="K_sub">' + esc(line) + '</span>' : '') + (usedW != null ? '<span class="K_sub">' + esc('💧 Water ' + fmtU(usedW, 1) + '\u00a0m³' + (w ? ', ' + arrowText(cur.m3Pct, 0) : '') + '.') + '</span>' : '') + '</div>';
   }
   // Five months of use as bars: the tallest month is full height; the current month is a forecast with its used-so-far part solid; a month with no counted reading is hatched.
   function usageChart(um, kind) {
-    var rows = um.slice(-5), e = kind === 'kwh', unit = e ? 'kWh' : 'm³', dec = e ? 0 : 1, so = e ? 'kwhSoFar' : 'm3So', pc = e ? 'kwhPct' : 'm3Pct', vals = rows.map(function (r) { return r[kind]; });
+    var rows = um.slice(-5), e = kind === 'kwh', unit = e ? 'kWh' : 'm³', dec = e ? 0 : 1, so = e ? 'kwhSoFar' : 'm3So', pc = e ? 'kwhPct' : 'm3Pct', nk = e ? 'kwhNight' : 'm3Night', npc = e ? 'kwhNightPct' : 'm3NightPct', nd = e ? 1 : 2, vals = rows.map(function (r) { return r[kind]; });
     if (!vals.some(function (v) { return v != null; })) return '';
-    var max = Math.max.apply(null, vals.filter(function (v) { return v != null; }).concat([0])), aria = [], missing = [];
+    var max = Math.max.apply(null, vals.filter(function (v) { return v != null; }).concat([0])), aria = [], missing = [], hasN = rows.some(function (r) { return r.pn; }); // an older server sends no per-night keys: the chart is then drawn as before
     var cols = rows.map(function (r) {
-      var v = r[kind], na = v == null, fc = r.forecast && !na, ar = arrowOf(r[pc], 0), mn = monthName(r.month), hh = na ? 30 : max > 0 ? Math.round(v / max * 100) : 0, sf = fc && r[so] != null && v > 0 ? Math.min(100, Math.round(r[so] / v * 100)) : 100;
-      aria.push(mn + ' ' + (na ? 'not counted' : (fc ? 'forecast ' : '') + fmt(v, dec))); if (na && !r.forecast) missing.push(mn);
-      return '<div class="KB_col' + (r.forecast ? ' KB_now' : '') + '"><span class="KB_v">' + esc(na ? '–' : fmt(v, dec)) + '</span><span class="KB_bar ' + (e ? 'KB_e' : 'KB_w') + (fc ? ' KB_fc' : '') + (na ? ' KB_na' : '') + '" style="--h:' + hh + (fc ? ';--sf:' + sf + '%' : '') + '"></span>' +
-        '<span class="KB_m">' + esc(mn.slice(0, 3)) + '</span><span class="KB_c' + (ar && ar.cls ? ' ' + ar.cls : '') + '">' + (ar ? (ar.ico ? '<i class="KB_a">' + ar.ico + '</i>' : '') + esc(ar.n + '%') : '–') + '</span></div>';
+      var v = r[kind], na = v == null, fc = r.forecast && !na, ar = arrowOf(typeof r[npc] === 'number' ? r[npc] : r[pc], 0), mn = monthName(r.month), hh = na ? 30 : max > 0 ? Math.round(v / max * 100) : 0, sf = fc && r[so] != null && v > 0 ? Math.min(100, Math.round(r[so] / v * 100)) : 100;
+      aria.push(mn + ' ' + (na ? 'not counted' : (fc ? 'forecast ' : '') + fmtU(v, dec)) + (hasN && r[nk] != null ? ', ' + nightTxt(r[nk], nd) + ' a night' + (fc ? ' so far' : '') : '')); if (na && !r.forecast) missing.push(mn);
+      return '<div class="KB_col' + (r.forecast ? ' KB_now' : '') + '"><span class="KB_v">' + esc(na ? '–' : fmtU(v, dec)) + '</span><span class="KB_bar ' + (e ? 'KB_e' : 'KB_w') + (fc ? ' KB_fc' : '') + (na ? ' KB_na' : '') + '" style="--h:' + hh + (fc ? ';--sf:' + sf + '%' : '') + '"></span>' +
+        '<span class="KB_m">' + esc(mn.slice(0, 3)) + '</span>' + (hasN ? '<span class="KB_n">' + esc(nightTxt(r[nk], nd)) + '</span>' : '') + '<span class="KB_c' + (ar && ar.cls ? ' ' + ar.cls : '') + '">' + (ar ? (ar.ico ? '<i class="KB_a">' + ar.ico + '</i>' : '') + esc(ar.n + '%') : '–') + '</span></div>';
     }).join('');
     var fcRow = rows.filter(function (r) { return r.forecast; })[0];
-    var cap = e ? 'The arrow is the change from the month before.' + (fcRow ? ' ' + monthName(fcRow.month) + ' is a forecast; the solid part is used so far.' : '') + (missing.length ? ' ' + missing.join(' and ') + (missing.length > 1 ? ' have' : ' has') + ' no counted meter reading.' : '') : '';
-    return '<div class="card glass K_note" id="' + (e ? 'K_ume' : 'K_umw') + '"><span class="K_lab">' + (e ? '⚡ Electricity' : '💧 Water') + ' by month · ' + unit + '</span><div class="KB_cols" role="img" aria-label="' + esc((e ? 'Electricity used each month in kWh: ' : 'Water used each month in cubic metres: ') + aria.join(', ')) + '">' + cols + '</div>' + (cap ? '<p class="K_sub">' + esc(cap) + '</p>' : '') + '</div>';
+    var fcNote = fcRow ? ' ' + monthName(fcRow.month) + ' is a forecast; the solid part is used so far.' : '', miss = missing.length ? ' ' + missing.join(' and ') + (missing.length > 1 ? ' have' : ' has') + ' no counted meter reading.' : '';
+    var cap = !e ? (hasN ? 'Small number: m³ per guest night, with its change.' : '') : (hasN ? 'Small number: kWh per guest night. The arrow is its change from the month before, so a busy month does not look like waste.' : 'The arrow is the change from the month before.') + fcNote + miss;
+    return '<div class="card glass K_note" id="' + (e ? 'K_ume' : 'K_umw') + '"><span class="K_lab">' + (e ? '⚡ Electricity' : '💧 Water') + ' by month · ' + unit + '</span><div class="KB_cols" role="img" aria-label="' + esc((e ? 'Electricity used each month in kWh' : 'Water used each month in cubic metres') + (hasN ? ', and per guest night: ' : ': ') + aria.join(hasN ? '; ' : ', ')) + '">' + cols + '</div>' + (cap ? '<p class="K_sub">' + esc(cap) + '</p>' : '') + '</div>';
   }
   function guestsCard(stays) {
     if (!stays.length) return '';
@@ -492,7 +499,7 @@
     var bar = function (v, mx, c) { return v != null && mx > 0 ? '<i class="' + c + '" style="--w:' + Math.round(v / mx * 100) + '%"></i>' : ''; };
     return '<div class="card glass K_note" id="K_ugs"><span class="K_lab">Use by guest · last ' + esc(stays.length === 1 ? 'stay' : stays.length + ' stays') + '</span><div class="KG_list">' + stays.map(function (s, i) {
       return '<div class="KG_row">' + faceHtml(s, 44) + '<div class="KG_who"><b>' + esc(s.name || 'Guest') + '</b><span class="K_sub">' + esc(dayMonth(s.to) + (s.nights != null ? ' · ' + plural(s.nights, 'night') : '')) + '</span><span class="KG_bars" aria-hidden="true">' + bar(nE[i], mxE, 'KG_e') + bar(nW[i], mxW, 'KG_w') + '</span></div>' +
-        '<div class="KG_num"><b>' + esc(s.cost != null ? peso(s.cost) : '–') + '</b>' + (s.kwh != null ? '<span class="K_sub">' + esc(fmt(s.kwh, s.kwh < 10 ? 1 : 0) + '\u00a0kWh') + '</span>' : '') + (s.m3 != null ? '<span class="K_sub">' + esc(fmt(s.m3, 2) + '\u00a0m³') + '</span>' : '') + '</div></div>';
+        '<div class="KG_num"><b>' + esc(s.cost != null ? peso(s.cost) : '–') + '</b>' + (s.kwh != null ? '<span class="K_sub">' + esc(fmtU(s.kwh, s.kwh < 10 ? 1 : 0) + '\u00a0kWh') + '</span>' : '') + (s.m3 != null ? '<span class="K_sub">' + esc(fmtU(s.m3, 2) + '\u00a0m³') + '</span>' : '') + '</div></div>';
     }).join('') + '</div><div class="KG_key K_sub"><span><i style="background:var(--v5-gold)"></i>kWh a night</span><span><i style="background:var(--v5-chart-line)"></i>m³ a night</span></div></div>';
   }
   function usageSection(d, a) {
@@ -688,6 +695,6 @@
 
   root.K_Kpi = { mount: mount, unmount: unmount, reset: reset, lib: {
     esc: esc, normalize: normalize, niceMax: niceMax, ticksFor: ticksFor, percentile: percentile, median: median, lineModel: lineModel, dayModel: dayModel, monthModel: monthModel, xPick: xPick, change: change, prevMonth: prevMonth, yOf: yOf, PLOT: PLOT, targetLines: targetLines, targetProblem: targetProblem, targetCall: targetCall, usageRows: usageRows, daysTone: daysTone, rateCost: rateCost, monthLabel: monthLabel, daysIn: daysIn, isAdminRole: isAdminRole, canSetRate: canSetRate,
-    usageMonths: usageMonths, arrowOf: arrowOf, arrowText: arrowText, manilaDay: manilaDay, inCycle: inCycle, perNight: perNight, normBlocks: normBlocks, correctionProblem: correctionProblem, blockCall: blockCall, resendCall: resendCall, rateCall: rateCall, rateProblem: rateProblem, errKind: errKind, peso: peso, pesoRate: pesoRate
+    usageMonths: usageMonths, fmtU: fmtU, nightTxt: nightTxt, arrowOf: arrowOf, arrowText: arrowText, manilaDay: manilaDay, inCycle: inCycle, perNight: perNight, normBlocks: normBlocks, correctionProblem: correctionProblem, blockCall: blockCall, resendCall: resendCall, rateCall: rateCall, rateProblem: rateProblem, errKind: errKind, peso: peso, pesoRate: pesoRate
   } };
 })(typeof window !== 'undefined' ? window : this);

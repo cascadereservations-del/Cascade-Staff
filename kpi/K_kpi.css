@@ -148,7 +148,8 @@
 .K_util > .K_h::after { content: ""; flex: 1; height: 1px; background: linear-gradient(90deg, var(--ub), transparent); opacity: .6; }
 .K_util .card.K_note { background-image: linear-gradient(180deg, color-mix(in srgb, var(--ub) 12%, transparent), transparent 5rem); }
 .K_util .K_money { position: relative; overflow: hidden; background-repeat: no-repeat; }
-.K_util .K_money .K_lab { color: var(--ub); }
+/* the panel is navy in both themes, so its label uses the panel's own light token (the section colour failed 4.5:1 in the light theme) */
+.K_util .K_money .K_lab { color: var(--v5-panel-fg-2); }
 .K_util-e .K_money { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M13 2 4 14h6l-1 8 9-12h-6z' fill='%23E0B872' fill-opacity='.16'/%3E%3C/svg%3E"), radial-gradient(18rem 12rem at 100% 0%, color-mix(in srgb, var(--v5-gold) 22%, transparent), transparent 70%); background-position: right -1rem center, 0 0; background-size: 7.5rem 7.5rem, auto; }
 .K_util-w .K_money { padding-bottom: 56px; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 400 80' preserveAspectRatio='none'%3E%3Cpath d='M0 40Q50 10 100 40T200 40T300 40T400 40V80H0Z' fill='%236CC4E0' fill-opacity='.18'/%3E%3Cpath d='M0 56Q50 32 100 56T200 56T300 56T400 56V80H0Z' fill='%236CC4E0' fill-opacity='.26'/%3E%3C/svg%3E"), radial-gradient(18rem 12rem at 100% 0%, color-mix(in srgb, var(--v5-chart-line) 20%, transparent), transparent 70%); background-position: 0 100%, 0 0; background-size: 100% 3rem, auto; }
 /* v5 usage section */
@@ -163,6 +164,7 @@
 .KB_na { background: repeating-linear-gradient(135deg, var(--v5-line) 0 4px, transparent 4px 8px); }
 .KB_m { font: 600 var(--v5-t-label)/1.2 var(--v5-font-ui); color: var(--v5-ink-2); }
 .KB_now .KB_m { color: inherit; }
+.KB_n { font: 600 var(--v5-t-label)/1.2 var(--v5-font-ui); color: var(--v5-ink-2); font-variant-numeric: tabular-nums; }
 .KB_c { font: 600 var(--v5-t-label)/1.2 var(--v5-font-ui); color: var(--v5-ink-2); }
 .KB_c.K_warn { color: var(--v5-warn-t); } .KB_c.K_ok { color: var(--v5-ok-t); }
 .KB_a { font-style: normal; font-size: .8em; }
