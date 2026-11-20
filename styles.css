@@ -1313,14 +1313,6 @@ a.T_call { min-height: var(--touch); display: inline-flex; align-items: center; 
 #T_bills .BL_who { flex: 1; min-width: 0; display: grid; gap: 4px; }
 #T_bills .BL_who b { font: 600 var(--v5-t-body)/1.25 var(--v5-font-ui); }
 #T_bills .BL_amt { font: 600 var(--v5-t-body)/1.25 var(--v5-font-ui); font-variant-numeric: tabular-nums; white-space: nowrap; }
-/* s128: an unpaid row is a grid, so the small line runs under the name AND the amount (it wrapped as "est. to 19 Nov · / due 27th" at 360) */
-#T_bills .K_line:not(.BL_paid) { display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto; grid-template-areas: "tile name amt btn" "tile sub sub btn"; gap: 4px 0; align-items: center; }
-#T_bills .K_line:not(.BL_paid) .BL_who { display: contents; }
-#T_bills .K_line:not(.BL_paid) .BL_tile { grid-area: tile; margin-right: 8px; }
-#T_bills .K_line:not(.BL_paid) .BL_who b { grid-area: name; align-self: end; }
-#T_bills .K_line:not(.BL_paid) .BL_who .K_sub { grid-area: sub; align-self: start; }
-#T_bills .K_line:not(.BL_paid) .BL_amt { grid-area: amt; align-self: end; padding-left: 8px; }
-#T_bills .K_line:not(.BL_paid) .btn-sm { grid-area: btn; margin-left: 12px; }
 /* s128: at 320 the icon tile left 58px for the name ("Electricit / y"); the name says what the bill is */
 @media (max-width: 340px) { #T_bills .BL_tile { display: none; } }
 #T_bills .BL_paid .i, #T_bills .BL_paid .K_sub { color: var(--v5-ok-t); } #T_bills .BL_paid .i { flex: none; }

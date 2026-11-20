@@ -105,10 +105,10 @@ test('s128 nowrap stays on an allowlist in the KPI sheet, and the Utility tiles 
   assert.match(css, /@media \(max-width: 340px\) \{ #K_glance, \.KU_tiles \{ grid-template-columns: minmax\(0, 1fr\); \}/);
 });
 
-test('s128 bills card: the two figures are centred, an unpaid row is a grid with the small line under name and amount, and the tile goes at 340 px and under', () => {
+test('s128 bills card: the two figures are centred, the amount sits in line with Pay, and the tile goes at 340 px and under', () => {
   const css = read('styles.css');
   assert.ok(css.includes('#T_bills .K_two > div { display: flex; flex-direction: column; align-items: center;'));
-  assert.ok(css.includes('grid-template-areas: "tile name amt btn" "tile sub sub btn"'));
+  assert.ok(!css.includes('grid-template-areas: "tile name amt btn"'), 'the amount stays on the centre line of the Pay button (Lloyd)');
   assert.ok(css.includes('@media (max-width: 340px) { #T_bills .BL_tile { display: none; } }'));
   assert.ok(!css.includes('margin-top: -8px'));
 });
