@@ -442,7 +442,7 @@
     per.push('Updates with every meter reading' + (lastDay ? '; last one ' + dayMonth(lastDay) : '') + '.');
     return '<div class="card glass K_note" id="K_bill"><span class="K_lab">' + esc('This bill' + (b.from && b.to ? ' · ' + dayMonth(b.from) + ' to ' + dayMonth(b.to) : '')) + '</span>' +
       twoCols([b.soFar != null ? peso(b.soFar) : 'Not yet', [b.kwh != null ? fmtU(b.kwh, 0) + '\u00a0kWh' : '', b.days != null ? plural(b.days, 'day') : ''].filter(Boolean).join(' · ')], [b.fPhp != null ? peso(b.fPhp) : 'Not yet', b.fKwh != null ? 'about ' + fmtU(b.fKwh, 0) + '\u00a0kWh' : '']) +
-      (st.length ? '<div class="KG_stack" role="group" aria-label="Guests on this bill">' + st.slice(0, 4).map(function (s) { return faceHtml(s, 32); }).join('') + '<span class="K_sub">' + esc(st.length > 4 ? '+' + (st.length - 4) + ' more ' + (st.length - 4 === 1 ? 'stay' : 'stays') : plural(st.length, 'stay')) + '</span></div>' : '') +
+      (st.length ? '<div class="KG_stack" role="group" aria-label="Guests on this bill">' + st.slice(0, 4).map(function (s) { return faceHtml(s, 32); }).join('') + '<span class="K_sub">' + esc(st.length > 4 ? '+ more stays' : plural(st.length, 'stay')) /* shortcut: the server sends at most 5 stays, so an exact +N would lie in a busy cycle; show the number when it sends a stay count */ + '</span></div>' : '') +
       '<p class="K_sub">' + esc(per.join(' ')) + '</p></div>';
   }
   function changeCard(h) {

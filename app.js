@@ -356,7 +356,7 @@
   var H_bSeq = 0;
   function A_billsCard() {
     var b = state.bills; if (!b) return '';
-    var kwh = Math.round(b.eKwh).toLocaleString('en-PH'), m3 = String(Math.round(b.wM3 * 10) / 10);
+    var kwh = (Math.round(b.eKwh) || 0).toLocaleString('en-PH'), m3 = String(Math.round(b.wM3 * 10) / 10);
     return '<section class="card glass A_card F_span K_bills" id="T_bills" aria-label="Bills so far"><span class="K_lab">' + esc('Bills since ' + CS.dayLabel(b.since) + ' · estimate') + '</span><div class="K_two">' +
       '<div><i class="K_e">⚡ Electricity</i><b>' + esc(b.ePhp != null ? A_peso(Math.round(b.ePhp)) : 'Not yet') + '</b><span class="K_sub">' + esc(kwh + ' kWh') + '</span></div>' +
       '<div><i class="K_w">💧 Water</i><b>' + esc(A_peso(Math.round(b.wPhp))) + '</b><span class="K_sub">' + esc(m3 + ' m³') + '</span></div></div>' +

@@ -160,7 +160,7 @@ test('s127 r1 thousands: kWh and m3 from 1,000 are grouped on the KPI tab; small
 test('s127 r1 face stack: "+N more stays" counts the real number, four or fewer say "N stays"', async () => {
   const st = (n) => Array.from({ length: n }, (_, i) => ({ from: '2026-11-0' + (i + 1), to: '2026-11-0' + (i + 2), nights: 1, kwh: 10, m3: 0.1, cost_php: 100, guest_name: 'Demo ' + i, tier: '', id_photo_path: null }));
   const stack = async (n) => { const a = NEW_ADMIN(); a.stays = st(n); return (await openAdmin(adminWith([], a))).match(/KG_stack[\s\S]*?<\/div>/)[0]; };
-  const five = await stack(5); assert.ok(text(five).includes('+1 more stay'), '5 stays in the cycle: four faces and +1'); assert.ok(!five.includes('+ more'));
+  const five = await stack(5); assert.ok(text(five).includes('+ more stays'), 'the server caps stays at 5, so no exact count is claimed'); assert.ok(!/\+\d/.test(text(five)));
   assert.ok(text(await stack(4)).includes('4 stays')); assert.ok(text(await stack(1)).includes('1 stay'));
 });
 
