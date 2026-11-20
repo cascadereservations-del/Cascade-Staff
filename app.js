@@ -20,7 +20,7 @@
     url: 'https://qkgfhsdppslwunarczeq.supabase.co',
     key: 'sb_publishable_JFuRYZ9csmQULcMRmHXDSg_Abo9UeCj',
     propertyId: '6ae230f4-c189-4547-84b1-cb6e0b2cc9bd',
-    version: '3.4.42'
+    version: '3.4.43'
   };
   var LINKS = {
     checklist: 'https://cascadereservations-del.github.io/CH-Cleaners-Checklist/',
@@ -67,7 +67,7 @@
     notices: null, noticesAbsent: false, noticesLoading: false, noticeFilter: 'all', nadd: null, fbOpen: false, ratesMore: false, calTab: 'calendar', calView: 'month', legendOpen: false, H_peekedCal: false, H_peekedTask: false, progress: null, progressAbsent: false, taskFilter: 'all', hubRoute: '', tasks: null, tasksErr: '', tasksLoading: false, showDone: false, lastDone: null, add: null, assignees: null, rates: null, ratesErr: '', rateForm: null, rateSaving: false, reply: null, bookings: null, bookingsDone: false, noticesDone: false, tasksDenied: false, noticesFailed: false, bookingsFailed: false, errorKind: '' };
   var $ = function (id) { return document.getElementById(id); };
   try { var lsLegend = store('localStorage'); state.legendOpen = !!lsLegend && lsLegend.getItem('cs_legend_open') === '1'; if (lsLegend && lsLegend.getItem('cs_cal_view') === 'bookings') state.calView = 'bookings'; } catch (e) {} // F2: the legend's More stays as it was left
-  var VIEWS = ['signin', 'home', 'calendar', 'tasks', 'payrates', 'more', 'door', 'reply', 'hub', 'weather', 'stock', 'manage', 'guests', 'inbox', 'search', 'kpis', 'supply'];
+  var VIEWS = ['signin', 'home', 'calendar', 'tasks', 'payrates', 'more', 'door', 'reply', 'hub', 'weather', 'stock', 'manage', 'guests', 'inbox', 'search', 'kpis', 'supply', 'bills'];
   function pid() { return (state.access && state.access.property_ids && state.access.property_ids[0]) || CFG.propertyId; }
   function canReply() { return CS.canDraftReply(state.access && state.access.role); } // s82 decision 5: every signed-in staff role
   function canAddDetails() { return CS.canAddGuestDetails(state.access && state.access.role); } // the guest-details uploader stays owner and admin
@@ -357,10 +357,30 @@
   function A_billsCard() {
     var b = state.bills; if (!b) return '';
     var kwh = (Math.round(b.eKwh) || 0).toLocaleString('en-PH'), m3 = String(Math.round(b.wM3 * 10) / 10);
-    return '<section class="card glass A_card F_span K_bills" id="T_bills" aria-label="Bills so far"><span class="K_lab">' + esc('Bills since ' + CS.dayLabel(b.since) + ' · estimate') + '</span><div class="K_two">' +
+    return '<section class="card glass A_card F_span K_bills" id="T_bills" aria-label="Bills so far"><span class="K_lab">' + esc('This cycle so far · since ' + CS.dayLabel(b.since)) + '</span><div class="K_two">' +
       '<div><i class="K_e">⚡ Electricity</i><b>' + esc(b.ePhp != null ? A_peso(Math.round(b.ePhp)) : 'Not yet') + '</b><span class="K_sub">' + esc(kwh + ' kWh') + '</span></div>' +
       '<div><i class="K_w">💧 Water</i><b>' + esc(A_peso(Math.round(b.wPhp))) + '</b><span class="K_sub">' + esc(m3 + ' m³') + '</span></div></div>' +
-      '<p class="K_sub">' + esc(b.last ? 'From the meter readings up to ' + CS.dayLabel(b.last) + ', at the latest rates.' : 'No meter reading in this bill yet.') + '</p></section>';
+      '<p class="K_sub">' + esc(b.last ? 'From the meter readings up to ' + CS.dayLabel(b.last) + ', at the latest rates.' : 'No meter reading in this bill yet.') + '</p>' + A_billDues(b) + '</section>';
+  }
+  // s127: the To pay list. Every role sees the rows and amounts; Pay shows only where the server said can_pay, and only owner, admin and finance open a paid row's screenshot.
+  function A_billDues(b) {
+    if (!b.due || !b.due.length) return '';
+    var ctx = { today: state.payload ? state.payload.today : '', last: b.last, mayProof: CS.billsMayPay(role()) };
+    return '<span class="K_lab BL_lab">To pay</span><div class="BL_dues">' + b.due.map(function (e) {
+      var r = CS.billRow(e, ctx), tile = '<span class="BL_tile BL_tile-' + r.tile + '" aria-hidden="true">' + r.emoji + '</span>',
+        who = '<span class="BL_who"><b>' + esc(r.label) + '</b><span class="K_sub">' + esc(r.sub) + '</span></span>';
+      if (r.status === 'paid') return r.action === 'proof'
+        ? '<button class="K_line BL_paid BL_tap" type="button" data-act="bill-proof" data-id="' + esc(r.id) + '" aria-label="' + esc(r.label + ', paid. See the screenshot') + '">' + tile + who + ICON('checks', 's16') + ICON('chev', 's16') + '</button>'
+        : '<div class="K_line BL_paid">' + tile + who + ICON('checks', 's16') + '</div>';
+      return '<div class="K_line">' + tile + who + '<b class="BL_amt">' + esc(r.amount) + '</b>' + (r.action === 'pay' ? '<a class="btn btn-secondary btn-sm" href="#bills/pay/' + esc(r.id) + '" aria-label="' + esc('Pay ' + r.label) + '">Pay</a>' : '') + '</div>';
+    }).join('') + '</div>';
+  }
+  // The screenshot of a paid bill (approve_payment only: the server checks). One signed link, shown in the shared photo viewer; a refusal or a failed link says so.
+  function A_billProof(id) {
+    Promise.resolve().then(function () { return sb.rpc('bill_proof_v1', { p_bill_id: id }); }).then(function (r) {
+      var d = r && r.data; if (!d || d.ok !== true || !d.path) throw new Error('proof');
+      return sb.storage.from('inventory-photos').createSignedUrl(d.path, 300);
+    }).then(function (r) { var u = r && r.data && r.data.signedUrl; if (!u) throw new Error('sign'); Z_open(u, { alt: 'Payment screenshot' }); }).catch(function () { toast('The screenshot could not be loaded.'); });
   }
   function A_loadBills() {
     if (!state.access || state.billsAbsent) return;
@@ -1939,7 +1959,9 @@
     manage:  { src: 'manage/N_manage.js',   css: 'manage/N_manage.css',   global: 'N_Manage',  title: 'Manage', roles: ['owner', 'admin'],
                deps: [{ src: 'manage/N_charts.js', css: 'manage/N_charts.css', global: 'N_CHARTS' }, { src: 'manage/N_bookings.js', css: 'manage/N_bookings.css', global: 'N_BOOKINGS' }, { src: 'manage/N_ops.js', css: 'manage/N_ops.css', global: 'N_OPS' }] }, // s89: the KPI charts and the Bookings / Ops tabs load with Manage
     guests:  { src: 'guests/G_guests.js',   css: 'guests/G_guests.css',   global: 'G_Guests',  title: 'Guests', roles: ['owner', 'admin'] },
-    inbox:   { src: 'inbox/X_inbox.js',     css: 'inbox/X_inbox.css',     global: 'X_Inbox',   title: 'Inbox', roles: ['owner', 'admin'] }
+    inbox:   { src: 'inbox/X_inbox.js',     css: 'inbox/X_inbox.css',     global: 'X_Inbox',   title: 'Inbox', roles: ['owner', 'admin'] },
+    // s127: pay a bill and edit its details (#bills/pay/<id>, #bills/edit/<kind>). The pay helpers of pay/ (C_PayAdmin) load first; the server decides who may pay or edit.
+    bills:   { src: 'bills/BL_bills.js',    css: 'bills/BL_bills.css',    global: 'BL_Bills',  title: 'Bills', roles: ['owner', 'admin', 'finance'], demoClient: true, deps: [{ src: 'pay/C_admin-lib.js', global: 'C_PayAdmin' }] }
   };
   var H_mod = { mounted: '', sub: '', n: 0, p: {} }, H_sub = '';
   function H_domLoad(m) { // a stylesheet (never waited for) and a script; a 404 on the script rejects
@@ -1960,7 +1982,7 @@
     return pr;
   }
   // 3.2: a module that keeps a list or a draft in memory (guests, inbox) drops it on sign-out and on an account switch; a throwing reset never blocks sign-out.
-  function H_resetModules() { ['G_Guests', 'X_Inbox', 'S110_Supply', 'K_Kpi'].forEach(function (n) { try { var g = window[n]; if (g && typeof g.reset === 'function') g.reset(); } catch (e) { /* never block sign-out */ } }); }
+  function H_resetModules() { ['G_Guests', 'X_Inbox', 'S110_Supply', 'K_Kpi', 'BL_Bills'].forEach(function (n) { try { var g = window[n]; if (g && typeof g.reset === 'function') g.reset(); } catch (e) { /* never block sign-out */ } }); }
   function H_unmount() {
     var k = H_mod.mounted; H_mod.mounted = ''; H_mod.sub = ''; H_mod.n++;
     var g = k && window[H_MODULES[k].global]; try { if (g && typeof g.unmount === 'function') g.unmount(); } catch (e) { /* never block navigation or sign-out */ }
@@ -1968,7 +1990,7 @@
   // The folder is not shipped yet: weather goes to the Notices tab (which has the weather card), stock to the inventory door, manage to the admin hub.
   // 3.2: guests and inbox fall back to the same pages of the admin dashboard door (route() sends a role or setting that cannot open the door to #home).
   function H_fallback(key) {
-    var fb = key === 'kpis' || key === 'supply' ? '#home' : key === 'weather' ? '#calendar/notices' : key === 'stock' ? (doorDef('inventory') && CS.doorAllowed('inventory', role()) ? '#door/inventory' : '#home') : key === 'guests' ? '#door/dashboard/guests' : key === 'inbox' ? '#door/dashboard/guests/conversations' : (state.layout === 'admin' ? '#hub' : '#home');
+    var fb = key === 'kpis' || key === 'supply' || key === 'bills' ? '#home' : key === 'weather' ? '#calendar/notices' : key === 'stock' ? (doorDef('inventory') && CS.doorAllowed('inventory', role()) ? '#door/inventory' : '#home') : key === 'guests' ? '#door/dashboard/guests' : key === 'inbox' ? '#door/dashboard/guests/conversations' : (state.layout === 'admin' ? '#hub' : '#home');
     history.replaceState(null, '', fb); route();
   }
   // 3.2: what a module needs to subscribe to a push topic without touching pay/. The key comes from the server when asked (as pay/ does); the registration is the shell's own worker.
@@ -1979,6 +2001,11 @@
       return net(CFG.url + '/functions/v1/notify-cleaner-payment', { method: 'POST', headers: { Authorization: 'Bearer ' + tok, apikey: CFG.key, 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'vapid_key' }) })
         .then(function (r) { return r.json(); }).then(function (j) { return j && j.ok && j.key ? j.key : null; });
     }).catch(function () { return null; });
+  }
+  // s127: the payment screenshot goes up the way staff pay sends it (CSPay.uploadPhoto, one shared helper); the demo sends nothing.
+  function H_billUpload(file) {
+    if (DEMO) return Promise.resolve({ path: 'demo/proof.jpg', sha256: new Array(65).join('d') });
+    return sb.auth.getSession().then(function (s) { var t = s.data && s.data.session && s.data.session.access_token; if (!t) throw new Error('signin'); return window.CSPay.uploadPhoto(file, { net: net, url: CFG.url, key: CFG.key, token: t, propertyId: pid(), fileName: 'payment-proof.jpg' }); });
   }
   function H_swReg() { // ready never settles when no worker registered (a blocked sw.js, a private window): give up after 4 seconds with null
     if (DEMO || !navigator.serviceWorker || !navigator.serviceWorker.ready) return Promise.resolve(null);
@@ -1995,7 +2022,7 @@
       var box = $('H_mod-' + key); if (!box) return; box.innerHTML = '';
       H_mod.mounted = key; H_mod.sub = sub; var low = !!state.H_lowOnce; state.H_lowOnce = false; // read at mount: a redraw while the script loads must not eat the one-shot
       var bad = function () { if (H_mod.mounted === key) { H_mod.mounted = ''; H_mod.sub = ''; H_mod.n++; } if (current === key) H_fallback(key); };
-      try { var mr = window[m.global].mount(box, { client: DEMO && !m.demoClient ? null : sb, demo: DEMO, role: role(), sub: sub, low: low && key === 'stock', propertyId: pid(), houseTimes: A_houseT(), pushKey: H_pushKey, swReg: H_swReg, navigate: function (h) { location.hash = String(h).charAt(0) === '#' ? h : '#' + h; }, toast: toast, haptic: E_vibe, faces: A_loadFaces, setTitle: function (t) { var h = el.querySelector && el.querySelector('.ttl'); if (h) h.textContent = t || m.title; }, onChange: function () { if (!DEMO) loadHome({ again: true }); } }); if (mr && typeof mr.then === 'function') mr.then(null, bad); } catch (e) { bad(); } // a module that throws leaves a screen that works, not a blank one
+      try { var mr = window[m.global].mount(box, { client: DEMO && !m.demoClient ? null : sb, demo: DEMO, role: role(), sub: sub, low: low && key === 'stock', propertyId: pid(), upload: H_billUpload, houseTimes: A_houseT(), pushKey: H_pushKey, swReg: H_swReg, navigate: function (h) { location.hash = String(h).charAt(0) === '#' ? h : '#' + h; }, toast: toast, haptic: E_vibe, faces: A_loadFaces, setTitle: function (t) { var h = el.querySelector && el.querySelector('.ttl'); if (h) h.textContent = t || m.title; }, onChange: function () { if (!DEMO) loadHome({ again: true }); } }); if (mr && typeof mr.then === 'function') mr.then(null, bad); } catch (e) { bad(); } // a module that throws leaves a screen that works, not a blank one
     }, function () { if (current === key && token === H_mod.n) H_fallback(key); });
   }
 
@@ -2120,7 +2147,7 @@
   // Runs once per device after sign-in (CS.phoneCheckDue, key cs_phone_check) and from More > This phone > Check this phone. Every row comes from a real probe
   // (CS.phoneCheckRows); Fix all runs the fixers in order from the one tap (CS.phoneFixPlan: alerts first, so the permission prompt rides the tap), then probes again.
   // The camera is opened only when its permission is 'prompt', and every track is stopped at once. Nothing changes Trust this device.
-  var PC_SHELL = 'cs-shell-v67'; // the service worker's cache for this version (sw.js CACHE_NAME; a test keeps them equal)
+  var PC_SHELL = 'cs-shell-v68'; // the service worker's cache for this version (sw.js CACHE_NAME; a test keeps them equal)
   var PC = { open: false, busy: false, rows: null, msg: '', camPerm: null };
   function PC_ls() { return store('localStorage'); }
   function PC_cameraPerm() {
@@ -2457,7 +2484,7 @@
     if (H_mod.mounted && H_mod.mounted !== v) H_unmount();
     setView(v);
     if (v === 'door') { renderDoor(); return; }
-    renderTabs(v === 'hub' || v === 'search' ? 'more' : v === 'weather' ? 'calendar' : v === 'stock' && CS.isLaundry(role()) ? 'stock' : v === 'stock' || v === 'manage' || v === 'guests' || v === 'inbox' || v === 'supply' ? '' : v); // B1: a sub-page marks no tab, never Today
+    renderTabs(v === 'hub' || v === 'search' ? 'more' : v === 'weather' ? 'calendar' : v === 'stock' && CS.isLaundry(role()) ? 'stock' : v === 'stock' || v === 'manage' || v === 'guests' || v === 'inbox' || v === 'supply' || v === 'bills' ? '' : v); // B1: a sub-page marks no tab, never Today
     if (H_MODULES[v]) renderModule(v); else if (v === 'search') renderSearch(); else if (v === 'hub') renderHub(); else if (v === 'home') renderHome(); else if (v === 'calendar') renderCalendar(); else if (v === 'tasks') renderTasks(); else if (v === 'payrates') { renderPayRates(); if (!state.rates) loadRates(); } else if (v === 'reply') renderReply(); else if (v === 'more') renderMore();
     var typing = document.activeElement && /^(df-(label|kind)|t-(title|due|who|note)|n-(type|title|date|start|hours|detail))$/.test(document.activeElement.id || '');
     if (state.sheet) { if (v !== state.sheet.view) closeSheet(); else if (!typing) drawSheet(); }
@@ -2486,7 +2513,7 @@
     CS.rememberRole(store('sessionStorage'), state.access.role); // per tab, so the pay and guest pages opened from here draw the same tab bar
     state.layout = CS.layoutForRole(state.access.role);
     state.name = CS.deriveDisplayName(state.user);
-    if (!/^#(home|calendar|tasks|payrates|reply|more|hub|weather|stock|manage|guests|inbox|notices|search|kpis|supply)/.test(location.hash)) history.replaceState(null, '', '#home');
+    if (!/^#(home|calendar|tasks|payrates|reply|more|hub|weather|stock|manage|guests|inbox|notices|search|kpis|supply|bills)/.test(location.hash)) history.replaceState(null, '', '#home');
     route(); loadHome(); loadTasks(); maybeIosHint(); H_tourMaybe(); H_alAuto(); PC_auto();
   }
   function boot() {
@@ -2635,6 +2662,7 @@
     else if (a === 'task-add-cancel') { state.add = null; closeSheet(); }
     else if (a === 'plain') { window.CSTheme.setPlain(!window.CSTheme.plainOn()); renderMore(); }
     else if (a === 'whatsnew') openSheet('news', 'news');
+    else if (a === 'bill-proof') A_billProof(t.getAttribute('data-id'));
     else if (a === 'tiers-open') { var tk = t.getAttribute('data-tier'); openSheet('tiers', /^(first|returning|regular|vip)$/.test(tk || '') ? tk : ''); }
     else if (a === 'fb-show') { state.fbOpen = true; renderCalendar(); }
     else if (a === 'fb-hide') { state.fbOpen = false; renderCalendar(); }

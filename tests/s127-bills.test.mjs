@@ -1,4 +1,4 @@
-// s127 (Staff 3.4.42): electricity and water bills, rate history, usage by month and by guest, and the Today bills card. Contract: docs/s127/CONTRACT.md (Facts, Lane B).
+// s127 (Staff 3.4.43): electricity and water bills, rate history, usage by month and by guest, and the Today bills card. Contract: docs/s127/CONTRACT.md (Facts, Lane B).
 // Hand-computed expectations. Older server (no new keys) must render what it rendered before.
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -88,7 +88,7 @@ test('s127 render: a cleaner sees the usage months but no pesos and no admin sec
 
 test('s127 lib.billsToday: the contract shape, a missing peso stays null, anything else is null', () => {
   const ok = CS.billsToday({ since: '2026-10-21', last_reading_at: '2026-11-19T17:30:00Z', electric: { php: 4314.35, kwh: 383 }, water: { php: 212, m3: 7.2 } });
-  assert.deepEqual({ ...ok }, { since: '2026-10-21', last: '2026-11-20', ePhp: 4314.35, eKwh: 383, wPhp: 212, wM3: 7.2 });
+  assert.deepEqual({ ...ok }, { since: '2026-10-21', last: '2026-11-20', ePhp: 4314.35, eKwh: 383, wPhp: 212, wM3: 7.2, due: [] });
   assert.equal(CS.billsToday({ since: '2026-10-21', electric: { php: null, kwh: 5 }, water: { php: 0, m3: 0 } }).ePhp, null);
   for (const bad of [null, undefined, 'x', [], {}, { since: 'no', electric: { kwh: 1 }, water: { php: 1, m3: 1 } }, { since: '2026-10-21', electric: { php: 1 }, water: { php: 1, m3: 1 } }, { since: '2026-10-21', electric: { php: 1, kwh: 1 }, water: null }]) assert.equal(CS.billsToday(bad), null);
 });
@@ -211,6 +211,6 @@ test('s127 r1 Today card: a later failed load keeps the card already shown; a la
   n = 0; h = await todayHtml('owner', flaky({ error: { code: '42501', message: 'denied' }, data: null }), (app) => app.click({ 'data-act': 'refresh' })); assert.doesNotMatch(h, /T_bills/, 'a refusal clears the card');
 });
 
-test('s127 release: 3.4.42 with cs-shell-v67', () => {
-  assert.equal(JSON.parse(read('package.json')).version, '3.4.42'); assert.match(read('app.js'), /version: '3\.4\.42'/); assert.match(read('sw.js'), /CACHE_NAME = 'cs-shell-v67'/); assert.match(read('app.js'), /var PC_SHELL = 'cs-shell-v67';/);
+test('s127 release: 3.4.43 with cs-shell-v68', () => {
+  assert.equal(JSON.parse(read('package.json')).version, '3.4.43'); assert.match(read('app.js'), /version: '3.4.43'/); assert.match(read('sw.js'), /CACHE_NAME = 'cs-shell-v68'/); assert.match(read('app.js'), /var PC_SHELL = 'cs-shell-v68';/);
 });

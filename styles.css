@@ -1303,6 +1303,23 @@ a.T_call { min-height: var(--touch); display: inline-flex; align-items: center; 
 #T_bills .K_two i { font: 600 var(--v5-t-label)/1.2 var(--v5-font-ui); font-style: normal; color: var(--v5-ink-2); }
 #T_bills .K_two b { font: 400 var(--v5-t-num)/1.1 var(--v5-font-display); font-variant-numeric: tabular-nums; }
 #T_bills .K_two .K_e { color: var(--v5-gold-text); } #T_bills .K_two .K_w { color: var(--v5-chart-line); }
+/* s127 (Staff 3.4.43): the To pay list in the bills card. Row, tile and amount; Pay is the app's own small button. */
+#T_bills .BL_lab { margin-top: 16px; }
+#T_bills .BL_dues { display: grid; margin-top: 4px; }
+#T_bills .K_line { display: flex; align-items: center; gap: 8px; padding: 12px 0; border-bottom: 1px solid var(--v5-sep); }
+#T_bills .K_line:last-child { border-bottom: 0; }
+#T_bills .K_line > span { min-width: 0; }
+#T_bills .K_line .btn-sm { min-height: 44px; flex: none; }
+#T_bills .BL_who { flex: 1; min-width: 0; display: grid; gap: 4px; }
+#T_bills .BL_who b { font: 600 var(--v5-t-2)/1.25 var(--v5-font-ui); }
+#T_bills .BL_amt { font: 600 var(--v5-t-2)/1.25 var(--v5-font-ui); font-variant-numeric: tabular-nums; white-space: nowrap; }
+#T_bills .BL_paid .i, #T_bills .BL_paid .K_sub { color: var(--v5-ok-t); } #T_bills .BL_paid .i { flex: none; }
+#T_bills .BL_tap { width: 100%; min-height: 44px; border: 0; border-bottom: 1px solid var(--v5-sep); background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+#T_bills .BL_tap:last-child { border-bottom: 0; }
+#T_bills .BL_tap .i + .i { color: var(--v5-ink-3); }
+.BL_tile { flex: none; width: 36px; height: 36px; display: grid; place-items: center; border-radius: var(--v5-r-field); font-size: var(--v5-t-body); line-height: 1; }
+.BL_tile-e { background: var(--v5-gold-wash); } .BL_tile-w { background: var(--v5-info-w); }
+.BL_tile-n { background: var(--v5-tier-returning-w); } .BL_tile-s { background: var(--v5-tier-regular-w); }
 /* ---- s110: tier tag with glyph, weather warnings, hourly strip, cleaner walk-through and thank-you ---- */
 .T_badge.p-tier-first { background: var(--v5-ok-w); color: var(--v5-ok-t); border-left-color: var(--v5-ok-t); }
 .T_badge { display: inline-flex; align-items: center; gap: 4px; min-width: 0; max-width: 100%; padding: 4px 8px; border-radius: 999px; border-left: 4px solid transparent; font: 600 var(--v5-t-label)/1.2 var(--font-ui); }
@@ -1484,3 +1501,8 @@ button.T_badge:focus-visible { outline: 2px solid var(--ring); outline-offset: 2
 .V_free .sub { margin: 0; }
 .A_body > .card.V_free[aria-label="Today in the house"] { grid-template-columns: minmax(0, 1fr); } /* the wide-screen Today card is two columns; this one is a single centred stack */
 .A_body > .card.V_free[aria-label="Today in the house"] > p.sub { grid-column: 1; grid-row: auto; text-align: center; max-width: 22rem; }
+
+/* s127 (Staff 3.4.43): a notice sentence wraps instead of being cut, and the Notices card grows to fit (reminders such as "Internet is due by the 27th." run long). */
+.A_noticecard, .A_noticecard.H_mgr { block-size: auto; }
+.A_noticecard .rowi { block-size: auto; min-height: 64px; }
+.A_noticecard .rowi .t, .A_noticecard .rowi .s { white-space: normal; overflow: visible; text-overflow: clip; overflow-wrap: anywhere; }

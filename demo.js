@@ -9,7 +9,7 @@
   else root.CSDemo = api;
 })(typeof self !== 'undefined' ? self : this, function (root, CS) {
   'use strict';
-  var ROLES = ['owner', 'admin', 'cleaner', 'laundry'], VIEWS = ['owner', 'admin', 'cleaner', 'laundry', 'signin'];
+  var ROLES = ['owner', 'admin', 'finance', 'cleaner', 'laundry'], VIEWS = ['owner', 'admin', 'finance', 'cleaner', 'laundry', 'signin'], BAR = ['owner', 'admin', 'cleaner', 'laundry', 'signin']; // s127: finance opens by address (?demo&role=finance); the bar keeps its five buttons
   var NOTE = 'Demo: nothing was saved';
 
   // ---- the one guard -----------------------------------------------------------------------------------------------------
@@ -39,10 +39,10 @@
     var onRoot = loc.pathname === rootPath || loc.pathname === rootPath + 'index.html';
     return rootPath + '?demo&role=' + role + (onRoot ? loc.hash || '' : '#home');
   }
-  var LABEL = { owner: 'Owner', admin: 'Admin', cleaner: 'Cleaner', laundry: 'Laundry', signin: 'Sign in' };
+  var LABEL = { owner: 'Owner', admin: 'Admin', finance: 'Finance', cleaner: 'Cleaner', laundry: 'Laundry', signin: 'Sign in' };
   function barHtml(role) {
     return '<span class="pill p-brand demo-pill">Demo data</span><div class="demo-roles" role="group" aria-label="View as">' +
-      VIEWS.map(function (v) { return '<button type="button" data-demo-role="' + v + '" aria-pressed="' + (v === role) + '">' + LABEL[v] + '</button>'; }).join('') + '</div>';
+      BAR.map(function (v) { return '<button type="button" data-demo-role="' + v + '" aria-pressed="' + (v === role) + '">' + LABEL[v] + '</button>'; }).join('') + '</div>';
   }
 
   // ---- a calm "nothing was saved" note: the same element the app uses for Copied (id cs-toast) -------------------------------
@@ -67,7 +67,7 @@
 
   // ---- fixtures: every date is relative to today (Manila), every name and number is made up ------------------------------------
   function build(role, now, empty) {
-    var r = role === 'cleaner' || role === 'admin' || role === 'laundry' ? role : 'owner', admin = r !== 'cleaner' && r !== 'laundry', today = CS.manilaToday(now), stamp = (now instanceof Date ? now : new Date()).toISOString();
+    var r = role === 'cleaner' || role === 'admin' || role === 'laundry' || role === 'finance' ? role : 'owner', admin = r !== 'cleaner' && r !== 'laundry', today = CS.manilaToday(now), stamp = (now instanceof Date ? now : new Date()).toISOString();
     var d = function (n) { return CS.addDays(today, n); }, at = function (n, hm) { return d(n) + 'T' + hm + ':00+08:00'; };
     var guest = function (o) { // the server sends a cleaner no companions, phone, e-mail or Messenger link
       if (!admin) { delete o.companions; delete o.phone; delete o.email; delete o.messenger; }
@@ -206,6 +206,46 @@
   function client(role, now, empty) {
     var view = VIEWS.indexOf(role) >= 0 ? role : 'owner', D = function () { return build(view, now, empty == null ? emptyFrom(root.location && root.location.search) : empty); }, doneSet = {}, acked = {}, closed = {}; // doneSet: this page load only, so a task marked done leaves the list and Undo brings it back, like the live app
     var done = function (data) { return Promise.resolve({ data: clone(data), error: null }); };
+    // s127: the bills of the demo. Invented names and numbers, kept in memory for this page load. Refusals can be seen: a second payment with the same demo screenshot is a duplicate,
+    // and an amount more than a quarter away from the estimate asks once. Owner, admin and finance may pay; only owner and admin may edit.
+    var bills = null, usedShot = {}, mayPay = view === 'owner' || view === 'admin' || view === 'finance', mayEdit = view === 'owner' || view === 'admin';
+    var SCHED = { electric: { label: 'Electricity', payee_name: 'Zz Power Co', number_label: 'Account number', number: 'Account ••••••', note: 'Electricity', amount_php: null, remind_day: 27, amount_fixed: false },
+      water: { label: 'Water', payee_name: 'Zz Water Co', number_label: 'Account number', number: 'Account ••••••', note: 'Water', amount_php: null, remind_day: 28, amount_fixed: false },
+      internet: { label: 'Internet', payee_name: 'Zz Internet Co', number_label: 'GCash number', number: '09•• ••• ••••', note: 'Internet', amount_php: 1500, remind_day: 27, amount_fixed: true },
+      netflix: { label: 'Streaming', payee_name: 'Zz Stream Co', number_label: 'Account number', number: 'Account ••••••', note: 'Streaming', amount_php: 449, remind_day: 10, amount_fixed: true } };
+    var me = 'Demo ' + view.charAt(0).toUpperCase() + view.slice(1);
+    function seedBills(today) {
+      if (bills) return bills; var ago = new Date(Date.parse(today + 'T04:00:00Z') - 10 * 86400000).toISOString();
+      var mk = function (id, kind, est, due, isEst, o) { return Object.assign({ id: 'demo-bill-' + id, kind: kind, label: SCHED[kind].label, period: today.slice(0, 7), status: 'due', estimate_php: est, paid_php: null, is_estimate: isEst, due_day: due, paying_by_name: null, paid_by_name: null, paid_at: null }, o || {}); };
+      return (bills = [mk('e', 'electric', 2140, 27, true), mk('w', 'water', 430, 30, true, { status: 'paying', paying_by_name: 'Zz Marifel' }), mk('i', 'internet', 1500, 28, false), mk('n', 'netflix', 449, 10, false, { status: 'paid', paid_php: 449, paid_by_name: 'Zz Finance', paid_at: ago })]);
+    }
+    function ent(b) { return Object.assign({}, b, { can_pay: mayPay && (b.status === 'due' || (b.status === 'paying' && b.paying_by_name === me)) }); }
+    function billList(today) { return seedBills(today).map(ent); }
+    function billCall(name, a, today) {
+      var list = seedBills(today), b = list.filter(function (x) { return x.id === a.p_bill_id; })[0];
+      if (/^bill_pay_|^bill_proof/.test(name)) { if (!mayPay) return { ok: false, reason: 'not_authorized' }; if (!b) return { ok: false, reason: 'not_found' }; }
+      if (name === 'bill_proof_v1') return b.status === 'paid' ? { ok: true, path: 'demo/proof.jpg' } : { ok: false, reason: 'no_proof' };
+      if (name === 'bill_pay_open_v1') {
+        if (b.status === 'paid') return { ok: false, reason: 'already_paid', bill: ent(b) }; if (b.status === 'paying' && b.paying_by_name !== me) return { ok: false, reason: 'paying_by_other', name: b.paying_by_name };
+        b.status = 'paying'; b.paying_by_name = me; var sc = SCHED[b.kind], month = new Date(b.period + '-01T00:00:00Z').toLocaleString('en-US', { month: 'long', timeZone: 'UTC' });
+        return { ok: true, bill: ent(b), pay: { payee_name: sc.payee_name, number_label: sc.number_label, number: sc.number, note: sc.note + ', ' + month, amount_php: b.estimate_php, amount_editable: b.is_estimate }, can_edit: mayEdit };
+      }
+      if (name === 'bill_pay_cancel_v1' || name === 'bill_pay_skip_v1') {
+        if (b.status === 'paid') return { ok: false, reason: 'already_paid' }; if (b.status === 'paying' && b.paying_by_name !== me) return { ok: false, reason: 'not_payer', name: b.paying_by_name }; toast(NOTE);
+        if (name === 'bill_pay_skip_v1') bills = bills.filter(function (x) { return x !== b; }); else { b.status = 'due'; b.paying_by_name = null; } return { ok: true, bill: ent(b) };
+      }
+      if (name === 'bill_pay_settle_v1') {
+        var p = a.p_proof || {}; if (b.status === 'paid') return { ok: false, reason: 'already_paid', bill: ent(b) }; if (b.paying_by_name !== me) return { ok: false, reason: 'not_payer', name: b.paying_by_name };
+        if (!(p.amount > 0)) return { ok: false, reason: 'bad_amount' }; if (usedShot[p.sha256]) return { ok: false, reason: 'duplicate_proof' };
+        if (Math.abs(p.amount - b.estimate_php) / b.estimate_php > 0.25 && p.confirmed !== true) return { ok: false, reason: 'confirm_amount', read: p.amount, estimate_php: b.estimate_php };
+        usedShot[p.sha256] = 1; b.status = 'paid'; b.paid_php = p.amount; b.paid_by_name = me; b.paid_at = new Date().toISOString(); toast(NOTE); return { ok: true, bill: ent(b), paid_php: p.amount };
+      }
+      if (!mayEdit) return { ok: false, reason: 'not_authorized' }; var c = SCHED[a.p_kind]; if (!c) return { ok: false, reason: 'bad_kind' };
+      if (name === 'bill_schedule_get_v1') return Object.assign({ ok: true, kind: a.p_kind }, c);
+      var keys = Object.keys(a.p_patch || {}), bad = keys.filter(function (k) { return ['payee_name', 'number', 'note', 'amount_php', 'remind_day'].indexOf(k) < 0; })[0]; if (bad) return { ok: false, reason: 'bad_key', key: bad };
+      var rd = a.p_patch.remind_day; if (rd != null && !(rd >= 1 && rd <= 28)) return { ok: false, reason: 'bad_value', key: 'remind_day' };
+      keys.forEach(function (k) { c[k] = a.p_patch[k]; }); toast(NOTE); return { ok: true, kind: a.p_kind, changed: keys };
+    }
     function rpc(name, args) {
       var X = D();
       if (name === 'task_set_done_v1' && args && args.p_id) doneSet[args.p_id] = !!args.p_done; // memory only: nothing is ever saved
@@ -224,7 +264,8 @@
         case 'staff_pay_candidates_v1': return done(X.pay);
         case 'staff_signin_list_v1': return done(X.signin);
         case 'kpi_tab_v1': return done(X.kpi);
-        case 'today_bills_v1': { var cb = cycleOf(X.home.today); return done({ since: cb.from, last_reading_at: cb.last + 'T02:00:00Z', electric: { php: 4314.35, kwh: 383 }, water: { php: 212, m3: 7.2 } }); } // s127: every role, like the live card
+        case 'today_bills_v1': { var cb = cycleOf(X.home.today); return done({ since: cb.from, last_reading_at: cb.last + 'T02:00:00Z', electric: { php: 4314.35, kwh: 383 }, water: { php: 212, m3: 7.2 }, due: billList(X.home.today) }); } // s127: every role, like the live card
+        case 'bill_pay_open_v1': case 'bill_pay_settle_v1': case 'bill_pay_cancel_v1': case 'bill_pay_skip_v1': case 'bill_proof_v1': case 'bill_schedule_get_v1': case 'bill_schedule_set_v1': return done(billCall(name, args || {}, X.home.today));
         case 'get_inventory_catalogue_v1': return done({ ok: true, items: X.items });
         case 'admin_report_blocks_v1': return admin_(view) ? done([{ reading_id: 'demo-reading-1', session_id: 'demo-s1', cleaner_name: 'Demo Cleaner', checkout_date: CS.addDays(X.home.today, -1), recorded_at: X.home.today + 'T02:00:00Z', typed_electric: 4310, typed_water: 812, prev_electric: 4272, prev_water: 805, photo_electric: 4301, photo_water: 812, photo_note_electric: 'Last digit unclear', photo_note_water: null, photo_path_electric: null, photo_path_water: null, resend_requested_at: null }]) : Promise.resolve({ data: null, error: { code: '42501', message: 'not authorized' } });
         case 'inventory_receipt_draft_v1': return done({ ok: true, draft: { id: args && args.p_draft_id || 'demo-draft', vendor: 'Demo Hardware', purchased_on: X.home.today, receipt_path: 'demo/receipt.jpg', status: 'draft', lines: [
@@ -244,7 +285,7 @@
         signOut: function () { view = 'signin'; return Promise.resolve({ error: null }); },
         // any sign-in works in the demo: the name picked decides the role, and the page reloads as that role
         signInWithPassword: function (cred) {
-          var m = /demo\.(cleaner|laundry|admin|owner)@/.exec(String((cred && cred.email) || '')), next = m ? m[1] : 'owner';
+          var m = /demo\.(cleaner|laundry|finance|admin|owner)@/.exec(String((cred && cred.email) || '')), next = m ? m[1] : 'owner';
           if (root.location && root.document) { root.location.replace(switchUrl(root.location, next, rootPath()) .replace(/#.*$/, '') + '#home'); return new Promise(function () {}); }
           view = next; return Promise.resolve({ data: { user: D().user }, error: null });
         }

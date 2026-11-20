@@ -1,0 +1,24 @@
+/* s127 (Staff 3.4.43): the Pay a bill and Edit details screens (bills/BL_bills.js). Loaded with the module, scoped to #v-bills so no other screen changes.
+   The look is the staff pay page's (pay/C_pay.css) for the pieces it shares; tokens only, 8/16 spacing. */
+#v-bills .BL_page { display: flex; flex-direction: column; flex: 1; gap: 12px; min-height: 0; }
+#v-bills .BL_page > .stack { margin-top: 8px; }
+#v-bills .errbox, #v-bills .okbox, #v-bills .infobox { font-size: var(--v5-t-2); line-height: 1.4; border-radius: var(--v5-r-field); }
+#v-bills .infobox { background: var(--v5-warn-glass); color: var(--v5-warn-t); }
+#v-bills .sticky { background: linear-gradient(to top, var(--v5-bg) 82%, transparent); }
+#v-bills .btn-sm { min-height: var(--v5-touch); }
+#v-bills .input { height: var(--v5-touch); border-radius: var(--v5-r-field); background: var(--v5-surf); border-color: var(--v5-line); }
+#v-bills .input input { font-size: var(--v5-t-body); }
+#v-bills .field label { font-size: var(--v5-t-2); }
+#v-bills .C_amountbox { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 12px; }
+#v-bills .C_amountbox .cap { flex-basis: 100%; }
+#v-bills .C_amount { font: 700 clamp(2.75rem, 2.571rem + 0.7951vw, 3.08rem)/1.1 var(--v5-font-ui); letter-spacing: -.02em; color: var(--v5-ink); }
+#v-bills .BL_copied:empty { display: none; }
+#v-bills .BL_kv { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 4px 12px; }
+#v-bills .BL_k { grid-column: 1 / -1; }
+#v-bills .BL_kv b { font: 600 var(--v5-t-body)/1.3 var(--v5-font-ui); overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
+#v-bills .BL_hd { display: flex; align-items: center; justify-content: space-between; margin: -12px 0 -4px; }
+#v-bills .BL_edit { display: inline-flex; align-items: center; min-height: 44px; min-width: 44px; justify-content: flex-end; padding: 0 0 0 16px; font: 600 var(--v5-t-label)/1 var(--v5-font-ui); color: var(--v5-act); text-decoration: none; }
+#v-bills .BL_shot { flex-wrap: nowrap; }
+#v-bills .BL_shotx { display: grid; gap: 4px; min-width: 0; }
+#v-bills .BL_thumb { width: 56px; height: 56px; flex: none; display: grid; place-items: center; border: 1px dashed var(--v5-line-2); border-radius: var(--v5-r-field); background: var(--v5-sunk); color: var(--v5-ink-2); }
+#v-bills .BL_skip { width: 100%; color: var(--v5-ink-2); }

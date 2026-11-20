@@ -166,6 +166,27 @@
     max = max || 1600; var k = Math.min(1, max / Math.max(w, h));
     return { w: Math.round(w * k), h: Math.round(h * k) };
   }
+  // s127: the payment screenshot, shared by the staff pay page and the bills screen. A picture goes down to a JPEG of 1600 px at most, is sent to upload-photo, and the server's own
+  // path and sha256 come back ({path, sha256}). o: {net (fetch), url, key, token, propertyId, fileName}. Errors: 'image', 'blob', 'upload', 'nosha'.
+  function toJpegBlob(file) {
+    return new Promise(function (res, rej) {
+      var u = URL.createObjectURL(file), img = new Image();
+      img.onload = function () {
+        URL.revokeObjectURL(u);
+        var z = fitSize(img.naturalWidth, img.naturalHeight), cv = document.createElement('canvas'); cv.width = z.w; cv.height = z.h;
+        cv.getContext('2d').drawImage(img, 0, 0, z.w, z.h);
+        cv.toBlob(function (b) { b ? res(b) : rej(new Error('blob')); }, 'image/jpeg', 0.85);
+      };
+      img.onerror = function () { URL.revokeObjectURL(u); rej(new Error('image')); };
+      img.src = u;
+    });
+  }
+  function uploadPhoto(file, o) {
+    return toJpegBlob(file).then(function (blob) {
+      return o.net(o.url + '/functions/v1/upload-photo', { method: 'POST', headers: { Authorization: 'Bearer ' + o.token, apikey: o.key, 'Content-Type': 'image/jpeg', 'x-cascade-file-name': o.fileName || 'payment-proof.jpg', 'x-cascade-property-id': o.propertyId, 'x-cascade-submission-id': newKey() }, body: blob })
+        .then(function (r) { return r.json(); }).then(function (j) { if (!j || !j.ok || !j.path) throw new Error('upload'); if (!j.sha256) throw new Error('nosha'); return { path: j.path, sha256: j.sha256 }; });
+    });
+  }
 
   // ---- P_ (s82 lane P): the shared chrome of both pay pages, so they look like the rest of the app (F7). Strings only; the caller passes ICON and esc.
   // Badge counts and "I came from the app" travel in the URL hash the shell links with: pay/#tasks=2&cal=2 (a hash with either key means the link was the shell's).
@@ -215,7 +236,7 @@
     P_hashCounts: P_hashCounts, P_fromShell: P_fromShell, P_backIsHistory: P_backIsHistory, P_tabs: P_tabs, P_shell: P_shell, P_wireBack: P_wireBack, P_param: P_param, P_hash: P_hash, P_plural: P_plural,
     peso: peso, plain: plain, dateLabel: dateLabel, shortDate: shortDate, typeLabel: typeLabel, parseExtra: parseExtra, sessionAmount: sessionAmount,
     advanceBody: advanceBody, chosen: chosen, computeTotal: computeTotal, lineCount: lineCount, buildPayload: buildPayload, reviewBlock: reviewBlock, newKey: newKey, keyKeeper: keyKeeper,
-    resultMessage: resultMessage, requestStatus: requestStatus, fitSize: fitSize,
+    resultMessage: resultMessage, requestStatus: requestStatus, fitSize: fitSize, toJpegBlob: toJpegBlob, uploadPhoto: uploadPhoto,
     MAX_EXTRA: MAX_EXTRA, MAX_LINES: MAX_LINES
   };
 });

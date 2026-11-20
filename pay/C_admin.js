@@ -293,28 +293,10 @@
   }
 
   // ---------------------------------------------------------------- screenshot, upload, settle
-  function toJpegBlob(file) {
-    return new Promise(function (res, rej) {
-      var u = URL.createObjectURL(file), img = new Image();
-      img.onload = function () {
-        URL.revokeObjectURL(u);
-        var z = P.fitSize(img.naturalWidth, img.naturalHeight), cv = document.createElement('canvas'); cv.width = z.w; cv.height = z.h;
-        cv.getContext('2d').drawImage(img, 0, 0, z.w, z.h);
-        cv.toBlob(function (b) { b ? res(b) : rej(new Error('blob')); }, 'image/jpeg', 0.85);
-      };
-      img.onerror = function () { URL.revokeObjectURL(u); rej(new Error('image')); };
-      img.src = u;
-    });
-  }
+  // s127: the JPEG conversion and the upload call are shared with the bills screen (CSPay.uploadPhoto); this page only keeps the answer for its form.
   function uploadProof(file, tok) {
     if (S.form.uploaded) return Promise.resolve(S.form.uploaded);
-    var key = P.newKey();
-    return toJpegBlob(file).then(function (blob) {
-      return blob.arrayBuffer().then(function (buf) { return A.sha256Hex(buf).then(function (sha) {
-        return net(CFG.url + '/functions/v1/upload-photo', { method: 'POST', headers: { Authorization: 'Bearer ' + tok, apikey: CFG.key, 'Content-Type': 'image/jpeg', 'x-cascade-file-name': 'payment-proof.jpg', 'x-cascade-property-id': CFG.propertyId, 'x-cascade-submission-id': key }, body: blob })
-          .then(function (r) { return r.json(); }).then(function (j) { if (!j || !j.ok || !j.path) throw new Error('upload'); if (!j.sha256) throw new Error('nosha'); S.form.uploaded = { path: j.path, sha256: j.sha256 }; return S.form.uploaded; });
-      }); });
-    });
+    return P.uploadPhoto(file, { net: net, url: CFG.url, key: CFG.key, token: tok, propertyId: CFG.propertyId, fileName: 'payment-proof.jpg' }).then(function (up) { S.form.uploaded = up; return up; });
   }
   // F_: one short buzz after a successful settle (silent no-op where vibration is missing or switched off; nothing stored in demo)
   function F_tap() { try { CS.E_buzz('tap', { navigator: navigator, storage: window.CSDemo && window.CSDemo.active ? null : window.localStorage, doc: document }); } catch (e) {} }
