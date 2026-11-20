@@ -97,3 +97,10 @@ test('s128 release is 3.4.45 with cs-shell-v70, in both pins', () => {
   assert.equal(JSON.parse(read('package.json')).version, '3.4.45'); assert.match(read('app.js'), /version: '3\.4\.45'/);
   assert.match(read('sw.js'), /CACHE_NAME = 'cs-shell-v70'/); assert.match(read('app.js'), /var PC_SHELL = 'cs-shell-v70';/);
 });
+
+test('s128 nowrap stays on an allowlist in the KPI sheet, and the Utility tiles stack at 340 px and under (Opus review)', () => {
+  const css = read('kpi/K_kpi.css');
+  const owners = [...css.matchAll(/([^{}]+)\{[^{}]*white-space\s*:\s*nowrap[^{}]*\}/g)].map((m) => m[1].trim()).sort();
+  assert.deepEqual(owners, ['.KU_chip', '.KU_rowv', '.K_end > span']);
+  assert.match(css, /@media \(max-width: 340px\) \{ #K_glance, \.KU_tiles \{ grid-template-columns: minmax\(0, 1fr\); \}/);
+});

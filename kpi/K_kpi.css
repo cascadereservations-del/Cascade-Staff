@@ -68,7 +68,7 @@
 .KU_lrl { display: flex; flex-direction: column; gap: 0; min-width: 0; }
 .KU_lrl .KU_big { margin-top: 0; }
 .KU_lrr { display: grid; gap: 4px; flex: 1 1 auto; min-width: 0; font: 600 var(--v5-t-label)/1.3 var(--v5-font-ui); color: var(--v5-ink); }
-.KU_lr { display: flex; align-items: baseline; gap: 8px; white-space: nowrap; }
+.KU_lr { display: flex; align-items: baseline; gap: 8px; }
 .KU_lr > i { font-style: normal; flex: none; }
 .KU_lflag { flex: 1 0 100%; display: flex; align-items: center; gap: 8px; }
 .KU_ringrow { display: flex; align-items: center; gap: 12px; margin-top: 4px; }
@@ -206,6 +206,6 @@
 /* s128: short labels and headings wrap in even lines, long notes never end on one word */
 .K_stat .K_lab { letter-spacing: .02em; }
 .K_end > span { white-space: nowrap; }
-@media (max-width: 340px) { #K_glance { grid-template-columns: minmax(0, 1fr); } .K_lines { padding: 8px 12px; } .K_lines .K_line { gap: 8px; } .K_lines .K_ic { width: 32px; height: 32px; } }
+@media (max-width: 340px) { #K_glance, .KU_tiles { grid-template-columns: minmax(0, 1fr); } .K_lines { padding: 8px 12px; } .K_lines .K_line { gap: 8px; } .K_lines .K_ic { width: 32px; height: 32px; } }
 .K_lab, .K_h, .K_fh, .K_line b, .K_chart-h b, .K_end > *, .K_mid > *, .K_line-s > span, .K_cmp-h, .KU_means, .K_stat .K_sub { text-wrap: balance; }
 .K_p { text-wrap: pretty; }
