@@ -25,11 +25,12 @@ async function sheet(rpc) {
   return st;
 }
 
-test('fix 2: only Mark as paid sits in the sticky footer; Not now and Not paying this month are in the page flow after the proof card', async () => {
+test('fix 2: the pay sheet keeps the approved order with every button in the page flow: amount, Pay to, screenshot, Mark as paid, Not now, Not paying this month', async () => {
   const s = await sheet((n) => (n === 'bill_pay_open_v1' ? OPEN : { ok: true }));
-  const [page, foot] = s.box.innerHTML.split('class="sticky"');
-  assert.ok(foot.includes('Mark as paid')); assert.ok(!foot.includes('Not now') && !foot.includes('Not paying this month'));
-  assert.ok(page.indexOf('Not now') > page.indexOf('After you have paid') && page.indexOf('Not paying this month') > page.indexOf('Not now'));
+  const h = s.box.innerHTML;
+  assert.ok(!h.includes('class="sticky"'), 'no sticky footer can cover Add the screenshot');
+  const at = ['Copy amount', 'Pay to', 'After you have paid', 'Add the screenshot', 'Mark as paid', 'Not now', 'Not paying this month'].map((t) => h.indexOf(t));
+  assert.ok(at.every((v, i) => v >= 0 && (i === 0 || v > at[i - 1])), at.join(','));
   BL.unmount();
 });
 test('fix 3: confirmed is sent only for the same screenshot and the same amount the warning was shown for', async () => {

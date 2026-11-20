@@ -105,7 +105,7 @@
     var skip = S.askSkip ? box('info', 'Skip ' + b.label + ' for this month? Nothing will be logged.') + '<div class="row-wrap"><button class="btn btn-secondary" type="button" data-bact="skip-yes"' + (S.busy ? ' disabled' : '') + '>Yes, skip it</button><button class="btn btn-ghost" type="button" data-bact="skip-no">Keep it</button></div>'
       : '<button class="btn btn-ghost btn-sm BL_skip" type="button" data-bact="skip-ask"' + (S.busy ? ' disabled' : '') + '>Not paying this month</button>';
     var later = '<div class="stack"><button class="btn btn-ghost" type="button" data-bact="cancel" style="width:100%"' + (S.busy ? ' disabled' : '') + '>Not now</button>' + skip + '</div>';
-    draw('<div class="stack">' + amountBox + proof + to + later +'</div><div class="sticky"><button class="btn btn-primary btn-block" type="button" id="BL_done" data-bact="settle"' + (payReady({ file: S.file, amountText: parts.editable ? S.amountText : String(est), busy: S.busy }) ? '' : ' disabled') + '>' + ICON('checks') + (S.busy ? 'Saving…' : 'Mark as paid') + '</button></div><input type="file" id="BL_file" accept="image/*" hidden>');
+    draw('<div class="stack">' + amountBox + to + proof + '<button class="btn btn-primary btn-block" type="button" id="BL_done" data-bact="settle"' + (payReady({ file: S.file, amountText: parts.editable ? S.amountText : String(est), busy: S.busy }) ? '' : ' disabled') + '>' + ICON('checks') + (S.busy ? 'Saving…' : 'Mark as paid') + '</button>' + later + '</div><input type="file" id="BL_file" accept="image/*" hidden>');
   }
   function settle() {
     var d = S.d, parts = sheetParts(d), amount = parts.editable ? amountOf(S.amountText) : Number(d.pay.amount_php);
