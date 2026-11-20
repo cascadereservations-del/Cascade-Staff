@@ -125,5 +125,15 @@ test('F1: with g.staying absent (older SQL payload) the owner line still draws',
 });
 
 test('F3: the Inventory supply receipt-line card keeps its own align-items (the global .S_line rule is gone)', () => {
-  assert.match(read('kpi/K_kpi.css'), /\.S_line \{[^}]*align-items: center;/);
+  const k = read('kpi/K_kpi.css'); assert.match(k, /\.S_line \{[^}]*align-items: center;/);
+  assert.match(k, /\.S_line \{[^}]*font: 400 var\(--v5-t-body\)\/1\.4 var\(--font-ui\);/); assert.match(k, /\.S_line \{[^}]*overflow-wrap: anywhere;/);
+});
+
+test('R1-1: the Calendar next-arrival card still says who is staying when the ID is a companion ID and nothing is typed; typed names hide it (old rule)', async () => {
+  const cal = async (g, role) => (await boot({ role, hash: '#calendar', handlers: baseHandlers(role, { staff_home_v1: () => HOMEWITH([stayRow('Ana Reyes', TODAY, '2026-10-17')], { next_guest: g }) }) })).els['v-calendar'].innerHTML;
+  const n = (h) => (h.match(/Staying: Eliza Acaso/g) || []).length;
+  for (const role of ['cleaner', 'owner']) {
+    assert.equal(n(await cal(GUEST({ id_photo_name: 'Eliza Acaso', staying: ST(''), companions: C('Eliza Acaso') }), role)), 1, role);
+    assert.equal(n(await cal(GUEST({ id_photo_name: 'Eliza Acaso', staying: ST('Bo Cruz'), companions: C('Eliza Acaso') }), role)), 0, role + ' typed names');
+  }
 });

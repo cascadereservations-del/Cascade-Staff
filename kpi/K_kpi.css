@@ -129,7 +129,7 @@
 .S_qty { width: 4rem; min-height: var(--v5-touch); text-align: center; border: 1px solid var(--v5-field-line); border-radius: var(--v5-r-field); background: var(--v5-surf); color: var(--v5-ink); font: 600 var(--v5-t-body)/1 var(--v5-font-ui); }
 .S_start { display: flex; flex-direction: column; gap: 12px; }
 .S_file { position: relative; display: inline-flex; align-items: center; justify-content: center; gap: 8px; cursor: pointer; }
-.S_line { display: flex; flex-direction: column; align-items: center; gap: 12px; padding: 16px; border-radius: var(--v5-r-card); }
+.S_line { display: flex; flex-direction: column; align-items: center; font: 400 var(--v5-t-body)/1.4 var(--font-ui); overflow-wrap: anywhere; gap: 12px; padding: 16px; border-radius: var(--v5-r-card); }
 .S_line-h { display: flex; flex-direction: column; gap: 4px; }
 .S_line-q { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .S_rcpt { display: flex; align-items: center; gap: 12px; }

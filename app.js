@@ -175,7 +175,7 @@
   // photo as the Guest ID card: no download, copy or share control. Owner and admin tap either one for the full ID (the placeholder loads the photo on that tap only,
   // via data-idpath, which A_loadFaces never reads); everyone else sees a picture or the bare initial.
   var A_FACE_PX = 88;
-  function A_ownerLine(g) { var sv = CS.stayingView(g, state.payload && state.payload.today); if (sv && sv.main) return ''; /* the Staying block owns who is staying */ var l = CS.stayingLine(g); return l ? '<p class="sub T_stay">' + esc(l) + '</p>' : ''; } // s116: whose face it is, when the ID is a companion's
+  function A_ownerLine(g, noBlock) { if (noBlock) { if (g.staying && CS.stayNames(g.staying.names).length) return ''; } else { var sv = CS.stayingView(g, state.payload && state.payload.today); if (sv && sv.main) return ''; } /* the Staying block owns who is staying */ var l = CS.stayingLine(g); return l ? '<p class="sub T_stay">' + esc(l) + '</p>' : ''; } // s116: whose face it is, when the ID is a companion's
   // numbers stay joined to their unit (no break inside '3 nights', '12:00 noon', '2:00 pm'); the time line breaks only at ' · '
   function A_nb(t) { return String(t).replace(/ /g, ' '); }
   // "24 → 25 Oct · 1 night" (the month once when both days share it)
@@ -711,7 +711,7 @@
     var src = CS.sourceLabel(g.source), earlier = CS.earlierLine(g), withLine = CS.canSeeGuestContact(state.access && state.access.role) ? CS.companionsLine(g) : null; // D-319: owner/admin only, even if the server sent it
     var tint = kind === 'house' ? 'G_stay' : 'G_in'; // s93: arriving = green, in the house = blue (the house guest always checks out after today, so no third tint)
     var info = '<div class="card glass ' + tint + '" id="' + (kind === 'house' ? 'house' : 'next') + '"><div class="row-between"><span class="cap up">' + label + '</span>' + st + '</div>' +
-      '<div class="T_namerow T_gap"><h3 class="ttl' + A_nm(g) + '">' + esc(g.guest_name || 'Guest') + '</h3>' + A_badge(g) + '</div>' + A_ownerLine(g) + A_perks(g, kind === 'house' ? 'house' : 'arriving') + (CS.notableLine(g) ? '<p class="help T_ask">' + esc(CS.notableLine(g)) + '</p>' : '') + (withLine ? '<p class="sub T_with">' + esc(withLine) + '</p>' : '') +
+      '<div class="T_namerow T_gap"><h3 class="ttl' + A_nm(g) + '">' + esc(g.guest_name || 'Guest') + '</h3>' + A_badge(g) + '</div>' + A_ownerLine(g, true) + A_perks(g, kind === 'house' ? 'house' : 'arriving') + (CS.notableLine(g) ? '<p class="help T_ask">' + esc(CS.notableLine(g)) + '</p>' : '') + (withLine ? '<p class="sub T_with">' + esc(withLine) + '</p>' : '') +
       '<div class="row-wrap" style="margin-top:6px">' + (src ? '<span class="pill p-neutral">' + esc(src) + '</span>' : '') + '</div>' +
       '<p class="sub num" style="margin:8px 0 0">' + esc(datesLine(g)) + '</p>' + (earlier ? '<p class="help num" style="margin:2px 0 0">' + esc(earlier) + '</p>' : '') + contactBlock(g) +
       H_readyBlock(g.arrival_ready, g, true) + (canAddDetails() && g.uid ? '<a class="btn btn-secondary btn-sm" href="./guest/#' + encodeURIComponent(g.uid) + '" style="margin-top:12px">' + ICON('idcard', 's16') + 'Add guest details</a>' : '') +
