@@ -28,8 +28,8 @@ test('C: typed names without the booker - first typed highlighted, the rest and 
 });
 
 test('D: no booker name and nothing typed gives no main name; the link shows for editors only', async () => {
-  assert.equal(view({ guest_name: '', staying: ST(''), companions: C('Bo Cruz') }).main, null);
   assert.equal(view({ guest_name: '   ', staying: ST('') }).mode, 'empty');
+  assert.equal(view({ guest_name: '', staying: ST(''), companions: [] }).mode, 'empty', 'empty = no booker, nothing typed and no companions');
   const nobody = { guest_name: '', staying: ST('') };
   assert.match(await home(GUEST(nobody), 'cleaner'), /data-act="stay-open"[^>]*>[\s\S]*?Add who is staying/);
   const ro = await home(GUEST(nobody), 'laundry'); assert.doesNotMatch(ro, /Add who is staying|S_who|stay-open/);
@@ -98,4 +98,32 @@ test('CSS: the staying block wraps long names, the Change control has its own co
 
 test('release pins: 3.4.46 and cs-shell-v71', () => {
   assert.equal(JSON.parse(read('package.json')).version, '3.4.46'); assert.match(read('app.js'), /version: '3\.4\.46'/); assert.match(read('sw.js'), /CACHE_NAME = 'cs-shell-v71'/); assert.match(read('app.js'), /var PC_SHELL = 'cs-shell-v71';/);
+});
+
+test('F2: no booker name, nothing typed, companions on record - the first companion is highlighted, the rest follow, no Add link', async () => {
+  const v = view({ guest_name: '', staying: ST(''), companions: C('Bo Cruz', 'Cy Cruz') });
+  assert.equal(v.main, 'Bo Cruz'); assert.deepEqual(v.others, ['Cy Cruz']); assert.equal(v.bookerLine, null); assert.notEqual(v.mode, 'empty');
+  const g = GUEST({ guest_name: '', staying: ST(''), companions: C('Bo Cruz', 'Cy Cruz') });
+  const ed = block(await home(g, 'cleaner')); assert.match(ed, /<span class="S_main">Bo Cruz<\/span>/); assert.match(ed, /Companion:<\/b> Cy Cruz/); assert.match(ed, /S_chg/);
+  assert.doesNotMatch(await home(g, 'cleaner'), /Add who is staying/);
+  const ro = block(await home(g, 'laundry')); assert.match(ro, /^<div class="S_who S_ro"/); assert.match(ro, /<span class="S_main">Bo Cruz<\/span>/); assert.doesNotMatch(ro, /S_chg|stay-open/);
+});
+
+test('F1: the ID photo owner is a companion on record - no second "Staying:" line, the name appears once, the booker is the highlighted name (Today and Up next)', async () => {
+  const mk = (o) => GUEST(Object.assign({ id_photo_name: 'Eliza Acaso', staying: ST(''), companions: C('Eliza Acaso') }, o || {}));
+  for (const r of ['cleaner', 'owner']) {
+    const t = await home(mk(), r);
+    assert.doesNotMatch(t, /Staying: Eliza/, r); assert.equal(t.split('Eliza Acaso').length - 1, 1, r + ' today: name once'); assert.match(block(t), /<span class="S_main">Ana Reyes<\/span>/, r);
+    const up = await home(GUEST({ checkin_date: '2026-10-10' }), r, mk({ uid: 'stay-2', guest_name: 'Ben Cruz', checkin_date: '2026-10-17', checkout_date: '2026-10-19' }));
+    const u = up.slice(up.indexOf('T_upnext')); assert.doesNotMatch(u, /Staying: Eliza/, r); assert.equal(u.split('Eliza Acaso').length - 1, 1, r + ' up next: name once'); assert.match(u, /<span class="S_main">Ben Cruz<\/span>/, r);
+  }
+});
+
+test('F1: with g.staying absent (older SQL payload) the owner line still draws', async () => {
+  const h = await home(GUEST({ id_photo_name: 'Eliza Acaso', staying: undefined }));
+  assert.match(h, /Staying: Eliza Acaso/); assert.doesNotMatch(h, /S_who/);
+});
+
+test('F3: the Inventory supply receipt-line card keeps its own align-items (the global .S_line rule is gone)', () => {
+  assert.match(read('kpi/K_kpi.css'), /\.S_line \{[^}]*align-items: center;/);
 });

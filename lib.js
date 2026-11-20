@@ -598,10 +598,11 @@
     if (!g || !g.uid || !g.staying || typeof g.staying !== 'object') return null;
     var st = g.staying, names = stayNames(st.names), sug = stayNames(st.suggestion), bk = stayNames([g.guest_name])[0] || '', bkKey = bk.toLowerCase();
     var inList = names.some(function (x) { return x.toLowerCase() === bkKey; });
-    var mode = !names.length && !bk ? 'empty' : !names.length || inList ? 'booker' : 'other';
-    var main = mode === 'empty' ? null : mode === 'booker' ? bk : names[0], seen = {};
+    var comp = Array.isArray(g.companions) ? g.companions.map(function (x) { return x && x.name; }) : [], cn = stayNames(comp);
+    // no booker name and nothing typed: the first companion on record is highlighted (mode other); 'empty' only when there is no name data at all
+    var mode = !names.length && !bk ? (cn.length ? 'other' : 'empty') : !names.length || inList ? 'booker' : 'other';
+    var main = mode === 'empty' ? null : mode === 'booker' ? bk : names.length ? names[0] : cn[0], seen = {};
     seen[(main || '').toLowerCase()] = 1; if (mode === 'other') seen[bkKey] = 1;
-    var comp = Array.isArray(g.companions) ? g.companions.map(function (x) { return x && x.name; }) : [];
     var others = stayNames(names.concat(comp)).filter(function (x) { var k = x.toLowerCase(); if (seen[k]) return false; seen[k] = 1; return true; });
     return { mode: mode, names: names, suggestion: sug, version: st.version == null ? null : st.version, tonight: !!today && g.checkin_date === today, uid: g.uid, booker: g.guest_name || 'Guest', main: main, others: others, bookerLine: mode === 'other' && bk ? bk : null };
   }
