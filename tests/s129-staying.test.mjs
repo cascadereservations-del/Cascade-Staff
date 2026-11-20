@@ -137,3 +137,33 @@ test('R1-1: the Calendar next-arrival card still says who is staying when the ID
     assert.equal(n(await cal(GUEST({ id_photo_name: 'Eliza Acaso', staying: ST('Bo Cruz'), companions: C('Eliza Acaso') }), role)), 0, role + ' typed names');
   }
 });
+
+// s129 round 3: the ID photo owner's name shows exactly once on a guest card (the Staying block or the owner line, never neither, never both)
+const OWN = (o) => GUEST(Object.assign({ guest_name: 'Joseph Ewing', id_photo_name: 'Eliza Acaso', staying: ST('') }, o || {}));
+const count = (h, s) => h.split(s).length - 1;
+const upnext = async (g, role) => { const h = await home(GUEST({ checkin_date: '2026-10-10' }), role, Object.assign(g, { uid: 'stay-2', checkin_date: '2026-10-17', checkout_date: '2026-10-19' })); return h.slice(h.indexOf('T_upnext')); };
+
+test('R3-1: Today, cleaner, companions key absent, photo owner not in the block - "Staying: Eliza Acaso" appears once and the block highlights the booker', async () => {
+  const t = await home(OWN(), 'cleaner');
+  assert.equal(count(t, 'Staying: Eliza Acaso'), 1); assert.equal(count(t, 'Eliza Acaso'), 1); assert.match(block(t), /<span class="S_main">Joseph Ewing<\/span>/);
+});
+
+test('R3-2: Up next card, same case - the owner line draws once', async () => {
+  const u = await upnext(OWN({ guest_name: 'Joseph Ewing' }), 'cleaner');
+  assert.equal(count(u, 'Staying: Eliza Acaso'), 1); assert.equal(count(u, 'Eliza Acaso'), 1); assert.match(u, /<span class="S_main">Joseph Ewing<\/span>/);
+});
+
+test('R3-3: owner role, photo owner is a companion on record - no owner line, the name appears once', async () => {
+  const t = await home(OWN({ companions: C('Eliza Acaso') }), 'owner');
+  assert.equal(count(t, 'Staying: Eliza Acaso'), 0); assert.equal(count(t, 'Eliza Acaso'), 1);
+});
+
+test('R3-4: photo owner differing only in case and spacing from a companion counts as shown - no owner line', async () => {
+  const t = await home(OWN({ id_photo_name: 'eliza  acaso', companions: C('Eliza Acaso') }), 'cleaner');
+  assert.doesNotMatch(t, /Staying: /i); assert.equal(count(t.toLowerCase().replace(/\s+/g, ' '), 'eliza acaso'), 1);
+});
+
+test('R3-5: typed names include the photo owner - no owner line, the name appears once', async () => {
+  const t = await home(OWN({ staying: ST('Eliza Acaso') }), 'cleaner');
+  assert.equal(count(t, 'Staying: Eliza Acaso'), 0); assert.equal(count(t, 'Eliza Acaso'), 1);
+});
