@@ -100,7 +100,8 @@ test('F_ scoping: the card grid, the dialogs, the rail and the side sheets exist
 });
 
 test('F_ reserved heights are unchanged and per-class boxes are CSS only: Notices 216, pill slot 124-184 x 44, hero 252, grabber 56, aspect-ratio crops, no JS width read', () => {
-  assert.match(css, /\.A_noticecard \{ height: 216px; overflow: hidden; align-content: start; \}/);
+  assert.match(css, /\.A_noticecard \{ overflow: hidden; align-content: start; \}/); assert.match(css, /\.A_noticecard, \.A_noticecard\.H_mgr \{ block-size: auto; \}/, 's127: the Notices card follows its rows');
+  assert.doesNotMatch(css, /\.A_noticecard(\.H_mgr)? \{ height: \d+px/, 'no pinned Notices height is left');
   assert.match(css, /button\.A_chipglass\.E_pill \{ width: auto; min-width: 124px; max-width: 184px; height: var\(--touch\);/);
   assert.match(css, /\.A_hero \{ min-height: clamp\(12\.5rem, 32vh, 15\.75rem\); \}/); assert.match(css, /\.E_grab \{ position: sticky; top: 0; z-index: 3; height: 28px;/);
   assert.match(block('(min-width: 37.5rem)'), /\.A_hero \{ aspect-ratio: 16 \/ 7; max-height: max\(15\.75rem, 34vh\); \}/); assert.match(block('(min-width: 52.5rem)'), /\.A_hero \{ aspect-ratio: 21 \/ 8; \}/);

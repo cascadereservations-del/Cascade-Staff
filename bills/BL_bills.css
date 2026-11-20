@@ -7,7 +7,8 @@
 #v-bills .sticky { background: linear-gradient(to top, var(--v5-bg) 82%, transparent); }
 #v-bills .btn-sm { min-height: var(--v5-touch); }
 #v-bills .input { height: var(--v5-touch); border-radius: var(--v5-r-field); background: var(--v5-surf); border-color: var(--v5-line); }
-#v-bills .input input { font-size: var(--v5-t-body); }
+#v-bills .input { cursor: text; }
+#v-bills .input input { font-size: var(--v5-t-body); align-self: stretch; }
 #v-bills .field label { font-size: var(--v5-t-2); }
 #v-bills .C_amountbox { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 12px; }
 #v-bills .C_amountbox .cap { flex-basis: 100%; }

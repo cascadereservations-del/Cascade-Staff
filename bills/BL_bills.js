@@ -6,6 +6,8 @@
   'use strict';
   var W = window, CS = W.CS, esc = CS.esc, peso = CS.billPeso, ICON = W.ICON;
   var UNKNOWN = 'This may not be logged yet. Check the card before paying again.'; // network failure, a missing function or a reason this file does not know
+  var OPENFAIL = 'This bill could not be opened. Check your connection and try again.', STEPFAIL = 'That did not go through. Check your connection and try again.';
+  var BAD_AMOUNT = 'Enter the amount on the receipt, between ₱1 and ₱100,000.'; // 100000 is the server's ceiling (bill_pay_settle_v1)
   var KEYS = ['payee_name', 'number', 'note', 'amount_php', 'remind_day'];
 
   // ---------------------------------------------------------------- pure helpers (BL_Bills.lib)
@@ -20,9 +22,10 @@
       case 'duplicate_proof': return 'This screenshot was already used for another payment. Add the one for this bill.';
       case 'confirm_amount': {
         var read = Number(res.read), est = Number(res.estimate_php);
+        if (res.read == null || res.estimate_php == null || !(est > 0)) return 'Check the amount on the receipt, then tap Mark as paid again to log it.';
         return peso(read) + ' is well ' + (read > est ? 'above' : 'below') + ' the estimate of ' + peso(est) + '. Check the receipt, then tap Mark as paid again to log it.';
       }
-      case 'bad_amount': return 'Type the amount shown on the receipt. It must be more than zero.';
+      case 'bad_amount': return BAD_AMOUNT;
       case 'bad_proof': return 'The screenshot or the amount is missing or not valid. Add the screenshot again and check the amount.';
       case 'no_stored_proof': return 'The screenshot did not finish uploading, so nothing was logged. Add it again.';
       case 'sha_mismatch': return 'The screenshot changed after it was uploaded, so nothing was logged. Add it again.';
@@ -31,12 +34,13 @@
       case 'bad_patch': return 'Nothing was saved. Check the details and try again.';
       case 'bad_key': return 'That detail cannot be changed here.';
       case 'bad_value': return 'Check the ' + (((ctx.labels || {})[res.key]) || 'detail you changed').toLowerCase() + '. It was not accepted.';
-      default: return ctx.edit ? 'Nothing was saved. Check your connection and try again.' : UNKNOWN;
+      default: return ctx.edit ? 'Nothing was saved. Check your connection and try again.' : ctx.act === 'open' ? OPENFAIL : ctx.act === 'step' ? STEPFAIL : UNKNOWN;
     }
   }
   // A thrown error or an rpc error to an answer {ok:false, reason}. A ledger conflict (SQLSTATE 55000) arrives as a plain sentence and is shown as it is.
   function failure(err) { return err && err.code === '55000' && err.message ? { ok: false, sentence: String(err.message) } : { ok: false, reason: 'unknown' }; }
-  function amountOf(text) { var t = String(text == null ? '' : text).replace(/[,\s]/g, ''); if (!/^\d+(\.\d{1,2})?$/.test(t)) return null; var v = Math.round(parseFloat(t) * 100) / 100; return v > 0 ? v : null; }
+  // "2,140", "2140.50", "₱2,140" and ".50" are amounts; "1,2,3", empty, zero, negatives and more than the server's 100,000 are not.
+  function amountOf(text) { var t = String(text == null ? '' : text).replace(/\s/g, '').replace(/^(₱|php)/i, ''); if (!/\d/.test(t) || !/^(?:\d{1,3}(?:,\d{3})+|\d*)(?:\.\d{1,2})?$/.test(t)) return null; var v = Math.round(parseFloat(t.replace(/,/g, '')) * 100) / 100; return v > 0 && v <= 100000 ? v : null; }
   // Mark as paid is on only with a screenshot, a good amount and nothing in flight.
   function payReady(s) { return !!(s && s.file && amountOf(s.amountText) != null && !s.busy); }
   // What settle sends. confirmed is true only when this very amount was already shown the "well above or below" message.
@@ -64,7 +68,8 @@
   function two(n) { return n.toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
   function nav(h) { if (S && S.o.navigate) S.o.navigate(h); }
   function back() { nav(S && S.from ? '#bills/pay/' + S.from : '#home'); }
-  function live(fn) { var g = S && S.g; return function () { if (S && S.g === g) return fn.apply(null, arguments); }; }
+  // o: when the screen is left before the answer comes, the Today card is still refreshed (the sheet is gone; the card is not)
+  function live(fn, o) { var g = S && S.g; return function () { if (S && S.g === g) return fn.apply(null, arguments); if (o && o.onChange) o.onChange(); }; }
   function call(name, args) { return Promise.resolve().then(function () { return S.o.client.rpc(name, args); }).then(function (r) { return r && r.error ? failure(r.error) : (r && r.data) || { ok: false, reason: 'unknown' }; }, failure); }
   function say(res, ctx) { return res.sentence || refusal(res, ctx); }
 
@@ -79,11 +84,12 @@
   function openPay() {
     draw('<div class="skel" style="height:320px;margin-top:16px"></div>');
     call('bill_pay_open_v1', { p_bill_id: S.id }).then(live(function (d) {
-      if (!d.ok || !d.bill || !d.pay) { if (d.reason === 'already_paid' && S.o.onChange) S.o.onChange(); return stop(say(d)); }
+      if (!d.ok || !d.bill || !d.pay) { if (d.reason === 'already_paid' && S.o.onChange) S.o.onChange(); return stop(say(d, { act: 'open' })); }
       S.d = d; S.amountText = d.pay.amount_editable ? two(Number(d.pay.amount_php) || 0) : String(Number(d.pay.amount_php) || 0);
       if (S.o.setTitle) S.o.setTitle('Pay ' + d.bill.label); renderPay();
     }));
   }
+  function amtHelp(text, est) { return amountOf(text) == null ? BAD_AMOUNT : 'Starts at the estimate, ' + peso(est) + '. Billers often add a PHP 10 fee, so type what the receipt says.'; }
   function renderPay() {
     var d = S.d, p = d.pay, b = d.bill, parts = sheetParts(d), est = Number(p.amount_php) || 0;
     var amountBox = '<div class="C_amountbox"><div class="cap up">' + esc(parts.editable ? 'Estimated bill' : 'Amount to pay ' + b.label) + '</div><div class="C_amount num">' + esc(peso(est)) + '</div>' +
@@ -93,36 +99,38 @@
       '<div class="stack">' + (rows || '<p class="help" style="margin:0">No payment details are saved yet.</p>') + '</div></div>';
     var shot = S.file ? '<div class="row-wrap BL_shot"><span class="BL_thumb" aria-hidden="true">' + ICON('camera', 's24') + '</span><div class="BL_shotx"><span class="help">Screenshot added</span><button class="btn btn-secondary btn-sm" type="button" data-bact="pick">Change screenshot</button></div></div>'
       : '<div class="row-wrap"><button class="btn btn-secondary" type="button" data-bact="pick">' + ICON('camera', 's16') + 'Add the screenshot</button></div>';
-    var field = parts.editable ? '<div class="field"><label for="BL_amt">Amount on the receipt</label><div class="input"><span>PHP</span><input id="BL_amt" inputmode="decimal" autocomplete="off" value="' + esc(S.amountText) + '"></div><p class="help" style="margin:0">Starts at the estimate, ' + esc(peso(est)) + '. Billers often add a PHP 10 fee, so type what the receipt says.</p></div>' : '';
+    var field = parts.editable ? '<div class="field"><label for="BL_amt">Amount on the receipt</label><div class="input"><span>PHP</span><input id="BL_amt" inputmode="decimal" autocomplete="off" value="' + esc(S.amountText) + '"></div><p class="help" id="BL_amthelp" style="margin:0">' + esc(amtHelp(S.amountText, est)) + '</p></div>' : '';
     var proof = '<div class="card"><div class="cap up">After you have paid</div><p class="help" style="margin:6px 0 10px">Add the payment screenshot. The bill is marked paid only with it.</p><div class="stack">' + shot + field +
       (S.msg ? box(S.msgKind || 'err', S.msg) : '') + '</div></div>';
     var skip = S.askSkip ? box('info', 'Skip ' + b.label + ' for this month? Nothing will be logged.') + '<div class="row-wrap"><button class="btn btn-secondary" type="button" data-bact="skip-yes"' + (S.busy ? ' disabled' : '') + '>Yes, skip it</button><button class="btn btn-ghost" type="button" data-bact="skip-no">Keep it</button></div>'
       : '<button class="btn btn-ghost btn-sm BL_skip" type="button" data-bact="skip-ask"' + (S.busy ? ' disabled' : '') + '>Not paying this month</button>';
-    draw('<div class="stack">' + amountBox + to + proof + '</div><div class="sticky"><button class="btn btn-primary btn-block" type="button" id="BL_done" data-bact="settle"' + (payReady({ file: S.file, amountText: parts.editable ? S.amountText : String(est), busy: S.busy }) ? '' : ' disabled') + '>' + ICON('checks') + (S.busy ? 'Saving…' : 'Mark as paid') + '</button>' +
-      '<button class="btn btn-ghost" type="button" data-bact="cancel" style="width:100%"' + (S.busy ? ' disabled' : '') + '>Not now</button>' + skip + '</div><input type="file" id="BL_file" accept="image/*" hidden>');
+    var later = '<div class="stack"><button class="btn btn-ghost" type="button" data-bact="cancel" style="width:100%"' + (S.busy ? ' disabled' : '') + '>Not now</button>' + skip + '</div>';
+    draw('<div class="stack">' + amountBox + proof + to + later +'</div><div class="sticky"><button class="btn btn-primary btn-block" type="button" id="BL_done" data-bact="settle"' + (payReady({ file: S.file, amountText: parts.editable ? S.amountText : String(est), busy: S.busy }) ? '' : ' disabled') + '>' + ICON('checks') + (S.busy ? 'Saving…' : 'Mark as paid') + '</button></div><input type="file" id="BL_file" accept="image/*" hidden>');
   }
   function settle() {
     var d = S.d, parts = sheetParts(d), amount = parts.editable ? amountOf(S.amountText) : Number(d.pay.amount_php);
     if (S.busy || !payReady({ file: S.file, amountText: parts.editable ? S.amountText : String(amount), busy: false })) return;
-    S.busy = true; S.msg = ''; renderPay();
+    var o = S.o; S.busy = true; S.msg = ''; renderPay();
     var up = S.up ? Promise.resolve(S.up) : Promise.resolve().then(function () { return S.o.upload(S.file); }).then(function (u) { S.up = u; return u; });
     up.then(function (u) { return call('bill_pay_settle_v1', { p_bill_id: S.id, p_proof: proofPayload(u, amount, S.confirmedFor) }); }, function () { return { ok: false, reason: 'upload' }; }).then(live(function (r) {
       S.busy = false;
       if (r.ok) { if (S.o.haptic) try { S.o.haptic('tap'); } catch (e) { /* no buzz */ } if (S.o.onChange) S.o.onChange(); return stop('Logged as an expense under Utilities.', 'ok'); }
       if (r.reason === 'already_paid' || r.reason === 'not_payer' || r.reason === 'not_found' || r.reason === 'not_authorized') { if (S.o.onChange) S.o.onChange(); return stop(say(r)); }
       if (r.reason === 'confirm_amount') { S.confirmedFor = amount; S.msgKind = 'info'; S.msg = refusal(r); return renderPay(); }
-      if (r.reason === 'duplicate_proof') { S.file = null; S.up = null; }
+      if (r.reason === 'duplicate_proof') { S.file = null; S.up = null; S.confirmedFor = null; }
       if (r.reason === 'no_stored_proof' || r.reason === 'sha_mismatch') S.up = null;
-      S.msgKind = 'err'; S.msg = r.reason === 'upload' ? 'The screenshot could not be sent, so nothing was logged. Add it again.' : say(r); renderPay();
-    }));
+      S.msgKind = 'err'; S.msg = r.reason === 'upload' ? 'The screenshot could not be sent, so nothing was logged. Add it again.' : say(r);
+      if (S.msg === UNKNOWN && S.o.onChange) S.o.onChange(); // the answer is unknown: show the real state on the card before anyone pays again
+      renderPay();
+    }, o));
   }
   function step(name, okText) {
-    if (S.busy) return; S.busy = true; S.askSkip = false; S.msg = ''; renderPay();
+    if (S.busy) return; var o = S.o; S.busy = true; S.askSkip = false; S.msg = ''; renderPay();
     call(name, { p_bill_id: S.id }).then(live(function (r) {
       S.busy = false; if (S.o.onChange) S.o.onChange();
       if (r.ok) { if (S.o.toast) S.o.toast(okText); return nav('#home'); }
-      stop(say(r));
-    }));
+      stop(say(r, { act: 'step' }));
+    }, o));
   }
   var COPY = { 'copy-amount': ['Amount', function () { var C = W.C_PayAdmin, p = S.d.pay; return C && C.copyAmount ? C.copyAmount(sheetParts(S.d).editable && amountOf(S.amountText) ? amountOf(S.amountText) : p.amount_php) : String(p.amount_php); }],
     'copy-name': ['Name', function () { return S.d.pay.payee_name; }], 'copy-number': ['Number', function () { return S.d.pay.number; }], 'copy-note': ['Note', function () { return S.d.pay.note; }] };
@@ -163,6 +171,7 @@
 
   // ---- mount
   function onClick(ev) {
+    var w = S && ev.target.closest ? ev.target.closest('.input') : null; if (w && w.querySelector) { var inp = w.querySelector('input'); if (inp && inp !== ev.target) inp.focus(); } // the whole box focuses its input, the PHP prefix too
     var t = ev.target.closest ? ev.target.closest('[data-bact]') : null; if (!t || !S) return; var a = t.getAttribute('data-bact');
     if (a === 'home') nav('#home'); else if (a === 'back') back();
     else if (a === 'pick') { var f = S.o.box.querySelector('#BL_file'); if (f) f.click(); }
@@ -174,10 +183,10 @@
   }
   function onInput(ev) {
     var t = ev.target; if (!S || S.end) return;
-    if (t.id === 'BL_amt') { S.amountText = t.value; var b = S.o.box.querySelector('#BL_done'); if (b) b.disabled = !payReady({ file: S.file, amountText: S.amountText, busy: S.busy }); }
+    if (t.id === 'BL_amt') { S.amountText = t.value; S.confirmedFor = null; var h = S.o.box.querySelector('#BL_amthelp'); if (h) h.textContent = amtHelp(t.value, Number(S.d.pay.amount_php) || 0); var b = S.o.box.querySelector('#BL_done'); if (b) b.disabled = !payReady({ file: S.file, amountText: S.amountText, busy: S.busy }); }
     else if (t.getAttribute && t.getAttribute('data-key')) { S.vals[t.getAttribute('data-key')] = t.value; var s = S.o.box.querySelector('#BL_save'); if (s) s.disabled = S.busy || !Object.keys(changedKeys(S.d, S.vals)).length; }
   }
-  function onChange(ev) { var t = ev.target; if (S && t.id === 'BL_file' && t.files && t.files[0]) { S.file = t.files[0]; S.up = null; S.msg = ''; renderPay(); } }
+  function onChange(ev) { var t = ev.target; if (S && t.id === 'BL_file' && t.files && t.files[0]) { S.file = t.files[0]; S.up = null; S.confirmedFor = null; S.msg = ''; renderPay(); } }
 
   function mount(el, o) {
     unmount();

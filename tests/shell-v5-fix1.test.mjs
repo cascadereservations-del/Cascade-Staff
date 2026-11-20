@@ -62,8 +62,9 @@ test('A_fix H3: Add a notice exists only once notices_v1 answered; a missing RPC
 
 // ---------------------------------------------------------------- M1 / M2 / M3
 test('A_fix M1: the Notices card has one fixed height for loaded, empty and failed, shows two rows and collapses only when the RPC is absent; the inbox slot is reserved', async () => {
-  const card = css.match(/\.A_noticecard \{[^}]*\}/)[0]; assert.match(card, /(^|[ ;{])height: 216px/); assert.doesNotMatch(card, /min-height/); assert.match(card, /overflow: hidden/);
-  assert.match(css, /\.A_noticecard \.rowi \{ height: 64px; min-height: 64px; overflow: hidden; \}/);
+  const card = css.match(/\.A_noticecard \{[^}]*\}/)[0]; assert.doesNotMatch(card, /(^|[ ;{])(min-)?height:/, 's127: no pinned height; the card follows its rows'); assert.match(card, /overflow: hidden/);
+  assert.match(css, /\.A_noticecard, \.A_noticecard\.H_mgr \{ block-size: auto; \}/); assert.match(css, /\.A_noticecard \.rowi \{ block-size: auto; min-height: 64px; \}/);
+  assert.match(css, /\.A_noticecard \.rowi \{ min-height: 64px; overflow: hidden; \}/);
   assert.match(css, /\.A_noticecard \.rowi \.t, \.A_noticecard \.rowi \.s \{ white-space: nowrap; overflow: hidden; text-overflow: ellipsis; \}/);
   const three = NOTICES_RAW({ notices: [...NOTICES_RAW().notices, { id: 'n3', type: 'deep_clean', title: 'Deep clean', date: '2026-10-21', source: 'manual' }] });
   const ok = await boot({ role: 'cleaner', hash: '#home', handlers: baseHandlers('cleaner', { notices_v1: () => ({ error: null, data: three }) }) }); // s91: owner/admin/finance get Needs action; the card stays for the cleaner
