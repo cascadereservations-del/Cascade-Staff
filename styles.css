@@ -1292,25 +1292,37 @@ a.T_call { min-height: var(--touch); display: inline-flex; align-items: center; 
 @media (min-width: 37.5rem) { .K_inv-row { grid-template-columns: repeat(auto-fit, minmax(9.5rem, 1fr)); } } /* s115: a narrow card (two-column Today at 720 px) drops to fewer tiles per line instead of a 19 px label column */
 /* end s110 kpi-inventory */
 /* s127 (Staff 3.4.42): the Today bills card. It uses the K_ names of kpi/K_kpi.css, which is not loaded on Today, so the few rules it needs are scoped to the card. */
-#T_bills { display: flex; flex-direction: column; gap: 8px; padding: 16px; }
-#T_bills .K_lab { font: 600 var(--v5-t-min)/1.2 var(--v5-font-ui); letter-spacing: .08em; text-transform: uppercase; color: var(--v5-ink-3); }
+#T_bills { display: flex; flex-direction: column; gap: 12px; padding: 16px; }
+#T_bills .K_lab { font: 700 var(--v5-t-min)/1.25 var(--v5-font-ui); letter-spacing: .08em; text-transform: uppercase; color: var(--v5-ink-2); }
 #T_bills .K_sub { margin: 0; font-size: var(--v5-t-label); line-height: 1.45; color: var(--v5-ink-2); text-wrap: pretty; }
-#T_bills .K_two { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
-#T_bills .K_two > div { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
-#T_bills .K_two > div + div { padding-left: 16px; border-left: 1px solid var(--v5-line); }
+/* s128: each half is centred on its own column, the rule sits exactly between them (Lloyd) */
+#T_bills .K_two { display: grid; grid-template-columns: 1fr 1fr; gap: 0; }
+#T_bills .K_two > div { display: flex; flex-direction: column; align-items: center; gap: 4px; min-width: 0; padding: 0 8px; text-align: center; }
+#T_bills .K_two > div + div { border-left: 1px solid var(--v5-line); }
 #T_bills .K_two i { font: 600 var(--v5-t-label)/1.2 var(--v5-font-ui); font-style: normal; color: var(--v5-ink-2); }
 #T_bills .K_two b { font: 400 var(--v5-t-num)/1.1 var(--v5-font-display); font-variant-numeric: tabular-nums; }
 #T_bills .K_two .K_e { color: var(--v5-gold-text); } #T_bills .K_two .K_w { color: var(--v5-chart-line); }
 /* s127 (Staff 3.4.43): the To pay list in the bills card. Row, tile and amount; Pay is the app's own small button. */
-#T_bills .BL_lab { margin-top: 16px; }
-#T_bills .BL_dues { display: grid; margin-top: 4px; }
+#T_bills .BL_lab { margin-top: 4px; }
+#T_bills .BL_dues { display: grid; }
+#T_bills .BL_dues > :first-child { padding-top: 4px; }
 #T_bills .K_line { display: flex; align-items: center; gap: 8px; padding: 12px 0; border-bottom: 1px solid var(--v5-sep); }
 #T_bills .K_line:last-child { border-bottom: 0; }
 #T_bills .K_line > span { min-width: 0; }
 #T_bills .K_line .btn-sm { min-height: 44px; flex: none; }
 #T_bills .BL_who { flex: 1; min-width: 0; display: grid; gap: 4px; }
-#T_bills .BL_who b { font: 600 var(--v5-t-2)/1.25 var(--v5-font-ui); }
-#T_bills .BL_amt { font: 600 var(--v5-t-2)/1.25 var(--v5-font-ui); font-variant-numeric: tabular-nums; white-space: nowrap; }
+#T_bills .BL_who b { font: 600 var(--v5-t-body)/1.25 var(--v5-font-ui); }
+#T_bills .BL_amt { font: 600 var(--v5-t-body)/1.25 var(--v5-font-ui); font-variant-numeric: tabular-nums; white-space: nowrap; }
+/* s128: an unpaid row is a grid, so the small line runs under the name AND the amount (it wrapped as "est. to 19 Nov · / due 27th" at 360) */
+#T_bills .K_line:not(.BL_paid) { display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto; grid-template-areas: "tile name amt btn" "tile sub sub btn"; gap: 4px 0; align-items: center; }
+#T_bills .K_line:not(.BL_paid) .BL_who { display: contents; }
+#T_bills .K_line:not(.BL_paid) .BL_tile { grid-area: tile; margin-right: 8px; }
+#T_bills .K_line:not(.BL_paid) .BL_who b { grid-area: name; align-self: end; }
+#T_bills .K_line:not(.BL_paid) .BL_who .K_sub { grid-area: sub; align-self: start; }
+#T_bills .K_line:not(.BL_paid) .BL_amt { grid-area: amt; align-self: end; padding-left: 8px; }
+#T_bills .K_line:not(.BL_paid) .btn-sm { grid-area: btn; margin-left: 12px; }
+/* s128: at 320 the icon tile left 58px for the name ("Electricit / y"); the name says what the bill is */
+@media (max-width: 340px) { #T_bills .BL_tile { display: none; } }
 #T_bills .BL_paid .i, #T_bills .BL_paid .K_sub { color: var(--v5-ok-t); } #T_bills .BL_paid .i { flex: none; }
 #T_bills .BL_tap { width: 100%; min-height: 44px; border: 0; border-bottom: 1px solid var(--v5-sep); background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; }
 #T_bills .BL_tap:last-child { border-bottom: 0; }
