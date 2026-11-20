@@ -39,8 +39,8 @@
   }
   // A thrown error or an rpc error to an answer {ok:false, reason}. A ledger conflict (SQLSTATE 55000) arrives as a plain sentence and is shown as it is.
   function failure(err) { return err && err.code === '55000' && err.message ? { ok: false, sentence: String(err.message) } : { ok: false, reason: 'unknown' }; }
-  // "2,140", "2140.50", "₱2,140" and ".50" are amounts; "1,2,3", empty, zero, negatives and more than the server's 100,000 are not.
-  function amountOf(text) { var t = String(text == null ? '' : text).replace(/\s/g, '').replace(/^(₱|php)/i, ''); if (!/\d/.test(t) || !/^(?:\d{1,3}(?:,\d{3})+|\d*)(?:\.\d{1,2})?$/.test(t)) return null; var v = Math.round(parseFloat(t.replace(/,/g, '')) * 100) / 100; return v > 0 && v <= 100000 ? v : null; }
+  // "2,140", "2140.50", "₱2,140" and "2140.5" are amounts; "1,2,3", empty, under ₱1, negatives and more than the server's 100,000 are not.
+  function amountOf(text) { var t = String(text == null ? '' : text).replace(/\s/g, '').replace(/^(₱|php)/i, ''); if (!/\d/.test(t) || !/^(?:\d{1,3}(?:,\d{3})+|\d*)(?:\.\d{1,2})?$/.test(t)) return null; var v = Math.round(parseFloat(t.replace(/,/g, '')) * 100) / 100; return v >= 1 && v <= 100000 ? v : null; }
   // Mark as paid is on only with a screenshot, a good amount and nothing in flight.
   function payReady(s) { return !!(s && s.file && amountOf(s.amountText) != null && !s.busy); }
   // What settle sends. confirmed is true only when this very amount was already shown the "well above or below" message.
@@ -97,9 +97,9 @@
     var rows = (parts.name ? kv('Name', p.payee_name, 'copy-name', 'Copy name') : '') + (parts.number ? kv(p.number_label || 'Account number', p.number, 'copy-number', 'Copy number') : '') + (parts.note ? kv('Note to send', p.note, 'copy-note', 'Copy note') : '');
     var to = '<div class="card"><div class="BL_hd"><div class="cap up">Pay to</div>' + (parts.edit ? '<a class="BL_edit" href="#bills/edit/' + esc(b.kind) + '/' + esc(b.id) + '" aria-label="' + esc('Edit ' + b.label + ' details') + '">Edit</a>' : '') + '</div>' +
       '<div class="stack">' + (rows || '<p class="help" style="margin:0">No payment details are saved yet.</p>') + '</div></div>';
-    var shot = S.file ? '<div class="row-wrap BL_shot"><span class="BL_thumb" aria-hidden="true">' + ICON('camera', 's24') + '</span><div class="BL_shotx"><span class="help">Screenshot added</span><button class="btn btn-secondary btn-sm" type="button" data-bact="pick">Change screenshot</button></div></div>'
+    var shot = S.file ? '<div class="row-wrap BL_shot"><span class="BL_thumb" aria-hidden="true">' + ICON('camera', 's24') + '</span><div class="BL_shotx"><span class="help">Screenshot added</span><button class="btn btn-secondary btn-sm" type="button" data-bact="pick"' + (S.busy ? ' disabled' : '') + '>Change screenshot</button></div></div>'
       : '<div class="row-wrap"><button class="btn btn-secondary" type="button" data-bact="pick">' + ICON('camera', 's16') + 'Add the screenshot</button></div>';
-    var field = parts.editable ? '<div class="field"><label for="BL_amt">Amount on the receipt</label><div class="input"><span>PHP</span><input id="BL_amt" inputmode="decimal" autocomplete="off" value="' + esc(S.amountText) + '"></div><p class="help" id="BL_amthelp" style="margin:0">' + esc(amtHelp(S.amountText, est)) + '</p></div>' : '';
+    var field = parts.editable ? '<div class="field"><label for="BL_amt">Amount on the receipt</label><div class="input"><span>PHP</span><input id="BL_amt" inputmode="decimal" autocomplete="off" value="' + esc(S.amountText) + '"' + (S.busy ? ' disabled' : '') + '></div><p class="help" id="BL_amthelp" style="margin:0">' + esc(amtHelp(S.amountText, est)) + '</p></div>' : '';
     var proof = '<div class="card"><div class="cap up">After you have paid</div><p class="help" style="margin:6px 0 10px">Add the payment screenshot. The bill is marked paid only with it.</p><div class="stack">' + shot + field +
       (S.msg ? box(S.msgKind || 'err', S.msg) : '') + '</div></div>';
     var skip = S.askSkip ? box('info', 'Skip ' + b.label + ' for this month? Nothing will be logged.') + '<div class="row-wrap"><button class="btn btn-secondary" type="button" data-bact="skip-yes"' + (S.busy ? ' disabled' : '') + '>Yes, skip it</button><button class="btn btn-ghost" type="button" data-bact="skip-no">Keep it</button></div>'
@@ -110,9 +110,10 @@
   function settle() {
     var d = S.d, parts = sheetParts(d), amount = parts.editable ? amountOf(S.amountText) : Number(d.pay.amount_php);
     if (S.busy || !payReady({ file: S.file, amountText: parts.editable ? S.amountText : String(amount), busy: false })) return;
-    var o = S.o; S.busy = true; S.msg = ''; renderPay();
-    var up = S.up ? Promise.resolve(S.up) : Promise.resolve().then(function () { return S.o.upload(S.file); }).then(function (u) { S.up = u; return u; });
-    up.then(function (u) { return call('bill_pay_settle_v1', { p_bill_id: S.id, p_proof: proofPayload(u, amount, S.confirmedFor) }); }, function () { return { ok: false, reason: 'upload' }; }).then(live(function (r) {
+    // s and file are this sheet and this screenshot: after the upload nothing may be read from S, which can by then be another bill's sheet.
+    var s = S, file = S.file, o = S.o; S.busy = true; S.msg = ''; renderPay();
+    var up = s.up ? Promise.resolve(s.up) : Promise.resolve().then(function () { return o.upload(file); }).then(function (u) { if (s.file === file) s.up = u; return u; });
+    up.then(function (u) { return S === s && s.file === file ? call('bill_pay_settle_v1', { p_bill_id: s.id, p_proof: proofPayload(u, amount, s.confirmedFor) }) : { ok: false, reason: 'unknown' }; }, function () { return { ok: false, reason: 'upload' }; }).then(live(function (r) {
       S.busy = false;
       if (r.ok) { if (S.o.haptic) try { S.o.haptic('tap'); } catch (e) { /* no buzz */ } if (S.o.onChange) S.o.onChange(); return stop('Logged as an expense under Utilities.', 'ok'); }
       if (r.reason === 'already_paid' || r.reason === 'not_payer' || r.reason === 'not_found' || r.reason === 'not_authorized') { if (S.o.onChange) S.o.onChange(); return stop(say(r)); }

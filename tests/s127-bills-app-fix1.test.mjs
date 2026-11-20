@@ -78,8 +78,8 @@ test('fix 8: leaving the sheet while Mark as paid is in flight still refreshes t
   BL.unmount(); release({ ok: true }); await flush();
   assert.equal(s.changes, 1);
 });
-test('fix 6: the amount field takes 2,140 / 2140.50 / ₱2,140 / .50 and refuses 1,2,3, empty, zero, negatives and over 100,000 with one sentence', async () => {
-  assert.equal(L.amountOf('2,140'), 2140); assert.equal(L.amountOf('2140.50'), 2140.5); assert.equal(L.amountOf('₱2,140'), 2140); assert.equal(L.amountOf('.50'), 0.5); assert.equal(L.amountOf('100,000'), 100000);
+test('fix 6: the amount field takes 2,140 / 2140.50 / ₱2,140 and refuses .50, 1,2,3, empty, zero, negatives and over 100,000 with one sentence', async () => {
+  assert.equal(L.amountOf('2,140'), 2140); assert.equal(L.amountOf('2140.50'), 2140.5); assert.equal(L.amountOf('₱2,140'), 2140); assert.equal(L.amountOf('.50'), null); assert.equal(L.amountOf('0.99'), null); assert.equal(L.amountOf('1'), 1); assert.equal(L.amountOf('100,000'), 100000);
   for (const bad of ['1,2,3', '12,34', '', '  ', '0', '0.00', '-5', '-2,140', '100,000.01', '1,000,00', '2140.']) assert.equal(L.amountOf(bad), null, JSON.stringify(bad));
   const s = await sheet((n) => (n === 'bill_pay_open_v1' ? OPEN : { ok: true }));
   await s.type('1,2,3'); assert.equal(s.nodes['#BL_amthelp'].textContent, 'Enter the amount on the receipt, between ₱1 and ₱100,000.');
@@ -103,4 +103,24 @@ test('fix 1: a paid bill screenshot is signed from cleaning-photos, where paymen
   const app = await boot({ role: 'owner', hash: '#home', storage, handlers: baseHandlers('owner', { bill_proof_v1: () => ({ error: null, data: { ok: true, path: 'bills/zz.jpg' } }) }) });
   await app.click({ 'data-act': 'bill-proof', 'data-id': 'b2' }); await app.flush();
   assert.deepEqual(buckets, ['cleaning-photos']);
+});
+
+// review 2: a slow upload must never settle another bill.
+test('review 2: an upload that finishes after the payer opened another bill settles nothing', async () => {
+  const s = await sheet((n) => (n === 'bill_pay_open_v1' ? OPEN : { ok: true }));
+  let release; const held = new Promise((r) => { release = r; });
+  BL.unmount();
+  const calls = [], box = s.box, h = s.h;
+  const mk = (sub, upload) => ({ box, sub, propertyId: 'p', client: { rpc: (n, a) => { calls.push([n, plain(a)]); return Promise.resolve({ error: null, data: n === 'bill_pay_open_v1' ? Object.assign({}, OPEN, { bill: { id: sub.slice(4), label: 'Zz', kind: 'internet' } }) : { ok: true } }); } }, upload, onChange() {}, navigate() {}, toast() {} });
+  BL.mount(box, mk('pay/A', () => held)); await flush();
+  h.change({ target: { id: 'BL_file', files: [{ name: 'a.jpg' }] } }); await flush();
+  h.click({ target: { closest: (q) => (q === '[data-bact]' ? { getAttribute: () => 'settle' } : null) } }); await flush();
+  assert.match(box.innerHTML, /id="BL_amt"[^>]* disabled/, 'amount is locked while saving'); assert.match(box.innerHTML, /data-bact="pick" disabled/, 'screenshot is locked while saving');
+  BL.unmount(); BL.mount(box, mk('pay/B', async () => ({ path: 'cleaning/b.jpg', sha256: 'b'.repeat(64) }))); await flush();
+  release({ path: 'cleaning/a.jpg', sha256: 'a'.repeat(64) }); await flush();
+  assert.deepEqual(calls.filter((c) => c[0] === 'bill_pay_settle_v1'), [], 'no bill is settled with the old upload');
+  h.change({ target: { id: 'BL_file', files: [{ name: 'b.jpg' }] } }); await flush();
+  h.click({ target: { closest: (q) => (q === '[data-bact]' ? { getAttribute: () => 'settle' } : null) } }); await flush();
+  assert.deepEqual(calls.filter((c) => c[0] === 'bill_pay_settle_v1').map((c) => [c[1].p_bill_id, c[1].p_proof.path]), [['B', 'cleaning/b.jpg']], 'bill B settles only with its own screenshot');
+  BL.unmount();
 });
