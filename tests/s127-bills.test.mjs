@@ -104,9 +104,9 @@ test('s127 demo: the fixture carries the new keys with invented names and the To
   assert.ok(!JSON.stringify(c).includes('so_far_php'), 'no money for a cleaner');
 });
 
-test('s127 shell: the Today card sits right after the utility bar, is drawn from today_bills_v1, and logs nothing when the RPC is missing', () => {
+test('s127 shell: the Today card sits below Inventory and above Shortcuts (s128, Lloyd), is drawn from today_bills_v1, and logs nothing when the RPC is missing', () => {
   const a = read('app.js');
-  assert.equal((a.match(/A_utilBar\(\)\)? \+ A_billsCard\(\)/g) || []).length, 2, 'both layouts');
+  assert.equal((a.match(/K_invCard\(\) \+ A_billsCard\(\) \+ /g) || []).length, 2, 'both layouts'); assert.equal((a.match(/A_billsCard\(\)/g) || []).length, 3, 'drawn once per layout');
   assert.match(a, /sb\.rpc\('today_bills_v1'/); assert.match(a, /id="T_bills"/);
   const fnBody = /function A_loadBills\(\) \{[\s\S]*?\n  \}\n/.exec(a)[0]; assert.ok(!/console\.|toast/.test(fnBody), 'no toast and no log');
   assert.match(a, /faces: A_loadFaces/); assert.match(a, /data-facepx/);
