@@ -592,12 +592,18 @@
     if (/idempotency_key_reused/.test(m)) return 'That did not go through. Please try saving again.';
     return null;
   }
+  // s129 (D-390): the block fills itself from the guest record. main = the one highlighted name; others = typed names then the record's companions, no repeats, never main, never the booker;
+  // bookerLine is set only when someone other than the booker stays. g.companions may be absent (older server): then only the booker and the typed names show.
   function stayingView(g, today) {
     if (!g || !g.uid || !g.staying || typeof g.staying !== 'object') return null;
-    var st = g.staying, names = stayNames(st.names), sug = stayNames(st.suggestion), booker = String(g.guest_name || '').replace(/\s+/g, ' ').trim().toLowerCase();
-    var inList = names.some(function (x) { return x.toLowerCase() === booker; });
-    var mode = !names.length ? 'empty' : names.length === 1 && inList ? 'booker' : inList ? 'with' : 'other';
-    return { mode: mode, names: names, suggestion: sug, version: st.version == null ? null : st.version, tonight: !!today && g.checkin_date === today, uid: g.uid, booker: g.guest_name || 'Guest' };
+    var st = g.staying, names = stayNames(st.names), sug = stayNames(st.suggestion), bk = stayNames([g.guest_name])[0] || '', bkKey = bk.toLowerCase();
+    var inList = names.some(function (x) { return x.toLowerCase() === bkKey; });
+    var mode = !names.length && !bk ? 'empty' : !names.length || inList ? 'booker' : 'other';
+    var main = mode === 'empty' ? null : mode === 'booker' ? bk : names[0], seen = {};
+    seen[(main || '').toLowerCase()] = 1; if (mode === 'other') seen[bkKey] = 1;
+    var comp = Array.isArray(g.companions) ? g.companions.map(function (x) { return x && x.name; }) : [];
+    var others = stayNames(names.concat(comp)).filter(function (x) { var k = x.toLowerCase(); if (seen[k]) return false; seen[k] = 1; return true; });
+    return { mode: mode, names: names, suggestion: sug, version: st.version == null ? null : st.version, tonight: !!today && g.checkin_date === today, uid: g.uid, booker: g.guest_name || 'Guest', main: main, others: others, bookerLine: mode === 'other' && bk ? bk : null };
   }
   // s105 SPEC-46 section 1: perks to give, from ONE map, cumulative by tier. phase 'arrival' = prepare before arrival, 'house' = what to give during the stay. opts.id: an ID is on file (the no-ID-again line needs it).
   // At most 4 lines: over that, the ID line goes first, then the last ones. No prices, no discounts, no exclamation marks.

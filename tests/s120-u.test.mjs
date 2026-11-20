@@ -110,7 +110,7 @@ test('demo: saving who is staying keeps the guest count and the booked number, s
   await app.click({ 'data-act': 'stay-open', 'data-uid': 'stay-1' }); app.input('stay-names', 'Ana Reyes, Bo Cruz'); await app.click({ 'data-act': 'stay-save' });
   assert.equal(app.calls.filter((c) => c[0] === 'set_stay_staying_v1').length, 0, 'the demo sends nothing');
   const h = app.els['v-home'].innerHTML;
-  assert.match(h, /Ana Reyes, Bo Cruz/, 'the demo applied the new names'); assert.match(tile(h), /2 guests/, 'the count survived the names save');
+  assert.match(h, /<b>Companion:<\/b> Bo Cruz/, 'the demo applied the new names'); assert.match(tile(h), /2 guests/, 'the count survived the names save');
 });
 
 test('the calendar guest card has no Open guest button in this release, even for owner and admin when the payload carries a guest id', async () => {

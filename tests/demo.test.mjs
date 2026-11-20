@@ -24,7 +24,7 @@ test('the cleaner fixtures pass the no-money, no-contact guard; owner and admin 
   const c = D.build('cleaner', NOW);
   assert.equal(CS.assertNoMoney(c.home), true);
   assert.equal(CS.assertNoMoney(c.tasks(true).tasks), true);
-  assert.doesNotMatch(JSON.stringify(c.home), /companions|phone|email|messenger/);
+  assert.doesNotMatch(JSON.stringify(c.home), /phone|email|messenger/); assert.match(JSON.stringify(c.home), /companions/, 's129: companions go to every staff role');
   for (const role of ['owner', 'admin']) {
     const x = D.build(role, NOW);
     assert.throws(() => CS.assertNoMoney(x.home), /phone|email/, role + ' carries contacts, so the strict guard refuses it');

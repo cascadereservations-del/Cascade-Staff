@@ -30,9 +30,9 @@ test('chip texts per tier and the name styling', async () => {
 test('stayingView: states from the payload; absent staying draws nothing', async () => {
   const v = (g) => CS.stayingView(GUEST(g), TODAY);
   assert.equal(v({}), null, 'key absent'); assert.equal(v({ staying: null }), null); assert.equal(CS.stayingView(GUEST({ uid: null, staying: { names: 'A' } }), TODAY), null, 'no uid, nothing to send');
-  assert.equal(v({ staying: { names: '', suggestion: 'Bo Cruz, Cy Cruz', version: 0 } }).mode, 'empty');
-  assert.deepEqual(v({ staying: { names: ' Ana Reyes ', version: 3 } }), { mode: 'booker', names: ['Ana Reyes'], suggestion: [], version: 3, tonight: true, uid: 'stay-1', booker: 'Ana Reyes' });
-  assert.equal(v({ staying: { names: 'Ana Reyes, Bo Cruz' } }).mode, 'with'); assert.equal(v({ staying: { names: 'Bo Cruz; Cy Cruz, bo cruz' } }).names.length, 2);
+  assert.equal(v({ staying: { names: '', suggestion: 'Bo Cruz, Cy Cruz', version: 0 } }).mode, 'booker', 's129: nothing typed shows the booker'); assert.equal(v({ guest_name: '', staying: { names: '', version: 0 } }).mode, 'empty');
+  assert.deepEqual(v({ staying: { names: ' Ana Reyes ', version: 3 } }), { mode: 'booker', names: ['Ana Reyes'], suggestion: [], version: 3, tonight: true, uid: 'stay-1', booker: 'Ana Reyes', main: 'Ana Reyes', others: [], bookerLine: null });
+  assert.equal(v({ staying: { names: 'Ana Reyes, Bo Cruz' } }).mode, 'booker'); assert.deepEqual(v({ staying: { names: 'Ana Reyes, Bo Cruz' } }).others, ['Bo Cruz']); assert.equal(v({ staying: { names: 'Bo Cruz; Cy Cruz, bo cruz' } }).names.length, 2);
   assert.equal(v({ staying: { names: ['Bo Cruz'] } }).mode, 'other');
   assert.equal(CS.stayingView(GUEST({ checkin_date: '2026-10-10', staying: { names: 'A' } }), TODAY).tonight, false);
   const none = await home(GUEST({}));
@@ -41,17 +41,19 @@ test('stayingView: states from the payload; absent staying draws nothing', async
 
 test('Today card staying line: empty link, booker only, with others, booked for someone else', async () => {
   const empty = await home(GUEST({ staying: { names: '', source: null, suggestion: null, version: 0 } }));
-  assert.match(empty, /<button class="S_lnk" type="button" data-act="stay-open" data-uid="stay-1">[\s\S]*?Add who is staying<\/button>/); assert.doesNotMatch(empty, /S_who/);
+  assert.match(empty, /<div class="S_who"[\s\S]*?<span class="S_main">Ana Reyes<\/span>/, 's129: nothing typed, the booker is the highlighted name'); assert.doesNotMatch(empty, /Add who is staying/);
+  const nobody = await home(GUEST({ guest_name: '', staying: { names: '', source: null, suggestion: null, version: 0 } }));
+  assert.match(nobody, /<button class="S_lnk" type="button" data-act="stay-open" data-uid="stay-1">[\s\S]*?Add who is staying<\/button>/); assert.doesNotMatch(nobody, /S_who/);
   const only = await home(GUEST({ staying: { names: 'Ana Reyes', version: 1 } }));
-  assert.match(only, /<b>Staying:<\/b> Ana Reyes/); assert.match(only, /Change who is staying/);
+  assert.match(only, /<span class="S_k">Staying tonight<\/span><span class="S_main">Ana Reyes<\/span>/); assert.match(only, /aria-label="Change who is staying">Change<\/button>/);
   const withO = await home(GUEST({ staying: { names: 'Ana Reyes, Bo Cruz', version: 1 } }));
-  assert.match(withO, /<b>Staying tonight:<\/b> Ana Reyes, Bo Cruz/);
+  assert.match(withO, /<span class="S_main">Ana Reyes<\/span><p class="S_sub"><b>Companion:<\/b> Bo Cruz<\/p>/);
   const later = await home(GUEST({ checkin_date: '2026-10-13', staying: { names: 'Ana Reyes, Bo Cruz', version: 1 } }));
-  assert.match(later, /<b>Staying:<\/b> Ana Reyes, Bo Cruz/, 'not the first night: Staying');
+  assert.match(later, /<span class="S_k">Staying<\/span><span class="S_main">Ana Reyes<\/span>/, 'not the first night: Staying');
   const other = await home(GUEST({ staying: { names: 'Bo Cruz, Cy Cruz', version: 1 } }));
-  assert.match(other, /Booked by Ana Reyes[\s\S]*?Not staying[\s\S]*?Staying tonight[\s\S]*?S_av on[\s\S]*?Bo Cruz[\s\S]*?Staying<\/span>[\s\S]*?Cy Cruz/);
+  assert.match(other, /<span class="S_k">Staying tonight<\/span><span class="S_main">Bo Cruz<\/span><p class="S_sub"><b>Companion:<\/b> Cy Cruz<\/p><p class="S_sub"><b>Booker:<\/b> Ana Reyes<\/p>/); assert.doesNotMatch(other, /Not staying|Booked by/);
   const up = await home(GUEST({ checkin_date: '2026-10-10' }), GUEST({ uid: 'stay-2', guest_name: 'Ben Cruz', checkin_date: '2026-10-17', checkout_date: '2026-10-19', staying: { names: '', version: 0 } }));
-  assert.match(up.slice(up.indexOf('T_upnext')), /data-uid="stay-2"[\s\S]*?Add who is staying/, 'the Up next card has its own link');
+  assert.match(up.slice(up.indexOf('T_upnext')), /<span class="S_main">Ben Cruz<\/span>[\s\S]*?data-act="stay-open" data-uid="stay-2"/, 'the Up next card has its own Change control');
 });
 
 test('the sheet calls the two RPCs with the agreed arguments; the demo sends nothing; offline keeps what was typed', () => {
@@ -62,13 +64,13 @@ test('the sheet calls the two RPCs with the agreed arguments; the demo sends not
   assert.match(app, /navigator\.onLine === false\) \{ a\.err = offline/);
   assert.match(app, /Cassy read this in the guest message[\s\S]*?Use these[\s\S]*?Not right[\s\S]*?Nothing is saved until you choose/);
   const css = read('styles.css').slice(read('styles.css').indexOf('s119 v4'));
-  for (const c of ['S_lnk', 'S_line', 'S_person']) assert.match(new RegExp('\\.' + c + ' \\{[^}]*\\}').exec(css)[0], /min-height: var\(--touch, 44px\)/, c);
+  for (const c of ['S_lnk', 'S_chg']) assert.match(new RegExp('\\.' + c + ' \\{[^}]*\\}').exec(css)[0], /min-height: var\(--touch, 44px\)/, c);
 });
 
 test('demo: sample staying data on both stays; release pins', async () => {
   const r = await D.client('owner', new Date('2026-10-15T04:30:00Z')).rpc('staff_home_v1');
-  assert.match(r.data.current_guest.staying.names, /Demo Guest One/); assert.equal(r.data.next_guest.staying.names, ''); assert.match(r.data.next_guest.staying.suggestion, /Demo Guest Two/);
-  assert.equal(JSON.parse(read('package.json')).version, '3.4.45'); assert.match(read('app.js'), /version: '3.4.45'/); assert.match(read('sw.js'), /CACHE_NAME = 'cs-shell-v70'/);
+  assert.match(r.data.current_guest.staying.names, /Demo Guest One/); assert.equal(r.data.next_guest.staying.names, ''); assert.deepEqual(r.data.next_guest.companions, [{ name: 'Demo Companion Three', has_photo: false }]); assert.match(r.data.next_guest.staying.suggestion, /Demo Guest Two/);
+  assert.equal(JSON.parse(read('package.json')).version, '3.4.46'); assert.match(read('app.js'), /version: '3.4.46'/); assert.match(read('sw.js'), /CACHE_NAME = 'cs-shell-v71'/);
 });
 
 // ---- fix round: roles, error mapping, length, hostile text
@@ -79,8 +81,8 @@ test('only owner, admin, inspector and cleaner get the link and the sheet; other
   for (const r of ['owner', 'admin', 'inspector', 'cleaner']) assert.equal(CS.canEditStaying(r), true, r);
   for (const r of ['laundry', 'finance', 'guest', null, undefined, '']) assert.equal(CS.canEditStaying(r), false, String(r));
   const h = (await open('laundry', GUEST({ staying: STAYING('Ana Reyes, Bo Cruz') }))).els['v-home'].innerHTML;
-  assert.match(h, /<b>Staying tonight:<\/b> Ana Reyes, Bo Cruz/); assert.doesNotMatch(h, /stay-open|S_lnk/);
-  assert.doesNotMatch((await open('laundry', GUEST({ staying: STAYING('') }))).els['v-home'].innerHTML, /Add who is staying|stay-open/);
+  assert.match(h, /<span class="S_main">Ana Reyes<\/span><p class="S_sub"><b>Companion:<\/b> Bo Cruz<\/p>/); assert.doesNotMatch(h, /stay-open|S_lnk|S_chg/);
+  assert.doesNotMatch((await open('laundry', GUEST({ guest_name: '', staying: STAYING('') }))).els['v-home'].innerHTML, /Add who is staying|stay-open/);
 });
 
 test('p_source is admin for owner and admin, staff for the rest', async () => {

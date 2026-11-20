@@ -69,8 +69,8 @@
   function build(role, now, empty) {
     var r = role === 'cleaner' || role === 'admin' || role === 'laundry' || role === 'finance' ? role : 'owner', admin = r !== 'cleaner' && r !== 'laundry', today = CS.manilaToday(now), stamp = (now instanceof Date ? now : new Date()).toISOString();
     var d = function (n) { return CS.addDays(today, n); }, at = function (n, hm) { return d(n) + 'T' + hm + ':00+08:00'; };
-    var guest = function (o) { // the server sends a cleaner no companions, phone, e-mail or Messenger link
-      if (!admin) { delete o.companions; delete o.phone; delete o.email; delete o.messenger; }
+    var guest = function (o) { // the server sends a cleaner no phone, e-mail or Messenger link; companions go to every staff role (s129, D-390)
+      if (!admin) { delete o.phone; delete o.email; delete o.messenger; }
       return o;
     };
     var g1 = guest({ uid: 'demo-stay-1', guest_name: 'Demo Guest One', checkin_date: d(-1), checkout_date: d(2), checkin_time: '14:00:00', checkout_time: '12:00:00', nights: 3, source: 'airbnb',
@@ -78,7 +78,7 @@
       tier: 'returning', id_photo_path: 'demo/id-1', id_photo_name: 'Demo Companion One', companions: [{ name: 'Demo Companion One', has_photo: true }, { name: 'Demo Companion Two', has_photo: false }],
       phone: '0900-000-0000', email: 'demo.guest.one@example.invalid', messenger: {} });
     var g2 = guest({ uid: 'demo-stay-2', guest_name: 'Demo Guest Two', checkin_date: d(2), checkout_date: d(5), checkin_time: '14:00:00', checkout_time: '12:00:00', nights: 3, source: 'direct',
-      repeat: true, tier: 'vip', stay_count: 8, earlier_stays: [], notes: null, id_photo_path: null, companions: [], phone: '0900-000-0001', email: 'demo.guest.two@example.invalid' });
+      repeat: true, tier: 'vip', stay_count: 8, earlier_stays: [], notes: null, id_photo_path: null, companions: [{ name: 'Demo Companion Three', has_photo: false }], phone: '0900-000-0001', email: 'demo.guest.two@example.invalid' });
     g1.staying = { names: 'Demo Guest One, Demo Companion One', source: 'staff', suggestion: null, version: 1, guest_count: null, booked_guests: 2 }; // s119: sample staying data (names typed by staff; the next stay has only a Cassy suggestion)
     g2.staying = { names: '', source: null, suggestion: 'Demo Guest Two, Demo Companion Three', version: 0, guest_count: 2, booked_guests: 3 };
     if (admin) { g1.guest_id = '00000000-0000-4000-8000-0000000000d1'; g2.guest_id = '00000000-0000-4000-8000-0000000000d2'; } // s120: the Guests tile links to the guest page (the demo guest page knows these two ids)

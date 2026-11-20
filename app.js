@@ -20,7 +20,7 @@
     url: 'https://qkgfhsdppslwunarczeq.supabase.co',
     key: 'sb_publishable_JFuRYZ9csmQULcMRmHXDSg_Abo9UeCj',
     propertyId: '6ae230f4-c189-4547-84b1-cb6e0b2cc9bd',
-    version: '3.4.45'
+    version: '3.4.46'
   };
   var LINKS = {
     checklist: 'https://cascadereservations-del.github.io/CH-Cleaners-Checklist/',
@@ -2148,7 +2148,7 @@
   // Runs once per device after sign-in (CS.phoneCheckDue, key cs_phone_check) and from More > This phone > Check this phone. Every row comes from a real probe
   // (CS.phoneCheckRows); Fix all runs the fixers in order from the one tap (CS.phoneFixPlan: alerts first, so the permission prompt rides the tap), then probes again.
   // The camera is opened only when its permission is 'prompt', and every track is stopped at once. Nothing changes Trust this device.
-  var PC_SHELL = 'cs-shell-v70'; // the service worker's cache for this version (sw.js CACHE_NAME; a test keeps them equal)
+  var PC_SHELL = 'cs-shell-v71'; // the service worker's cache for this version (sw.js CACHE_NAME; a test keeps them equal)
   var PC = { open: false, busy: false, rows: null, msg: '', camPerm: null };
   function PC_ls() { return store('localStorage'); }
   function PC_cameraPerm() {
@@ -2287,14 +2287,14 @@
   function A_av(n) { return '<span class="S_av on" aria-hidden="true">' + A_inits(n) + '<span class="S_tk">' + ICON('check', 's12') + '</span></span>'; }
   function A_staying(g) {
     var v = CS.stayingView(g, state.payload && state.payload.today); if (!v) return '';
-    // read-only roles see the names and no link (submit_cleaning is the write permission)
-    var open = !CS.canEditStaying(role()) ? function () { return ''; } : function (txt, ic) { return '<button class="S_lnk" type="button" data-act="stay-open" data-uid="' + esc(v.uid) + '">' + ICON(ic, 's16') + txt + '</button>'; };
-    if (v.mode === 'empty') return open('Add who is staying', 'plus');
-    var change = open('Change who is staying', 'note');
-    if (v.mode === 'booker') return '<div class="S_who"><div class="S_line">' + A_av(v.booker) + '<span><b>Staying:</b> ' + esc(v.names[0]) + '</span></div>' + change + '</div>';
-    if (v.mode === 'with') return '<div class="S_who"><div class="S_line">' + A_av(v.names[0]) + '<span><b>' + (v.tonight ? 'Staying tonight' : 'Staying') + ':</b> ' + esc(v.names.join(', ')) + '</span></div>' + change + '</div>';
-    return '<div class="S_who" role="group" aria-label="Who is in the house"><div class="S_person muted"><span class="S_av" aria-hidden="true">' + A_inits(v.booker) + '</span><span class="S_n">Booked by ' + esc(v.booker) + '</span><span class="S_mk q">Not staying</span></div>' +
-      '<span class="S_k">' + (v.tonight ? 'Staying tonight' : 'Staying') + '</span>' + v.names.map(function (n) { return '<div class="S_person">' + A_av(n) + '<span class="S_n">' + esc(n) + '</span><span class="S_mk">Staying</span></div>'; }).join('') + change + '</div>';
+    // read-only roles see the names and no control (submit_cleaning is the write permission)
+    var can = CS.canEditStaying(role());
+    if (!v.main) return can ? '<button class="S_lnk" type="button" data-act="stay-open" data-uid="' + esc(v.uid) + '">' + ICON('plus', 's16') + 'Add who is staying</button>' : '';
+    // s129 (D-390): highlighted name, then Companion(s) from the typed names and the guest record, then Booker when someone else stays; the Change control sits quietly top right
+    var sub = function (k, t) { return '<p class="S_sub"><b>' + k + ':</b> ' + esc(t) + '</p>'; };
+    return '<div class="S_who' + (can ? '' : ' S_ro') + '" role="group" aria-label="Who is staying">' + A_av(v.main) + '<span class="S_k">' + (v.tonight ? 'Staying tonight' : 'Staying') + '</span><span class="S_main">' + esc(v.main) + '</span>' +
+      (v.others.length ? sub(v.others.length > 1 ? 'Companions' : 'Companion', v.others.join(', ')) : '') + (v.bookerLine ? sub('Booker', v.bookerLine) : '') +
+      (can ? '<button class="S_chg" type="button" data-act="stay-open" data-uid="' + esc(v.uid) + '" aria-label="Change who is staying">Change</button>' : '') + '</div>';
   }
   function A_stayGuest(uid) { var p = state.payload; return p ? [p.current_guest, p.next_guest].filter(function (g) { return g && g.uid === uid; })[0] || null : null; }
   function A_stayKey() { return 'stay-' + (window.crypto && crypto.randomUUID ? crypto.randomUUID() : Date.now() + '-' + Math.random().toString(16).slice(2)); }
