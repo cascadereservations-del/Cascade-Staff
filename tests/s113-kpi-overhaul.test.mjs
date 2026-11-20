@@ -100,24 +100,25 @@ test('s113 chart C: one outlier month is drawn at the top edge with its true val
 test('s113 tiles: big per-day numbers with units, context, a change chip in words vs last month, sparklines, the nights ring, the last reading; a plain What this means line', async () => {
   for (const role of ['cleaner', 'laundry', 'inspector', 'maintenance', 'owner']) {
     const { el } = mountWith(payload(), role); await tick(); const h = el.innerHTML;
-    const e = cardOf(h, 'K_tE'); assert.match(e, /<span class="KU_chip KU_chip-down">down 12% vs September<\/span>/); assert.match(e, /<span class="KU_spark" role="img" aria-label="Electricity per day, last readings"><svg viewBox="0 0 100 100" preserveAspectRatio="none"/);
+    const e = cardOf(h, 'K_tE'); assert.match(e, /<span class="KU_chip KU_chip-down">down 12% vs Sep<\/span>/); assert.match(e, /<span class="KU_spark" role="img" aria-label="Electricity per day, last readings"><svg viewBox="0 0 100 100" preserveAspectRatio="none"/);
     assert.match(e, /<i style="left:96%;top:83\.4%"><\/i>/, 'the latest point is dotted');
-    assert.match(cardOf(h, 'K_tW'), /<span class="KU_chip KU_chip-same">about the same as September<\/span>/);
-    const n = cardOf(h, 'K_tN'); assert.match(n, /<circle class="KU_ring-f" cx="18" cy="18" r="15\.9155" stroke-dasharray="40 100" transform="rotate\(-90 18 18\)"><\/circle><\/svg><b>40%<\/b>/); assert.match(n, /12 of 30 nights/);
+    assert.match(cardOf(h, 'K_tW'), /<span class="KU_chip KU_chip-same">same as Sep<\/span>/);
+    const n = cardOf(h, 'K_tN'); assert.match(n, /<circle class="KU_ring-f" cx="18" cy="18" r="15\.9155" stroke-dasharray="40 100" transform="rotate\(-90 18 18\)"><\/circle><\/svg><b>40%<\/b>/); assert.match(n, /12\u00a0of\u00a030\u00a0nights/);
     assert.match(h, /<p class="KU_means" id="K_means"><b>What this means<\/b> Electricity is lower than last month\. Water is about the same as last month\.<\/p>/);
     assert.ok(h.indexOf('K_means') < h.indexOf('K_day') && h.indexOf('K_day') < h.indexOf('K_avg'), 'tiles, the line, then the two charts');
     assert.doesNotMatch(h, /₱|PHP|!/, role + ': no money, calm copy');
   }
   const none = mountWith(payload({ per_month: perMonth().filter((r) => r.month !== '2026-09') })); await tick();
   assert.doesNotMatch(none.el.innerHTML, /KU_chip|K_means/, 'no last month: no chip and no line, never a guess');
-  const up = mountWith(payload({ kwh_per_day: 14 })); await tick(); assert.match(up.el.innerHTML, /KU_chip-up">up 24% vs September/); assert.match(up.el.innerHTML, /Electricity is higher than last month\./);
+  const up = mountWith(payload({ kwh_per_day: 14 })); await tick(); assert.match(up.el.innerHTML, /KU_chip-up">up 24% vs Sep/); assert.match(up.el.innerHTML, /Electricity is higher than last month\./);
 });
 
 test('s113 tokens and house rules: chart tokens in all three theme blocks, no raw colours, no px type, gaps on the scale, the old bar CSS is gone', () => {
   const tok = read('tokens.css'); for (const k of ['chart-line', 'chart-area', 'chart-band', 'chart-grid', 'chart-axis', 'chart-avg']) assert.equal((tok.match(new RegExp('--v5-' + k + ':', 'g')) || []).length, 3, k);
   assert.doesNotMatch(tok, /--v5-chart-bar/, 'the bar tokens went with the bars');
   const css = read('kpi/K_kpi.css'); assert.doesNotMatch(css, /\.K_(bar|cols?|avgl|avgk|plot|yax|xax)\s*[{,>]|writing-mode/);
-  assert.doesNotMatch(css, /#[0-9a-f]{3,8}\b|rgba?\(|nowrap|font(-size)?\s*:[^;}]*\d+px/i);
+  // s128: nowrap is allowed in K_kpi.css (the change pill and the two full-width rows must stay on one line, Lloyd 2026-11-20)
+  assert.doesNotMatch(css, /#[0-9a-f]{3,8}\b|rgba?\(|font(-size)?\s*:[^;}]*\d+px/i);
   for (const m of css.matchAll(/(?:^|[;{\s])gap\s*:\s*([^;}]+)/g)) for (const v of m[1].trim().split(/\s+/)) assert.ok(['0', '4px', '8px', '12px', '16px', '24px'].includes(v), 'gap ' + v);
   const s = read('styles.css'), blk = s.slice(s.indexOf('/* s113 Phone check')); assert.doesNotMatch(blk, /#[0-9a-f]{3,8}\b|rgba?\(|nowrap|font(-size)?\s*:[^;}]*\d+px/i);
   for (const m of blk.matchAll(/(?:^|[;{\s])gap\s*:\s*([^;}]+)/g)) for (const v of m[1].trim().split(/\s+/)) assert.ok(['0', '4px', '8px', '12px', '16px', '24px'].includes(v), 'styles gap ' + v);
@@ -196,6 +197,6 @@ test('s114 Today guide card: "Guest tiers: how many stays for each", closed by d
 
 // ---------------------------------------------------------------------------------------------- release
 test('s113 release: 3.4.30, cs-shell-v64 in sw.js and PC_SHELL, the new test file is the contract name', () => {
-  assert.equal(JSON.parse(read('package.json')).version, '3.4.44'); assert.match(read('app.js'), /version: '3.4.44'/);
-  assert.match(read('sw.js'), /CACHE_NAME = 'cs-shell-v69'/); assert.match(read('app.js'), /var PC_SHELL = 'cs-shell-v69';/);
+  assert.equal(JSON.parse(read('package.json')).version, '3.4.45'); assert.match(read('app.js'), /version: '3.4.45'/);
+  assert.match(read('sw.js'), /CACHE_NAME = 'cs-shell-v70'/); assert.match(read('app.js'), /var PC_SHELL = 'cs-shell-v70';/);
 });

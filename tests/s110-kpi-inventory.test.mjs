@@ -81,7 +81,7 @@ test('s110 KPIs tab: owner and finance get Utility, Inventory and Admin; cleaner
   for (const role of ['owner', 'finance']) { const { html, calls } = await kpiScreen(role, KPI(true)); assert.match(html, /data-seg="admin"/, role); assert.match(html, /data-seg="utility"[\s\S]*data-seg="inventory"/); assert.ok(calls.some((c) => c[0] === 'kpi_tab_v1' && c[1].p_month === null), 'kpi_tab_v1 asked for the current month'); }
   for (const role of ['cleaner', 'inspector']) {
     const { html, app } = await kpiScreen(role, KPI(true)); // even a payload that wrongly carries the admin key
-    assert.doesNotMatch(html, /data-seg="admin"/, role); assert.match(html, /412 kWh/); assert.doesNotMatch(html, /₱|PHP|11\.25|4,635|429/, role + ': no money anywhere');
+    assert.doesNotMatch(html, /data-seg="admin"/, role); assert.match(html, /412\skWh/); assert.doesNotMatch(html, /₱|PHP|11\.25|4,635|429/, role + ': no money anywhere');
     assert.match(html, /role="tablist"/); assert.equal((html.match(/role="tab"/g) || []).length, 2);
     assert.match(app.els.tabbar.innerHTML, /href="#kpis"/, role + ' has the KPIs tab');
   }
@@ -272,7 +272,8 @@ test('s110 files and house rules: precached, no nowrap, no px font sizes, no raw
   const html = read('index.html'); assert.match(html, /id="v-kpis"/); assert.match(html, /id="v-supply"/);
   const blk = read('styles.css').match(/\/\* s110 kpi-inventory[\s\S]*?\/\* end s110 kpi-inventory \*\//)[0];
   for (const [name, css] of [['kpi/K_kpi.css', read('kpi/K_kpi.css')], ['styles block', blk]]) {
-    assert.doesNotMatch(css, /white-space\s*:\s*nowrap/, name); assert.doesNotMatch(css, /#[0-9a-fA-F]{3,8}\b/, name + ': no raw hex'); assert.doesNotMatch(css, /\brgba?\(|\bhsla?\(/, name + ': no raw colours');
+    if (name !== 'kpi/K_kpi.css') assert.doesNotMatch(css, /white-space\s*:\s*nowrap/, name); // s128: the KPI sheet keeps its pill and two rows on one line
+    assert.doesNotMatch(css, /#[0-9a-fA-F]{3,8}\b/, name + ': no raw hex'); assert.doesNotMatch(css, /\brgba?\(|\bhsla?\(/, name + ': no raw colours');
     assert.doesNotMatch(css, /font(-size)?\s*:[^;}]*\b\d+(\.\d+)?px/, name + ': type only through --v5-t-* tokens');
     for (const m of css.matchAll(/(?:^|[;{\s])gap\s*:\s*([^;}]+)/g)) for (const v of m[1].trim().split(/\s+/)) assert.ok(['0', '4px', '8px', '12px', '16px', '24px'].includes(v), name + ' gap ' + v);
   }
@@ -346,7 +347,7 @@ test('s110 laundry tab bar on the guest and pay pages: Inventory where Tasks wou
 test('s110 KPIs: Internet outages row for every role, from utility.internet_cuts; no row on an older server', async () => {
   for (const role of ['cleaner', 'owner']) {
     const { html } = await kpiScreen(role, KPI(true)); assert.match(html, /Internet outages/, role); assert.match(html, /K_ic-purple/); assert.match(html, /data-i="wifioff"/);
-    assert.match(html, /<b>2<\/b><span>3 h total<\/span>/, role + ': count and hours');
+    assert.match(html, /<b>2<\/b><span>3\sh total<\/span>/, role + ': count and hours');
   }
   const none = KPI(false); delete none.utility.internet_cuts; assert.doesNotMatch((await kpiScreen('cleaner', none)).html, /Internet outages/);
   const zero = KPI(false); zero.utility.internet_cuts = { count: 0, hours: 0 }; assert.match((await kpiScreen('cleaner', zero)).html, /Internet outages[\s\S]*?<b>0<\/b><span>none<\/span>/);
@@ -356,7 +357,7 @@ test('s110 Admin segment: the month at a glance for owner, admin and finance onl
   for (const role of ['owner', 'admin', 'finance']) {
     const a = adminKpi(role); await tick(); await clickK(a.el, 'seg', { 'data-seg': 'admin' }); const h = a.el.innerHTML;
     assert.match(h, /Net this month so far[\s\S]*₱38,420/, role); assert.match(h, /Revenue ₱61,900 · costs ₱23,480/);
-    assert.match(h, /Occupancy[\s\S]*73%[\s\S]*22 of 30 nights/); assert.match(h, /Average rate[\s\S]*₱2,814[\s\S]*a night, on average/); assert.match(h, /Direct bookings[\s\S]*41%/);
+    assert.match(h, /Occupancy[\s\S]*73%[\s\S]*22\u00a0of\u00a030\u00a0nights/); assert.match(h, /Average rate[\s\S]*₱2,814[\s\S]*a night, on average/); assert.match(h, /Direct bookings[\s\S]*41%/);
     assert.ok(h.indexOf('K_net') < h.indexOf('Electricity cost'), 'the glance comes first');
   }
   const part = KPI(true); part.admin = { net_month: null, occupancy: null, adr: null, direct_share: null }; const p = adminKpi('finance', { kpi_tab_v1: () => ({ error: null, data: part }) }); await tick(); await clickK(p.el, 'seg', { 'data-seg': 'admin' });

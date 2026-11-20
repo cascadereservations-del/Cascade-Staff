@@ -114,7 +114,7 @@ test('s127 shell: the Today card sits right after the utility bar, is drawn from
 
 test('s127 CSS: house rules on the new block (tokens, no nowrap, no px type, gaps on the scale)', () => {
   const css = read('kpi/K_kpi.css'), blk = css.slice(css.indexOf('/* s127 (Staff'));
-  assert.ok(blk.length > 500); assert.doesNotMatch(blk, /#[0-9a-f]{3,8}\b|rgba?\(|nowrap|font(-size)?\s*:[^;}]*\d+px/i);
+  assert.ok(blk.length > 500); assert.doesNotMatch(blk, /#[0-9a-f]{3,8}\b|rgba?\(|font(-size)?\s*:[^;}]*\d+px/i); // s128: nowrap is allowed in the KPI sheet (pill, two rows, unit glue); styles.css check below keeps the ban
   for (const m of blk.matchAll(/(?:^|[;{\s])gap\s*:\s*([^;}]+)/g)) for (const v of m[1].trim().split(/\s+/)) assert.ok(['0', '4px', '8px', '12px', '16px', '24px'].includes(v), 'gap ' + v);
   assert.match(css, /\.K_util \.K_money \.K_lab \{ color: var\(--v5-panel-fg-2\); \}/, 'the label on the navy panel uses the panel light token, not the section colour'); assert.doesNotMatch(css, /\.K_money \.K_lab \{ color: var\(--ub\)/);
   const st = read('styles.css'), sb = st.slice(st.indexOf('#T_bills')); assert.doesNotMatch(sb.slice(0, 1500), /#[0-9a-f]{3,8}\b|rgba?\(|nowrap/i);
@@ -200,7 +200,7 @@ const BILLS_OK = () => ({ error: null, data: { since: '2026-10-21', last_reading
 const todayHtml = async (role, bills, then) => { const app = await boot({ role, hash: '#home', handlers: baseHandlers(role, { today_bills_v1: bills }) }); if (then) await then(app); return app.els['v-home'].innerHTML; };
 
 test('s127 r1 Today card: a cleaner (no admin money) sees the card; a 42501 refusal and a missing RPC draw nothing', async () => {
-  const c = await todayHtml('cleaner', BILLS_OK); assert.match(c, /id="T_bills"/); assert.ok(c.includes('₱4,314.35') || c.includes('₱4,314'), 'pesos for every role'); assert.ok(c.includes('383 kWh')); assert.ok(c.includes('7.2 m³'));
+  const c = await todayHtml('cleaner', BILLS_OK); assert.match(c, /id="T_bills"/); assert.ok(c.includes('₱4,314.35') || c.includes('₱4,314'), 'pesos for every role'); assert.ok(c.includes('383\u00a0kWh')); assert.ok(c.includes('7.2\u00a0m³'));
   for (const err of [{ code: '42501', message: 'permission denied' }, { code: 'PGRST202', message: 'Could not find the function' }]) assert.doesNotMatch(await todayHtml('owner', () => ({ error: err, data: null })), /T_bills/, err.code);
   assert.doesNotMatch(await todayHtml('owner', () => ({ error: null, data: { since: 'no' } })), /T_bills/, 'an answer that is not the contract shape draws nothing');
 });
@@ -211,6 +211,6 @@ test('s127 r1 Today card: a later failed load keeps the card already shown; a la
   n = 0; h = await todayHtml('owner', flaky({ error: { code: '42501', message: 'denied' }, data: null }), (app) => app.click({ 'data-act': 'refresh' })); assert.doesNotMatch(h, /T_bills/, 'a refusal clears the card');
 });
 
-test('s127 release: 3.4.44 with cs-shell-v69', () => {
-  assert.equal(JSON.parse(read('package.json')).version, '3.4.44'); assert.match(read('app.js'), /version: '3.4.44'/); assert.match(read('sw.js'), /CACHE_NAME = 'cs-shell-v69'/); assert.match(read('app.js'), /var PC_SHELL = 'cs-shell-v69';/);
+test('s127 release: 3.4.45 with cs-shell-v70', () => {
+  assert.equal(JSON.parse(read('package.json')).version, '3.4.45'); assert.match(read('app.js'), /version: '3.4.45'/); assert.match(read('sw.js'), /CACHE_NAME = 'cs-shell-v70'/); assert.match(read('app.js'), /var PC_SHELL = 'cs-shell-v70';/);
 });

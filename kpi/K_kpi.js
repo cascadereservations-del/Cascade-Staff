@@ -129,7 +129,7 @@
   }
   function chip(c, monthName) {
     if (!c) return '';
-    return '<span class="KU_chip KU_chip-' + c.dir + '">' + esc(c.dir === 'same' ? 'about the same as ' + monthName : c.dir + ' ' + c.pct + '% vs ' + monthName) + '</span>';
+    return '<span class="KU_chip KU_chip-' + c.dir + '">' + esc(c.dir === 'same' ? 'same as ' + monthName : c.dir + ' ' + c.pct + '% vs ' + monthName) + '</span>';
   }
   // the ring gauge: an SVG circle of circumference 100, so the dash is the percent
   function ring(pct) {
@@ -366,28 +366,28 @@
   function cmpWord(c) { return !c ? '' : c.dir === 'same' ? 'about the same as' : c.dir === 'down' ? 'lower than' : 'higher than'; }
   function utilityPanel(d) {
     var u = d.utility, nm = u.monthNights != null ? u.monthNights : daysIn(d.month), h = '', pm = prevMonth(d.month);
-    var prev = u.perMonth.filter(function (r) { return r.month === pm; })[0] || null, pName = pm ? MONTHS[monthParts(pm).m - 1] : '';
+    var prev = u.perMonth.filter(function (r) { return r.month === pm; })[0] || null, pName = pm ? MONTHS[monthParts(pm).m - 1].slice(0, 3) : '';
     var cE = change(u.perDay, prev && prev.kwhDay), cW = change(u.m3PerDay, prev && prev.m3Day), last8 = function (k) { return u.perStay.map(function (r) { return r[k]; }); };
     h += '<h2 class="K_h">Utility · this month</h2><div class="K_grid2 KU_tiles">' +
       tile('K_tE', 'Electricity', u.perDay != null ? fmt(u.perDay) : u.kwh != null ? fmt(u.kwh, 0) : 'No reading', u.perDay != null ? 'kWh a day' : u.kwh != null ? 'kWh' : '',
-        u.perDay != null ? (u.kwh != null ? fmt(u.kwh, 0) + ' kWh used this month' : '') : 'A day figure needs two readings', chip(cE, pName) + spark(last8('kwh'), 'Electricity per day, last readings')) +
+        u.perDay != null ? (u.kwh != null ? fmt(u.kwh, 0) + '\u00a0kWh this month' : '') : 'A day figure needs two readings', chip(cE, pName) + spark(last8('kwh'), 'Electricity per day, last readings')) +
       (u.m3 != null || u.m3PerDay != null ? tile('K_tW', 'Water', u.m3PerDay != null ? fmt(u.m3PerDay, 2) : fmt(u.m3, 1), u.m3PerDay != null ? 'm³ a day' : 'm³',
-        u.m3PerDay != null ? (u.m3 != null ? fmt(u.m3, 1) + ' m³ used this month' : '') : 'A day figure needs two readings', chip(cW, pName) + spark(last8('m3'), 'Water per day, last readings')) : '') +
-      '<div class="card glass KU_tile KU_tile-ring" id="K_tN"><span class="K_lab">Nights booked</span>' + (u.booked != null && nm > 0 ? '<span class="KU_ringrow">' + ring(u.booked / nm * 100) + '<span class="K_sub">' + esc(u.booked + ' of ' + nm + ' nights') + '</span></span>' : '<span class="KU_big"><b>Not yet</b></span>') + '</div>';
+        u.m3PerDay != null ? (u.m3 != null ? fmt(u.m3, 1) + '\u00a0m³ this month' : '') : 'A day figure needs two readings', chip(cW, pName) + spark(last8('m3'), 'Water per day, last readings')) : '') +
+      '<div class="card glass KU_row KU_row-ring" id="K_tN">' + (u.booked != null && nm > 0 ? ring(u.booked / nm * 100) + '<span class="KU_rowtx"><span class="K_lab">Nights booked</span><span class="KU_rowv">' + esc(u.booked + '\u00a0of\u00a0' + nm + '\u00a0nights') + '</span></span>' : '<span class="KU_rowtx"><span class="K_lab">Nights booked</span><span class="KU_big"><b>Not yet</b></span></span>') + '</div>';
     if (u.last) {
-      var l = u.last, over = l.days ? ' over ' + plural(l.days, 'day') : '', lines = [];
-      if (l.delta != null) lines.push(fmt(l.delta) + ' kWh' + over);
-      if (l.perDay != null) lines.push(fmt(l.perDay) + ' kWh a day');
-      if (l.m3 != null) lines.push(fmt(l.m3, 2) + ' m³' + over + (l.m3PerDay != null ? ' · ' + fmt(l.m3PerDay, 2) + ' m³ a day' : ''));
-      h += '<div class="card glass KU_tile" id="K_last"><span class="K_lab">Last reading</span><span class="KU_big"><b>' + esc(l.at ? dayMonth(l.at) : 'Recorded') + '</b></span>' +
-        lines.map(function (x) { return '<span class="K_sub">' + esc(x) + '</span>'; }).join('') + (l.flag ? '<span class="K_sub K_warn">' + gi('alert', 's16') + ' This reading is being checked.</span>' : '') + '</div>';
+      var l = u.last, n1 = l.days === 1; // one day: the "a day" figure repeats the number, so it is left out
+      var rowE = l.delta != null ? fmt(l.delta) + '\u00a0kWh' + (l.perDay != null && !n1 ? ' · ' + fmt(l.perDay) + '\u00a0a\u00a0day' : '') : l.perDay != null ? fmt(l.perDay) + '\u00a0kWh a\u00a0day' : '';
+      var rowW = l.m3 != null ? fmt(l.m3, 2) + '\u00a0m³' + (l.m3PerDay != null && !n1 ? ' · ' + fmt(l.m3PerDay, 2) + '\u00a0a\u00a0day' : '') : '';
+      var lr = function (ico, lab, t) { return t ? '<span class="KU_lr"><i aria-hidden="true">' + ico + '</i><span class="sr">' + lab + ' </span>' + esc(t) + '</span>' : ''; };
+      h += '<div class="card glass KU_row KU_row-last" id="K_last"><span class="KU_rowhd"><span class="K_lab">Last reading</span></span><span class="KU_lrl"><span class="KU_big"><b>' + esc(l.at ? dayMonth(l.at) : 'Recorded') + '</b></span>' + (l.days ? '<span class="K_sub">' + esc('over ' + plural(l.days, 'day')) + '</span>' : '') + '</span>' +
+        '<span class="KU_lrr">' + lr('⚡', 'Electricity', rowE) + lr('💧', 'Water', rowW) + '</span>' + (l.flag ? '<span class="K_sub K_warn KU_lflag">' + gi('alert', 's16') + ' This reading is being checked.</span>' : '') + '</div>';
     }
     h += '</div>';
     var means = [cE ? 'Electricity is ' + cmpWord(cE) + ' last month.' : '', cW ? 'Water is ' + cmpWord(cW) + ' last month.' : ''].filter(Boolean).join(' ');
     if (means) h += '<p class="KU_means" id="K_means"><b>What this means</b> ' + esc(means) + '</p>';
-    h += dayCard(u) + avgCard(u, d.month) + '<div class="card glass K_lines">' + lineRow('zap', 'warn', 'Brownouts', 'Feeder notices', String(u.brownouts.count), u.brownouts.count ? fmt(u.brownouts.hours, 0) + ' h total' : 'none') +
-      lineRow('drop', 'info', 'Water interruptions', 'GSCWD notices', String(u.water.count), u.water.count ? fmt(u.water.hours, 0) + ' h total' : 'none') +
-      (u.internet ? lineRow('wifioff', 'purple', 'Internet outages', 'From notices', String(u.internet.count), u.internet.count ? fmt(u.internet.hours, 0) + ' h total' : 'none') : '') + '</div>';
+    h += dayCard(u) + avgCard(u, d.month) + '<div class="card glass K_lines">' + lineRow('zap', 'warn', 'Brownouts', 'Feeder notices', String(u.brownouts.count), u.brownouts.count ? fmt(u.brownouts.hours, 0) + '\u00a0h total' : 'none') +
+      lineRow('drop', 'info', 'Water interruptions', 'GSCWD notices', String(u.water.count), u.water.count ? fmt(u.water.hours, 0) + '\u00a0h total' : 'none') +
+      (u.internet ? lineRow('wifioff', 'purple', 'Internet outages', 'From notices', String(u.internet.count), u.internet.count ? fmt(u.internet.hours, 0) + '\u00a0h total' : 'none') : '') + '</div>';
     return h;
   }
   function inventoryPanel(d) {
@@ -436,12 +436,18 @@
   function twoCols(a, b) {
     return '<div class="K_two"><div><i>So far</i><b>' + esc(a[0]) + '</b><span class="K_sub">' + esc(a[1]) + '</span></div><div><i>Forecast</i><b>' + esc(b[0]) + '</b><span class="K_sub">' + esc(b[1]) + '</span></div></div>';
   }
+  // s128: a cost the server could not work out (no rate on file) is never "Not yet" beside a rate caption: the usage is the figure and one line says the cost waits for the rate.
+  function billCols(soFar, use, days, fPhp, fUse) {
+    var noCost = (soFar == null && use) || (fPhp == null && fUse);
+    var a = soFar != null ? [peso(soFar), [use, days].filter(Boolean).join(' · ')] : use ? [use, days] : ['Not yet', ''], f = fPhp != null ? [peso(fPhp), fUse] : fUse ? [fUse, ''] : ['Not yet', ''];
+    return twoCols(a, f) + (noCost ? '<p class="K_sub">Cost shows when the rate is in.</p>' : '');
+  }
   function billCard(a) {
     var b = a.bills.e, st = inCycle(a.stays, b.from), per = [], lastDay = b.last ? manilaDay(b.last) : '';
     if (b.perKwh != null) per.push('Guests use about ' + (b.perPhp != null ? peso(b.perPhp) + ' a day (' + fmtU(b.perKwh, 1) + '\u00a0kWh).' : fmtU(b.perKwh, 1) + '\u00a0kWh a day.'));
     per.push('Updates with every meter reading' + (lastDay ? '; last one ' + dayMonth(lastDay) : '') + '.');
     return '<div class="card glass K_note" id="K_bill"><span class="K_lab">' + esc('This bill' + (b.from && b.to ? ' · ' + dayMonth(b.from) + ' to ' + dayMonth(b.to) : '')) + '</span>' +
-      twoCols([b.soFar != null ? peso(b.soFar) : 'Not yet', [b.kwh != null ? fmtU(b.kwh, 0) + '\u00a0kWh' : '', b.days != null ? plural(b.days, 'day') : ''].filter(Boolean).join(' · ')], [b.fPhp != null ? peso(b.fPhp) : 'Not yet', b.fKwh != null ? 'about ' + fmtU(b.fKwh, 0) + '\u00a0kWh' : '']) +
+      billCols(b.soFar, b.kwh != null ? fmtU(b.kwh, 0) + '\u00a0kWh' : '', b.days != null ? plural(b.days, 'day') : '', b.fPhp, b.fKwh != null ? 'about ' + fmtU(b.fKwh, 0) + '\u00a0kWh' : '') +
       (st.length ? '<div class="KG_stack" role="group" aria-label="Guests on this bill">' + st.slice(0, 4).map(function (s) { return faceHtml(s, 32); }).join('') + '<span class="K_sub">' + esc(st.length > 4 ? '+ more stays' : plural(st.length, 'stay')) /* shortcut: the server sends at most 5 stays, so an exact +N would lie in a busy cycle; show the number when it sends a stay count */ + '</span></div>' : '') +
       '<p class="K_sub">' + esc(per.join(' ')) + '</p></div>';
   }
@@ -463,7 +469,7 @@
       if (inside) per.push(b.fM3 != null && b.fM3 > b.minM3 ? 'Inside the minimum so far; the forecast goes past it.' : 'Still inside the minimum.');
       else if (b.m3 != null && b.minM3 != null) per.push('Past the minimum.' + (b.next != null ? ' The next m³ costs ' + pesoRate(b.next) + '.' : ''));
       h += '<div class="card glass K_note" id="K_wbill"><span class="K_lab">' + esc('This bill' + (b.from ? ' · since ' + dayMonth(b.from) : '')) + '</span>' +
-        twoCols([b.soFar != null ? peso(b.soFar) : 'Not yet', [b.m3 != null ? fmtU(b.m3, 1) + '\u00a0m³' : '', b.days != null ? plural(b.days, 'day') : ''].filter(Boolean).join(' · ')], [b.fPhp != null ? peso(b.fPhp) : 'Not yet', b.fM3 != null ? 'about ' + fmtU(b.fM3, 1) + '\u00a0m³' : '']) +
+        billCols(b.soFar, b.m3 != null ? fmtU(b.m3, 1) + '\u00a0m³' : '', b.days != null ? plural(b.days, 'day') : '', b.fPhp, b.fM3 != null ? 'about ' + fmtU(b.fM3, 1) + '\u00a0m³' : '') +
         (per.length ? '<p class="K_sub">' + esc(per.join(' ')) + '</p>' : '') + '</div>';
     }
     return h + '</div>';
@@ -538,7 +544,7 @@
       h += '<div class="K_money" id="K_net"><span class="K_lab">Net this month so far</span><span class="K_big">' + esc(n.net != null ? peso(n.net) : 'Not yet') + '</span><span class="K_sub">' + esc(bits.join(' · ') || 'Revenue and costs are not in yet.') + '</span></div>';
     }
     var tiles = '';
-    if (a.occupancy) { var o = a.occupancy; tiles += stat('Occupancy', pctOf(o.pct), o.pct != null && o.sold != null && o.sellable != null ? o.sold + ' of ' + o.sellable + ' nights' : '', o.pct != null && o.sold != null && o.sellable != null ? 'ok' : ''); }
+    if (a.occupancy) { var o = a.occupancy; tiles += stat('Occupancy', pctOf(o.pct), o.pct != null && o.sold != null && o.sellable != null ? o.sold + '\u00a0of\u00a0' + o.sellable + '\u00a0nights' : '', o.pct != null && o.sold != null && o.sellable != null ? 'ok' : ''); }
     if ('adr' in a) tiles += stat('Average rate', a.adr != null ? peso(a.adr) : 'Not yet', a.adr != null ? 'a night, on average' : '');
     if ('direct' in a) tiles += stat('Direct bookings', pctOf(a.direct), a.direct != null ? 'of nights, no Airbnb fee' : '');
     return h + (tiles ? '<div class="K_grid2" id="K_glance">' + tiles + '</div>' : '') + targetCard(a.target);

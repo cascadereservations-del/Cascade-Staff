@@ -14,12 +14,16 @@
 #v-bills .C_amountbox .cap { flex-basis: 100%; }
 #v-bills .C_amount { font: 700 clamp(2.75rem, 2.571rem + 0.7951vw, 3.08rem)/1.1 var(--v5-font-ui); letter-spacing: -.02em; color: var(--v5-ink); }
 #v-bills .BL_copied:empty { display: none; }
-#v-bills .BL_kv { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 4px 12px; }
-#v-bills .BL_k { grid-column: 1 / -1; }
-#v-bills .BL_kv b { font: 600 var(--v5-t-body)/1.3 var(--v5-font-ui); overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
+#v-bills .BL_kv { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; }
+#v-bills .BL_k { flex: 1 0 100%; }
+#v-bills .BL_kv b { flex: 1 1 11rem; min-width: 0; font: 600 var(--v5-t-body)/1.3 var(--v5-font-ui); overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
 #v-bills .BL_hd { display: flex; align-items: center; justify-content: space-between; margin: -12px 0 -4px; }
 #v-bills .BL_edit { display: inline-flex; align-items: center; min-height: 44px; min-width: 44px; justify-content: flex-end; padding: 0 0 0 16px; font: 600 var(--v5-t-label)/1 var(--v5-font-ui); color: var(--v5-act); text-decoration: none; }
 #v-bills .BL_shot { flex-wrap: nowrap; }
 #v-bills .BL_shotx { display: grid; gap: 4px; min-width: 0; }
 #v-bills .BL_thumb { width: 56px; height: 56px; flex: none; display: grid; place-items: center; border: 1px dashed var(--v5-line-2); border-radius: var(--v5-r-field); background: var(--v5-sunk); color: var(--v5-ink-2); }
 #v-bills .BL_skip { width: 100%; color: var(--v5-ink-2); }
+/* s128: even wraps, no one-word last line */
+#v-bills .field label { text-wrap: balance; }
+#v-bills .BL_kv .btn { margin-left: auto; }
+#v-bills .help { text-wrap: pretty; }

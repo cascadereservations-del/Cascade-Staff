@@ -54,11 +54,23 @@
 .KU_big { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px; margin-top: 4px; }
 .KU_big > b { font: 400 var(--v5-t-num)/1.1 var(--v5-font-display); color: var(--v5-ink); }
 .KU_big > span { font: 600 var(--v5-t-label)/1.2 var(--v5-font-ui); color: var(--v5-ink-2); }
-.KU_chip { align-self: flex-start; margin-top: 4px; padding: 2px 8px; border-radius: 999px; font: 600 var(--v5-t-min)/1.4 var(--v5-font-ui); background: var(--v5-sunk); color: var(--v5-ink-2); }
+.KU_chip { align-self: flex-start; white-space: nowrap; margin-top: 4px; padding: 2px 8px; border-radius: 999px; font: 600 var(--v5-t-min)/1.4 var(--v5-font-ui); background: var(--v5-sunk); color: var(--v5-ink-2); }
 .KU_chip-down { background: var(--v5-ok-w); color: var(--v5-ok-t); } .KU_chip-up { background: var(--v5-warn-w); color: var(--v5-warn-t); }
 .KU_spark { position: relative; display: block; height: 2rem; margin-top: 8px; }
 .KU_spark > svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
 .KU_spark > i { position: absolute; width: 0.5rem; height: 0.5rem; transform: translate(-50%, -50%); border-radius: 50%; background: var(--v5-chart-line); box-shadow: 0 0 0 2px var(--v5-surf); }
+.KU_tile .K_sub { text-wrap: balance; }
+/* s128: Nights booked and Last reading are full-width rows (a half tile left a big empty area beside a taller partner) */
+.KU_row { grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; padding: 16px; border-radius: var(--v5-r-card); min-width: 0; font-variant-numeric: tabular-nums; }
+.KU_rowtx { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.KU_rowv { font: 600 var(--v5-t-body)/1.2 var(--v5-font-ui); color: var(--v5-ink); white-space: nowrap; }
+.KU_rowhd { flex: 1 0 100%; }
+.KU_lrl { display: flex; flex-direction: column; gap: 0; min-width: 0; }
+.KU_lrl .KU_big { margin-top: 0; }
+.KU_lrr { display: grid; gap: 4px; flex: 1 1 auto; min-width: 0; font: 600 var(--v5-t-label)/1.3 var(--v5-font-ui); color: var(--v5-ink); }
+.KU_lr { display: flex; align-items: baseline; gap: 8px; white-space: nowrap; }
+.KU_lr > i { font-style: normal; flex: none; }
+.KU_lflag { flex: 1 0 100%; display: flex; align-items: center; gap: 8px; }
 .KU_ringrow { display: flex; align-items: center; gap: 12px; margin-top: 4px; }
 .KU_ring { position: relative; display: inline-grid; place-items: center; width: 4rem; height: 4rem; flex: none; }
 .KU_ring > svg { position: absolute; inset: 0; width: 100%; height: 100%; }
@@ -127,6 +139,7 @@
 /* s127 (Staff 3.4.42): utility bills, usage tracking and the use-by-guest list. Tokens only, 8/16 spacing. Electricity is gold, water is blue, usage is green. */
 .K_note .K_sub, .K_money .K_sub { line-height: 1.45; text-wrap: pretty; }
 .K_two { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.K_two .K_sub { text-wrap: balance; }
 .K_two > div { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
 .K_two > div + div { padding-left: 16px; border-left: 1px solid var(--v5-line); }
 .K_two i { font: 600 var(--v5-t-label)/1.2 var(--v5-font-ui); color: var(--v5-ink-2); }
@@ -167,7 +180,7 @@
 .KB_n { font: 600 var(--v5-t-label)/1.2 var(--v5-font-ui); color: var(--v5-ink-2); font-variant-numeric: tabular-nums; }
 .KB_c { font: 600 var(--v5-t-label)/1.2 var(--v5-font-ui); color: var(--v5-ink-2); }
 .KB_c.K_warn { color: var(--v5-warn-t); } .KB_c.K_ok { color: var(--v5-ok-t); }
-.KB_a { font-style: normal; font-size: .8em; }
+.KB_a { font-style: normal; font-size: 1em; }
 .KB_cols + .K_sub { margin-top: 12px; }
 .KG_list { display: grid; margin-top: 4px; }
 .KG_row { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 12px; align-items: center; padding: 12px 0; border-top: 1px solid var(--v5-line); }
@@ -190,3 +203,9 @@
 .K_two .K_e { color: var(--v5-gold-text); } .K_two .K_w { color: var(--v5-chart-line); }
 .KG_face img { position: absolute; max-width: none; display: block; -webkit-touch-callout: none; user-select: none; -webkit-user-select: none; pointer-events: none; }
 .KG_returning { background: var(--v5-tier-returning-w); color: var(--v5-tier-returning-t); } .KG_regular { background: var(--v5-tier-regular-w); color: var(--v5-tier-regular-t); } .KG_vip { background: var(--v5-tier-vip-w); color: var(--v5-tier-vip-t); }
+/* s128: short labels and headings wrap in even lines, long notes never end on one word */
+.K_stat .K_lab { letter-spacing: .02em; }
+.K_end > span { white-space: nowrap; }
+@media (max-width: 340px) { #K_glance { grid-template-columns: minmax(0, 1fr); } .K_lines { padding: 8px 12px; } .K_lines .K_line { gap: 8px; } .K_lines .K_ic { width: 32px; height: 32px; } }
+.K_lab, .K_h, .K_fh, .K_line b, .K_chart-h b, .K_end > *, .K_mid > *, .K_line-s > span, .K_cmp-h, .KU_means, .K_stat .K_sub { text-wrap: balance; }
+.K_p { text-wrap: pretty; }

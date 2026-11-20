@@ -33,10 +33,10 @@ test('s111 utility tiles (s113 shape): per day, never per night; nights booked f
   for (const role of ['cleaner', 'laundry', 'owner']) {
     const { el, click } = mountWith(payload({}, role === 'owner'), role); await tick();
     const h = el.innerHTML;
-    assert.match(h, /id="K_tE"><span class="K_lab">Electricity<\/span><span class="KU_big"><b>9\.9<\/b><span>kWh a day<\/span><\/span><span class="K_sub">79 kWh used this month<\/span>/);
-    assert.match(h, /id="K_tW"><span class="K_lab">Water<\/span><span class="KU_big"><b>0\.39<\/b><span>m³ a day<\/span><\/span><span class="K_sub">3\.1 m³ used this month<\/span>/);
-    assert.match(h, /id="K_tN"><span class="K_lab">Nights booked<\/span>[\s\S]*?<b>40%<\/b><\/span><span class="K_sub">12 of 30 nights<\/span>/, '12 / 30 = 40%, the Admin occupancy figure');
-    assert.match(h, /id="K_last"><span class="K_lab">Last reading<\/span><span class="KU_big"><b>7 Nov<\/b><\/span><span class="K_sub">25 kWh over 3 days<\/span><span class="K_sub">8\.3 kWh a day<\/span><span class="K_sub">0\.9 m³ over 3 days · 0\.3 m³ a day<\/span>/);
+    assert.match(h, /id="K_tE"><span class="K_lab">Electricity<\/span><span class="KU_big"><b>9\.9<\/b><span>kWh a day<\/span><\/span><span class="K_sub">79\u00a0kWh this month<\/span>/);
+    assert.match(h, /id="K_tW"><span class="K_lab">Water<\/span><span class="KU_big"><b>0\.39<\/b><span>m³ a day<\/span><\/span><span class="K_sub">3\.1\u00a0m³ this month<\/span>/);
+    assert.match(h, /id="K_tN"[^>]*>[\s\S]*?<b>40%<\/b>[\s\S]*?<span class="KU_rowv">12\u00a0of\u00a030\u00a0nights<\/span>/, '12 / 30 = 40%, the Admin occupancy figure');
+    assert.match(h, /id="K_last"[^>]*><span class="KU_rowhd"><span class="K_lab">Last reading<\/span><\/span><span class="KU_lrl"><span class="KU_big"><b>7 Nov<\/b><\/span><span class="K_sub">over 3 days<\/span><\/span><span class="KU_lrr"><span class="KU_lr"><i aria-hidden="true">⚡<\/i><span class="sr">Electricity <\/span>25\u00a0kWh · 8\.3\u00a0a\u00a0day<\/span><span class="KU_lr"><i aria-hidden="true">💧<\/i><span class="sr">Water <\/span>0\.9\u00a0m³ · 0\.3\u00a0a\u00a0day<\/span>/);
     assert.doesNotMatch(h, /per night|a night/i, role + ': no per-night wording on Utility');
     if (role === 'owner') { await click({ 'data-kact': 'seg', 'data-seg': 'admin' }); assert.doesNotMatch(el.innerHTML, /per night/i, 'none on Admin either'); }
     await click({ 'data-kact': 'seg', 'data-seg': 'inventory' }); assert.doesNotMatch(el.innerHTML, /per night/i);
@@ -175,10 +175,10 @@ test('s111 Guest tiers (s114 shape): a card after the guest cards on Today, clos
 });
 
 test('s111 release pins and tokens: version unchanged, chart tokens in all three theme blocks, no raw colours or px type in the new CSS', () => {
-  assert.equal(JSON.parse(read('package.json')).version, '3.4.44'); assert.match(read('sw.js'), /CACHE_NAME = 'cs-shell-v69'/);
+  assert.equal(JSON.parse(read('package.json')).version, '3.4.45'); assert.match(read('sw.js'), /CACHE_NAME = 'cs-shell-v70'/);
   const tok = read('tokens.css'); for (const k of ['chart-line', 'chart-area', 'chart-band', 'chart-grid', 'chart-axis', 'chart-avg']) assert.equal((tok.match(new RegExp('--v5-' + k + ':', 'g')) || []).length, 3, k);
   const css = read('kpi/K_kpi.css'); const s111 = css.slice(css.indexOf('s113, the chart standard'), css.indexOf('/* supply and consumption'));
-  assert.doesNotMatch(s111, /#[0-9a-f]{3,6}\b|rgb\(|nowrap|font-size:\s*\d+px|font:[^;]*\d+px/i);
+  assert.doesNotMatch(s111, /#[0-9a-f]{3,6}\b|rgb\(|font-size:\s*\d+px|font:[^;]*\d+px/i);
   const sty = read('styles.css'); const z = sty.slice(sty.indexOf('s111: the shared zoom viewer'), sty.indexOf('s111: the shared zoom viewer') + 900); assert.doesNotMatch(z, /#[0-9a-f]{3,6}\b|rgb\(|nowrap/i);
   const d = createDemo(); assert.equal(d.utility.nights_booked, d.admin.sold_nights, 'demo: nights booked equals the Admin occupancy nights'); assert.ok(!('kwh_per_night' in d.utility) && !('nights_month' in d.utility));
 });

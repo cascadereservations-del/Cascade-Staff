@@ -20,7 +20,7 @@
     url: 'https://qkgfhsdppslwunarczeq.supabase.co',
     key: 'sb_publishable_JFuRYZ9csmQULcMRmHXDSg_Abo9UeCj',
     propertyId: '6ae230f4-c189-4547-84b1-cb6e0b2cc9bd',
-    version: '3.4.44'
+    version: '3.4.45'
   };
   var LINKS = {
     checklist: 'https://cascadereservations-del.github.io/CH-Cleaners-Checklist/',
@@ -356,11 +356,12 @@
   var H_bSeq = 0;
   function A_billsCard() {
     var b = state.bills; if (!b) return '';
-    var kwh = (Math.round(b.eKwh) || 0).toLocaleString('en-PH'), m3 = String(Math.round(b.wM3 * 10) / 10);
-    return '<section class="card glass A_card F_span K_bills" id="T_bills" aria-label="Bills so far"><span class="K_lab">' + esc('This cycle so far · since ' + CS.dayLabel(b.since)) + '</span><div class="K_two">' +
-      '<div><i class="K_e">⚡ Electricity</i><b>' + esc(b.ePhp != null ? A_peso(Math.round(b.ePhp)) : 'Not yet') + '</b><span class="K_sub">' + esc(kwh + ' kWh') + '</span></div>' +
-      '<div><i class="K_w">💧 Water</i><b>' + esc(A_peso(Math.round(b.wPhp))) + '</b><span class="K_sub">' + esc(m3 + ' m³') + '</span></div></div>' +
-      '<p class="K_sub">' + esc(b.last ? 'From the meter readings up to ' + CS.dayLabel(b.last) + ', at the latest rates.' : 'No meter reading in this bill yet.') + '</p>' + A_billDues(b) + '</section>';
+    var kwh = (Math.round(b.eKwh) || 0).toLocaleString('en-PH') + '\u00a0kWh', m3 = String(Math.round(b.wM3 * 10) / 10) + '\u00a0m³', noRate = 'Cost shows when the rate is in.';
+    var col = function (php, use) { return php != null ? ['<b>' + esc(A_peso(Math.round(php))) + '</b>', use] : ['<b>' + esc(use) + '</b>', noRate]; }, e = col(b.ePhp, kwh), w = col(b.wPhp, m3); // s128: no peso, no "Not yet": the usage is the figure
+    return '<section class="card glass A_card F_span K_bills" id="T_bills" aria-label="Bills so far"><span class="K_lab">' + esc('This cycle so far · since ' + A_nb(CS.dayLabel(b.since))) + '</span><div class="K_two">' +
+      '<div><i class="K_e">⚡ Electricity</i>' + e[0] + '<span class="K_sub">' + esc(e[1]) + '</span></div>' +
+      '<div><i class="K_w">💧 Water</i>' + w[0] + '<span class="K_sub">' + esc(w[1]) + '</span></div></div>' +
+      '<p class="K_sub">' + esc(b.last ? 'From the meter readings up to ' + A_nb(CS.dayLabel(b.last)) + (b.ePhp != null && b.wPhp != null ? ', at the latest rates.' : '.') : 'No meter reading in this bill yet.') + '</p>' + A_billDues(b) + '</section>';
   }
   // s127: the To pay list. Every role sees the rows and amounts; Pay shows only where the server said can_pay, and only owner, admin and finance open a paid row's screenshot.
   function A_billDues(b) {
@@ -2147,7 +2148,7 @@
   // Runs once per device after sign-in (CS.phoneCheckDue, key cs_phone_check) and from More > This phone > Check this phone. Every row comes from a real probe
   // (CS.phoneCheckRows); Fix all runs the fixers in order from the one tap (CS.phoneFixPlan: alerts first, so the permission prompt rides the tap), then probes again.
   // The camera is opened only when its permission is 'prompt', and every track is stopped at once. Nothing changes Trust this device.
-  var PC_SHELL = 'cs-shell-v69'; // the service worker's cache for this version (sw.js CACHE_NAME; a test keeps them equal)
+  var PC_SHELL = 'cs-shell-v70'; // the service worker's cache for this version (sw.js CACHE_NAME; a test keeps them equal)
   var PC = { open: false, busy: false, rows: null, msg: '', camPerm: null };
   function PC_ls() { return store('localStorage'); }
   function PC_cameraPerm() {
