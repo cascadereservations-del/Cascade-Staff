@@ -142,6 +142,55 @@
   function daysTone(d) { return d != null && d <= 5 ? 'bad' : d != null && d <= 10 ? 'warn' : 'ok'; }
   function rateCost(kwh, rate) { var k = num(kwh), r = num(rate); return k != null && r != null ? k * r : null; }
 
+  /* s127: utility bills, rate history, usage by month and by guest. Every key is optional: an older server sends none and the screen stays as it was. */
+  var UP = '🔺', DOWN = '🔻', TIERS = ['returning', 'regular', 'vip'];
+  function isoDay(v) { return /^\d{4}-\d{2}-\d{2}/.test(String(v || '')) ? String(v).slice(0, 10) : ''; }
+  function obj(v) { return v && typeof v === 'object' && !Array.isArray(v) ? v : null; }
+  function billE(e) {
+    e = obj(e); if (!e) return null;
+    return { from: isoDay(e.cycle_from), to: isoDay(e.cycle_to), days: num(e.days), cycleDays: num(e.days_in_cycle), kwh: num(e.kwh), rate: num(e.rate), fixed: num(e.fixed_php), soFar: num(e.so_far_php), fKwh: num(e.forecast_kwh), fPhp: num(e.forecast_php), perKwh: num(e.per_day_kwh), perPhp: num(e.per_day_php), last: e.last_reading_at ? String(e.last_reading_at) : '' };
+  }
+  function billW(w) {
+    w = obj(w); if (!w) return null;
+    return { from: isoDay(w.cycle_from), to: isoDay(w.cycle_to), days: num(w.days), m3: num(w.m3), soFar: num(w.so_far_php), fM3: num(w.forecast_m3), fPhp: num(w.forecast_php), perM3: num(w.per_day_m3), min: num(w.min_php), minM3: num(w.min_m3), next: num(w.next_php), nextUpto: num(w.next_upto) };
+  }
+  // a face box is only kept when all four numbers are real; the screen then asks CS.faceFrame, exactly as the Today card does
+  function faceBox(b) { b = obj(b); return b && ['x', 'y', 'w', 'h'].every(function (k) { return typeof b[k] === 'number' && isFinite(b[k]); }) ? { x: b.x, y: b.y, w: b.w, h: b.h, src: b.src ? String(b.src) : '' } : null; }
+  function stayRows(rows) {
+    return (Array.isArray(rows) ? rows : []).filter(obj).map(function (s) {
+      return { from: isoDay(s.from), to: isoDay(s.to), nights: num(s.nights), kwh: num(s.kwh), m3: num(s.m3), cost: num(s.cost_php), name: s.guest_name ? String(s.guest_name).trim() : '', tier: TIERS.indexOf(s.tier) >= 0 ? s.tier : '', path: s.id_photo_path ? String(s.id_photo_path) : '', box: faceBox(s.id_face_box) };
+    }).filter(function (s) { return s.to; }).slice(0, 5);
+  }
+  function s127Admin(out, a) {
+    var b = obj(a.bills); out.bills = b ? { e: billE(b.electric), w: billW(b.water) } : null;
+    var yr = num(a.rate_year_avg); out.yearAvg = yr != null && yr > 0 ? yr : null;
+    out.rateHistory = (Array.isArray(a.rate_history) ? a.rate_history : []).filter(function (r) { return obj(r) && /^\d{4}-\d{2}/.test(String(r.month || '')) && num(r.php_per_kwh) != null; }).map(function (r) { return { month: String(r.month).slice(0, 7), php: num(r.php_per_kwh), pct: num(r.change_pct) }; }).slice(0, 6);
+    var w = obj(a.water_rate); out.waterRate = w && num(w.min_php) != null ? { min: num(w.min_php), minM3: num(w.min_m3), next: num(w.next_php), nextUpto: num(w.next_upto), url: /^https:\/\//.test(String(w.source_url || '')) ? String(w.source_url) : '' } : null;
+    out.stays = stayRows(a.stays);
+  }
+  function usageMonths(rows) {
+    return (Array.isArray(rows) ? rows : []).filter(function (r) { return obj(r) && /^\d{4}-\d{2}/.test(String(r.month || '')); }).map(function (r) {
+      return { month: String(r.month).slice(0, 7), kwh: num(r.kwh), m3: num(r.m3), kwhPct: num(r.kwh_change_pct), m3Pct: num(r.m3_change_pct), forecast: r.forecast === true, kwhSoFar: num(r.kwh_so_far), m3So: num(r.m3_so_far) };
+    }).slice(-6);
+  }
+  // the change arrow: up is warn, down is ok, no value is a dash, a change that rounds to zero is a plain 0%
+  function arrowOf(pct, dec) {
+    var p = num(pct); if (p == null) return null;
+    var n = fmt(Math.abs(p), dec == null ? 0 : dec), z = +n === 0;
+    return { cls: z ? '' : p > 0 ? 'K_warn' : 'K_ok', ico: z ? '' : p > 0 ? UP : DOWN, n: n };
+  }
+  function arrowText(pct, dec) { var a = arrowOf(pct, dec); return a ? (a.ico ? a.ico + ' ' : '') + a.n + '%' : '–'; }
+  function manilaDay(iso) { var t = Date.parse(iso); return isFinite(t) ? new Date(t + 8 * 3600000).toISOString().slice(0, 10) : ''; }
+  function checkedWhen(iso) {
+    var d = manilaDay(iso); if (!d) return '';
+    var t = manilaToday(); return d === t ? 'today' : d === new Date(Date.parse(t) - 86400000).toISOString().slice(0, 10) ? 'yesterday' : 'on ' + dayMonth(d);
+  }
+  function monthName(m) { var p = monthParts(m); return p && p.m >= 1 && p.m <= 12 ? MONTHS[p.m - 1] : ''; }
+  // the stays that fall in this bill's cycle (a stay counts from the day it ended)
+  function inCycle(stays, from) { return from ? stays.filter(function (s) { return s.to >= from; }) : []; }
+  // one stay use divided by its nights, for the bars: null when the nights or the figure is missing
+  function perNight(v, nights) { return v != null && nights != null && nights > 0 ? v / nights : null; }
+
   // One kpi_tab_v1 payload to what the screen draws. `admin` survives only for owner, admin and finance; anything else is dropped here, before any drawing.
   function normalize(raw, role) {
     if (!raw || typeof raw !== 'object' || raw.ok === false) return null;
@@ -160,9 +209,10 @@
         runsOut: (inv.runs_out || []).map(function (r) { return { name: String((r && r.name) || ''), days: num(r && r.days_left) }; }).filter(function (r) { return r.name && r.days != null; }).slice(0, 3) },
       admin: null
     };
+    out.utility.usageMonths = usageMonths(u.usage_months); // s127: no money in this key, so every role may read it
     if (isAdminRole(role) && raw.admin && typeof raw.admin === 'object') {
       var a = raw.admin, rt = a.rate && typeof a.rate === 'object' ? a.rate : null;
-      out.admin = { rate: rt && num(rt.php_per_kwh) != null ? { php: num(rt.php_per_kwh), from: rt.effective_from || '', source: rt.source || '', url: /^https:\/\//.test(String(rt.source_url || '')) ? String(rt.source_url) : '' } : null,
+      out.admin = { rate: rt && num(rt.php_per_kwh) != null ? { php: num(rt.php_per_kwh), from: rt.effective_from || '', source: rt.source || '', url: /^https:\/\//.test(String(rt.source_url || '')) ? String(rt.source_url) : '', checked: rt.checked_at ? String(rt.checked_at) : '' } : null,
         lastCost: num(a.last_reading_cost), monthCost: num(a.month_kwh_cost), supplies: num(a.supplies_month), perTurnover: num(a.supply_cost_per_turnover), cleaning: num(a.cleaning_pay_month) };
       // Amendment 1: the month at a glance. A key that is absent draws nothing; a key that is present but empty draws "Not yet". Kept only here, inside the admin role check.
       var has = function (k) { return Object.prototype.hasOwnProperty.call(a, k); };
@@ -170,6 +220,7 @@
       if (has('occupancy')) out.admin.occupancy = { pct: num(a.occupancy), sold: num(a.sold_nights), sellable: num(a.sellable_nights) };
       if (has('adr')) out.admin.adr = num(a.adr);
       if (has('direct_share')) out.admin.direct = num(a.direct_share);
+      s127Admin(out.admin, a);
       if (a.target && typeof a.target === 'object') { var tg = a.target; out.admin.target = { net: num(tg.net_target) || 0, costs: num(tg.costs_basis), need: num(tg.revenue_needed), adr: num(tg.adr), monthNights: num(tg.nights_in_month), onBooks: num(tg.nights_on_books), occ: num(tg.needed_occupancy), needAdr: num(tg.needed_adr), at: tg.set_at || '' }; }
     }
     return out;
@@ -351,20 +402,123 @@
     }
     return h;
   }
+  // s127: the face (or the first initial on the tier colour). The photo is placed by the shell's Today loader through data-facepath (a signed URL, cropped to the face box);
+  // a stay with no located face never shows the ID, only the initial.
+  function faceHtml(s, px) {
+    var nm = s.name || 'Guest', ini = (root.Array && Array.from ? Array.from(nm)[0] : nm.charAt(0)) || 'G', cls = 'KG_face' + (s.tier ? ' KG_' + s.tier : '');
+    var fr = s.path && s.box && root.CS && root.CS.faceFrame ? root.CS.faceFrame(s.box, 1, 1, 0, 1) : null;
+    if (fr && !fr.fallback) return '<span class="' + cls + '" aria-hidden="true" data-facepath="' + esc(s.path) + '" data-facebox="' + esc(JSON.stringify([s.box.x, s.box.y, s.box.w, s.box.h, 'v'])) + '" data-facepx="' + px + '">' + esc(ini.toUpperCase()) + '</span>';
+    return '<span class="' + cls + '" aria-hidden="true">' + esc(ini.toUpperCase()) + '</span>';
+  }
+  function rateSub(a) {
+    var rate = a.rate, h = a.rateHistory, bits = [], cur = rate && rate.from ? String(rate.from).slice(0, 7) : '';
+    if (h.length > 1 && h[0].month === cur && h[0].pct != null) { var ar = arrowOf(h[0].pct, 1); bits.push(ar.ico ? ar.ico + ' ' + ar.n + '% from ' + monthName(h[1].month) + '.' : 'No change from ' + monthName(h[1].month) + '.'); }
+    if (a.yearAvg != null) bits.push("This year's average is " + pesoRate(a.yearAvg) + '.');
+    return bits.join(' ');
+  }
+  function srcLine(when, url) {
+    if (!when && !url) return '';
+    return '<span class="K_sub K_src">' + (when ? esc('Checked ' + when + '.') + ' ' : '') + (url ? '<a class="K_link" href="' + esc(url) + '" target="_blank" rel="noopener">See the source</a>' : '') + '</span>';
+  }
+  function ratePanel(a) {
+    var rate = a.rate, sub = rate ? rateSub(a) : '';
+    if (rate && !sub) sub = 'From ' + dateLabel(rate.from) + (rate.source === 'auto' ? ' · read from the SOCOTECO II post' : rate.source === 'manual' ? ' · entered by hand' : '');
+    return '<div class="K_money" id="K_rate"><span class="K_lab">' + esc(rate && monthLabel(rate.from) ? monthLabel(rate.from) + ' rate' : 'Latest SOCOTECO II rate') + '</span>' +
+      '<span class="K_big">' + esc(rate ? pesoRate(rate.php) + '/kWh' : 'No rate on file') + '</span><span class="K_sub">' + esc(rate ? sub : 'Add the rate to see what a reading costs.') + '</span>' +
+      (rate ? srcLine(rate.checked ? checkedWhen(rate.checked) : '', rate.url) : '') + '</div>';
+  }
+  function twoCols(a, b) {
+    return '<div class="K_two"><div><i>So far</i><b>' + esc(a[0]) + '</b><span class="K_sub">' + esc(a[1]) + '</span></div><div><i>Forecast</i><b>' + esc(b[0]) + '</b><span class="K_sub">' + esc(b[1]) + '</span></div></div>';
+  }
+  function billCard(a) {
+    var b = a.bills.e, st = inCycle(a.stays, b.from), per = [], lastDay = b.last ? manilaDay(b.last) : '';
+    if (b.perKwh != null) per.push('Guests use about ' + (b.perPhp != null ? peso(b.perPhp) + ' a day (' + fmt(b.perKwh, 1) + ' kWh).' : fmt(b.perKwh, 1) + ' kWh a day.'));
+    per.push('Updates with every meter reading' + (lastDay ? '; last one ' + dayMonth(lastDay) : '') + '.');
+    return '<div class="card glass K_note" id="K_bill"><span class="K_lab">' + esc('This bill' + (b.from && b.to ? ' · ' + dayMonth(b.from) + ' to ' + dayMonth(b.to) : '')) + '</span>' +
+      twoCols([b.soFar != null ? peso(b.soFar) : 'Not yet', [b.kwh != null ? fmt(b.kwh, 0) + ' kWh' : '', b.days != null ? plural(b.days, 'day') : ''].filter(Boolean).join(' · ')], [b.fPhp != null ? peso(b.fPhp) : 'Not yet', b.fKwh != null ? 'about ' + fmt(b.fKwh, 0) + ' kWh' : '']) +
+      (st.length ? '<div class="KG_stack" role="group" aria-label="Guests on this bill">' + st.slice(0, 4).map(function (s) { return faceHtml(s, 32); }).join('') + '<span class="K_sub">' + esc(st.length > 4 ? '+ more stays' : plural(st.length, 'stay')) + '</span></div>' : '') +
+      '<p class="K_sub">' + esc(per.join(' ')) + '</p></div>';
+  }
+  function changeCard(h) {
+    return '<div class="card glass K_note" id="K_chg"><span class="K_lab">Rate change by month</span><div class="K_cmp" role="table" aria-label="Rate per kWh by month and change from the month before">' +
+      '<span class="K_cmp-h">Month</span><span class="K_cmp-h">Rate</span><span class="K_cmp-h">Change</span>' + h.map(function (r) {
+        var ar = arrowOf(r.pct, 1);
+        return '<span>' + esc(monthName(r.month).slice(0, 3)) + '</span><span>' + esc(pesoRate(r.php)) + '</span><span class="' + (ar && ar.cls ? ar.cls : 'K_dim') + '">' + esc(arrowText(r.pct, 1)) + '</span>';
+      }).join('') + '</div></div>';
+  }
+  function waterSection(a) {
+    var wr = a.waterRate, b = a.bills && a.bills.w; if (!wr && !b) return '';
+    var min = wr ? wr.min : b && b.min, minM3 = wr ? wr.minM3 : b && b.minM3, next = wr ? wr.next : b && b.next, upto = wr ? wr.nextUpto : b && b.nextUpto, h = '<div class="K_util K_util-w"><h2 class="K_h">💧 Water cost</h2>';
+    if (min != null) h += '<div class="K_money" id="K_wrate"><span class="K_lab">Gensan Water District rate</span><span class="K_big">' + esc(peso(min) + ' minimum') + '</span>' +
+      '<span class="K_sub">' + esc((minM3 != null ? 'Covers the first ' + fmt(minM3, 0) + ' m³.' : '') + (next != null ? (minM3 != null ? ' Then ' : 'Then ') + pesoRate(next) + ' per m³' + (upto != null ? ' up to ' + fmt(upto, 0) + ' m³' : '') + '.' : '')) + '</span>' + srcLine('', wr && wr.url) + '</div>';
+    if (b) {
+      var per = [], inside = b.m3 != null && b.minM3 != null && b.m3 <= b.minM3;
+      if (b.perM3 != null) per.push('Guests use about ' + fmt(b.perM3, 2) + ' m³ a day.');
+      if (inside) per.push(b.fM3 != null && b.fM3 > b.minM3 ? 'Inside the minimum so far; the forecast goes past it.' : 'Still inside the minimum.');
+      else if (b.m3 != null && b.minM3 != null) per.push('Past the minimum.' + (b.next != null ? ' The next m³ costs ' + pesoRate(b.next) + '.' : ''));
+      h += '<div class="card glass K_note" id="K_wbill"><span class="K_lab">' + esc('This bill' + (b.from ? ' · since ' + dayMonth(b.from) : '')) + '</span>' +
+        twoCols([b.soFar != null ? peso(b.soFar) : 'Not yet', [b.m3 != null ? fmt(b.m3, 1) + ' m³' : '', b.days != null ? plural(b.days, 'day') : ''].filter(Boolean).join(' · ')], [b.fPhp != null ? peso(b.fPhp) : 'Not yet', b.fM3 != null ? 'about ' + fmt(b.fM3, 1) + ' m³' : '']) +
+        (per.length ? '<p class="K_sub">' + esc(per.join(' ')) + '</p>' : '') + '</div>';
+    }
+    return h + '</div>';
+  }
+  // The usage hero: this month so far, against the month before at the same pace.
+  function usageHero(um) {
+    var cur = um[um.length - 1], prev = um.length > 1 ? um[um.length - 2] : null, pn = prev ? monthName(prev.month) : '', e = arrowOf(cur.kwhPct, 0), w = arrowOf(cur.m3Pct, 0);
+    var used = cur.forecast ? cur.kwhSoFar : cur.kwh, usedW = cur.forecast ? cur.m3So : cur.m3, end = cur.forecast && cur.kwh != null ? 'about ' + fmt(cur.kwh, 0) + ' kWh by month end' : '';
+    var base = e && pn ? (e.ico ? e.ico + ' ' + e.n + '% against ' + pn : 'No change against ' + pn) : '', line = base ? base + (cur.forecast ? ' at this pace' : '') + (end ? ', ' + end : '') + '.' : end ? 'At this pace, ' + end + '.' : '';
+    return '<div class="K_money" id="K_use"><span class="K_lab">' + esc(monthName(cur.month) + (cur.forecast ? ' so far' : '')) + '</span><span class="K_big">' + esc(used != null ? fmt(used, 0) + ' kWh' : 'No reading yet') + '</span>' +
+      (line ? '<span class="K_sub">' + esc(line) + '</span>' : '') + (usedW != null ? '<span class="K_sub">' + esc('💧 Water ' + fmt(usedW, 1) + ' m³' + (w ? ', ' + arrowText(cur.m3Pct, 0) : '') + '.') + '</span>' : '') + '</div>';
+  }
+  // Five months of use as bars: the tallest month is full height; the current month is a forecast with its used-so-far part solid; a month with no counted reading is hatched.
+  function usageChart(um, kind) {
+    var rows = um.slice(-5), e = kind === 'kwh', unit = e ? 'kWh' : 'm³', dec = e ? 0 : 1, so = e ? 'kwhSoFar' : 'm3So', pc = e ? 'kwhPct' : 'm3Pct', vals = rows.map(function (r) { return r[kind]; });
+    if (!vals.some(function (v) { return v != null; })) return '';
+    var max = Math.max.apply(null, vals.filter(function (v) { return v != null; }).concat([0])), aria = [], missing = [];
+    var cols = rows.map(function (r) {
+      var v = r[kind], na = v == null, fc = r.forecast && !na, ar = arrowOf(r[pc], 0), mn = monthName(r.month), hh = na ? 30 : max > 0 ? Math.round(v / max * 100) : 0, sf = fc && r[so] != null && v > 0 ? Math.min(100, Math.round(r[so] / v * 100)) : 100;
+      aria.push(mn + ' ' + (na ? 'not counted' : (fc ? 'forecast ' : '') + fmt(v, dec))); if (na && !r.forecast) missing.push(mn);
+      return '<div class="KB_col' + (r.forecast ? ' KB_now' : '') + '"><span class="KB_v">' + esc(na ? '–' : fmt(v, dec)) + '</span><span class="KB_bar ' + (e ? 'KB_e' : 'KB_w') + (fc ? ' KB_fc' : '') + (na ? ' KB_na' : '') + '" style="--h:' + hh + (fc ? ';--sf:' + sf + '%' : '') + '"></span>' +
+        '<span class="KB_m">' + esc(mn.slice(0, 3)) + '</span><span class="KB_c' + (ar && ar.cls ? ' ' + ar.cls : '') + '">' + (ar ? (ar.ico ? '<i class="KB_a">' + ar.ico + '</i>' : '') + esc(ar.n + '%') : '–') + '</span></div>';
+    }).join('');
+    var fcRow = rows.filter(function (r) { return r.forecast; })[0];
+    var cap = e ? 'The arrow is the change from the month before.' + (fcRow ? ' ' + monthName(fcRow.month) + ' is a forecast; the solid part is used so far.' : '') + (missing.length ? ' ' + missing.join(' and ') + (missing.length > 1 ? ' have' : ' has') + ' no counted meter reading.' : '') : '';
+    return '<div class="card glass K_note" id="' + (e ? 'K_ume' : 'K_umw') + '"><span class="K_lab">' + (e ? '⚡ Electricity' : '💧 Water') + ' by month · ' + unit + '</span><div class="KB_cols" role="img" aria-label="' + esc((e ? 'Electricity used each month in kWh: ' : 'Water used each month in cubic metres: ') + aria.join(', ')) + '">' + cols + '</div>' + (cap ? '<p class="K_sub">' + esc(cap) + '</p>' : '') + '</div>';
+  }
+  function guestsCard(stays) {
+    if (!stays.length) return '';
+    var nE = stays.map(function (s) { return perNight(s.kwh, s.nights); }), nW = stays.map(function (s) { return perNight(s.m3, s.nights); });
+    var mxE = Math.max.apply(null, nE.filter(function (v) { return v != null; }).concat([0])), mxW = Math.max.apply(null, nW.filter(function (v) { return v != null; }).concat([0]));
+    var bar = function (v, mx, c) { return v != null && mx > 0 ? '<i class="' + c + '" style="--w:' + Math.round(v / mx * 100) + '%"></i>' : ''; };
+    return '<div class="card glass K_note" id="K_ugs"><span class="K_lab">Use by guest · last ' + esc(stays.length === 1 ? 'stay' : stays.length + ' stays') + '</span><div class="KG_list">' + stays.map(function (s, i) {
+      return '<div class="KG_row">' + faceHtml(s, 44) + '<div class="KG_who"><b>' + esc(s.name || 'Guest') + '</b><span class="K_sub">' + esc(dayMonth(s.to) + (s.nights != null ? ' · ' + plural(s.nights, 'night') : '')) + '</span><span class="KG_bars" aria-hidden="true">' + bar(nE[i], mxE, 'KG_e') + bar(nW[i], mxW, 'KG_w') + '</span></div>' +
+        '<div class="KG_num"><b>' + esc(s.cost != null ? peso(s.cost) : '–') + '</b>' + (s.kwh != null ? '<span class="K_sub">' + esc(fmt(s.kwh, s.kwh < 10 ? 1 : 0) + ' kWh') + '</span>' : '') + (s.m3 != null ? '<span class="K_sub">' + esc(fmt(s.m3, 2) + ' m³') + '</span>' : '') + '</div></div>';
+    }).join('') + '</div><div class="KG_key K_sub"><span><i style="background:var(--v5-gold)"></i>kWh a night</span><span><i style="background:var(--v5-chart-line)"></i>m³ a night</span></div></div>';
+  }
+  function usageSection(d, a) {
+    var um = d.utility.usageMonths || [], stays = a.stays || []; if (!um.length && !stays.length) return '';
+    return '<div class="K_util K_util-u"><h2 class="K_h">📊 Usage tracking</h2>' + (um.length ? usageHero(um) + usageChart(um, 'kwh') + usageChart(um, 'm3') : '') + guestsCard(stays) + '</div>';
+  }
   function adminPanel(d) {
     var a = d.admin, role = S.role, h = '';
     if (!a) return '<div class="card glass K_note"><p class="K_p">' + esc('The money figures are not available yet.') + '</p></div>';
-    var rate = a.rate;
-    h += monthGlance(a) + '<h2 class="K_h">Electricity cost</h2><div class="K_money" id="K_rate"><span class="K_lab">Latest SOCOTECO II rate</span>' +
-      '<span class="K_big">' + esc(rate ? pesoRate(rate.php) + ' per kWh' : 'No rate on file') + '</span>' +
-      '<span class="K_sub">' + esc(rate ? 'From ' + dateLabel(rate.from) + (rate.source === 'auto' ? ' · read from the SOCOTECO II post' : rate.source === 'manual' ? ' · entered by hand' : '') : 'Add the rate to see what a reading costs.') + '</span>' +
-      (rate && rate.url ? '<a class="K_link" href="' + esc(rate.url) + '" target="_blank" rel="noopener">See the source</a>' : '') + '</div>';
+    var rate = a.rate, bills = a.bills, fresh = !!(bills && bills.e) || a.rateHistory.length > 0; // an older server sends neither: the electricity block is then exactly what it was
     var l = d.utility.last, lastTxt = l && l.delta != null ? (a.lastCost != null ? 'About ' + peso(a.lastCost) + ' for ' + fmt(l.delta) + ' kWh' + (l.days ? ' over ' + plural(l.days, 'day') : '') + ', at ' + (rate ? pesoRate(rate.php) : 'the latest rate') + ' per kWh.' : fmt(l.delta) + ' kWh in the last report. The cost needs a rate on file.') : 'No consumption report yet.';
-    h += '<div class="card glass K_note" id="K_lastcost"><span class="K_lab">Last reported consumption</span><p class="K_p">' + esc(lastTxt) + '</p></div>';
-    if (canSetRate(role)) h += rateForm();
-    h += '<h2 class="K_h">Money in utility and stock</h2><div class="card glass K_lines">' + [
+    var lastCard = '<div class="card glass K_note" id="K_lastcost"><span class="K_lab">Last reported consumption</span><p class="K_p">' + esc(lastTxt) + '</p></div>';
+    h += monthGlance(a);
+    if (fresh) h += '<div class="K_util K_util-e"><h2 class="K_h">⚡ Electricity cost</h2>' + ratePanel(a) + (bills && bills.e ? billCard(a) : '') + (a.rateHistory.length ? changeCard(a.rateHistory) : '') + lastCard + (canSetRate(role) ? rateForm() : '') + '</div>';
+    else {
+      h += '<h2 class="K_h">Electricity cost</h2><div class="K_money" id="K_rate"><span class="K_lab">Latest SOCOTECO II rate</span>' +
+        '<span class="K_big">' + esc(rate ? pesoRate(rate.php) + ' per kWh' : 'No rate on file') + '</span>' +
+        '<span class="K_sub">' + esc(rate ? 'From ' + dateLabel(rate.from) + (rate.source === 'auto' ? ' · read from the SOCOTECO II post' : rate.source === 'manual' ? ' · entered by hand' : '') : 'Add the rate to see what a reading costs.') + '</span>' +
+        (rate && rate.url ? '<a class="K_link" href="' + esc(rate.url) + '" target="_blank" rel="noopener">See the source</a>' : '') + '</div>' + lastCard;
+      if (canSetRate(role)) h += rateForm();
+    }
+    h += waterSection(a) + usageSection(d, a);
+    var fc = [bills && bills.e ? ['⚡ Electricity, this bill (forecast)', bills.e.fPhp] : null, bills && bills.w ? ['💧 Water, this bill (forecast)', bills.w.fPhp] : null].filter(Boolean);
+    h += '<h2 class="K_h">Money in utility and stock</h2><div class="card glass K_lines">' + fc.concat([
       ['Electricity this month (estimate)', a.monthCost], ['Supplies bought', a.supplies], ['Supply cost per turnover', a.perTurnover], ['Cleaning pay', a.cleaning]
-    ].map(function (r) { return '<div class="K_line K_line-s"><span>' + esc(r[0]) + '</span><b>' + esc(r[1] != null ? peso(r[1]) : 'Not yet') + '</b></div>'; }).join('') + '</div>';
+    ]).map(function (r) { return '<div class="K_line K_line-s"><span>' + esc(r[0]) + '</span><b>' + esc(r[1] != null ? peso(r[1]) : 'Not yet') + '</b></div>'; }).join('') + '</div>';
     if (canSetRate(role)) h += '<a class="btn btn-secondary btn-block" href="#manage/kpis">' + gi('star', 's16') + 'Open the full key figures</a>';
     return h + metersCard();
   }
@@ -458,6 +612,7 @@
     else if (!d) body = '<div class="errbox" role="alert">' + gi('alert') + '<span>' + esc(stateMsg(S.state)) + (S.state === 'error' || S.state === 'offline' ? ' <button class="btn btn-ghost btn-sm" type="button" data-kact="retry">Try again</button>' : '') + '</span></div>';
     else body = seg === 'admin' && adm ? adminPanel(d) : seg === 'inventory' ? inventoryPanel(d) : utilityPanel(d);
     S.el.innerHTML = '<div class="K_wrap">' + head + '<div class="K_body" role="tabpanel">' + body + '</div><div class="sr" role="status" aria-live="polite" data-k-live></div></div>';
+    if (S.opts.faces && seg === 'admin' && adm) { try { S.opts.faces(S.el); } catch (e) { /* the initials stay */ } }
   }
 
   /* ---------------------------------------------------------------- events */
@@ -533,6 +688,6 @@
 
   root.K_Kpi = { mount: mount, unmount: unmount, reset: reset, lib: {
     esc: esc, normalize: normalize, niceMax: niceMax, ticksFor: ticksFor, percentile: percentile, median: median, lineModel: lineModel, dayModel: dayModel, monthModel: monthModel, xPick: xPick, change: change, prevMonth: prevMonth, yOf: yOf, PLOT: PLOT, targetLines: targetLines, targetProblem: targetProblem, targetCall: targetCall, usageRows: usageRows, daysTone: daysTone, rateCost: rateCost, monthLabel: monthLabel, daysIn: daysIn, isAdminRole: isAdminRole, canSetRate: canSetRate,
-    normBlocks: normBlocks, correctionProblem: correctionProblem, blockCall: blockCall, resendCall: resendCall, rateCall: rateCall, rateProblem: rateProblem, errKind: errKind, peso: peso, pesoRate: pesoRate
+    usageMonths: usageMonths, arrowOf: arrowOf, arrowText: arrowText, manilaDay: manilaDay, inCycle: inCycle, perNight: perNight, normBlocks: normBlocks, correctionProblem: correctionProblem, blockCall: blockCall, resendCall: resendCall, rateCall: rateCall, rateProblem: rateProblem, errKind: errKind, peso: peso, pesoRate: pesoRate
   } };
 })(typeof window !== 'undefined' ? window : this);

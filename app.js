@@ -208,7 +208,8 @@
   function A_faceTurn(img, d) {
     if (!img.naturalWidth) return;
     var raw = img.parentNode && img.parentNode.getAttribute && img.parentNode.getAttribute('data-facebox'), a = null; try { a = raw ? JSON.parse(raw) : null; } catch (e) { a = null; }
-    var f = CS.faceFrame(a ? { x: a[0], y: a[1], w: a[2], h: a[3], src: a[4] } : null, img.naturalWidth, img.naturalHeight, d, A_FACE_PX); if (!f) return;
+    var px = Number(img.parentNode && img.parentNode.getAttribute && img.parentNode.getAttribute('data-facepx')) || A_FACE_PX; // s127: the key figures draw the same crop at 44 and 32 px
+    var f = CS.faceFrame(a ? { x: a[0], y: a[1], w: a[2], h: a[3], src: a[4] } : null, img.naturalWidth, img.naturalHeight, d, px); if (!f) return;
     img.style.width = f.w + 'px'; img.style.height = f.h + 'px'; img.style.left = f.left + 'px'; img.style.top = f.top + 'px'; img.style.transform = d ? 'rotate(' + d + 'deg)' : '';
   }
   function A_loadFaces(root) {
@@ -349,6 +350,26 @@
     }).join('') + hz.map(function (x) {
       return '<a class="U_row U_hz U_' + x.kind + '" href="#weather">' + ICON(x.icon, 's24') + '<span class="U_txt"><b>' + esc(x.word) + '</b><span>' + esc((x.detail ? x.detail + '. ' : '') + x.advice) + '</span></span>' + ICON('chev', 's16') + '</a>';
     }).join('') + '</section>';
+  }
+  // s127: "Bills since the 21st", every role (Lloyd approved the pesos for all staff). today_bills_v1 is read once per Today load; a missing or refused RPC, or an answer that is
+  // not the contract shape, draws nothing and logs nothing.
+  var H_bSeq = 0;
+  function A_billsCard() {
+    var b = state.bills; if (!b) return '';
+    var kwh = Math.round(b.eKwh).toLocaleString('en-PH'), m3 = String(Math.round(b.wM3 * 10) / 10);
+    return '<section class="card glass A_card F_span K_bills" id="T_bills" aria-label="Bills so far"><span class="K_lab">' + esc('Bills since ' + CS.dayLabel(b.since) + ' · estimate') + '</span><div class="K_two">' +
+      '<div><i class="K_e">⚡ Electricity</i><b>' + esc(b.ePhp != null ? A_peso(Math.round(b.ePhp)) : 'Not yet') + '</b><span class="K_sub">' + esc(kwh + ' kWh') + '</span></div>' +
+      '<div><i class="K_w">💧 Water</i><b>' + esc(A_peso(Math.round(b.wPhp))) + '</b><span class="K_sub">' + esc(m3 + ' m³') + '</span></div></div>' +
+      '<p class="K_sub">' + esc(b.last ? 'From the meter readings up to ' + CS.dayLabel(b.last) + ', at the latest rates.' : 'No meter reading in this bill yet.') + '</p></section>';
+  }
+  function A_loadBills() {
+    if (!state.access || state.billsAbsent) return;
+    var my = ++H_bSeq;
+    Promise.resolve().then(function () { return sb.rpc('today_bills_v1', { p_property_id: pid() }); }).then(function (r) {
+      if (my !== H_bSeq) return;
+      if (!r || r.error) { if (r && r.error && CS.rpcMissing(r.error)) state.billsAbsent = true; state.bills = null; return; }
+      state.bills = CS.billsToday(r.data);
+    }).catch(function () { if (my === H_bSeq) state.bills = null; }).then(function () { if (my === H_bSeq && current === 'home' && state.layout) renderHome(); });
   }
   // s109: owner/admin/finance: a payment request a staff member has sent stands out at the top of Today until it is paid.
   function A_peso(x) { return '₱' + (Number(x) || 0).toLocaleString('en-PH', { maximumFractionDigits: 2 }); }
@@ -617,7 +638,7 @@
     if (staff) {
       // Today, Turnover, the paid notice (under Turnover: Turnover and Slide to start never move when it lands), Notices, then the doors
       var laundry = CS.isLaundry(role()); // s110: no turnover, clean-done card, paid slots, checklist door or cleaning fee for the laundry role
-      body = '<div class="A_body">' + errBanner() + H_alertsCard() + A_turnTag() + PC_todayCard() + (laundry ? '' : A_utilBar()) + (wxTop ? wxCard : '') + S_sec('Guests') + todayCard() + nextCard() + (laundry ? '' : A_tierGuide()) + (laundry ? '' : S_sec('Turnover') + A_turnoverCard(true)) + (wxTop ? '' : wxCard) + (laundry ? '' : H_cleanDoneCard() + '<div id="slot-paid-notice" class="A_slot" hidden></div><div id="slot-owed" class="A_slot" hidden></div>') + K_invCard() + A_noticesCard() + (laundry ? A_signOutRow() : S_sec('Shortcuts') +
+      body = '<div class="A_body">' + errBanner() + H_alertsCard() + A_turnTag() + PC_todayCard() + (laundry ? '' : A_utilBar()) + A_billsCard() + (wxTop ? wxCard : '') + S_sec('Guests') + todayCard() + nextCard() + (laundry ? '' : A_tierGuide()) + (laundry ? '' : S_sec('Turnover') + A_turnoverCard(true)) + (wxTop ? '' : wxCard) + (laundry ? '' : H_cleanDoneCard() + '<div id="slot-paid-notice" class="A_slot" hidden></div><div id="slot-owed" class="A_slot" hidden></div>') + K_invCard() + A_noticesCard() + (laundry ? A_signOutRow() : S_sec('Shortcuts') +
         A_navCard('Work', row({ icon: 'cloud', title: 'Weather', sub: 'Today and the next few hours', href: '#weather' }) + doorRow('checklist', 'clip', 'Start or continue today’s turnover') +
           (LINKS.pay ? row({ icon: 'cash', title: 'Cleaning fee', sub: state.payHint || 'Ask for payment for your cleans and expenses', href: H_payUrl(), subId: 'pay-sub' }) : '') +
           row({ icon: 'calendar', title: 'Calendar', sub: 'Who is staying, who is next', href: '#calendar', count: n || '' }) +
@@ -632,7 +653,7 @@
       // 3.2: the row opens the shell's own #inbox (which falls back to the dashboard's conversations page when the module is not shipped)
       var inboxShown = CS.canSeeGuestContact(role()) && !state.noticesAbsent && (v ? inbox != null : state.noticesLoading);
       var BD = B_build(); // the board sits above the Turnover card while something blocks an arrival or a guest is waiting; otherwise under it
-      body = '<div class="A_body">' + errBanner() + H_alertsCard() + A_turnTag() + PC_todayCard() + A_payBanner() + A_utilBar() + (wxTop ? wxCard : '') + S_sec('Guests') + todayCard() + nextCard() + A_tierGuide() + (BD.top ? BD.html : '') + S_sec('Turnover') + A_turnoverCard(false) + (wxTop ? '' : wxCard) + H_cleanDoneCard() + K_invCard() + (BD.top ? '' : BD.html) + S_sec('Shortcuts') +
+      body = '<div class="A_body">' + errBanner() + H_alertsCard() + A_turnTag() + PC_todayCard() + A_payBanner() + A_utilBar() + A_billsCard() + (wxTop ? wxCard : '') + S_sec('Guests') + todayCard() + nextCard() + A_tierGuide() + (BD.top ? BD.html : '') + S_sec('Turnover') + A_turnoverCard(false) + (wxTop ? '' : wxCard) + H_cleanDoneCard() + K_invCard() + (BD.top ? '' : BD.html) + S_sec('Shortcuts') +
         A_navCard('Guests and bookings', (bk ? row({ icon: 'clip', title: 'Bookings to confirm', sub: 'Open the pending bookings', href: bk.href, external: bk.external, count: bk.count, countLabel: bk.n === 1 ? ' booking to confirm' : ' bookings to confirm' }) : '') +
           row({ icon: 'calendar', title: 'Calendar', sub: 'Stays, blocked nights, notices', href: '#calendar', count: n || '' }) +
           '<div id="slot-inbox"' + (inboxShown ? '' : ' hidden') + (inboxShown && !v ? ' style="min-height:64px"' : '') + '>' + (inboxShown && v ? row({ icon: 'chat', title: 'Inbox', sub: inbox ? inbox + ' open' : 'No open messages', href: '#inbox', count: inbox || '', countLabel: ' open messages' }) : '') + '</div>' +
@@ -1974,7 +1995,7 @@
       var box = $('H_mod-' + key); if (!box) return; box.innerHTML = '';
       H_mod.mounted = key; H_mod.sub = sub; var low = !!state.H_lowOnce; state.H_lowOnce = false; // read at mount: a redraw while the script loads must not eat the one-shot
       var bad = function () { if (H_mod.mounted === key) { H_mod.mounted = ''; H_mod.sub = ''; H_mod.n++; } if (current === key) H_fallback(key); };
-      try { var mr = window[m.global].mount(box, { client: DEMO && !m.demoClient ? null : sb, demo: DEMO, role: role(), sub: sub, low: low && key === 'stock', propertyId: pid(), houseTimes: A_houseT(), pushKey: H_pushKey, swReg: H_swReg, navigate: function (h) { location.hash = String(h).charAt(0) === '#' ? h : '#' + h; }, toast: toast, haptic: E_vibe, setTitle: function (t) { var h = el.querySelector && el.querySelector('.ttl'); if (h) h.textContent = t || m.title; }, onChange: function () { if (!DEMO) loadHome({ again: true }); } }); if (mr && typeof mr.then === 'function') mr.then(null, bad); } catch (e) { bad(); } // a module that throws leaves a screen that works, not a blank one
+      try { var mr = window[m.global].mount(box, { client: DEMO && !m.demoClient ? null : sb, demo: DEMO, role: role(), sub: sub, low: low && key === 'stock', propertyId: pid(), houseTimes: A_houseT(), pushKey: H_pushKey, swReg: H_swReg, navigate: function (h) { location.hash = String(h).charAt(0) === '#' ? h : '#' + h; }, toast: toast, haptic: E_vibe, faces: A_loadFaces, setTitle: function (t) { var h = el.querySelector && el.querySelector('.ttl'); if (h) h.textContent = t || m.title; }, onChange: function () { if (!DEMO) loadHome({ again: true }); } }); if (mr && typeof mr.then === 'function') mr.then(null, bad); } catch (e) { bad(); } // a module that throws leaves a screen that works, not a blank one
     }, function () { if (current === key && token === H_mod.n) H_fallback(key); });
   }
 
@@ -2322,7 +2343,7 @@
     });
   }
   function signOutTo(msg) {
-    clearTimeout(H_rpT); state.H_q = ''; state.H_offKey = ''; H_unmount(); H_resetModules(); H_histGen++; H_calReset(); H_alReset(); closeSheet(); dropPhotos(); state.replyRecent = []; state.cleanDone = null; state.payWait = 0; state.payReqs = null; state.reviewN = 0; B_gone = {}; state.bheads = false; state.bookingsOldest = ''; state.bconfirm = ''; state.bmsg = ''; state.progress = null; state.progressAbsent = false; H_idClose(); state.reply = null; var rb = $('rp-body'); if (rb) rb.innerHTML = ''; rpLive(''); state.payload = null; state.bookings = null; state.bookingsDone = false; state.noticesDone = false; state.notices = null; state.noticesAbsent = false; state.nadd = null; state.fbOpen = false; state.tasks = null; state.access = null; state.layout = null; state.month = null; state.error = ''; CS.rememberRole(store('sessionStorage'), '');
+    clearTimeout(H_rpT); state.H_q = ''; state.H_offKey = ''; H_unmount(); H_resetModules(); H_histGen++; H_calReset(); H_alReset(); closeSheet(); dropPhotos(); state.replyRecent = []; state.cleanDone = null; state.payWait = 0; state.payReqs = null; state.reviewN = 0; B_gone = {}; state.bheads = false; state.bookingsOldest = ''; state.bconfirm = ''; state.bmsg = ''; state.progress = null; state.progressAbsent = false; state.bills = null; state.billsAbsent = false; H_bSeq++; H_idClose(); state.reply = null; var rb = $('rp-body'); if (rb) rb.innerHTML = ''; rpLive(''); state.payload = null; state.bookings = null; state.bookingsDone = false; state.noticesDone = false; state.notices = null; state.noticesAbsent = false; state.nadd = null; state.fbOpen = false; state.tasks = null; state.access = null; state.layout = null; state.month = null; state.error = ''; CS.rememberRole(store('sessionStorage'), '');
     return sb.auth.signOut().catch(function () {}).then(function () { showSignin(msg); });
   }
   function showSignin(msg) {
@@ -2344,7 +2365,7 @@
       try { CS.assertNoMoney(r.data, { allowContact: CS.canSeeGuestContact(state.access && state.access.role) }); } catch (e) { state.payload = null; state.errorKind = 'blocked'; state.error = 'This page was blocked because the data carried an amount or a contact detail. Tell Lloyd.'; return; }
       if (!CS.canSeeGuestContact(state.access && state.access.role)) r.data.warnings = (r.data.warnings || []).filter(function (w) { return w.kind !== 'verifier'; });
       state.payload = r.data; state.loadedAt = Date.now(); state.error = ''; state.errorKind = '';
-      H_wxP = null; refreshWeather(); loadPayHint(); loadBookingsToConfirm(); B_loadReview(); A_loadNotices(); H_loadProgress();
+      H_wxP = null; refreshWeather(); loadPayHint(); A_loadBills(); loadBookingsToConfirm(); B_loadReview(); A_loadNotices(); H_loadProgress();
     }).catch(function (e) {
       state.errorKind = E_netErr(e) ? 'network' : 'server'; // "No connection" only when the network is the problem
       state.error = state.errorKind === 'network' ? (state.payload ? 'Live information needs a connection. Showing the last update.' : 'Live information needs a connection.') : (state.payload ? 'Could not update. Showing the last update.' : 'Could not update.');

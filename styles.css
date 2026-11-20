@@ -1293,6 +1293,16 @@ a.T_call { min-height: var(--touch); display: inline-flex; align-items: center; 
 .K_inv-t span { font: 400 var(--v5-t-label)/1.3 var(--font-ui); opacity: .85; }
 @media (min-width: 37.5rem) { .K_inv-row { grid-template-columns: repeat(auto-fit, minmax(9.5rem, 1fr)); } } /* s115: a narrow card (two-column Today at 720 px) drops to fewer tiles per line instead of a 19 px label column */
 /* end s110 kpi-inventory */
+/* s127 (Staff 3.4.42): the Today bills card. It uses the K_ names of kpi/K_kpi.css, which is not loaded on Today, so the few rules it needs are scoped to the card. */
+#T_bills { display: flex; flex-direction: column; gap: 8px; padding: 16px; }
+#T_bills .K_lab { font: 600 var(--v5-t-min)/1.2 var(--v5-font-ui); letter-spacing: .08em; text-transform: uppercase; color: var(--v5-ink-3); }
+#T_bills .K_sub { margin: 0; font-size: var(--v5-t-label); line-height: 1.45; color: var(--v5-ink-2); text-wrap: pretty; }
+#T_bills .K_two { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+#T_bills .K_two > div { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+#T_bills .K_two > div + div { padding-left: 16px; border-left: 1px solid var(--v5-line); }
+#T_bills .K_two i { font: 600 var(--v5-t-label)/1.2 var(--v5-font-ui); font-style: normal; color: var(--v5-ink-2); }
+#T_bills .K_two b { font: 400 var(--v5-t-num)/1.1 var(--v5-font-display); font-variant-numeric: tabular-nums; }
+#T_bills .K_two .K_e { color: var(--v5-gold-text); } #T_bills .K_two .K_w { color: var(--v5-chart-line); }
 /* ---- s110: tier tag with glyph, weather warnings, hourly strip, cleaner walk-through and thank-you ---- */
 .T_badge.p-tier-first { background: var(--v5-ok-w); color: var(--v5-ok-t); border-left-color: var(--v5-ok-t); }
 .T_badge { display: inline-flex; align-items: center; gap: 4px; min-width: 0; max-width: 100%; padding: 4px 8px; border-radius: 999px; border-left: 4px solid transparent; font: 600 var(--v5-t-label)/1.2 var(--font-ui); }

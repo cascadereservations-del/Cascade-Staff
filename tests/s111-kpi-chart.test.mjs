@@ -182,7 +182,7 @@ test('s111 release pins and tokens: version unchanged, chart tokens in all three
   const sty = read('styles.css'); const z = sty.slice(sty.indexOf('s111: the shared zoom viewer'), sty.indexOf('s111: the shared zoom viewer') + 900); assert.doesNotMatch(z, /#[0-9a-f]{3,6}\b|rgb\(|nowrap/i);
   const d = createDemo(); assert.equal(d.utility.nights_booked, d.admin.sold_nights, 'demo: nights booked equals the Admin occupancy nights'); assert.ok(!('kwh_per_night' in d.utility) && !('nights_month' in d.utility));
 });
-function createDemo() { const src = read('demo.js'); const m = /function kpiFixture\(r, today\) \{[\s\S]*?\n  \}\n/.exec(src); const fn = new Function('CS', m[0] + '; return kpiFixture;')(CS); return fn('owner', '2026-10-15'); }
+function createDemo() { const src = read('demo.js'); const m = /function kpiFixture\(r, today\) \{[\s\S]*?\n  function s127\([\s\S]*?\n  \}\n/.exec(src); const fn = new Function('CS', m[0] + '; return kpiFixture;')(CS); return fn('owner', '2026-10-15'); }
 
 // ---------------------------------------------------------------------------------------------- fix round r3 (M3, L2, L3)
 test('s111 r3 M3: the zoom viewer keeps Tab and Shift+Tab on its own buttons (disabled skipped), and Esc closes only the viewer, not the sheet under it', async () => {

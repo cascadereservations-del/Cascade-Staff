@@ -169,7 +169,28 @@
     if (r === 'owner' || r === 'admin') k.admin = { rate: { php_per_kwh: 11.25, effective_from: CS.addDays(today, -20), source: 'auto', source_url: 'https://www.facebook.com/socoteco2.EC/' }, last_reading_cost: 429.75, month_kwh_cost: 4635, supplies_month: 4950, supply_cost_per_turnover: 550, cleaning_pay_month: 6300,
       net_month: 38420, revenue_month: 61900, costs_month: 23480, occupancy: 0.73, sold_nights: 22, sellable_nights: 30, adr: 2814, direct_share: 0.41,
       target: { net_target: 30000, costs_basis: 24100, revenue_needed: 54100, adr: 2814, nights_in_month: 30, nights_on_books: 22, needed_occupancy: 0.64, needed_adr: 2459, set_by: null, set_at: CS.addDays(today, -6) + 'T03:00:00Z' } };
+    s127(k, r, today);
     return k;
+  }
+  // s127: utility bills, usage by month and by guest, as the contract says (docs/s127/CONTRACT.md). Invented names, hand-set numbers at the demo rate of 11.25. Money only in `admin`.
+  function cycleOf(today) { // the 21st to the 21st that holds today
+    var m0 = today.slice(0, 8) + '01', from = +today.slice(8, 10) >= 21 ? today.slice(0, 8) + '21' : CS.addDays(m0, -1).slice(0, 8) + '21', to = +today.slice(8, 10) >= 21 ? CS.addDays(m0, 31).slice(0, 8) + '21' : today.slice(0, 8) + '21';
+    return { from: from, to: to, dim: CS.daysBetween(from, to), last: CS.addDays(today, -1) };
+  }
+  function s127(k, r, today) {
+    var cy = cycleOf(today), days = Math.max(1, CS.daysBetween(cy.from, cy.last)), mk = function (n) { return new Date(Date.UTC(+today.slice(0, 4), +today.slice(5, 7) - 1 + n, 1)).toISOString().slice(0, 7); };
+    var KWH = [372, 380, null, 349, 380, 338], M3 = [5.9, 5.8, null, 6.2, 8.9, 5.5], chg = function (a, i) { for (var j = i - 1; j >= 0; j--) if (a[j] != null) return a[i] != null ? Math.round((a[i] / a[j] - 1) * 100) : null; return null; };
+    k.utility.usage_months = KWH.map(function (v, i) { var now = i === KWH.length - 1; return { month: mk(i - (KWH.length - 1)), kwh: v, m3: M3[i], kwh_change_pct: chg(KWH, i), m3_change_pct: chg(M3, i), forecast: now, kwh_so_far: now ? 214 : null, m3_so_far: now ? 3.5 : null }; });
+    if (!k.admin) return;
+    var stay = function (n, name, tier, nights, kwh, m3, path, box) { return { from: CS.addDays(CS.addDays(today, -n), -nights), to: CS.addDays(today, -n), nights: nights, kwh: kwh, m3: m3, cost_php: Math.round(kwh * 1125) / 100, guest_name: name, tier: tier, id_photo_path: path, id_face_box: box }; };
+    var box = { x: 0.056, y: 0.26, w: 0.27, h: 0.54, src: 'v' };
+    k.admin.bills = {
+      electric: { cycle_from: cy.from, cycle_to: cy.to, days: days, days_in_cycle: cy.dim, kwh: 383, rate: 11.25, fixed_php: 5.6, so_far_php: 4314.35, forecast_kwh: 409, forecast_php: 4606.85, per_day_kwh: 13.2, per_day_php: 148.5, last_reading_at: cy.last + 'T02:00:00Z' },
+      water: { cycle_from: cy.from, cycle_to: cy.to, days: days, m3: 7.2, so_far_php: 212, forecast_m3: 7.7, forecast_php: 212, per_day_m3: 0.25, min_php: 212, min_m3: 10, next_php: 23.05, next_upto: 20 } };
+    k.admin.rate.checked_at = today + 'T01:00:00Z'; k.admin.rate.effective_from = today.slice(0, 8) + '01'; k.admin.rate_year_avg = 10.78;
+    k.admin.rate_history = [11.25, 11.8, 11.65, 9.59, 11.16, 10].map(function (v, i, a) { return { month: mk(-i), php_per_kwh: v, change_pct: i < a.length - 1 ? Math.round((v / a[i + 1] - 1) * 1000) / 10 : null }; });
+    k.admin.water_rate = { min_php: 212, min_m3: 10, next_php: 23.05, next_upto: 20, source_url: 'https://gensanwater.gov.ph/water-rates/' };
+    k.admin.stays = [stay(1, 'Demo Guest One', 'returning', 1, 10, 0.11, 'demo/id-1', box), stay(2, 'Demo Guest Two', 'vip', 1, 11, 0.21, 'demo/id-1', box), stay(6, 'Demo Guest Three', null, 2, 37, 0.72, 'demo/id-1', null), stay(8, 'Demo Guest Four', 'regular', 4, 37, 0.22, null, null), stay(12, 'Demo Guest Five', null, 3, 25, 0.57, null, null)];
   }
 
   // ---- the stand-in for the Supabase client: same four calls the pages make, answered from the fixtures ---------------------------
@@ -198,6 +219,7 @@
         case 'staff_pay_candidates_v1': return done(X.pay);
         case 'staff_signin_list_v1': return done(X.signin);
         case 'kpi_tab_v1': return done(X.kpi);
+        case 'today_bills_v1': { var cb = cycleOf(X.home.today); return done({ since: cb.from, last_reading_at: cb.last + 'T02:00:00Z', electric: { php: 4314.35, kwh: 383 }, water: { php: 212, m3: 7.2 } }); } // s127: every role, like the live card
         case 'get_inventory_catalogue_v1': return done({ ok: true, items: X.items });
         case 'admin_report_blocks_v1': return admin_(view) ? done([{ reading_id: 'demo-reading-1', session_id: 'demo-s1', cleaner_name: 'Demo Cleaner', checkout_date: CS.addDays(X.home.today, -1), recorded_at: X.home.today + 'T02:00:00Z', typed_electric: 4310, typed_water: 812, prev_electric: 4272, prev_water: 805, photo_electric: 4301, photo_water: 812, photo_note_electric: 'Last digit unclear', photo_note_water: null, photo_path_electric: null, photo_path_water: null, resend_requested_at: null }]) : Promise.resolve({ data: null, error: { code: '42501', message: 'not authorized' } });
         case 'inventory_receipt_draft_v1': return done({ ok: true, draft: { id: args && args.p_draft_id || 'demo-draft', vendor: 'Demo Hardware', purchased_on: X.home.today, receipt_path: 'demo/receipt.jpg', status: 'draft', lines: [
