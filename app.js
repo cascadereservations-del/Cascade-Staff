@@ -20,7 +20,7 @@
     url: 'https://qkgfhsdppslwunarczeq.supabase.co',
     key: 'sb_publishable_JFuRYZ9csmQULcMRmHXDSg_Abo9UeCj',
     propertyId: '6ae230f4-c189-4547-84b1-cb6e0b2cc9bd',
-    version: '3.4.41'
+    version: '3.4.42'
   };
   var LINKS = {
     checklist: 'https://cascadereservations-del.github.io/CH-Cleaners-Checklist/',
@@ -208,7 +208,7 @@
   function A_faceTurn(img, d) {
     if (!img.naturalWidth) return;
     var raw = img.parentNode && img.parentNode.getAttribute && img.parentNode.getAttribute('data-facebox'), a = null; try { a = raw ? JSON.parse(raw) : null; } catch (e) { a = null; }
-    var px = Number(img.parentNode && img.parentNode.getAttribute && img.parentNode.getAttribute('data-facepx')) || A_FACE_PX; // s127: the key figures draw the same crop at 44 and 32 px
+    var px = Number(img.parentNode && img.parentNode.getAttribute && img.parentNode.getAttribute('data-facepx')) || A_FACE_PX;
     var f = CS.faceFrame(a ? { x: a[0], y: a[1], w: a[2], h: a[3], src: a[4] } : null, img.naturalWidth, img.naturalHeight, d, px); if (!f) return;
     img.style.width = f.w + 'px'; img.style.height = f.h + 'px'; img.style.left = f.left + 'px'; img.style.top = f.top + 'px'; img.style.transform = d ? 'rotate(' + d + 'deg)' : '';
   }
@@ -2120,7 +2120,7 @@
   // Runs once per device after sign-in (CS.phoneCheckDue, key cs_phone_check) and from More > This phone > Check this phone. Every row comes from a real probe
   // (CS.phoneCheckRows); Fix all runs the fixers in order from the one tap (CS.phoneFixPlan: alerts first, so the permission prompt rides the tap), then probes again.
   // The camera is opened only when its permission is 'prompt', and every track is stopped at once. Nothing changes Trust this device.
-  var PC_SHELL = 'cs-shell-v66'; // the service worker's cache for this version (sw.js CACHE_NAME; a test keeps them equal)
+  var PC_SHELL = 'cs-shell-v67'; // the service worker's cache for this version (sw.js CACHE_NAME; a test keeps them equal)
   var PC = { open: false, busy: false, rows: null, msg: '', camPerm: null };
   function PC_ls() { return store('localStorage'); }
   function PC_cameraPerm() {
