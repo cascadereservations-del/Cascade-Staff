@@ -55,7 +55,7 @@ test('Today card (live path): key time first, tier chip + line, important note w
   assert.match(h, /<p class="sub num T_when"><strong class="A_key">Out 17 Oct, 12:00 noon<\/strong> · 4 nights<\/p>/, "checks out later: the day is in the key, only the nights follow");
   assert.doesNotMatch(h, / · out /);
   assert.match(h, /<button class="T_chip T_c-regular" type="button" data-act="tiers-open" data-tier="regular"><svg[^>]*><\/svg><span>Regular · 3 stays<\/span><span class="sr">, open the guest tiers guide<\/span><\/button>/); assert.doesNotMatch(h, /pill p-tier-regular|T_line|T_ribbon/, 'one chip, no ribbon and no grey line'); assert.match(h, /aria-label="Perks to give"[^]*Up to 2 hours early or late free/);
-  assert.match(h, /<div class="T_key note-key">[\s\S]*<b aria-label="Importance 3 of 3">!!!<\/b> Reported a damage to the kettle/); assert.doesNotMatch(h, /Important:|Request:/); assert.match(h, /href="#calendar\/house">\+2 more notes<\/a>/);
+  assert.match(h, /<div class="T_key note-key">[\s\S]*<b role="img" aria-label="Importance 3 of 3">!!!<\/b> Reported a damage to the kettle/); assert.doesNotMatch(h, /Important:|Request:/); assert.match(h, /href="#calendar\/house">\+2 more notes<\/a>/);
   assert.match(h, /<p class="help T_ask">Asked about: directions, guest count<\/p>/);
   assert.doesNotMatch(h, /T_face/, 'no photo, no face');
   const none = await boot({ role: 'cleaner', hash: '#home', handlers: baseHandlers('cleaner', { staff_home_v1: homeOf(GUEST({ notes: null, notable: [] })) }) });

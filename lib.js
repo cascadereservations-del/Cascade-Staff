@@ -528,9 +528,20 @@
     return { date: date, notes: out, lone: !!m && !out.length };
   }
   // The chunks in order. A date typed alone on its line ("2026-01-02:" then the note on the next line) dates the next undated chunk, so the date is not lost.
+  // A lone date nothing consumes (the next chunk is dated or lone too, or none follows; in the card string a " || " boundary also ends it) stays as a plain note, so it is stored back byte for byte.
   function parseChunks(text, card) {
-    var pend = null, out = [];
-    noteChunks(text).forEach(function (c) { var g = parseChunk(c, card, pend); if (g.lone) pend = g.date; else if (g.notes.length) pend = null; out.push(g); });
+    var pend = null, pg = null, raw = '', out = [];
+    var flush = function () { if (pg) { pg.notes = [{ text: raw, date: null, mark: 0, level: 0, suggestion: false, addressed: false, addressedOn: null, readOnly: null }]; pg.lone = false; } pg = null; pend = null; };
+    String(text == null ? '' : text).split(' || ').forEach(function (seg) {
+      if (card) flush();
+      seg.split(/\r\n|\r|\n/).forEach(function (c) {
+        var g = parseChunk(c, card, pend);
+        if (g.lone) { flush(); pend = g.date; pg = g; raw = c.trim(); }
+        else if (g.notes.length) { if (/^\d{4}-\d{2}-\d{2}:/.test(c)) flush(); else { pg = null; pend = null; } }
+        out.push(g);
+      });
+    });
+    flush();
     return out;
   }
   // Notes in stored order; i is the stored position (the id the edit helpers take). opts.card flags the server-joined read-only chunks.
@@ -574,7 +585,7 @@
     var l = parseNoteList(stored), old = l[i]; if (!old) return String(stored || '');
     inp = inp || {};
     // Compare what the sheet holds with the stored note BEFORE any cleaning: nothing changed means the stored string is returned untouched.
-    var txt = String(inp.text == null ? '' : inp.text), edited = txt !== old.text, mk = Math.max(0, Math.min(3, inp.mark | 0));
+    var txt = String(inp.text == null ? '' : inp.text), edited = txt.trim() !== old.text, mk = Math.max(0, Math.min(3, inp.mark | 0));
     if (!edited && !!inp.suggestion === old.suggestion && mk === old.mark && (inp.date || null) === (old.date || null) && !!inp.addressed === old.addressed && (!inp.addressed || !inp.addressedOn || inp.addressedOn === old.addressedOn)) return String(stored || '');
     var n = noteInput(inp, noteCap(old), !edited); if (!n.text) return String(stored || '');
     if (n.addressed && old.addressed && !n.addressedOn) n.addressedOn = old.addressedOn; // still addressed: a bare [addressed] stays bare, only ticking it now stamps today

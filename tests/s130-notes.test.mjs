@@ -241,3 +241,24 @@ test('s130 fix1 F7: every piece of a turnover-report chunk is read-only on the c
   assert.deepEqual(CS.parseNoteList(t).map((n) => n.readOnly), [null, null, null, null, null]);
   assert.equal(CS.notesView(t, true).all.filter((n) => n.readOnly).length, 3);
 });
+
+test('s130 fix B: a lone date that nothing consumes is kept as a plain note and round-trips', () => {
+  const lvl = (s) => CS.notesEdit(s, 0, { text: 'Likes tea', mark: 2, date: null }, TODAY);
+  assert.equal(lvl('Likes tea || 2026-01-02:'), '!! Likes tea || 2026-01-02:', 'no next chunk');
+  const two = CS.parseNoteList('2026-01-02: \n2026-01-03: x');
+  assert.deepEqual(two.map((n) => [n.date, n.text]), [[null, '2026-01-02:'], ['2026-01-03', 'x']]);
+  assert.equal(CS.serializeNotes(two), '2026-01-02: || 2026-01-03: x', 'both dates kept');
+  const lone2 = CS.parseNoteList('2026-01-02:\n2026-01-03:');
+  assert.equal(lone2.length, 2); assert.deepEqual(lone2.map((n) => n.text), ['2026-01-02:', '2026-01-03:']);
+  const added = CS.notesAdd('2026-01-02:\n2026-01-03:', { text: 'New note' }, TODAY);
+  assert.equal(added, '2026-01-02: || 2026-01-03: || ' + TODAY + ': New note');
+  const vip = CS.parseNoteList('Likes tea || 2026-01-02: || VIP - repeat guest', { card: true });
+  assert.deepEqual(vip.map((n) => [n.text, n.date, n.readOnly]), [['Likes tea', null, null], ['2026-01-02:', null, null], ['VIP - repeat guest', null, 'vip']], 'the VIP row stays undated');
+  assert.deepEqual(CS.parseNoteList('2026-01-02:\nAC at 24').map((n) => [n.date, n.text]), [['2026-01-02', 'AC at 24']]);
+  assert.deepEqual(CS.parseNoteList('2026-01-02:\n\nAC at 24').map((n) => [n.date, n.text]), [['2026-01-02', 'AC at 24']]);
+});
+
+test('s130 fix C: a whitespace-only edit is not an edit', () => {
+  const s = 'AC|fan please';
+  assert.equal(CS.notesEdit(s, 0, { text: 'AC|fan please ', mark: 0 }, TODAY), s);
+});

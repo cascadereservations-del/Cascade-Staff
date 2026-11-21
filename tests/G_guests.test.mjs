@@ -1979,3 +1979,20 @@ test('G s130 fix1 F6: Add guest details does not append a preference already on 
   const c4 = prefClient('2026-10-01: Allergic to nuts'); const m4 = await toReviewWith(c4); m4.el.type('G_r_pref', 'Allergic to nuts and shellfish'); await clickA(m4.el, 'save-add'); await tick();
   assert.equal(lastSave(c4).stay_preferences, '2026-10-14: Allergic to nuts and shellfish', 'a longer text is not a duplicate');
 });
+
+test('G s130 fix A: a request that returns after being addressed is sent again; an open duplicate is not; the partial case keeps the typed case', async () => {
+  for (const [stored, typed] of [['2026-10-01: Late check-out [addressed 2026-10-02]', 'Late check-out'], ['Extra pillows requested [addressed]', 'Extra pillows requested']]) {
+    const cl = prefClient(stored); const { el } = await toReviewWith(cl); el.type('G_r_pref', typed); await clickA(el, 'save-add'); await tick();
+    assert.equal(lastSave(cl).stay_preferences, '2026-10-14: ' + typed, stored);
+  }
+  const c2 = prefClient('2026-10-01: Late check-out'); const m2 = await toReviewWith(c2); m2.el.type('G_r_pref', 'Late check-out'); await clickA(m2.el, 'save-add'); await tick();
+  assert.equal('stay_preferences' in lastSave(c2), false, 'an exact open duplicate is still skipped');
+  const c3 = prefClient('2026-10-01: Late check-out'); const m3 = await toReviewWith(c3); m3.el.type('G_r_pref', 'late check-out\nsuggestion: x'); await clickA(m3.el, 'save-add'); await tick();
+  assert.equal(lastSave(c3).stay_preferences, '2026-10-14: suggestion: x', 'typed case kept, only the date added');
+});
+
+test('G s130 fix D: a stored date that is not a real day is kept when only the importance changes', async () => {
+  const cl = notesClient('2026-02-30: Odd date note'); const { el } = await mount(cl, GID + '/notes');
+  await clickA(el, 'n-open', { i: '0' }); await tick(); el.type('G_n_date', ''); await clickA(el, 'n-level', { v: '2' }); await clickA(el, 'n-save'); await tick();
+  assert.equal(cl.saves.length, 1); assert.equal(cl.saves[0].p_patch.stay_preferences, '2026-02-30: !! Odd date note');
+});

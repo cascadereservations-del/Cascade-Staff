@@ -397,7 +397,7 @@
   function G_nMark(n) {
     if (n.addressed) return '<span class="N_lv N_lv0" aria-label="Addressed">' + G_ic('check') + '</span>';
     if (n.readOnly) return '<span class="N_lv N_lv0" aria-hidden="true">' + G_ic('note') + '</span>';
-    return '<span class="N_lv N_lv' + n.level + '"' + (n.level ? ' aria-label="Importance ' + n.level + ' of 3"' : ' aria-hidden="true"') + '>' + (n.level ? '!!!'.slice(0, n.level) : '&bull;') + '</span>';
+    return '<span class="N_lv N_lv' + n.level + '"' + (n.level ? ' role="img" aria-label="Importance ' + n.level + ' of 3"' : ' aria-hidden="true"') + '>' + (n.level ? '!!!'.slice(0, n.level) : '&bull;') + '</span>';
   }
   function G_nTags(n) {
     var dt = n.date ? root.CS.noteDateLabel(n.date) : '', from = n.readOnly ? 'from the guest record, not editable here' : '';
@@ -448,7 +448,11 @@
       (add ? '' : '<button class="btn btn-ghost btn-block" type="button" data-act="n-del" style="color:var(--danger)"' + G_off() + '>Delete note</button>') +
       '<button class="btn btn-ghost btn-block" type="button" data-act="n-cancel"' + (busy ? ' disabled' : '') + '>Cancel</button></div></div>';
   }
-  function G_readNote() { var s = S.nt.sheet; s.text = G_val('G_n_text'); if (G_q('G_n_date')) s.date = G_val('G_n_date'); }
+  function G_readNote() {
+    var s = S.nt.sheet, v; s.text = G_val('G_n_text');
+    if (G_q('G_n_date')) { v = G_val('G_n_date'); if (v === '' && s.date && !G_realDate(s.date)) v = s.date; s.date = v; } // a stored date that is not a real day shows blank in the date input: keep it unless the person typed another
+  }
+  function G_realDate(d) { return /^\d{4}-\d{2}-\d{2}$/.test(d) && G_iso(Date.parse(d + 'T00:00:00Z')) === d; }
   function G_noteStored() { var p = S.d && S.d.details || {}; return String(p.stay_preferences || ''); }
   function G_noteOpen(i) {
     var n = i < 0 ? null : root.CS.parseNoteList(G_noteStored())[i]; if (i >= 0 && !n) return;
@@ -660,11 +664,22 @@
   /** s130: the preferences to append, dated; null when empty or when every one is already a note on file (same text, trimmed, any case). The server's own duplicate check compares exact text, which the date prefix would defeat. */
   function G_newPrefs(text) {
     if (!text) return null;
-    var dated = G_datedNote(text), have = {}, CSx = root.CS, list = CSx.parseNoteList(dated), keep;
-    CSx.parseNoteList(S.d && S.d.details ? S.d.details.stay_preferences : '').forEach(function (n) { have[n.text.trim().toLowerCase()] = 1; });
-    keep = list.filter(function (n) { return !have[n.text.trim().toLowerCase()]; });
-    if (!keep.length) return null;
-    return keep.length === list.length ? dated : CSx.serializeNotes(keep.map(function (n) { n.date = n.date || G_today(); return n; }));
+    var dated = G_datedNote(text), have = {}, CSx = root.CS, dropped = false, pend = null, out = [];
+    CSx.parseNoteList(S.d && S.d.details ? S.d.details.stay_preferences : '').forEach(function (n) { if (!n.addressed) have[n.text.trim().toLowerCase()] = 1; }); // only OPEN notes count: a request that returns after being addressed is new
+    String(text).split(' || ').forEach(function (seg) {
+      seg.split(/\r\n|\r|\n/).forEach(function (c) {
+        var m = /^(\d{4}-\d{2}-\d{2}):\s*([\s\S]*)$/.exec(c), date = m ? m[1] : pend, body = m ? m[2] : c, kept;
+        if (m && !body.trim()) { pend = date; return; }
+        kept = body.split(' | ').filter(function (p) {
+          p = p.trim(); if (!p) return false;
+          var n = CSx.parseNoteList(p)[0], dup = !!n && !!have[n.text.trim().toLowerCase()]; if (dup) dropped = true; return !dup;
+        }).map(function (p) { return p.trim(); }); // the lines stay exactly as typed
+        if (body.trim()) pend = null;
+        if (kept.length) out.push((date || G_today()) + ': ' + kept.join(' | '));
+      });
+    });
+    if (!out.length) return null;
+    return dropped ? out.join(' || ') : dated;
   }
   /** What the sheet would send, or { error }. The server checks every field again. */
   function G_addBody(guestId, s, images, guestName, version) {

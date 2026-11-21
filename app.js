@@ -411,7 +411,7 @@
     // s109: the phone and the guest count moved to the fact grid (A_grid); Good to know keeps the notes
     if (!gk.notes.length && !facts.length) return '';
     return '<div class="T_gtk" role="group" aria-label="Good to know"><span class="cap up">Good to know</span>' + gk.notes.map(function (n) {
-      return '<div class="T_key note-key">' + ICON('alert', 's16') + '<span class="T_nt">' + (n.mark ? '<b aria-label="Importance ' + n.mark.length + ' of 3">' + n.mark + '</b> ' : '') + esc(n.p) + '</span></div>'; }).join('') +
+      return '<div class="T_key note-key">' + ICON('alert', 's16') + '<span class="T_nt">' + (n.mark ? '<b role="img" aria-label="Importance ' + n.mark.length + ' of 3">' + n.mark + '</b> ' : '') + esc(n.p) + '</span></div>'; }).join('') +
       (gk.notes.length && gk.more > 0 ? '<a class="T_more" href="' + href + '">+' + gk.more + ' more ' + (gk.more === 1 ? 'note' : 'notes') + '</a>' : '') + (facts.length ? '<div class="T_facts">' + facts.join('') + '</div>' : '') + '</div>';
   }
   // The hero (photo, wordmark, pill, greeting) is built once; a redraw patches only the greeting and the buttons, so the photo is not decoded again and focus stays put.
@@ -709,7 +709,7 @@
   function N_mark(n) {
     if (n.addressed) return '<span class="N_lv N_lv0" aria-label="Addressed">' + ICON('check', 's16') + '</span>';
     if (n.readOnly) return '<span class="N_lv N_lv0" aria-hidden="true">' + ICON('note', 's16') + '</span>';
-    return '<span class="N_lv N_lv' + n.level + '"' + (n.level ? ' aria-label="Importance ' + n.level + ' of 3"' : ' aria-hidden="true"') + '>' + (n.level ? '!!!'.slice(0, n.level) : '&bull;') + '</span>';
+    return '<span class="N_lv N_lv' + n.level + '"' + (n.level ? ' role="img" aria-label="Importance ' + n.level + ' of 3"' : ' aria-hidden="true"') + '>' + (n.level ? '!!!'.slice(0, n.level) : '&bull;') + '</span>';
   }
   function N_tags(n) {
     var from = n.readOnly ? (n.readOnly === 'turnover' ? 'from the cleaning report, not editable here' : 'from the guest record, not editable here') : '', dt = n.date ? CS.noteDateLabel(n.date) : '';
