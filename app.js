@@ -20,7 +20,7 @@
     url: 'https://qkgfhsdppslwunarczeq.supabase.co',
     key: 'sb_publishable_JFuRYZ9csmQULcMRmHXDSg_Abo9UeCj',
     propertyId: '6ae230f4-c189-4547-84b1-cb6e0b2cc9bd',
-    version: '3.4.46'
+    version: '3.4.47'
   };
   var LINKS = {
     checklist: 'https://cascadereservations-del.github.io/CH-Cleaners-Checklist/',
@@ -705,6 +705,19 @@
   function loadingBlock() { return '<div class="skel T_sk1"></div><div class="skel T_sk2"></div><div class="skel T_sk3"></div><div class="skel T_sk3"></div>'; }
 
   // ---------------------------------------------------------------- guest card (Guest Calendar Info)
+  // s130 notes (spec 4): the level is a text mark (never colour alone) with an aria-label; an addressed note shows a check; a server-joined row (turnover report, VIP) is read-only.
+  function N_mark(n) {
+    if (n.addressed) return '<span class="N_lv N_lv0" aria-label="Addressed">' + ICON('check', 's16') + '</span>';
+    if (n.readOnly) return '<span class="N_lv N_lv0" aria-hidden="true">' + ICON('note', 's16') + '</span>';
+    return '<span class="N_lv N_lv' + n.level + '"' + (n.level ? ' aria-label="Importance ' + n.level + ' of 3"' : ' aria-hidden="true"') + '>' + (n.level ? '!!!'.slice(0, n.level) : '&bull;') + '</span>';
+  }
+  function N_tags(n) {
+    var from = n.readOnly ? (n.readOnly === 'turnover' ? 'from the cleaning report, not editable here' : 'from the guest record, not editable here') : '', dt = n.date ? CS.noteDateLabel(n.date) : '';
+    return '<span class="N_tags"><span class="help num">' + esc(dt + (dt && from ? ' · ' : '') + from) + '</span>' + (n.suggestion ? '<span class="pill p-brand">Guest suggestion</span>' : '') + (n.addressed ? '<span class="pill p-ok">Addressed' + (n.addressedOn ? ' ' + esc(CS.noteDateLabel(n.addressedOn)) : '') + '</span>' : '') + '</span>';
+  }
+  function N_item(n, extra) {
+    return '<li class="N_it' + (n.level && !n.addressed ? ' N_key' : '') + (n.addressed ? ' N_done' : '') + (extra ? ' N_x' : '') + '">' + N_mark(n) + '<div><p class="N_tx N_clamp">' + esc(n.text) + '</p>' + N_tags(n) + '</div></li>';
+  }
   function guestBlock(g, kind) {
     var label = kind === 'house' ? 'In the house' : 'Next arrival';
     var st = kind === 'house' ? pill('ok', 'check', g.checkin_date === state.payload.today ? 'Arrived today' : 'Checked in') : pill('info', 'info', 'Arrives ' + CS.dayLabel(g.checkin_date));
@@ -716,14 +729,14 @@
       '<p class="sub num" style="margin:8px 0 0">' + esc(datesLine(g)) + '</p>' + (earlier ? '<p class="help num" style="margin:2px 0 0">' + esc(earlier) + '</p>' : '') + contactBlock(g) +
       H_readyBlock(g.arrival_ready, g, true) + (canAddDetails() && g.uid ? '<a class="btn btn-secondary btn-sm" href="./guest/#' + encodeURIComponent(g.uid) + '" style="margin-top:12px">' + ICON('idcard', 's16') + 'Add guest details</a>' : '') +
       '</div>'; // s120: no Open guest button in this release (not in the approved mockup); the Guests tile on Today is the way in
-    var groups = CS.parseNotes(g.notes), notes = '';
-    if (groups.length) {
-      notes = '<div class="card glass"><h3 class="hd">Notes from earlier stays</h3><div style="margin-top:10px">' + groups.map(function (gr) {
-        return '<div class="notegroup">' + (gr.date ? '<p class="help num" style="margin-bottom:4px">' + esc(CS.dayLabel(gr.date) + ' ' + gr.date.slice(0, 4)) + '</p>' : '') +
-          '<ul class="notes">' + gr.points.map(function (x) { return x.rank <= 1 ? '<li class="note-key">' + ICON('alert') + '<span><b>' + (x.rank === 0 ? 'Important:' : 'Request:') + '</b> ' + esc(x.p) + '</span></li>' : '<li>' + ICON('note') + '<span>' + esc(x.p) + '</span></li>'; }).join('') + '</ul></div>';
-      }).join('') + '</div></div>';
+    var nv = CS.notesView(g.notes, true), notes = '';
+    if (nv.total) {
+      var nOpen = !!(state.notesOpen && state.notesOpen[kind]), nEdit = canAddDetails() && /^[0-9a-f-]{36}$/i.test(String(g.guest_id || ''));
+      notes = '<div class="card glass N_paper N_card" data-open="' + (nOpen ? 1 : 0) + '"><div class="row-between"><h3 class="hd">Notes</h3>' + (nEdit ? '<a class="btn btn-ghost btn-sm" href="#guests/' + esc(g.guest_id) + '/notes" style="margin:-10px -12px -10px 0">Edit notes</a>' : '') + '</div>' +
+        '<ul class="N_list">' + nv.all.map(function (n, i) { return N_item(n, i >= CS.NOTE_SHOW); }).join('') + '</ul>' +
+        (nv.button ? '<button class="btn btn-secondary btn-block N_more" type="button" data-act="notes-toggle" data-key="' + kind + '" data-total="' + nv.total + '" aria-expanded="' + nOpen + '">' + (nOpen ? 'Show fewer' : 'Show all ' + nv.total + ' notes') + '</button>' : '') + '</div>';
     } else if (g.repeat === true) {
-      notes = '<div class="card"><h3 class="hd">Notes from earlier stays</h3><p class="sub" style="margin-top:8px">Nothing was noted last time.</p></div>';
+      notes = '<div class="card"><h3 class="hd">Notes</h3><p class="sub" style="margin-top:8px">Nothing was noted last time.</p></div>';
     }
     // Owner/admin: the empty box opens Add guest details in ID mode (take or choose the guest's own ID photo; D-320.5).
     var addId = canAddDetails() && g.uid ? './guest/?for=id#' + encodeURIComponent(g.uid) : '';
@@ -2148,7 +2161,7 @@
   // Runs once per device after sign-in (CS.phoneCheckDue, key cs_phone_check) and from More > This phone > Check this phone. Every row comes from a real probe
   // (CS.phoneCheckRows); Fix all runs the fixers in order from the one tap (CS.phoneFixPlan: alerts first, so the permission prompt rides the tap), then probes again.
   // The camera is opened only when its permission is 'prompt', and every track is stopped at once. Nothing changes Trust this device.
-  var PC_SHELL = 'cs-shell-v71'; // the service worker's cache for this version (sw.js CACHE_NAME; a test keeps them equal)
+  var PC_SHELL = 'cs-shell-v72'; // the service worker's cache for this version (sw.js CACHE_NAME; a test keeps them equal)
   var PC = { open: false, busy: false, rows: null, msg: '', camPerm: null };
   function PC_ls() { return store('localStorage'); }
   function PC_cameraPerm() {
@@ -2665,6 +2678,7 @@
     else if (a === 'whatsnew') openSheet('news', 'news');
     else if (a === 'bill-proof') A_billProof(t.getAttribute('data-id'));
     else if (a === 'tiers-open') { var tk = t.getAttribute('data-tier'); openSheet('tiers', /^(first|returning|regular|vip)$/.test(tk || '') ? tk : ''); }
+    else if (a === 'notes-toggle') { var nk = t.getAttribute('data-key') === 'house' ? 'house' : 'next', no = !(state.notesOpen && state.notesOpen[nk]), nc = t.closest && t.closest('.N_card'); (state.notesOpen || (state.notesOpen = {}))[nk] = no; if (nc) nc.setAttribute('data-open', no ? '1' : '0'); t.setAttribute('aria-expanded', String(no)); t.textContent = no ? 'Show fewer' : 'Show all ' + (+t.getAttribute('data-total') || '') + ' notes'; } // s130: the card keeps every note in the page; a shut card hides all but the first 4 and clamps long ones
     else if (a === 'fb-show') { state.fbOpen = true; renderCalendar(); }
     else if (a === 'fb-hide') { state.fbOpen = false; renderCalendar(); }
     else if (a === 'notice-add-open') { if (CS.canSeeGuestContact(role()) && state.notices && !state.noticesAbsent) { state.nadd = { type: 'water', title: '', date: t.getAttribute('data-date') || '', start: '', hours: '', detail: '', err: '', busy: false }; openSheet('nadd', 'notice-add-open'); } }

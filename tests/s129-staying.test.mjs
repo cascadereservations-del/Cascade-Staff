@@ -1,4 +1,4 @@
-// s129 (Staff 3.4.46, D-390): "Who is staying" fills itself from the guest record: booker, typed names, record companions.
+// s129 (Staff 3.4.47, D-390): "Who is staying" fills itself from the guest record: booker, typed names, record companions.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { CS, D, read, boot, HOMEWITH, baseHandlers, stayRow, TODAY } from './_a_harness.mjs';
@@ -96,8 +96,8 @@ test('CSS: the staying block wraps long names, the Change control has its own co
   const app = read('app.js'); assert.doesNotMatch(app, /S_person|S_mk|class="S_line"/);
 });
 
-test('release pins: 3.4.46 and cs-shell-v71', () => {
-  assert.equal(JSON.parse(read('package.json')).version, '3.4.46'); assert.match(read('app.js'), /version: '3\.4\.46'/); assert.match(read('sw.js'), /CACHE_NAME = 'cs-shell-v71'/); assert.match(read('app.js'), /var PC_SHELL = 'cs-shell-v71';/);
+test('release pins: 3.4.47 and cs-shell-v72', () => {
+  assert.equal(JSON.parse(read('package.json')).version, '3.4.47'); assert.match(read('app.js'), /version: '3\.4\.47'/); assert.match(read('sw.js'), /CACHE_NAME = 'cs-shell-v72'/); assert.match(read('app.js'), /var PC_SHELL = 'cs-shell-v72';/);
 });
 
 test('F2: no booker name, nothing typed, companions on record - the first companion is highlighted, the rest follow, no Add link', async () => {

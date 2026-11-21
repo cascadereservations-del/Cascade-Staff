@@ -70,7 +70,7 @@ test('the sheet calls the two RPCs with the agreed arguments; the demo sends not
 test('demo: sample staying data on both stays; release pins', async () => {
   const r = await D.client('owner', new Date('2026-10-15T04:30:00Z')).rpc('staff_home_v1');
   assert.match(r.data.current_guest.staying.names, /Demo Guest One/); assert.equal(r.data.next_guest.staying.names, ''); assert.deepEqual(r.data.next_guest.companions, [{ name: 'Demo Companion Three', has_photo: false }]); assert.match(r.data.next_guest.staying.suggestion, /Demo Guest Two/);
-  assert.equal(JSON.parse(read('package.json')).version, '3.4.46'); assert.match(read('app.js'), /version: '3.4.46'/); assert.match(read('sw.js'), /CACHE_NAME = 'cs-shell-v71'/);
+  assert.equal(JSON.parse(read('package.json')).version, '3.4.47'); assert.match(read('app.js'), /version: '3.4.47'/); assert.match(read('sw.js'), /CACHE_NAME = 'cs-shell-v72'/);
 });
 
 // ---- fix round: roles, error mapping, length, hostile text

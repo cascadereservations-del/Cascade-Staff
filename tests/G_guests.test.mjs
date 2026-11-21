@@ -257,7 +257,7 @@ test('G: the record reads explicit columns (never the ID number), companions by 
   assert.ok(prof.some((x) => x[0] === 'eq' && x[1] === 'guest_id' && x[2] === GID));
   assert.deepEqual(cl.calls[0], ['list_guest_companions_v1', { p_guest_id: GID }]);
   assert.deepEqual(cl.fcalls[0], ['staff-guest-details', { action: 'context', guest_id: GID }]);
-  assert.match(el.html, /Ana Maria Reyes/); assert.match(el.html, /Quiet room/); assert.match(el.html, /anniversary/);
+  assert.match(el.html, /Ana Maria Reyes/); assert.match(el.html, /1 on file/); assert.match(el.html, /anniversary/);
   assert.match(el.html, /20 Oct 1990/); assert.match(el.html, /Birthday in 6 days/);
   assert.match(el.html, /Add from text, screenshot or photo/);
   assert.match(el.html, /Guest ID/); assert.match(el.html, /ID on file/); assert.match(el.html, /Ben Cruz/);
@@ -288,14 +288,14 @@ test('G: edit saves through save_guest_profile_v1 with only the changed keys, th
   const { el, toasts } = await mount(cl, GID);
   await clickA(el, 'edit');
   assert.match(el.html, /Contact number/); assert.match(el.html, /value="Updated in the Staff app"/);
-  setNodes(el, { G_f_phone: '0917 555 0000', G_f_bday: '1990-10-20', G_f_pref: 'Quiet room\nLate arrival', G_f_tags: 'Anniversary, baby', G_f_reason: 'Guest asked on Messenger' });
+  setNodes(el, { G_f_phone: '0917 555 0000', G_f_bday: '1990-10-20', G_f_tags: 'Anniversary, baby', G_f_reason: 'Guest asked on Messenger' });
   await clickA(el, 'save-edit'); await tick();
   const save = cl.calls.find((c) => c[0] === 'save_guest_profile_v1');
-  assert.deepEqual(save[1], { p_guest_id: GID, p_patch: { contact_number: '0917 555 0000', stay_preferences: 'Quiet room\nLate arrival', tags: ['anniversary', 'baby'] }, p_expected_version: 4, p_reason: 'Guest asked on Messenger' });
-  assert.match(el.html, /Saved\. Changed: phone, preferences, tags\./);
+  assert.deepEqual(save[1], { p_guest_id: GID, p_patch: { contact_number: '0917 555 0000', tags: ['anniversary', 'baby'] }, p_expected_version: 4, p_reason: 'Guest asked on Messenger' });
+  assert.match(el.html, /Saved\. Changed: phone, tags\./);
   assert.deepEqual(toasts, ['Saved']);
   // the next edit uses the version the server returned (5)
-  await clickA(el, 'edit'); setNodes(el, { G_f_phone: '0917 555 0000', G_f_bday: '1990-10-21', G_f_pref: 'Quiet room\nLate arrival', G_f_tags: 'anniversary, baby', G_f_reason: 'Birthday fix' });
+  await clickA(el, 'edit'); setNodes(el, { G_f_phone: '0917 555 0000', G_f_bday: '1990-10-21', G_f_tags: 'anniversary, baby', G_f_reason: 'Birthday fix' });
   await clickA(el, 'save-edit'); await tick();
   assert.equal(cl.calls.filter((c) => c[0] === 'save_guest_profile_v1')[1][1].p_expected_version, 5);
 });
@@ -304,12 +304,12 @@ test('G: an untouched edit sends nothing; a bad reason or future birthday is ref
   const cl = detailClient();
   const { el } = await mount(cl, GID);
   await clickA(el, 'edit');
-  setNodes(el, { G_f_phone: '09171234567', G_f_bday: '1990-10-20', G_f_pref: 'Quiet room', G_f_tags: 'anniversary', G_f_reason: 'Updated in the Staff app' });
+  setNodes(el, { G_f_phone: '09171234567', G_f_bday: '1990-10-20', G_f_tags: 'anniversary', G_f_reason: 'Updated in the Staff app' });
   await clickA(el, 'save-edit'); await tick();
   assert.equal(cl.calls.filter((c) => c[0] === 'save_guest_profile_v1').length, 0);
   assert.match(el.html, /Nothing was changed/);
   await clickA(el, 'edit');
-  setNodes(el, { G_f_phone: '09171234567', G_f_bday: '2026-10-15', G_f_pref: 'Quiet room', G_f_tags: 'anniversary', G_f_reason: 'ok then' });
+  setNodes(el, { G_f_phone: '09171234567', G_f_bday: '2026-10-15', G_f_tags: 'anniversary', G_f_reason: 'ok then' });
   await clickA(el, 'save-edit');
   assert.match(el.html, /not in the future/);
   setNodes(el, { G_f_bday: '1990-10-20', G_f_reason: 'x' });
@@ -321,7 +321,7 @@ test('G: an untouched edit sends nothing; a bad reason or future birthday is ref
 test('G: a stale version keeps the form and says who to reload for; no overwrite happens', async () => {
   const cl = detailClient({ rpcs: { list_guest_companions_v1: () => ({ data: [], error: null }), save_guest_profile_v1: () => ({ data: null, error: { code: '40001', message: 'stale version: profile changed since it was loaded' } }) } });
   const { el } = await mount(cl, GID);
-  await clickA(el, 'edit'); setNodes(el, { G_f_phone: '0999', G_f_bday: '1990-10-20', G_f_pref: 'Quiet room', G_f_tags: 'anniversary', G_f_reason: 'Phone fix' });
+  await clickA(el, 'edit'); setNodes(el, { G_f_phone: '0999', G_f_bday: '1990-10-20', G_f_tags: 'anniversary', G_f_reason: 'Phone fix' });
   await clickA(el, 'save-edit'); await tick();
   assert.match(el.html, /Someone else changed this guest/); assert.match(el.html, /Contact number/); assert.match(el.html, /value="0999"|0999/);
 });
@@ -344,7 +344,7 @@ test('G: Add from text: extract body, review sheet, save body with expected_vers
   saveStatus = 207;
   await clickA(el, 'save-add'); await tick();
   const sv = cl.fcalls.filter((c) => c[1].action === 'save').pop()[1];
-  assert.deepEqual(sv, { action: 'save', guest_id: GID, reason: 'From the chat', expected_version: 4, phone: '09175550000', stay_preferences: 'Allergic to nuts', birthday: '1992-03-04', tags: ['anniversary', 'nuts'], companions: ['Carla Dizon'] });
+  assert.deepEqual(sv, { action: 'save', guest_id: GID, reason: 'From the chat', expected_version: 4, phone: '09175550000', stay_preferences: '2026-10-14: Allergic to nuts', birthday: '1992-03-04', tags: ['anniversary', 'nuts'], companions: ['Carla Dizon'] });
   assert.match(el.html, /Companion added\./); assert.match(el.html, /The details were changed by someone else/);
 });
 
@@ -1040,20 +1040,20 @@ test('G U6: while Add from text saves, a second Save, Back and Cancel do nothing
   release(); await tick();
   assert.match(el.html, /Check before saving/); assert.doesNotMatch(el.html, /\sreadonly/); assert.equal(el.val('G_r_pref'), 'Allergic to nuts and shellfish');
   await clickA(el, 'save-add'); await tick();
-  assert.equal(nFn(cl, 'save'), 2); assert.equal(cl.fcalls.filter((c) => c[1].action === 'save').pop()[1].stay_preferences, 'Allergic to nuts and shellfish'); assert.match(el.html, /Details saved\./);
+  assert.equal(nFn(cl, 'save'), 2); assert.equal(cl.fcalls.filter((c) => c[1].action === 'save').pop()[1].stay_preferences, '2026-10-14: Allergic to nuts and shellfish'); assert.match(el.html, /Details saved\./);
 });
 
 test('G U6: while Edit details saves, its fields and the VIP tick are read-only, Cancel and a second Save do nothing; a failure unlocks them with the text intact', async () => {
   const [gate, release] = gateOf(); let n = 0;
   const cl = detailClient({ rpcs: { list_guest_companions_v1: () => ({ data: COMPS, error: null }), save_guest_profile_v1: () => (n++ === 0 ? gate.then(() => ({ data: null, error: { code: '42501', message: 'permission denied' } })) : { data: { ok: true, version: 5 }, error: null }) } });
   const { M, el } = await mount(cl, GID);
-  await clickA(el, 'edit'); el.type('G_f_phone', '0999 typed'); el.type('G_f_pref', 'Typed note'); await clickA(el, 'save-edit'); await tick();
-  for (const id of ['G_f_phone', 'G_f_bday', 'G_f_pref', 'G_f_tags', 'G_f_reason']) assert.match(el.html, new RegExp('id="' + id + '"[^>]*\\sreadonly'), id);
+  await clickA(el, 'edit'); el.type('G_f_phone', '0999 typed'); await clickA(el, 'save-edit'); await tick();
+  for (const id of ['G_f_phone', 'G_f_bday', 'G_f_tags', 'G_f_reason']) assert.match(el.html, new RegExp('id="' + id + '"[^>]*\\sreadonly'), id);
   assert.match(el.html, /data-act="vip"[^>]*\sdisabled/); assert.ok(dis(el, 'save-edit') && dis(el, 'edit-cancel'));
   await clickA(el, 'save-edit'); await clickA(el, 'edit-cancel'); await clickA(el, 'vip'); await tick();
   assert.equal(nCalls(cl, 'save_guest_profile_v1'), 1); assert.ok(M._state().edit, 'Cancel did nothing'); assert.equal(M._state().edit.vip, false);
   release(); await tick();
-  assert.doesNotMatch(el.html, /\sreadonly/); assert.equal(el.val('G_f_phone'), '0999 typed'); assert.equal(el.val('G_f_pref'), 'Typed note'); assert.match(el.html, /not allowed|permission/i);
+  assert.doesNotMatch(el.html, /\sreadonly/); assert.equal(el.val('G_f_phone'), '0999 typed'); assert.match(el.html, /not allowed|permission/i);
   await clickA(el, 'save-edit'); await tick(); assert.equal(nCalls(cl, 'save_guest_profile_v1'), 2); assert.match(el.html, /Saved\. Changed/);
 });
 
@@ -1233,8 +1233,8 @@ test('G U7: a lost answer to Save details locks Save, keeps the typed text, says
 test('G U7: a version conflict while editing locks Save the same way and keeps the text; Cancel reloads', async () => {
   const cl = detailClient({ rpcs: { list_guest_companions_v1: () => ({ data: COMPS, error: null }), save_guest_profile_v1: () => ({ data: null, error: { code: '40001', message: 'stale version' } }) } });
   const { el } = await mount(cl, GID);
-  await clickA(el, 'edit'); el.type('G_f_pref', 'Typed note'); await clickA(el, 'save-edit'); await tick();
-  assert.match(el.html, /Someone else changed this guest\./); assert.match(el.html, COPYRE); assert.ok(dis(el, 'save-edit')); assert.equal(el.val('G_f_pref'), 'Typed note');
+  await clickA(el, 'edit'); el.type('G_f_phone', '0999 typed'); await clickA(el, 'save-edit'); await tick();
+  assert.match(el.html, /Someone else changed this guest\./); assert.match(el.html, COPYRE); assert.ok(dis(el, 'save-edit')); assert.equal(el.val('G_f_phone'), '0999 typed');
   await clickA(el, 'edit-cancel'); await tick(); assert.equal(nCalls(cl, 'list_guest_companions_v1'), 2); assert.ok(ena(el, 'edit'));
 });
 
@@ -1860,4 +1860,69 @@ test('G U11 mutant: landed stays true when a later retry saves nothing, so Cance
   let n = 0; const cl = reviewClient(() => (n++ === 0 ? part1() : { status: 207, j: { ok: false, saved: [{ what: 'id_photo', ok: false, reason: 'upload_failed' }] } }), TWO);
   const { M, el } = await toReviewWith(cl); await clickA(el, 'save-add'); await tick(); await clickA(el, 'save-add'); await tick();
   assert.equal(n, 2); assert.ok(M._state().add.landed); assert.ok(!/data-act="add-back"/.test(el.html)); assert.match(el.html, /data-act="add-cancel"/);
+});
+
+// ------------------------------------------------------------------------------------------------ s130: the Edit notes screen
+const NOTED = '2026-10-10: !!! Allergic to nuts || 2026-10-12: Late arrival || 2026-09-01: Suggestion: a kettle';
+const notesClient = (stored = NOTED, saveFn = null) => { const saves = []; const c = detailClient({ tables: { guests: { data: GUEST, error: null }, guest_profile_details: { data: { ...PROFILE, stay_preferences: stored }, error: null } },
+  rpcs: { list_guest_companions_v1: () => ({ data: COMPS, error: null }), save_guest_profile_v1: (a) => { saves.push(plain(a)); return saveFn ? saveFn(a) : { data: { ok: true, version: 5 }, error: null }; } } }); c.saves = saves; return c; };
+
+test('G s130: the notes screen lists most important first and the card is notepaper', async () => {
+  const { el } = await mount(notesClient(), GID + '/notes');
+  assert.match(el.html, /Add a note/); assert.match(el.html, /N_paper/);
+  assert.ok(el.html.indexOf('Allergic to nuts') < el.html.indexOf('Late arrival'), 'level 3 first');
+  assert.match(el.html, /aria-label="Importance 3 of 3"/);
+  assert.match(el.html, /Guest suggestion/);
+});
+
+test('G s130: add saves only stay_preferences with the loaded version and the reason Note added', async () => {
+  const cl = notesClient(); const { el } = await mount(cl, GID + '/notes');
+  await clickA(el, 'n-add'); await tick();
+  assert.match(el.html, /id="G_n_text"/); assert.match(el.html, /role="checkbox"[^>]*aria-checked="false"|aria-checked="false"[^>]*role="checkbox"/);
+  el.type('G_n_text', 'Needs a crib'); await clickA(el, 'n-level', { v: '2' }); await clickA(el, 'n-save'); await tick();
+  assert.equal(cl.saves.length, 1);
+  assert.deepEqual(Object.keys(cl.saves[0].p_patch), ['stay_preferences']);
+  assert.equal(cl.saves[0].p_expected_version, 4); assert.equal(cl.saves[0].p_reason, 'Note added');
+  assert.equal(cl.saves[0].p_patch.stay_preferences, NOTED + ' || 2026-10-14: !! Needs a crib');
+});
+
+test('G s130: saving a note without a change writes nothing', async () => {
+  const cl = notesClient(); const { el } = await mount(cl, GID + '/notes');
+  await clickA(el, 'n-open', { i: '1' }); await tick(); await clickA(el, 'n-save'); await tick();
+  assert.equal(cl.saves.length, 0); assert.match(el.html, /Nothing was changed/);
+});
+
+test('G s130: an empty note and a future date are refused before any call', async () => {
+  const cl = notesClient(); const { el } = await mount(cl, GID + '/notes');
+  await clickA(el, 'n-add'); await tick(); await clickA(el, 'n-save'); await tick();
+  assert.match(el.html, /Write the note first/); assert.equal(cl.saves.length, 0);
+  el.type('G_n_text', 'x'); el.type('G_n_date', '2026-12-01'); await clickA(el, 'n-save'); await tick();
+  assert.match(el.html, /not in the future/); assert.equal(cl.saves.length, 0);
+});
+
+test('G s130: delete, then Undo writes the exact previous string back with the reason Note restored', async () => {
+  const cl = notesClient(); const { el } = await mount(cl, GID + '/notes');
+  await clickA(el, 'n-open', { i: '1' }); await tick(); await clickA(el, 'n-del'); await tick();
+  assert.equal(cl.saves[0].p_reason, 'Note deleted'); assert.equal(cl.saves[0].p_patch.stay_preferences, '2026-10-10: !!! Allergic to nuts || 2026-09-01: Suggestion: a kettle');
+  assert.match(el.html, /Note deleted\./); assert.match(el.html, /data-act="n-undo"/);
+  await clickA(el, 'n-undo'); await tick();
+  assert.equal(cl.saves[1].p_reason, 'Note restored'); assert.equal(cl.saves[1].p_patch.stay_preferences, NOTED);
+  assert.equal(cl.saves[1].p_expected_version, 5);
+});
+
+test('G s130: a stale version reloads the screen and says Someone else changed these notes', async () => {
+  const cl = notesClient(NOTED, () => ({ data: null, error: { code: '40001', message: 'stale version' } })); const { el } = await mount(cl, GID + '/notes');
+  await clickA(el, 'n-add'); await tick(); el.type('G_n_text', 'Another'); await clickA(el, 'n-save'); await tick(); await tick();
+  assert.match(el.html, /Someone else changed these notes\. Check the list, then try again\./);
+});
+
+test('G s130: a cleaner or finance role gets no notes screen controls', async () => {
+  for (const role of ['cleaner', 'finance']) { const cl = notesClient(); const { el } = await mount(cl, GID + '/notes', role); assert.doesNotMatch(el.html, /n-add|n-save/, role); assert.equal(cl.saves.length, 0); }
+});
+
+test('G s130: the sheet marks Regular, !, !!, !!! as pressed buttons and the top level help carries no exclamation words', async () => {
+  const { el } = await mount(notesClient(), GID + '/notes');
+  await clickA(el, 'n-open', { i: '0' }); await tick();
+  assert.match(el.html, /data-act="n-level" data-v="3" aria-pressed="true"/); assert.match(el.html, /data-act="n-level" data-v="0" aria-pressed="false"/);
+  assert.match(el.html, /N_paper G_nsheet/);
 });

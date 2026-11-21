@@ -24,7 +24,6 @@
 .G_line { margin: 0; color: var(--fg-2); line-height: 1.4; }
 .G_slot { min-height: 52px; display: grid; align-content: start; }
 .G_card { display: grid; gap: 12px; }
-.G_pre { white-space: pre-wrap; line-height: 1.45; }
 .G_none { color: var(--fg-3); }
 .G_tags { display: flex; flex-wrap: wrap; gap: 6px; }
 .G_tel { display: inline-flex; align-items: center; min-height: 44px; color: var(--primary); text-decoration: underline; text-underline-offset: 2px; }
@@ -137,3 +136,8 @@ button.G_frm:active { background: var(--muted); }
 .G_cl small:empty, .G_sv:empty { display: none; }
 /* s120 U7: a disabled row, photo picker or tick looks like a disabled button (same as .btn[disabled] in styles.css) */
 .G_frm[disabled], .G_pick:has(input:disabled), .G_root .chk[disabled], .G_idform .input:has(:disabled) { opacity: .45; pointer-events: none; cursor: default; }
+/* s130 notes: the Notes row is a link to the Edit notes screen; the list card and the sheet reuse the N_ rules of styles.css */
+a.G_frm { cursor: pointer; text-decoration: none; }
+a.G_frm:active { background: var(--muted); }
+.G_nlist { padding-top: 6px; padding-bottom: 6px; }
+.G_nsheet { display: grid; gap: 14px; }

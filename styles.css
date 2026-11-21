@@ -225,10 +225,6 @@ hr.hair { width: auto; height: 1px; border: 0; background: var(--rule); }
 .row-wrap { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 
 /* ---- guest card ---- */
-.notes { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
-.notes li { display: flex; gap: 10px; align-items: flex-start; font: 400 clamp(0.875rem, 0.818rem + 0.253vw, 0.98rem)/clamp(1.25rem, 1.1686rem + 0.3614vw, 1.4rem) var(--font-ui); }
-.notes li svg.i { color: var(--fg-3); margin-top: 2px; }
-.notegroup + .notegroup { margin-top: 12px; }
 .idphoto { width: 100%; border-radius: var(--r-md); background: var(--muted); display: flex; align-items: center; justify-content: center; min-height: 160px; overflow: hidden; color: var(--fg-3); }
 .idphoto { image-orientation: from-image; }
 .idphoto img { image-orientation: from-image; aspect-ratio: auto 8 / 5; background: var(--muted); width: 100%; height: auto; display: block; -webkit-touch-callout: none; user-select: none; -webkit-user-select: none; }
@@ -1170,10 +1166,9 @@ p.sub.T_line { margin: 2px 0 0; padding-left: 8px; border-left: 2px solid var(--
 .A_card .T_when { margin: 0; color: var(--v5-ink-2); }
 strong.A_key { font-weight: 500; color: var(--fg); font-size: var(--v5-t-2); }
 /* important notes: wash, left bar, glyph + word (Important: / Request:) */
-.notes li { font-size: var(--v5-t-body); line-height: 1.45; }
-.notes li.note-key, .T_key { background: var(--v5-note-key-w); border-left: 3px solid var(--v5-warn-t); border-radius: var(--r-sm); padding: 8px 10px; color: var(--fg); }
-.notes li.note-key svg.i, .T_key svg.i { color: var(--v5-warn-t); margin-top: 2px; }
-.notes li.note-key b, .T_key b { font-weight: 700; }
+.T_key { background: var(--v5-note-key-w); border-left: 3px solid var(--v5-warn-t); border-radius: var(--r-sm); padding: 8px 10px; color: var(--fg); }
+.T_key svg.i { color: var(--v5-warn-t); margin-top: 2px; }
+.T_key b { font-weight: 700; }
 .T_key { display: flex; gap: 8px; align-items: flex-start; font-size: var(--v5-t-body); line-height: 1.45; }
 .T_nt { min-width: 0; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; overflow-wrap: anywhere; }
 a.T_more { justify-self: start; min-height: var(--touch); display: inline-flex; align-items: center; font: 600 var(--v5-t-2)/1.4 var(--font-ui); color: var(--v5-act); text-decoration: none; }
@@ -1510,3 +1505,42 @@ button.T_badge:focus-visible { outline: 2px solid var(--ring); outline-offset: 2
 .A_noticecard, .A_noticecard.H_mgr { block-size: auto; }
 .A_noticecard .rowi { block-size: auto; min-height: 64px; }
 .A_noticecard .rowi .t, .A_noticecard .rowi .s { white-space: normal; overflow: visible; text-overflow: clip; overflow-wrap: anywhere; }
+/* s130 notes: the list on the guest card and the Edit notes screen (guests/G_guests.js uses the same classes). Level is never colour alone: the mark is text. */
+.N_list { list-style: none; margin: 10px 0 0; padding: 0; display: grid; gap: 12px; }
+.N_it { display: grid; grid-template-columns: 2.5rem minmax(0, 1fr); gap: 12px; align-items: start; }
+.N_lv { min-height: 26px; border-radius: var(--r-full); display: inline-flex; align-items: center; justify-content: center; font: 700 var(--v5-t-min)/1 var(--font-ui); letter-spacing: .04em; }
+.N_lv3 { background: var(--danger-soft); color: var(--danger); }
+.N_lv2 { background: var(--warn-soft); color: var(--warn); }
+.N_lv1 { background: var(--info-soft); color: var(--info); }
+.N_lv0 { color: var(--fg-3); }
+.N_tx { margin: 0; font: 400 var(--v5-t-body)/1.45 var(--font-ui); color: var(--fg); overflow-wrap: anywhere; }
+.N_it.N_key .N_tx { font-weight: 600; }
+.N_dt { margin: 2px 0 0; }
+.N_clamp { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.N_2 { -webkit-line-clamp: 2; }
+.N_card[data-open="1"] .N_clamp { display: block; overflow: visible; }
+.N_card:not([data-open="1"]) .N_x { display: none; }
+.N_more { margin-top: 12px; }
+.N_row { display: grid; grid-template-columns: 2.5rem minmax(0, 1fr) auto; gap: 12px; align-items: center; width: 100%; min-height: 56px; padding: 10px 0; border: 0; border-top: 1px solid var(--border); background: none; color: inherit; text-align: left; font: inherit; cursor: pointer; }
+.N_row:first-child { border-top: 0; }
+.N_row .chev { color: var(--fg-3); }
+.N_ro { opacity: .85; cursor: default; }
+.N_seg { display: grid; grid-template-columns: 1.6fr 1fr 1fr 1fr; gap: 8px; }
+.N_seg2 { grid-template-columns: 1fr 1fr; }
+.N_seg .btn { min-height: 48px; padding: 0 4px; }
+.N_seg .btn[aria-pressed="true"] { background: var(--primary-soft); color: var(--primary); border-color: var(--primary); box-shadow: inset 0 0 0 1px var(--primary); font-weight: 700; }
+/* notepaper (spec 4d): a soft gradient tint on the three notes surfaces only; fields inside keep the plain card colour */
+.card.N_paper, .card.glass.N_paper { background-color: var(--card); background-image: linear-gradient(165deg, color-mix(in srgb, var(--accent-soft) 55%, var(--card)) 0%, color-mix(in srgb, var(--accent-soft) 18%, var(--card)) 55%, var(--card) 100%); border-color: color-mix(in srgb, var(--accent-text) 18%, var(--border)); }
+.N_paper .ta, .N_paper .input, .N_paper .N_seg .btn { background-color: var(--card); }
+.N_ta { min-height: 96px; }
+.N_tags { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 4px 0 0; }
+.N_tags .pill { min-height: 22px; }
+.N_done .N_tx { color: var(--fg-2); font-weight: 400; }
+.N_done .N_lv { background: var(--ok-soft); color: var(--ok); }
+.N_chk { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 12px; align-items: center; min-height: 48px; padding: 0; border: 0; background: none; color: inherit; font: 400 var(--v5-t-body)/1.4 var(--font-ui); text-align: left; cursor: pointer; width: 100%; }
+.N_box { width: 24px; height: 24px; border-radius: 6px; border: 2px solid var(--primary); background: var(--primary); color: var(--primary-fg); display: inline-flex; align-items: center; justify-content: center; }
+.N_chk[aria-checked="false"] .N_box { background: none; color: transparent; }
+.N_btns { display: grid; gap: 8px; margin-top: 4px; }
+.N_toast { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 6px 6px 6px 14px; border-radius: var(--r-md); background: var(--v5-panel); color: var(--v5-panel-fg); font: 400 var(--v5-t-label)/1.3 var(--font-ui); }
+.N_toast .btn { color: inherit; text-decoration: underline; }
+.N_link { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px; align-items: center; min-height: 56px; color: inherit; text-decoration: none; }

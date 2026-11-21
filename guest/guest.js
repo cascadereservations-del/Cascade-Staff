@@ -85,6 +85,13 @@
       '<p class="sub num" style="margin:6px 0 0">' + esc(CS.dayLabel(st.checkin) + ' → ' + CS.dayLabel(st.checkout)) + '</p>' +
       '<p class="help" style="margin:6px 0 0">' + esc(known.length ? 'On file: ' + known.join(', ') + '.' : 'Nothing on file yet.') + '</p></div>';
   }
+  // s130: a top row to the Edit notes screen, only when the page context carries the guest id (staff-guest-details context does not send one yet: no id, no row).
+  function notesRow() {
+    var c = S.ctx || {}, f = c.on_file || {}, st = c.stay || {}, gid = String(f.guest_id || st.guest_id || c.guest_id || '');
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(gid)) return '';
+    var sum = CS.notesSummary(f.stay_preferences != null ? f.stay_preferences : c.stay_preferences);
+    return '<div class="card" style="padding-top:4px;padding-bottom:4px"><a class="N_link" href="../#guests/' + esc(gid) + '/notes"><span><b style="font:600 var(--v5-t-body)/1.4 var(--font-ui)">Notes</b>' + (sum ? '<span class="help" style="display:block">' + esc(sum) + '</span>' : '') + '</span><span class="btn btn-ghost btn-sm" style="margin-right:-12px">Add or edit</span></a></div>';
+  }
   function renderInput() {
     var busy = S.step === 'reading';
     var shots = S.images.map(function (im, i) {
@@ -96,7 +103,7 @@
     var photos = '<div class="field"><span class="lbl">' + (idMode ? 'Photo of the guest’s ID' : 'Photos (optional)') + '</span>' + (shots ? '<div class="gd-shots">' + shots + '</div>' : '') +
       (S.images.length + S.preparing < G.MAX_IMAGES ? photoButtons('gd-file', true) : '') +
       (S.preparing ? '<p class="help" role="status" style="margin:0">Preparing the photos…</p>' : '<p class="help" style="margin:0">' + (idMode ? 'Only the name and the ID type are read from an ID. ' : 'ID photos and chat screenshots, up to ' + G.MAX_IMAGES + '. Screenshots are read and then dropped.') + '</p>') + '</div>';
-    return stayCard() + errBox() + (idMode ? photos + textField : textField + photos) +
+    return stayCard() + notesRow() + errBox() + (idMode ? photos + textField : textField + photos) +
       '<button class="btn btn-primary btn-block" type="button" data-act="read"' + (busy || S.preparing ? ' disabled' : '') + '>' + (busy ? 'Reading…' : 'Read the details') + '</button>' +
       '<button class="btn btn-ghost btn-block" type="button" data-act="manual"' + (busy || S.preparing ? ' disabled' : '') + '>Fill in by hand instead</button>' +
       '<p class="help" style="margin:0">Nothing is saved until you check the details and tap Save.</p>';

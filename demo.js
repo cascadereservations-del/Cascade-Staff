@@ -74,11 +74,11 @@
       return o;
     };
     var g1 = guest({ uid: 'demo-stay-1', guest_name: 'Demo Guest One', checkin_date: d(-1), checkout_date: d(2), checkin_time: '14:00:00', checkout_time: '12:00:00', nights: 3, source: 'airbnb',
-      repeat: true, stay_count: 2, earlier_stays: [{ month: d(-120).slice(0, 7), nights: 2 }], notes: d(-120) + ': Special request: extra pillows | Courtesy: late check-out was offered',
+      repeat: true, stay_count: 2, earlier_stays: [{ month: d(-120).slice(0, 7), nights: 2 }], notes: noteSeed(today).g1,
       tier: 'returning', id_photo_path: 'demo/id-1', id_photo_name: 'Demo Companion One', companions: [{ name: 'Demo Companion One', has_photo: true }, { name: 'Demo Companion Two', has_photo: false }],
       phone: '0900-000-0000', email: 'demo.guest.one@example.invalid', messenger: {} });
     var g2 = guest({ uid: 'demo-stay-2', guest_name: 'Demo Guest Two', checkin_date: d(2), checkout_date: d(5), checkin_time: '14:00:00', checkout_time: '12:00:00', nights: 3, source: 'direct',
-      repeat: true, tier: 'vip', stay_count: 8, earlier_stays: [], notes: null, id_photo_path: null, companions: [{ name: 'Demo Companion Three', has_photo: false }], phone: '0900-000-0001', email: 'demo.guest.two@example.invalid' });
+      repeat: true, tier: 'vip', stay_count: 8, earlier_stays: [], notes: noteSeed(today).g2, id_photo_path: null, companions: [{ name: 'Demo Companion Three', has_photo: false }], phone: '0900-000-0001', email: 'demo.guest.two@example.invalid' });
     g1.staying = { names: 'Demo Guest One, Demo Companion One', source: 'staff', suggestion: null, version: 1, guest_count: null, booked_guests: 2 }; // s119: sample staying data (names typed by staff; the next stay has only a Cassy suggestion)
     g2.staying = { names: '', source: null, suggestion: 'Demo Guest Two, Demo Companion Three', version: 0, guest_count: 2, booked_guests: 3 };
     if (admin) { g1.guest_id = '00000000-0000-4000-8000-0000000000d1'; g2.guest_id = '00000000-0000-4000-8000-0000000000d2'; } // s120: the Guests tile links to the guest page (the demo guest page knows these two ids)
@@ -198,6 +198,25 @@
     k.admin.stays = [stay(1, 'Demo Guest One', 'returning', 1, 10, 0.11, 'demo/id-1', box), stay(2, 'Demo Guest Two', 'vip', 1, 11, 0.21, 'demo/id-1', box), stay(6, 'Demo Guest Three', null, 2, 37, 0.72, 'demo/id-1', null), stay(8, 'Demo Guest Four', 'regular', 4, 37, 0.22, null, null), stay(12, 'Demo Guest Five', null, 3, 25, 0.57, null, null)];
   }
 
+  // s130: the demo notes, one source for the guest card (build), the Edit notes screen (G_guests) and Add guest details. g1 is legacy free text with line breaks; g2 has 8 notes:
+  // every level, a suggestion, an addressed note and a long one.
+  function noteSeed(today) {
+    var d = function (n) { return CS.addDays(today, n); };
+    return {
+      g1: ['Likes the room cool, AC at 24', 'Allergic to feather pillows, please use the foam ones', 'Arriving late on the first night, around 10 pm'].join('\n'),
+      g2: CS.serializeNotes([
+        { date: d(-100), mark: 3, text: 'Severe shellfish allergy. No seafood snacks in the welcome tray.' },
+        { date: d(-20), mark: 2, text: 'Asked for the quiet side: switch the hallway light off by 9 pm.' },
+        { date: d(-20), mark: 2, suggestion: true, text: 'A full-length mirror near the door would help.' },
+        { date: d(-100), mark: 1, text: 'Likes two extra pillows and the AC at 24.' },
+        { date: d(-20), mark: 0, text: 'Arrived late, around 10 pm. Self check-in went fine.' },
+        { date: d(-100), mark: 0, text: 'Travels for work, usually three nights. Books direct after the first Airbnb stay and pays the balance by GCash the day before.' },
+        { date: d(-200), mark: 0, text: 'First stay. Left the unit very tidy.' },
+        { date: d(-200), mark: 0, suggestion: true, text: 'The shower drain was slow.', addressed: true, addressedOn: d(-100) }
+      ])
+    };
+  }
+
   // ---- the stand-in for the Supabase client: same four calls the pages make, answered from the fixtures ---------------------------
   var WRITES = ['calendar_day_flag_set_v1', 'calendar_day_flag_clear_v1', 'ack_verifier_finding_v1', 'task_set_done_v1', 'task_add_reminder_v1', 'admin_add_pay_rate_v1', 'ops_notice_add_v1', 'ops_notice_close_v1',
     'record_inventory_usage', 'record_inventory_receipt_v1', 'inventory_receipt_confirm_v1', 'inventory_receipt_undo_v1', 'inventory_receipt_cancel_v1', 'inventory_item_photo_set_v1', 'utility_rate_set_v1', 'admin_resolve_report_block_v1', 'admin_request_meter_resend_v1', 'kpi_target_set_v1']; // s110: stock, rate and meter-check writes say "nothing was saved"
@@ -251,6 +270,7 @@
       if (name === 'task_set_done_v1' && args && args.p_id) doneSet[args.p_id] = !!args.p_done; // memory only: nothing is ever saved
       if (name === 'ack_verifier_finding_v1' && args && args.p_key) acked[args.p_key] = 1; if (name === 'ops_notice_close_v1' && args && args.p_id) closed[args.p_id] = 1; // memory only, so the reload drops the row
       if (name === 'inventory_receipt_manual_v1') { toast(NOTE); return done({ ok: true, draft_id: 'demo-manual', purchase_count: 1, new_items: [] }); } // the answer carries the entry id, so the demo shows Undo too
+      if (name === 'save_guest_profile_v1') return done({ ok: true, version: ((args && args.p_expected_version) || 0) + 1 }); // s130: a note save works in the demo (the Edit notes screen keeps the text in memory), and the version moves on
       if (WRITES.indexOf(name) >= 0) { toast(NOTE); return done({ ok: true }); }
       switch (name) {
         case 'current_staff_access': return done(X.access);
@@ -313,7 +333,7 @@
           'Thank you for the message. We cannot promise an early check-in yet, and we will confirm the morning after the cleaning is done. Your bags are welcome from 9 if you arrive first.'] });
     }
     if (name === 'staff-guest-details') {
-      var on = { name: 'Demo Guest One', phone: '', email: '', id_on_file: false, companions: [] }, act = body && body.action;
+      var on = { name: 'Demo Guest One', phone: '', email: '', id_on_file: false, companions: [], guest_id: '00000000-0000-4000-8000-0000000000d1', stay_preferences: noteSeed(CS.manilaToday(new Date())).g1 }, act = body && body.action; // guest_id and stay_preferences are demo-only: the live context does not send them yet
       if (act === 'extract') return reply(200, { ok: true, stay: X.stay, on_file: on, proposal: { phone: '0900-000-0000', email: 'demo.guest.one@example.invalid', guests: 2, nationality: 'Demo', companions: ['Demo Companion One'], ids: [], images: ((body && body.images) || []).map(function () { return 'other'; }) } });
       if (act === 'save') { toast(NOTE); return reply(200, { ok: true, saved: [] }); }
       return reply(200, { ok: true, stay: X.stay, on_file: on });
@@ -359,6 +379,6 @@
 
   return {
     active: active, ROLES: ROLES, VIEWS: VIEWS, NOTE: NOTE, WRITES: WRITES, isDemo: isDemo, roleFrom: roleFrom, emptyFrom: emptyFrom, role: function () { return roleFrom(root.location && root.location.search); },
-    onNote: function (fn) { hook = fn; }, demoHref: demoHref, switchUrl: switchUrl, barHtml: barHtml, build: build, client: client, fetch: demoFetch, toast: toast, idPlaceholder: idPlaceholder, geo: geo
+    onNote: function (fn) { hook = fn; }, demoHref: demoHref, switchUrl: switchUrl, barHtml: barHtml, build: build, noteSeed: noteSeed, client: client, fetch: demoFetch, toast: toast, idPlaceholder: idPlaceholder, geo: geo
   };
 });

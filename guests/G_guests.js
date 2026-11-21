@@ -208,12 +208,13 @@
     var A = S.add;
     if (S.addComp && G_q('G_newc')) S.newc = G_val('G_newc');
     if (S.edit && G_q('G_f_phone')) G_readEdit();
+    if (S.nt && S.nt.sheet && G_q('G_n_text')) G_readNote();
     if (A && A.sheet && G_q('G_r_phone')) G_syncSheet();
     else if (A && A.step === 'input' && G_q('G_text')) A.text = G_val('G_text');
   }
   function G_activeField() { var d = S && S.el && (S.el.ownerDocument || root.document), a = d && d.activeElement; return a && a.id && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName) && G_q(a.id) === a ? a : null; }
   // The app bar owns the screen's one heading: while the edit form is open it reads Edit details, otherwise the module's own title (the shell restores it on an empty string).
-  function G_title() { var t = S.view === 'detail' && S.edit ? 'Edit details' : ''; if (S.ttl !== t) { S.ttl = t; S.setTitle(t); } }
+  function G_title() { var t = S.view === 'detail' && S.sub === 'notes' ? 'Edit notes' : S.view === 'detail' && S.edit ? 'Edit details' : ''; if (S.ttl !== t) { S.ttl = t; S.setTitle(t); } }
   function G_q(id) { return S && S.el && S.el.querySelector ? S.el.querySelector('#' + id) : null; }
   function G_focus(id) { var e = S && S.el && S.el.querySelector && S.el.querySelector('#' + id); if (e && e.focus) e.focus(); }
   // For an answer that arrives later: it never pulls focus off a field staff are typing in (the message is still drawn, and its box announces itself).
@@ -235,7 +236,7 @@
   function G_off(rotOk) { return G_run(rotOk) ? ' disabled' : ''; }
   function G_rotOk() { return !!S && S.rot === 1 && S.rotPath === S.fullPath; }
   function G_lock() { return !!(S.busy || (S.add && S.add.step === 'saving')); } // the form's own save is running: its fields cannot take new text
-  var G_ACTS = /^(edit|edit-cancel|vip|save-edit|add-open|add-cancel|add-back|read|save-add|comp-on|id-on|id-yes|detail-retry|stay-save|add-comp|remove-photo|remove-comp|remove-photo-yes|remove-comp-yes|full-rot|rm-shot)$/, G_NOFORM = /^(detail-retry|remove-photo|remove-comp|remove-photo-yes|remove-comp-yes|full-rot)$/; // with a form open, photos and reloads are off too
+  var G_ACTS = /^(edit|edit-cancel|vip|save-edit|add-open|add-cancel|add-back|read|save-add|comp-on|id-on|id-yes|detail-retry|stay-save|add-comp|remove-photo|remove-comp|remove-photo-yes|remove-comp-yes|full-rot|rm-shot|n-add|n-open|n-save|n-del|n-undo)$/, G_NOFORM = /^(detail-retry|remove-photo|remove-comp|remove-photo-yes|remove-comp-yes|full-rot)$/; // with a form open, photos and reloads are off too
   /** An rpc call that never throws: { data, error }. */
   function G_rpc(name, args, cols, client) { // client: a write that outlives its page (a queued photo turn) passes the one it was tapped on, because S is null once Guests is left
     try { var q = (client || S.client).rpc(name, args); if (cols && q && typeof q.select === 'function') q = q.select(cols); return Promise.resolve(q).then(function (r) { return r || { data: null, error: { message: 'no answer' } }; }, function (e) { return { data: null, error: { message: String(e && e.message || e), network: true } }; }); }
@@ -337,6 +338,7 @@
     var notice = S.msg ? '<div class="okbox G_note" role="status" id="G_msg" tabindex="-1">' + G_glyph('ok') + '<span>' + S.msg.map(G_esc).join('<br>') + '</span></div>' : '';
     if (D.loading) return back + '<div class="skel G_sk G_tall"></div><div class="skel G_sk"></div><div class="skel G_sk"></div>';
     if (D.err) return back + notice + G_err(S.err, 'G_serr') + G_err(D.err) + '<button class="btn btn-secondary" type="button" data-act="detail-retry"' + G_off() + '>Try again</button>'; // a removal that went through stays said even when the reload after it failed
+    if (S.sub === 'notes') return G_notesHtml();
     if (S.add) return G_addHtml();
     var g = D.guest, p = D.details || {}, today = G_today(), bd = G_daysToBirthday(p.birthday, today);
     var phone = p.contact_number || g.phone || '';
@@ -366,7 +368,7 @@
     return '<div class="cap up G_cap">Guest</div><div class="card list G_group">' +
       '<div class="G_frwrap">' + G_row('Contact number', phone ? G_esc(phone) : none(canEdit ? 'Add' : 'Not on file'), canEdit) + call + '</div>' +
       G_row('Email', g.email ? '<a class="G_tel" href="mailto:' + G_esc(g.email) + '">' + G_esc(g.email) + '</a>' : none('Not on file'), false) +
-      G_row('Notes', p.stay_preferences ? '<span class="G_pre">' + G_esc(p.stay_preferences) + '</span>' : none(canEdit ? 'Add' : 'Could not load'), canEdit) +
+      G_notesRow(p, none, canEdit) +
       '</div>' +
       '<details class="card list G_group G_opt"><summary><span class="G_fl">More details</span><span class="G_cnt">' + filled + ' of 3 filled</span><span class="chev turn" aria-hidden="true">' + G_chev() + '</span></summary>' +
       G_row('Birthday', p.birthday ? G_esc(G_date(p.birthday)) : none('Not on file'), false) + G_row('Tags', tags ? '<span class="G_tags">' + tags + '</span>' : none('None'), false) +
@@ -380,12 +382,133 @@
     return '<div class="card G_card G_form">' + G_err(E.err, 'G_eerr') +
       G_field('G_f_phone', 'Contact number', E.contact_number, 'inputmode="tel" maxlength="40"') +
       G_field('G_f_bday', 'Birthday', E.birthday, 'type="date" max="' + G_today() + '"') +
-      '<div class="field"><label for="G_f_pref">Notes</label><textarea class="ta" id="G_f_pref" rows="4" maxlength="4000"' + (G_lock() ? ' readonly' : '') + ' placeholder="Allergies, a quiet room, a late arrival">' + G_esc(E.stay_preferences) + '</textarea></div>' +
       G_field('G_f_tags', 'Tags', E.tags, 'maxlength="400"', 'Separate tags with commas.') +
       '<div class="G_vip"><button class="chk" type="button" id="G_f_vip" role="checkbox" aria-checked="' + !!E.vip + '" aria-label="VIP guest" data-act="vip"' + (G_lock() ? ' disabled' : '') + '>' + (root.ICON ? root.ICON('check', 's16') : '') + '</button><span>VIP guest</span></div>' +
       (E.vip ? G_field('G_f_vipr', 'VIP note', E.vip_reason, 'maxlength="500"') : '') +
       G_field('G_f_reason', 'Reason for the change', E.reason, 'maxlength="500"', 'Kept in the guest’s history. Change it if you like.') +
       '<div class="G_btns"><button class="btn btn-primary" type="button" data-act="save-edit"' + (busy || S.d.stale ? ' disabled' : '') + '>' + (busy ? 'Saving…' : 'Save changes') + '</button><button class="btn btn-ghost" type="button" data-act="edit-cancel"' + (busy ? ' disabled' : '') + '>Cancel</button></div></div>';
+  }
+
+  // ---- notes (s130): #guests/<guest_id>/notes. One note at a time; the whole field is rewritten by the pure helpers in lib.js (CS.notesAdd / notesEdit / notesDelete) and saved with ONLY stay_preferences in the patch,
+  // the version it was read at and an automatic reason. A stale version reloads the screen. Delete keeps the exact previous string for Undo (until the next action or leaving the screen).
+  var G_NOTES_CHANGED = 'Someone else changed these notes. Check the list, then try again.', G_NOTE_LEVELS = [[0, 'Regular'], [1, '!'], [2, '!!'], [3, '!!!']];
+  function G_nt() { return { sheet: null, more: false, undo: null }; }
+  function G_datedNote(t) { return /^\d{4}-\d{2}-\d{2}:/.test(t) ? t : G_today() + ': ' + t; }
+  function G_nMark(n) {
+    if (n.addressed) return '<span class="N_lv N_lv0" aria-label="Addressed">' + G_ic('check') + '</span>';
+    if (n.readOnly) return '<span class="N_lv N_lv0" aria-hidden="true">' + G_ic('note') + '</span>';
+    return '<span class="N_lv N_lv' + n.level + '"' + (n.level ? ' aria-label="Importance ' + n.level + ' of 3"' : ' aria-hidden="true"') + '>' + (n.level ? '!!!'.slice(0, n.level) : '&bull;') + '</span>';
+  }
+  function G_nTags(n) {
+    var dt = n.date ? root.CS.noteDateLabel(n.date) : '', from = n.readOnly ? 'from the guest record, not editable here' : '';
+    return '<span class="N_tags"><span class="help num">' + G_esc(dt + (dt && from ? ' · ' : '') + from) + '</span>' + (n.suggestion ? '<span class="pill p-brand">Guest suggestion</span>' : '') + (n.addressed ? '<span class="pill p-ok">Addressed' + (n.addressedOn ? ' ' + G_esc(root.CS.noteDateLabel(n.addressedOn)) : '') + '</span>' : '') + '</span>';
+  }
+  // The Notes row of the guest page: opens the screen. "N on file · n marked !!! · n open suggestions", or Add.
+  function G_notesRow(p, none, canEdit) {
+    var sum = root.CS && root.CS.notesSummary ? root.CS.notesSummary(p.stay_preferences) : null;
+    if (!canEdit) return G_row('Notes', none('Could not load'), false);
+    return '<div class="G_fr"><a class="G_frm" href="#guests/' + G_esc(S.gid) + '/notes"><span class="G_fl">Notes</span><span class="G_fv">' + (sum ? G_esc(sum) : none('Add')) + '</span><span class="chev" aria-hidden="true">' + G_chev() + '</span></a></div>';
+  }
+  function G_noteRow(n) {
+    return '<button class="N_row' + (n.addressed ? ' N_done' : '') + '" type="button" data-act="n-open" data-i="' + n.i + '"' + G_off() + '>' + G_nMark(n) + '<span><span class="N_tx N_clamp N_2">' + G_esc(n.text) + '</span>' + G_nTags(n) + '</span><span class="chev" aria-hidden="true">' + G_chev() + '</span></button>';
+  }
+  function G_roomLine(stored) { var r = root.CS.notesRoom(stored); return r.warn ? '<p class="help" role="status">' + G_esc(r.left > 0 ? 'Room for about ' + r.left + ' more characters of notes (the limit is 4,000).' : 'The notes are full (4,000 characters). Delete or shorten one before adding.') + '</p>' : ''; }
+  function G_notesHtml() {
+    var D = S.d, N = S.nt, g = D.guest, p = D.details || {}, CSx = root.CS;
+    var back = '<a class="btn btn-ghost G_back" href="#guests/' + G_esc(S.gid) + '">‹ Back to the guest</a>';
+    var notice = S.msg ? '<div class="okbox G_note" role="status" id="G_msg" tabindex="-1">' + G_glyph('ok') + '<span>' + S.msg.map(G_esc).join('<br>') + '</span></div>' : '';
+    if (!D.detailsOk) return '<div class="G_detail">' + back + G_err(S.err) + '<p class="help" role="status">The notes could not load, so they cannot be changed yet.</p><button class="btn btn-secondary btn-sm" type="button" data-act="detail-retry"' + G_off() + '>Try again</button></div>';
+    var stored = String(p.stay_preferences || ''), nameLine = '<p class="cap up" style="margin:0">' + G_esc((g.name || 'Guest') + (p.vip ? ' · VIP' : '') + (g.total_stays ? ' · ' + g.total_stays + (g.total_stays === 1 ? ' stay' : ' stays') : '')) + '</p>';
+    if (N.sheet) return '<div class="G_detail">' + back + G_err(S.err) + '<div class="stack">' + nameLine + G_noteSheetHtml(stored) + '</div></div>';
+    var list = CSx.sortNotes(CSx.parseNoteList(stored)), ro = p.vip && p.vip_reason ? [{ text: 'VIP - ' + p.vip_reason, date: null, level: 0, mark: 0, suggestion: false, addressed: false, addressedOn: null, readOnly: 'vip', i: -1 }] : [];
+    var shown = N.more ? list : list.slice(0, 5), rest = list.length - 5;
+    var rows = shown.map(G_noteRow).join('') + ro.map(function (n) { return '<div class="N_row N_ro">' + G_nMark(n) + '<span><span class="N_tx">' + G_esc(n.text) + '</span>' + G_nTags(n) + '</span><span></span></div>'; }).join('');
+    return '<div class="G_detail">' + back + notice + G_err(S.err) + '<div class="stack">' + nameLine +
+      '<button class="btn btn-primary btn-block" type="button" data-act="n-add"' + G_off() + '>' + G_ic('plus') + 'Add a note</button>' +
+      (N.undo ? '<div class="N_toast" role="status"><span>Note deleted.</span><button class="btn btn-ghost btn-sm" type="button" id="G_n_undo" data-act="n-undo"' + G_off() + '>Undo</button></div>' : '') +
+      (rows ? '<div class="card N_paper G_nlist">' + rows + '</div>' : '<div class="card N_paper"><p class="sub" style="margin:0">No notes yet. Tap Add a note.</p></div>') +
+      (rest > 0 ? '<button class="btn btn-secondary btn-block" type="button" data-act="n-more" aria-expanded="' + !!N.more + '">' + (N.more ? 'Show fewer notes' : 'Show ' + rest + ' more ' + (rest === 1 ? 'note' : 'notes')) + '</button>' : '') +
+      G_roomLine(stored) +
+      '<p class="help" style="margin:0">Most important first, then newest. Addressed notes go last. Staff see these on the guest card; phone numbers, e-mails and amounts are hidden from them.</p></div></div>';
+  }
+  function G_noteSeg(act, items, cur, cls, label) {
+    return '<div class="N_seg ' + cls + '" role="group" aria-label="' + label + '">' + items.map(function (it) {
+      return '<button class="btn btn-secondary" type="button" data-act="' + act + '" data-v="' + it[0] + '" aria-pressed="' + (it[0] === cur) + '"' + (act === 'n-level' && it[0] ? ' aria-label="Importance ' + it[0] + ' of 3"' : '') + (S.busy ? ' disabled' : '') + '>' + it[1] + '</button>';
+    }).join('') + '</div>';
+  }
+  function G_noteSheetHtml(stored) {
+    var s = S.nt.sheet, busy = S.busy, ro = busy ? ' readonly' : '', add = s.i < 0, lift = s.lift ? 'This note shows as ' + '!!!'.slice(0, s.lift) + ' because of the words in it. Choose an importance to set it yourself.' : '';
+    return '<div class="card N_paper G_nsheet"><h3 class="hd">' + (add ? 'Add a note' : 'Edit note') + '</h3>' + G_err(s.err, 'G_nerr') +
+      '<div class="field"><label for="G_n_text">Note</label><textarea class="ta N_ta" id="G_n_text" rows="4" maxlength="' + root.CS.NOTE_MAX + '"' + ro + ' placeholder="Allergies, a quiet room, a late arrival">' + G_esc(s.text) + '</textarea></div>' +
+      '<div class="field"><span class="lbl" id="G_n_k">Kind</span>' + G_noteSeg('n-kind', [['note', 'Note'], ['sug', 'Suggestion']], s.suggestion ? 'sug' : 'note', 'N_seg2', 'Kind') + '</div>' +
+      '<div class="field"><span class="lbl" id="G_n_l">How important</span>' + G_noteSeg('n-level', G_NOTE_LEVELS.map(function (l) { return [String(l[0]), l[1]]; }), String(s.mark), '', 'How important') + '<span class="help">The top level shows first on the card and on Today.' + (lift ? ' ' + G_esc(lift) : '') + '</span></div>' +
+      '<button class="N_chk" type="button" id="G_n_addr" role="checkbox" aria-checked="' + !!s.addressed + '" data-act="n-addr"' + (busy ? ' disabled' : '') + '><span class="N_box" aria-hidden="true">' + G_ic('check') + '</span><span>Addressed or fixed<span class="help" style="display:block">Stays on file, moves to the end, leaves Today.</span></span></button>' +
+      G_field('G_n_date', 'Date', s.date, 'type="date" max="' + G_today() + '"') + G_roomLine(stored) +
+      '<div class="N_btns"><button class="btn btn-primary btn-block" type="button" data-act="n-save"' + G_off() + '>' + (busy ? 'Saving…' : 'Save note') + '</button>' +
+      (add ? '' : '<button class="btn btn-ghost btn-block" type="button" data-act="n-del" style="color:var(--danger)"' + G_off() + '>Delete note</button>') +
+      '<button class="btn btn-ghost btn-block" type="button" data-act="n-cancel"' + (busy ? ' disabled' : '') + '>Cancel</button></div></div>';
+  }
+  function G_readNote() { var s = S.nt.sheet; s.text = G_val('G_n_text'); if (G_q('G_n_date')) s.date = G_val('G_n_date'); }
+  function G_noteStored() { var p = S.d && S.d.details || {}; return String(p.stay_preferences || ''); }
+  function G_noteOpen(i) {
+    var n = i < 0 ? null : root.CS.parseNoteList(G_noteStored())[i]; if (i >= 0 && !n) return;
+    S.msg = null; S.err = ''; S.nt.undo = null;
+    S.nt.sheet = n ? { i: i, text: n.text, suggestion: n.suggestion, mark: n.mark, addressed: n.addressed, addressedOn: n.addressedOn, date: n.date || '', err: '', lift: n.mark === 0 && n.level > 0 ? n.level : 0 }
+      : { i: -1, text: '', suggestion: false, mark: 0, addressed: false, addressedOn: null, date: G_today(), err: '', lift: 0 };
+    G_paint(); G_focus('G_n_text');
+  }
+  // In place, so the pressed button keeps its focus.
+  function G_notePress(t) {
+    var s = S.nt.sheet, a = t.getAttribute('data-act'), v = t.getAttribute('data-v'); if (!s) return;
+    if (a === 'n-kind') s.suggestion = v === 'sug'; else { s.mark = +v; s.lift = 0; }
+    var sib = t.parentNode && t.parentNode.children ? t.parentNode.children : []; Array.prototype.forEach.call(sib, function (b) { b.setAttribute('aria-pressed', String(b === t)); });
+  }
+  function G_noteAddr(t) {
+    var s = S.nt.sheet; if (!s) return;
+    s.addressed = !s.addressed; s.addressedOn = s.addressed ? G_today() : null; // ticking stamps today, unticking removes the date
+    t.setAttribute('aria-checked', String(s.addressed));
+  }
+  function G_noteSave() {
+    var s = S.nt.sheet, today = G_today(), CSx = root.CS, stored = G_noteStored(); if (!s) return;
+    G_readNote();
+    var bad = function (m) { s.err = m; G_paint(); G_focusLate('G_nerr'); };
+    var inp = { text: s.text, mark: s.mark, suggestion: s.suggestion, date: s.date || null, addressed: s.addressed, addressedOn: s.addressed ? s.addressedOn || today : null };
+    if (!CSx.noteInput(inp).text) return bad('Write the note first.');
+    if (inp.date && (!/^\d{4}-\d{2}-\d{2}$/.test(inp.date) || G_iso(Date.parse(inp.date + 'T00:00:00Z')) !== inp.date || inp.date > today)) return bad('Enter a date that is not in the future.');
+    var next = s.i < 0 ? CSx.notesAdd(stored, inp, today) : CSx.notesEdit(stored, s.i, inp, today);
+    if (next === stored) { S.nt.sheet = null; S.msg = ['Nothing was changed.']; G_paint(); G_focus('G_msg'); return; } // no write when nothing changed
+    if (next.length > CSx.NOTES_MAX) return bad('The notes hold 4,000 characters in all. Shorten this note or delete an older one.');
+    G_noteWrite(next, s.i < 0 ? 'Note added' : 'Note edited', function () { S.nt.sheet = null; S.nt.undo = null; S.msg = [s.i < 0 ? 'Note added.' : 'Note saved.']; });
+  }
+  function G_noteDelete() {
+    var s = S.nt.sheet, stored = G_noteStored(); if (!s || s.i < 0) return;
+    G_noteWrite(root.CS.notesDelete(stored, s.i), 'Note deleted', function () { S.nt.sheet = null; S.nt.undo = { prev: stored }; S.msg = null; });
+  }
+  function G_noteUndo() {
+    var u = S.nt.undo; if (!u) return;
+    G_noteWrite(u.prev, 'Note restored', function () { S.nt.undo = null; S.msg = ['Note restored.']; });
+  }
+  // The one write. The demo applies it in memory and bumps the version, so add, edit, delete and Undo all work there.
+  function G_noteWrite(next, reason, after) {
+    var p = S.d.details || {}, tok = S.token, ver = p.version == null ? null : p.version, N = S.nt, s = N.sheet;
+    S.busy = true; G_paint();
+    var pr = S.demo ? Promise.resolve({ data: { version: (ver || 0) + 1 }, error: null }) : G_rpc('save_guest_profile_v1', { p_guest_id: S.gid, p_patch: { stay_preferences: next === '' ? null : next }, p_expected_version: ver, p_reason: reason });
+    pr.then(function (r) {
+      if (!G_live(tok)) return;
+      S.busy = false;
+      if (r.error) {
+        var sm = G_rpcStale(r.error);
+        if (sm) { S.nt = G_nt(); G_loadDetail(); S.err = sm === G_errText(0, 'changed') ? G_NOTES_CHANGED : sm; return; } // reload and say so; the list on screen can no longer be trusted
+        var msg = G_noAnswer(r.error) ? G_NO_CONN : G_rpcText(r.error);
+        if (s && N.sheet === s) s.err = msg; else S.err = msg;
+        G_paint(); G_focusLate(s ? 'G_nerr' : 'G_err'); return;
+      }
+      var nv = r.data && r.data.version != null ? r.data.version : (ver == null ? 1 : ver + 1), d = {};
+      Object.keys(p).forEach(function (k) { d[k] = p[k]; });
+      d.stay_preferences = next === '' ? null : next; d.version = nv; d.guest_id = S.gid; S.d.details = d;
+      if (S.demo) G_demoNotes[S.gid] = { stay_preferences: d.stay_preferences, version: nv };
+      after(); S.haptic('ok'); G_paint(); G_focus(N.undo ? 'G_n_undo' : 'G_msg');
+    });
   }
 
   // ---- companions and ID photos
@@ -546,7 +669,7 @@
     if (version != null) body.expected_version = version;
     if (String(s.phone).trim()) body.phone = String(s.phone).trim();
     if (String(s.email).trim()) body.email = String(s.email).trim();
-    if (String(s.stay_preferences).trim()) body.stay_preferences = String(s.stay_preferences).trim();
+    if (String(s.stay_preferences).trim()) body.stay_preferences = G_datedNote(String(s.stay_preferences).trim()); // s130: a dated, regular note (the server appends it under what is on file)
     if (s.birthday) body.birthday = s.birthday;
     if (tags.length) body.tags = tags;
     var comps = s.companions.filter(function (c) { return c.on && String(c.name).trim(); }).map(function (c) { return String(c.name).trim(); });
@@ -659,7 +782,7 @@
   }
   function G_readEdit() {
     var E = S.edit;
-    E.contact_number = G_val('G_f_phone'); E.birthday = G_val('G_f_bday'); E.stay_preferences = G_val('G_f_pref'); E.tags = G_val('G_f_tags');
+    E.contact_number = G_val('G_f_phone'); E.birthday = G_val('G_f_bday'); E.tags = G_val('G_f_tags'); // s130: the notes are edited one at a time on their own screen; E.stay_preferences is carried unchanged so the patch never touches them
     if (E.vip && G_q('G_f_vipr')) E.vip_reason = G_val('G_f_vipr'); E.reason = G_val('G_f_reason');
   }
   function G_saveEdit() {
@@ -968,6 +1091,15 @@
     else if (a === 'stay-save') G_staySave();
     else if (a === 'comp-open') { S.cOpen = S.cOpen === id ? '' : id; G_paint(); }
     else if (a === 'comp-add-open') { if (S.addComp && G_q('G_newc')) S.newc = G_val('G_newc'); S.addComp = !S.addComp; G_paint(); if (S.addComp) G_focus('G_newc'); }
+    else if (a === 'n-add') G_noteOpen(-1);
+    else if (a === 'n-open') G_noteOpen(G_idx(t));
+    else if (a === 'n-cancel') { S.nt.sheet = null; S.err = ''; G_paint(); }
+    else if (a === 'n-kind' || a === 'n-level') G_notePress(t);
+    else if (a === 'n-addr') G_noteAddr(t);
+    else if (a === 'n-save') G_noteSave();
+    else if (a === 'n-del') G_noteDelete();
+    else if (a === 'n-undo') G_noteUndo();
+    else if (a === 'n-more') { S.nt.undo = null; S.nt.more = !S.nt.more; G_paint(); }
     else if (a === 'edit') G_openEdit();
     else if (a === 'edit-cancel') { S.edit = null; if (S.d.stale) G_loadDetail(); else G_paint(); }
     else if (a === 'vip') { G_readEdit(); S.edit.vip = !S.edit.vip; G_paint(); G_focus('G_f_vip'); }
@@ -1016,23 +1148,26 @@
 
   // ------------------------------------------------------------------------------------------------ mount
   var G_DEMO_IDS = ['00000000-0000-4000-8000-0000000000d1', '00000000-0000-4000-8000-0000000000d2'];
+  var G_demoNotes = {}; // demo only: notes edited in this tab, so leaving the screen and coming back shows them; never stored
   function G_demoRows() { // built at mount so the dates sit around today
-    var t = G_today(), at = function (n) { return G_iso(Date.parse(t + 'T00:00:00Z') + n * 86400000); };
-    return [
-      { id: G_DEMO_IDS[0], name: 'Demo Guest One', tier: 'returning', total_stays: 2, last_stay_date: at(-1), phone: '0900-000-0000', guest_profile_details: { id_on_file: true, birthday: null, vip: false }, guest_companions: [{ id_photo_path: 'demo/id-1.jpg' }, { id_photo_path: null }],
+    var t = G_today(), at = function (n) { return G_iso(Date.parse(t + 'T00:00:00Z') + n * 86400000); }, seed = root.CSDemo && root.CSDemo.noteSeed ? root.CSDemo.noteSeed(t) : {};
+    var rows = [
+      { id: G_DEMO_IDS[0], name: 'Demo Guest One', tier: 'returning', total_stays: 2, last_stay_date: at(-1), phone: '0900-000-0000', guest_profile_details: { id_on_file: true, birthday: null, vip: false, stay_preferences: seed.g1 || null, version: 1 }, guest_companions: [{ id_photo_path: 'demo/id-1.jpg' }, { id_photo_path: null }],
         stay: { uid: 'demo-stay-1', checkin_date: at(-1), checkout_date: at(2), booked_guests: 2, guest_count: null, version: 0 },
         people: [{ id: 'demo-c1', name: 'Demo Guest One', id_type: null, id_photo_path: 'demo/id-1.jpg' }, { id: 'demo-c2', name: 'Demo Companion', id_type: null, id_photo_path: null }] },
-      { id: G_DEMO_IDS[1], name: 'Demo Guest Two', tier: 'vip', total_stays: 8, last_stay_date: at(2), guest_profile_details: { id_on_file: false, birthday: null, vip: true }, guest_companions: [{ id_photo_path: null }],
+      { id: G_DEMO_IDS[1], name: 'Demo Guest Two', tier: 'vip', total_stays: 8, last_stay_date: at(2), guest_profile_details: { id_on_file: false, birthday: null, vip: true, stay_preferences: seed.g2 || null, version: 1 }, guest_companions: [{ id_photo_path: null }],
         stay: { uid: 'demo-stay-2', checkin_date: at(2), checkout_date: at(5), booked_guests: 3, guest_count: 2, version: 1 },
         people: [{ id: 'demo-c3', name: 'Demo Friend', id_type: null, id_photo_path: null }] }
     ];
+    rows.forEach(function (x) { var k = G_demoNotes[x.id]; if (k) { x.guest_profile_details.stay_preferences = k.stay_preferences; x.guest_profile_details.version = k.version; } });
+    return rows;
   }
   function G_mount(el, opts) {
     G_unmount();
     opts = opts || {};
     var parts = String(opts.sub || '').split('/'), sub = parts[0], uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(sub) ? sub.toLowerCase() : '';
     S = {
-      el: el, client: opts.client || null, demo: !!opts.demo, role: opts.role, pid: opts.propertyId || null, token: ++G_seq, gid: uuid, view: uuid ? 'detail' : 'list', seg: uuid && parts[1] === 'stay' ? 'stay' : '', ttl: '',
+      el: el, client: opts.client || null, demo: !!opts.demo, role: opts.role, pid: opts.propertyId || null, token: ++G_seq, gid: uuid, view: uuid ? 'detail' : 'list', seg: uuid && parts[1] === 'stay' ? 'stay' : '', sub: uuid && parts[1] === 'notes' ? 'notes' : '', nt: G_nt(), ttl: '',
       setTitle: typeof opts.setTitle === 'function' ? opts.setTitle : G_noop, onChange: typeof opts.onChange === 'function' ? opts.onChange : G_noop,
       nav: typeof opts.navigate === 'function' ? opts.navigate : G_noop, toast: typeof opts.toast === 'function' ? opts.toast : G_noop, haptic: typeof opts.haptic === 'function' ? opts.haptic : G_noop,
       list: { q: '', filter: 'recent', rows: [], total: 0, more: false, loading: false, err: '', ticket: 0, stays: { ok: false, map: {} } },
@@ -1072,7 +1207,7 @@
   root.G_Guests = {
     mount: G_mount, unmount: G_unmount, reset: G_reset, _setClock: function (f) { G_clock = f; },
     _t: { searchPattern: G_searchPattern, daysToBirthday: G_daysToBirthday, stayMap: G_stayMap, tagsFromText: G_tagsFromText, check: G_check, patch: G_patch, sameName: G_sameName,
-      errText: G_errText, rpcText: G_rpcText, absent: G_absent, saveLines: G_saveLines, stayLine: G_stayLine, stayFrom: G_stayFrom, sheetFrom: G_sheetFrom, addBody: G_addBody, today: G_today },
+      errText: G_errText, rpcText: G_rpcText, absent: G_absent, saveLines: G_saveLines, stayLine: G_stayLine, stayFrom: G_stayFrom, sheetFrom: G_sheetFrom, addBody: G_addBody, today: G_today, datedNote: G_datedNote },
     _state: function () { return S; }, _onImg: G_onImg, _onImgErr: G_onImgErr
   };
 })(typeof window !== 'undefined' ? window : this);

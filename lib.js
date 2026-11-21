@@ -505,26 +505,99 @@
   // Notes are one text field "YYYY-MM-DD: point | point || YYYY-MM-DD: point" (the dashboard's ImportantNotes parses it too).
   var PRIORITY = [[/^turnover report/i, 0], [/security|incident|complaint|damage|dispute|concern/i, 0], [/allerg|asthma|medical|wheelchair|disab/i, 1], [/special request|requested/i, 1], [/courtesy|benefit|goodwill|complimentary/i, 2], [/early check|late check|checkout/i, 3]];
   function isTurnover(p) { return /^turnover report/i.test(p); }
-  // s115: the points that matter, strongest first: incident/complaint (0), request/allergy (1), then ONE turnover report (the newest chunk date); the rest are only counted
+  // ---- s130 notes model: ONE parser; parseNotes, keyPoints, keyNote and goodToKnow all read it ------------------------------
+  // Stored text (guest_profile_details.stay_preferences): chunks joined with " || " (line breaks split too); " | " splits points, one note each.
+  // A note is: optional "YYYY-MM-DD: ", optional mark "!" "!!" "!!!" + space, optional "Suggestion: ", the text, optional " [addressed YYYY-MM-DD]".
+  var NOTE_MAX = 600, NOTES_MAX = 4000, NOTES_WARN = 3600, NOTE_SHOW = 4, NOTE_CLAMP_CHARS = 110, NOTE_MARKS = ['', '!', '!!', '!!!'];
+  function noteChunks(text) { return String(text == null ? '' : text).split(/ \|\| |\r\n|\r|\n/); }
+  // The keyword rank stays for DISPLAY only: rank 0 reads as !!!, rank 1 as !!, anything else as regular.
+  function rankLevel(t) { var r = pointPriority(t); return r === 0 ? 3 : r === 1 ? 2 : 0; }
+  function noteOf(p, date, card) {
+    var t = p, mark = 0, sug = false, addr = false, addrOn = null, a = /\s*\[addressed(?: (\d{4}-\d{2}-\d{2}))?\]$/i.exec(t), m, ro;
+    if (a) { addr = true; addrOn = a[1] || null; t = t.slice(0, a.index); }
+    m = /^(!{1,3})\s+/.exec(t); if (m) { mark = m[1].length; t = t.slice(m[0].length); }
+    m = /^suggestion:\s*/i.exec(t); if (m) { sug = true; t = t.slice(m[0].length); }
+    t = t.trim(); if (!t) return null;
+    ro = card ? (isTurnover(t) ? 'turnover' : /^VIP\s+-\s/i.test(t) ? 'vip' : null) : null; // the card string also holds chunks the server joins in: read-only rows
+    return { text: t, date: date, mark: mark, level: ro ? 0 : mark || rankLevel(t), suggestion: sug, addressed: addr, addressedOn: addrOn, readOnly: ro };
+  }
+  function parseChunk(chunk, card) {
+    var m = /^(\d{4}-\d{2}-\d{2}):\s*([\s\S]*)$/.exec(chunk), date = m ? m[1] : null, out = [];
+    (m ? m[2] : chunk).split(' | ').forEach(function (p) { p = p.trim(); if (!p) return; var n = noteOf(p, date, card); if (n) out.push(n); });
+    return { date: date, notes: out };
+  }
+  // Notes in stored order; i is the stored position (the id the edit helpers take). opts.card flags the server-joined read-only chunks.
+  function parseNoteList(text, opts) {
+    var out = [], card = !!(opts && opts.card);
+    if (!text) return out;
+    noteChunks(text).forEach(function (c) { parseChunk(c, card).notes.forEach(function (n) { n.i = out.length; out.push(n); }); });
+    return out;
+  }
+  function noteCmp(a, b) {
+    if (a.addressed !== b.addressed) return a.addressed ? 1 : -1;
+    if (!a.addressed && a.level !== b.level) return b.level - a.level;
+    var da = a.date || '', db = b.date || '';
+    if (da !== db) return !da ? 1 : !db ? -1 : da < db ? 1 : -1;
+    if (a.addressed) { var oa = a.addressedOn || '', ob = b.addressedOn || ''; if (oa !== ob) return oa < ob ? 1 : -1; }
+    return a.i - b.i;
+  }
+  // Open notes: level 3 to 0, newest first, undated last, ties in stored order. Addressed notes after all of them, newest first.
+  function sortNotes(list) { return (list || []).slice().sort(noteCmp); }
+  function noteLine(n) { return (n.date ? n.date + ': ' : '') + (n.mark ? NOTE_MARKS[n.mark] + ' ' : '') + (n.suggestion ? 'Suggestion: ' : '') + n.text + (n.addressed ? ' [addressed' + (n.addressedOn ? ' ' + n.addressedOn : '') + ']' : ''); }
+  function serializeNotes(list) { return (list || []).map(noteLine).join(' || '); }
+  // What a person typed, made safe to store: "|" becomes "/", line breaks a space, trimmed, 600 characters.
+  function noteInput(o) {
+    o = o || {};
+    var t = String(o.text == null ? '' : o.text).replace(/[\r\n]+/g, ' ').replace(/\|/g, '/').replace(/\[addressed/gi, '(addressed').trim();
+    return { text: t.slice(0, NOTE_MAX).trim(), mark: Math.max(0, Math.min(3, o.mark | 0)), suggestion: !!o.suggestion, date: o.date || null, addressed: !!o.addressed, addressedOn: o.addressed ? o.addressedOn || null : null };
+  }
+  function noteFull(inp, today) { var n = noteInput(inp); if (n.addressed && !n.addressedOn) n.addressedOn = today || null; return n; }
+  function notesAdd(stored, inp, today) {
+    var n = noteFull(inp, today); if (!n.text) return String(stored || '');
+    if (!n.date) n.date = today || null;
+    var l = parseNoteList(stored); l.push(n); return serializeNotes(l);
+  }
+  // The same string comes back when the note is unchanged (nothing to write); a missing index changes nothing.
+  function notesEdit(stored, i, inp, today) {
+    var l = parseNoteList(stored), old = l[i], n = noteFull(inp, today); if (!old || !n.text) return String(stored || '');
+    if (noteLine(old) === noteLine(n)) return String(stored || '');
+    l[i] = n; return serializeNotes(l);
+  }
+  function notesDelete(stored, i) { var l = parseNoteList(stored); if (!l[i]) return String(stored || ''); l.splice(i, 1); return serializeNotes(l); }
+  function notesRoom(stored) { var used = String(stored || '').length; return { used: used, left: NOTES_MAX - used, warn: used >= NOTES_WARN, over: used > NOTES_MAX }; }
+  // "8 on file · 1 marked !!! · 1 open suggestion" for Add guest details; zero parts are left out; null when there are no notes.
+  function notesSummary(text) {
+    var l = parseNoteList(text); if (!l.length) return null;
+    var hi = l.filter(function (n) { return !n.addressed && n.level === 3; }).length, sg = l.filter(function (n) { return !n.addressed && n.suggestion; }).length, s = [l.length + ' on file'];
+    if (hi) s.push(hi + ' marked !!!');
+    if (sg) s.push(sg + ' open ' + (sg === 1 ? 'suggestion' : 'suggestions'));
+    return s.join(' · ');
+  }
+  function noteDateLabel(iso) { return iso ? dayLabel(iso) + ' ' + String(iso).slice(0, 4) : ''; }
+  // The card list: sorted; the first 4 unless open. A long note may be clamped to 3 lines, so a short list still gets the button then.
+  function notesView(text, open) {
+    var all = sortNotes(parseNoteList(text, { card: true })), clamped = all.some(function (n) { return n.text.length > NOTE_CLAMP_CHARS; });
+    return { all: all, shown: open ? all : all.slice(0, NOTE_SHOW), total: all.length, button: all.length > NOTE_SHOW || clamped, open: !!open };
+  }
+  // s115: the points that matter, strongest first (level 3, 2), then ONE turnover report (the newest); addressed notes never.
   function keyPoints(text) {
-    var out = [], tr = null, order = 0;
-    parseNotes(text).forEach(function (g) { g.points.forEach(function (x) {
-      var o = { p: x.p, rank: x.rank, i: order++, d: g.date || '' };
-      if (x.rank > 1) return;
-      if (!isTurnover(x.p)) { out.push(o); return; }
-      if (!tr || o.d > tr.d) tr = o;
-    }); });
+    var out = [], tr = null;
+    parseNoteList(text).forEach(function (n, i) {
+      if (n.addressed) return;
+      var o = { p: n.text, rank: n.level === 3 ? 0 : n.level === 2 ? 1 : 2, i: i, d: n.date || '' };
+      if (isTurnover(n.text)) { if (!tr || o.d > tr.d) tr = o; return; }
+      if (n.level >= 2) out.push(o);
+    });
     if (tr) { tr.t = 1; out.push(tr); }
     return out.sort(function (a, b) { return (a.t ? 1.5 : a.rank) - (b.t ? 1.5 : b.rank) || a.i - b.i; });
   }
   function pointPriority(p) { for (var i = 0; i < PRIORITY.length; i++) if (PRIORITY[i][0].test(p)) return PRIORITY[i][1]; return 4; }
+  // Older shape kept for its callers and tests: one group per chunk, strongest keyword first. Built on the same parser, so the two cannot disagree.
   function parseNotes(text) {
     if (!text) return [];
-    return String(text).split(' || ').map(function (chunk) {
-      var m = /^(\d{4}-\d{2}-\d{2}):\s*([\s\S]*)$/.exec(chunk);
-      var points = (m ? m[2] : chunk).split(' | ').map(function (p) { return p.trim(); }).filter(Boolean);
-      points = points.map(function (p, i) { return { p: p, i: i }; }).sort(function (a, b) { return pointPriority(a.p) - pointPriority(b.p) || a.i - b.i; }).map(function (x) { return { p: x.p, rank: pointPriority(x.p) }; });
-      return { date: m ? m[1] : null, points: points };
+    return noteChunks(text).map(function (c) {
+      var g = parseChunk(c, false);
+      return { date: g.date, points: g.notes.map(function (n, i) { return { p: n.text, rank: pointPriority(n.text), i: i }; }).sort(function (a, b) { return a.rank - b.rank || a.i - b.i; }).map(function (x) { return { p: x.p, rank: x.rank }; }) };
     }).filter(function (g) { return g.points.length; });
   }
   // Returning pill text, or null when the guest is unknown or on a first stay.
@@ -743,7 +816,7 @@
   function phoneFixPlan(rows) { var need = {}; (rows || []).forEach(function (r) { if (r.state === 'tap' && r.fix) need[r.id] = 1; }); return PHONE_FIX_ORDER.filter(function (id) { return need[id]; }); }
   // s96 SPEC-47: the notes that matter (rank 0 incident/complaint, 1 special request): the strongest one first, and how many other notes there are.
   function keyNote(text) {
-    var n = 0, key = keyPoints(text)[0]; parseNotes(text).forEach(function (g) { n += g.points.length; });
+    var n = parseNoteList(text).filter(function (x) { return !x.addressed; }).length, key = keyPoints(text)[0];
     return key ? { p: key.p, rank: key.rank, word: key.rank === 0 ? 'Important:' : 'Request:', more: n - 1 } : null;
   }
   // s96 SPEC-47: topics a guest asked about (card key `notable`, topic keys only), in plain words; absent or empty gives null, max 3, the third after a dot
@@ -1005,7 +1078,7 @@
   // `more` counts every other unique note. Phone and the companion count only when canContact (owner/admin); guests from a count the server sends, else 1 + companions. id: the photo path exists.
   function goodToKnow(g, canContact) {
     var seen = {}, total = 0, cut = function (t) { if (t.length <= 90) return t; var w = t.slice(0, 89).replace(/\s+\S*$/, ''); return (w.length < 69 ? t.slice(0, 89) : w) + '…'; }; // a word boundary that would drop more than 20 characters is not worth it
-    parseNotes(g && g.notes).forEach(function (gr) { gr.points.forEach(function (x) { var k = x.p.toLowerCase(); if (!seen[k]) { seen[k] = 1; total++; } }); });
+    parseNoteList(g && g.notes).forEach(function (x) { if (x.addressed) return; var k = x.text.toLowerCase(); if (!seen[k]) { seen[k] = 1; total++; } });
     var shown = {}, key = keyPoints(g && g.notes).filter(function (x) { var k = x.p.toLowerCase(); return shown[k] ? false : (shown[k] = 1); }).map(function (x) { return { p: cut(x.p), rank: x.rank }; });
     var c = canContact ? guestContact(g) : null, n = null;
     // s120 (D-373): the staff correction (guest_count) wins, then the number Airbnb booked (booked_guests), then the older server counts, then 1 + companions below. staff_home_v1 puts the first two on `staying`.
@@ -1858,6 +1931,7 @@
     signinKind: signinKind, signinList: signinList, resolveTeam: resolveTeam, signinForTeam: signinForTeam, typedEntry: typedEntry, keypadPress: keypadPress, signinCredentials: signinCredentials, signinAsKind: signinAsKind,
     authStorage: authStorage, trustedFromStorage: trustedFromStorage, rememberName: rememberName, rememberRole: rememberRole, recalledRole: recalledRole, recalledName: recalledName, doorTarget: doorTarget, doorLink: doorLink, doorRule: doorRule, doorFramed: doorFramed, doorAllowed: doorAllowed, doorsForRole: doorsForRole, foldedDoorUrls: foldedDoorUrls, framedParentTarget: framedParentTarget, FOLD_DOORS: FOLD_DOORS,
     layoutForRole: layoutForRole, isLaundry: isLaundry, tabKeys: tabKeys, laundryView: laundryView, kpiAdmin: kpiAdmin, accessVerdict: accessVerdict, assertNoMoney: assertNoMoney, moneyKeys: moneyKeys,
+    parseNoteList: parseNoteList, sortNotes: sortNotes, noteLine: noteLine, serializeNotes: serializeNotes, noteInput: noteInput, notesAdd: notesAdd, notesEdit: notesEdit, notesDelete: notesDelete, notesRoom: notesRoom, notesSummary: notesSummary, notesView: notesView, noteDateLabel: noteDateLabel, NOTE_MAX: NOTE_MAX, NOTES_MAX: NOTES_MAX, NOTES_WARN: NOTES_WARN, NOTE_SHOW: NOTE_SHOW,
     manilaToday: manilaToday, manilaParts: manilaParts, addDays: addDays, daysBetween: daysBetween, weekdayIndex: weekdayIndex,
     dayLabel: dayLabel, dayLong: dayLong, dayShort: dayShort, monthTitle: monthTitle, monthShortYear: monthShortYear, greeting: greeting,
     fmtTime: fmtTime, fmt24: fmt24, ordinal: ordinal, plural: plural, agoLabel: agoLabel, clockLabel: clockLabel,
