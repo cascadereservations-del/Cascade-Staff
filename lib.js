@@ -517,20 +517,27 @@
     if (a) { addr = true; addrOn = a[1] || null; t = t.slice(0, a.index); }
     m = /^(!{1,3})\s+/.exec(t); if (m) { mark = m[1].length; t = t.slice(m[0].length); }
     m = /^suggestion:\s*/i.exec(t); if (m) { sug = true; t = t.slice(m[0].length); }
-    t = t.trim(); if (!t) return null;
+    t = t.trim(); if (!t) return { text: p, date: date, mark: 0, level: rankLevel(p), suggestion: false, addressed: false, addressedOn: null, readOnly: null }; // only markers were typed ("Suggestion:", "[addressed]"): keep them as a plain note, never drop the text
     ro = card ? (isTurnover(t) ? 'turnover' : /^VIP\s+-\s/i.test(t) ? 'vip' : null) : null; // the card string also holds chunks the server joins in: read-only rows
     return { text: t, date: date, mark: mark, level: ro ? 0 : mark || rankLevel(t), suggestion: sug, addressed: addr, addressedOn: addrOn, readOnly: ro };
   }
-  function parseChunk(chunk, card) {
-    var m = /^(\d{4}-\d{2}-\d{2}):\s*([\s\S]*)$/.exec(chunk), date = m ? m[1] : null, out = [];
+  function parseChunk(chunk, card, pend) {
+    var m = /^(\d{4}-\d{2}-\d{2}):\s*([\s\S]*)$/.exec(chunk), date = m ? m[1] : pend || null, out = [];
     (m ? m[2] : chunk).split(' | ').forEach(function (p) { p = p.trim(); if (!p) return; var n = noteOf(p, date, card); if (n) out.push(n); });
-    return { date: date, notes: out };
+    if (card && out.some(function (n) { return n.readOnly === 'turnover'; })) out.forEach(function (n) { n.readOnly = 'turnover'; n.level = 0; }); // every piece of a turnover-report chunk is from the report
+    return { date: date, notes: out, lone: !!m && !out.length };
+  }
+  // The chunks in order. A date typed alone on its line ("2026-01-02:" then the note on the next line) dates the next undated chunk, so the date is not lost.
+  function parseChunks(text, card) {
+    var pend = null, out = [];
+    noteChunks(text).forEach(function (c) { var g = parseChunk(c, card, pend); if (g.lone) pend = g.date; else if (g.notes.length) pend = null; out.push(g); });
+    return out;
   }
   // Notes in stored order; i is the stored position (the id the edit helpers take). opts.card flags the server-joined read-only chunks.
   function parseNoteList(text, opts) {
     var out = [], card = !!(opts && opts.card);
     if (!text) return out;
-    noteChunks(text).forEach(function (c) { parseChunk(c, card).notes.forEach(function (n) { n.i = out.length; out.push(n); }); });
+    parseChunks(text, card).forEach(function (g) { g.notes.forEach(function (n) { n.i = out.length; out.push(n); }); });
     return out;
   }
   function noteCmp(a, b) {
@@ -545,12 +552,17 @@
   function sortNotes(list) { return (list || []).slice().sort(noteCmp); }
   function noteLine(n) { return (n.date ? n.date + ': ' : '') + (n.mark ? NOTE_MARKS[n.mark] + ' ' : '') + (n.suggestion ? 'Suggestion: ' : '') + n.text + (n.addressed ? ' [addressed' + (n.addressedOn ? ' ' + n.addressedOn : '') + ']' : ''); }
   function serializeNotes(list) { return (list || []).map(noteLine).join(' || '); }
-  // What a person typed, made safe to store: "|" becomes "/", line breaks a space, trimmed, 600 characters.
-  function noteInput(o) {
+  // What a person typed, made safe to store: "|" becomes "/", line breaks a space, trimmed, 600 characters (cap: a stored longer note keeps its own length when it is edited).
+  // keep: the text was not edited, so it is stored as it is (a stored "AC|fan" stays "AC|fan").
+  function noteInput(o, cap, keep) {
     o = o || {};
-    var t = String(o.text == null ? '' : o.text).replace(/[\r\n]+/g, ' ').replace(/\|/g, '/').replace(/\[addressed/gi, '(addressed').trim();
-    return { text: t.slice(0, NOTE_MAX).trim(), mark: Math.max(0, Math.min(3, o.mark | 0)), suggestion: !!o.suggestion, date: o.date || null, addressed: !!o.addressed, addressedOn: o.addressed ? o.addressedOn || null : null };
+    var t = String(o.text == null ? '' : o.text);
+    if (!keep) t = t.replace(/[\r\n]+/g, ' ').replace(/\|/g, '/').replace(/\[addressed/gi, '(addressed');
+    t = t.trim(); cap = cap > NOTE_MAX ? cap : NOTE_MAX;
+    return { text: keep ? t : t.slice(0, cap).trim(), mark: Math.max(0, Math.min(3, o.mark | 0)), suggestion: !!o.suggestion, date: o.date || null, addressed: !!o.addressed, addressedOn: o.addressed ? o.addressedOn || null : null };
   }
+  // The longest an edited note may be: 600, or its own length when it was stored longer (never cut without the person editing it).
+  function noteCap(n) { return Math.max(NOTE_MAX, n && n.text ? n.text.length : 0); }
   function noteFull(inp, today) { var n = noteInput(inp); if (n.addressed && !n.addressedOn) n.addressedOn = today || null; return n; }
   function notesAdd(stored, inp, today) {
     var n = noteFull(inp, today); if (!n.text) return String(stored || '');
@@ -559,7 +571,14 @@
   }
   // The same string comes back when the note is unchanged (nothing to write); a missing index changes nothing.
   function notesEdit(stored, i, inp, today) {
-    var l = parseNoteList(stored), old = l[i], n = noteFull(inp, today); if (!old || !n.text) return String(stored || '');
+    var l = parseNoteList(stored), old = l[i]; if (!old) return String(stored || '');
+    inp = inp || {};
+    // Compare what the sheet holds with the stored note BEFORE any cleaning: nothing changed means the stored string is returned untouched.
+    var txt = String(inp.text == null ? '' : inp.text), edited = txt !== old.text, mk = Math.max(0, Math.min(3, inp.mark | 0));
+    if (!edited && !!inp.suggestion === old.suggestion && mk === old.mark && (inp.date || null) === (old.date || null) && !!inp.addressed === old.addressed && (!inp.addressed || !inp.addressedOn || inp.addressedOn === old.addressedOn)) return String(stored || '');
+    var n = noteInput(inp, noteCap(old), !edited); if (!n.text) return String(stored || '');
+    if (n.addressed && old.addressed && !n.addressedOn) n.addressedOn = old.addressedOn; // still addressed: a bare [addressed] stays bare, only ticking it now stamps today
+    else if (n.addressed && !old.addressed && !n.addressedOn) n.addressedOn = today || null;
     if (noteLine(old) === noteLine(n)) return String(stored || '');
     l[i] = n; return serializeNotes(l);
   }
@@ -595,8 +614,7 @@
   // Older shape kept for its callers and tests: one group per chunk, strongest keyword first. Built on the same parser, so the two cannot disagree.
   function parseNotes(text) {
     if (!text) return [];
-    return noteChunks(text).map(function (c) {
-      var g = parseChunk(c, false);
+    return parseChunks(text, false).map(function (g) {
       return { date: g.date, points: g.notes.map(function (n, i) { return { p: n.text, rank: pointPriority(n.text), i: i }; }).sort(function (a, b) { return a.rank - b.rank || a.i - b.i; }).map(function (x) { return { p: x.p, rank: x.rank }; }) };
     }).filter(function (g) { return g.points.length; });
   }
@@ -817,7 +835,7 @@
   // s96 SPEC-47: the notes that matter (rank 0 incident/complaint, 1 special request): the strongest one first, and how many other notes there are.
   function keyNote(text) {
     var n = parseNoteList(text).filter(function (x) { return !x.addressed; }).length, key = keyPoints(text)[0];
-    return key ? { p: key.p, rank: key.rank, word: key.rank === 0 ? 'Important:' : 'Request:', more: n - 1 } : null;
+    return key ? { p: key.p, rank: key.rank, mark: key.rank === 0 ? '!!!' : '!!', more: n - 1 } : null; // s130: the level mark takes the place of the Important:/Request: labels
   }
   // s96 SPEC-47: topics a guest asked about (card key `notable`, topic keys only), in plain words; absent or empty gives null, max 3, the third after a dot
   var TOPIC_LABELS = { directions: 'directions', links: 'links', wifi: 'Wi-Fi', brownout: 'brownout', guest_count: 'guest count', early_checkin: 'early check-in', late_checkout: 'late check-out', parking: 'parking', pets: 'pets', id: 'ID', complaint: 'a concern' };
@@ -1079,7 +1097,7 @@
   function goodToKnow(g, canContact) {
     var seen = {}, total = 0, cut = function (t) { if (t.length <= 90) return t; var w = t.slice(0, 89).replace(/\s+\S*$/, ''); return (w.length < 69 ? t.slice(0, 89) : w) + '…'; }; // a word boundary that would drop more than 20 characters is not worth it
     parseNoteList(g && g.notes).forEach(function (x) { if (x.addressed) return; var k = x.text.toLowerCase(); if (!seen[k]) { seen[k] = 1; total++; } });
-    var shown = {}, key = keyPoints(g && g.notes).filter(function (x) { var k = x.p.toLowerCase(); return shown[k] ? false : (shown[k] = 1); }).map(function (x) { return { p: cut(x.p), rank: x.rank }; });
+    var shown = {}, key = keyPoints(g && g.notes).filter(function (x) { var k = x.p.toLowerCase(); return shown[k] ? false : (shown[k] = 1); }).map(function (x) { return { p: cut(x.p), rank: x.rank, mark: x.rank === 0 ? '!!!' : x.rank === 1 ? '!!' : '' }; });
     var c = canContact ? guestContact(g) : null, n = null;
     // s120 (D-373): the staff correction (guest_count) wins, then the number Airbnb booked (booked_guests), then the older server counts, then 1 + companions below. staff_home_v1 puts the first two on `staying`.
     var sy = g && g.staying && typeof g.staying === 'object' ? g.staying : null;
@@ -1931,7 +1949,7 @@
     signinKind: signinKind, signinList: signinList, resolveTeam: resolveTeam, signinForTeam: signinForTeam, typedEntry: typedEntry, keypadPress: keypadPress, signinCredentials: signinCredentials, signinAsKind: signinAsKind,
     authStorage: authStorage, trustedFromStorage: trustedFromStorage, rememberName: rememberName, rememberRole: rememberRole, recalledRole: recalledRole, recalledName: recalledName, doorTarget: doorTarget, doorLink: doorLink, doorRule: doorRule, doorFramed: doorFramed, doorAllowed: doorAllowed, doorsForRole: doorsForRole, foldedDoorUrls: foldedDoorUrls, framedParentTarget: framedParentTarget, FOLD_DOORS: FOLD_DOORS,
     layoutForRole: layoutForRole, isLaundry: isLaundry, tabKeys: tabKeys, laundryView: laundryView, kpiAdmin: kpiAdmin, accessVerdict: accessVerdict, assertNoMoney: assertNoMoney, moneyKeys: moneyKeys,
-    parseNoteList: parseNoteList, sortNotes: sortNotes, noteLine: noteLine, serializeNotes: serializeNotes, noteInput: noteInput, notesAdd: notesAdd, notesEdit: notesEdit, notesDelete: notesDelete, notesRoom: notesRoom, notesSummary: notesSummary, notesView: notesView, noteDateLabel: noteDateLabel, NOTE_MAX: NOTE_MAX, NOTES_MAX: NOTES_MAX, NOTES_WARN: NOTES_WARN, NOTE_SHOW: NOTE_SHOW,
+    parseNoteList: parseNoteList, sortNotes: sortNotes, noteLine: noteLine, serializeNotes: serializeNotes, noteInput: noteInput, noteCap: noteCap, notesAdd: notesAdd, notesEdit: notesEdit, notesDelete: notesDelete, notesRoom: notesRoom, notesSummary: notesSummary, notesView: notesView, noteDateLabel: noteDateLabel, NOTE_MAX: NOTE_MAX, NOTES_MAX: NOTES_MAX, NOTES_WARN: NOTES_WARN, NOTE_SHOW: NOTE_SHOW,
     manilaToday: manilaToday, manilaParts: manilaParts, addDays: addDays, daysBetween: daysBetween, weekdayIndex: weekdayIndex,
     dayLabel: dayLabel, dayLong: dayLong, dayShort: dayShort, monthTitle: monthTitle, monthShortYear: monthShortYear, greeting: greeting,
     fmtTime: fmtTime, fmt24: fmt24, ordinal: ordinal, plural: plural, agoLabel: agoLabel, clockLabel: clockLabel,

@@ -182,3 +182,62 @@ test('s130: demo seeds - a legacy free-text guest and a typed one, and the demo 
   assert.match(seeds, /Suggestion:/);
   assert.match(seeds, /!!!/);
 });
+
+// ---------------------------------------------------------------------------------------------- s130 fix round 1 (Opus review of 48c6745)
+test('s130 fix1 F1: a stored 700-character note saved unchanged is not written; edited, it keeps its full length; new notes stay at 600', () => {
+  const long = 'w'.repeat(700), s = '2026-10-10: ' + long + ' || 2026-10-11: short';
+  assert.equal(CS.noteCap(CS.parseNoteList(s)[0]), 700); assert.equal(CS.noteCap(CS.parseNoteList(s)[1]), 600);
+  assert.equal(CS.notesEdit(s, 0, { text: long, mark: 0, suggestion: false, date: '2026-10-10' }, TODAY), s, 'unchanged: the same string, no write');
+  const swapped = 'v' + long.slice(1), out = CS.notesEdit(s, 0, { text: swapped, mark: 0, suggestion: false, date: '2026-10-10' }, TODAY);
+  assert.equal(out, '2026-10-10: ' + swapped + ' || 2026-10-11: short', 'edited: all 700 characters kept');
+  assert.equal(CS.notesEdit(s, 0, { text: long + 'zzzz', mark: 0, date: '2026-10-10' }, TODAY).split(' || ')[0].length, 12 + 700, 'typing past the old length is cut at that length, not at 600');
+  assert.equal(CS.notesEdit(s, 1, { text: 'y'.repeat(700), mark: 0, date: '2026-10-11' }, TODAY).split(' || ')[1].length, 12 + 600, 'a normal note is still capped at 600');
+  assert.equal(CS.notesAdd('', { text: 'x'.repeat(700) }, TODAY), TODAY + ': ' + 'x'.repeat(600));
+});
+
+test('s130 fix1 F2: an unchanged save returns the stored string for bare [addressed], a pipe inside a word and a mid-text marker', () => {
+  for (const s of ['Fix the drain [addressed]', 'AC|fan please', 'Was [addressed 2026-01-01] again', '2026-10-10: !! Suggestion: AC|fan [addressed]']) {
+    const o = CS.parseNoteList(s)[0];
+    assert.equal(CS.notesEdit(s, 0, { text: o.text, mark: o.mark, suggestion: o.suggestion, date: o.date, addressed: o.addressed, addressedOn: o.addressedOn }, TODAY), s, s);
+  }
+  assert.equal(CS.parseNoteList('Fix the drain [addressed]')[0].addressedOn, null, 'a bare [addressed] has no date');
+});
+
+test('s130 fix1 F2: editing around a bare [addressed] keeps it bare; ticking it stamps today; pipes in edited text still become slashes', () => {
+  const s = 'Fix the drain [addressed]', o = CS.parseNoteList(s)[0];
+  assert.equal(CS.notesEdit(s, 0, { text: o.text, mark: 2, addressed: true, addressedOn: null }, TODAY), '!! Fix the drain [addressed]', 'level changed, still bare');
+  assert.equal(CS.notesEdit(s, 0, { text: 'Fix the sink', mark: 0, addressed: true, addressedOn: null }, TODAY), 'Fix the sink [addressed]');
+  assert.equal(CS.notesEdit('Open note', 0, { text: 'Open note', mark: 0, addressed: true, addressedOn: null }, TODAY), 'Open note [addressed ' + TODAY + ']', 'ticking stamps today');
+  assert.equal(CS.notesEdit('AC|fan please', 0, { text: 'AC|fan on low', mark: 0 }, TODAY), 'AC/fan on low', 'edited text is cleaned');
+  assert.equal(CS.notesEdit('AC|fan please', 0, { text: 'AC|fan please', mark: 3 }, TODAY), '!!! AC|fan please', 'level changed: the text is not rewritten');
+});
+
+test('s130 fix1 F3: marker-only and date-only text survives a write-back', () => {
+  const a = 'Likes tea || Suggestion: [addressed]';
+  assert.deepEqual(CS.parseNoteList(a).map((n) => n.text), ['Likes tea', 'Suggestion: [addressed]']);
+  assert.equal(CS.serializeNotes(CS.parseNoteList(a)), a);
+  assert.equal(CS.serializeNotes(CS.parseNoteList('Suggestion:')), 'Suggestion:');
+  assert.equal(CS.parseNoteList('Suggestion:')[0].suggestion, false);
+  assert.equal(CS.serializeNotes(CS.parseNoteList('2026-01-02: !!! Suggestion:')), '2026-01-02: !!! Suggestion:');
+  const d = CS.parseNoteList('2026-01-02:\nAC at 24');
+  assert.deepEqual(d.map((n) => [n.date, n.text]), [['2026-01-02', 'AC at 24']]);
+  assert.equal(CS.serializeNotes(d), '2026-01-02: AC at 24');
+  assert.deepEqual(CS.parseNoteList('2026-01-02:\nAC at 24\nNo date here').map((n) => n.date), ['2026-01-02', null], 'the lone date dates only the next line');
+  assert.equal(CS.notesAdd(a, { text: 'More' }, TODAY), a + ' || ' + TODAY + ': More', 'adding after such a note keeps it');
+});
+
+test('s130 fix1 F5: Good to know has the level mark and no Important:/Request: label', () => {
+  const g = CS.goodToKnow({ notes: '2026-09-01: Special request: extra pillows || 2026-10-20: Reported a damage to the kettle' }, false);
+  assert.deepEqual(g.notes.map((n) => [n.p, n.mark]), [['Reported a damage to the kettle', '!!!'], ['Special request: extra pillows', '!!']]);
+  assert.equal(CS.keyNote('Special request: x').mark, '!!'); assert.equal(CS.keyNote('Special request: x').word, undefined);
+  const src = read('app.js'); assert.doesNotMatch(src, /'Important:'|'Request:'/);
+});
+
+test('s130 fix1 F7: every piece of a turnover-report chunk is read-only on the card; other chunks and the editor list are not', () => {
+  const t = '2026-10-20: Turnover report: sofa stained | towel missing | AC leaking || 2026-10-10: Likes tea | Needs a crib';
+  const card = CS.parseNoteList(t, { card: true });
+  assert.deepEqual(card.map((n) => n.readOnly), ['turnover', 'turnover', 'turnover', null, null]);
+  assert.deepEqual(card.slice(0, 3).map((n) => n.level), [0, 0, 0]);
+  assert.deepEqual(CS.parseNoteList(t).map((n) => n.readOnly), [null, null, null, null, null]);
+  assert.equal(CS.notesView(t, true).all.filter((n) => n.readOnly).length, 3);
+});

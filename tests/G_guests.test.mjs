@@ -1926,3 +1926,56 @@ test('G s130: the sheet marks Regular, !, !!, !!! as pressed buttons and the top
   assert.match(el.html, /data-act="n-level" data-v="3" aria-pressed="true"/); assert.match(el.html, /data-act="n-level" data-v="0" aria-pressed="false"/);
   assert.match(el.html, /N_paper G_nsheet/);
 });
+
+// ------------------------------------------------------------------------------------------------ s130 fix round 1
+const LONG = 'w'.repeat(700);
+test('G s130 fix1 F1: a stored 700-character note opened and saved unchanged writes nothing; edited, the whole text is written; the field allows 700', async () => {
+  const cl = notesClient('2026-10-10: ' + LONG + ' || 2026-10-11: short'); const { el } = await mount(cl, GID + '/notes');
+  await clickA(el, 'n-open', { i: '0' }); await tick(); assert.match(el.html, /id="G_n_text"[^>]*maxlength="700"/);
+  await clickA(el, 'n-save'); await tick(); assert.equal(cl.saves.length, 0); assert.match(el.html, /Nothing was changed/);
+  const c2 = notesClient('2026-10-10: ' + LONG + ' || 2026-10-11: short'); const m2 = await mount(c2, GID + '/notes');
+  await clickA(m2.el, 'n-open', { i: '0' }); await tick(); const o = m2.el.val('G_n_text'); assert.equal(o.length, 700);
+  m2.el.type('G_n_text', 'v' + o.slice(1)); await clickA(m2.el, 'n-save'); await tick();
+  assert.equal(c2.saves.length, 1); assert.equal(c2.saves[0].p_patch.stay_preferences, '2026-10-10: v' + LONG.slice(1) + ' || 2026-10-11: short');
+  const c3 = notesClient(); const m3 = await mount(c3, GID + '/notes'); await clickA(m3.el, 'n-add'); await tick(); assert.match(m3.el.html, /id="G_n_text"[^>]*maxlength="600"/);
+});
+
+test('G s130 fix1 F2: saving without a change writes nothing for bare [addressed], a pipe inside a word and a mid-text [addressed date]', async () => {
+  for (const stored of ['Fix the drain [addressed]', 'AC|fan please', 'Was [addressed 2026-01-01] again']) {
+    const cl = notesClient(stored); const { el } = await mount(cl, GID + '/notes');
+    await clickA(el, 'n-open', { i: '0' }); await tick(); await clickA(el, 'n-save'); await tick();
+    assert.equal(cl.saves.length, 0, stored); assert.match(el.html, /Nothing was changed/, stored);
+  }
+  const cl = notesClient('Fix the drain [addressed]'); const { el } = await mount(cl, GID + '/notes');
+  await clickA(el, 'n-open', { i: '0' }); await tick(); await clickA(el, 'n-level', { v: '2' }); await clickA(el, 'n-save'); await tick();
+  assert.equal(cl.saves[0].p_patch.stay_preferences, '!! Fix the drain [addressed]', 'a changed level keeps the bare [addressed] bare');
+});
+
+test('G s130 fix1 F3: a note that is only a marker is kept when another note is saved', async () => {
+  const cl = notesClient('Likes tea || Suggestion: [addressed]'); const { el } = await mount(cl, GID + '/notes');
+  await clickA(el, 'n-add'); await tick(); el.type('G_n_text', 'Needs a crib'); await clickA(el, 'n-save'); await tick();
+  assert.equal(cl.saves[0].p_patch.stay_preferences, 'Likes tea || Suggestion: [addressed] || 2026-10-14: Needs a crib');
+});
+
+test('G s130 fix1 F4: a legacy note dated in the future saves after only its importance changes; a changed future date is still refused', async () => {
+  const cl = notesClient('2026-12-24: Christmas stay'); const { el } = await mount(cl, GID + '/notes');
+  await clickA(el, 'n-open', { i: '0' }); await tick(); await clickA(el, 'n-level', { v: '2' }); await clickA(el, 'n-save'); await tick();
+  assert.equal(cl.saves.length, 1); assert.equal(cl.saves[0].p_patch.stay_preferences, '2026-12-24: !! Christmas stay');
+  const c2 = notesClient('2026-12-24: Christmas stay'); const m2 = await mount(c2, GID + '/notes');
+  await clickA(m2.el, 'n-open', { i: '0' }); await tick(); m2.el.type('G_n_date', '2026-12-25'); await clickA(m2.el, 'n-save'); await tick();
+  assert.match(m2.el.html, /not in the future/); assert.equal(c2.saves.length, 0);
+});
+
+const prefClient = (stored) => reviewClient(() => ({ status: 200, j: { ok: true, saved: [{ what: 'profile', ok: true }] } }), PROPOSAL, { tables: { guests: { data: GUEST, error: null }, guest_profile_details: { data: { ...PROFILE, stay_preferences: stored }, error: null } } });
+const lastSave = (cl) => cl.fcalls.filter((c) => c[1].action === 'save').pop()[1];
+test('G s130 fix1 F6: Add guest details does not append a preference already on file (trimmed, any case); a new one is still dated and sent', async () => {
+  const cl = prefClient('2026-10-01: Allergic to nuts'); const { el } = await toReviewWith(cl);
+  await clickA(el, 'save-add'); await tick();
+  const b = lastSave(cl); assert.equal('stay_preferences' in b, false, 'all duplicates: not sent'); assert.equal(b.phone, '09175550000', 'the rest is still saved');
+  const c2 = prefClient('Quiet room'); const m2 = await toReviewWith(c2); m2.el.type('G_r_pref', '  allergic TO nuts '); await clickA(m2.el, 'save-add'); await tick();
+  assert.equal(lastSave(c2).stay_preferences, '2026-10-14: allergic TO nuts', 'not on file: sent with the date');
+  const c3 = prefClient('2026-10-01: Allergic to nuts'); const m3 = await toReviewWith(c3); m3.el.type('G_r_pref', ' allergic TO nuts \nLikes a quiet room'); await clickA(m3.el, 'save-add'); await tick();
+  assert.equal(lastSave(c3).stay_preferences, '2026-10-14: Likes a quiet room', 'only the new one is sent');
+  const c4 = prefClient('2026-10-01: Allergic to nuts'); const m4 = await toReviewWith(c4); m4.el.type('G_r_pref', 'Allergic to nuts and shellfish'); await clickA(m4.el, 'save-add'); await tick();
+  assert.equal(lastSave(c4).stay_preferences, '2026-10-14: Allergic to nuts and shellfish', 'a longer text is not a duplicate');
+});

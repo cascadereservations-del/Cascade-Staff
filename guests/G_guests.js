@@ -439,7 +439,7 @@
   function G_noteSheetHtml(stored) {
     var s = S.nt.sheet, busy = S.busy, ro = busy ? ' readonly' : '', add = s.i < 0, lift = s.lift ? 'This note shows as ' + '!!!'.slice(0, s.lift) + ' because of the words in it. Choose an importance to set it yourself.' : '';
     return '<div class="card N_paper G_nsheet"><h3 class="hd">' + (add ? 'Add a note' : 'Edit note') + '</h3>' + G_err(s.err, 'G_nerr') +
-      '<div class="field"><label for="G_n_text">Note</label><textarea class="ta N_ta" id="G_n_text" rows="4" maxlength="' + root.CS.NOTE_MAX + '"' + ro + ' placeholder="Allergies, a quiet room, a late arrival">' + G_esc(s.text) + '</textarea></div>' +
+      '<div class="field"><label for="G_n_text">Note</label><textarea class="ta N_ta" id="G_n_text" rows="4" maxlength="' + (s.cap || root.CS.NOTE_MAX) + '"' + ro + ' placeholder="Allergies, a quiet room, a late arrival">' + G_esc(s.text) + '</textarea></div>' +
       '<div class="field"><span class="lbl" id="G_n_k">Kind</span>' + G_noteSeg('n-kind', [['note', 'Note'], ['sug', 'Suggestion']], s.suggestion ? 'sug' : 'note', 'N_seg2', 'Kind') + '</div>' +
       '<div class="field"><span class="lbl" id="G_n_l">How important</span>' + G_noteSeg('n-level', G_NOTE_LEVELS.map(function (l) { return [String(l[0]), l[1]]; }), String(s.mark), '', 'How important') + '<span class="help">The top level shows first on the card and on Today.' + (lift ? ' ' + G_esc(lift) : '') + '</span></div>' +
       '<button class="N_chk" type="button" id="G_n_addr" role="checkbox" aria-checked="' + !!s.addressed + '" data-act="n-addr"' + (busy ? ' disabled' : '') + '><span class="N_box" aria-hidden="true">' + G_ic('check') + '</span><span>Addressed or fixed<span class="help" style="display:block">Stays on file, moves to the end, leaves Today.</span></span></button>' +
@@ -453,8 +453,8 @@
   function G_noteOpen(i) {
     var n = i < 0 ? null : root.CS.parseNoteList(G_noteStored())[i]; if (i >= 0 && !n) return;
     S.msg = null; S.err = ''; S.nt.undo = null;
-    S.nt.sheet = n ? { i: i, text: n.text, suggestion: n.suggestion, mark: n.mark, addressed: n.addressed, addressedOn: n.addressedOn, date: n.date || '', err: '', lift: n.mark === 0 && n.level > 0 ? n.level : 0 }
-      : { i: -1, text: '', suggestion: false, mark: 0, addressed: false, addressedOn: null, date: G_today(), err: '', lift: 0 };
+    S.nt.sheet = n ? { i: i, text: n.text, suggestion: n.suggestion, mark: n.mark, addressed: n.addressed, addressedOn: n.addressedOn, date: n.date || '', err: '', cap: root.CS.noteCap(n), lift: n.mark === 0 && n.level > 0 ? n.level : 0 }
+      : { i: -1, text: '', suggestion: false, mark: 0, addressed: false, addressedOn: null, date: G_today(), err: '', cap: root.CS.NOTE_MAX, lift: 0 };
     G_paint(); G_focus('G_n_text');
   }
   // In place, so the pressed button keeps its focus.
@@ -472,9 +472,10 @@
     var s = S.nt.sheet, today = G_today(), CSx = root.CS, stored = G_noteStored(); if (!s) return;
     G_readNote();
     var bad = function (m) { s.err = m; G_paint(); G_focusLate('G_nerr'); };
-    var inp = { text: s.text, mark: s.mark, suggestion: s.suggestion, date: s.date || null, addressed: s.addressed, addressedOn: s.addressed ? s.addressedOn || today : null };
+    var inp = { text: s.text, mark: s.mark, suggestion: s.suggestion, date: s.date || null, addressed: s.addressed, addressedOn: s.addressed ? s.addressedOn || null : null }; // a bare [addressed] stays bare; only ticking it here stamps today (G_noteAddr)
     if (!CSx.noteInput(inp).text) return bad('Write the note first.');
-    if (inp.date && (!/^\d{4}-\d{2}-\d{2}$/.test(inp.date) || G_iso(Date.parse(inp.date + 'T00:00:00Z')) !== inp.date || inp.date > today)) return bad('Enter a date that is not in the future.');
+    var was = s.i < 0 ? null : CSx.parseNoteList(stored)[s.i]; // a stored date is kept as it is: the check only applies to a date that was changed
+    if (inp.date && !(was && inp.date === was.date) && (!/^\d{4}-\d{2}-\d{2}$/.test(inp.date) || G_iso(Date.parse(inp.date + 'T00:00:00Z')) !== inp.date || inp.date > today)) return bad('Enter a date that is not in the future.');
     var next = s.i < 0 ? CSx.notesAdd(stored, inp, today) : CSx.notesEdit(stored, s.i, inp, today);
     if (next === stored) { S.nt.sheet = null; S.msg = ['Nothing was changed.']; G_paint(); G_focus('G_msg'); return; } // no write when nothing changed
     if (next.length > CSx.NOTES_MAX) return bad('The notes hold 4,000 characters in all. Shorten this note or delete an older one.');
@@ -656,6 +657,15 @@
       if (o) d.own = o.value === 'own'; if (n) d.name = n.value; if (t) d.id_type = t.value;
     });
   }
+  /** s130: the preferences to append, dated; null when empty or when every one is already a note on file (same text, trimmed, any case). The server's own duplicate check compares exact text, which the date prefix would defeat. */
+  function G_newPrefs(text) {
+    if (!text) return null;
+    var dated = G_datedNote(text), have = {}, CSx = root.CS, list = CSx.parseNoteList(dated), keep;
+    CSx.parseNoteList(S.d && S.d.details ? S.d.details.stay_preferences : '').forEach(function (n) { have[n.text.trim().toLowerCase()] = 1; });
+    keep = list.filter(function (n) { return !have[n.text.trim().toLowerCase()]; });
+    if (!keep.length) return null;
+    return keep.length === list.length ? dated : CSx.serializeNotes(keep.map(function (n) { n.date = n.date || G_today(); return n; }));
+  }
   /** What the sheet would send, or { error }. The server checks every field again. */
   function G_addBody(guestId, s, images, guestName, version) {
     var tags = G_tagsFromText(s.tags);
@@ -669,7 +679,8 @@
     if (version != null) body.expected_version = version;
     if (String(s.phone).trim()) body.phone = String(s.phone).trim();
     if (String(s.email).trim()) body.email = String(s.email).trim();
-    if (String(s.stay_preferences).trim()) body.stay_preferences = G_datedNote(String(s.stay_preferences).trim()); // s130: a dated, regular note (the server appends it under what is on file)
+    var pref = G_newPrefs(String(s.stay_preferences).trim()); // s130: a dated, regular note (the server appends it under what is on file); one already on file is not sent again
+    if (pref) body.stay_preferences = pref;
     if (s.birthday) body.birthday = s.birthday;
     if (tags.length) body.tags = tags;
     var comps = s.companions.filter(function (c) { return c.on && String(c.name).trim(); }).map(function (c) { return String(c.name).trim(); });
