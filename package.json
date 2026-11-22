@@ -3,5 +3,10 @@
   "version": "3.4.50",
   "private": true,
   "description": "Cascade Staff PWA: staff app and the official mobile admin side (SPEC-36, D-299.3). Static files, no build step.",
-  "scripts": { "test": "node --test --test-timeout=120000 \"tests/*.test.mjs\"" }
+  "scripts": {
+    "test": "node --test --test-timeout=120000 \"tests/*.test.mjs\"",
+    "test:related": "node scripts/test-related.mjs",
+    "test:changed": "node scripts/test-related.mjs --changed",
+    "test:affected": "node scripts/test-related.mjs --affected"
+  }
 }
