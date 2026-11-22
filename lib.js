@@ -1138,7 +1138,7 @@
     var all = parseNoteList(g && g.notes, { card: true }), hid = turnCovered(all), open = [];
     all.forEach(function (x) { if (x.addressed || hid(x)) return; var k = x.text.toLowerCase(); if (!seen[k]) { seen[k] = 1; total++; open.push(x); } });
     var lev = sortNotes(open.filter(function (x) { return !x.readOnly && x.level >= 1; })), iss = null;
-    open.forEach(function (x) { if (x.readOnly !== 'turnover' && !(x.turn && x.kind === 'issue')) return; if (!iss || (x.date || '') > (iss.date || '')) iss = x; });
+    open.forEach(function (x) { if (x.readOnly !== 'turnover' && !(x.turn && x.kind === 'issue')) return; if (!iss || (x.turn || x.date || '') > (iss.turn || iss.date || '')) iss = x; });
     var pick = lev.slice(0, 3); if (iss && pick.indexOf(iss) < 0) pick = lev.slice(0, 2).concat([iss]); // the newest open turnover issue always has a row
     var key = sortNotes(pick).map(function (x) {
       var raw = x.readOnly === 'turnover', lv = raw ? 0 : x.level;

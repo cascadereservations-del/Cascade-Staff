@@ -125,11 +125,11 @@
     var skip = S.askSkip ? box('info', 'Skip ' + b.label + ' for this month? Nothing will be logged.') + '<div class="row-wrap"><button class="btn btn-secondary" type="button" data-bact="skip-yes"' + (S.busy ? ' disabled' : '') + '>Yes, skip it</button><button class="btn btn-ghost" type="button" data-bact="skip-no">Keep it</button></div>'
       : '<button class="btn btn-ghost btn-sm BL_skip" type="button" data-bact="skip-ask"' + (S.busy ? ' disabled' : '') + '>Not paying this month</button>';
     var later = '<div class="stack"><button class="btn btn-ghost" type="button" data-bact="cancel" style="width:100%"' + (S.busy ? ' disabled' : '') + '>Not now</button>' + skip + '</div>';
-    draw('<div class="stack">' + amountBox + to + meter + proof + '<button class="btn btn-primary btn-block" type="button" id="BL_done" data-bact="settle"' + (payReady({ file: S.file, amountText: parts.editable ? S.amountText : String(est), busy: S.busy, meter: S.meter, readDate: S.readDate, readVal: S.readVal, today: S.today }) ? '' : ' disabled') + '>' + ICON('checks') + (S.busy ? 'Saving…' : 'Mark as paid') + '</button>' + later + '</div><input type="file" id="BL_file" accept="image/*" hidden>');
+    draw('<div class="stack">' + amountBox + to + meter + proof + '<button class="btn btn-primary btn-block" type="button" id="BL_done" data-bact="settle"' + (payNow() ? '' : ' disabled') + '>' + ICON('checks') + (S.busy ? 'Saving…' : 'Mark as paid') + '</button>' + later + '</div><input type="file" id="BL_file" accept="image/*" hidden>');
   }
   function settle() {
     var d = S.d, parts = sheetParts(d), amount = parts.editable ? amountOf(S.amountText) : Number(d.pay.amount_php);
-    if (S.busy || !payReady({ file: S.file, amountText: parts.editable ? S.amountText : String(amount), busy: false, meter: S.meter, readDate: S.readDate, readVal: S.readVal, today: S.today })) return;
+    if (S.busy || !payNow()) return;
     // s and file are this sheet and this screenshot: after the upload nothing may be read from S, which can by then be another bill's sheet.
     var s = S, file = S.file, o = S.o; S.busy = true; S.msg = ''; renderPay();
     var up = s.up ? Promise.resolve(s.up) : Promise.resolve().then(function () { return o.upload(file); }).then(function (u) { if (s.file === file) s.up = u; return u; });
@@ -203,7 +203,7 @@
     else if (a === 'save') save();
   }
   // The Mark as paid state from the full sheet state (amount, screenshot, meter reading date): every input handler uses this one.
-  function payNow() { return payReady({ file: S.file, amountText: S.d.pay.amount_editable ? S.amountText : String(Number(S.d.pay.amount_php) || 0), busy: S.busy, meter: S.meter, readDate: S.readDate, readVal: S.readVal, today: S.today }); }
+  function payNow() { return payReady({ file: S.file, amountText: sheetParts(S.d).editable ? S.amountText : String(Number(S.d.pay.amount_php) || 0), busy: S.busy, meter: S.meter, readDate: S.readDate, readVal: S.readVal, today: S.today }); }
   function onInput(ev) {
     var t = ev.target; if (!S || S.end) return;
     if (t.id === 'BL_amt') { S.amountText = t.value; S.confirmedFor = null; var h = S.o.box.querySelector('#BL_amthelp'); if (h) h.textContent = amtHelp(t.value, Number(S.d.pay.amount_php) || 0); var b = S.o.box.querySelector('#BL_done'); if (b) b.disabled = !payNow(); }

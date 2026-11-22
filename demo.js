@@ -235,7 +235,7 @@
     var me = 'Demo ' + view.charAt(0).toUpperCase() + view.slice(1);
     function seedBills(today) {
       if (bills) return bills; var ago = new Date(Date.parse(today + 'T04:00:00Z') - 10 * 86400000).toISOString();
-      var mk = function (id, kind, est, due, isEst, o) { return Object.assign({ id: 'demo-bill-' + id, kind: kind, label: SCHED[kind].label, period: today.slice(0, 7), status: 'due', estimate_php: est, paid_php: null, is_estimate: isEst, due_day: due, paying_by_name: null, paid_by_name: null, paid_at: null }, o || {}); };
+      var mk = function (id, kind, est, due, isEst, o) { return Object.assign({ id: 'demo-bill-' + id, kind: kind, label: SCHED[kind].label, period: (kind === 'electric' || kind === 'water' ? cycleOf(today).from : today).slice(0, 7), status: 'due', estimate_php: est, paid_php: null, is_estimate: isEst, due_day: due, paying_by_name: null, paid_by_name: null, paid_at: null }, o || {}); };
       return (bills = [mk('e', 'electric', 2140, 27, true), mk('w', 'water', 430, 30, true, { status: 'paying', paying_by_name: 'Zz Payer' }), mk('i', 'internet', 1500, 28, false), mk('n', 'netflix', 449, 10, false, { status: 'paid', paid_php: 449, paid_by_name: 'Zz Finance', paid_at: ago })]);
     }
     function ent(b) { return Object.assign({}, b, { can_pay: mayPay && (b.status === 'due' || (b.status === 'paying' && b.paying_by_name === me)) }); }
