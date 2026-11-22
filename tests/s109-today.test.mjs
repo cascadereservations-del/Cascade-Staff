@@ -26,7 +26,7 @@ test('s109 utility strip: today and tomorrow only, one word per kind, time range
 });
 
 test('D-360 freebie: returning, regular and VIP guests only, before arrival; a first stay or an unknown tier gets none', () => {
-  const F = 'Returning-guest freebie: 1 chocolate, 2 Kit Kats, 1 extra bottle of water or 2 extra coffee sachets';
+  const F = 'Returning-guest freebie: 1 chocolate and 2 extra bottles of water';
   for (const t of ['returning', 'regular', 'vip']) assert.ok(CS.tierPerks(t, { phase: 'arrival' }).includes(F), String(t));
   for (const t of [null, 'first', 'gold']) assert.ok(!CS.tierPerks(t, { phase: 'arrival' }).includes(F), String(t));
   assert.doesNotMatch(read('lib.js'), /Standard freebie/);

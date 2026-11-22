@@ -96,8 +96,8 @@ test('CSS: the staying block wraps long names, the Change control has its own co
   const app = read('app.js'); assert.doesNotMatch(app, /S_person|S_mk|class="S_line"/);
 });
 
-test('release pins: 3.4.47 and cs-shell-v72', () => {
-  assert.equal(JSON.parse(read('package.json')).version, '3.4.47'); assert.match(read('app.js'), /version: '3\.4\.47'/); assert.match(read('sw.js'), /CACHE_NAME = 'cs-shell-v72'/); assert.match(read('app.js'), /var PC_SHELL = 'cs-shell-v72';/);
+test('release pins: 3.4.48 and cs-shell-v73', () => {
+  assert.equal(JSON.parse(read('package.json')).version, '3.4.48'); assert.match(read('app.js'), /version: '3.4.48'/); assert.match(read('sw.js'), /CACHE_NAME = 'cs-shell-v73'/); assert.match(read('app.js'), /var PC_SHELL = 'cs-shell-v73';/);
 });
 
 test('F2: no booker name, nothing typed, companions on record - the first companion is highlighted, the rest follow, no Add link', async () => {

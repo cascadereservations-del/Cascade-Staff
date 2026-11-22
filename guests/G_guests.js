@@ -400,8 +400,9 @@
     return '<span class="N_lv N_lv' + n.level + '"' + (n.level ? ' role="img" aria-label="Importance ' + n.level + ' of 3"' : ' aria-hidden="true"') + '>' + (n.level ? '!!!'.slice(0, n.level) : '&bull;') + '</span>';
   }
   function G_nTags(n) {
-    var dt = n.date ? root.CS.noteDateLabel(n.date) : '', from = n.readOnly ? 'from the guest record, not editable here' : '';
-    return '<span class="N_tags"><span class="help num">' + G_esc(dt + (dt && from ? ' · ' : '') + from) + '</span>' + (n.suggestion ? '<span class="pill p-brand">Guest suggestion</span>' : '') + (n.addressed ? '<span class="pill p-ok">Addressed' + (n.addressedOn ? ' ' + G_esc(root.CS.noteDateLabel(n.addressedOn)) : '') + '</span>' : '') + '</span>';
+    var dt = n.date ? root.CS.noteDateLabel(n.date) : '', from = n.readOnly ? 'from the guest record, not editable here' : n.turn ? 'from the cleaning report' : '';
+    var kd = n.suggestion ? '<span class="pill p-brand">Guest suggestion</span>' : n.kind === 'request' ? '<span class="pill p-warn">Request</span>' : n.kind === 'issue' ? '<span class="pill p-warn">Issue</span>' : ''; // s131: the kind chip is neutral or warn tone, red is only for the !!! mark
+    return '<span class="N_tags"><span class="help num">' + G_esc(dt + (dt && from ? ' · ' : '') + from) + '</span>' + kd + (n.addressed ? '<span class="pill p-ok">Addressed' + (n.addressedOn ? ' ' + G_esc(root.CS.noteDateLabel(n.addressedOn)) : '') + '</span>' : '') + '</span>';
   }
   // The Notes row of the guest page: opens the screen. "N on file · n marked !!! · n open suggestions", or Add.
   function G_notesRow(p, none, canEdit) {
@@ -418,6 +419,7 @@
     var back = '<a class="btn btn-ghost G_back" href="#guests/' + G_esc(S.gid) + '">‹ Back to the guest</a>';
     var notice = S.msg ? '<div class="okbox G_note" role="status" id="G_msg" tabindex="-1">' + G_glyph('ok') + '<span>' + S.msg.map(G_esc).join('<br>') + '</span></div>' : '';
     if (!D.detailsOk) return '<div class="G_detail">' + back + G_err(S.err) + '<p class="help" role="status">The notes could not load, so they cannot be changed yet.</p><button class="btn btn-secondary btn-sm" type="button" data-act="detail-retry"' + G_off() + '>Try again</button></div>';
+    if (S.tn && !S.tn.done) G_noteOpenTurn();
     var stored = String(p.stay_preferences || ''), nameLine = '<p class="cap up" style="margin:0">' + G_esc((g.name || 'Guest') + (p.vip ? ' · VIP' : '') + (g.total_stays ? ' · ' + g.total_stays + (g.total_stays === 1 ? ' stay' : ' stays') : '')) + '</p>';
     if (N.sheet) return '<div class="G_detail">' + back + G_err(S.err) + '<div class="stack">' + nameLine + G_noteSheetHtml(stored) + '</div></div>';
     var list = CSx.sortNotes(CSx.parseNoteList(stored)), ro = p.vip && p.vip_reason ? [{ text: 'VIP - ' + p.vip_reason, date: null, level: 0, mark: 0, suggestion: false, addressed: false, addressedOn: null, readOnly: 'vip', i: -1 }] : [];
@@ -437,19 +439,20 @@
     }).join('') + '</div>';
   }
   function G_noteSheetHtml(stored) {
-    var s = S.nt.sheet, busy = S.busy, ro = busy ? ' readonly' : '', add = s.i < 0, lift = s.lift ? 'This note shows as ' + '!!!'.slice(0, s.lift) + ' because of the words in it. Choose an importance to set it yourself.' : '';
-    return '<div class="card N_paper G_nsheet"><h3 class="hd">' + (add ? 'Add a note' : 'Edit note') + '</h3>' + G_err(s.err, 'G_nerr') +
-      '<div class="field"><label for="G_n_text">Note</label><textarea class="ta N_ta" id="G_n_text" rows="4" maxlength="' + (s.cap || root.CS.NOTE_MAX) + '"' + ro + ' placeholder="Allergies, a quiet room, a late arrival">' + G_esc(s.text) + '</textarea></div>' +
-      '<div class="field"><span class="lbl" id="G_n_k">Kind</span>' + G_noteSeg('n-kind', [['note', 'Note'], ['sug', 'Suggestion']], s.suggestion ? 'sug' : 'note', 'N_seg2', 'Kind') + '</div>' +
+    var s = S.nt.sheet, busy = S.busy, ro = busy ? ' readonly' : '', add = s.i < 0, tn = !!s.turn, lift = s.lift ? 'This note shows as ' + '!!!'.slice(0, s.lift) + ' because of the words in it. Choose an importance to set it yourself.' : '';
+    var words = tn ? '<div class="field"><span class="lbl" id="G_n_t">From the ' + G_esc(root.CS.dayLabel(s.turn)) + ' cleaning report</span><div class="N_words" id="G_n_text">' + G_esc(s.text) + '</div><span class="help">The cleaner’s words are not changed here. Only the importance, the kind and Addressed are saved.</span></div>'
+      : '<div class="field"><label for="G_n_text">Note</label><textarea class="ta N_ta" id="G_n_text" rows="4" maxlength="' + (s.cap || root.CS.NOTE_MAX) + '"' + ro + ' placeholder="Allergies, a quiet room, a late arrival">' + G_esc(s.text) + '</textarea></div>';
+    return '<div class="card N_paper G_nsheet"><h3 class="hd">' + (tn ? 'Cleaning report note' : add ? 'Add a note' : 'Edit note') + '</h3>' + G_err(s.err, 'G_nerr') + words +
+      '<div class="field"><span class="lbl" id="G_n_k">Kind</span>' + G_noteSeg('n-kind', [['note', 'Note'], ['request', 'Request'], ['suggestion', 'Suggestion'], ['issue', 'Issue']], s.kind || 'note', 'N_seg2', 'Kind') + '</div>' +
       '<div class="field"><span class="lbl" id="G_n_l">How important</span>' + G_noteSeg('n-level', G_NOTE_LEVELS.map(function (l) { return [String(l[0]), l[1]]; }), String(s.mark), '', 'How important') + '<span class="help">The top level shows first on the card and on Today.' + (lift ? ' ' + G_esc(lift) : '') + '</span></div>' +
       '<button class="N_chk" type="button" id="G_n_addr" role="checkbox" aria-checked="' + !!s.addressed + '" data-act="n-addr"' + (busy ? ' disabled' : '') + '><span class="N_box" aria-hidden="true">' + G_ic('check') + '</span><span>Addressed or fixed<span class="help" style="display:block">Stays on file, moves to the end, leaves Today.</span></span></button>' +
-      G_field('G_n_date', 'Date', s.date, 'type="date" max="' + G_today() + '"') + G_roomLine(stored) +
+      (tn ? '' : G_field('G_n_date', 'Date', s.date, 'type="date" max="' + G_today() + '"')) + G_roomLine(stored) +
       '<div class="N_btns"><button class="btn btn-primary btn-block" type="button" data-act="n-save"' + G_off() + '>' + (busy ? 'Saving…' : 'Save note') + '</button>' +
-      (add ? '' : '<button class="btn btn-ghost btn-block" type="button" data-act="n-del" style="color:var(--danger)"' + G_off() + '>Delete note</button>') +
+      (add ? '' : '<button class="btn btn-ghost btn-block" type="button" data-act="n-del" style="color:var(--danger)"' + G_off() + '>' + (tn ? 'Remove my marking' : 'Delete note') + '</button>') +
       '<button class="btn btn-ghost btn-block" type="button" data-act="n-cancel"' + (busy ? ' disabled' : '') + '>Cancel</button></div></div>';
   }
   function G_readNote() {
-    var s = S.nt.sheet, v; s.text = G_val('G_n_text');
+    var s = S.nt.sheet, v; if (!s.turn) s.text = G_val('G_n_text'); // a cleaning-report note keeps the cleaner's words as they are
     if (G_q('G_n_date')) { v = G_val('G_n_date'); if (v === '' && s.date && !G_realDate(s.date)) v = s.date; s.date = v; } // a stored date that is not a real day shows blank in the date input: keep it unless the person typed another
   }
   function G_realDate(d) { return /^\d{4}-\d{2}-\d{2}$/.test(d) && G_iso(Date.parse(d + 'T00:00:00Z')) === d; }
@@ -457,14 +460,25 @@
   function G_noteOpen(i) {
     var n = i < 0 ? null : root.CS.parseNoteList(G_noteStored())[i]; if (i >= 0 && !n) return;
     S.msg = null; S.err = ''; S.nt.undo = null;
-    S.nt.sheet = n ? { i: i, text: n.text, suggestion: n.suggestion, mark: n.mark, addressed: n.addressed, addressedOn: n.addressedOn, date: n.date || '', err: '', cap: root.CS.noteCap(n), lift: n.mark === 0 && n.level > 0 ? n.level : 0 }
-      : { i: -1, text: '', suggestion: false, mark: 0, addressed: false, addressedOn: null, date: G_today(), err: '', cap: root.CS.NOTE_MAX, lift: 0 };
+    S.nt.sheet = n ? { i: i, text: n.text, kind: root.CS.noteKind(n), turn: n.turn || null, mark: n.mark, addressed: n.addressed, addressedOn: n.addressedOn, date: n.date || '', err: '', cap: root.CS.noteCap(n), lift: n.mark === 0 && n.level > 0 ? n.level : 0 }
+      : { i: -1, text: '', kind: 'note', turn: null, mark: 0, addressed: false, addressedOn: null, date: G_today(), err: '', cap: root.CS.NOTE_MAX, lift: 0 };
     G_paint(); G_focus('G_n_text');
+  }
+  // s131: #guests/<id>/notes/t/<date>/<k> opens the sheet for the k-th cleaning-report row of that date (read from the Today payload through opts.cardNotes). A marker already saved for it opens as that note.
+  function G_noteOpenTurn() {
+    var t = S.tn; if (!t || t.done) return; t.done = true;
+    var rows = root.CS.turnoverRows(S.cardNotes ? S.cardNotes(S.gid) : ''), r = rows.filter(function (x) { return x.date === t.date; })[t.k];
+    if (!r) { S.err = 'That cleaning report is not loaded here. Go back to the guest card and tap it again.'; return; }
+    var list = root.CS.parseNoteList(G_noteStored()), key = r.date + '|' + r.body.replace(/\s+/g, ' ').toLowerCase(), at = -1;
+    list.forEach(function (n, i) { if (at < 0 && n.turn === r.date && (n.turn + '|' + root.CS.turnBody(n.text).replace(/\s+/g, ' ').toLowerCase()) === key) at = i; });
+    S.msg = null; S.err = ''; S.nt.undo = null;
+    if (at >= 0) { var n = list[at]; S.nt.sheet = { i: at, text: n.text, kind: root.CS.noteKind(n), turn: r.date, mark: n.mark, addressed: n.addressed, addressedOn: n.addressedOn, date: n.date || r.date, err: '', cap: root.CS.noteCap(n), lift: 0 }; }
+    else S.nt.sheet = { i: -1, text: r.body, kind: 'issue', turn: r.date, mark: 0, addressed: false, addressedOn: null, date: r.date, err: '', cap: root.CS.NOTE_MAX, lift: 0 };
   }
   // In place, so the pressed button keeps its focus.
   function G_notePress(t) {
     var s = S.nt.sheet, a = t.getAttribute('data-act'), v = t.getAttribute('data-v'); if (!s) return;
-    if (a === 'n-kind') s.suggestion = v === 'sug'; else { s.mark = +v; s.lift = 0; }
+    if (a === 'n-kind') s.kind = v; else { s.mark = +v; s.lift = 0; }
     var sib = t.parentNode && t.parentNode.children ? t.parentNode.children : []; Array.prototype.forEach.call(sib, function (b) { b.setAttribute('aria-pressed', String(b === t)); });
   }
   function G_noteAddr(t) {
@@ -476,11 +490,11 @@
     var s = S.nt.sheet, today = G_today(), CSx = root.CS, stored = G_noteStored(); if (!s) return;
     G_readNote();
     var bad = function (m) { s.err = m; G_paint(); G_focusLate('G_nerr'); };
-    var inp = { text: s.text, mark: s.mark, suggestion: s.suggestion, date: s.date || null, addressed: s.addressed, addressedOn: s.addressed ? s.addressedOn || null : null }; // a bare [addressed] stays bare; only ticking it here stamps today (G_noteAddr)
+    var inp = { text: s.text, mark: s.mark, kind: s.kind, turn: s.turn, date: s.date || null, addressed: s.addressed, addressedOn: s.addressed ? s.addressedOn || null : null }; // a bare [addressed] stays bare; only ticking it here stamps today (G_noteAddr)
     if (!CSx.noteInput(inp).text) return bad('Write the note first.');
     var was = s.i < 0 ? null : CSx.parseNoteList(stored)[s.i]; // a stored date is kept as it is: the check only applies to a date that was changed
     if (inp.date && !(was && inp.date === was.date) && (!/^\d{4}-\d{2}-\d{2}$/.test(inp.date) || G_iso(Date.parse(inp.date + 'T00:00:00Z')) !== inp.date || inp.date > today)) return bad('Enter a date that is not in the future.');
-    var next = s.i < 0 ? CSx.notesAdd(stored, inp, today) : CSx.notesEdit(stored, s.i, inp, today);
+    var next = s.i < 0 ? (s.turn ? CSx.notesAddTurn(stored, inp, today) : CSx.notesAdd(stored, inp, today)) : CSx.notesEdit(stored, s.i, inp, today);
     if (next === stored) { S.nt.sheet = null; S.msg = ['Nothing was changed.']; G_paint(); G_focus('G_msg'); return; } // no write when nothing changed
     if (next.length > CSx.NOTES_MAX) return bad('The notes hold 4,000 characters in all. Shorten this note or delete an older one.');
     G_noteWrite(next, s.i < 0 ? 'Note added' : 'Note edited', function () { S.nt.sheet = null; S.nt.undo = null; S.msg = [s.i < 0 ? 'Note added.' : 'Note saved.']; });
@@ -1193,7 +1207,7 @@
     opts = opts || {};
     var parts = String(opts.sub || '').split('/'), sub = parts[0], uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(sub) ? sub.toLowerCase() : '';
     S = {
-      el: el, client: opts.client || null, demo: !!opts.demo, role: opts.role, pid: opts.propertyId || null, token: ++G_seq, gid: uuid, view: uuid ? 'detail' : 'list', seg: uuid && parts[1] === 'stay' ? 'stay' : '', sub: uuid && parts[1] === 'notes' ? 'notes' : '', nt: G_nt(), ttl: '',
+      el: el, client: opts.client || null, demo: !!opts.demo, role: opts.role, pid: opts.propertyId || null, token: ++G_seq, gid: uuid, view: uuid ? 'detail' : 'list', seg: uuid && parts[1] === 'stay' ? 'stay' : '', sub: uuid && parts[1] === 'notes' ? 'notes' : '', tn: uuid && parts[1] === 'notes' && parts[2] === 't' && /^\d{4}-\d{2}-\d{2}$/.test(parts[3] || '') && /^\d{1,3}$/.test(parts[4] || '') ? { date: parts[3], k: +parts[4], done: false } : null, cardNotes: typeof opts.cardNotes === 'function' ? opts.cardNotes : null, nt: G_nt(), ttl: '',
       setTitle: typeof opts.setTitle === 'function' ? opts.setTitle : G_noop, onChange: typeof opts.onChange === 'function' ? opts.onChange : G_noop,
       nav: typeof opts.navigate === 'function' ? opts.navigate : G_noop, toast: typeof opts.toast === 'function' ? opts.toast : G_noop, haptic: typeof opts.haptic === 'function' ? opts.haptic : G_noop,
       list: { q: '', filter: 'recent', rows: [], total: 0, more: false, loading: false, err: '', ticket: 0, stays: { ok: false, map: {} } },

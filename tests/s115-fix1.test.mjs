@@ -9,12 +9,12 @@ const tick = async (n = 12) => { for (let i = 0; i < n; i++) await new Promise((
 test('s115 notes: 3 reports + a current request -> the request first, then ONLY the newest report; the rest are counted', () => {
   const t = '2026-10-01: Turnover report: a || 2026-10-20: Turnover report: b || 2026-09-01: Turnover report: c || 2026-10-25: Special request: extra pillows';
   const g = CS.goodToKnow({ notes: t }, false);
-  assert.deepEqual(g.notes.map((n) => n.p), ['Special request: extra pillows', 'Turnover report: b']);
+  assert.deepEqual(g.notes.map((n) => n.p), ['Special request: extra pillows', 'b']);
   assert.equal(g.more, 2, '4 notes, 2 shown');
   const k = CS.keyNote(t); assert.equal(k.p, 'Special request: extra pillows'); assert.equal(k.more, 3);
   // an incident (rank 0) still comes before the request, and the report after it
   const g2 = CS.goodToKnow({ notes: '2026-10-20: Turnover report: b || 2026-10-25: Special request: x | Reported damage to the kettle' }, false);
-  assert.deepEqual(g2.notes.map((n) => n.p), ['Reported damage to the kettle', 'Special request: x', 'Turnover report: b']);
+  assert.deepEqual(g2.notes.map((n) => n.p), ['Reported damage to the kettle', 'Special request: x', 'b']);
   // only reports: the newest one by chunk date, not the first listed
   assert.equal(CS.keyNote('2026-09-01: Turnover report: old || 2026-10-20: Turnover report: new').p, 'Turnover report: new');
 });
@@ -25,10 +25,10 @@ test('s115 notes: an allergy or medical note is shown (guest safety)', () => {
   }
 });
 test('s115 the 90-character cut: a word boundary that would drop more than 20 characters hard-slices instead', () => {
-  const long = 'Turnover report: ' + 'x'.repeat(100);
+  const long = 'Special request: ' + 'x'.repeat(100);
   const a = CS.goodToKnow({ notes: '2026-10-20: ' + long }, false).notes[0].p;
   assert.equal(a, long.slice(0, 89) + '…'); assert.equal(a.length, 90);
-  const words = 'Turnover report: ' + 'word '.repeat(30), b = CS.goodToKnow({ notes: '2026-10-20: ' + words }, false).notes[0].p;
+  const words = 'Special request: ' + 'word '.repeat(30), b = CS.goodToKnow({ notes: '2026-10-20: ' + words }, false).notes[0].p;
   assert.match(b, /word…$/); assert.ok(b.length <= 90 && b.length >= 70);
 });
 test('s115 a turnover text with " / " (the server replaced " | ") stays ONE point', () => {

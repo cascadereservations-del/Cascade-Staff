@@ -1280,7 +1280,8 @@ a.T_call { min-height: var(--touch); display: inline-flex; align-items: center; 
 /* s110 kpi-inventory: the Inventory card on Today and on the laundry Inventory tab (three big buttons); the KPIs and supply screens live in kpi/K_kpi.css */
 .K_inv { display: flex; flex-direction: column; gap: 12px; }
 .K_inv-row { display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; }
-.K_inv-btn { display: flex; height: auto; flex-direction: column; align-items: flex-start; justify-content: flex-start; gap: 8px; overflow-wrap: break-word; min-height: var(--v5-target-glove); padding: 12px 16px; text-align: left; }
+.K_inv-btn { display: flex; height: auto; flex-direction: row; align-items: center; justify-content: flex-start; gap: 12px; overflow-wrap: break-word; min-height: 60px; padding: 8px 16px; text-align: left; } /* s131: the icon sits beside the title and sub, so a tile is about 60 px, not 100 */
+.K_inv-btn > svg.i { flex: none; }
 .K_inv-t { display: flex; flex-direction: column; min-width: 0; }
 .K_inv-t b { font: 600 var(--v5-t-body)/1.2 var(--font-ui); }
 .K_inv-t span { font: 400 var(--v5-t-label)/1.3 var(--font-ui); opacity: .85; }
@@ -1505,6 +1506,15 @@ button.T_badge:focus-visible { outline: 2px solid var(--ring); outline-offset: 2
 .A_noticecard, .A_noticecard.H_mgr { block-size: auto; }
 .A_noticecard .rowi { block-size: auto; min-height: 64px; }
 .A_noticecard .rowi .t, .A_noticecard .rowi .s { white-space: normal; overflow: visible; text-overflow: clip; overflow-wrap: anywhere; }
+/* s131 (Staff 3.4.48): the bill waits for its reading date, Check for the bills, the cleaning-report words in the notes sheet, the Mark link on a report row */
+#T_bills .K_wait { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; }
+#T_bills .K_wait .pill { flex: none; }
+#T_bills .BL_check { min-height: 44px; color: inherit; text-decoration: none; }
+#T_bills .BL_check > svg.i { flex: none; color: var(--v5-ink-3); }
+.N_words { margin: 0; padding: 10px 12px; border-radius: var(--r-md); background: var(--muted); color: var(--fg-2); font: 400 var(--v5-t-body)/1.45 var(--font-ui); overflow-wrap: anywhere; }
+.N_tags .N_mk { min-height: 44px; margin: -6px 0 -6px -12px; }
+.BL_when { display: grid; gap: 4px; }
+.BL_when .BL_est { margin: 0; }
 /* s130 notes: the list on the guest card and the Edit notes screen (guests/G_guests.js uses the same classes). Level is never colour alone: the mark is text. */
 .N_list { list-style: none; margin: 10px 0 0; padding: 0; display: grid; gap: 12px; }
 .N_it { display: grid; grid-template-columns: 2.5rem minmax(0, 1fr); gap: 12px; align-items: start; }

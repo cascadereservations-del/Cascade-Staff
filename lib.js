@@ -507,19 +507,20 @@
   function isTurnover(p) { return /^turnover report/i.test(p); }
   // ---- s130 notes model: ONE parser; parseNotes, keyPoints, keyNote and goodToKnow all read it ------------------------------
   // Stored text (guest_profile_details.stay_preferences): chunks joined with " || " (line breaks split too); " | " splits points, one note each.
-  // A note is: optional "YYYY-MM-DD: ", optional mark "!" "!!" "!!!" + space, optional "Suggestion: ", the text, optional " [addressed YYYY-MM-DD]".
-  var NOTE_MAX = 600, NOTES_MAX = 4000, NOTES_WARN = 3600, NOTE_SHOW = 4, NOTE_CLAMP_CHARS = 110, NOTE_MARKS = ['', '!', '!!', '!!!'];
+  // A note is: optional "YYYY-MM-DD: ", optional mark "!" "!!" "!!!" + space, optional kind "Request: " / "Suggestion: " / "Issue: " (s131; no word = Note), optional "[turnover YYYY-MM-DD] " (a marker for a cleaning-report row, s131), the text, optional " [addressed YYYY-MM-DD]".
+  var NOTE_MAX = 600, NOTES_MAX = 4000, NOTES_WARN = 3600, NOTE_SHOW = 4, NOTE_CLAMP_CHARS = 110, NOTE_MARKS = ['', '!', '!!', '!!!'], NOTE_KINDS = ['note', 'request', 'suggestion', 'issue'];
   function noteChunks(text) { return String(text == null ? '' : text).split(/ \|\| |\r\n|\r|\n/); }
   // The keyword rank stays for DISPLAY only: rank 0 reads as !!!, rank 1 as !!, anything else as regular.
   function rankLevel(t) { var r = pointPriority(t); return r === 0 ? 3 : r === 1 ? 2 : 0; }
   function noteOf(p, date, card) {
-    var t = p, mark = 0, sug = false, addr = false, addrOn = null, a = /\s*\[addressed(?: (\d{4}-\d{2}-\d{2}))?\]$/i.exec(t), m, ro;
+    var t = p, mark = 0, kind = 'note', kp = '', turn = null, addr = false, addrOn = null, a = /\s*\[addressed(?: (\d{4}-\d{2}-\d{2}))?\]$/i.exec(t), m, ro;
     if (a) { addr = true; addrOn = a[1] || null; t = t.slice(0, a.index); }
     m = /^(!{1,3})\s+/.exec(t); if (m) { mark = m[1].length; t = t.slice(m[0].length); }
-    m = /^suggestion:\s*/i.exec(t); if (m) { sug = true; t = t.slice(m[0].length); }
-    t = t.trim(); if (!t) return { text: p, date: date, mark: 0, level: rankLevel(p), suggestion: false, addressed: false, addressedOn: null, readOnly: null }; // only markers were typed ("Suggestion:", "[addressed]"): keep them as a plain note, never drop the text
+    m = /^(suggestion|request|issue):\s*/i.exec(t); if (m) { kind = m[1].toLowerCase(); kp = m[0]; t = t.slice(m[0].length); }
+    m = /^\[turnover (\d{4}-\d{2}-\d{2})\]\s*/.exec(t); if (m) { turn = m[1]; t = t.slice(m[0].length); }
+    t = t.trim(); if (!t) return { text: p, date: date, mark: 0, level: rankLevel(p), kind: 'note', suggestion: false, turn: null, addressed: false, addressedOn: null, readOnly: null }; // only markers were typed ("Suggestion:", "[addressed]"): keep them as a plain note, never drop the text
     ro = card ? (isTurnover(t) ? 'turnover' : /^VIP\s+-\s/i.test(t) ? 'vip' : null) : null; // the card string also holds chunks the server joins in: read-only rows
-    return { text: t, date: date, mark: mark, level: ro ? 0 : mark || rankLevel(t), suggestion: sug, addressed: addr, addressedOn: addrOn, readOnly: ro };
+    return { text: t, date: date, mark: mark, level: ro ? 0 : mark || rankLevel(t), kind: kind, kp: kp, suggestion: kind === 'suggestion', turn: turn, addressed: addr, addressedOn: addrOn, readOnly: ro };
   }
   function parseChunk(chunk, card, pend) {
     var m = /^(\d{4}-\d{2}-\d{2}):\s*([\s\S]*)$/.exec(chunk), date = m ? m[1] : pend || null, out = [];
@@ -531,7 +532,7 @@
   // A lone date nothing consumes (the next chunk is dated or lone too, or none follows; in the card string a " || " boundary also ends it) stays as a plain note, so it is stored back byte for byte.
   function parseChunks(text, card) {
     var pend = null, pg = null, raw = '', out = [];
-    var flush = function () { if (pg) { pg.notes = [{ text: raw, date: null, mark: 0, level: 0, suggestion: false, addressed: false, addressedOn: null, readOnly: null }]; pg.lone = false; } pg = null; pend = null; };
+    var flush = function () { if (pg) { pg.notes = [{ text: raw, date: null, mark: 0, level: 0, kind: 'note', suggestion: false, turn: null, addressed: false, addressedOn: null, readOnly: null }]; pg.lone = false; } pg = null; pend = null; };
     String(text == null ? '' : text).split(' || ').forEach(function (seg) {
       if (card) flush();
       seg.split(/\r\n|\r|\n/).forEach(function (c) {
@@ -561,7 +562,10 @@
   }
   // Open notes: level 3 to 0, newest first, undated last, ties in stored order. Addressed notes after all of them, newest first.
   function sortNotes(list) { return (list || []).slice().sort(noteCmp); }
-  function noteLine(n) { return (n.date ? n.date + ': ' : '') + (n.mark ? NOTE_MARKS[n.mark] + ' ' : '') + (n.suggestion ? 'Suggestion: ' : '') + n.text + (n.addressed ? ' [addressed' + (n.addressedOn ? ' ' + n.addressedOn : '') + ']' : ''); }
+  function noteKind(n) { return NOTE_KINDS.indexOf(n && n.kind) >= 0 ? n.kind : n && n.suggestion ? 'suggestion' : 'note'; }
+  // The kind word as stored: "Request: ", "Suggestion: ", "Issue: " (a note with no word is a Note). A stored prefix is written back exactly as it was read until the kind is changed.
+  function kindPrefix(n) { var k = noteKind(n); return k === 'note' ? '' : n.kp && n.kp.toLowerCase().indexOf(k + ':') === 0 ? n.kp : k.charAt(0).toUpperCase() + k.slice(1) + ': '; }
+  function noteLine(n) { return (n.date ? n.date + ': ' : '') + (n.mark ? NOTE_MARKS[n.mark] + ' ' : '') + kindPrefix(n) + (n.turn ? '[turnover ' + n.turn + '] ' : '') + n.text + (n.addressed ? ' [addressed' + (n.addressedOn ? ' ' + n.addressedOn : '') + ']' : ''); }
   function serializeNotes(list) { return (list || []).map(noteLine).join(' || '); }
   // What a person typed, made safe to store: "|" becomes "/", line breaks a space, trimmed, 600 characters (cap: a stored longer note keeps its own length when it is edited).
   // keep: the text was not edited, so it is stored as it is (a stored "AC|fan" stays "AC|fan").
@@ -570,7 +574,7 @@
     var t = String(o.text == null ? '' : o.text);
     if (!keep) t = t.replace(/[\r\n]+/g, ' ').replace(/\|/g, '/').replace(/\[addressed/gi, '(addressed');
     t = t.trim(); cap = cap > NOTE_MAX ? cap : NOTE_MAX;
-    return { text: keep ? t : t.slice(0, cap).trim(), mark: Math.max(0, Math.min(3, o.mark | 0)), suggestion: !!o.suggestion, date: o.date || null, addressed: !!o.addressed, addressedOn: o.addressed ? o.addressedOn || null : null };
+    var kind = noteKind(o); return { text: keep ? t : t.slice(0, cap).trim(), mark: Math.max(0, Math.min(3, o.mark | 0)), kind: kind, suggestion: kind === 'suggestion', turn: /^\d{4}-\d{2}-\d{2}$/.test(o.turn || '') ? o.turn : null, date: o.date || null, addressed: !!o.addressed, addressedOn: o.addressed ? o.addressedOn || null : null };
   }
   // The longest an edited note may be: 600, or its own length when it was stored longer (never cut without the person editing it).
   function noteCap(n) { return Math.max(NOTE_MAX, n && n.text ? n.text.length : 0); }
@@ -586,8 +590,9 @@
     inp = inp || {};
     // Compare what the sheet holds with the stored note BEFORE any cleaning: nothing changed means the stored string is returned untouched.
     var txt = String(inp.text == null ? '' : inp.text), edited = txt.trim() !== old.text, mk = Math.max(0, Math.min(3, inp.mark | 0));
-    if (!edited && !!inp.suggestion === old.suggestion && mk === old.mark && (inp.date || null) === (old.date || null) && !!inp.addressed === old.addressed && (!inp.addressed || !inp.addressedOn || inp.addressedOn === old.addressedOn)) return String(stored || '');
+    if (!edited && noteKind(inp) === noteKind(old) && mk === old.mark && (inp.date || null) === (old.date || null) && !!inp.addressed === old.addressed && (!inp.addressed || !inp.addressedOn || inp.addressedOn === old.addressedOn)) return String(stored || '');
     var n = noteInput(inp, noteCap(old), !edited); if (!n.text) return String(stored || '');
+    n.turn = old.turn; // a marked cleaning-report note stays linked to its report
     if (n.addressed && old.addressed && !n.addressedOn) n.addressedOn = old.addressedOn; // still addressed: a bare [addressed] stays bare, only ticking it now stamps today
     else if (n.addressed && !old.addressed && !n.addressedOn) n.addressedOn = today || null;
     if (noteLine(old) === noteLine(n)) return String(stored || '');
@@ -604,9 +609,28 @@
     return s.join(' · ');
   }
   function noteDateLabel(iso) { return iso ? dayLabel(iso) + ' ' + String(iso).slice(0, 4) : ''; }
+  // ---- s131: cleaning-report rows (read-only, from the server-joined card string) and the marker note an owner or admin saves for one ----------
+  // A marker is a stored note "YYYY-MM-DD: ! Issue: [turnover YYYY-MM-DD] <the cleaner's words> [addressed ...]". It carries the importance, the kind and Addressed;
+  // the cleaner's words are copied unchanged. The raw row is hidden wherever a marker for the same date and the same words exists.
+  function turnBody(t) { return String(t == null ? '' : t).replace(/^turnover report:\s*/i, '').trim(); }
+  function turnKey(date, t) { return (date || '') + '|' + turnBody(t).replace(/\s+/g, ' ').toLowerCase(); }
+  function turnCovered(list) { var have = {}; list.forEach(function (n) { if (n.turn) have[turnKey(n.turn, n.text)] = 1; }); return function (n) { return n.readOnly === 'turnover' && !!have[turnKey(n.date, n.text)]; }; }
+  // The raw cleaning-report rows of a card string, in order: {date, body, k, covered}. k counts the rows with the same date (the id the edit screen takes).
+  function turnoverRows(card) {
+    var list = parseNoteList(card, { card: true }), cov = turnCovered(list), count = {}, out = [];
+    list.forEach(function (n) { if (n.readOnly !== 'turnover' || !n.date) return; var k = count[n.date] = (count[n.date] || 0) + 1; out.push({ date: n.date, body: turnBody(n.text), k: k - 1, covered: cov(n), addressed: n.addressed }); });
+    return out;
+  }
+  // Add a marker note for a cleaning-report row. The cleaner's words go in as they are (never cleaned or cut).
+  function notesAddTurn(stored, inp, today) {
+    var n = noteInput(inp, NOTE_MAX, true); if (!n.text || !n.turn) return String(stored || '');
+    n.text = turnBody(n.text); if (!n.date) n.date = n.turn;
+    if (n.addressed && !n.addressedOn) n.addressedOn = today || null;
+    var l = parseNoteList(stored); l.push(n); return serializeNotes(l);
+  }
   // The card list: sorted; the first 4 unless open. A long note may be clamped to 3 lines, so a short list still gets the button then.
   function notesView(text, open) {
-    var all = sortNotes(parseNoteList(text, { card: true })), clamped = all.some(function (n) { return n.text.length > NOTE_CLAMP_CHARS; });
+    var all = parseNoteList(text, { card: true }), hid = turnCovered(all); all = sortNotes(all.filter(function (n) { return !hid(n); })); var clamped = all.some(function (n) { return n.text.length > NOTE_CLAMP_CHARS; });
     return { all: all, shown: open ? all : all.slice(0, NOTE_SHOW), total: all.length, button: all.length > NOTE_SHOW || clamped, open: !!open };
   }
   // s115: the points that matter, strongest first (level 3, 2), then ONE turnover report (the newest); addressed notes never.
@@ -712,7 +736,7 @@
   // At most 4 lines: over that, the ID line goes first, then the last ones. No prices, no discounts, no exclamation marks.
   var PERKS = {
     id: ['No need to ask for ID again, one is on file', 'returning', 'arrival'],
-    std: ['Returning-guest freebie: 1 chocolate, 2 Kit Kats, 1 extra bottle of water or 2 extra coffee sachets', 'returning', 'arrival'], // D-360 (Lloyd 2026-11-08): returning, regular and VIP guests only; a first stay gets the standard amenities, no freebie
+    std: ['Returning-guest freebie: 1 chocolate and 2 extra bottles of water', 'returning', 'arrival'], // D-360 (Lloyd 2026-11-08): returning, regular and VIP guests only; a first stay gets the standard amenities, no freebie
     early1: ['First hour of early check-in or late check-out free, if the calendar allows', 'returning', 'both', 'regular'],
     early2: ['Up to 2 hours early or late free, if the calendar allows', 'regular', 'both'],
     prefs: ['Set saved preferences before arrival (pillows, AC temperature)', 'regular', 'arrival'],
@@ -872,7 +896,9 @@
     var r = o(raw), e = r && o(r.electric), w = r && o(r.water); if (!e || !w || !/^\d{4}-\d{2}-\d{2}/.test(String(r.since || ''))) return null;
     var t = Date.parse(r.last_reading_at), last = isFinite(t) ? new Date(t + 8 * 3600000).toISOString().slice(0, 10) : '';
     if (n(e.kwh) == null || n(w.php) == null || n(w.m3) == null) return null;
-    return { since: String(r.since).slice(0, 10), last: last, ePhp: n(e.php), eKwh: n(e.kwh), wPhp: n(w.php), wM3: n(w.m3), due: (Array.isArray(r.due) ? r.due : []).map(billEntry).filter(Boolean) };
+    var day = function (v) { return /^\d{4}-\d{2}-\d{2}/.test(String(v || '')) ? String(v).slice(0, 10) : ''; }, mon = function (v) { v = String(v == null ? '' : v).trim(); return v && v.length <= 20 ? v : ''; }; // s131: the keys the meter-cycle release adds; a payload without them draws as before
+    return { since: String(r.since).slice(0, 10), waterSince: day(r.water_since), waiting: mon(r.waiting_for), waterWaiting: mon(r.water_waiting_for), canPayList: r.can_pay_list === true ? true : r.can_pay_list === false ? false : null, checkBills: r.check_bills === true,
+      last: last, ePhp: n(e.php), eKwh: n(e.kwh), wPhp: n(w.php), wM3: n(w.m3), due: (Array.isArray(r.due) ? r.due : []).map(billEntry).filter(Boolean) };
   }
   // s127: one bill of the To pay list on Today. Anything that is not the contract shape is dropped; a missing peso is null, never 0.
   var BILL_LABEL = { electric: 'Electricity', water: 'Water', internet: 'Internet', netflix: 'Subscription' }, BILL_TILE = { electric: ['⚡', 'e'], water: ['💧', 'w'], internet: ['🌐', 'n'], netflix: ['📺', 's'] };
@@ -1107,8 +1133,16 @@
   // `more` counts every other unique note. Phone and the companion count only when canContact (owner/admin); guests from a count the server sends, else 1 + companions. id: the photo path exists.
   function goodToKnow(g, canContact) {
     var seen = {}, total = 0, cut = function (t) { if (t.length <= 90) return t; var w = t.slice(0, 89).replace(/\s+\S*$/, ''); return (w.length < 69 ? t.slice(0, 89) : w) + '…'; }; // a word boundary that would drop more than 20 characters is not worth it
-    parseNoteList(g && g.notes).forEach(function (x) { if (x.addressed) return; var k = x.text.toLowerCase(); if (!seen[k]) { seen[k] = 1; total++; } });
-    var shown = {}, key = keyPoints(g && g.notes).filter(function (x) { var k = x.p.toLowerCase(); return shown[k] ? false : (shown[k] = 1); }).map(function (x) { return { p: cut(x.p), rank: x.rank, mark: x.rank === 0 ? '!!!' : x.rank === 1 ? '!!' : '' }; });
+    // s131: every open note marked ! or higher (strongest, then newest), plus the newest open cleaning-report issue; the raw report row is left out where a marker note covers it. At most 3 are shown.
+    var all = parseNoteList(g && g.notes, { card: true }), hid = turnCovered(all), open = [];
+    all.forEach(function (x) { if (x.addressed || hid(x)) return; var k = x.text.toLowerCase(); if (!seen[k]) { seen[k] = 1; total++; open.push(x); } });
+    var lev = sortNotes(open.filter(function (x) { return !x.readOnly && x.level >= 1; })), iss = null;
+    open.forEach(function (x) { if (x.readOnly !== 'turnover' && !(x.turn && x.kind === 'issue')) return; if (!iss || (x.date || '') > (iss.date || '')) iss = x; });
+    var pick = iss && lev.indexOf(iss) < 0 ? lev.slice(0, 2).concat([iss]) : lev.slice(0, 3);
+    var key = sortNotes(pick).map(function (x) {
+      var raw = x.readOnly === 'turnover', lv = raw ? 0 : x.level;
+      return { p: cut(raw ? turnBody(x.text) : x.text), rank: lv === 3 ? 0 : lv === 2 ? 1 : 2, mark: NOTE_MARKS[lv] || '', kind: raw ? 'issue' : noteKind(x), src: raw || x.turn ? 'from the ' + dayLabel(raw ? x.date : x.turn) + ' turnover' : '' };
+    });
     var c = canContact ? guestContact(g) : null, n = null;
     // s120 (D-373): the staff correction (guest_count) wins, then the number Airbnb booked (booked_guests), then the older server counts, then 1 + companions below. staff_home_v1 puts the first two on `staying`.
     var sy = g && g.staying && typeof g.staying === 'object' ? g.staying : null;
@@ -1960,7 +1994,7 @@
     signinKind: signinKind, signinList: signinList, resolveTeam: resolveTeam, signinForTeam: signinForTeam, typedEntry: typedEntry, keypadPress: keypadPress, signinCredentials: signinCredentials, signinAsKind: signinAsKind,
     authStorage: authStorage, trustedFromStorage: trustedFromStorage, rememberName: rememberName, rememberRole: rememberRole, recalledRole: recalledRole, recalledName: recalledName, doorTarget: doorTarget, doorLink: doorLink, doorRule: doorRule, doorFramed: doorFramed, doorAllowed: doorAllowed, doorsForRole: doorsForRole, foldedDoorUrls: foldedDoorUrls, framedParentTarget: framedParentTarget, FOLD_DOORS: FOLD_DOORS,
     layoutForRole: layoutForRole, isLaundry: isLaundry, tabKeys: tabKeys, laundryView: laundryView, kpiAdmin: kpiAdmin, accessVerdict: accessVerdict, assertNoMoney: assertNoMoney, moneyKeys: moneyKeys,
-    parseNoteList: parseNoteList, sortNotes: sortNotes, noteLine: noteLine, serializeNotes: serializeNotes, noteInput: noteInput, noteCap: noteCap, notesAdd: notesAdd, notesEdit: notesEdit, notesDelete: notesDelete, notesRoom: notesRoom, notesSummary: notesSummary, notesView: notesView, noteDateLabel: noteDateLabel, NOTE_MAX: NOTE_MAX, NOTES_MAX: NOTES_MAX, NOTES_WARN: NOTES_WARN, NOTE_SHOW: NOTE_SHOW,
+    parseNoteList: parseNoteList, sortNotes: sortNotes, noteLine: noteLine, serializeNotes: serializeNotes, noteInput: noteInput, noteCap: noteCap, notesAdd: notesAdd, notesEdit: notesEdit, notesDelete: notesDelete, notesRoom: notesRoom, notesSummary: notesSummary, notesView: notesView, noteDateLabel: noteDateLabel, noteKind: noteKind, NOTE_KINDS: NOTE_KINDS, turnoverRows: turnoverRows, turnBody: turnBody, notesAddTurn: notesAddTurn, NOTE_MAX: NOTE_MAX, NOTES_MAX: NOTES_MAX, NOTES_WARN: NOTES_WARN, NOTE_SHOW: NOTE_SHOW,
     manilaToday: manilaToday, manilaParts: manilaParts, addDays: addDays, daysBetween: daysBetween, weekdayIndex: weekdayIndex,
     dayLabel: dayLabel, dayLong: dayLong, dayShort: dayShort, monthTitle: monthTitle, monthShortYear: monthShortYear, greeting: greeting,
     fmtTime: fmtTime, fmt24: fmt24, ordinal: ordinal, plural: plural, agoLabel: agoLabel, clockLabel: clockLabel,

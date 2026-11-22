@@ -47,7 +47,7 @@ test('s109 up next: the incoming guest is its own card under the in-house one fo
   for (const role of ['admin', 'cleaner']) {
     const h = await house(cur, { next_guest: nx() }, role);
     assert.match(h, /<section class="card A_card F_span T_card T_upnext T_tier-regular" aria-label="Next arrival"><div class="row-between"><span class="cap up T_lbl">Up next · incoming<\/span>[\s\S]*?Arrives tomorrow[\s\S]*?<h3 class="T_nname nm3">Ben Cruz<\/h3>[\s\S]*?Regular/);
-    assert.match(h.slice(h.indexOf('T_upnext')), /Prepare before arrival[\s\S]*Returning-guest freebie: 1 chocolate, 2 Kit Kats, 1 extra bottle of water or 2 extra coffee sachets[\s\S]*Set saved preferences/);
+    assert.match(h.slice(h.indexOf('T_upnext')), /Prepare before arrival[\s\S]*Returning-guest freebie: 1 chocolate and 2 extra bottles of water[\s\S]*Set saved preferences/);
     assert.ok(h.indexOf('T_now') < h.indexOf('T_upnext'), 'the guest in the house comes first');
     if (role === 'cleaner') assert.doesNotMatch(h.slice(h.indexOf('T_upnext')), /tel:|T_call/);
   }

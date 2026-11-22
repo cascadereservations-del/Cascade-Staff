@@ -78,7 +78,7 @@ const DUE = [{ id: 'b1', kind: 'internet', label: 'Internet', status: 'due', est
   { id: 'b2', kind: 'netflix', label: 'Subscription', status: 'paid', estimate_php: 449, paid_php: 449, paid_by_name: 'Zz Ben', paid_at: '2026-11-20T03:00:00Z', can_pay: false }];
 test('Today card: owner gets the Pay link and a tappable paid row; cleaner gets neither', async () => {
   const o = await todayHtml('owner', DUE);
-  assert.ok(o.includes('href="#bills/pay/b1"')); assert.ok(o.includes('data-act="bill-proof"')); assert.ok(o.includes('₱1,500')); assert.ok(o.includes('This cycle so far'));
+  assert.ok(o.includes('href="#bills/pay/b1"')); assert.ok(o.includes('data-act="bill-proof"')); assert.ok(o.includes('₱1,500')); assert.ok(o.includes('This bill so far'));
   const c = await todayHtml('cleaner', [Object.assign({}, DUE[0], { can_pay: false }), DUE[1]]);
   assert.ok(!c.includes('#bills/pay/')); assert.ok(!c.includes('data-act="bill-proof"')); assert.ok(c.includes('Internet'));
 });

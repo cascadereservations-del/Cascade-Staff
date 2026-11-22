@@ -26,6 +26,8 @@
         return peso(read) + ' is well ' + (read > est ? 'above' : 'below') + ' the estimate of ' + peso(est) + '. Check the receipt, then tap Mark as paid again to log it.';
       }
       case 'bad_amount': return BAD_AMOUNT;
+      case 'reading_date_required': return 'Enter the meter reading date shown on the bill.'; // s131
+      case 'reading_date_invalid': return 'The reading date must be after the last bill’s reading date and not in the future. Check the date on the bill.';
       case 'bad_proof': return 'The screenshot or the amount is missing or not valid. Add the screenshot again and check the amount.';
       case 'no_stored_proof': return 'The screenshot did not finish uploading, so nothing was logged. Add it again.';
       case 'sha_mismatch': return 'The screenshot changed after it was uploaded, so nothing was logged. Add it again.';
@@ -42,9 +44,21 @@
   // "2,140", "2140.50", "₱2,140" and "2140.5" are amounts; "1,2,3", empty, under ₱1, negatives and more than the server's 100,000 are not.
   function amountOf(text) { var t = String(text == null ? '' : text).replace(/\s/g, '').replace(/^(₱|php)/i, ''); if (!/\d/.test(t) || !/^(?:\d{1,3}(?:,\d{3})+|\d*)(?:\.\d{1,2})?$/.test(t)) return null; var v = Math.round(parseFloat(t.replace(/,/g, '')) * 100) / 100; return v >= 1 && v <= 100000 ? v : null; }
   // Mark as paid is on only with a screenshot, a good amount and nothing in flight.
-  function payReady(s) { return !!(s && s.file && amountOf(s.amountText) != null && !s.busy); }
+  // s131: an electric or water bill (s.meter) also needs the meter reading date on the bill (a real day, not after today); the present reading is optional but must be a number when typed.
+  function dateOk(d, today) { return /^\d{4}-\d{2}-\d{2}$/.test(String(d || '')) && !isNaN(Date.parse(d + 'T00:00:00Z')) && new Date(Date.parse(d + 'T00:00:00Z')).toISOString().slice(0, 10) === d && (!today || d <= today); }
+  function readingOf(text) { var t = String(text == null ? '' : text).replace(/[\s,]/g, ''); if (t === '') return { ok: true, v: null }; return /^\d{1,7}(?:\.\d{1,2})?$/.test(t) ? { ok: true, v: Number(t) } : { ok: false, v: null }; }
+  function payReady(s) { return !!(s && s.file && amountOf(s.amountText) != null && !s.busy && (!s.meter || (dateOk(s.readDate, s.today) && readingOf(s.readVal).ok))); }
   // What settle sends. confirmed is true only when this very amount was already shown the "well above or below" message.
-  function proofPayload(up, amount, confirmedFor) { return { path: up.path, sha256: up.sha256, amount: amount, confirmed: confirmedFor != null && confirmedFor === amount }; }
+  // rd (meter bills only): {date, value}; reading_value is left out when nothing was typed.
+  function proofPayload(up, amount, confirmedFor, rd) {
+    var p = { path: up.path, sha256: up.sha256, amount: amount, confirmed: confirmedFor != null && confirmedFor === amount };
+    if (rd) { p.reading_date = rd.date; var v = readingOf(rd.value); if (v.ok && v.v != null) p.reading_value = v.v; }
+    return p;
+  }
+  // "2026-11" to "November"
+  function monthName(period) { var m = /^(\d{4})-(\d{2})/.exec(String(period || '')); return m ? ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'][+m[2] - 1] || '' : ''; }
+  // The date the meter reading is dated by default: the 21st of the billed month, never after today.
+  function defaultReadDate(period, today) { var m = /^(\d{4}-\d{2})/.exec(String(period || '')), d = m ? m[1] + '-21' : today; return today && d > today ? today : d; }
   // Only what changed: a text trimmed, a number as a number. Nothing changed gives {}.
   function changedKeys(orig, now) {
     var out = {}; orig = orig || {}; now = now || {};
@@ -61,7 +75,7 @@
     var p = (d && d.pay) || {};
     return { edit: !!(d && d.can_edit), name: !!p.payee_name, number: !!p.number, note: !!p.note, editable: p.amount_editable === true };
   }
-  var lib = { refusal: refusal, failure: failure, amountOf: amountOf, payReady: payReady, proofPayload: proofPayload, changedKeys: changedKeys, sheetParts: sheetParts, UNKNOWN: UNKNOWN };
+  var lib = { refusal: refusal, failure: failure, amountOf: amountOf, payReady: payReady, proofPayload: proofPayload, dateOk: dateOk, readingOf: readingOf, defaultReadDate: defaultReadDate, monthName: monthName, changedKeys: changedKeys, sheetParts: sheetParts, UNKNOWN: UNKNOWN };
 
   // ---------------------------------------------------------------- the screens
   var S = null, G = 0;
@@ -75,8 +89,8 @@
 
   function draw(inner) { if (S) S.o.box.innerHTML = '<div class="BL_page">' + inner + '</div>'; }
   function box(kind, text) { var ic = kind === 'ok' ? 'checks' : kind === 'err' ? 'alert' : 'info'; return '<div class="' + kind + 'box" role="' + (kind === 'err' ? 'alert' : 'status') + '">' + ICON(ic) + '<span>' + esc(text) + '</span></div>'; }
-  function stop(text, kind) { // an end state: one message and the way back to Today
-    S.end = true; draw('<div class="stack">' + box(kind || 'err', text) + '</div><div class="sticky"><button class="btn btn-primary btn-block" type="button" data-bact="home">Back to Today</button></div>');
+  function stop(text, kind, extra) { // an end state: one message (and a second, softer one) and the way back to Today
+    S.end = true; draw('<div class="stack">' + box(kind || 'err', text) + (extra ? box('info', extra) : '') + '</div><div class="sticky"><button class="btn btn-primary btn-block" type="button" data-bact="home">Back to Today</button></div>');
   }
   function kv(k, v, act, btn) { return '<div class="BL_kv"><span class="cap BL_k">' + esc(k) + '</span><b>' + esc(v) + '</b><button class="btn btn-secondary btn-sm" type="button" data-bact="' + act + '">' + ICON('clip', 's16') + esc(btn) + '</button></div>'; }
 
@@ -86,6 +100,7 @@
     call('bill_pay_open_v1', { p_bill_id: S.id }).then(live(function (d) {
       if (!d.ok || !d.bill || !d.pay) { if (d.reason === 'already_paid' && S.o.onChange) S.o.onChange(); return stop(say(d, { act: 'open' })); }
       S.d = d; S.amountText = d.pay.amount_editable ? two(Number(d.pay.amount_php) || 0) : String(Number(d.pay.amount_php) || 0);
+      S.meter = d.bill.kind === 'electric' || d.bill.kind === 'water'; S.today = CS.manilaToday(); S.readDate = S.meter ? defaultReadDate(d.bill.period, S.today) : ''; S.readVal = ''; // s131: a meter bill carries its reading date
       if (S.o.setTitle) S.o.setTitle('Pay ' + d.bill.label); renderPay();
     }));
   }
@@ -99,23 +114,27 @@
       '<div class="stack">' + (rows || '<p class="help" style="margin:0">No payment details are saved yet.</p>') + '</div></div>';
     var shot = S.file ? '<div class="row-wrap BL_shot"><span class="BL_thumb" aria-hidden="true">' + ICON('camera', 's24') + '</span><div class="BL_shotx"><span class="help">Screenshot added</span><button class="btn btn-secondary btn-sm" type="button" data-bact="pick"' + (S.busy ? ' disabled' : '') + '>Change screenshot</button></div></div>'
       : '<div class="row-wrap"><button class="btn btn-secondary" type="button" data-bact="pick">' + ICON('camera', 's16') + 'Add the screenshot</button></div>';
+    var meter = S.meter ? '<div class="card"><div class="BL_when"><b>' + esc(b.label + (monthName(b.period) ? ' · ' + monthName(b.period) + ' bill' : '')) + '</b><span class="help BL_est">' + esc('est. ' + peso(est)) + '</span></div><div class="stack" style="margin-top:12px">' +
+      '<div class="field"><label for="BL_rdate">Meter reading date on the bill</label><div class="input"><input id="BL_rdate" type="date" max="' + esc(S.today) + '" value="' + esc(S.readDate) + '"' + (S.busy ? ' disabled' : '') + ' aria-describedby="BL_rhelp"></div></div>' +
+      '<div class="field"><label for="BL_rval">Present reading on the bill (optional)</label><div class="input"><input id="BL_rval" inputmode="decimal" autocomplete="off" placeholder="' + (b.kind === 'water' ? 'm³' : 'kWh') + '" value="' + esc(S.readVal) + '"' + (S.busy ? ' disabled' : '') + '></div></div>' +
+      '<p class="help" id="BL_rhelp" style="margin:0">' + esc('Readings after this date start the next bill. The app warns when the reading is far from the meter log.') + '</p></div></div>' : '';
     var field = parts.editable ? '<div class="field"><label for="BL_amt">Amount on the receipt</label><div class="input"><span>PHP</span><input id="BL_amt" inputmode="decimal" autocomplete="off" value="' + esc(S.amountText) + '"' + (S.busy ? ' disabled' : '') + '></div><p class="help" id="BL_amthelp" style="margin:0">' + esc(amtHelp(S.amountText, est)) + '</p></div>' : '';
     var proof = '<div class="card"><div class="cap up">After you have paid</div><p class="help" style="margin:6px 0 10px">Add the payment screenshot. The bill is marked paid only with it.</p><div class="stack">' + shot + field +
       (S.msg ? box(S.msgKind || 'err', S.msg) : '') + '</div></div>';
     var skip = S.askSkip ? box('info', 'Skip ' + b.label + ' for this month? Nothing will be logged.') + '<div class="row-wrap"><button class="btn btn-secondary" type="button" data-bact="skip-yes"' + (S.busy ? ' disabled' : '') + '>Yes, skip it</button><button class="btn btn-ghost" type="button" data-bact="skip-no">Keep it</button></div>'
       : '<button class="btn btn-ghost btn-sm BL_skip" type="button" data-bact="skip-ask"' + (S.busy ? ' disabled' : '') + '>Not paying this month</button>';
     var later = '<div class="stack"><button class="btn btn-ghost" type="button" data-bact="cancel" style="width:100%"' + (S.busy ? ' disabled' : '') + '>Not now</button>' + skip + '</div>';
-    draw('<div class="stack">' + amountBox + to + proof + '<button class="btn btn-primary btn-block" type="button" id="BL_done" data-bact="settle"' + (payReady({ file: S.file, amountText: parts.editable ? S.amountText : String(est), busy: S.busy }) ? '' : ' disabled') + '>' + ICON('checks') + (S.busy ? 'Saving…' : 'Mark as paid') + '</button>' + later + '</div><input type="file" id="BL_file" accept="image/*" hidden>');
+    draw('<div class="stack">' + amountBox + to + meter + proof + '<button class="btn btn-primary btn-block" type="button" id="BL_done" data-bact="settle"' + (payReady({ file: S.file, amountText: parts.editable ? S.amountText : String(est), busy: S.busy, meter: S.meter, readDate: S.readDate, readVal: S.readVal, today: S.today }) ? '' : ' disabled') + '>' + ICON('checks') + (S.busy ? 'Saving…' : 'Mark as paid') + '</button>' + later + '</div><input type="file" id="BL_file" accept="image/*" hidden>');
   }
   function settle() {
     var d = S.d, parts = sheetParts(d), amount = parts.editable ? amountOf(S.amountText) : Number(d.pay.amount_php);
-    if (S.busy || !payReady({ file: S.file, amountText: parts.editable ? S.amountText : String(amount), busy: false })) return;
+    if (S.busy || !payReady({ file: S.file, amountText: parts.editable ? S.amountText : String(amount), busy: false, meter: S.meter, readDate: S.readDate, readVal: S.readVal, today: S.today })) return;
     // s and file are this sheet and this screenshot: after the upload nothing may be read from S, which can by then be another bill's sheet.
     var s = S, file = S.file, o = S.o; S.busy = true; S.msg = ''; renderPay();
     var up = s.up ? Promise.resolve(s.up) : Promise.resolve().then(function () { return o.upload(file); }).then(function (u) { if (s.file === file) s.up = u; return u; });
-    up.then(function (u) { return S === s && s.file === file ? call('bill_pay_settle_v1', { p_bill_id: s.id, p_proof: proofPayload(u, amount, s.confirmedFor) }) : { ok: false, reason: 'unknown' }; }, function () { return { ok: false, reason: 'upload' }; }).then(live(function (r) {
+    up.then(function (u) { return S === s && s.file === file ? call('bill_pay_settle_v1', { p_bill_id: s.id, p_proof: proofPayload(u, amount, s.confirmedFor, s.meter ? { date: s.readDate, value: s.readVal } : null) }) : { ok: false, reason: 'unknown' }; }, function () { return { ok: false, reason: 'upload' }; }).then(live(function (r) {
       S.busy = false;
-      if (r.ok) { if (S.o.haptic) try { S.o.haptic('tap'); } catch (e) { /* no buzz */ } if (S.o.onChange) S.o.onChange(); return stop('Logged as an expense under Utilities.', 'ok'); }
+      if (r.ok) { if (S.o.haptic) try { S.o.haptic('tap'); } catch (e) { /* no buzz */ } if (S.o.onChange) S.o.onChange(); return stop('Logged as an expense under Utilities.', 'ok', r.reading_warn === true ? 'The reading on the bill is far from the meter log. Check that it was typed right.' : ''); }
       if (r.reason === 'already_paid' || r.reason === 'not_payer' || r.reason === 'not_found' || r.reason === 'not_authorized') { if (S.o.onChange) S.o.onChange(); return stop(say(r)); }
       if (r.reason === 'confirm_amount') { S.confirmedFor = amount; S.msgKind = 'info'; S.msg = refusal(r); return renderPay(); }
       if (r.reason === 'duplicate_proof') { S.file = null; S.up = null; S.confirmedFor = null; }
@@ -185,6 +204,7 @@
   function onInput(ev) {
     var t = ev.target; if (!S || S.end) return;
     if (t.id === 'BL_amt') { S.amountText = t.value; S.confirmedFor = null; var h = S.o.box.querySelector('#BL_amthelp'); if (h) h.textContent = amtHelp(t.value, Number(S.d.pay.amount_php) || 0); var b = S.o.box.querySelector('#BL_done'); if (b) b.disabled = !payReady({ file: S.file, amountText: S.amountText, busy: S.busy }); }
+    else if (t.id === 'BL_rdate' || t.id === 'BL_rval') { if (t.id === 'BL_rdate') S.readDate = t.value; else S.readVal = t.value; var rb = S.o.box.querySelector('#BL_done'); if (rb) rb.disabled = !payReady({ file: S.file, amountText: S.d.pay.amount_editable ? S.amountText : String(Number(S.d.pay.amount_php) || 0), busy: S.busy, meter: S.meter, readDate: S.readDate, readVal: S.readVal, today: S.today }); }
     else if (t.getAttribute && t.getAttribute('data-key')) { S.vals[t.getAttribute('data-key')] = t.value; var s = S.o.box.querySelector('#BL_save'); if (s) s.disabled = S.busy || !Object.keys(changedKeys(S.d, S.vals)).length; }
   }
   function onChange(ev) { var t = ev.target; if (S && t.id === 'BL_file' && t.files && t.files[0]) { S.file = t.files[0]; S.up = null; S.confirmedFor = null; S.msg = ''; renderPay(); } }

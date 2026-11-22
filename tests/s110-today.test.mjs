@@ -137,7 +137,7 @@ test('s110 house rules: tokens in all three theme blocks, no raw colour or px fo
   for (const t of ['--v5-hz-haze-t', '--v5-hz-haze-w', '--v5-hz-sun-t', '--v5-hz-sun-w']) assert.equal(tk.split(t + ':').length - 1, 3, t + ' in light, media dark and data-theme dark');
   assert.doesNotMatch(s110, /#[0-9a-fA-F]{3,8}\b|rgba?\(/, 'tokens only'); assert.doesNotMatch(s110, /font-size:\s*[\d.]+px/); assert.doesNotMatch(s110, /white-space:\s*nowrap/);
   assert.doesNotMatch(s110, /gap:\s*(?!0\b|4px|8px|12px|16px|24px)\S+/, 'gaps on the 4/8/12/16/24 scale');
-  assert.equal(JSON.parse(read('package.json')).version, '3.4.47'); assert.match(read('app.js'), /version: '3.4.47'/); assert.match(read('sw.js'), /CACHE_NAME = 'cs-shell-v72'/);
+  assert.equal(JSON.parse(read('package.json')).version, '3.4.48'); assert.match(read('app.js'), /version: '3.4.48'/); assert.match(read('sw.js'), /CACHE_NAME = 'cs-shell-v73'/);
 });
 
 // ---------------------------------------------------------------------------------------------- s115 (Staff 3.4.30)
@@ -148,13 +148,13 @@ test('s115 badge reads as the ordinal of THIS stay, so it never contradicts "1 m
   const k = CS.keyNote('2026-10-20: Turnover report: sofa stained, towel missing || 2026-09-01: Special request: extra pillows');
   assert.equal(k.mark, '!!'); assert.equal(k.p, 'Special request: extra pillows'); // s115 fix 1: a current request comes before a turnover report
   const gk = CS.goodToKnow({ notes: '2026-09-01: Special request: extra pillows || 2026-10-20: Turnover report: sofa stained' }, false);
-  assert.equal(gk.notes[0].p, 'Special request: extra pillows'); assert.equal(gk.notes[1].p, 'Turnover report: sofa stained'); assert.equal(gk.notes[1].rank, 0);
+  assert.equal(gk.notes[0].p, 'Special request: extra pillows'); assert.equal(gk.notes[1].p, 'sofa stained'); assert.equal(gk.notes[1].kind, 'issue');
 });
-test('s115 in-house card: the badge sits beside the name and the progress line is under it; Inventory tiles stack icon over text', async () => {
+test('s115 in-house card: the badge sits beside the name and the progress line is under it; Inventory tiles put the icon left of the text (s131)', async () => {
   const css = read('styles.css'), app = read('app.js');
   assert.match(app, /<h2 class="A_name' \+ A_nm\(g\) \+ '">' \+ esc\(g\.guest_name \|\| 'Guest'\) \+ '<\/h2><\/div>' \+ A_badge\(g\) \+ A_prog\(g\)/);
   assert.doesNotMatch(app, /aria-label="Today in the house">' \+ A_ribbon/);
-  assert.match(css, /\.K_inv-btn \{[^}]*flex-direction: column;[^}]*height: auto|\.K_inv-btn \{[^}]*height: auto;[^}]*flex-direction: column/);
+  assert.match(css, /.K_inv-btn {[^}]*height: auto;[^}]*flex-direction: row/); // s131: icon left of the text, not stacked
   assert.match(css, /\.K_inv-row \{ grid-template-columns: repeat\(auto-fit, minmax\(9\.5rem, 1fr\)\); \}/);
 });
 test('s115 the KPI unit toggle never reaches the calendar day sheet; a non-date data-day opens nothing', async () => {

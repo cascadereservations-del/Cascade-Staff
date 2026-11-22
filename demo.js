@@ -78,7 +78,7 @@
       tier: 'returning', id_photo_path: 'demo/id-1', id_photo_name: 'Demo Companion One', companions: [{ name: 'Demo Companion One', has_photo: true }, { name: 'Demo Companion Two', has_photo: false }],
       phone: '0900-000-0000', email: 'demo.guest.one@example.invalid', messenger: {} });
     var g2 = guest({ uid: 'demo-stay-2', guest_name: 'Demo Guest Two', checkin_date: d(2), checkout_date: d(5), checkin_time: '14:00:00', checkout_time: '12:00:00', nights: 3, source: 'direct',
-      repeat: true, tier: 'vip', stay_count: 8, earlier_stays: [], notes: noteSeed(today).g2, id_photo_path: null, companions: [{ name: 'Demo Companion Three', has_photo: false }], phone: '0900-000-0001', email: 'demo.guest.two@example.invalid' });
+      repeat: true, tier: 'vip', stay_count: 8, earlier_stays: [], notes: noteSeed(today).g2 + ' || ' + d(-9) + ': Turnover report: Faucet is leaking in the CR', id_photo_path: null, companions: [{ name: 'Demo Companion Three', has_photo: false }], phone: '0900-000-0001', email: 'demo.guest.two@example.invalid' });
     g1.staying = { names: 'Demo Guest One, Demo Companion One', source: 'staff', suggestion: null, version: 1, guest_count: null, booked_guests: 2 }; // s119: sample staying data (names typed by staff; the next stay has only a Cassy suggestion)
     g2.staying = { names: '', source: null, suggestion: 'Demo Guest Two, Demo Companion Three', version: 0, guest_count: 2, booked_guests: 3 };
     if (admin) { g1.guest_id = '00000000-0000-4000-8000-0000000000d1'; g2.guest_id = '00000000-0000-4000-8000-0000000000d2'; } // s120: the Guests tile links to the guest page (the demo guest page knows these two ids)
@@ -255,9 +255,11 @@
       }
       if (name === 'bill_pay_settle_v1') {
         var p = a.p_proof || {}; if (b.status === 'paid') return { ok: false, reason: 'already_paid', bill: ent(b) }; if (b.paying_by_name !== me) return { ok: false, reason: 'not_payer', name: b.paying_by_name };
+        var meter = b.kind === 'electric' || b.kind === 'water', today1 = CS.manilaToday(), prev = CS.addDays(today1, -40);
+        if (meter && !p.reading_date) return { ok: false, reason: 'reading_date_required' }; if (meter && (!/^\d{4}-\d{2}-\d{2}$/.test(p.reading_date) || p.reading_date > today1 || p.reading_date <= prev)) return { ok: false, reason: 'reading_date_invalid' };
         if (!(p.amount > 0)) return { ok: false, reason: 'bad_amount' }; if (usedShot[p.sha256]) return { ok: false, reason: 'duplicate_proof' };
         if (Math.abs(p.amount - b.estimate_php) / b.estimate_php > 0.25 && p.confirmed !== true) return { ok: false, reason: 'confirm_amount', read: p.amount, estimate_php: b.estimate_php };
-        usedShot[p.sha256] = 1; b.status = 'paid'; b.paid_php = p.amount; b.paid_by_name = me; b.paid_at = new Date().toISOString(); toast(NOTE); return { ok: true, bill: ent(b), paid_php: p.amount };
+        usedShot[p.sha256] = 1; b.status = 'paid'; b.paid_php = p.amount; b.paid_by_name = me; b.paid_at = new Date().toISOString(); toast(NOTE); return Object.assign({ ok: true, bill: ent(b), paid_php: p.amount }, meter && p.reading_value != null && Math.abs(p.reading_value - (b.kind === 'electric' ? 4655 : 48)) > (b.kind === 'electric' ? 30 : 3) ? { reading_warn: true } : {});
       }
       if (!mayEdit) return { ok: false, reason: 'not_authorized' }; var c = SCHED[a.p_kind]; if (!c) return { ok: false, reason: 'bad_kind' };
       if (name === 'bill_schedule_get_v1') return Object.assign({ ok: true, kind: a.p_kind }, c);
@@ -284,7 +286,9 @@
         case 'staff_pay_candidates_v1': return done(X.pay);
         case 'staff_signin_list_v1': return done(X.signin);
         case 'kpi_tab_v1': return done(X.kpi);
-        case 'today_bills_v1': { var cb = cycleOf(X.home.today); return done({ since: cb.from, last_reading_at: cb.last + 'T02:00:00Z', electric: { php: 4314.35, kwh: 383 }, water: { php: 212, m3: 7.2 }, due: billList(X.home.today) }); } // s127: every role, like the live card
+        case 'today_bills_v1': { // s131: the cycle stays open from the last bill's reading date (the 21st a month back) until the next bill is entered; staff who may not pay get one check row instead of the list
+          var cb = cycleOf(X.home.today), sy = +cb.from.slice(0, 4), sm = +cb.from.slice(5, 7), since = new Date(Date.UTC(sy, sm - 2, 21)).toISOString().slice(0, 10), mon = new Date(Date.UTC(sy, sm - 1, 1)).toLocaleString('en-US', { month: 'long', timeZone: 'UTC' });
+          return done({ since: since, water_since: since, waiting_for: mon, water_waiting_for: mon, can_pay_list: mayPay, check_bills: !mayPay, last_reading_at: cb.last + 'T02:00:00Z', electric: { php: 4621, kwh: 383 }, water: { php: 212, m3: 7.2 }, due: mayPay ? billList(X.home.today) : [] }); }
         case 'bill_pay_open_v1': case 'bill_pay_settle_v1': case 'bill_pay_cancel_v1': case 'bill_pay_skip_v1': case 'bill_proof_v1': case 'bill_schedule_get_v1': case 'bill_schedule_set_v1': return done(billCall(name, args || {}, X.home.today));
         case 'get_inventory_catalogue_v1': return done({ ok: true, items: X.items });
         case 'admin_report_blocks_v1': return admin_(view) ? done([{ reading_id: 'demo-reading-1', session_id: 'demo-s1', cleaner_name: 'Demo Cleaner', checkout_date: CS.addDays(X.home.today, -1), recorded_at: X.home.today + 'T02:00:00Z', typed_electric: 4310, typed_water: 812, prev_electric: 4272, prev_water: 805, photo_electric: 4301, photo_water: 812, photo_note_electric: 'Last digit unclear', photo_note_water: null, photo_path_electric: null, photo_path_water: null, resend_requested_at: null }]) : Promise.resolve({ data: null, error: { code: '42501', message: 'not authorized' } });

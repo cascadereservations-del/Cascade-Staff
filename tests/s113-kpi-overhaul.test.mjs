@@ -197,6 +197,6 @@ test('s114 Today guide card: "Guest tiers: how many stays for each", closed by d
 
 // ---------------------------------------------------------------------------------------------- release
 test('s113 release: 3.4.30, cs-shell-v64 in sw.js and PC_SHELL, the new test file is the contract name', () => {
-  assert.equal(JSON.parse(read('package.json')).version, '3.4.47'); assert.match(read('app.js'), /version: '3.4.47'/);
-  assert.match(read('sw.js'), /CACHE_NAME = 'cs-shell-v72'/); assert.match(read('app.js'), /var PC_SHELL = 'cs-shell-v72';/);
+  assert.equal(JSON.parse(read('package.json')).version, '3.4.48'); assert.match(read('app.js'), /version: '3.4.48'/);
+  assert.match(read('sw.js'), /CACHE_NAME = 'cs-shell-v73'/); assert.match(read('app.js'), /var PC_SHELL = 'cs-shell-v73';/);
 });

@@ -20,7 +20,7 @@
     url: 'https://qkgfhsdppslwunarczeq.supabase.co',
     key: 'sb_publishable_JFuRYZ9csmQULcMRmHXDSg_Abo9UeCj',
     propertyId: '6ae230f4-c189-4547-84b1-cb6e0b2cc9bd',
-    version: '3.4.47'
+    version: '3.4.48'
   };
   var LINKS = {
     checklist: 'https://cascadereservations-del.github.io/CH-Cleaners-Checklist/',
@@ -305,7 +305,7 @@
     var n = np.guest, tier = CS.tierLabel(n.tier) ? n.tier : 'first', when = 'Arrives ' + np.day + ' ' + (CS.fmtTime(n.checkin_time) || A_houseT().inLabel);
     return '<section class="card A_card F_span T_card T_upnext T_tier-' + tier + '" aria-label="Next arrival"><div class="row-between"><span class="cap up T_lbl">Up next · incoming</span>' + pill('info', 'clock', when) + '</div>' +
       '<div class="T_who"><div class="T_id"><div class="T_namerow"><h3 class="T_nname' + A_nm(n) + '">' + esc(np.name) + '</h3>' + A_badge(n) + '</div>' + A_prog(n) + A_ownerLine(n) + '</div>' + A_face(n) + '</div>' +
-      A_staying(n) + A_grid(n, 'next') + A_perks(n, 'arriving') + '<a class="A_more" href="#calendar/next">Open guest card' + ICON('chev', 's16') + '</a></section>';
+      A_staying(n) + A_grid(n, 'next') + A_goodToKnow(n, 'next') + A_perks(n, 'arriving') + '<a class="A_more" href="#calendar/next">Open guest card' + ICON('chev', 's16') + '</a></section>';
   }
   // s113: "Guest tiers: how many stays for each". s114: closed until tapped; closes itself 5 minutes after a tap opened it (A_autoClose).
   // A compact table: tier (glyph and colour) | when | what they get (CS.tierPerks, arrival and house). The same table is the tier guide sheet, with the guest's row marked.
@@ -354,17 +354,29 @@
   // s127: "Bills since the 21st", every role (Lloyd approved the pesos for all staff). today_bills_v1 is read once per Today load; a missing or refused RPC, or an answer that is
   // not the contract shape, draws nothing and logs nothing.
   var H_bSeq = 0;
+  // s131: the cycle follows the bill. "since" is the last paid bill's reading date (or the opening date); electric and water may differ, then each column says its own.
+  // "Waiting for the <month> bill" shows (info tone, never an alarm) once the expected reading day has passed and the bill has no reading date yet.
   function A_billsCard() {
     var b = state.bills; if (!b) return '';
     var kwh = (Math.round(b.eKwh) || 0).toLocaleString('en-PH') + '\u00a0kWh', m3 = String(Math.round(b.wM3 * 10) / 10) + '\u00a0m³', noRate = 'Cost shows when the rate is in.';
     var col = function (php, use) { return php != null ? ['<b>' + esc(A_peso(Math.round(php))) + '</b>', use] : ['<b>' + esc(use) + '</b>', noRate]; }, e = col(b.ePhp, kwh), w = col(b.wPhp, m3); // s128: no peso, no "Not yet": the usage is the figure
-    return '<section class="card glass A_card F_span K_bills" id="T_bills" aria-label="Bills so far"><span class="K_lab">' + esc('This cycle so far · since ' + A_nb(CS.dayLabel(b.since))) + '</span><div class="K_two">' +
-      '<div><i class="K_e">⚡ Electricity</i>' + e[0] + '<span class="K_sub">' + esc(e[1]) + '</span></div>' +
-      '<div><i class="K_w">💧 Water</i>' + w[0] + '<span class="K_sub">' + esc(w[1]) + '</span></div></div>' +
-      '<p class="K_sub">' + esc(b.last ? 'From the meter readings up to ' + A_nb(CS.dayLabel(b.last)) + (b.ePhp != null && b.wPhp != null ? ', at the latest rates.' : '.') : 'No meter reading in this bill yet.') + '</p>' + A_billDues(b) + '</section>';
+    var split = !!b.waterSince && b.waterSince !== b.since, since = function (d) { return '<span class="K_sub K_since">' + esc('since ' + A_nb(CS.dayLabel(d))) + '</span>'; };
+    var wait = b.waiting && b.waterWaiting && b.waiting === b.waterWaiting ? [['', b.waiting]] : [['electricity ', b.waiting], ['water ', b.waterWaiting]].filter(function (x) { return x[1]; });
+    var waiting = wait.map(function (x) { return '<p class="K_sub K_wait">' + pill('info', 'clock', 'Waiting for the ' + x[1] + ' ' + x[0] + 'bill') + ' ' + esc('Counting goes on until its reading date is entered.') + '</p>'; }).join('');
+    var hasUse = (b.eKwh > 0) || (b.wM3 > 0);
+    return '<section class="card glass A_card F_span K_bills" id="T_bills" aria-label="Bills so far"><span class="K_lab">' + esc(split ? 'This bill so far' : 'This bill so far · since ' + A_nb(CS.dayLabel(b.since))) + '</span><div class="K_two">' +
+      '<div><i class="K_e">⚡ Electricity</i>' + e[0] + '<span class="K_sub">' + esc(e[1]) + '</span>' + (split ? since(b.since) : '') + '</div>' +
+      '<div><i class="K_w">💧 Water</i>' + w[0] + '<span class="K_sub">' + esc(w[1]) + '</span>' + (split ? since(b.waterSince) : '') + '</div></div>' +
+      (b.last || !hasUse ? '<p class="K_sub">' + esc(b.last ? 'From the meter readings up to ' + A_nb(CS.dayLabel(b.last)) + (b.ePhp != null && b.wPhp != null ? ', at the latest rates.' : '.') : 'No meter reading in this bill yet.') + '</p>' : '') + waiting + A_billDues(b) + '</section>';
   }
   // s127: the To pay list. Every role sees the rows and amounts; Pay shows only where the server said can_pay, and only owner, admin and finance open a paid row's screenshot.
+  // s131: where the server says this caller may not pay (can_pay_list false) there are no To pay rows at all; from the 25th one row asks the person at the property to look for the paper bills. An old payload without the key behaves as before.
+  function A_billCheck(b) {
+    if (!b.checkBills) return '';
+    return '<span class="K_lab BL_lab">Bills to check</span><div class="BL_dues"><a class="K_line BL_check" href="#supply"><span class="BL_tile BL_tile-e" aria-hidden="true">📬</span><span class="BL_who"><b>Check for the bills</b><span class="K_sub">' + esc('Look for the SOCOTECO and water bills at the gate and send a photo in the app.') + '</span></span>' + ICON('chev', 's16') + '</a></div>';
+  }
   function A_billDues(b) {
+    if (b.canPayList === false) return A_billCheck(b);
     if (!b.due || !b.due.length) return '';
     var ctx = { today: state.payload ? state.payload.today : '', last: b.last, mayProof: CS.billsMayPay(role()) };
     return '<span class="K_lab BL_lab">To pay</span><div class="BL_dues">' + b.due.map(function (e) {
@@ -375,6 +387,12 @@
         : '<div class="K_line BL_paid">' + tile + who + ICON('checks', 's16') + '</div>';
       return '<div class="K_line">' + tile + who + '<b class="BL_amt">' + esc(r.amount) + '</b>' + (r.action === 'pay' ? '<a class="btn btn-secondary btn-sm" href="#bills/pay/' + esc(r.id) + '" aria-label="' + esc('Pay ' + r.label) + '">Pay</a>' : '') + '</div>';
     }).join('') + '</div>';
+  }
+  // s131: the notes string the Today payload holds for a guest (stored notes plus the server-joined cleaning reports), for the Edit notes screen to find the report row it was opened for.
+  function A_cardNotes(gid) {
+    var p = state.payload, id = String(gid || '').toLowerCase(), out = '';
+    [p && p.current_guest, p && p.next_guest].forEach(function (g) { if (!out && g && String(g.guest_id || '').toLowerCase() === id && g.notes) out = String(g.notes); });
+    return out;
   }
   // The screenshot of a paid bill (approve_payment only: the server checks). One signed link, shown in the shared photo viewer; a refusal or a failed link says so.
   function A_billProof(id) {
@@ -411,7 +429,8 @@
     // s109: the phone and the guest count moved to the fact grid (A_grid); Good to know keeps the notes
     if (!gk.notes.length && !facts.length) return '';
     return '<div class="T_gtk" role="group" aria-label="Good to know"><span class="cap up">Good to know</span>' + gk.notes.map(function (n) {
-      return '<div class="T_key note-key">' + ICON('alert', 's16') + '<span class="T_nt">' + (n.mark ? '<b role="img" aria-label="Importance ' + n.mark.length + ' of 3">' + n.mark + '</b> ' : '') + esc(n.p) + '</span></div>'; }).join('') +
+      var kw = n.kind && n.kind !== 'note' ? n.kind.charAt(0).toUpperCase() + n.kind.slice(1) + ':' : ''; // s131: the kind word, bold
+      return '<div class="T_key note-key">' + ICON('alert', 's16') + '<span class="T_nt">' + (n.mark ? '<b role="img" aria-label="Importance ' + n.mark.length + ' of 3">' + n.mark + '</b> ' : '') + (kw ? '<b>' + kw + '</b> ' : '') + esc(n.p) + (n.src ? ' · ' + esc(n.src) : '') + '</span></div>'; }).join('') +
       (gk.notes.length && gk.more > 0 ? '<a class="T_more" href="' + href + '">+' + gk.more + ' more ' + (gk.more === 1 ? 'note' : 'notes') + '</a>' : '') + (facts.length ? '<div class="T_facts">' + facts.join('') + '</div>' : '') + '</div>';
   }
   // The hero (photo, wordmark, pill, greeting) is built once; a redraw patches only the greeting and the buttons, so the photo is not decoded again and focus stays put.
@@ -711,12 +730,16 @@
     if (n.readOnly) return '<span class="N_lv N_lv0" aria-hidden="true">' + ICON('note', 's16') + '</span>';
     return '<span class="N_lv N_lv' + n.level + '"' + (n.level ? ' role="img" aria-label="Importance ' + n.level + ' of 3"' : ' aria-hidden="true"') + '>' + (n.level ? '!!!'.slice(0, n.level) : '&bull;') + '</span>';
   }
-  function N_tags(n) {
-    var from = n.readOnly ? (n.readOnly === 'turnover' ? 'from the cleaning report, not editable here' : 'from the guest record, not editable here') : '', dt = n.date ? CS.noteDateLabel(n.date) : '';
-    return '<span class="N_tags"><span class="help num">' + esc(dt + (dt && from ? ' · ' : '') + from) + '</span>' + (n.suggestion ? '<span class="pill p-brand">Guest suggestion</span>' : '') + (n.addressed ? '<span class="pill p-ok">Addressed' + (n.addressedOn ? ' ' + esc(CS.noteDateLabel(n.addressedOn)) : '') + '</span>' : '') + '</span>';
+  // s131: the kind chip is neutral or warn tone (red is only the importance mark !!!); an owner or admin can mark a cleaning-report row (importance, kind, Addressed) from here: the words stay the cleaner's.
+  function N_tags(n, ed) {
+    var from = n.readOnly ? (n.readOnly === 'turnover' ? (ed ? 'from the cleaning report, the words are not changed' : 'from the cleaning report, not editable here') : 'from the guest record, not editable here') : n.turn ? 'from the cleaning report' : '', dt = n.date ? CS.noteDateLabel(n.date) : '';
+    var kd = n.suggestion ? '<span class="pill p-brand">Guest suggestion</span>' : n.kind === 'request' ? '<span class="pill p-warn">Request</span>' : n.kind === 'issue' ? '<span class="pill p-warn">Issue</span>' : '';
+    var k = n.readOnly === 'turnover' && ed && n.date ? ed[n.date + '|' + CS.turnBody(n.text).toLowerCase()] : undefined;
+    var mk = k === undefined ? '' : '<a class="btn btn-ghost btn-sm N_mk" href="#guests/' + esc(ed.gid) + '/notes/t/' + esc(n.date) + '/' + k + '">Set importance or kind</a>';
+    return '<span class="N_tags"><span class="help num">' + esc(dt + (dt && from ? ' · ' : '') + from) + '</span>' + kd + mk + (n.addressed ? '<span class="pill p-ok">Addressed' + (n.addressedOn ? ' ' + esc(CS.noteDateLabel(n.addressedOn)) : '') + '</span>' : '') + '</span>';
   }
-  function N_item(n, extra) {
-    return '<li class="N_it' + (n.level && !n.addressed ? ' N_key' : '') + (n.addressed ? ' N_done' : '') + (extra ? ' N_x' : '') + '">' + N_mark(n) + '<div><p class="N_tx N_clamp">' + esc(n.text) + '</p>' + N_tags(n) + '</div></li>';
+  function N_item(n, extra, ed) {
+    return '<li class="N_it' + (n.level && !n.addressed ? ' N_key' : '') + (n.addressed ? ' N_done' : '') + (extra ? ' N_x' : '') + '">' + N_mark(n) + '<div><p class="N_tx N_clamp">' + esc(n.text) + '</p>' + N_tags(n, ed) + '</div></li>';
   }
   function guestBlock(g, kind) {
     var label = kind === 'house' ? 'In the house' : 'Next arrival';
@@ -731,9 +754,10 @@
       '</div>'; // s120: no Open guest button in this release (not in the approved mockup); the Guests tile on Today is the way in
     var nv = CS.notesView(g.notes, true), notes = '';
     if (nv.total) {
-      var nOpen = !!(state.notesOpen && state.notesOpen[kind]), nEdit = canAddDetails() && /^[0-9a-f-]{36}$/i.test(String(g.guest_id || ''));
+      var nOpen = !!(state.notesOpen && state.notesOpen[kind]), nEdit = canAddDetails() && /^[0-9a-f-]{36}$/i.test(String(g.guest_id || '')), ed = null;
+      if (nEdit) { ed = { gid: g.guest_id }; CS.turnoverRows(g.notes).forEach(function (r) { ed[r.date + '|' + r.body.toLowerCase()] = r.k; }); }
       notes = '<div class="card glass N_paper N_card" data-open="' + (nOpen ? 1 : 0) + '"><div class="row-between"><h3 class="hd">Notes</h3>' + (nEdit ? '<a class="btn btn-ghost btn-sm" href="#guests/' + esc(g.guest_id) + '/notes" style="margin:-10px -12px -10px 0">Edit notes</a>' : '') + '</div>' +
-        '<ul class="N_list">' + nv.all.map(function (n, i) { return N_item(n, i >= CS.NOTE_SHOW); }).join('') + '</ul>' +
+        '<ul class="N_list">' + nv.all.map(function (n, i) { return N_item(n, i >= CS.NOTE_SHOW, ed); }).join('') + '</ul>' +
         (nv.button ? '<button class="btn btn-secondary btn-block N_more" type="button" data-act="notes-toggle" data-key="' + kind + '" data-total="' + nv.total + '" aria-expanded="' + nOpen + '">' + (nOpen ? 'Show fewer' : 'Show all ' + nv.total + ' notes') + '</button>' : '') + '</div>';
     } else if (g.repeat === true) {
       notes = '<div class="card"><h3 class="hd">Notes</h3><p class="sub" style="margin-top:8px">Nothing was noted last time.</p></div>';
@@ -2036,7 +2060,7 @@
       var box = $('H_mod-' + key); if (!box) return; box.innerHTML = '';
       H_mod.mounted = key; H_mod.sub = sub; var low = !!state.H_lowOnce; state.H_lowOnce = false; // read at mount: a redraw while the script loads must not eat the one-shot
       var bad = function () { if (H_mod.mounted === key) { H_mod.mounted = ''; H_mod.sub = ''; H_mod.n++; } if (current === key) H_fallback(key); };
-      try { var mr = window[m.global].mount(box, { client: DEMO && !m.demoClient ? null : sb, demo: DEMO, role: role(), sub: sub, low: low && key === 'stock', propertyId: pid(), upload: H_billUpload, houseTimes: A_houseT(), pushKey: H_pushKey, swReg: H_swReg, navigate: function (h) { location.hash = String(h).charAt(0) === '#' ? h : '#' + h; }, toast: toast, haptic: E_vibe, faces: A_loadFaces, setTitle: function (t) { var h = el.querySelector && el.querySelector('.ttl'); if (h) h.textContent = t || m.title; }, onChange: function () { if (!DEMO) loadHome({ again: true }); } }); if (mr && typeof mr.then === 'function') mr.then(null, bad); } catch (e) { bad(); } // a module that throws leaves a screen that works, not a blank one
+      try { var mr = window[m.global].mount(box, { client: DEMO && !m.demoClient ? null : sb, demo: DEMO, role: role(), sub: sub, low: low && key === 'stock', propertyId: pid(), cardNotes: A_cardNotes, upload: H_billUpload, houseTimes: A_houseT(), pushKey: H_pushKey, swReg: H_swReg, navigate: function (h) { location.hash = String(h).charAt(0) === '#' ? h : '#' + h; }, toast: toast, haptic: E_vibe, faces: A_loadFaces, setTitle: function (t) { var h = el.querySelector && el.querySelector('.ttl'); if (h) h.textContent = t || m.title; }, onChange: function () { if (!DEMO) loadHome({ again: true }); } }); if (mr && typeof mr.then === 'function') mr.then(null, bad); } catch (e) { bad(); } // a module that throws leaves a screen that works, not a blank one
     }, function () { if (current === key && token === H_mod.n) H_fallback(key); });
   }
 
@@ -2161,7 +2185,7 @@
   // Runs once per device after sign-in (CS.phoneCheckDue, key cs_phone_check) and from More > This phone > Check this phone. Every row comes from a real probe
   // (CS.phoneCheckRows); Fix all runs the fixers in order from the one tap (CS.phoneFixPlan: alerts first, so the permission prompt rides the tap), then probes again.
   // The camera is opened only when its permission is 'prompt', and every track is stopped at once. Nothing changes Trust this device.
-  var PC_SHELL = 'cs-shell-v72'; // the service worker's cache for this version (sw.js CACHE_NAME; a test keeps them equal)
+  var PC_SHELL = 'cs-shell-v73'; // the service worker's cache for this version (sw.js CACHE_NAME; a test keeps them equal)
   var PC = { open: false, busy: false, rows: null, msg: '', camPerm: null };
   function PC_ls() { return store('localStorage'); }
   function PC_cameraPerm() {
