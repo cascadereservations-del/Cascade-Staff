@@ -190,7 +190,13 @@ const C = [
   ['utensils step on every cleaning type', [["utensils: true, only: ['turnover', 'deep_clean'],", "utensils: true,"]]],
   ['utensils photo not lazy', [['width="40" height="40" loading="lazy"', 'width="40" height="40"']]],
   ['utensils rows not capped', [["const S132U_MAX_ROWS = 30;", "const S132U_MAX_ROWS = 3000;"]]],
-  ['utensils carry-over ignores the card', [["S120R_liveSend(draft.linen) || S120R_liveSend(draft.utensils);", "S120R_liveSend(draft.linen);"]]]
+  ['utensils carry-over ignores the card', [["S120R_liveSend(draft.linen) || S120R_liveSend(draft.utensils);", "S120R_liveSend(draft.linen);"]]],
+  ['utensils F1 too many lines not in the report', [["if (!U.sent && S132U_rows(U).length > S132U_MAX_ROWS) return [", "if (false && S132U_rows(U).length > S132U_MAX_ROWS) return ["]]],
+  ['utensils F2 failed list read shows no line', [["m.wrap.hidden = !(show || noList);", "m.wrap.hidden = !show;"]]],
+  ['utensils F3 direct tick bypasses the card', [["if (cardOn && U.answer == null && !S132U_locked(U)) {", "if (false) {"]]],
+  ['utensils F4 list read again on every render', [["if (_utLoading === p && _utFailed) _utLoading = null;", "if (_utLoading === p) _utLoading = null;"]]],
+  ['utensils F6 exact-name url filter', [["category=ilike.*kitchen%20utensils*&select", "category=ilike.Kitchen%20utensils&select"]]],
+  ['utensils F6 client exact test dropped', [["S132U_GROUP_RE.test(String(r.category || '').trim())", "/kitchen utensils/i.test(String(r.category || ''))"]]]
 ];
 const cdir = fs.mkdtempSync(path.join(os.tmpdir(), 'I_red_c-'));
 for (const [name, edits] of C) {
@@ -201,7 +207,7 @@ for (const [name, edits] of C) {
   if (s == null) continue;
   const f = path.join(cdir, 'index.mut.html'); fs.writeFileSync(f, s);
   const r = spawnSync(process.execPath, ['--test', path.join(here, 's132-utensils-check.test.mjs')], { env: Object.assign({}, process.env, { S132U_SRC: f }), encoding: 'utf8', timeout: 60000 });
-  const red = [...(r.stdout || '').matchAll(/^s*✖ (s132 L3 .+?) (d+(?:.?d+)?ms)/gm)].map((m) => m[1].trim()).filter((v, i, a) => a.indexOf(v) === i);
+  const red = [...(r.stdout || '').matchAll(/^\s*✖ (s132 L3.+?) \(\d+(?:\.\d+)?ms\)/gm)].map((m) => m[1].trim()).filter((v, i, a) => a.indexOf(v) === i);
   const ok = r.status !== 0 && (red.length > 0 || /✖|not ok/.test(r.stdout || ''));
   if (!ok) bad++;
   console.log((ok ? 'RED  ' : 'GREEN(!) ') + name + ' -> ' + (red.length ? red.length + ' failing: ' + red.slice(0, 2).join(' | ') : ok ? 'suite fails' : 'no failing test'));

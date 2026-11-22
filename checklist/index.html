@@ -11773,7 +11773,6 @@ const S132U_PU_KEY = 'I_pu_v1';                  // the stock app's signed photo
 const S132U_SIGN_STALE = 6 * 86400000;
 const S132U_MAX_ROWS = 30;                       // the server takes 1 to 30 rows
 const S132U_NAME_EM = [[/glass|cup|mug/i, '\u{1F95B}'], [/spoon|fork|knife|ladle|utensil/i, '\u{1F944}'], [/pot|pan|wok|kettle|cooker/i, '\u{1F372}'], [/plate|bowl|dish/i, '\u{1F37D}️']];
-const S132U_esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const S132U_n = v => { const n = Math.floor(Number(v)); return Number.isFinite(n) ? Math.max(0, Math.min(99, n)) : 0; };
 function S132U_emoji(name) {
   const t = String(name || '');
@@ -11842,8 +11841,10 @@ function S132U_summary(U) {
 }
 /* The line the report carries, so a send that could not go is never lost. */
 function S132U_reportLines(U) {
-  if (!U || !S132U_problems(U).length || !(U.saved || U.sent || U.tried)) return [];
+  if (!U || !S132U_problems(U).length) return [];
   const n = S132U_note(U);
+  if (!U.sent && S132U_rows(U).length > S132U_MAX_ROWS) return [{ section: 'Kitchen', text: 'Utensils check: ' + S132U_summary(U) + (n ? '. Note: ' + n : '') + '. Not recorded (too many lines). The host will check the kitchen.' }];   // over the server's 30 lines: nothing could be sent, so the report carries every count
+  if (!(U.saved || U.sent || U.tried)) return [];
   let t = 'Utensils check: ' + S132U_summary(U) + (n ? '. Note: ' + n : '') + '.';
   if (U.sent) t += ' Recorded.';
   else if (U.failed) t += ' Not recorded (' + U.failed + '). The host will check the kitchen.';
@@ -11866,7 +11867,7 @@ function S132U_status(U, hasItems) {
 }
 /* The whole card body as one string (no DOM here, so the wording and the controls can be tested). urls = signed photo links by storage path; bad = links that failed to load. */
 function S132U_cardHtml(U, items, urls, bad) {
-  const E = S132U_esc, locked = S132U_locked(U), off = locked ? ' disabled' : '';
+  const E = S120R_esc, locked = S132U_locked(U), off = locked ? ' disabled' : '';
   const has = S132U_problems(U).length > 0, ans = has ? 'issues' : (U.answer === 'all' ? 'all' : null);
   const row = it => {
     const r = (U.rows && U.rows[it.id]) || {}, m = S132U_n(r.missing), b = S132U_n(r.broken), open = U.open === it.id;
@@ -11895,16 +11896,17 @@ let _utItems = [];        // the Kitchen utensils rows (id, name, unit, qty, pho
 let _utUrls = {};         // signed photo links by storage path
 let _utBad = {};          // links that would not load: the emoji shows instead (D-396)
 let _utMount = null;      // { div, wrap, body, status, cb } of the card now on screen
-let _utLoading = null;
+let _utLoading = null;     // one load per page: kept after a good read so a re-render does not fetch again, dropped after a failed one so the next try can
+let _utFailed = false;     // the last list read failed (or there was no connection): with no cached list the card says so
 let _utQueue = Promise.resolve();   // one send at a time, like the linen and restock sends
 const S132U_active = () => state.cleaningType === 'turnover' || state.cleaningType === 'deep_clean';
 function S132U_state() { if (!state.utensils) state.utensils = S132U_newUtensils(); return state.utensils; }
 
 async function S132U_fetchItems() {
-  const url = `${SUPABASE_URL}/rest/v1/inventory_items?property_id=eq.${PROPERTY_ID}&is_active=eq.true&is_consumable=eq.false&category=ilike.Kitchen%20utensils&select=id,name,category,unit,qty_on_hand,photo_path,is_active,is_consumable&order=name.asc`;
+  const url = `${SUPABASE_URL}/rest/v1/inventory_items?property_id=eq.${PROPERTY_ID}&is_active=eq.true&is_consumable=eq.false&category=ilike.*kitchen%20utensils*&select=id,name,category,unit,qty_on_hand,photo_path,is_active,is_consumable&order=name.asc`;
   const resp = await fetch(url, { headers: { ...(await staffHeaders()), 'Accept': 'application/json' } });
   if (!resp.ok) throw new Error('HTTP ' + resp.status);
-  return S132U_items(await resp.json());   // the same filter again here: a row that is not lasting, active and Kitchen utensils never reaches the card
+  return S132U_items(await resp.json());   // the wildcard above also lets a stray space or case through; the same exact filter again here (trimmed, any case): a row that is not lasting, active and Kitchen utensils never reaches the card
 }
 function S132U_readUrls() {
   try {
@@ -11933,13 +11935,14 @@ function S132U_load() {
   S132U_readUrls(); S132U_paint();
   const p = (async () => {
     try {
-      if (navigator.onLine !== false) { _utItems = await S132U_fetchItems(); lsJSON(S132U_CACHE, _utItems); }
-    } catch (e) { /* offline or refused: the cached rows, or none */ }
+      if (navigator.onLine !== false) { _utItems = await S132U_fetchItems(); lsJSON(S132U_CACHE, _utItems); _utFailed = false; }
+      else _utFailed = true;
+    } catch (e) { _utFailed = true; /* offline or refused: the cached rows, or none */ }
     S132U_paint();
     await S132U_sign();
   })();
   _utLoading = p;
-  const done = () => { if (_utLoading === p) _utLoading = null; };
+  const done = () => { if (_utLoading === p && _utFailed) _utLoading = null; };
   p.then(done, done);
   return p;
 }
@@ -11957,8 +11960,10 @@ function S132U_focusKey(root) {
 function S132U_paint() {
   const m = _utMount; if (!m) return;
   const U = S132U_state(), show = S132U_active() && _utItems.length > 0;
-  m.wrap.hidden = !show;
-  if (!show) return;
+  const noList = !show && S132U_active() && _utFailed && !_utItems.length;   // the list could not be read and there is no copy: say so, the plain tick stays
+  m.wrap.hidden = !(show || noList);
+  if (noList) { m.body.innerHTML = ''; m.status.textContent = 'Could not load the utensils list - tick when checked, and flag anything missing'; m.status.className = 's120-status'; return; }
+  if (!show) return;   // a list read that worked and is empty (group not set up yet): no card, no note
   const fk = S132U_focusKey(m.body);
   m.body.innerHTML = S132U_cardHtml(U, _utItems, _utUrls, _utBad);
   try { if (fk) { const n = m.body.querySelector(fk) || m.body.querySelector('button:not([disabled])'); if (n) n.focus({ preventScroll: true }); } } catch (e) { /* focus is a courtesy */ }
@@ -11989,9 +11994,11 @@ function S132U_mount(div, item, cb) {
   wrap.addEventListener('input', S132U_onInput);
   wrap.addEventListener('error', S132U_onImgError, true);   // an image error does not bubble: the capture phase sees it
   if (cb) cb.addEventListener('change', () => {   // the generic tick handler already ran; the card keeps the tick while it holds an answer
-    const U = S132U_state();
-    if (!cb.checked && U.answer === 'issues') { S132U_tick(true); saveDraft(); }
-    else if (!cb.checked && U.answer === 'all') { U.answer = null; S132U_paint(); saveDraft(); }
+    const U = S132U_state(), cardOn = !wrap.hidden && _utItems.length > 0;
+    if (cb.checked) {   // a direct tick or a phase Check all while the card shows means All there: it is not a way round the card
+      if (cardOn && U.answer == null && !S132U_locked(U)) { U.answer = 'all'; U.rows = {}; U.note = ''; U.open = null; U.failed = ''; U.saved = false; U.waiting = false; S132U_paint(); saveDraft(); }
+    } else if (U.answer === 'issues') { S132U_tick(true); saveDraft(); }
+    else if (U.answer === 'all' && !S132U_locked(U)) { U.answer = null; S132U_paint(); saveDraft(); }   // not once a report was sent or tried
   });
   S132U_state(); S132U_paint();
   S132U_load().catch(() => {});

@@ -14,7 +14,9 @@ const fnText = name => {
 const block = html.slice(html.indexOf('/* S132U:BEGIN'), html.indexOf('/* S132U:END */'));
 assert.ok(block.length > 500, 'S132U block present');
 const names = 'S132U_items,S132U_newUtensils,S132U_migrate,S132U_problems,S132U_rows,S132U_settle,S132U_locked,S132U_args,S132U_failText,S132U_summary,S132U_reportLines,S132U_status,S132U_cardHtml,S132U_emoji';
-const pure = new Function(fnText('S120R_stepperHtml') + block + `\nreturn { ${names} };`)();
+const escLine = html.split('\n').find(l => l.startsWith('const S120R_esc = '));
+assert.ok(escLine, 'S120R_esc present');
+const pure = new Function(escLine + '\n' + fnText('S120R_stepperHtml') + block + `\nreturn { ${names} };`)();
 
 const raw = [
   { id: 'a', name: 'Dinner fork', category: 'Kitchen utensils', unit: 'pc', qty_on_hand: 8, photo_path: 'items/a.webp', is_active: true, is_consumable: false },
@@ -166,4 +168,145 @@ test('s132 L3: the wiring in the page. Turnover and deep clean only, Submit flus
   assert.match(html, /S120R_liveSend\(draft\.linen\) \|\| S120R_liveSend\(draft\.utensils\)/, 'a live utensils send is carried over a reset');
   assert.match(fnText('runPreSubmitFlush'), /S132U_flush\(true\)/);
   assert.ok((html.match(/K_only\(KITCHEN_ITEMS\)/g) || []).length >= 5, 'every list that reads the kitchen items filters by type');
+});
+
+/* ── behaviour: the real card runtime (mount, paint, click, tick, load, restore, carry-over) against a small fake page ── */
+const runtimeSrc = html.slice(html.indexOf('/* ── S132U: the list, the card, the send'), html.indexOf('/* ── state sync'));
+assert.ok(runtimeSrc.length > 2000, 'S132U runtime present');
+const settle = async () => { for (let i = 0; i < 8; i++) await new Promise(r => setImmediate(r)); };
+function page(opts = {}) {
+  const calls = [], saved = [], fetches = [], toasts = [], store = {};
+  const state = { utensils: null, cleaningType: opts.type || 'turnover', checklist: {} };
+  const mk = () => ({ hidden: false, className: '', id: '', innerHTML: '', textContent: '', children: [], l: {}, appendChild(c) { this.children.push(c); return c; }, addEventListener(t, f) { (this.l[t] = this.l[t] || []).push(f); }, setAttribute() {}, contains() { return false; }, querySelector() { return null; }, classList: { toggle() {} } });
+  const document = { activeElement: null, createElement: mk };
+  const nav = { onLine: opts.online !== false };
+  const rpcQueue = (opts.rpc || []).slice();
+  const rpc = async (name, body) => { calls.push({ name, body: JSON.parse(JSON.stringify(body)) }); return rpcQueue.shift() || { ok: true, data: { ok: true } }; };
+  const fetchFn = async url => { fetches.push(url); if (opts.fetchFails) throw new Error('down'); return { ok: true, json: async () => (opts.rows !== undefined ? opts.rows : raw) }; };
+  const lsJSON = (k, v) => { if (v === undefined) return store[k] === undefined ? null : JSON.parse(store[k]); store[k] = JSON.stringify(v); return true; };
+  let n = 0;
+  const heldWork = [];
+  const fn = new Function('state', 'document', 'navigator', 'localStorage', 'lsJSON', 'SUPABASE_URL', 'PROPERTY_ID', 'EDGE_BASE', 'staffHeaders', 'fetch', 'fetchWithRetry', 'showToast', 'S120R_rpc', 'S120R_certainOffline', 'saveDraft', 'uuid', 'updateProgress', '_heldWork',
+    escLine + '\n' + fnText('S120R_stepperHtml') + '\n' + html.split('\n').find(l => l.startsWith('function S120R_step(')) + '\n' + block + '\nlet _draftHold = false;\n' + runtimeSrc
+    + '\nreturn { S132U_mount, S132U_load, S132U_paint, S132U_flush, S132U_restore, S132U_reportLines, S132U_state, items: () => _utItems };')(
+    state, document, nav, { getItem: k => store[k] ?? null, setItem: (k, v) => { store[k] = v; } }, lsJSON, 'https://x', 'PROP', 'https://e', async () => ({}), fetchFn, async () => ({ json: async () => ({ urls: {} }) }), (m, k) => toasts.push(m),
+    rpc, () => nav.onLine === false, () => saved.push(JSON.stringify(state.utensils)), () => 'uuid' + (++n), () => {}, heldWork);
+  state.utensils = fn.S132U_state();
+  const cb = Object.assign(mk(), { checked: false });
+  const div = Object.assign(mk(), { classList: { toggle() {} } });
+  const api = { ...fn, state, calls, saved, fetches, toasts, nav, cb, div, mountAgain() { const d = Object.assign(mk(), { classList: { toggle() {} } }), c = Object.assign(mk(), { checked: false }); fn.S132U_mount(d, {}, c); } };
+  fn.S132U_mount(div, { id: 'check_7_6' }, cb);
+  const wrap = div.children[0];
+  api.wrap = wrap;
+  api.click = (attrs, box) => { const btn = { disabled: false, dataset: attrs, closest: s => (s === '[data-ut]' && box ? { dataset: box } : null) }; wrap.l.click[0]({ target: { closest: s => (s === 'button' ? btn : null) } }); };
+  api.tick = on => { cb.checked = on; cb.l.change.forEach(f => f()); };
+  return api;
+}
+
+test('s132 L3 behaviour: All there ticks the step, sends nothing, even at Submit', async () => {
+  const P = page(); await settle();
+  assert.equal(P.wrap.hidden, false, 'the card shows once the list is read');
+  P.click({ utAll: '1' });
+  assert.equal(P.state.utensils.answer, 'all'); assert.equal(P.state.checklist.check_7_6, true); assert.equal(P.cb.checked, true);
+  await P.S132U_flush(true);
+  assert.equal(P.calls.length, 0);
+  assert.deepEqual(P.S132U_reportLines(P.state.utensils), []);
+});
+
+test('s132 L3 behaviour: a stepper and Send makes one call with the exact payload', async () => {
+  const P = page(); await settle();
+  P.click({ utOpen: 'a' });
+  P.click({ d: '1' }, { ut: 'missing', id: 'a' }); P.click({ d: '1' }, { ut: 'missing', id: 'a' }); P.click({ d: '1' }, { ut: 'broken', id: 'b' });
+  assert.equal(P.state.utensils.answer, 'issues'); assert.equal(P.state.checklist.check_7_6, true);
+  P.state.utensils.note = ' bent ';
+  P.click({ utSend: '1' }); await settle();
+  assert.equal(P.calls.length, 1);
+  const c = P.calls[0];
+  assert.equal(c.name, 'record_inventory_damage_v1');
+  assert.deepEqual(c.body.p_rows, [{ item_id: 'a', qty: 2, reason: 'missing' }, { item_id: 'b', qty: 1, reason: 'broken' }]);
+  assert.equal(c.body.p_property_id, 'PROP'); assert.equal(c.body.p_source, 'turnover'); assert.equal(c.body.p_add_to_list, true); assert.equal(c.body.p_note, 'bent');
+  assert.match(c.body.p_idempotency_key, /^s132-utensils-uuid/);
+  assert.equal(P.state.utensils.sent, true);
+  P.click({ d: '1' }, { ut: 'missing', id: 'a' }); assert.equal(P.state.utensils.rows.a.missing, 2, 'counts are locked once sent');
+});
+
+test('s132 L3 behaviour: a reload restores a tried draft and resends with the SAME key', async () => {
+  const P = page({ rpc: [{ ok: false, kind: 'retry', msg: 'no connection' }] }); await settle();
+  P.click({ d: '1' }, { ut: 'missing', id: 'a' }); P.click({ utSend: '1' }); await settle();
+  const first = P.calls[0].body.p_idempotency_key;
+  const draft = { utensils: JSON.parse(P.saved[P.saved.length - 1]) };
+  assert.equal(draft.utensils.tried, true); assert.equal(draft.utensils.key, first);
+  const Q = page({ rpc: [{ ok: true, data: { ok: true, duplicate: true } }] }); await settle();
+  Q.S132U_restore(draft); await settle();
+  assert.equal(Q.calls.length, 1); assert.equal(Q.calls[0].body.p_idempotency_key, first, 'the same key goes again');
+  assert.deepEqual(Q.calls[0].body.p_rows, [{ item_id: 'a', qty: 1, reason: 'missing' }]);
+  assert.equal(Q.state.utensils.sent, true);
+  const R = page(); await settle(); R.nav.onLine = false;
+  R.S132U_restore({ utensils: { ...draft.utensils, waiting: true } }); await settle();
+  assert.equal(R.calls.length, 0, 'offline: held, not sent');
+});
+
+/* Start fresh: carryOverSends and the stamp it reads, the real functions */
+test('s132 L3 behaviour: Start fresh keeps a live send (key and counts) and drops a stale or never-tried one', () => {
+  const body = fnText('S120R_sendFresh') + '\n' + html.split('\n').find(l => l.startsWith('const S120R_liveSend = ')) + '\n' + fnText('carryOverSends') + '\nreturn carryOverSends;';
+  const run = u => {
+    const state = { utensils: pure.S132U_newUtensils(), cleaningType: 'turnover' };
+    const f = new Function('state', 'todayManila', 'S132U_migrate', 'S132U_tick', 'S120R_migrateRestock', 'S120R_migrateLinen', 'S120R_syncLinen', 'renderConfirmItems', 'S120R_refreshStatus', 'el', 'let _carryApplied = false;\n' + body)(
+      state, () => new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' }), d => ({ ...pure.S132U_newUtensils(), ...d.utensils }), () => {}, () => ({}), () => ({}), () => {}, () => {}, () => {}, () => null);
+    return { kept: f({ utensils: u }), state };
+  };
+  const live = { answer: 'issues', rows: { a: { name: 'Fork', missing: 2, broken: 0 } }, key: 'K9', saved: true, tried: true, sendStartedAt: Date.now() - 1000 };
+  const a = run(live); assert.equal(a.kept, true); assert.equal(a.state.utensils.key, 'K9');
+  const old = run({ ...live, sendStartedAt: Date.now() - 3 * 86400000 }); assert.equal(old.kept, false); assert.equal(old.state.utensils.key, null);
+  assert.equal(run({ ...live, sendStartedAt: null }).kept, false, 'no stamp, no carry-over');
+  assert.equal(run({ ...live, tried: false, sent: false, waiting: false }).kept, false, 'never tried: not carried');
+});
+
+test('s132 L3 behaviour F1: over 30 lines, Submit sends nothing and the report names every count', async () => {
+  const rows = []; for (let i = 0; i < 16; i++) rows.push({ id: 'i' + i, name: 'Item' + i, category: 'Kitchen utensils', is_active: true, is_consumable: false });
+  const P = page({ rows }); await settle();
+  for (let i = 0; i < 16; i++) { P.click({ d: '1' }, { ut: 'missing', id: 'i' + i }); P.click({ d: '1' }, { ut: 'broken', id: 'i' + i }); }
+  assert.equal(P.state.utensils.answer, 'issues');
+  P.click({ utSend: '1' }); await settle(); assert.equal(P.calls.length, 0, 'Send is refused locally');
+  await P.S132U_flush(true); assert.equal(P.calls.length, 0, 'and Submit cannot send it');
+  const lines = P.S132U_reportLines(P.state.utensils);
+  assert.equal(lines.length, 1); assert.equal(lines[0].section, 'Kitchen');
+  assert.match(lines[0].text, /Not recorded \(too many lines\)/); assert.match(lines[0].text, /Item0: 1 missing, 1 broken/); assert.match(lines[0].text, /Item15: 1 missing, 1 broken/);
+  P.state.utensils.sent = true; assert.doesNotMatch(P.S132U_reportLines(P.state.utensils)[0].text, /too many/);
+});
+
+test('s132 L3 behaviour F2: a failed list read shows one muted line; an empty list shows nothing', async () => {
+  const F = page({ fetchFails: true }); await settle();
+  assert.equal(F.wrap.hidden, false); assert.match(F.wrap.children[1].textContent, /Could not load the utensils list/);
+  assert.equal(F.wrap.children[0].innerHTML, '', 'no card, only the line'); assert.equal(F.wrap.children[1].className, 's120-status');
+  const E = page({ rows: [] }); await settle();
+  assert.equal(E.wrap.hidden, true); assert.equal(E.wrap.children[1].textContent, '');
+  const O = page({ online: false }); await settle();
+  assert.match(O.wrap.children[1].textContent, /Could not load/, 'no connection and no copy is the same');
+  const W = page({ type: 'quick' }); await settle(); assert.equal(W.wrap.hidden, true, 'other cleaning types never show it');
+});
+
+test('s132 L3 behaviour F3: ticking the step or a phase Check all while the card shows means All there', async () => {
+  const P = page(); await settle();
+  P.tick(true);
+  assert.equal(P.state.utensils.answer, 'all'); assert.equal(P.calls.length, 0);
+  P.tick(false); assert.equal(P.state.utensils.answer, null, 'unticking lifts All there');
+  P.click({ d: '1' }, { ut: 'missing', id: 'a' });
+  P.tick(false); assert.equal(P.state.utensils.answer, 'issues'); assert.equal(P.cb.checked, true, 'counts keep the tick');
+  const L = page(); await settle();
+  L.click({ d: '1' }, { ut: 'missing', id: 'a' }); L.state.utensils.tried = true;
+  L.tick(true); assert.equal(L.state.utensils.answer, 'issues', 'a send in flight is not overwritten');
+  const N = page({ fetchFails: true }); await settle();
+  N.tick(true); assert.equal(N.state.utensils.answer, null, 'no card on screen: the plain tick stands');
+});
+
+test('s132 L3 behaviour F4/F6: one list read per page; a failed read is tried again; the filter is a wildcard with an exact client test', async () => {
+  const P = page(); await settle();
+  P.mountAgain(); P.mountAgain(); await settle();
+  assert.equal(P.fetches.length, 1, 're-renders do not fetch again');
+  assert.match(P.fetches[0], /category=ilike\.\*kitchen%20utensils\*/);
+  const F = page({ fetchFails: true }); await settle();
+  F.mountAgain(); await settle(); assert.equal(F.fetches.length, 2, 'a failed read is retried on the next render');
+  assert.deepEqual(P.items().map(i => i.id), ['a', 'b']);
+  assert.deepEqual(pure.S132U_items([{ id: 'z', name: 'Kitchen utensils set', category: 'Kitchen utensils set', is_active: true, is_consumable: false }]), [], 'the wildcard rows are cut back to the exact group');
 });

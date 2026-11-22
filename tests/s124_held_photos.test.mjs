@@ -129,6 +129,6 @@ t0('L3: condition switched to all clear after a lost condition photo: Submit doe
   } finally { await t.close(); }
 });
 
-t0('L3: the checklist service worker cache is ch-shell-v14-held-photos', () => {
-  assert.match(readFileSync(new URL('../checklist/sw.js', import.meta.url), 'utf8'), /const CACHE_NAME = 'ch-shell-v14-held-photos';/);
+t0('L3: the checklist service worker cache is ch-shell-v15-utensils', () => {
+  assert.match(readFileSync(new URL('../checklist/sw.js', import.meta.url), 'utf8'), /const CACHE_NAME = 'ch-shell-v15-utensils';/);
 });
