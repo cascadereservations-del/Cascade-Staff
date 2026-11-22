@@ -370,10 +370,10 @@
       (b.last || !hasUse ? '<p class="K_sub">' + esc(b.last ? 'From the meter readings up to ' + A_nb(CS.dayLabel(b.last)) + (b.ePhp != null && b.wPhp != null ? ', at the latest rates.' : '.') : 'No meter reading in this bill yet.') + '</p>' : '') + waiting + A_billDues(b) + '</section>';
   }
   // s127: the To pay list. Every role sees the rows and amounts; Pay shows only where the server said can_pay, and only owner, admin and finance open a paid row's screenshot.
-  // s131: where the server says this caller may not pay (can_pay_list false) there are no To pay rows at all; from the 25th one row asks the person at the property to look for the paper bills. An old payload without the key behaves as before.
+  // s131: where the server says this caller may not pay (can_pay_list false) there are no To pay rows at all; from the 25th one plain row (no link: a bill photo must not be read as a supply receipt) asks the person at the property to look for the paper bills and hand them to the admin. An old payload without the key behaves as before.
   function A_billCheck(b) {
     if (!b.checkBills) return '';
-    return '<span class="K_lab BL_lab">Bills to check</span><div class="BL_dues"><a class="K_line BL_check" href="#supply"><span class="BL_tile BL_tile-e" aria-hidden="true">📬</span><span class="BL_who"><b>Check for the bills</b><span class="K_sub">' + esc('Look for the SOCOTECO and water bills at the gate and send a photo in the app.') + '</span></span>' + ICON('chev', 's16') + '</a></div>';
+    return '<span class="K_lab BL_lab">Bills to check</span><div class="BL_dues"><div class="K_line BL_check"><span class="BL_tile BL_tile-e" aria-hidden="true">📬</span><span class="BL_who"><b>Check for the bills</b><span class="K_sub">' + esc('Look for the SOCOTECO and water bills at the gate and give them to the admin.') + '</span></span></div></div>';
   }
   function A_billDues(b) {
     if (b.canPayList === false) return A_billCheck(b);

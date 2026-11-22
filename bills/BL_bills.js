@@ -201,10 +201,12 @@
     else if (a === 'skip-yes') step('bill_pay_skip_v1', 'Skipped for this month. Nothing was logged.');
     else if (a === 'save') save();
   }
+  // The Mark as paid state from the full sheet state (amount, screenshot, meter reading date): every input handler uses this one.
+  function payNow() { return payReady({ file: S.file, amountText: S.d.pay.amount_editable ? S.amountText : String(Number(S.d.pay.amount_php) || 0), busy: S.busy, meter: S.meter, readDate: S.readDate, readVal: S.readVal, today: S.today }); }
   function onInput(ev) {
     var t = ev.target; if (!S || S.end) return;
-    if (t.id === 'BL_amt') { S.amountText = t.value; S.confirmedFor = null; var h = S.o.box.querySelector('#BL_amthelp'); if (h) h.textContent = amtHelp(t.value, Number(S.d.pay.amount_php) || 0); var b = S.o.box.querySelector('#BL_done'); if (b) b.disabled = !payReady({ file: S.file, amountText: S.amountText, busy: S.busy }); }
-    else if (t.id === 'BL_rdate' || t.id === 'BL_rval') { if (t.id === 'BL_rdate') S.readDate = t.value; else S.readVal = t.value; var rb = S.o.box.querySelector('#BL_done'); if (rb) rb.disabled = !payReady({ file: S.file, amountText: S.d.pay.amount_editable ? S.amountText : String(Number(S.d.pay.amount_php) || 0), busy: S.busy, meter: S.meter, readDate: S.readDate, readVal: S.readVal, today: S.today }); }
+    if (t.id === 'BL_amt') { S.amountText = t.value; S.confirmedFor = null; var h = S.o.box.querySelector('#BL_amthelp'); if (h) h.textContent = amtHelp(t.value, Number(S.d.pay.amount_php) || 0); var b = S.o.box.querySelector('#BL_done'); if (b) b.disabled = !payNow(); }
+    else if (t.id === 'BL_rdate' || t.id === 'BL_rval') { if (t.id === 'BL_rdate') S.readDate = t.value; else S.readVal = t.value; var rb = S.o.box.querySelector('#BL_done'); if (rb) rb.disabled = !payNow(); }
     else if (t.getAttribute && t.getAttribute('data-key')) { S.vals[t.getAttribute('data-key')] = t.value; var s = S.o.box.querySelector('#BL_save'); if (s) s.disabled = S.busy || !Object.keys(changedKeys(S.d, S.vals)).length; }
   }
   function onChange(ev) { var t = ev.target; if (S && t.id === 'BL_file' && t.files && t.files[0]) { S.file = t.files[0]; S.up = null; S.confirmedFor = null; S.msg = ''; renderPay(); } }

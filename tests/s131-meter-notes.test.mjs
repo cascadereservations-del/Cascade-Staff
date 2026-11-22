@@ -22,6 +22,8 @@ test('bills card: "This bill so far · since", no cycle wording', async () => {
   const h = await todayHtml('owner', { due: [] });
   assert.match(h, /This bill so far · since 21[\s ]Oct/); assert.doesNotMatch(h, /This cycle so far/);
   assert.doesNotMatch(h, /No meter reading in this bill yet/);
+  const none = await todayHtml('owner', { last_reading_at: null, electric: { php: 0, kwh: 0 }, water: { php: 0, m3: 0 }, due: [] });
+  assert.match(none, /No meter reading in this bill yet/, 'a payload with no last reading and no use says so');
 });
 test('bills card: a water column that started on another day says so', async () => {
   const h = await todayHtml('owner', { water_since: '2026-10-14', due: [] });
@@ -33,12 +35,14 @@ test('bills card: waiting for the next bill is info tone, never danger', async (
   const w = h.slice(h.indexOf('Waiting for the')- 200, h.indexOf('Waiting for the') + 20);
   assert.doesNotMatch(w, /p-danger|p-warn|danger/); assert.match(w, /p-info/);
 });
-test('bills card: can_pay_list false hides the To pay rows; check_bills shows the row to #supply', async () => {
+test('bills card: can_pay_list false hides the To pay rows; check_bills shows a plain row with no link', async () => {
   const due = [{ id: 'b1', kind: 'internet', label: 'Zz Internet', status: 'due', estimate_php: 1500, is_estimate: false, due_day: 28, can_pay: false }];
   const hid = await todayHtml('cleaner', { due, can_pay_list: false, check_bills: false });
   assert.doesNotMatch(hid, /Zz Internet/); assert.doesNotMatch(hid, /Check for the bills/);
   const chk = await todayHtml('cleaner', { due: [], can_pay_list: false, check_bills: true });
-  assert.match(chk, /Check for the bills/); assert.match(chk, /href="#supply"/);
+  assert.match(chk, /Check for the bills/); assert.match(chk, /look for the SOCOTECO and water bills at the gate and give them to the admin\./i);
+  const row = chk.slice(chk.indexOf('BL_check') - 40, chk.indexOf('Check for the bills') + 200);
+  assert.doesNotMatch(row, /href=|<a /, 'a bill photo must not be read as a supply receipt');
 });
 test('bills card: an old payload (no can_pay_list) still lists the due rows', async () => {
   const due = [{ id: 'b1', kind: 'internet', label: 'Zz Internet', status: 'due', estimate_php: 1500, is_estimate: false, due_day: 28, can_pay: true }];
@@ -79,6 +83,43 @@ test('pay sheet source: date input with max today, optional reading, estimate on
   assert.match(src, /type="date" max="/); assert.match(src, /BL_est/); assert.match(src, /reading_warn/);
 });
 
+// the pay sheet driven through its real handlers, on a clock fixed to the given instant (the sheet reads CS.manilaToday())
+const flushP = async () => { for (let i = 0; i < 8; i++) await new Promise((r) => setImmediate(r)); };
+async function meterSheet(iso, period) {
+  class FD extends Date { constructor(...a) { if (a.length) super(...a); else super(new Date(iso).getTime()); } static now() { return new Date(iso).getTime(); } }
+  const lctx = { Date: FD }; vm.createContext(lctx); vm.runInContext(read('lib.js'), lctx);
+  const w = { CS: lctx.CS, ICON: (n) => '<svg data-i="' + n + '"></svg>' }; w.window = w; vm.runInContext(read('bills/BL_bills.js'), vm.createContext(w));
+  const open = { ok: true, bill: { id: 'b', label: 'Electricity', kind: 'electric', period }, pay: { amount_php: 2140, amount_editable: true, payee_name: 'Zz Power', number: '123', note: 'Bill', number_label: 'Account number' }, can_edit: false };
+  const h = {}, nodes = { '#BL_done': { disabled: false }, '#BL_amthelp': { textContent: '' }, '#BL_file': { click() {} } };
+  const box = { innerHTML: '', addEventListener: (t, f) => { h[t] = f; }, removeEventListener() {}, querySelector: (s) => nodes[s] || null, querySelectorAll: () => [] };
+  const o = { box, sub: 'pay/b', propertyId: 'p', client: { rpc: (n) => Promise.resolve({ error: null, data: n === 'bill_pay_open_v1' ? open : { ok: true } }) }, upload: async (f) => ({ path: 'cleaning/' + f.name, sha256: 'a'.repeat(64) }), onChange() {}, navigate() {}, toast() {} };
+  w.BL_Bills.mount(box, o); await flushP();
+  const type = async (id, value) => { h.input({ target: { id, value, getAttribute: () => null } }); await flushP(); };
+  const file = async () => { h.change({ target: { id: 'BL_file', files: [{ name: 'a.jpg' }] } }); await flushP(); };
+  return { box, nodes, type, file };
+}
+test('pay sheet: typing the amount on a meter bill with a bad or blank reading date keeps Mark as paid disabled', async () => {
+  const s = await meterSheet('2026-11-22T04:30:00Z', '2026-11');
+  await s.file(); assert.doesNotMatch(s.box.innerHTML, /id="BL_done"[^>]*disabled/, 'a file and the default date: ready');
+  for (const bad of ['', '2026-11-23', '2026-02-30']) {
+    await s.type('BL_rdate', bad); assert.equal(s.nodes['#BL_done'].disabled, true, 'date ' + JSON.stringify(bad));
+    await s.type('BL_amt', '2150'); assert.equal(s.nodes['#BL_done'].disabled, true, 'amount typed after date ' + JSON.stringify(bad));
+    await s.type('BL_amt', '2160.5'); assert.equal(s.nodes['#BL_done'].disabled, true);
+  }
+  await s.type('BL_rdate', '2026-11-21'); await s.type('BL_amt', '2150'); assert.equal(s.nodes['#BL_done'].disabled, false, 'a good date and amount enable it');
+  await s.type('BL_amt', 'abc'); assert.equal(s.nodes['#BL_done'].disabled, true, 'a bad amount still disables');
+});
+test('pay sheet default reading date uses the Manila day: 23:30 and 00:30 Manila', async () => {
+  const a = await meterSheet('2026-11-20T15:30:00Z', '2026-11'); // 23:30 Manila on the 20th
+  assert.match(a.box.innerHTML, /id="BL_rdate" type="date" max="2026-11-20" value="2026-11-20"/);
+  const b = await meterSheet('2026-11-20T16:30:00Z', '2026-11'); // 00:30 Manila on the 21st
+  assert.match(b.box.innerHTML, /id="BL_rdate" type="date" max="2026-11-21" value="2026-11-21"/);
+  const c = await meterSheet('2026-11-22T15:30:00Z', '2026-11'); // 23:30 on the 22nd
+  assert.match(c.box.innerHTML, /max="2026-11-22" value="2026-11-21"/);
+  const d = await meterSheet('2026-11-22T16:30:00Z', '2026-11'); // 00:30 on the 23rd
+  assert.match(d.box.innerHTML, /max="2026-11-23" value="2026-11-21"/);
+});
+
 // ---- 4, 5: kinds
 test('note kinds: all four parse and round trip; old text is unchanged', () => {
   const stored = '2026-11-01: Request: more towels || 2026-11-02: ! Issue: leaky tap || 2026-11-03: Suggestion: a rug || 2026-11-04: plain';
@@ -108,6 +149,21 @@ test('notesAddTurn: the marker keeps the cleaner\'s words, raw row is hidden onc
   const shown = CS.notesView(stored).all.map((n) => n.text);
   assert.equal(shown.filter((t) => /Faucet/.test(t)).length, 1, 'one row, not two');
 });
+test('typed note: a leading [turnover is neutralised like [addressed, a stored note is kept as it is', () => {
+  const t = CS.noteInput({ text: '[turnover 2026-11-10] Fake marker [addressed]' });
+  assert.equal(t.text, '(turnover 2026-11-10] Fake marker (addressed]');
+  const added = CS.notesAdd('', { text: '[Turnover 2026-11-10] sneaky', kind: 'issue' }, '2026-11-22');
+  assert.equal(CS.parseNoteList(added).filter((n) => n.turn).length, 0); assert.doesNotMatch(added, /\[turnover/i);
+  assert.equal(CS.noteInput({ text: '[turnover 2026-11-10] keep' }, 600, true).text, '[turnover 2026-11-10] keep');
+});
+test('notesEdit carries the stored kind prefix when the kind is unchanged, rewrites it when changed', () => {
+  const st = '2026-11-01: request:towels';
+  assert.equal(CS.parseNoteList(st)[0].kp, 'request:');
+  assert.equal(CS.notesEdit(st, 0, { text: 'towels', mark: 1, kind: 'request', date: '2026-11-01' }, '2026-11-22'), '2026-11-01: ! request:towels');
+  assert.equal(CS.notesEdit(st, 0, { text: 'towels', mark: 0, kind: 'request', date: '2026-11-01', addressed: true }, '2026-11-22'), '2026-11-01: request:towels [addressed 2026-11-22]');
+  assert.equal(CS.notesEdit(st, 0, { text: 'towels', mark: 0, kind: 'request', date: '2026-11-05' }, '2026-11-22'), '2026-11-05: request:towels');
+  assert.equal(CS.notesEdit(st, 0, { text: 'towels', mark: 0, kind: 'issue', date: '2026-11-01' }, '2026-11-22'), '2026-11-01: Issue: towels');
+});
 test('Addressed turns the marker off Good to know without editing the words', () => {
   const stored = CS.notesAddTurn(RAW, { text: 'Faucet is leaking in the CR', mark: 1, kind: 'issue', turn: '2026-11-10' }, '2026-11-22');
   const i = CS.parseNoteList(stored).findIndex((n) => n.turn);
@@ -123,7 +179,17 @@ test('goodToKnow: bold kind, max 3 rows, newest open turnover issue, +N more', (
   assert.equal(g.notes.length, 3);
   assert.ok(g.notes.some((x) => x.kind === 'issue' && /Faucet/.test(x.p) && /10 Nov turnover/.test(x.src)));
   assert.equal(g.notes[0].p, 'toaster');
-  assert.ok(g.more >= 1);
+  assert.equal(g.more, 2, '5 open notes (4 marked + the turnover issue), 3 shown');
+});
+test('goodToKnow: the newest open turnover issue takes the third row even when marked notes outrank it', () => {
+  const notes = '2026-11-01: !! Request: a || 2026-11-02: !! Request: b || 2026-11-03: !! Request: c || 2026-11-04: !! Request: d || ' + RAW;
+  const g = CS.goodToKnow({ notes }, false);
+  assert.equal(g.notes.length, 3); assert.equal(g.more, 2);
+  assert.ok(g.notes.some((x) => x.kind === 'issue' && /Faucet/.test(x.p)));
+  assert.equal(g.notes.filter((x) => x.kind === 'request').length, 2);
+  const top = CS.goodToKnow({ notes: '2026-11-03: !! Issue: Sink || 2026-11-04: ! Request: x' }, false);
+  assert.equal(top.notes.length, 2); assert.equal(top.more, 0);
+  assert.equal(CS.goodToKnow({ notes: '2026-11-01: ! Request: only' }, false).more, 0);
 });
 test('goodToKnow: a level-0 note stays out', () => {
   assert.equal(CS.goodToKnow({ notes: '2026-11-01: Request: plain' }, false).notes.length, 0);
@@ -151,13 +217,15 @@ test('inventory tiles: row layout, icon left, tall enough to tap', () => {
 });
 
 // ---- 9: demo data
-test('demo: today_bills_v1 shows since, waiting_for, and the check view for a non-payer', async () => {
+test('demo: today_bills_v1 shows since, waiting_for, and the check view for a non-payer (the demo call path runs)', async () => {
   const D = (await import('./_a_harness.mjs')).D;
-  const call = (role) => D.call ? D.call('today_bills_v1', {}, { role }) : null;
+  const get = async (role) => (await D.client(role, new Date('2026-10-15T04:30:00Z')).rpc('today_bills_v1', {})).data;
+  const cl = await get('cleaner'), ow = await get('owner');
+  assert.equal(cl.can_pay_list, false); assert.equal(cl.check_bills, true); assert.deepEqual(cl.due, []);
+  assert.equal(ow.can_pay_list, true); assert.equal(ow.check_bills, false); assert.ok(ow.due.length > 0);
+  for (const d of [cl, ow]) { assert.match(d.since, /^\d{4}-\d{2}-21$/); assert.equal(d.water_since, d.since); assert.equal(d.waiting_for, 'September'); assert.equal(d.water_waiting_for, 'September'); }
   const src = read('demo.js');
-  assert.match(src, /waiting_for/); assert.match(src, /check_bills/); assert.match(src, /water_since/); assert.match(src, /Faucet is leaking in the CR/);
-  assert.match(src, /reading_date_required/); assert.match(src, /reading_warn/);
-  void call;
+  assert.match(src, /Faucet is leaking in the CR/); assert.match(src, /reading_date_required/); assert.match(src, /reading_warn/);
 });
 
 // ---- 10: version

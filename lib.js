@@ -563,7 +563,7 @@
   // Open notes: level 3 to 0, newest first, undated last, ties in stored order. Addressed notes after all of them, newest first.
   function sortNotes(list) { return (list || []).slice().sort(noteCmp); }
   function noteKind(n) { return NOTE_KINDS.indexOf(n && n.kind) >= 0 ? n.kind : n && n.suggestion ? 'suggestion' : 'note'; }
-  // The kind word as stored: "Request: ", "Suggestion: ", "Issue: " (a note with no word is a Note). A stored prefix is written back exactly as it was read until the kind is changed.
+  // The kind word as stored: "Request: ", "Suggestion: ", "Issue: " (a note with no word is a Note). A stored prefix is written back exactly as it was read (parse keeps it, notesEdit carries it) until the kind is changed.
   function kindPrefix(n) { var k = noteKind(n); return k === 'note' ? '' : n.kp && n.kp.toLowerCase().indexOf(k + ':') === 0 ? n.kp : k.charAt(0).toUpperCase() + k.slice(1) + ': '; }
   function noteLine(n) { return (n.date ? n.date + ': ' : '') + (n.mark ? NOTE_MARKS[n.mark] + ' ' : '') + kindPrefix(n) + (n.turn ? '[turnover ' + n.turn + '] ' : '') + n.text + (n.addressed ? ' [addressed' + (n.addressedOn ? ' ' + n.addressedOn : '') + ']' : ''); }
   function serializeNotes(list) { return (list || []).map(noteLine).join(' || '); }
@@ -572,7 +572,7 @@
   function noteInput(o, cap, keep) {
     o = o || {};
     var t = String(o.text == null ? '' : o.text);
-    if (!keep) t = t.replace(/[\r\n]+/g, ' ').replace(/\|/g, '/').replace(/\[addressed/gi, '(addressed');
+    if (!keep) t = t.replace(/[\r\n]+/g, ' ').replace(/\|/g, '/').replace(/\[addressed/gi, '(addressed').replace(/\[turnover/gi, '(turnover');
     t = t.trim(); cap = cap > NOTE_MAX ? cap : NOTE_MAX;
     var kind = noteKind(o); return { text: keep ? t : t.slice(0, cap).trim(), mark: Math.max(0, Math.min(3, o.mark | 0)), kind: kind, suggestion: kind === 'suggestion', turn: /^\d{4}-\d{2}-\d{2}$/.test(o.turn || '') ? o.turn : null, date: o.date || null, addressed: !!o.addressed, addressedOn: o.addressed ? o.addressedOn || null : null };
   }
@@ -592,6 +592,7 @@
     var txt = String(inp.text == null ? '' : inp.text), edited = txt.trim() !== old.text, mk = Math.max(0, Math.min(3, inp.mark | 0));
     if (!edited && noteKind(inp) === noteKind(old) && mk === old.mark && (inp.date || null) === (old.date || null) && !!inp.addressed === old.addressed && (!inp.addressed || !inp.addressedOn || inp.addressedOn === old.addressedOn)) return String(stored || '');
     var n = noteInput(inp, noteCap(old), !edited); if (!n.text) return String(stored || '');
+    if (noteKind(inp) === noteKind(old)) n.kp = old.kp; // the kind did not change: "request:towels" stays as typed
     n.turn = old.turn; // a marked cleaning-report note stays linked to its report
     if (n.addressed && old.addressed && !n.addressedOn) n.addressedOn = old.addressedOn; // still addressed: a bare [addressed] stays bare, only ticking it now stamps today
     else if (n.addressed && !old.addressed && !n.addressedOn) n.addressedOn = today || null;
@@ -1138,7 +1139,7 @@
     all.forEach(function (x) { if (x.addressed || hid(x)) return; var k = x.text.toLowerCase(); if (!seen[k]) { seen[k] = 1; total++; open.push(x); } });
     var lev = sortNotes(open.filter(function (x) { return !x.readOnly && x.level >= 1; })), iss = null;
     open.forEach(function (x) { if (x.readOnly !== 'turnover' && !(x.turn && x.kind === 'issue')) return; if (!iss || (x.date || '') > (iss.date || '')) iss = x; });
-    var pick = iss && lev.indexOf(iss) < 0 ? lev.slice(0, 2).concat([iss]) : lev.slice(0, 3);
+    var pick = lev.slice(0, 3); if (iss && pick.indexOf(iss) < 0) pick = lev.slice(0, 2).concat([iss]); // the newest open turnover issue always has a row
     var key = sortNotes(pick).map(function (x) {
       var raw = x.readOnly === 'turnover', lv = raw ? 0 : x.level;
       return { p: cut(raw ? turnBody(x.text) : x.text), rank: lv === 3 ? 0 : lv === 2 ? 1 : 2, mark: NOTE_MARKS[lv] || '', kind: raw ? 'issue' : noteKind(x), src: raw || x.turn ? 'from the ' + dayLabel(raw ? x.date : x.turn) + ' turnover' : '' };
@@ -1148,7 +1149,7 @@
     var sy = g && g.staying && typeof g.staying === 'object' ? g.staying : null;
     [[sy, 'guest_count'], [g, 'guest_count'], [sy, 'booked_guests'], [g, 'booked_guests'], [g, 'num_guests'], [g, 'guests']].forEach(function (s) { var v = s[0] && s[0][s[1]]; if (n === null && typeof v === 'number' && Math.round(v) >= 1) n = Math.min(3, Math.round(v)); }); // 1 to 3, the same rule as G_clampGuests on the guest page: a booked 4 reads 3 here and there
     if (n === null && canContact && g && Array.isArray(g.companions)) { var me = String(g.guest_name || '').trim().toLowerCase(), others = g.companions.filter(function (x) { return x && String(x.name || '').trim().toLowerCase() !== me; }); if (others.length) n = Math.min(3, 1 + others.length); } // guest_companions holds the main guest's own row too
-    return { notes: key.slice(0, 3), more: total - Math.min(3, key.length), phone: c && c.phone ? c.phone : null, tel: c && c.tel ? c.tel : null, guests: n, id: !!(g && g.id_photo_path) || !!(g && g.arrival_ready && g.arrival_ready.id === true), idKnown: !!(g && (g.id_photo_path || (g.arrival_ready && g.arrival_ready.id === true) || g.guest_id !== null)) }; // idKnown false: no ID photo and the stay is not linked to a guest record (guest_id null), so the pill says nothing rather than No ID yet
+    return { notes: key.slice(0, 3), more: total - key.length, phone: c && c.phone ? c.phone : null, tel: c && c.tel ? c.tel : null, guests: n, id: !!(g && g.id_photo_path) || !!(g && g.arrival_ready && g.arrival_ready.id === true), idKnown: !!(g && (g.id_photo_path || (g.arrival_ready && g.arrival_ready.id === true) || g.guest_id !== null)) }; // idKnown false: no ID photo and the stay is not linked to a guest record (guest_id null), so the pill says nothing rather than No ID yet
   }
   // 60 minutes: the same age at which notices_v1 stops sending its weather (SQL: c_at > now() - interval '60 minutes'). Never higher than the server rule.
   var WEATHER_STALE_MIN = 60;
