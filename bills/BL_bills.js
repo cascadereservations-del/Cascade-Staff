@@ -27,7 +27,8 @@
       }
       case 'bad_amount': return BAD_AMOUNT;
       case 'reading_date_required': return 'Enter the meter reading date shown on the bill.'; // s131
-      case 'reading_date_invalid': return 'The reading date must be after the last bill’s reading date and not in the future. Check the date on the bill.';
+      case 'reading_date_invalid': return 'The reading date must be after the last bill’s reading date, no earlier than the month before this bill, and not in the future. Check the date on the bill.';
+      case 'older_bill_open': return 'Log the older bill of this meter first (pay it or skip it), then this one.'; // s131
       case 'bad_proof': return 'The screenshot or the amount is missing or not valid. Add the screenshot again and check the amount.';
       case 'no_stored_proof': return 'The screenshot did not finish uploading, so nothing was logged. Add it again.';
       case 'sha_mismatch': return 'The screenshot changed after it was uploaded, so nothing was logged. Add it again.';

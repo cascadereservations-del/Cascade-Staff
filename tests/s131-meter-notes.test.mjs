@@ -232,3 +232,10 @@ test('demo: today_bills_v1 shows since, waiting_for, and the check view for a no
 test('version 3.4.48, shell v73', () => {
   assert.match(read('app.js'), /3\.4\.48/); assert.match(read('sw.js'), /cs-shell-v73/);
 });
+
+test('s131 fix: older_bill_open has its own plain message', async () => {
+  const src = (await import('node:fs')).readFileSync(new URL('../bills/BL_bills.js', import.meta.url), 'utf8');
+  const m = src.match(/case 'older_bill_open': return '([^']+)'/);
+  assert.ok(m, 'older_bill_open case missing');
+  assert.match(m[1], /older bill/);
+});
