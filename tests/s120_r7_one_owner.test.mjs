@@ -56,7 +56,8 @@ function world({ online = true } = {}) {
   const fns = names.map(fnText).join(NL) + NL + holdSnippet(html) + NL + resumeSnippet(html) + NL + 'const S120R_RESUME_FAIL = "x"; const console = { error() {} };';
   const api = new Function('w', 'el', 'fetch', 'staffHeaders', 'uuid', 'todayManila', 'SUPABASE_URL', 'PROPERTY_ID', 'navigator', 'document', 'esc', 'setTimeout', 'clearTimeout', 'setInterval', 'localStorage',
     'let state = w.state;\n'
-    + block + NL + fns + NL + guardLine + NL
+    + block + NL + html.slice(html.indexOf('/* S132U:BEGIN'), html.indexOf('/* S132U:END */')) + NL + 'const S132U_tick = () => {}, S132U_flush = async () => ({}), S132U_restore = d => { state.utensils = S132U_migrate(d); };' + NL   // s132 L3: the utensils card is stubbed in this harness; s132-utensils-check.test.mjs runs the real one
+    + fns + NL + guardLine + NL
     + 'const DRAFT_KEY = "ch_draft_v6", DWELL_KEY = "ch_dwell", DRAFT_VERSION = 5, PHASE_COUNT = 7, SUBMITTED_IDS_KEY = "ids";\n'
     + 'let _susItems = [], _susLoaded = false, _draftRestoring = false;\n'
     + 'const fetchWithRetry = (u, o) => fetch(u, o);\n'

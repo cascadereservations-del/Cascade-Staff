@@ -305,7 +305,7 @@ test('s120R: the page wires it in: draft keeps linen and restock, Submit flushes
   assert.match(fnText('runPreSubmitFlush'), /state\.pendingPreSubmit = true;/, 'item 2: Submit remembers it stopped');
   assert.match(fnText('runPreSubmitFlush'), /submit-status/, 'item 2: and says so on screen, not only in a toast');
   assert.match(fnText('S120R_resumePreSubmit'), /state\.pendingPreSubmit[\s\S]*?runPreSubmitFlush\(\)/, 'item 2: the online event runs it again');
-  assert.match(html, /window\.addEventListener\('online', \(\) => \{ S120R_flushAll\(true\); \}\);/);
+  assert.match(html, /window\.addEventListener\('online', \(\) => \{ S120R_flushAll\(true\); S132U_flush\(false\);/);
   assert.match(html, /const DRAFT_VERSION\s+= 5;/, 'old drafts are migrated, not discarded');
   assert.ok(!/LIQUID_ML_PER_UNIT|QUICK_ITEM_NAMES/.test(html), 'item 14: dead constants are gone');
   const sw = readFileSync(new URL('../checklist/sw.js', import.meta.url), 'utf8');
@@ -401,9 +401,9 @@ test('R3 item 10: Submit says it is sending and cannot be tapped twice until the
     const state = { cleaningType: 'turnover', supplyLogSaved: true, pendingPreSubmit: false, meterPhotos: [], precleanPhotos: [], aftercleanPhotos: [], bedroomPhotos: [], kitchenPhotos: [] };
     let release, proceeded = 0;
     const gate = new Promise((res, rej) => { release = v => (v instanceof Error ? rej(v) : res(v)); });
-    const fn = new Function('state', 'el', 'showToast', 'S120R_flushAll', 'updateBottomBar', 'proceedWithSubmission', 'showFlushOverlay', 'enqueuePhotoUpload', 'uploadPhotoRecord', 'updateFlushOverlay', 'hideFlushOverlay', 'isPhaseValid', 'PHASE_COUNT', 'S120R_certainOffline',
+    const fn = new Function('state', 'el', 'showToast', 'S120R_flushAll', 'updateBottomBar', 'proceedWithSubmission', 'showFlushOverlay', 'enqueuePhotoUpload', 'uploadPhotoRecord', 'updateFlushOverlay', 'hideFlushOverlay', 'isPhaseValid', 'PHASE_COUNT', 'S120R_certainOffline', 'S132U_flush',
       html.slice(html.indexOf('/* S120R14:BEGIN'), html.indexOf('/* S120R14:END */')) + NL + 'let _preSubmitRunning = false;' + NL + holdSnippet(html) + NL + fnText('runPreSubmitFlush') + '\nreturn runPreSubmitFlush;');
-    const go = fn(state, id => els[id], () => {}, () => gate, () => { els['btn-submit'].disabled = false; }, () => { proceeded++; }, () => {}, () => {}, () => {}, () => {}, () => {}, () => true, 6, () => true);
+    const go = fn(state, id => els[id], () => {}, () => gate, () => { els['btn-submit'].disabled = false; }, () => { proceeded++; }, () => {}, () => {}, () => {}, () => {}, () => {}, () => true, 6, () => true, async () => ({ sent: false }));
     return { els, go, release, proceeded: () => proceeded };
   };
   for (const [name, result] of [['unanswered', { pending: [], unanswered: ['Tea'] }], ['pending', { pending: ['restock'], unanswered: [] }]]) {

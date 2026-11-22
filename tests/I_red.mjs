@@ -170,6 +170,42 @@ for (const [mi, [name, edits]] of M.entries()) {
   if (!ok) bad++;
   console.log((ok ? 'RED  ' : 'GREEN(!) ') + name + ' -> ' + (hung ? 'suite hangs (caught)' : red.length ? red.length + ' failing: ' + red.slice(0, 3).join(' | ') : 'no failing test'));
 }
+
+// s132 L3: the Kitchen utensils card in checklist/index.html. Same idea: ONE bug per copy, the card's test file must go red (S132U_SRC points it at the copy).
+const csrc = fs.readFileSync(path.join(here, '..', 'checklist', 'index.html'), 'utf8').split(String.fromCharCode(13, 10)).join(String.fromCharCode(10));
+const C = [
+  ['utensils key regenerated on retry', [["if (!U.key) U.key = 's132-utensils-' + uuid();", "U.key = 's132-utensils-' + uuid();"]]],
+  ['utensils source renamed', [["p_source: 'turnover', p_note: S132U_note(U)", "p_source: 'update', p_note: S132U_note(U)"]]],
+  ['utensils not added to the list', [["p_add_to_list: true, p_source: 'turnover'", "p_add_to_list: false, p_source: 'turnover'"]]],
+  ['utensils lasting-only filter dropped', [["r.is_active !== false && r.is_consumable === false &&", "r.is_active !== false &&"]]],
+  ['utensils unknown flag counts as lasting', [["r.is_consumable === false && S132U_GROUP_RE", "r.is_consumable !== true && S132U_GROUP_RE"]]],
+  ['utensils inactive items shown', [["r.is_active !== false && r.is_consumable === false", "r.is_consumable === false"]]],
+  ['utensils group test loosened', [["const S132U_GROUP_RE = /^kitchen utensils$/i;", "const S132U_GROUP_RE = /kitchen|linen/i;"]]],
+  ['utensils duplicate not counted as sent', [["else if (r.ok) { U.sent = true;", "else if (r.ok && !(r.data && r.data.duplicate)) { U.sent = true;"]]],
+  ['utensils never locks while trying', [["if (!S120R_certainOffline()) U.tried = true;", ""]]],
+  ['utensils All there sends a call', [["U.saved && !U.sent && !U.failed && U.answer === 'issues'", "U.saved && !U.sent && !U.failed"], ["if (!rows.length || rows.length > S132U_MAX_ROWS) return { ok: true, noop: true };", "if (rows.length > S132U_MAX_ROWS) return { ok: true, noop: true };"]]],
+  ['utensils Submit does not send typed counts', [["if (atSubmit && S132U_active() && U.answer === 'issues' && !U.saved", "if (false && U.answer === 'issues' && !U.saved"]]],
+  ['utensils Submit flush removed', [["await S132U_flush(true); }   // s132 L3", "}   // s132 L3"]]],
+  ['utensils old tick no longer kept', [["if (d.checklist && d.checklist.check_7_6) out.answer = 'all';", ""]]],
+  ['utensils step on every cleaning type', [["utensils: true, only: ['turnover', 'deep_clean'],", "utensils: true,"]]],
+  ['utensils photo not lazy', [['width="40" height="40" loading="lazy"', 'width="40" height="40"']]],
+  ['utensils rows not capped', [["const S132U_MAX_ROWS = 30;", "const S132U_MAX_ROWS = 3000;"]]],
+  ['utensils carry-over ignores the card', [["S120R_liveSend(draft.linen) || S120R_liveSend(draft.utensils);", "S120R_liveSend(draft.linen);"]]]
+];
+const cdir = fs.mkdtempSync(path.join(os.tmpdir(), 'I_red_c-'));
+for (const [name, edits] of C) {
+  if (only && !name.includes(only)) continue;
+  ran++;
+  let s = csrc;
+  for (const [a, b] of edits) { if (!s.includes(a)) { console.log('SKIP (pattern not found): ' + name + ' :: ' + a.slice(0, 50)); bad++; s = null; break; } s = s.replace(a, () => b); }
+  if (s == null) continue;
+  const f = path.join(cdir, 'index.mut.html'); fs.writeFileSync(f, s);
+  const r = spawnSync(process.execPath, ['--test', path.join(here, 's132-utensils-check.test.mjs')], { env: Object.assign({}, process.env, { S132U_SRC: f }), encoding: 'utf8', timeout: 60000 });
+  const red = [...(r.stdout || '').matchAll(/^s*✖ (s132 L3 .+?) (d+(?:.?d+)?ms)/gm)].map((m) => m[1].trim()).filter((v, i, a) => a.indexOf(v) === i);
+  const ok = r.status !== 0 && (red.length > 0 || /✖|not ok/.test(r.stdout || ''));
+  if (!ok) bad++;
+  console.log((ok ? 'RED  ' : 'GREEN(!) ') + name + ' -> ' + (red.length ? red.length + ' failing: ' + red.slice(0, 2).join(' | ') : ok ? 'suite fails' : 'no failing test'));
+}
 if (!ran) { console.log('no mutation ran (check the name filter or I_RED_SHARD)'); process.exit(1); }
 console.log(bad ? bad + ' mutation(s) not caught' : 'every mutation was caught');
 process.exit(bad ? 1 : 0);

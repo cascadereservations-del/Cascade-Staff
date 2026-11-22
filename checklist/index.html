@@ -547,6 +547,24 @@
 .s120-t-returning{--tb:#EEF8F5;--tl:#C6E6DE;--tf:#0B4F44;}
 .s120-t-regular{--tb:#F0F5FD;--tl:#CDDDF5;--tf:#173F7A;}
 .s120-t-vip{--tb:#FBF3E0;--tl:#EBD6A6;--tf:#5C3A00;}
+/* s132 L3 (D-396): the Kitchen utensils check card, in the checklist's own card look; same tokens, no new font sizes, every tap 44 px or more */
+.s132-ut{border:1px solid var(--border,#e4ded4);background:var(--surface);border-radius:12px;padding:var(--space-3) var(--space-4);margin:var(--space-2) 0 var(--space-3);}
+.s132-ut[hidden]{display:none;}
+.s132-ut-head{display:flex;align-items:center;justify-content:space-between;gap:var(--space-3);font-size:var(--font-size-sm);}
+.s132-pill{font-size:var(--font-size-xs);padding:2px var(--space-3);border-radius:999px;background:var(--surface-raised);color:var(--text-muted);white-space:nowrap;}
+.s132-all{width:100%;min-height:48px;margin:var(--space-3) 0;}
+.s132-ur{border-top:1px solid var(--border,#e4ded4);}
+.s132-ur-main{display:flex;align-items:center;gap:var(--space-3);width:100%;min-height:56px;padding:var(--space-2) 0;background:transparent;border:none;color:inherit;font:inherit;text-align:left;cursor:pointer;}
+.s132-ur-main:disabled{cursor:not-allowed;}
+.s132-th{flex:0 0 40px;width:40px;height:40px;border-radius:8px;overflow:hidden;background:var(--surface-raised);display:flex;align-items:center;justify-content:center;font-size:1.3rem;}
+.s132-th img{width:40px;height:40px;object-fit:cover;display:block;}
+.s132-ur-name{flex:1 1 auto;min-width:0;display:flex;flex-direction:column;font-weight:600;}
+.s132-ur-name small{font-weight:400;font-size:var(--font-size-xs);color:var(--text-muted);}
+.s132-ur.bad .s132-pill{background:var(--warning-bg);color:var(--warning);}
+.s132-ur-edit{padding:0 0 var(--space-3);}
+.s132-note{width:100%;min-height:44px;margin:var(--space-2) 0;font:inherit;padding:0 var(--space-3);}
+.s132-send{width:100%;min-height:48px;margin:var(--space-2) 0;}
+.s132-ut .confirm-btn:disabled:not(.confirmed):not(.issue){background:var(--surface-raised);color:var(--text-muted);border-color:var(--border);opacity:.7;cursor:not-allowed;}
 </style>
 
 <!-- The Lucide CDN script and its emoji fallback map were removed on
@@ -5949,7 +5967,7 @@ const KITCHEN_ITEMS = [
     covers: ['check_6_4'], standard: 'kitchen',
     sub: ['Microwave (inside and door), fridge (inside and handle), kettle, rice cooker, all outsides wiped',
           'Sink basin scrubbed, faucet polished to a shine, every counter wiped clean and dry'] },
-  { id: 'check_7_6',  text: 'Inspect utensils and cookware; report chips or missing items', flag: true,
+  { id: 'check_7_6',  text: 'Inspect utensils and cookware; report chips or missing items', flag: true, utensils: true, only: ['turnover', 'deep_clean'],   // s132 L3 (D-396): a turnover and a deep clean get the Kitchen utensils check card under this step; with no list it stays this plain tick
     detail: 'Note the quantity of anything damaged or missing.' },
   { id: 'check_7_7',  text: 'Check the dish sponge', triggersInventory: true,
     covers: ['check_6_5'],
@@ -6363,6 +6381,7 @@ const state = {
   supplyLogSaved:     false,        // v6.8: compulsory supply log gate (s120: true once the restock answers are saved; sending is separate)
   linen:              null,         // s120R: linen check answers {answer, rows, key, sent}
   restock:            null,         // s120R: restock answers {top, kit, extras, other, saved, sent, key}
+  utensils:           null,         // s132 L3: the Kitchen utensils check {answer, rows, note, key, saved, sent, tried, waiting, failed}
   cleaningType:       'turnover',   // v7.8: 'turnover' | 'mid_stay' | 'deep_clean' | 'emergency'
   cleaningDateStatus: 'unknown',    // 'valid' | 'blocked' | 'warn' | 'unknown' — set by calendar check
   midStayAutoApplied: false,        // true once occupied-unit auto-switch to mid-stay has fired
@@ -9150,6 +9169,8 @@ function renderItems(items, containerId) {
       const noteTxt = div.querySelector(`.issue-note-${item.id}`);
       if (noteTxt) noteTxt.value = state.issueFlags[item.id].note || '';
     }
+
+    if (item.utensils) S132U_mount(div, item, cb);   // s132 L3: the Kitchen utensils check card sits under the step
   });
 }
 
@@ -9655,7 +9676,7 @@ function calcProgress(phase) {
     }
     case 2: return K_phaseProgress([...ARRIVE_ITEMS, ...CHEMICAL_ITEMS], 2);
     case 3: return K_phaseProgress(K_only(BEDROOM_ITEMS), 3);
-    case 4: return K_phaseProgress(KITCHEN_ITEMS, 4);
+    case 4: return K_phaseProgress(K_only(KITCHEN_ITEMS), 4);
     case 5: {
       const all = [...K_only(FINAL_CLEANING_ITEMS), ...POWER_CHECK_ITEMS];
       const g5 = K_gatedForPhase(5);
@@ -9703,6 +9724,7 @@ function K_advanceSlot() {
 }
 
 function K_renderBedroom() { renderItems(K_only(BEDROOM_ITEMS), 'bedroom-items'); updateProgress(3); }
+function K_renderKitchen() { renderItems(K_only(KITCHEN_ITEMS), 'kitchen-items'); updateProgress(4); }   // s132 L3: the utensils check is a turnover and deep-clean line, so a type change rebuilds this list too
 
 /* Keep state.issueFlags[id] in step with the Confirm control for the not-urgent killers: Issue Found = a flag with the note (and the photo,
    if one is added), Confirmed or cleared = no flag. */
@@ -9725,7 +9747,7 @@ function K_phaseProgress(items, ph) {
 function getAllChecklistItems() {
   return [
     ...ARRIVE_ITEMS, ...CHEMICAL_ITEMS,
-    ...K_only(BEDROOM_ITEMS), ...KITCHEN_ITEMS,
+    ...K_only(BEDROOM_ITEMS), ...K_only(KITCHEN_ITEMS),
     ...K_only(FINAL_CLEANING_ITEMS), ...POWER_CHECK_ITEMS,
     ...(state.isWeeklyIncluded ? weeklyItemsForSession() : []),
   ];
@@ -9868,6 +9890,7 @@ function saveDraft() {
     supplyLogSaved:  state.supplyLogSaved,
     linen:           state.linen,       // s120R: optional keys; DRAFT_VERSION stays 5 so no draft is discarded (old drafts migrate in S120R_restore)
     restock:         state.restock || null,   // the key is always present: a draft without it is from the older sheet (S120R_migrateRestock)
+    utensils:        state.utensils || null,  // s132 L3: optional key, DRAFT_VERSION stays 5; a draft without it keeps a ticked check_7_6 as All there and sends nothing (S132U_migrate)
     cleaningType:    state.cleaningType || 'turnover',
     extraExpenses:   collectExtraExpenses(),
     sessionFolderId: state.sessionFolderId,
@@ -9958,6 +9981,7 @@ function applyDraft(draft) {
   state.supplyLogSaved    = draft.supplyLogSaved  || false;
   if (draft.cleaningType) setCleaningType(draft.cleaningType);
   S120R_restore(draft);
+  S132U_restore(draft);   // s132 L3: after the type is set, so the card is on screen to take the answer
   // v7.8: restore additional expense lines
   if (Array.isArray(draft.extraExpenses) && draft.extraExpenses.length) {
     el('extra-exp-list') && (el('extra-exp-list').innerHTML = '');
@@ -10087,14 +10111,15 @@ function carryOverSends(draft) {
   let kept = false;
   if (S120R_liveSend(draft.restock)) { state.restock = S120R_migrateRestock(draft); state.supplyLogSaved = !!draft.supplyLogSaved; if (state.restock.saved) el('supply-usage-trigger-card')?.classList.add('sus-done'); kept = true; }
   if (S120R_liveSend(draft.linen)) { state.linen = S120R_migrateLinen(draft); if (state.cleaningType !== 'emergency') S120R_syncLinen(); kept = true; }
+  if (S120R_liveSend(draft.utensils)) { state.utensils = S132U_migrate(draft); if (state.utensils.answer != null) S132U_tick(true); kept = true; }   // s132 L3: a damage report that was sent or may have reached the server keeps its key
   if (kept) { _carryApplied = true; try { renderConfirmItems(); S120R_refreshStatus(); } catch (e) { /* the cards repaint on the next tap */ } }
   return kept;
 }
 /* s120R11: the carry key for Start fresh. With storage full it may not fit beside the old draft: hold it in memory, clear the draft, write the key, and only go on when it stuck.
    Returns { stale } (the old draft, for the blob sweep) or false: nothing is lost, the draft goes back and the cleaner is told. */
 function S120R_stashCarry(draft) {
-  const keep = S120R_liveSend(draft.restock) || S120R_liveSend(draft.linen);
-  const carry = keep ? { restock: draft.restock || null, linen: draft.linen || null, supplyLogSaved: !!draft.supplyLogSaved } : null;
+  const keep = S120R_liveSend(draft.restock) || S120R_liveSend(draft.linen) || S120R_liveSend(draft.utensils);
+  const carry = keep ? { restock: draft.restock || null, linen: draft.linen || null, utensils: draft.utensils || null, supplyLogSaved: !!draft.supplyLogSaved } : null;
   const raw = localStorage.getItem(DRAFT_KEY), stale = lsJSON(DRAFT_KEY);
   ls(DRAFT_KEY, null);
   let stuck = true;
@@ -10363,7 +10388,7 @@ async function runPreSubmitFlush(fromTap) {
   if (sendSt) { sendSt.className = 'visible loading'; sendSt.textContent = busy; }
   if (sendBtn) sendBtn.disabled = true;   // no second tap while the send is out
   let sent;
-  try { sent = await S120R_flushAll(false, true); }
+  try { sent = await S120R_flushAll(false, true); await S132U_flush(true); }   // s132 L3: the utensils send is tried here but never stops Submit; what cannot go is in the report
   finally {
     if (sendSt && sendSt.textContent === busy) { sendSt.className = ''; sendSt.textContent = ''; }
     updateBottomBar();   // gives Submit back on every path; the report path switches it off again itself
@@ -10525,7 +10550,7 @@ function buildEmailHtml() {
   const sections = [
     { title: 'Arrive & Prep', items: [...ARRIVE_ITEMS, ...CHEMICAL_ITEMS] },
     { title: 'Bedroom & Living Room', items: K_only(BEDROOM_ITEMS) },
-    { title: 'Kitchen & Bathroom', items: KITCHEN_ITEMS },
+    { title: 'Kitchen & Bathroom', items: K_only(KITCHEN_ITEMS) },
     { title: 'Final Cleaning', items: [...K_only(FINAL_CLEANING_ITEMS), ...POWER_CHECK_ITEMS] },
   ];
 
@@ -10777,7 +10802,7 @@ function buildPayload() {
   const checklistDetails = [
     { title: 'Arrive & Prep', icon: '🚪', items: [...ARRIVE_ITEMS, ...CHEMICAL_ITEMS] },
     { title: 'Bedroom & Living Room', icon: '🛏️', items: K_only(BEDROOM_ITEMS) },
-    { title: 'Kitchen & Bathroom', icon: '🍳', items: KITCHEN_ITEMS },
+    { title: 'Kitchen & Bathroom', icon: '🍳', items: K_only(KITCHEN_ITEMS) },
     { title: 'Final Cleaning', icon: '🧹', items: [...K_only(FINAL_CLEANING_ITEMS), ...POWER_CHECK_ITEMS] },
     ...(state.isWeeklyIncluded
       ? [{ title: `Weekly Deep Maintenance — week ${weekOfMonth(cleaningDate)}`, icon: '📋', items: weeklyItemsForSession() }]
@@ -10839,6 +10864,7 @@ function buildPayload() {
   // s120R: a Confirmed linen result with stains found and cleaned, the restock 'something else' line, and any send the system refused
   if (state.confirmItems.check_2_4 === 'confirmed' && state.confirmNotes.check_2_4) allNotes.push({ section: 'Linen', text: state.confirmNotes.check_2_4, isUrgent: false });
   S120R_reportLines(state.linen, state.restock).forEach(l => allNotes.push({ section: l.section, text: l.text, isUrgent: false }));
+  S132U_reportLines(state.utensils).forEach(l => allNotes.push({ section: l.section, text: l.text, isUrgent: false }));   // s132 L3
 
   // WORKAROUND [FD-001]: Code.gs v3.6 has TOTAL_COLS=19 — no dedicated sheet columns
   // for checkInDate (col T) and checkOutDate (col U). Embedding them at the front of
@@ -11183,6 +11209,7 @@ function resetApp() {
   const skipRow = el('meter-skip-row'); if (skipRow) { skipRow.hidden = true; skipRow.classList.remove('used'); }
   state.linen            = S120R_newLinen();
   state.restock          = S120R_newRestock();
+  state.utensils         = S132U_newUtensils();
   state.cleaningType    = 'turnover';
   state.cleaningDateStatus = 'unknown';
   state.midStayAutoApplied = false;
@@ -11332,7 +11359,7 @@ function renderAllItems() {
   renderItems(ARRIVE_ITEMS,         'arrive-items');
   renderItems(CHEMICAL_ITEMS,       'chemical-items');
   renderItems(K_only(BEDROOM_ITEMS), 'bedroom-items');
-  renderItems(KITCHEN_ITEMS,        'kitchen-items');
+  renderItems(K_only(KITCHEN_ITEMS), 'kitchen-items');
   renderItems(K_only(FINAL_CLEANING_ITEMS), 'final-cleaning-items');
   renderItems(POWER_CHECK_ITEMS,    'power-check-items');
   renderItems(weeklyItemsForSession(), 'weekly-items-list');
@@ -11730,6 +11757,326 @@ const S120R_CACHE_CONS = 'ch_s120_consumables', S120R_CACHE_LINEN = 'ch_s120_lin
 let _linenItems = [];
 let _s120rQueue = Promise.resolve();   // one send at a time: a second tap or the online event waits for the first and then finds nothing left to send
 /* S120R:END */
+
+/* ═══════════════════════════════════════════════════════════════
+   S132U: KITCHEN UTENSILS CHECK (s132 lane L3, D-396)
+   Replaces the plain "inspect utensils" tick on a turnover or deep clean. The rows are the active, lasting items of the
+   Kitchen utensils group with the count the app expects. The cleaner taps All there (nothing is sent), or says how many of
+   each are missing or broken and adds one note; one record_inventory_damage_v1 call (source 'turnover', one key held in the
+   draft) records the lot. Submit is never held by this card: a send that cannot go is carried in the report instead.
+═══════════════════════════════════════════════════════════════ */
+/* S132U:BEGIN (the tests extract and run everything down to S132U:END; no DOM in here) */
+const S132U_GROUP_RE = /^kitchen utensils$/i;   // the server tests the group name the same way (trimmed, any case)
+const S132U_REASONS = ['missing', 'broken'];
+const S132U_CACHE = 'ch_s132_utensils';
+const S132U_PU_KEY = 'I_pu_v1';                  // the stock app's signed photo links; shared so a photo is signed once on this phone
+const S132U_SIGN_STALE = 6 * 86400000;
+const S132U_MAX_ROWS = 30;                       // the server takes 1 to 30 rows
+const S132U_NAME_EM = [[/glass|cup|mug/i, '\u{1F95B}'], [/spoon|fork|knife|ladle|utensil/i, '\u{1F944}'], [/pot|pan|wok|kettle|cooker/i, '\u{1F372}'], [/plate|bowl|dish/i, '\u{1F37D}️']];
+const S132U_esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const S132U_n = v => { const n = Math.floor(Number(v)); return Number.isFinite(n) ? Math.max(0, Math.min(99, n)) : 0; };
+function S132U_emoji(name) {
+  const t = String(name || '');
+  const hit = S132U_NAME_EM.find(p => p[0].test(t));
+  return hit ? hit[1] : '\u{1F37D}️';
+}
+/* The catalogue rows (inventory_items columns) -> the card's rows: active, lasting (is_consumable false, never unknown), group Kitchen utensils. */
+function S132U_items(raw) {
+  const seen = {};
+  return (Array.isArray(raw) ? raw : [])
+    .filter(r => r && r.id != null && r.is_active !== false && r.is_consumable === false && S132U_GROUP_RE.test(String(r.category || '').trim()) && !seen[r.id] && (seen[r.id] = 1))
+    .map(r => { const q = Number(r.qty_on_hand); return { id: String(r.id), name: String(r.name || '').trim() || 'Item', unit: String(r.unit || ''), qty: r.qty_on_hand != null && Number.isFinite(q) && q >= 0 ? Math.floor(q) : null, photo: r.photo_path ? String(r.photo_path) : null }; })
+    .sort((a, b) => a.name.localeCompare(b.name));
+}
+function S132U_newUtensils() { return { answer: null, rows: {}, note: '', open: null, key: null, saved: false, sent: false, tried: false, waiting: false, failed: '', sendStartedAt: null }; }
+/* An old draft -> this shape. A draft from before the card holds only the plain tick on check_7_6: it stays ticked as All there and nothing is sent for it. */
+function S132U_migrate(draft) {
+  const d = draft || {}, out = S132U_newUtensils(), u = d.utensils;
+  if (u && typeof u === 'object') {
+    out.answer = u.answer === 'all' || u.answer === 'issues' ? u.answer : null;
+    Object.keys(u.rows && typeof u.rows === 'object' ? u.rows : {}).forEach(id => {
+      const r = u.rows[id] || {}, m = S132U_n(r.missing), b = S132U_n(r.broken);
+      if (m || b) out.rows[id] = { name: String(r.name || '').slice(0, 120), missing: m, broken: b };
+    });
+    out.note = typeof u.note === 'string' ? u.note.slice(0, 500) : '';
+    out.key = typeof u.key === 'string' && u.key ? u.key : null;
+    out.saved = !!u.saved; out.sent = !!u.sent; out.tried = !!u.tried; out.waiting = !!u.waiting;
+    out.failed = typeof u.failed === 'string' ? u.failed : '';
+    out.sendStartedAt = Number(u.sendStartedAt) > 0 ? Number(u.sendStartedAt) : null;
+    S132U_settle(out);
+    return out;
+  }
+  if (d.checklist && d.checklist.check_7_6) out.answer = 'all';
+  return out;
+}
+/* What is wrong, one entry per item, in the order the cleaner entered it. */
+function S132U_problems(U) {
+  const rows = U && U.rows && typeof U.rows === 'object' ? U.rows : {};
+  return Object.keys(rows).map(id => ({ id, name: String(rows[id].name || ''), missing: S132U_n(rows[id].missing), broken: S132U_n(rows[id].broken) })).filter(p => p.missing > 0 || p.broken > 0);
+}
+/* The rows record_inventory_damage_v1 takes: whole pieces 1 to 99, one row per item and reason. */
+function S132U_rows(U) {
+  const out = [];
+  S132U_problems(U).forEach(p => S132U_REASONS.forEach(k => { if (p[k] > 0) out.push({ item_id: p.id, qty: p[k], reason: k }); }));
+  return out;
+}
+/* Anything wrong makes the answer "issues"; All there stays only while nothing is wrong. */
+function S132U_settle(U) {
+  if (S132U_problems(U).length) U.answer = 'issues'; else if (U.answer === 'issues') U.answer = null;
+  return U.answer;
+}
+const S132U_locked = U => !!(U && (U.sent || U.tried));
+const S132U_note = U => { const t = String(U && U.note || '').trim().slice(0, 500); return t || null; };
+/* The call, exactly as the contract names it. Source is always turnover here; the card sends nothing for All there. */
+function S132U_args(pid, U, key) {
+  return { p_property_id: pid, p_rows: S132U_rows(U), p_photo_path: null, p_booking_id: null, p_add_to_list: true, p_source: 'turnover', p_note: S132U_note(U), p_idempotency_key: key };
+}
+const S132U_WORDS = { not_allowed: 'this sign-in may not report damage', source_invalid: 'the app and the system disagree about this report', rows_invalid: 'one of the lines was not accepted', qty_invalid: 'a count was not accepted', item_not_found: 'an item is no longer on the list', consumable_item: 'an item is a used-up item', linen_item: 'an item is linen' };
+function S132U_failText(msg) {
+  const m = String(msg || '');
+  if (S132U_WORDS[m]) return S132U_WORDS[m];
+  return (m === 'idempotency_key_reused' || m === 'check_key_conflict') ? 'this send had different answers from one already recorded, so nothing more was written' : (m.slice(0, 120) || 'refused');
+}
+function S132U_summary(U) {
+  return S132U_problems(U).map(p => (p.name || 'Item') + ': ' + [p.missing ? p.missing + ' missing' : '', p.broken ? p.broken + ' broken' : ''].filter(Boolean).join(', ')).join('; ');
+}
+/* The line the report carries, so a send that could not go is never lost. */
+function S132U_reportLines(U) {
+  if (!U || !S132U_problems(U).length || !(U.saved || U.sent || U.tried)) return [];
+  const n = S132U_note(U);
+  let t = 'Utensils check: ' + S132U_summary(U) + (n ? '. Note: ' + n : '') + '.';
+  if (U.sent) t += ' Recorded.';
+  else if (U.failed) t += ' Not recorded (' + U.failed + '). The host will check the kitchen.';
+  else t += ' Not confirmed as recorded. The host will check the kitchen.';
+  return [{ section: 'Kitchen', text: t }];
+}
+/* The words under the card and whether they are good news, a fault or neutral. */
+function S132U_status(U, hasItems) {
+  const has = S132U_problems(U).length > 0;
+  if (U.sent && has) return { text: 'Sent. The host has the report and a shopping list proposal.', cls: 'ok' };
+  if (has && U.failed) return { text: 'The system could not record this (' + U.failed + '). The host will see it in the report. Change a count to try again.', cls: 'warn' };
+  if (has && U.tried && U.waiting) return { text: 'Saved on this phone. It will send when the connection returns; the counts stay locked until then.', cls: '' };
+  if (has && U.tried) return { text: 'Sending now. The counts are locked until it is sent.', cls: '' };
+  if (has && U.saved && U.waiting) return { text: 'Saved on this phone. It sends when you are online, or when you submit.', cls: '' };
+  if (has && U.saved) return { text: 'Saved. It sends before you submit.', cls: '' };
+  if (has && S132U_rows(U).length > S132U_MAX_ROWS) return { text: 'That is too many different lines for one report. Lower some counts.', cls: 'warn' };
+  if (has) return { text: 'Not sent yet. Tap Send report; it also sends when you submit.', cls: '' };
+  if (U.answer === 'all') return { text: 'Everything is there. Nothing to send.', cls: 'ok' };
+  return { text: hasItems ? 'Tap All there, or tap a row to say what is missing or broken.' : '', cls: '' };
+}
+/* The whole card body as one string (no DOM here, so the wording and the controls can be tested). urls = signed photo links by storage path; bad = links that failed to load. */
+function S132U_cardHtml(U, items, urls, bad) {
+  const E = S132U_esc, locked = S132U_locked(U), off = locked ? ' disabled' : '';
+  const has = S132U_problems(U).length > 0, ans = has ? 'issues' : (U.answer === 'all' ? 'all' : null);
+  const row = it => {
+    const r = (U.rows && U.rows[it.id]) || {}, m = S132U_n(r.missing), b = S132U_n(r.broken), open = U.open === it.id;
+    const url = urls && it.photo && urls[it.photo], img = url && !(bad && bad[url]);
+    const th = img ? `<img src="${E(url)}" alt="" width="40" height="40" loading="lazy" decoding="async">` : `<span aria-hidden="true">${S132U_emoji(it.name)}</span>`;
+    const pill = (m || b) ? [m ? m + ' missing' : '', b ? b + ' broken' : ''].filter(Boolean).join(' · ') : (ans === 'all' ? '✓' + (it.qty != null ? ' ' + it.qty : '') : '›');
+    const step = (k, label) => `<div class="sus-item"><div class="sus-item-info"><div class="sus-item-name">${label}</div></div>${S120R_stepperHtml(k === 'missing' ? m : b, `data-ut="${k}" data-id="${E(it.id)}" aria-label="${label}: ${E(it.name)}"`, locked, 99)}</div>`;
+    return `<div class="s132-ur${m || b ? ' bad' : ''}" role="listitem">
+      <button type="button" class="s132-ur-main" data-ut-open="${E(it.id)}" aria-expanded="${open}"${off}>
+        <span class="s132-th" data-ut-th="${E(it.id)}">${th}</span>
+        <span class="s132-ur-name">${E(it.name)}<small>${it.qty != null ? 'expected ' + it.qty : 'expected count not known'}</small></span>
+        <span class="s132-pill">${E(pill)}</span></button>
+      ${open ? `<div class="s132-ur-edit">${step('missing', 'Missing')}${step('broken', 'Broken')}</div>` : ''}</div>`;
+  };
+  const over = has && S132U_rows(U).length > S132U_MAX_ROWS;
+  return `<div class="s132-ut-head"><b>\u{1F37D}️ Kitchen utensils check</b><span class="s132-pill">${items.length} item${items.length === 1 ? '' : 's'}</span></div>
+    <button type="button" class="confirm-btn s132-all ${ans === 'all' ? 'confirmed' : ''}" data-ut-all="1" aria-pressed="${ans === 'all'}"${off}>✅ All there</button>
+    <div role="list" aria-label="Kitchen utensils">${items.map(row).join('')}</div>
+    ${has ? `<input type="text" class="s132-note" id="s132-ut-note" maxlength="500" aria-label="Note about the missing or broken items (optional)" placeholder="Note (optional), for example: chipped rim" value="${E(U.note || '')}"${off}>
+      ${locked ? '' : `<button type="button" class="confirm-btn issue s132-send" data-ut-send="1"${over ? ' disabled' : ''}>Send report</button>`}` : ''}`;
+}
+/* S132U:END */
+
+/* ── S132U: the list, the card, the send ─────────────────────── */
+let _utItems = [];        // the Kitchen utensils rows (id, name, unit, qty, photo) the card shows; empty = no card, the old tick stands
+let _utUrls = {};         // signed photo links by storage path
+let _utBad = {};          // links that would not load: the emoji shows instead (D-396)
+let _utMount = null;      // { div, wrap, body, status, cb } of the card now on screen
+let _utLoading = null;
+let _utQueue = Promise.resolve();   // one send at a time, like the linen and restock sends
+const S132U_active = () => state.cleaningType === 'turnover' || state.cleaningType === 'deep_clean';
+function S132U_state() { if (!state.utensils) state.utensils = S132U_newUtensils(); return state.utensils; }
+
+async function S132U_fetchItems() {
+  const url = `${SUPABASE_URL}/rest/v1/inventory_items?property_id=eq.${PROPERTY_ID}&is_active=eq.true&is_consumable=eq.false&category=ilike.Kitchen%20utensils&select=id,name,category,unit,qty_on_hand,photo_path,is_active,is_consumable&order=name.asc`;
+  const resp = await fetch(url, { headers: { ...(await staffHeaders()), 'Accept': 'application/json' } });
+  if (!resp.ok) throw new Error('HTTP ' + resp.status);
+  return S132U_items(await resp.json());   // the same filter again here: a row that is not lasting, active and Kitchen utensils never reaches the card
+}
+function S132U_readUrls() {
+  try {
+    const o = JSON.parse(localStorage.getItem(S132U_PU_KEY) || 'null') || {};
+    Object.keys(o).forEach(p => { const c = o[p]; if (c && typeof c.url === 'string' && Date.now() - c.at < S132U_SIGN_STALE) _utUrls[p] = c.url; });
+  } catch (e) { /* private mode: the links are fetched again */ }
+}
+async function S132U_sign() {
+  const paths = _utItems.map(i => i.photo).filter((p, n, a) => p && !_utUrls[p] && a.indexOf(p) === n);
+  if (!paths.length || navigator.onLine === false) return;
+  try {
+    const resp = await fetchWithRetry(`${EDGE_BASE}/upload-photo`, { method: 'POST', headers: await staffHeaders(true), body: JSON.stringify({ purpose: 'inventory', action: 'sign', propertyId: PROPERTY_ID, paths }) }, 1, 15000);
+    const d = await resp.json();
+    const urls = d && d.urls; if (!urls) return;
+    let o = {};
+    try { o = JSON.parse(localStorage.getItem(S132U_PU_KEY) || 'null') || {}; } catch (e) { o = {}; }
+    Object.keys(urls).forEach(p => { if (typeof urls[p] === 'string') { _utUrls[p] = urls[p]; o[p] = { url: urls[p], at: Date.now() }; } });
+    try { localStorage.setItem(S132U_PU_KEY, JSON.stringify(o)); } catch (e) { /* full: the links stay in memory */ }
+    S132U_paint();
+  } catch (e) { /* the emoji stays */ }
+}
+/* The list: the last copy shows at once, a fresh read replaces it when there is a connection. No list at all = no card (the plain tick stays). */
+function S132U_load() {
+  if (_utLoading) return _utLoading;
+  if (!_utItems.length) { const c = lsJSON(S132U_CACHE); if (Array.isArray(c)) _utItems = c.filter(x => x && x.id && x.name); }
+  S132U_readUrls(); S132U_paint();
+  const p = (async () => {
+    try {
+      if (navigator.onLine !== false) { _utItems = await S132U_fetchItems(); lsJSON(S132U_CACHE, _utItems); }
+    } catch (e) { /* offline or refused: the cached rows, or none */ }
+    S132U_paint();
+    await S132U_sign();
+  })();
+  _utLoading = p;
+  const done = () => { if (_utLoading === p) _utLoading = null; };
+  p.then(done, done);
+  return p;
+}
+
+function S132U_focusKey(root) {
+  try {
+    const a = document.activeElement; if (!a || !root || !root.contains || !root.contains(a)) return null;
+    const att = ['data-ut-open', 'data-ut-all', 'data-ut-send'].find(k => a.hasAttribute(k));
+    if (att) return `[${att}="${a.getAttribute(att)}"]`;
+    const box = a.closest('[data-ut]');
+    if (box && a.hasAttribute('data-d')) return `[data-ut="${box.getAttribute('data-ut')}"][data-id="${box.getAttribute('data-id')}"] [data-d="${a.getAttribute('data-d')}"]`;
+    return a.id ? '#' + a.id : null;
+  } catch (e) { return null; }
+}
+function S132U_paint() {
+  const m = _utMount; if (!m) return;
+  const U = S132U_state(), show = S132U_active() && _utItems.length > 0;
+  m.wrap.hidden = !show;
+  if (!show) return;
+  const fk = S132U_focusKey(m.body);
+  m.body.innerHTML = S132U_cardHtml(U, _utItems, _utUrls, _utBad);
+  try { if (fk) { const n = m.body.querySelector(fk) || m.body.querySelector('button:not([disabled])'); if (n) n.focus({ preventScroll: true }); } } catch (e) { /* focus is a courtesy */ }
+  const st = S132U_status(U, true);
+  m.status.textContent = st.text; m.status.className = 's120-status ' + st.cls;
+}
+/* The step's tick follows the card: any answer ticks it, no answer lifts it (only called from a tap on the card). */
+function S132U_tick(on) {
+  state.checklist.check_7_6 = !!on;
+  const m = _utMount; if (!m) return;
+  if (m.cb) m.cb.checked = !!on;
+  m.div.classList.toggle('checked', !!on);
+}
+function S132U_changed() {
+  const U = S132U_state(); S132U_settle(U);
+  S132U_tick(U.answer != null);
+  S132U_paint();
+  try { updateProgress(); } catch (e) { /* no page yet */ }
+  saveDraft();
+}
+function S132U_mount(div, item, cb) {
+  const wrap = document.createElement('div'); wrap.className = 's132-ut'; wrap.id = 's132-ut'; wrap.hidden = true;
+  const body = document.createElement('div'), status = document.createElement('p');
+  status.id = 's132-ut-status'; status.className = 's120-status'; status.setAttribute('role', 'status'); status.setAttribute('aria-live', 'polite');
+  wrap.appendChild(body); wrap.appendChild(status); div.appendChild(wrap);
+  _utMount = { div, wrap, body, status, cb: cb || null };
+  wrap.addEventListener('click', S132U_onClick);
+  wrap.addEventListener('input', S132U_onInput);
+  wrap.addEventListener('error', S132U_onImgError, true);   // an image error does not bubble: the capture phase sees it
+  if (cb) cb.addEventListener('change', () => {   // the generic tick handler already ran; the card keeps the tick while it holds an answer
+    const U = S132U_state();
+    if (!cb.checked && U.answer === 'issues') { S132U_tick(true); saveDraft(); }
+    else if (!cb.checked && U.answer === 'all') { U.answer = null; S132U_paint(); saveDraft(); }
+  });
+  S132U_state(); S132U_paint();
+  S132U_load().catch(() => {});
+}
+function S132U_onImgError(ev) {
+  const t = ev && ev.target; if (!t || t.tagName !== 'IMG') return;
+  _utBad[t.getAttribute('src')] = true;
+  const th = t.closest ? t.closest('[data-ut-th]') : null;
+  const it = th && _utItems.find(i => i.id === th.getAttribute('data-ut-th'));
+  if (th && it) th.innerHTML = `<span aria-hidden="true">${S132U_emoji(it.name)}</span>`;   // the row stays as it is: only the picture is swapped
+}
+function S132U_onInput(ev) {
+  const U = S132U_state();
+  if (ev.target && ev.target.id === 's132-ut-note' && !S132U_locked(U)) { U.note = String(ev.target.value || '').slice(0, 500); saveDraft(); }
+}
+function S132U_onClick(ev) {
+  const t = ev.target && ev.target.closest ? ev.target.closest('button') : null; if (!t || t.disabled) return;
+  const U = S132U_state(); if (S132U_locked(U)) return;
+  const snap = () => JSON.stringify([U.answer, U.rows, U.note]);
+  const before = snap();
+  if (t.dataset.utSend) { S132U_sendTap(); return; }
+  if (t.dataset.utAll) { U.answer = U.answer === 'all' ? null : 'all'; U.rows = {}; U.note = ''; U.open = null; }
+  else if (t.dataset.utOpen) U.open = U.open === t.dataset.utOpen ? null : t.dataset.utOpen;
+  else if (t.dataset.d) {
+    const box = t.closest('[data-ut]'); if (!box) return;
+    const k = box.dataset.ut, id = box.dataset.id, it = _utItems.find(i => i.id === id);
+    if (!S132U_REASONS.includes(k) || !it) return;
+    const r = U.rows[id] || { name: it.name, missing: 0, broken: 0 };
+    r[k] = S120R_step(r[k], Number(t.dataset.d), 99);
+    if (r.missing > 0 || r.broken > 0) U.rows[id] = r; else delete U.rows[id];
+  } else return;
+  if (snap() !== before) { U.failed = ''; U.saved = false; U.waiting = false; }   // a real change clears an old refusal; it is sent afresh
+  S132U_changed();
+}
+async function S132U_sendTap() {
+  const U = S132U_state(); if (S132U_locked(U)) return;
+  const n = S132U_rows(U).length;
+  if (!n || n > S132U_MAX_ROWS) return;
+  U.saved = true; U.failed = ''; S132U_changed();
+  await S132U_flush(false);
+  showToast(U.sent ? 'Sent.' : (U.failed ? 'Saved. The system could not record it; the host will see it.' : 'Saved on this phone. It will send when you are online.'), U.sent ? 'success' : 'info', 4000);
+}
+
+/* The send. Never throws and never reports a stop: Submit does not wait for this card. */
+async function S132U_send() {
+  const U = S132U_state();
+  const rows = S132U_rows(U);
+  if (!rows.length || rows.length > S132U_MAX_ROWS) return { ok: true, noop: true };
+  if (!U.key) U.key = 's132-utensils-' + uuid();   // one key for this card, kept by the draft: a retry sends the same key and the server answers duplicate
+  if (!U.sendStartedAt) U.sendStartedAt = Date.now();   // the send's own time, stored before the request goes out; carry-over reads only this
+  if (!S120R_certainOffline()) U.tried = true;   // a lost answer may still have been written: lock the counts until it is sent
+  U.waiting = false;
+  saveDraft();
+  const r = await S120R_rpc('record_inventory_damage_v1', S132U_args(PROPERTY_ID, U, U.key));
+  if (r.ok && r.data && r.data.ok === false) { U.failed = S132U_failText(r.data.reason); U.tried = false; U.sendStartedAt = null; }   // the server read it and wrote nothing
+  else if (r.ok) { U.sent = true; U.failed = ''; U.waiting = false; }   // a duplicate is the same report already recorded
+  else if (r.kind === 'refused') { U.failed = S132U_failText(r.msg); U.tried = false; U.sendStartedAt = null; }
+  else U.waiting = true;   // no connection or server trouble: it stays locked and goes again with the same key
+  saveDraft();
+  return r;
+}
+function S132U_flush(atSubmit) {
+  if (typeof _draftHold !== 'undefined' && _draftHold) return new Promise(done => { _heldWork.push(() => done(S132U_flush(atSubmit))); });
+  const run = () => S132U_flushOnce(atSubmit);
+  const p = _utQueue.then(run, run);
+  _utQueue = p.catch(() => {});
+  return p;
+}
+async function S132U_flushOnce(atSubmit) {
+  try {
+    const U = state.utensils; if (!U) return { sent: false };
+    S132U_settle(U);
+    if (atSubmit && U.failed) U.failed = '';   // a refusal gets one more try at Submit
+    if (atSubmit && S132U_active() && U.answer === 'issues' && !U.saved && !U.sent && S132U_rows(U).length <= S132U_MAX_ROWS) U.saved = true;   // counts typed but not sent are sent now, not lost
+    if (U.saved && !U.sent && !U.failed && U.answer === 'issues') await S132U_send();
+  } catch (e) { /* the report carries it instead */ }
+  try { S132U_paint(); } catch (e) { /* no page yet */ }
+  return { sent: !!(state.utensils && state.utensils.sent) };
+}
+function S132U_restore(draft) {
+  state.utensils = S132U_migrate(draft);
+  if (state.utensils.answer != null) S132U_tick(true);
+  S132U_paint();
+  if (navigator.onLine && state.utensils.saved && !state.utensils.sent && !state.utensils.failed) S132U_flush(false);
+}
 
 /* ── state sync ─────────────────────────────────────────────── */
 function S120R_syncLinen() {
@@ -12194,7 +12541,7 @@ function initInventoryUsage() {
   el('sus-none-btn')?.addEventListener('click', () => S120R_saveRestock(true));
   el('sus-list')?.addEventListener('click', S120R_onRestockClick);
   el('sus-list')?.addEventListener('input', ev => { const R = state.restock; if (ev.target.id === 's120-else' && R && !R.sent && !R.tried && R.elseText !== ev.target.value) { R.elseText = ev.target.value; S120R_unsave(R); } });
-  window.addEventListener('online', () => { S120R_flushAll(true); });
+  window.addEventListener('online', () => { S120R_flushAll(true); S132U_flush(false); if (!_utItems.length) S132U_load().catch(() => {}); });
   S120R_loadContext().catch(() => {});   // warms the offline copy before the cleaner opens the sheet
   S120R_refreshStatus();
 
@@ -12313,6 +12660,7 @@ function setCleaningType(type, opts = {}) {
   // per type, so a type change has to rebuild them.
   if (typeof renderConfirmItems === 'function') renderConfirmItems();
   if (typeof K_renderBedroom === 'function') K_renderBedroom();
+  if (typeof K_renderKitchen === 'function') K_renderKitchen();
   if (typeof refreshKitchenPhotoRequirement === 'function') refreshKitchenPhotoRequirement();
   S120R_typeChanged(type);   // s120R: "nothing used" is a mid-stay answer only
   updateBottomBar(); updateProgress(0); saveDraft();
