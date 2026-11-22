@@ -13,7 +13,7 @@ const raw = () => ({ items: [
   item('l1', 'Bath towels', 14, 10, { category: 'Linen', unit: 'pieces', consumable: false, purchaseUnit: null, unitsPerPurchase: 1 })
 ], sourceAsOf: NOW });
 const sign = (b) => (b.action === 'sign' ? { data: { ok: true, urls: { [P1]: URL1 } }, error: null } : { data: { ok: true, path: P1 }, error: null });
-const make = (role = 'cleaner', rpc = {}) => setup({ role, doc: {}, client: mockClient({ catalogue: raw(), rpc, fn: { 'upload-photo': sign } }) });
+const make = (role = 'cleaner', rpc = {}, extra = {}) => setup({ role, doc: {}, ...extra, client: mockClient({ catalogue: raw(), rpc, fn: { 'upload-photo': sign } }) });
 const kindsIn = (s) => [...s.matchAll(/data-act="upd-pick" data-kind="(\w+)"/g)].map((m) => m[1]);
 const okd = (d) => () => ({ data: { ok: true, ...d }, error: null });
 const the = (e, fn) => e.client.rpcCalls(fn);
@@ -168,11 +168,109 @@ test('s132 Undo: broken, stained and a staff purchase each take their own call b
   assert.match(t.sheet(), /too late|can no longer be undone|already|moved on/i);
 });
 
-test('s132 history rows show the source emoji and the note', async () => {
-  const hist = { ok: true, usage: {}, changes: [{ at: '2026-10-12T03:00:00Z', kind: 'damage', before: 6, after: 5, who: 'Honey', source: 'damage', note: 'Guest broke it' }, { at: '2026-10-11T03:00:00Z', kind: 'counted', before: 5, after: 6, who: 'Lloyd', source: 'count', note: 'Found extra' }] };
-  const e = await make('owner', { inventory_item_history_v1: () => ({ data: hist, error: null }) }); await e.mount(''); await e.open('u1'); await e.act('history-open');
-  assert.match(e.sheet(), /class="I_hsrc"[^>]*>[^<]+<\/em> Broken or missing/); assert.match(e.sheet(), /<span class="I_hnote">Guest broke it<\/span>/);
-  assert.match(e.sheet(), /<span class="I_hnote">Found extra<\/span>/);
+// ML-65: the fixture is the live producer's shape (inventory_item_history_v1, s132): {at, kind, before, after, qty, note, source, who}; usage and receipt rows have before = after = null and qty set.
+const HROW = (o) => ({ at: '2026-10-12T03:00:00Z', kind: 'adjusted', before: null, after: null, qty: null, note: null, source: 'edit', who: 'Honey', ...o });
+const histOf = async (changes, id = 'c1') => { const e = await make('owner', { inventory_item_history_v1: () => ({ data: { ok: true, usage: {}, changes }, error: null }) }); await e.mount(''); await e.open(id); await e.act('history-open'); return e; };
+const lines = (h) => [...h.matchAll(/<li>[\s\S]*?<\/li>/g)].map((m) => m[0].replace(/<[^>]+>/g, '|').replace(/\|+/g, '|'));
+test('s132 history renders each source in the live shape: count, usage, receipt, damage, linen (stained, cleaned), edit', async () => {
+  const e = await histOf([
+    HROW({ kind: 'counted', before: 5, after: 6, source: 'count', note: 'Found extra' }),
+    HROW({ kind: 'used', qty: 2, source: 'usage', note: 'For a guest stay' }),
+    HROW({ kind: 'received', qty: 24, source: 'receipt' }),
+    HROW({ kind: 'broken', before: 6, after: 4, qty: 2, source: 'damage', note: 'Guest broke it' }),
+    HROW({ kind: 'missing', before: 4, after: 3, qty: 1, source: 'damage' }),
+    HROW({ kind: 'stained', before: 14, after: 13, qty: 1, source: 'linen' }),
+    HROW({ kind: 'cleaned', before: 13, after: 13, qty: 1, source: 'linen' }),
+    HROW({ kind: 'adjusted', before: 5, after: 7, source: 'edit' })
+  ]);
+  const h = e.sheet(), L = lines(h);
+  assert.equal(L.length, 8);
+  assert.match(L[0], /Counted\|5 → 6 sachets/); assert.match(h, /<span class="I_hnote">Found extra<\/span>/);
+  assert.match(L[1], /Used\|-2 sachets/); assert.match(h, /<span class="I_hnote">For a guest stay<\/span>/);
+  assert.match(L[2], /Received\|\+24 sachets/);
+  assert.match(L[3], /Broken\|-2 sachets \(6 → 4\)/); assert.match(h, /<span class="I_hnote">Guest broke it<\/span>/);
+  assert.match(L[4], /Missing\|-1 sachet \(4 → 3\)/);
+  assert.match(L[5], /Stained\|-1 sachet \(14 → 13\)/);
+  assert.match(L[6], /Cleaned, back in use\|1 sachet/); assert.doesNotMatch(L[6], /→/);
+  assert.match(L[7], /Adjusted\|5 → 7 sachets/);
+  for (const l of L) assert.doesNotMatch(l, /→ \s*sachets|null|NaN|undefined/);
+  const emo = [...h.matchAll(/class="I_hsrc"[^>]*>([^<]+)<\/em>/g)].map((m) => m[1]);
+  assert.equal(emo.length, 8);
+  assert.equal(new Set([emo[0], emo[1], emo[2], emo[3], emo[5], emo[7]]).size, 6, 'six sources, six emoji'); assert.equal(emo[3], emo[4]); assert.equal(emo[5], emo[6]);
+});
+
+test('s132 history: a usage row with no counts and no qty shows no arrow or empty numbers', async () => {
+  const e = await histOf([HROW({ kind: 'used', source: 'usage' })]);
+  const L = lines(e.sheet()); assert.equal(L.length, 1); assert.match(L[0], /Used/); assert.doesNotMatch(L[0], /→|null|NaN/);
+});
+
+test('s132 booking: the stay in the house goes to the damage call; without one the switch writes During a guest stay. into the note', async () => {
+  const BID = '33333333-3333-4333-8333-333333333333';
+  const run = async (extra, note) => {
+    const e = await make('cleaner', { record_inventory_damage_v1: okd({ report_id: 'r1' }) }, extra); await e.mount(''); await e.open('u1'); await e.begin('brk');
+    await e.act('upd-sw', { 'data-f': 'stay' }); if (note) await e.input('I_f_note', note); await e.submit();
+    return the(e, 'record_inventory_damage_v1')[0][2];
+  };
+  let a = await run({ bookingId: BID }); assert.equal(a.p_booking_id, BID); assert.equal(a.p_note, null);
+  a = await run({ bookingId: () => BID }); assert.equal(a.p_booking_id, BID, 'a function is read when the form is saved');
+  a = await run({}); assert.equal(a.p_booking_id, null); assert.equal(a.p_note, 'During a guest stay.');
+  a = await run({ bookingId: null }, 'Dropped'); assert.equal(a.p_booking_id, null); assert.equal(a.p_note, 'Dropped During a guest stay.');
+  const e = await make('cleaner', { record_inventory_damage_v1: okd({ report_id: 'r1' }) }, { bookingId: BID }); await e.mount(''); await e.open('u1'); await e.begin('brk'); await e.submit();
+  const b = the(e, 'record_inventory_damage_v1')[0][2]; assert.equal(b.p_booking_id, null); assert.equal(b.p_note, null);
+});
+
+test('s132 refusals: rows_invalid, source_invalid, stock_moved and item_not_found are said plainly, with reload and try again', async () => {
+  const say = async (reason, rx) => {
+    const e = await make('owner', { record_inventory_damage_v1: () => ({ data: { ok: false, reason }, error: null }) });
+    await e.mount(''); await e.open('u1'); await e.begin('brk'); await e.submit();
+    assert.match(e.sheet(), rx, reason); assert.match(e.sheet(), /Reload and try again/, reason); assert.doesNotMatch(e.sheet(), new RegExp(reason), reason + ' raw');
+  };
+  await say('rows_invalid', /could not be read/); await say('source_invalid', /could not be sent from here/);
+  await say('stock_moved', /stock changed/); await say('item_not_found', /no longer on the list/);
+});
+
+test('s132 a refused save from the Update sheet toasts the plain refusal and keeps the form and the typed note', async () => {
+  for (const [kind, id, fn, role] of [['used', 'c1', 'record_inventory_usage', 'laundry'], ['brk', 'u1', 'record_inventory_damage_v1', 'cleaner'], ['lin', 'l1', 'record_linen_stains_v1', 'laundry']]) {
+    const e = await make(role, { [fn]: () => ({ data: null, error: { code: '42501', message: 'permission denied' } }) });
+    await e.mount(''); await e.open(id); await e.begin('update'); await e.act('upd-pick', { 'data-kind': kind }); await e.input('I_f_note', 'typed words'); await e.submit();
+    assert.ok(e.toasts.some((t) => /not available to you/.test(String(t))), kind + ' toast');
+    assert.match(e.sheet(), /not available to you/, kind + ' line in the form'); assert.match(e.sheet(), /data-i-save/, kind + ' still on the form');
+  }
+});
+
+test('s132 isLinen follows the server: lower(btrim(category)) like linen%', async () => {
+  const e = await make('owner'); await e.mount('');
+  const f = e.lib.isLinen;
+  assert.equal(f({ category: 'Linen' }), true); assert.equal(f({ category: ' linen ' }), true); assert.equal(f({ category: 'LINENS' }), true); assert.equal(f({ category: 'Linen & towels' }), true);
+  assert.equal(f({ category: 'Kitchen linen' }), false); assert.equal(f({ category: '' }), false); assert.equal(f({ category: null }), false); assert.equal(f(null), false);
+});
+
+test('s132 Mark bought on an approved shopping row is owner and admin only (button and a hand-made click)', async () => {
+  const SHOP = [{ id: 's9', item_id: 'c1', item_name: 'Coffee (3-in-1)', quantity: 1, purchase_unit: 'box', reason: null, status: 'approved', proposed_by: 'x', proposed_at: '2026-10-11T02:00:00Z' }];
+  for (const role of ['owner', 'admin', 'cleaner', 'laundry']) {
+    const e = await setup({ role, doc: {}, client: mockClient({ catalogue: raw(), shop: SHOP }) }); await e.mount('shopping');
+    await e.act('shop-open', { 'data-id': 's9' });
+    const can = role === 'owner' || role === 'admin';
+    assert.equal(/data-act="shop-bought"/.test(e.sheet()), can, role + ' button');
+    await e.act('shop-bought'); assert.equal(/I_hue_buy/.test(e.sheet()), can, role + ' form');
+    assert.equal(the(e, 'inventory_receipt_manual_v1').length, 0, role);
+  }
+});
+
+test('s132 a picture that fails to load does not redraw the open sheet while a field in it has focus', async () => {
+  const e = await make('owner'); await e.mount(''); await e.open('u1'); await e.begin('brk');
+  e.win.document.activeElement = { tagName: 'INPUT', id: 'I_f_note' }; const sheet = { contains: (n) => n === e.win.document.activeElement };
+  const before = e.sheet(); const orig = e.root.querySelector; e.root.querySelector = (sel) => (sel === '.sheet' ? sheet : orig && orig.call(e.root, sel));
+  const bad = { target: { getAttribute: (k) => ({ 'data-uimg': '1', src: URL1 })[k] || null } };
+  for (const f of e.root.l.error || []) await f(bad);
+  assert.match(e.sheet(), /<img/, 'sheet not redrawn while typing: the picture is still in the markup'); assert.equal(e.sheet(), before);
+});
+
+test('s132 owner and admin see the cost of one pack under the total; staff do not', async () => {
+  const o = await make('owner'); await o.mount(''); await o.open('c1'); await o.begin('recv'); await o.input('I_f_total', '180'); await o.act('step', { 'data-f': 'packs', 'data-d': '1', 'data-z': '0' }); // 2 packs for 180
+  assert.match(o.sheet(), /data-i-perpack>₱90\.00 per box</);
+  const s = await make('cleaner'); await s.mount(''); await s.open('c1'); await s.begin('recv'); await s.input('I_f_total', '180');
+  assert.doesNotMatch(s.sheet(), /per box|per pack/);
 });
 
 test('s132 the create-item group sets the consumable default: supplies yes, utensils and appliances no, until the person changes it', async () => {

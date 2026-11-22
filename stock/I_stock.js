@@ -164,7 +164,11 @@
     createGone: 'It was already removed.',
     consumable: 'This item gets used up, so it cannot be marked broken. Choose Used up instead.',
     linen: 'Towels and sheets are reported as stained or damaged. Choose that instead.',
-    qty: 'Enter a whole number from 1 to 99.'
+    qty: 'Enter a whole number from 1 to 99.',
+    rowsBad: 'That entry could not be read. Reload and try again.',
+    sourceBad: 'That entry could not be sent from here. Reload and try again.',
+    stockMoved: 'The stock changed while you were here. Reload and try again.',
+    itemGone: 'That item is no longer on the list. Reload and try again.'
   };
   var REPORTS = [{ k: 'order', t: 'Order list', s: 'the order list' }, { k: 'all', t: 'All items', s: 'the full item list' }, { k: 'consumables', t: 'Consumables', s: 'the consumables list' }, { k: 'low', t: 'Low stock', s: 'the low-stock list' }, { k: 'misc', t: 'Miscellaneous', s: 'the miscellaneous list' }];
   var COOL_MS = 30000; // a sent report cannot be sent again to the same group for 30 seconds
@@ -433,7 +437,8 @@
   }
   function redrawMenu(id) { if (M && M.act && M.act.kind === 'menu' && M.act.itemId === id) drawLayer(); }
   function optById(itemId, id) { var st = M && K.opt[itemId]; return st && st.list ? st.list.filter(function (o) { return o.id === id; })[0] || null : null; }
-  function onImgErr(ev) { var t = ev && ev.target; if (M && t && t.getAttribute && t.getAttribute('data-uimg')) { K.badImg[t.getAttribute('src')] = 1; drawList(); if (M.act && !M.act.sending && (M.act.kind === 'menu' || M.act.kind === 'update' || UKINDS[M.act.kind])) drawLayer(); return; } /* s132: a picture that will not load becomes the emoji */ if (M && t && t.getAttribute && t.getAttribute('data-oimg')) { K.badImg[t.getAttribute('src')] = 1; if (M.act && (M.act.kind === 'menu' || M.act.kind === 'o8list')) drawLayer(); } }
+  function sheetTyping() { var d = root.document, ae = d && d.activeElement, sh = M && M.el && M.el.querySelector ? M.el.querySelector('.sheet') : null; return !!(ae && sh && sh.contains(ae) && /^(INPUT|TEXTAREA|SELECT)$/i.test(ae.tagName || '')); } // a failed picture must not redraw the sheet under a thumb that is typing
+  function onImgErr(ev) { var t = ev && ev.target; if (M && t && t.getAttribute && t.getAttribute('data-uimg')) { K.badImg[t.getAttribute('src')] = 1; drawList(); if (M.act && !M.act.sending && (M.act.kind === 'menu' || M.act.kind === 'update' || UKINDS[M.act.kind]) && !sheetTyping()) drawLayer(); return; } /* s132: a picture that will not load becomes the emoji */ if (M && t && t.getAttribute && t.getAttribute('data-oimg')) { K.badImg[t.getAttribute('src')] = 1; if (M.act && (M.act.kind === 'menu' || M.act.kind === 'o8list')) drawLayer(); } }
   function optionsBlock(it) {
     var st = K.opt[it.id]; if (!st || !st.list) return ''; var ed = o8On(); if (!st.list.length && !ed) return '';
     var money = canPrice(M.role), mng = canManage(M.role), sorted = optSort(st.list, money), main = sorted.filter(function (o) { return o.usual; }), rest = sorted.filter(function (o) { return !o.usual; });
@@ -1442,7 +1447,7 @@
     var r = (K.shop || []).filter(function (x) { return x.id === a.shopId; })[0]; if (!r) return null;
     return head(r.name, (r.qty != null ? uq(r.qty, r.unit || '') : '') + ' · ' + (r.status === 'approved' ? 'Approved' : 'Asked')) + (r.note ? '<p>' + esc(r.note) + '</p>' : '') + (a.note ? '<div class="okbox" role="status"><span>' + esc(a.note) + '</span></div>' : '') + errBox(a) +
       '<div class="I_btns">' + (r.status === 'proposed' && !M.denied.shopset ? '<button class="btn btn-primary btn-block" type="button" data-act="shop-do" data-do="approved">Approve</button>' : '') +
-      (r.status === 'approved' && r.itemId && allowed('recv', itemById(r.itemId)) ? '<button class="btn btn-primary btn-block" type="button" data-act="shop-bought">Mark bought</button>' : '') +
+      (r.status === 'approved' && r.itemId && canManage(M.role) && allowed('recv', itemById(r.itemId)) ? '<button class="btn btn-primary btn-block" type="button" data-act="shop-bought">Mark bought</button>' : '') +
       (M.denied.shopset ? '' : '<button class="btn btn-secondary btn-block" type="button" data-act="shop-do" data-do="rejected">Remove from the list</button>') + '<button class="btn btn-ghost btn-block" type="button" data-act="close">Close</button></div>';
   }
 
@@ -1516,7 +1521,7 @@
     if (act === 'rep-to') { a.vals.to = attr(t, 'data-to') === 'finance' && canPrice(M.role) && !K.noFinance ? 'finance' : 'ops'; a.bad = false; drawLayer(); return; }
     if (act === 'back') { if (a.upd && UKINDS[a.kind]) { relPrev(a); a.blob = null; a.upPath = null; a.kind = 'update'; a.vals = null; a.step = null; a.err = null; a.bad = false; a.focused = false; drawLayer(); return; } if (/^(scan|link|create|report|undo|bought|unlink|history|photo|photoremove|optusual|cconfirm|labels|tidy|rename|sort|addlow|copytext)$/.test(a.kind)) return flowBack(a); if (a.kind === 'shopset') { a.kind = 'menu'; a.step = null; a.err = null; drawLayer(); } else if (a.fromShop && a.step !== 'confirm') { M.act = null; drawLayer(); } else if (a.step === 'confirm' && a.kind !== 'low') { a.step = 'form'; a.err = null; drawLayer(); } else if (a.shopId) { a.kind = 'menu'; a.err = null; drawLayer(); } else { a.kind = 'menu'; a.vals = null; a.step = null; a.err = null; a.bad = false; drawLayer(); } return; }
     if (act === 'step') { a.vals = a.vals || {}; var f = attr(t, 'data-f'); a.vals[f] = stepQty(a.vals[f], +attr(t, 'data-d'), attr(t, 'data-z') === '1'); a.err = null; a.bad = false; if (a.kind === 'count') { var sit = itemOf(a); a.chg = !!sit && countChanged(a, sit); } drawLayer(); var nb = q('[data-act="step"][data-f="' + f + '"][data-d="' + attr(t, 'data-d') + '"]'); if (nb && nb.focus) nb.focus(); return; }
-    if (act === 'shop-bought') { var r = (K.shop || []).filter(function (x) { return x.id === a.shopId; })[0]; if (!r || !r.itemId || !allowed('recv', itemById(r.itemId))) return; M.act = { kind: 'recv', itemId: r.itemId, step: 'form', vals: { packs: fmt(r.qty || 1), supplier: K.sup ? K.sup.name : '', supplierId: K.sup && K.sup.id || '', cost: '', shopId: r.id }, fromShop: true }; drawLayer(); return; }
+    if (act === 'shop-bought') { var r = (K.shop || []).filter(function (x) { return x.id === a.shopId; })[0]; if (!r || !r.itemId || !canManage(M.role) || !allowed('recv', itemById(r.itemId))) return; M.act = { kind: 'recv', itemId: r.itemId, step: 'form', vals: { packs: fmt(r.qty || 1), supplier: K.sup ? K.sup.name : '', supplierId: K.sup && K.sup.id || '', cost: '', shopId: r.id }, fromShop: true }; drawLayer(); return; }
     if (act === 'shop-do') { var rr = (K.shop || []).filter(function (x) { return x.id === a.shopId; })[0]; if (!rr) return; a.kind = 'shopset'; a.status = attr(t, 'data-do'); a.step = 'confirm'; a.rowName = rr.name; drawLayer(); return; }
   }
   function applyQuick(keep) {
@@ -1725,7 +1730,7 @@
     a.sending = false;
     if (a.kind === 'sort') K.catAt = 0; // a sort that did not happen does not hold the next one
     if (a.mintedDone) { a.err = 'labelsend'; return drawLayer(); } // the codes exist; only the sheet is missing
-    if (why === 'item_not_found') { a.err = 'other'; return drawLayer(); }
+    if (why === 'item_not_found' && !UKINDS[a.kind]) { a.err = 'other'; return drawLayer(); }
     if (why === 'code_taken') { a.err = 'taken'; a.takenId = body.item_id || null; a.takenName = body.item_name || (itemById(body.item_id) || {}).name || ''; return drawLayer(); }
     if (why === 'name_exists' && a.kind === 'create' && a.lost && body.item_id) { delete K.keys[a.sig]; a.res = {}; createOpen(a, String(body.item_id)); load(); return; } // A4: our own earlier send landed and its answer was lost: the item is added, no Undo line
     if (why === 'name_exists') { if (a.kind === 'create') { a.step = 'form'; a.focused = false; } a.err = 'exists'; a.takenId = body.item_id || null; a.takenName = (itemById(body.item_id) || {}).name || ''; return drawLayer(); }
@@ -1738,6 +1743,7 @@
     var dk = a.kind === 'undo' ? a.entry.call.fn : a.kind === 'photoremove' ? 'photo' : a.kind;
     if (a.err === 'missing' && NEWK[a.kind]) { me.denied[dk] = true; if (a.kind === 'sort') me.denied.cat = true; if (a.itemId && !rep && a.kind !== 'create') { a.kind = a.upd ? 'update' : 'menu'; a.vals = null; a.step = null; } else me.act = null; a.err = null; toast(ERR.missing); if (rep || !a.itemId) draw(); return drawLayer(); } // not here yet: hide it, no error box
     if (!rep && (a.err === 'offline' || a.err === 'other')) { me.loading = false; load(); } // the write may have landed: look again
+    if (a.err === 'refused' && a.upd && UKINDS[a.kind]) { toast(ERR.refused); return drawLayer(); } // s132: a refused Update save says so (toast and the line in the form); the typed values stay, nothing is hidden
     if (a.err === 'refused' && a.kind === 'count' && !canManage(me.role)) { me.denied.count = true; a.kind = 'menu'; a.vals = null; a.step = null; a.err = null; toast(ERR.missing); return drawLayer(); } // s85: the count release is not applied yet for staff: hide Count for the visit, no error box
     if (a.err === 'refused') { // the server decides: calm line, and the action goes away
       me.denied[dk] = true;
@@ -1985,7 +1991,7 @@
   function levelsSuggest(a, it) {
     return a.sugg ? '<p class="help I_sugg">Suggested: buy up to ' + esc(fmt(a.sugg)) + ' <button class="btn btn-secondary I_undobtn" type="button" data-act="use-sugg">Use ' + esc(fmt(a.sugg)) + '</button></p>' : '';
   }
-  var CHANGE_WORD = { damage: 'Broken or missing', linen: 'Stained or damaged', counted: 'Counted', received: 'Received', used: 'Used', adjusted: 'Adjusted', reconcile: 'Counted', receipt: 'Received', adjustment: 'Adjusted', usage: 'Used', undo: 'Undo', telegram_count: 'Telegram count' };
+  var CHANGE_WORD = { damage: 'Broken or missing', linen: 'Stained or damaged', counted: 'Counted', received: 'Received', used: 'Used', broken: 'Broken', missing: 'Missing', stained: 'Stained', damaged: 'Damaged', cleaned: 'Cleaned, back in use', adjusted: 'Adjusted', reconcile: 'Counted', receipt: 'Received', adjustment: 'Adjusted', usage: 'Used', undo: 'Undo', telegram_count: 'Telegram count' };
   var FIELD_WORD = { name: 'Name', category: 'Category', unit: 'Unit', reorder_below: 'Reorder at', par_qty: 'Buy up to', location: 'Kept in' };
   // s124: one history row, three columns (when, what, who). Details and price rows come from the change log; a price shows amounts only to roles that may see prices.
   function histRow(c, it) {
@@ -1999,7 +2005,12 @@
     } else if (c.kind === 'photo') w = 'Photo changed';
     else {
       w = CHANGE_WORD[c.kind] || String(c.kind || 'Change').replace(/^./, function (x) { return x.toUpperCase(); });
-      d = (c.before == null ? '' : fmt(c.before) + ' ') + '→ ' + (c.after == null ? '' : fmt(c.after)) + ' ' + unitWord(Number(c.after), unitOf(it));
+      var qn = c.qty == null || c.qty === '' ? null : Number(c.qty), hasBA = c.before != null && c.after != null, ba = hasBA ? fmt(c.before) + ' → ' + fmt(c.after) : '';
+      if (c.kind === 'cleaned') { d = qn != null && isFinite(qn) ? uq(qn, unitOf(it)) : ''; } // linen back in use: the count did not move (before = after)
+      else if (qn != null && isFinite(qn) && (c.source === 'usage' || c.source === 'receipt' || c.source === 'damage' || c.source === 'linen')) { // the live shape: a usage or receipt line carries qty only; a damage or linen row carries qty and the counts
+        var minus = c.kind === 'received' ? '+' : '-'; d = minus + uq(qn, unitOf(it)) + (hasBA ? ' (' + ba + ')' : '');
+      } else d = (c.before == null ? '' : fmt(c.before) + ' ') + '→ ' + (c.after == null ? '' : fmt(c.after)) + ' ' + unitWord(Number(c.after), unitOf(it));
+      if (c.before == null && c.after == null && qn == null) d = '';
     }
     return '<li><span class="I_hwhen">' + esc(manilaLabel(c.at)) + '</span><span class="I_hwhat"><b>' + (SOURCE_EM[c.source] ? '<em class="I_hsrc" aria-hidden="true">' + SOURCE_EM[c.source] + '</em> ' : '') + esc(w) + '</b>' + (d ? '<span>' + esc(d.trim()) + '</span>' : '') + (c.note ? '<span class="I_hnote">' + esc(String(c.note).trim().slice(0, 200)) + '</span>' : '') + '</span><span class="I_hwho">' + (c.who ? esc(String(c.who).split(' ')[0]) : '') + '</span></li>';
   }
@@ -2177,7 +2188,7 @@
     count: [[UE.bkn, 'One broke'], [UE.cln, 'Found extra'], ['\u{1F4DD}', 'Not logged before']]
   };
   var ULABEL = { used: 'Note (optional)', brk: 'Note (optional)', lin: 'Note (optional)', recv: 'Note (optional)', count: 'Why is it different? (optional)' };
-  var UWORDS = { consumable_item: 'consumable', linen_item: 'linen', qty_invalid: 'qty', not_allowed: 'refused' }; // the server's refusal reasons, answered in plain words by ERR
+  var UWORDS = { consumable_item: 'consumable', linen_item: 'linen', qty_invalid: 'qty', not_allowed: 'refused', rows_invalid: 'rowsBad', source_invalid: 'sourceBad', stock_moved: 'stockMoved', item_not_found: 'itemGone' }; // the server's refusal reasons, answered in plain words by ERR
   var SOURCE_EM = { count: UE.cnt, usage: UE.use, receipt: UE.buy, damage: UE.brk, linen: UE.lin, edit: UE.edit };
   var GROUP_CONS = { 'Kitchen supplies': 'yes', 'Kitchen utensils': 'no', 'Appliances': 'no' }; // the group sets the Is it a consumable? default on a new item
   var GROUP_EM = { 'Kitchen supplies': '☕', 'Kitchen utensils': '\u{1F37D}️', 'Appliances': '\u{1F50C}' };
@@ -2191,7 +2202,7 @@
     return GROUP_EM[it && it.category] ? GROUP_EM[it.category] : it && it.category === 'Linen' ? '\u{1F6CF}️' : '\u{1F4E6}';
   }
   function groupName(c) { return (GROUP_EM[c] ? GROUP_EM[c] + ' ' : '') + c; }
-  function isLinen(it) { return !!it && it.category === 'Linen'; }
+  function isLinen(it) { return !!it && /^linen/i.test(String(it.category || '').trim()); } // the server tests lower(btrim(category)) like 'linen%'
   // Which options this item shows: used up things, lasting things, linen. Bought and Recount are always there.
   function updKinds(it) { return it.consumable ? ['used', 'recv', 'count'] : isLinen(it) ? ['lin', 'recv', 'count'] : ['brk', 'recv', 'count']; }
   // The picture first (the signed link of the item's photo), the emoji only when there is none or it did not load.
@@ -2207,9 +2218,10 @@
 
   // The calls. Names, keys and reasons are the s132 contract.
   function damageCall(pid, it, v, key, path, booking) {
-    var row = { item_id: it.id, qty: wholeQty(v.qty), reason: v.what === 'missing' ? 'missing' : 'broken' }, nt = noteText(v);
+    var row = { item_id: it.id, qty: wholeQty(v.qty), reason: v.what === 'missing' ? 'missing' : 'broken' }, nt = noteText(v), stay = v.stay === 'yes';
     if (nt) row.note = nt;
-    return { fn: 'record_inventory_damage_v1', args: { p_property_id: pid, p_rows: [row], p_photo_path: path || null, p_booking_id: v.stay === 'yes' ? booking : null, p_add_to_list: v.list !== 'no', p_source: 'update', p_note: nt, p_idempotency_key: key } };
+    if (stay && !booking) nt = (nt ? nt + ' ' : '') + 'During a guest stay.'; // no stay to point at: the words carry it
+    return { fn: 'record_inventory_damage_v1', args: { p_property_id: pid, p_rows: [row], p_photo_path: path || null, p_booking_id: stay ? booking || null : null, p_add_to_list: v.list !== 'no', p_source: 'update', p_note: nt, p_idempotency_key: key } };
   }
   function linenCall(pid, it, v, key, path, today) {
     var row = { item_id: it.id, outcome: v.now === 'needs_replacing' || v.now === 'replaced' ? v.now : 'cleaned', qty: wholeQty(v.qty), reason: v.what === 'damaged' ? 'damaged' : 'stained' }, nt = noteText(v);
@@ -2280,6 +2292,13 @@
     var it = itemOf(a); if (!it || !UKINDS[a.kind]) return;
     var f = q('[data-i-flow]'); if (f) f.innerHTML = flowInner(a, it);
     var s = q('[data-i-save]'); if (s && !a.sending) s.textContent = saveText(a, it);
+    var pp = q('[data-i-perpack]'); if (pp) pp.textContent = perPackText(a, it);
+  }
+  // Owner and admin see what one pack cost under the total (the staff form has no prices shown back).
+  function perPackText(a, it) {
+    if (!a || a.kind !== 'recv' || !canManage(M.role)) return '';
+    var v = a.vals || {}, pk = parseQty(v.packs), tt = String(v.total || '').trim() === '' ? null : parseQty(v.total, true);
+    return pk && tt != null && tt > 0 ? '₱' + (Math.round(tt / pk * 100) / 100).toFixed(2) + ' per ' + (it && it.purchaseUnit || 'pack') : '';
   }
   function storePicks(it) {
     var seen = {}, list = [], add = function (n) { n = String(n || '').trim(); if (n && !seen[n.toLowerCase()]) { seen[n.toLowerCase()] = 1; list.push(n); } };
@@ -2352,7 +2371,7 @@
     } else if (k === 'recv') {
       var pu = it.purchaseUnit || 'pack', pk = parseQty(v.packs), mng = canManage(M.role);
       body = stepper('packs', 'How many packs?', v.packs, false) + '<p class="help I_packn">1 ' + esc(pu) + ' = ' + esc(uq(it.perPack || 1, unit)) + '</p>' + '<div data-i-flow>' + flowInner(a, it) + '</div>' +
-        '<div class="field"><label for="I_f_total">Total paid</label><div class="input I_money"><b aria-hidden="true">₱</b><input id="I_f_total" inputmode="decimal" autocomplete="off" placeholder="0" value="' + esc(v.total || '') + '"></div></div>' +
+        '<div class="field"><label for="I_f_total">Total paid</label><div class="input I_money"><b aria-hidden="true">₱</b><input id="I_f_total" inputmode="decimal" autocomplete="off" placeholder="0" value="' + esc(v.total || '') + '"></div><p class="help I_perpack" data-i-perpack>' + esc(perPackText(a, it)) + '</p></div>' +
         photoField(a, 'Receipt (optional)', UE.rcp, 'receipt') + (mng ? supplierField(a) + textField('date', 'Date', v.date || '', 'type="date"') : '') + noteField(a, it) +
         (mng ? '' : '<div class="I_info"><span aria-hidden="true">' + UE.info + '</span><span>Stock goes up now. The admin gets a task with the amount and the receipt and records the money.</span></div>');
       foot = mng ? 'Undo for 15 minutes after saving' : 'Undo for 24 hours after saving';

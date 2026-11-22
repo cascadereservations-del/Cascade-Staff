@@ -150,6 +150,8 @@
     if (H_nm.v !== v || H_nm.p !== p) H_nm = { v: v, p: p, out: CS.H_withFlags(v, p.day_flags, p.today) };
     return H_nm.out;
   }
+  // s132: the stay in the house now (staff_home_v1 current_guest.uid) when it is a booking id (a uuid); anything else is null, and the Update sheet then puts the words in the note.
+  function A_houseBookingId() { var g = state && state.payload && state.payload.current_guest, u = g && g.uid; return u && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(u)) ? String(u) : null; }
   function A_houseT() { var v = A_notices(); return v ? v.times : CS.A_houseTimes(null); } // 12:00 noon / 2:00 pm, from notices_v1.house_times, one fallback in lib.js
   // The Today card (glass). Check-out time falls back to the house time, never a hard-coded one.
   function todayCard() {
@@ -2060,7 +2062,7 @@
       var box = $('H_mod-' + key); if (!box) return; box.innerHTML = '';
       H_mod.mounted = key; H_mod.sub = sub; var low = !!state.H_lowOnce; state.H_lowOnce = false; // read at mount: a redraw while the script loads must not eat the one-shot
       var bad = function () { if (H_mod.mounted === key) { H_mod.mounted = ''; H_mod.sub = ''; H_mod.n++; } if (current === key) H_fallback(key); };
-      try { var mr = window[m.global].mount(box, { client: DEMO && !m.demoClient ? null : sb, demo: DEMO, role: role(), sub: sub, low: low && key === 'stock', propertyId: pid(), cardNotes: A_cardNotes, upload: H_billUpload, houseTimes: A_houseT(), pushKey: H_pushKey, swReg: H_swReg, navigate: function (h) { location.hash = String(h).charAt(0) === '#' ? h : '#' + h; }, toast: toast, haptic: E_vibe, faces: A_loadFaces, setTitle: function (t) { var h = el.querySelector && el.querySelector('.ttl'); if (h) h.textContent = t || m.title; }, onChange: function () { if (!DEMO) loadHome({ again: true }); } }); if (mr && typeof mr.then === 'function') mr.then(null, bad); } catch (e) { bad(); } // a module that throws leaves a screen that works, not a blank one
+      try { var mr = window[m.global].mount(box, { client: DEMO && !m.demoClient ? null : sb, demo: DEMO, role: role(), sub: sub, low: low && key === 'stock', propertyId: pid(), cardNotes: A_cardNotes, upload: H_billUpload, houseTimes: A_houseT(), bookingId: A_houseBookingId, pushKey: H_pushKey, swReg: H_swReg, navigate: function (h) { location.hash = String(h).charAt(0) === '#' ? h : '#' + h; }, toast: toast, haptic: E_vibe, faces: A_loadFaces, setTitle: function (t) { var h = el.querySelector && el.querySelector('.ttl'); if (h) h.textContent = t || m.title; }, onChange: function () { if (!DEMO) loadHome({ again: true }); } }); if (mr && typeof mr.then === 'function') mr.then(null, bad); } catch (e) { bad(); } // a module that throws leaves a screen that works, not a blank one
     }, function () { if (current === key && token === H_mod.n) H_fallback(key); });
   }
 
