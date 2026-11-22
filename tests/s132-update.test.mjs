@@ -245,14 +245,19 @@ test('s132 isLinen follows the server: lower(btrim(category)) like linen%', asyn
   assert.equal(f({ category: 'Kitchen linen' }), false); assert.equal(f({ category: '' }), false); assert.equal(f({ category: null }), false); assert.equal(f(null), false);
 });
 
-test('s132 Mark bought on an approved shopping row is owner and admin only (button and a hand-made click)', async () => {
+test('s132 Mark bought on an approved shopping row is owner and admin only (button and click), proven on a sheet staff are put on', async () => {
   const SHOP = [{ id: 's9', item_id: 'c1', item_name: 'Coffee (3-in-1)', quantity: 1, purchase_unit: 'box', reason: null, status: 'approved', proposed_by: 'x', proposed_at: '2026-10-11T02:00:00Z' }];
   for (const role of ['owner', 'admin', 'cleaner', 'laundry']) {
     const e = await setup({ role, doc: {}, client: mockClient({ catalogue: raw(), shop: SHOP }) }); await e.mount('shopping');
-    await e.act('shop-open', { 'data-id': 's9' });
     const can = role === 'owner' || role === 'admin';
+    await e.act('shop-open', { 'data-id': 's9' }); // the row hand-click: staff are refused here
+    assert.equal((e.lib.state().act || {}).shopId, can ? 's9' : undefined, role + ' shop-open');
+    // put the approved row's sheet in front of every role (the state the guard on the button and the click protects), then look
+    e.lib.state().act = { kind: 'menu', shopId: 's9' }; await e.act('retry');
+    assert.match(e.sheet(), /Approved/, role + ' the approved sheet is open (state reached)'); assert.match(e.sheet(), /Remove from the list/, role + ' sheet drawn');
     assert.equal(/data-act="shop-bought"/.test(e.sheet()), can, role + ' button');
-    await e.act('shop-bought'); assert.equal(/I_hue_buy/.test(e.sheet()), can, role + ' form');
+    await e.act('shop-bought');
+    assert.equal(e.lib.state().act && e.lib.state().act.kind, can ? 'recv' : 'menu', role + ' click effect'); assert.equal(/I_hue_buy/.test(e.sheet()), can, role + ' form');
     assert.equal(the(e, 'inventory_receipt_manual_v1').length, 0, role);
   }
 });
@@ -269,8 +274,9 @@ test('s132 a picture that fails to load does not redraw the open sheet while a f
 test('s132 owner and admin see the cost of one pack under the total; staff do not', async () => {
   const o = await make('owner'); await o.mount(''); await o.open('c1'); await o.begin('recv'); await o.input('I_f_total', '180'); await o.act('step', { 'data-f': 'packs', 'data-d': '1', 'data-z': '0' }); // 2 packs for 180
   assert.match(o.sheet(), /data-i-perpack>₱90\.00 per box</);
-  const s = await make('cleaner'); await s.mount(''); await s.open('c1'); await s.begin('recv'); await s.input('I_f_total', '180');
-  assert.doesNotMatch(s.sheet(), /per box|per pack/);
+  const s = await make('cleaner'); await s.mount(''); await s.open('c1'); await s.begin('recv'); await s.input('I_f_total', '180'); await s.act('step', { 'data-f': 'packs', 'data-d': '1', 'data-z': '0' });
+  assert.match(s.sheet(), /value="180"/); assert.match(s.sheet(), /data-i-perpack>/, 'the same state is reached: 2 packs for 180 on the staff form'); // staff typed the same numbers the owner did
+  assert.doesNotMatch(s.sheet(), /per box|per pack|₱90/);
 });
 
 test('s132 the create-item group sets the consumable default: supplies yes, utensils and appliances no, until the person changes it', async () => {
@@ -298,4 +304,25 @@ test('s132 groups: Kitchen supplies, Kitchen utensils and Appliances are chips w
   const e = await make('owner'); await e.mount('');
   assert.match(e.html(), /Kitchen supplies/); assert.match(e.html(), /Kitchen utensils/); assert.match(e.html(), /Appliances/);
   for (const id of ['c1', 'u1', 'a1', 'l1']) assert.match(new RegExp('data-act="open" data-id="' + id + '"[\\s\\S]*?</button>').exec(e.html())[0], /I_bar|I_lbar|class="lv/, id + ' bar');
+});
+
+test('s132 a receipt photo path goes to the server: p_receipt_path on the owner call and on the staff manual call', async () => {
+  const RP = 'receipts/aaaa/bbbb.webp';
+  for (const role of ['owner', 'cleaner']) {
+    const e = await make(role); await e.mount('');
+    const it = { id: 'c1', perPack: 30, name: 'Coffee (3-in-1)', purchaseUnit: 'box', unit: 'sachets' };
+    const c = e.lib.boughtCall(it, { packs: '2', total: '240', supplier: '', supplierId: '' }, 'k-' + role + '-0123456789', '2026-10-15', RP);
+    assert.equal(c.fn, role === 'owner' ? 'record_inventory_receipt_v1' : 'inventory_receipt_manual_v1', role);
+    assert.equal(c.args.p_receipt_path, RP, role + ' path sent');
+    assert.equal(e.lib.boughtCall(it, { packs: '2', total: '240', supplier: '', supplierId: '' }, 'k-x-0123456789', '2026-10-15', null).args.p_receipt_path, null, role + ' no photo is null');
+  }
+});
+
+test('s132 inventory_receipt_manual_v1 refuses with {error:forbidden} or {error:bad_line}: said plainly, the form and typed values kept', async () => {
+  for (const [error, rx] of [['forbidden', /not available to you/], ['bad_line', /could not be read/]]) {
+    const e = await make('cleaner', { inventory_receipt_manual_v1: () => ({ data: { ok: false, error }, error: null }) });
+    await e.mount(''); await e.open('c1'); await e.begin('update'); await e.act('upd-pick', { 'data-kind': 'recv' }); await e.input('I_f_packs', '2'); await e.input('I_f_note', 'typed words'); await e.submit();
+    assert.match(e.sheet(), rx, error); assert.doesNotMatch(e.sheet(), new RegExp(error), error + ' raw'); assert.match(e.sheet(), /data-i-save/, error + ' still on the form'); assert.match(e.sheet(), /typed words/, error + ' values kept');
+    if (error === 'forbidden') assert.ok(e.toasts.some((t) => /not available to you/.test(String(t))), 'forbidden toast');
+  }
 });

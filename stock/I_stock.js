@@ -27,7 +27,7 @@
   function canPrice(role) { return role === 'owner' || role === 'admin' || role === 'finance'; } // the server sends unitCost only to these three
   function canCount(role) { return role === 'owner' || role === 'admin' || role === 'cleaner' || role === 'laundry'; } // s85: the cleaner counts too; s132: laundry recounts; the server decides (42501 hides Count for the visit)
   function canEdit(role) { return canManage(role) || role === 'cleaner'; } // s124: the cleaner edits details and sets a new price blind; the server decides
-  function canUse(role) { return canUpdate(role); } // s132: every Update role sees Used up; record_inventory_usage needs submit_cleaning, so the server may refuse it and the option then hides for the visit
+  function canUse(role) { return canUpdate(role); } // s132: every Update role sees Used up; record_inventory_usage accepts submit_cleaning or report_supply (s110), so a refused Update save toasts the plain refusal and keeps the form with the typed values (Revision 1)
   function canUpdate(role) { return role === 'owner' || role === 'admin' || role === 'cleaner' || role === 'laundry'; } // s132: the one Update button; finance, inspector and maintenance do not get it
   function manilaToday(ms) { return new Date(ms + 8 * 3600000).toISOString().slice(0, 10); }
   function dateLabel(iso) { var a = String(iso || '').slice(0, 10).split('-'); return a.length === 3 && +a[1] ? MONTHS[+a[1] - 1] + ' ' + +a[2] : ''; }
@@ -2188,7 +2188,7 @@
     count: [[UE.bkn, 'One broke'], [UE.cln, 'Found extra'], ['\u{1F4DD}', 'Not logged before']]
   };
   var ULABEL = { used: 'Note (optional)', brk: 'Note (optional)', lin: 'Note (optional)', recv: 'Note (optional)', count: 'Why is it different? (optional)' };
-  var UWORDS = { consumable_item: 'consumable', linen_item: 'linen', qty_invalid: 'qty', not_allowed: 'refused', rows_invalid: 'rowsBad', source_invalid: 'sourceBad', stock_moved: 'stockMoved', item_not_found: 'itemGone' }; // the server's refusal reasons, answered in plain words by ERR
+  var UWORDS = { consumable_item: 'consumable', linen_item: 'linen', qty_invalid: 'qty', not_allowed: 'refused', rows_invalid: 'rowsBad', source_invalid: 'sourceBad', stock_moved: 'stockMoved', item_not_found: 'itemGone', forbidden: 'refused', bad_line: 'rowsBad' }; // the server's refusal reasons, answered in plain words by ERR; inventory_receipt_manual_v1 refuses with {error:'forbidden'} or 'bad_line'; stock_moved is no s132 write's answer, kept as a fallback for the older undo paths
   var SOURCE_EM = { count: UE.cnt, usage: UE.use, receipt: UE.buy, damage: UE.brk, linen: UE.lin, edit: UE.edit };
   var GROUP_CONS = { 'Kitchen supplies': 'yes', 'Kitchen utensils': 'no', 'Appliances': 'no' }; // the group sets the Is it a consumable? default on a new item
   var GROUP_EM = { 'Kitchen supplies': '☕', 'Kitchen utensils': '\u{1F37D}️', 'Appliances': '\u{1F50C}' };
@@ -2578,7 +2578,7 @@
     esc: esc, canPrice: canPrice, groupsFor: groupsFor, codeIndex: codeIndex, I_codeIndex: codeIndex, normCode: normCode, validCode: validCode, attachCall: attachCall, priceCall: priceCall, levelsCall: levelsCall, createCall: createCall, reportCall: reportCall, REPORTS: REPORTS, normalize: normalize, normalizeCatalogue: normalizeCatalogue, level: level, summary: summary, chipsFor: chipsFor, visible: visible, barPct: barPct, parseQty: parseQty, stepQty: stepQty,
     newKey: newKey, errKind: errKind, ERR: ERR, countCall: countCall, usageCall: usageCall, receiptCall: receiptCall, shopAddCall: shopAddCall, shopSetCall: shopSetCall, normalizeShop: normalizeShop,
     fitSize: fitSize, phpText: phpText, photoSetCall: photoSetCall, recatCall: recatCall, mintCall: mintCall, labelsCall: labelsCall,
-    manilaToday: manilaToday, demoItems: demoItems, PROPERTY_ID: PROPERTY_ID, canManage: canManage, canUse: canUse,
+    manilaToday: manilaToday, demoItems: demoItems, PROPERTY_ID: PROPERTY_ID, canManage: canManage, canUse: canUse, state: function () { return M; }, /* test seam: the open state, so a test can put a role on a sheet the UI never opens for it */
     normOpts: normOpts, normReqs: normReqs, o8Link: o8Link, o8Pic: o8Pic, setUsualCall: setUsualCall, optSort: optSort, chipsFor: chipsFor,
     itemEmoji: itemEmoji, updKinds: updKinds, UOPT: UOPT, damageCall: damageCall, linenCall: linenCall, boughtCall: boughtCall, saveText: saveText, canUpdate: canUpdate, isLinen: isLinen, tilePct: tilePct, groupName: groupName, wholeQty: wholeQty,
     lowItems: lowItems, shopLines: shopLines, shopText: shopText, shopLayout: shopLayout, unitPrice: unitPrice, wrapText: wrapText, longDate: longDate
