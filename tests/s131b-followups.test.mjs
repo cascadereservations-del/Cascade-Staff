@@ -2,6 +2,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
+import { readFileSync } from 'node:fs';
 import { CS, read, D } from './_a_harness.mjs';
 
 const flushP = async () => { for (let i = 0; i < 8; i++) await new Promise((r) => setImmediate(r)); };
@@ -46,4 +47,14 @@ test('s131b 3: demo on 2026-10-15 gives a matching period and waiting month; 21s
     for (const b of d.due.filter((x) => x.kind === 'electric' || x.kind === 'water')) { assert.equal(b.period, per, day + ' ' + b.kind); assert.equal(monthOf(b.period), d.waiting_for); }
     assert.ok(d.due.some((x) => x.kind === 'internet' && x.period === day.slice(0, 7)), 'other bills keep the current month');
   }
+});
+
+test('s131b: reading_date_invalid with before names the later paid bill date', () => {
+  const src = readFileSync(new URL('../bills/BL_bills.js', import.meta.url), 'utf8');
+  const m = src.match(/function refusal\(res, ctx\) \{[\s\S]*?\r?\n  \}\r?\n/);
+  assert.ok(m, 'refusal() not found');
+  const refusal = new Function('peso', 'BAD_AMOUNT', 'OPENFAIL', 'STEPFAIL', 'UNKNOWN', m[0] + '; return refusal;')(String, '', '', '', 'U');
+  assert.match(refusal({ reason: 'reading_date_invalid', before: '2026-11-05' }), /before 2026-11-05, the reading date of a later bill/);
+  assert.match(refusal({ reason: 'reading_date_invalid' }), /after the last bill/);
+  assert.match(refusal({ reason: 'reading_date_invalid', before: '<b>x' }), /after the last bill/);
 });
