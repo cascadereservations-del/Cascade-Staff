@@ -20,16 +20,16 @@ test('I_b2 unit plurals: 1 roll, 2 rolls, 1 bottle, 2 bottles on the list, the c
   assert.match(e.html(), /0 of 10 pieces/); // zero is plural
   await e.open('i1');
   assert.match(e.sheet(), /1 roll[^s]/); assert.doesNotMatch(e.sheet(), /1 rolls/);
-  await e.begin('recv'); await e.submit();
-  assert.match(e.sheet(), /Add 12 rolls of Toilet paper\?/);
-  assert.match(e.sheet(), /1 pack x 12 rolls/);
-  assert.match(e.sheet(), /On hand goes to 13 rolls/);
+  await e.begin('recv'); // s132: the Bought form shows the pack and the before-to-after picture instead of a confirm step
+  assert.match(e.sheet(), /1 pack = 12 rolls/);
+  assert.match(e.sheet(), /1<\/b><small>now<\/small>[\s\S]*13<\/b><small>after<\/small>/);
+  assert.match(e.sheet(), /Save \u00b7 \+12 rolls/);
 });
 
 test('I_b2 unit plurals: the Record use confirm and the Undo bar say 1 roll', async () => {
   const e = await setup({ role: 'cleaner', client: mockClient({ catalogue: cat(), rpc: { record_inventory_usage: () => ({ data: { ok: true, rows: 1, movementIds: ['m1'] }, error: null }) } }) });
-  await e.mount(''); await e.open('i1'); await e.begin('used'); await e.submit();
-  assert.match(e.sheet(), /Log 1 roll of Toilet paper as used\?/); assert.doesNotMatch(e.sheet(), /1 rolls/);
+  await e.mount(''); await e.open('i1'); await e.begin('used');
+  assert.match(e.sheet(), /Save \u00b7 1 used/); assert.doesNotMatch(e.sheet(), /1 rolls/); // s132: one tap saves, Undo replaces the confirm
   await e.submit();
   assert.match(e.undo(), /Logged 1 roll of Toilet paper as used/); assert.doesNotMatch(e.undo(), /1 rolls/);
 });
@@ -89,12 +89,12 @@ const qaOf = (h, id) => (new RegExp('data-act="quick" data-kind="([a-z]+)" data-
 
 test('I_b2 each row carries one quick action by role: owner adds low items to the list, counts the rest, the cleaner records use', async () => {
   const o = await make('owner'); await o.mount('');
-  assert.equal(qaOf(o.html(), 'i3'), 'low'); // out, not on the list: Add to list
-  assert.equal(qaOf(o.html(), 'i1'), 'count'); // low but already on the shopping list: Count
-  assert.match(o.html(), /Add to list/);
+  assert.equal(qaOf(o.html(), 'i3'), 'update'); // s132: every tile carries one Update button
+  assert.equal(qaOf(o.html(), 'i1'), 'update');
+  assert.match(o.html(), />Update</);
   const c = await make('cleaner'); await c.mount('');
-  assert.equal(qaOf(c.html(), 'i1'), 'used'); // low but already on the list: Use
-  assert.equal(qaOf(c.html(), 'i3'), 'low'); assert.match(c.html(), /It is out, Bath towels/); // s107 B8 + s124: out and not listed: It is out
+  assert.equal(qaOf(c.html(), 'i1'), 'update'); assert.equal(qaOf(c.html(), 'i3'), 'update');
+  const l = await make('laundry'); await l.mount(''); assert.equal(qaOf(l.html(), 'i1'), 'update');
   const f = await make('finance'); await f.mount('');
   assert.doesNotMatch(f.html(), /data-kind="count"|data-kind="used"/); // finance neither counts nor records use
   assert.match(o.html(), /<button class="rowi I_row I_irow" type="button" data-act="open" data-id="i1"/); // the open hook is unchanged
@@ -102,13 +102,14 @@ test('I_b2 each row carries one quick action by role: owner adds low items to th
 
 test('I_b2 the quick action opens the card straight on the form with the current amount filled in; nothing is sent until confirmed', async () => {
   const o = await make('owner'); await o.mount('');
-  await o.act('quick', { 'data-id': 'i1', 'data-kind': 'count' });
-  assert.match(o.sheet(), /Toilet paper/); assert.match(o.sheet(), /id="I_f_qty"[^>]*value="1"/);
+  await o.act('quick', { 'data-id': 'i1', 'data-kind': 'update' });
+  assert.match(o.sheet(), /Toilet paper/); assert.match(o.sheet(), /Recount/);
+  await o.begin('count'); assert.match(o.sheet(), /id="I_f_qty"[^>]*value="1"/); // the Recount form opens with the current amount filled in
   assert.equal(o.client.rpcCalls('reconcile_inventory_baseline_v1').length, 0);
   const c = await make('cleaner'); await c.mount('');
-  await c.act('quick', { 'data-id': 'i1', 'data-kind': 'used' });
-  assert.match(c.sheet(), /Record use: Toilet paper/);
-  const x = await make('cleaner'); await x.mount('');
+  await c.act('quick', { 'data-id': 'i1', 'data-kind': 'update' });
+  assert.match(c.sheet(), /Used up/);
+  const x = await make('finance'); await x.mount('');
   await x.act('quick', { 'data-id': 'i1', 'data-kind': 'recv' }); // a hand-made click for something not allowed does nothing
   assert.doesNotMatch(x.sheet(), /Stock received|How many/);
 });

@@ -33,11 +33,11 @@ test('I_scan a typed code that is linked opens that item card (route and sheet)'
   const e = await make('owner');
   await e.mount(''); await e.act('scan'); await typeCode(e, CODE);
   assert.equal(e.navs[e.navs.length - 1], '#stock/item/i1');
-  assert.match(e.sheet(), /Toilet paper/); assert.match(e.sheet(), /data-kind="count"/);
+  assert.match(e.sheet(), /Toilet paper/); assert.match(e.sheet(), /data-kind="update"/);
 });
 
 test('I_scan after a scan the right action comes first: owner Count it, finance Change price, cleaner Running low', async () => {
-  const order = { owner: 'count', admin: 'count', finance: 'price', cleaner: 'low' };
+  const order = { owner: 'update', admin: 'update', finance: 'price', cleaner: 'update' }; // s132: Update leads for everyone who may update
   for (const role of Object.keys(order)) {
     const e = await make(role);
     await e.mount(''); await e.act('scan'); await typeCode(e, CODE);

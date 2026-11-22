@@ -38,8 +38,8 @@ test('I_rpc count: reconcile_inventory_baseline_v1 keys and values', async () =>
 
 test('I_rpc count without a note sends the default note (the server needs three characters)', async () => {
   const e = await setup({ role: 'admin' });
-  await e.mount(''); await e.open('i1'); await e.begin('count'); await e.submit(); await e.submit();
-  assert.equal(e.client.rpcCalls('reconcile_inventory_baseline_v1')[0][2].p_note, 'Counted in the staff app');
+  await e.mount(''); await e.open('i1'); await e.begin('count'); await e.submit();
+  assert.equal(e.client.rpcCalls('reconcile_inventory_baseline_v1')[0][2].p_note, 'Recount'); // s132: the Recount default note
 });
 
 test('I_rpc usage: record_inventory_usage keys, Manila date from the frozen clock, usage_key = the idempotency key', async () => {
@@ -67,19 +67,18 @@ test('I_rpc frozen clock: after 16:00 UTC the Manila date is already tomorrow', 
 test('I_rpc receipt: record_inventory_receipt_v1 keys, no receipt upload, optional cost and supplier', async () => {
   const e = await setup({ role: 'owner' });
   await e.mount(''); await e.open('i1'); await e.begin('recv');
-  await e.input('I_f_packs', '2'); await e.input('I_f_supplier', 'Gaisano'); await e.input('I_f_cost', '150.50'); await e.submit();
-  assert.match(e.sheet(), /Add 24 rolls of Toilet paper\?/); // 2 packs x 12
+  await e.input('I_f_packs', '2'); await e.input('I_f_supplier', 'Gaisano'); await e.input('I_f_total', '301'); // s132: the form asks for the total paid; the cost per pack is worked out (301 / 2 = 150.50)
   await e.submit();
   const c = e.client.rpcCalls('record_inventory_receipt_v1');
   assert.equal(c.length, 1);
-  assert.deepEqual(keysOf(c[0][2]), ['p_idempotency_key', 'p_item_id', 'p_packs', 'p_purchased_at', 'p_receipt_path', 'p_shopping_list_id', 'p_supplier', 'p_unit_cost']);
+  assert.deepEqual(keysOf(c[0][2]), ['p_idempotency_key', 'p_item_id', 'p_note', 'p_packs', 'p_purchased_at', 'p_receipt_path', 'p_shopping_list_id', 'p_supplier', 'p_unit_cost']);
   const a = c[0][2];
   assert.equal(a.p_packs, 2); assert.equal(a.p_unit_cost, 150.5); assert.equal(a.p_supplier, 'Gaisano'); assert.equal(a.p_receipt_path, null); assert.equal(a.p_shopping_list_id, null); assert.equal(a.p_purchased_at, '2026-10-15');
 });
 
 test('I_rpc receipt with no cost sends null, not zero', async () => {
   const e = await setup({ role: 'owner' });
-  await e.mount(''); await e.open('i1'); await e.begin('recv'); await e.submit(); await e.submit();
+  await e.mount(''); await e.open('i1'); await e.begin('recv'); await e.submit();
   const a = e.client.rpcCalls('record_inventory_receipt_v1')[0][2];
   assert.equal(a.p_unit_cost, null); assert.equal(a.p_supplier, null);
 });
@@ -98,14 +97,14 @@ test('I_rpc idempotency: the key is stable across a retry of the same values and
   let n = 0;
   const client = mockClient({ catalogue: CATALOGUE, rpc: { reconcile_inventory_baseline_v1: () => { n++; if (n === 1) throw new TypeError('Failed to fetch'); return ok(); } } });
   const e = await setup({ role: 'owner', client });
-  await e.mount(''); await e.open('i1'); await e.begin('count'); await e.input('I_f_qty', '9'); await e.submit(); await e.submit();
+  await e.mount(''); await e.open('i1'); await e.begin('count'); await e.input('I_f_qty', '9'); await e.submit();
   assert.match(e.sheet(), /No connection, so nothing was sent\./);
   await e.submit(); // retry, same values
   const calls = client.rpcCalls('reconcile_inventory_baseline_v1');
   assert.equal(calls.length, 2);
   assert.equal(calls[0][2].p_idempotency_key, calls[1][2].p_idempotency_key);
   // a second, different count gets a different key
-  await e.open('i1'); await e.begin('count'); await e.input('I_f_qty', '10'); await e.submit(); await e.submit();
+  await e.open('i1'); await e.begin('count'); await e.input('I_f_qty', '10'); await e.submit();
   const third = client.rpcCalls('reconcile_inventory_baseline_v1')[2][2];
   assert.notEqual(third.p_idempotency_key, calls[0][2].p_idempotency_key);
 });
@@ -114,9 +113,8 @@ test('I_rpc idempotency: changing the value after a failure gives a new key (a r
   let n = 0;
   const client = mockClient({ catalogue: CATALOGUE, rpc: { reconcile_inventory_baseline_v1: () => { n++; if (n === 1) throw new TypeError('Failed to fetch'); return ok(); } } });
   const e = await setup({ role: 'owner', client });
-  await e.mount(''); await e.open('i1'); await e.begin('count'); await e.input('I_f_qty', '9'); await e.submit(); await e.submit();
-  await e.act('back'); // to the form
-  await e.input('I_f_qty', '11'); await e.submit(); await e.submit();
+  await e.mount(''); await e.open('i1'); await e.begin('count'); await e.input('I_f_qty', '9'); await e.submit(); // fails, the form stays open
+  await e.input('I_f_qty', '11'); await e.submit();
   const c = client.rpcCalls('reconcile_inventory_baseline_v1');
   assert.equal(c.length, 2); assert.notEqual(c[0][2].p_idempotency_key, c[1][2].p_idempotency_key); assert.equal(c[1][2].p_counted_qty, 11);
 });

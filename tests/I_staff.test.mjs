@@ -12,11 +12,11 @@ const make = (role = 'cleaner', rpc = {}, o = {}) => setup({ role, ...o, client:
 test('I_staff the cleaner sees Record use on the card by default (no flag set) and it sends record_inventory_usage with the right rows', async () => {
   const e = await make('cleaner', {}, { flags: null });
   await e.mount(''); await e.open('i1');
-  assert.match(e.sheet(), /data-kind="used"[^>]*>Record use</);
-  await e.begin('used'); await e.act('step', { 'data-f': 'qty', 'data-d': '1', 'data-z': '0' }); await e.submit();
-  assert.match(e.sheet(), /Log 2 rolls of Toilet paper as used\?/);
+  assert.match(e.sheet(), /data-kind="update"[^>]*>Update</); // s132: one Update button; Used up sits inside it
+  await e.begin('used'); await e.act('step', { 'data-f': 'qty', 'data-d': '1', 'data-z': '0' });
+  assert.match(e.sheet(), /Save \u00b7 2 used/);
   assert.equal(e.client.rpcCalls('record_inventory_usage').length, 0);
-  await e.submit();
+  await e.submit(); // one tap saves
   const c = e.client.rpcCalls('record_inventory_usage');
   assert.equal(c.length, 1);
   const a = c[0][2];
@@ -26,20 +26,21 @@ test('I_staff the cleaner sees Record use on the card by default (no flag set) a
   assert.doesNotMatch(e.undo() + e.toasts.join(' '), /!/);
 });
 
-test('I_staff Undo of a use sends inventory_undo_v1 with the movement and asks first; no movement in the answer means no Undo bar', async () => {
-  const e = await make('cleaner');
-  await e.mount(''); await e.open('i1'); await e.begin('used'); await e.submit(); await e.submit();
+test('I_staff Undo of a use sends undo_inventory_usage_v1 with the usage key and asks first; the Undo bar is there whatever the answer carries', async () => {
+  const e = await make('cleaner', { undo_inventory_usage_v1: okd({}) });
+  await e.mount(''); await e.open('i1'); await e.begin('used'); await e.submit();
   assert.match(e.undo(), /Logged 1 roll of Toilet paper as used/);
   const id = /data-id="(u\d+)"/.exec(e.undo())[1];
   await e.act('undo', { 'data-id': id });
   assert.match(e.sheet(), /Put the 1 roll of Toilet paper back\?/);
-  assert.equal(e.client.rpcCalls('inventory_undo_v1').length, 0);
+  assert.equal(e.client.rpcCalls('undo_inventory_usage_v1').length, 0);
   await e.submit();
-  assert.deepEqual(e.client.rpcCalls('inventory_undo_v1')[0][2], { p_movement_id: 'mov-u1', p_purchase_id: null });
+  const key = e.client.rpcCalls('record_inventory_usage')[0][2].p_rows[0].usage_key;
+  assert.deepEqual(e.client.rpcCalls('undo_inventory_usage_v1')[0][2], { p_usage_key: key });
   assert.match(e.toasts[e.toasts.length - 1], /^Undone\.$/); assert.equal(e.undo(), '');
   const n = await make('cleaner', { record_inventory_usage: okd({ rows: 1 }) });
-  await n.mount(''); await n.open('i1'); await n.begin('used'); await n.submit(); await n.submit();
-  assert.equal(n.undo(), ''); assert.match(n.toasts[n.toasts.length - 1], /Logged/);
+  await n.mount(''); await n.open('i1'); await n.begin('used'); await n.submit();
+  assert.match(n.undo(), /Logged 1 roll/); // s132: undo goes by the usage key, so the answer needs no movement id
 });
 
 test('I_staff the cleaner sees Count it and it sends reconcile_inventory_baseline_v1; Count a group and Needs a count show for her too', async () => {
@@ -47,10 +48,9 @@ test('I_staff the cleaner sees Count it and it sends reconcile_inventory_baselin
   await e.mount('');
   assert.match(e.html(), /Count this group/); assert.match(e.html(), /to count/);
   await e.open('i1');
-  assert.match(e.sheet(), /data-kind="count"/);
+  await e.begin('update');
+  assert.match(e.sheet(), /data-act="upd-pick" data-kind="count"/); // Recount is one of the three options
   await e.begin('count'); await e.input('I_f_qty', '9'); await e.submit();
-  assert.match(e.sheet(), /Set Toilet paper to 9\?/);
-  await e.submit();
   const c = e.client.rpcCalls('reconcile_inventory_baseline_v1');
   assert.equal(c.length, 1); assert.equal(c[0][2].p_item_id, 'i1'); assert.equal(c[0][2].p_counted_qty, 9); assert.ok(c[0][2].p_idempotency_key.length >= 16);
   assert.match(e.undo(), /Counted Toilet paper: 9/);
@@ -93,8 +93,7 @@ test('I_staff owner and admin are unchanged: Count it, no Record use, prices sti
   for (const role of ['owner', 'admin']) {
     const e = await make(role, {}, { flags: null });
     await e.mount(''); await e.open('i1');
-    assert.match(e.sheet(), /data-kind="count"/); assert.doesNotMatch(e.sheet(), /data-kind="used"/); assert.match(e.sheet(), /Unit cost/);
-    await e.begin('used'); assert.doesNotMatch(e.sheet(), /Used some|Record use:|How much did you use/); // a hand-made click does nothing
+    assert.match(e.sheet(), /data-kind="update"/); assert.doesNotMatch(e.sheet(), /data-kind="(used|count)"/); assert.match(e.sheet(), /Unit cost/); // s132: the three old buttons moved inside Update
   }
 });
 

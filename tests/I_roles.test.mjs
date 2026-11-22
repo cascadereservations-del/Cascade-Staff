@@ -47,7 +47,8 @@ test('I_roles an item with no unit cost shows no cost row for the owner', async 
   assert.doesNotMatch(e.sheet(), /Unit cost/);
 });
 
-const MATRIX = { owner: { count: 1, used: 0, recv: 1, shop: 1, link: 1 }, admin: { count: 1, used: 0, recv: 1, shop: 1, link: 1 }, cleaner: { count: 1, used: 1, recv: 0, shop: 1, link: 0 }, finance: { count: 0, used: 0, recv: 0, shop: 1, link: 0 } };
+// s132: owner, admin, cleaner and laundry get one Update button (it holds Used up, Bought, Recount); finance, inspector and maintenance get none
+const MATRIX = { owner: { update: 1, count: 0, used: 0, recv: 0, shop: 1, link: 1 }, admin: { update: 1, count: 0, used: 0, recv: 0, shop: 1, link: 1 }, cleaner: { update: 1, count: 0, used: 0, recv: 0, shop: 1, link: 0 }, laundry: { update: 1, count: 0, used: 0, recv: 0, shop: 1, link: 0 }, finance: { update: 0, count: 0, used: 0, recv: 0, shop: 1, link: 0 } };
 
 test('I_roles finance: the unit cost shows on the item sheet only, never in the list, the shopping list or a sheet it cannot use', async () => {
   const e = await setup({ role: 'finance', client: mockClient({ catalogue: CATALOGUE, shop: SHOP }) });
@@ -66,6 +67,7 @@ for (const role of Object.keys(MATRIX)) {
     const e = await setup({ role });
     await e.mount(''); await e.open('i1');
     const s = e.sheet(), m = MATRIX[role];
+    assert.equal(/data-kind="update"/.test(s), !!m.update, 'update');
     assert.equal(/data-kind="count"/.test(s), !!m.count, 'count');
     assert.equal(/data-kind="used"/.test(s), !!m.used, 'used');
     assert.equal(/data-kind="recv"/.test(s), !!m.recv, 'recv');

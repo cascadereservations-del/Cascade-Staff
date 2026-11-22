@@ -28,9 +28,10 @@ for (const role of ['owner', 'admin', 'cleaner', 'finance']) {
 test('I_fix (1b) a controlled item can be received in the app: record_inventory_receipt_v1 writes its movement, so no dashboard detour', async () => {
   const e = await setup({ role: 'owner', client: cl() });
   await e.mount(''); await e.open('c1');
-  assert.match(e.sheet(), /data-kind="recv"/);
+  assert.match(e.sheet(), /data-kind="update"/);
   assert.doesNotMatch(e.sheet(), /Receive this one in the admin dashboard/);
-  await e.begin('recv'); await e.submit(); await e.submit();
+  await e.begin('update'); assert.match(e.sheet(), /data-act="upd-pick" data-kind="recv"/); // s132: Bought is one of the three options
+  await e.begin('recv'); await e.submit();
   assert.equal(e.client.rpcCalls('record_inventory_receipt_v1').length, 1);
 });
 
@@ -39,24 +40,25 @@ test('I_fix (1b) Mark bought works for a controlled item too', async () => {
   await e.mount('shopping');
   await e.act('shop-open', { 'data-id': 's3' });
   assert.match(e.sheet(), /shop-bought/); assert.doesNotMatch(e.sheet(), /Receive this one in the admin dashboard/);
-  await e.act('shop-bought'); assert.match(e.sheet(), /Stock received:/);
+  await e.act('shop-bought'); assert.match(e.sheet(), /I_hue_buy/); // the Bought form opens for the listed item
+  await e.submit(); assert.equal(e.client.rpcCalls('record_inventory_receipt_v1')[0][2].p_shopping_list_id, 's3');
 });
 
 test('I_fix Close, the scrim and Escape do nothing while a write is sending; the result then lands with its toast', async () => {
   let release; const held = new Promise((r) => { release = r; });
   const e = await setup({ role: 'owner', client: cl({ rpc: { reconcile_inventory_baseline_v1: () => held } }) });
-  await e.mount(''); await e.open('i1'); await e.begin('count'); await e.input('I_f_qty', '12'); await e.submit(); await e.submit();
+  await e.mount(''); await e.open('i1'); await e.begin('count'); await e.input('I_f_qty', '12'); await e.submit();
   const navsBefore = e.navs.length;
   await e.act('close'); await e.key('Escape');
-  assert.match(e.sheet(), /Sending/); assert.equal(e.navs.length, navsBefore);
+  assert.match(e.sheet(), /Saving/); assert.equal(e.navs.length, navsBefore);
   release({ data: { ok: true }, error: null }); await flush();
   assert.equal(e.toasts.length, 1); assert.equal(e.sheet(), '');
 });
 
 test('I_fix a count note shorter than 3 characters falls back to the default and the server accepts it', async () => {
   const e = await setup({ role: 'owner', client: cl() });
-  await e.mount(''); await e.open('i1'); await e.begin('count'); await e.input('I_f_note', 'ok '); await e.submit(); await e.submit();
-  assert.equal(e.client.rpcCalls('reconcile_inventory_baseline_v1')[0][2].p_note, 'Counted in the staff app');
+  await e.mount(''); await e.open('i1'); await e.begin('count'); await e.input('I_f_note', 'ok '); await e.submit();
+  assert.equal(e.client.rpcCalls('reconcile_inventory_baseline_v1')[0][2].p_note, 'Recount'); // s132: the default note for a Recount
   assert.equal(e.toasts.length, 1); // the mock refuses a short note, so this is the server rule holding
   assert.equal(e.lib.countCall({ id: 'x' }, { qty: '1', note: 'abc' }, 'k'.repeat(16)).args.p_note, 'abc');
 });
@@ -64,15 +66,15 @@ test('I_fix a count note shorter than 3 characters falls back to the default and
 test('I_fix after a failed send the list is reloaded and the same key is used when the same submission is retried from a reopened sheet', async () => {
   let n = 0;
   const e = await setup({ role: 'owner', client: cl({ rpc: { reconcile_inventory_baseline_v1: () => { n++; return n === 1 ? { data: null, error: { code: 'XX000', message: 'boom' } } : { data: { ok: true }, error: null }; } } }) });
-  await e.mount(''); await e.open('i1'); await e.begin('count'); await e.input('I_f_qty', '9'); await e.submit(); await e.submit();
+  await e.mount(''); await e.open('i1'); await e.begin('count'); await e.input('I_f_qty', '9'); await e.submit();
   assert.match(e.sheet(), /did not go through/);
   assert.equal(e.client.rpcCalls('get_inventory_catalogue_v1').length, 2); // reloaded: the write may have landed
-  await e.act('back'); await e.act('back'); await e.act('close'); // leave the sheet entirely
-  await e.open('i1'); await e.begin('count'); await e.input('I_f_qty', '9'); await e.submit(); await e.submit();
+  await e.act('close'); // leave the sheet entirely
+  await e.open('i1'); await e.begin('count'); await e.input('I_f_qty', '9'); await e.submit();
   const c = e.client.rpcCalls('reconcile_inventory_baseline_v1');
   assert.equal(c.length, 2); assert.equal(c[0][2].p_idempotency_key, c[1][2].p_idempotency_key);
   // after success the same values get a fresh key
-  await e.open('i1'); await e.begin('count'); await e.input('I_f_qty', '9'); await e.submit(); await e.submit();
+  await e.open('i1'); await e.begin('count'); await e.input('I_f_qty', '9'); await e.submit();
   assert.notEqual(e.client.rpcCalls('reconcile_inventory_baseline_v1')[2][2].p_idempotency_key, c[0][2].p_idempotency_key);
 });
 
@@ -96,30 +98,29 @@ test('I_fix a refused approve hides Approve and Remove, not Stock received', asy
   assert.doesNotMatch(e.sheet(), /data-do="approved"|data-do="rejected"/);
   await e.act('close'); await e.act('shop-open', { 'data-id': 's2' });
   assert.match(e.sheet(), /shop-bought/);
-  await e.act('close'); await e.mount('item/i1');
-  assert.match(e.sheet(), /data-kind="recv"/);
+  await e.act('close');   await e.mount('item/i1'); await e.begin('update');
+  assert.match(e.sheet(), /data-act="upd-pick" data-kind="recv"/); // Bought stays in the Update list
 });
 
-test('I_fix defaults: Count it is ON for owner, admin and cleaner (s85), Record use for the cleaner only', async () => {
-  for (const [role, count, used] of [['owner', true, false], ['admin', true, false], ['cleaner', true, true], ['finance', false, false]]) {
+test('I_fix defaults: Update is ON for owner, admin, cleaner and laundry; finance has none (s132)', async () => {
+  for (const [role, upd] of [['owner', true], ['admin', true], ['cleaner', true], ['laundry', true], ['finance', false]]) {
     const e = await setup({ role, flags: null, client: cl() });
     await e.mount('item/i1');
-    assert.equal(/data-kind="count"/.test(e.sheet()), count, role + ' count');
-    assert.equal(/data-kind="used"/.test(e.sheet()), used, role + ' used');
+    assert.equal(/data-kind="update"/.test(e.sheet()), upd, role + ' update');
+    assert.doesNotMatch(e.sheet(), /data-kind="(count|used)"/, role + ' the old buttons are gone from the card');
   }
 });
 
-test('I_fix count confirm: a first count says it is one-way; a controlled item gets the plain question', async () => {
+test('I_fix Recount form: a first count says it is one-way; a controlled item gets no Telegram line', async () => {
   const e = await setup({ role: 'owner', flags: null, client: cl() });
-  await e.mount(''); await e.open('i1'); await e.begin('count'); await e.input('I_f_qty', '9'); await e.submit();
-  assert.match(e.sheet(), /Set Toilet paper to 9\?/);
+  await e.mount(''); await e.open('i1'); await e.begin('count'); await e.input('I_f_qty', '9'); // s132: the notes sit on the form itself, there is no confirm step
   assert.match(e.sheet(), /This count keeps usage learning\. Telegram \/count still works for this item\./); assert.doesNotMatch(e.sheet(), /will skip it/, 'an active consumable stays in usage learning');
-  await e.act('back'); await e.act('back'); await e.act('close');
-  await e.open('i3'); await e.begin('count'); await e.input('I_f_qty', '9'); await e.submit();
+  await e.act('close');
+  await e.open('i3'); await e.begin('count'); await e.input('I_f_qty', '9');
   assert.match(e.sheet(), /After this, Bath towels is counted in the app\. Telegram \/count will skip it\./); assert.doesNotMatch(e.sheet(), /keeps usage learning/);
-  await e.act('back'); await e.act('back'); await e.act('close');
-  await e.open('c1'); await e.begin('count'); await e.input('I_f_qty', '3'); await e.submit();
-  assert.match(e.sheet(), /Set Controlled soap to 3\?/);
+  await e.act('close');
+  await e.open('c1'); await e.begin('count'); await e.input('I_f_qty', '3');
+  assert.match(e.sheet(), /Controlled soap/);
   assert.doesNotMatch(e.sheet(), /Telegram/);
 });
 
@@ -128,7 +129,7 @@ test('I_fix3 after a successful write from an item sheet the shell re-mounts and
   const cat = () => ({ items: [item('i1', 'Toilet paper', qty, 12)] });
   const client = cl({ rpc: { get_inventory_catalogue_v1: () => ({ data: cat(), error: null }), reconcile_inventory_baseline_v1: () => { qty = 12; return { data: { ok: true }, error: null }; } } });
   const e = await setup({ role: 'owner', client });
-  await e.mount(''); await e.open('i1'); await e.begin('count'); await e.input('I_f_qty', '12'); await e.submit(); await e.submit();
+  await e.mount(''); await e.open('i1'); await e.begin('count'); await e.input('I_f_qty', '12'); await e.submit();
   assert.ok(client.rpcCalls('get_inventory_catalogue_v1').length >= 2);
   assert.match(e.html(), /12 rolls/); assert.doesNotMatch(e.html(), /4 rolls/);
   assert.equal(e.navs[e.navs.length - 1], '#stock');
@@ -137,7 +138,7 @@ test('I_fix3 after a successful write from an item sheet the shell re-mounts and
 test('I_fix3 an idempotency key is forgotten after 10 minutes and kept before that', async () => {
   const bad = { data: null, error: { code: 'XX000', message: 'boom' } };
   const e = await setup({ role: 'owner', client: cl({ rpc: { reconcile_inventory_baseline_v1: () => bad } }) });
-  const go = async () => { await e.open('i1'); await e.begin('count'); await e.input('I_f_qty', '9'); await e.submit(); await e.submit(); await e.act('back'); await e.act('back'); await e.act('close'); };
+  const go = async () => { await e.open('i1'); await e.begin('count'); await e.input('I_f_qty', '9'); await e.submit(); await e.act('close'); };
   await e.mount(''); await go();
   e.advance(9 * 60000); await go();
   e.advance(11 * 60000); await go();

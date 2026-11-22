@@ -61,7 +61,7 @@ test('I_s107 B1/B4 Recent shows only while the search box is empty; the search k
 test('I_s107 B5 flat rows: name, then level word and amount, one quick action; tags are glyphs with spoken words; no second footer line', async () => {
   const e = await make('owner', { shop: SHOP }); await e.mount('');
   const r = /<div class="I_it"><button class="rowi I_row I_irow"[^>]*data-id="a1"[\s\S]*?<\/div>/.exec(e.html())[0];
-  assert.match(r, /Low<\/span> · 4 of 12 rolls/); assert.match(r, /<span class="sr">On the list<\/span>/); assert.match(r, /data-act="quick" data-kind="count"/);
+  assert.match(r, /Low<\/span> · 4 of 12 rolls/); assert.match(r, /<span class="sr">On the list<\/span>/); assert.match(r, /data-act="quick" data-kind="update"/); // s132: one Update button per tile
   assert.doesNotMatch(e.html(), /I_foot2|I_tags|reorder at/);
   assert.match(e.html(), /Out<\/span> · 0 of 3 bottles/);
   assert.match(await rule('.I_irow .t'), /white-space: nowrap/); assert.match(await rule('.I_irow .t'), /text-overflow: ellipsis/);
@@ -72,7 +72,7 @@ test('I_s107 B6 the item card: sticky title and Close, one primary, status line 
   const e = await make('owner', { shop: SHOP }); await e.mount(''); await e.open('a4');
   let s = e.sheet();
   assert.match(s, /^<div class="scrim on"[^>]*><\/div><div class="sheet on I_sheet I_sheetm"[^>]*><div class="F_sheethead I_sh"><h2 class="hd I_sht" id="I_sh_t"[^>]*>Sponges<\/h2><button class="btn btn-secondary btn-sm F_close" type="button" data-act="close">/);
-  assert.match(s, /I_actbar"><button class="btn btn-primary btn-block" type="button" data-act="begin" data-kind="count">Count it<\/button>/);
+  assert.match(s, /I_actbar"><button class="btn btn-primary btn-block" type="button" data-act="begin" data-kind="update">Update<\/button>/);
   assert.match(s, /<h3 class="I_hh">More<\/h3><div class="I_grid2">/); assert.match(s, /<details class="I_det" open>/);
   assert.ok(s.indexOf('I_actbar') < s.indexOf('I_det')); assert.match(s, /data-kind="shop"/); assert.doesNotMatch(s, /On the list/);
   await e.act('close'); await e.open('a1'); s = e.sheet();
@@ -81,9 +81,9 @@ test('I_s107 B6 the item card: sticky title and Close, one primary, status line 
   await e.act('close'); await e.open('a2'); // out and not listed would be Add to list; a2 is listed in SHOP so the status line wins
   assert.doesNotMatch(e.sheet(), /data-kind="low"/);
   const f = await make('owner'); await f.mount(''); await f.open('a2');
-  assert.match(f.sheet(), /I_actbar"><button class="btn btn-primary btn-block" type="button" data-act="begin" data-kind="low">Add to list<\/button>/);
+  assert.match(f.sheet(), /I_actbar"><button class="btn btn-primary btn-block" type="button" data-act="begin" data-kind="update">Update<\/button><button class="btn btn-secondary btn-block" type="button" data-act="begin" data-kind="low">Add to list<\/button>/);
   const c = await make('cleaner'); await c.mount(''); await c.open('a1');
-  assert.match(c.sheet(), /I_actbar"><button class="btn btn-primary btn-block" type="button" data-act="begin" data-kind="used">Record use<\/button><button class="btn btn-secondary btn-block" type="button" data-act="begin" data-kind="low">Running low<\/button>/);
+  assert.match(c.sheet(), /I_actbar"><button class="btn btn-primary btn-block" type="button" data-act="begin" data-kind="update">Update<\/button><button class="btn btn-secondary btn-block" type="button" data-act="begin" data-kind="low">Running low<\/button>/);
 });
 
 test('I_s107 B7 options sort: usual, preferred, in stock, then cheapest for price roles, by title for the rest; others collapse with ghost buttons', async () => {
@@ -155,9 +155,10 @@ test('I_s107 B14 the tab and chip come back once per visit; a store that throws 
   await boom.mount(''); await boom.act('chip', { 'data-k': 'all' }); assert.match(boom.html(), /Toilet paper/);
 });
 
-test('I_s107 B8 a cleaner sees Running low on a low row not yet listed, Use otherwise', async () => {
+test('I_s107 B8 a cleaner has one Update button on every row; Running low sits in the card on a low item not yet listed', async () => {
   const c = await make('cleaner', { shop: [SHOP[0]] }); await c.mount('');
   const kind = (id) => (new RegExp('data-act="quick" data-kind="([a-z]+)" data-id="' + id + '"').exec(c.html()) || [])[1];
-  assert.equal(kind('a2'), 'low'); assert.equal(kind('a1'), 'used'); assert.equal(kind('a3'), 'used');
-  assert.match(c.html(), />It is out</); assert.match(c.html(), />Use</); // s124: a2 is out, so the label says out
+  assert.equal(kind('a2'), 'update'); assert.equal(kind('a1'), 'update'); assert.equal(kind('a3'), 'update'); // s132: the row button is Update for everyone who may update
+  await c.open('a2'); assert.match(c.sheet(), /data-kind="low">It is out</); // s124: a2 is out, so the label says out
+  await c.act('close'); await c.open('a1'); assert.doesNotMatch(c.sheet(), /data-kind="low"/); // a1 is already on the list
 });

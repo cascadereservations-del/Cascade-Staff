@@ -21,11 +21,11 @@ test('I_bought-supplier Stock received: a Supplier button first; the pick sends 
   const e = await make({ sup: stub({ id: 'sup-1', name: 'SM Savemore', created: false }, log) });
   await e.mount(''); await e.open('i1'); await e.begin('recv');
   assert.match(e.sheet(), /data-act="pick-sup"/); assert.doesNotMatch(e.sheet(), /id="I_f_supplier"/);
-  assert.ok(e.sheet().indexOf('pick-sup') < e.sheet().indexOf('I_f_packs'));
+  assert.ok(e.sheet().indexOf('pick-sup') > e.sheet().indexOf('I_f_packs')); // s132: the pack count leads, the supplier sits under the receipt
   await e.act('pick-sup');
   assert.equal(j(log[0][1]), j({ itemId: 'i1', preferredId: null, selectedId: null }));
   assert.match(e.sheet(), /SM Savemore/);
-  await e.submit(); assert.match(e.sheet(), /from SM Savemore/); await e.submit();
+  await e.submit(); // s132: one tap saves, no review screen
   const a = rcpts(e)[0][2];
   assert.equal(a.p_supplier_id, 'sup-1'); assert.equal(a.p_supplier, 'SM Savemore');
 });

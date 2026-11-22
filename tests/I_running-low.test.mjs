@@ -15,10 +15,10 @@ const kinds = (s) => [...s.matchAll(/data-kind="(\w+)"/g)].map((m) => m[1]);
 test('I_running-low it is in the action bar of the card for every role: first for owner and admin (Add to list), beside Record use for the cleaner', async () => {
   for (const role of ['owner', 'admin']) {
     const e = await make(role); await e.mount(''); await e.open('i1');
-    assert.equal(kinds(e.sheet())[0], 'low', role); assert.match(e.sheet(), />Add to list</, role);
+    assert.deepEqual(kinds(e.sheet()).slice(0, 2), ['update', 'low'], role); assert.match(e.sheet(), />Add to list</, role); // s132: Update leads, Add to list follows
   }
   const c = await make('cleaner'); await c.mount(''); await c.open('i1');
-  assert.deepEqual(kinds(c.sheet()).slice(0, 2), ['used', 'low']); assert.match(c.sheet(), />Running low</);
+  assert.deepEqual(kinds(c.sheet()).slice(0, 2), ['update', 'low']); assert.match(c.sheet(), />Running low</);
   const f = await make('finance'); await f.mount(''); await f.open('i1');
   assert.ok(kinds(f.sheet()).slice(0, 3).includes('low')); assert.match(f.sheet(), />Running low</);
 });
@@ -69,8 +69,8 @@ test('I_running-low Undo cancels her own row with save_shopping_item_v1', async 
 
 test('I_running-low after a scan it is the first action for a cleaner; it writes only after the confirm', async () => {
   const e = await make('cleaner'); await e.mount(''); await e.act('scan'); await e.input('I_f_code', 'T1'); await e.submit();
-  assert.equal(kinds(e.sheet())[0], 'low');
-  assert.match(e.sheet(), /btn-primary btn-block" type="button" data-act="begin" data-kind="low"/);
+  assert.deepEqual(kinds(e.sheet()).slice(0, 2), ['update', 'low']); // s132: Update leads, Running low is right beside it
+  assert.match(e.sheet(), /btn-secondary btn-block" type="button" data-act="begin" data-kind="low"/);
   assert.equal(e.client.rpcCalls('save_shopping_item_v1').length, 0);
 });
 

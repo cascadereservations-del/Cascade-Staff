@@ -6,7 +6,22 @@ import { setup, mockClient, CATALOGUE, item, flush } from './I_harness.mjs';
 const ok = () => ({ data: { ok: true }, error: null });
 const WRITES = { count: ['owner', 'reconcile_inventory_baseline_v1'], used: ['cleaner', 'record_inventory_usage'], recv: ['owner', 'record_inventory_receipt_v1'], shop: ['cleaner', 'save_shopping_item_v1'] };
 
-for (const kind of Object.keys(WRITES)) {
+// s132: the Update forms (count = Recount, used = Used up, recv = Bought) save in one tap: the Save button says what happens and Undo takes it back
+for (const kind of ['count', 'used', 'recv']) {
+  test('I_flow ' + kind + ': nothing is sent while the form is open, one tap sends once, and a second tap sends nothing more', async () => {
+    const [role, fn] = WRITES[kind];
+    const e = await setup({ role });
+    await e.mount(''); await e.open('i1'); await e.begin(kind);
+    assert.equal(e.client.rpcCalls(fn).length, 0);
+    assert.match(e.sheet(), /type="submit" data-i-save>/); // the Save button is in the form
+    await e.submit();
+    assert.equal(e.client.rpcCalls(fn).length, 1);
+    await e.submit();
+    assert.equal(e.client.rpcCalls(fn).length, 1);
+  });
+}
+
+for (const kind of ['shop']) {
   test('I_flow ' + kind + ': a confirm step comes first, and nothing is sent until it is confirmed', async () => {
     const [role, fn] = WRITES[kind];
     const e = await setup({ role });
@@ -26,11 +41,13 @@ for (const kind of Object.keys(WRITES)) {
 test('I_flow count rejects a value that is not a number and stays on the form', async () => {
   const e = await setup({ role: 'owner' });
   await e.mount(''); await e.open('i1'); await e.begin('count'); await e.input('I_f_qty', 'abc'); await e.submit();
-  assert.match(e.sheet(), /Enter a number/); assert.doesNotMatch(e.sheet(), /Set Toilet paper/);
+  assert.match(e.sheet(), /Enter a number/);
   await e.input('I_f_qty', '1.234'); await e.submit(); assert.match(e.sheet(), /Enter a number/);
   await e.input('I_f_qty', '-3'); await e.submit(); assert.match(e.sheet(), /Enter a number/);
   assert.equal(e.client.rpcCalls('reconcile_inventory_baseline_v1').length, 0);
-  await e.input('I_f_qty', '0'); await e.submit(); assert.match(e.sheet(), /Set Toilet paper to 0\?/); // zero is a real count
+  await e.input('I_f_qty', '0'); await e.submit(); // zero is a real count
+  assert.equal(e.client.rpcCalls('reconcile_inventory_baseline_v1').length, 1);
+  assert.equal(e.client.rpcCalls('reconcile_inventory_baseline_v1')[0][2].p_counted_qty, 0);
 });
 
 test('I_flow the stepper moves by one, never below the minimum', async () => {
@@ -45,8 +62,8 @@ test('I_flow the button is disabled while sending, a second submit sends nothing
   let release; const held = new Promise((r) => { release = r; });
   const client = mockClient({ catalogue: CATALOGUE, rpc: { reconcile_inventory_baseline_v1: () => held } });
   const e = await setup({ role: 'owner', client });
-  await e.mount(''); await e.open('i1'); await e.begin('count'); await e.input('I_f_qty', '12'); await e.submit(); await e.submit();
-  assert.match(e.sheet(), /type="submit" disabled>Sending/);
+  await e.mount(''); await e.open('i1'); await e.begin('count'); await e.input('I_f_qty', '12'); await e.submit();
+  assert.match(e.sheet(), /type="submit" data-i-save disabled>Saving/);
   await e.submit(); await e.act('begin', { 'data-kind': 'count' });
   assert.equal(client.rpcCalls('reconcile_inventory_baseline_v1').length, 1);
   assert.equal(client.rpcCalls('get_inventory_catalogue_v1').length, 1);
@@ -60,13 +77,13 @@ test('I_flow the button is disabled while sending, a second submit sends nothing
 
 test('I_flow offline: nothing is sent and the line says so, inline, with no queue', async () => {
   const e = await setup({ role: 'owner' });
-  await e.mount(''); await e.open('i1'); await e.begin('count'); await e.submit();
+  await e.mount(''); await e.open('i1'); await e.begin('count');
   e.nav.onLine = false;
   await e.submit();
   assert.equal(e.client.rpcCalls('reconcile_inventory_baseline_v1').length, 0);
   assert.match(e.sheet(), /No connection, so nothing was sent\./);
   assert.equal(e.toasts.length, 0);
-  e.nav.onLine = true; await e.submit(); // still on the confirm step: the person can send it now
+  e.nav.onLine = true; await e.submit(); // still on the form: the person can send it now
   assert.equal(e.client.rpcCalls('reconcile_inventory_baseline_v1').length, 1);
 });
 
@@ -123,12 +140,12 @@ test('I_flow a refused catalogue payload that is not a list is also "not availab
   assert.doesNotMatch(e.html(), /data-act="open"/);
 });
 
-test('I_flow demo: a built-in sample of 12 items, a full write walk and no network call at all', async () => {
+test('I_flow demo: a built-in sample of 15 items, a full write walk and no network call at all', async () => {
   const trip = new Proxy({}, { get() { throw new Error('network touched in demo'); }, has() { throw new Error('network touched in demo'); } });
   for (const role of ['owner', 'cleaner']) {
     const e = await setup({ role, demo: true, client: trip });
     await e.mount('');
-    assert.equal((e.html().match(/data-act="open"/g) || []).length, 12);
+    assert.equal((e.html().match(/data-act="open"/g) || []).length, 15);
     await e.open('d1');
     await e.begin(role === 'owner' ? 'count' : 'used'); await e.submit(); await e.submit();
     assert.match(e.toasts[0], /Demo only/);

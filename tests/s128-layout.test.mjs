@@ -93,9 +93,9 @@ test('s128 Admin bill card: no peso shows the usage and "Cost shows when the rat
   assert.ok(cardOf(h, 'K_wbill').includes('<b>7.2' + NB + 'm³</b>'));
 });
 
-test('s128 release is 3.4.49 with cs-shell-v74, in both pins', () => {
-  assert.equal(JSON.parse(read('package.json')).version, '3.4.49'); assert.match(read('app.js'), /version: '3.4.49'/);
-  assert.match(read('sw.js'), /CACHE_NAME = 'cs-shell-v74'/); assert.match(read('app.js'), /var PC_SHELL = 'cs-shell-v74';/);
+test('s128 release is 3.4.50 with cs-shell-v75, in both pins', () => {
+  assert.equal(JSON.parse(read('package.json')).version, '3.4.50'); assert.match(read('app.js'), /version: '3.4.50'/);
+  assert.match(read('sw.js'), /CACHE_NAME = 'cs-shell-v75'/); assert.match(read('app.js'), /var PC_SHELL = 'cs-shell-v75';/);
 });
 
 test('s128 nowrap stays on an allowlist in the KPI sheet, and the Utility tiles stack at 340 px and under (Opus review)', () => {
