@@ -2474,7 +2474,7 @@
       e.say = 'Received ' + n; e.line = 'received stock'; e.confirm = 'Take the stock you just added to ' + n + ' back out?'; e.call = ucs[0]; if (ucs.length > 1) e.more = ucs.slice(1);
     } else if (a.kind === 'group') {
       var gu = groupUndoCalls(a, d); if (!gu.length) return null; var gn = (d.rows || []).length || gu.length;
-      e.v2 = true; e.itemId = null; e.name = ''; e.say = 'Saved ' + gn + (gn === 1 ? ' change' : ' changes') + ' in ' + a.cat; e.line = 'updated ' + a.cat; e.confirm = 'Put the ' + gn + (gn === 1 ? ' change' : ' changes') + ' in ' + a.cat + ' back?'; e.call = gu[0]; if (gu.length > 1) e.more = gu.slice(1);
+      e.v2 = a.mode === 'used'; /* used: not_found = wrong key, an error; count/bought: a repeat undo of a deleted purchase answers not_found = done */ e.itemId = null; e.name = ''; e.say = 'Saved ' + gn + (gn === 1 ? ' change' : ' changes') + ' in ' + a.cat; e.line = 'updated ' + a.cat; e.confirm = 'Put the ' + gn + (gn === 1 ? ' change' : ' changes') + ' in ' + a.cat + ' back?'; e.call = gu[0]; if (gu.length > 1) e.more = gu.slice(1);
     } else if (a.kind === 'recv' && d.draft_id && !canManage(M.role)) {
       e.say = 'Received ' + n; e.line = 'received stock'; e.confirm = 'Take the stock you just added to ' + n + ' back out?'; e.call = { fn: 'inventory_receipt_undo_v1', args: { p_draft_id: d.draft_id } }; e.ttl = 86400000; // the staff receipt keeps its 24 hours
     } else if (a.kind === 'recv' && (d.movementId || d.purchaseId)) {
