@@ -120,7 +120,7 @@ test('s113 tokens and house rules: chart tokens in all three theme blocks, no ra
   // s128: nowrap is allowed in K_kpi.css (the change pill and the two full-width rows must stay on one line, Lloyd 2026-11-20)
   assert.doesNotMatch(css, /#[0-9a-f]{3,8}\b|rgba?\(|font(-size)?\s*:[^;}]*\d+px/i);
   for (const m of css.matchAll(/(?:^|[;{\s])gap\s*:\s*([^;}]+)/g)) for (const v of m[1].trim().split(/\s+/)) assert.ok(['0', '4px', '8px', '12px', '16px', '24px'].includes(v), 'gap ' + v);
-  const s = read('styles.css'), blk = s.slice(s.indexOf('/* s113 Phone check')).replace(/\.E_today \.E_tsub \{[^}]*\}/, ''); // s134 mockup A: the Today expenses sub line may not wrap assert.doesNotMatch(blk, /#[0-9a-f]{3,8}\b|rgba?\(|nowrap|font(-size)?\s*:[^;}]*\d+px/i);
+  const s = read('styles.css'), blk = s.slice(s.indexOf('/* s113 Phone check')).replace(/\.E_today \.E_tsub \{[^}]*\}/, ''); assert.doesNotMatch(blk, /#[0-9a-f]{3,8}\b|rgba?\(|nowrap|font(-size)?\s*:[^;}]*\d+px/i); // s134 mockup A: only the Today expenses sub line may not wrap
   for (const m of blk.matchAll(/(?:^|[;{\s])gap\s*:\s*([^;}]+)/g)) for (const v of m[1].trim().split(/\s+/)) assert.ok(['0', '4px', '8px', '12px', '16px', '24px'].includes(v), 'styles gap ' + v);
   const d = (() => { const src = read('demo.js'); const mm = /function kpiFixture\(r, today\) \{[\s\S]*?\n  function s127\([\s\S]*?\n  \}\n/.exec(src); return new Function('CS', mm[0] + '; return kpiFixture;')(CS)('owner', '2026-10-15'); })();
   const vals = d.utility.per_month.map((r) => r.kwh_per_stay).filter((v) => v != null); assert.ok(Math.max(...vals) > lib().percentile(vals, 0.85) * 1.4, 'the demo has one outlier month');
