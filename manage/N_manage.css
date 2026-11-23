@@ -126,14 +126,14 @@ button.N_link { background: none; border: 0; padding: 0; font: inherit; cursor: 
 .N_inc { display: inline-block; color: var(--v5-ink); background: var(--v5-warn-glass); border-radius: var(--v5-r-sm); padding: 2px 8px; margin-top: 2px; } /* s134: the amount is not complete; same warm cue as the Expenses screen (E_inc), repeated here because that stylesheet only loads with #expenses */
 
 /* ---- confirm flow (3.4.54): gold bar, sheet header and body, receipt box, sticky action bar, zoom ---- */
-.N_due { box-shadow: inset 4px 0 0 var(--accent); }
-.N_card.N_due { box-shadow: inset 4px 0 0 var(--accent), inset 0 1px 0 var(--v5-card-hi), 0 8px 24px var(--v5-card-shadow); }
+.N_due { --N_bar: color-mix(in srgb, var(--v5-gold) 55%, var(--v5-gold-text)); box-shadow: inset 4px 0 0 var(--N_bar); }
+.N_card.N_due { box-shadow: inset 4px 0 0 var(--N_bar), inset 0 1px 0 var(--v5-card-hi), 0 8px 24px var(--v5-card-shadow); }
 .N_go { position: relative; padding-right: 40px; }
 .N_go > .N_chev { position: absolute; right: 16px; top: 50%; transform: translateY(-50%); }
 .N_hd { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
 .N_hd .N_h { margin: 0; }
 .N_closeb { min-width: 44px; min-height: 44px; flex: none; }
-.N_shb { display: grid; gap: 12px; }
+.N_shb { display: grid; gap: 12px; padding-bottom: 4px; }
 .N_shb > .N_field, .N_shb > .N_fs { margin-bottom: 0; }
 .N_shb > p, .N_shb > dl, .N_shb > .N_sub { margin: 0; }
 .N_rcpt { display: block; height: clamp(11rem, 34dvh, 17rem); width: 100%; box-sizing: border-box; background: var(--muted); border: 1px solid var(--border); border-radius: var(--r-md); position: relative; overflow: hidden; padding: 0; margin: 0; cursor: pointer; color: var(--fg); font: inherit; }
