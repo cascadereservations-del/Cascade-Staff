@@ -567,7 +567,7 @@
       if (rows.length > 5 && !S.needsOpen) shown = rows.slice(0, 4).concat('<button class="N_row" type="button" data-n="needs-more" aria-expanded="false"><span class="N_rowmid"><span class="N_rowt">' + esc('Show ' + (rows.length - 4) + ' more') + '</span></span><span class="N_chev" aria-hidden="true">⌄</span></button>');
       var fail = st[1] === 'err' ? 'Requests could not be loaded' : st[0] === 'err' ? 'Other items could not be loaded' : st[2] === 'err' ? 'Guest replies could not be loaded' : '';
       if (fail) shown = shown.concat(rowBtn('', 'retry', 'today', fail, 'Try again'));
-      body = shown.length ? shown.join('') : pending ? '<p class="N_p N_pad N_wait" role="status">Checking…</p>' : '<p class="N_p N_pad">All clear. Nothing needs you right now.</p>';
+      body = shown.length ? shown.join('') : pending ? '<p class="N_p N_pad N_wait">Checking…</p>' : '<p class="N_p N_pad">All clear. Nothing needs you right now.</p>';
     }
     return '<section class="N_card N_list" aria-labelledby="N_t3"><h3 class="N_h3 N_pad" id="N_t3">Needs you</h3>' + body + '</section>';
   }
@@ -831,12 +831,12 @@
       var absentActs = S.d.confirm && S.d.confirm.absent, cmp = receiptCmp(p), now = clock(), nights = p.checkin_date && p.checkout_date ? nightsBetween(p.checkin_date, p.checkout_date) : null;
       if (sh.zoom) {
         var zi = (S.photos && S.photos[p.id]) || {};
-        return sheetShell('Receipt', '<div class="N_zoom' + (sh.z200 ? ' N_z2' : '') + '">' + (zi.state === 'ok' ? '<img class="N_photo" data-n="photo-fit" src="' + esc(zi.url) + '" alt="Receipt photo sent by the guest" referrerpolicy="no-referrer">' : '<p class="N_p N_pad" role="status">Opening the receipt photo…</p>') + '</div>' + sheetErr(sh),
+        return sheetShell('Receipt', '<div class="N_zoom' + (sh.z200 ? ' N_z2' : '') + '">' + (zi.state === 'ok' ? '<button class="N_zbtn" type="button" data-n="photo-fit" aria-pressed="' + (!!sh.z200) + '" aria-label="Receipt photo, ' + (sh.z200 ? 'now at 200 percent. Switch to fit width' : 'fit to width. Switch to 200 percent') + '"><img class="N_photo" src="' + esc(zi.url) + '" alt="" referrerpolicy="no-referrer"></button>' : '<p class="N_p N_pad" role="status">Opening the receipt photo…</p>') + '</div>' + sheetErr(sh),
           actBar('', 'Back to the request', 'photo-unzoom'), { label: 'Back to the request', act: 'photo-unzoom' });
       }
       var body = '<p class="N_sub">' + esc(fmtDate(p.checkin_date, 'weekday') + ' to ' + fmtDate(p.checkout_date, 'weekday') + (nights !== null ? ' · ' + count(nights, 'night', 'nights') : '') + (p.pax == null ? '' : ' · ' + count(p.pax, 'guest', 'guests'))) + '</p>';
+      if (p.receipt_image_path) body += receiptBox(p);
       if (cmp) {
-        if (p.receipt_image_path) body += receiptBox(p);
         body += '<p>' + (cmp.kind === 'ok' ? pill('ok', 'Amounts match') : cmp.kind === 'short' || cmp.kind === 'over' ? pill('warn', 'Receipt is ' + cents(cmp.diff) + (cmp.kind === 'short' ? ' short' : ' over')) : '<span class="N_chipd">Amount not read. Check the photo.</span>') + '</p>';
       } else body += '<p class="N_info">' + esc(!p.hold_expires_at ? 'No receipt yet.' : holdEnded(p.hold_expires_at, now) ? 'No receipt yet. The hold ended ' + fmtHoldAt(p.hold_expires_at) + '.' : 'No receipt yet. The dates are held until ' + fmtHoldAt(p.hold_expires_at) + '.') + '</p>';
       body += '<dl class="N_dl"><dt>To receive</dt><dd class="N_num N_nw">' + esc(formatPHP(p.expected_amount)) + '</dd>' + (cmp && cmp.kind !== 'unread' ? '<dt>Receipt shows</dt><dd class="N_num N_nw">' + esc(cents(cmp.amt)) + '</dd>' : '') +
@@ -850,14 +850,14 @@
       var pc = payOf(sh.id); if (!pc) return ''; var f = sh.f, e = sh.errs || {}, rc = hasReceipt(pc), b = '', cc = receiptCmp(pc), ch = pc.contact_channel;
       if (sh.step === 'form') {
         b += '<p class="N_sub">' + esc((pc.guest_name || 'A guest') + ', ' + fmtDay(pc.checkin_date) + ' to ' + fmtDay(pc.checkout_date) + '. Dates are rechecked when you confirm.') + '</p>';
-        if (rc && cc) {
+        if (cc) {
           if (cc.kind === 'unread') b += '<p class="N_info">The amount could not be read from the receipt. Check the photo and type it.</p>';
           else b += '<div class="N_info"><dl class="N_dl"><dt>Receipt shows</dt><dd class="N_num N_nw">' + esc(cents(cc.amt)) + '</dd>' + (pc.reference ? '<dt>Reference</dt><dd class="N_num">' + esc(groupRef(pc.reference)) + '</dd>' : '') + '</dl></div>';
           if (cc.kind === 'short' || cc.kind === 'over') b += '<p class="N_warnb"><span aria-hidden="true">!</span> ' + esc('The receipt shows ' + cents(cc.amt) + '. That is ' + cents(cc.diff) + (cc.kind === 'short' ? ' less than' : ' more than') + ' the ' + formatPHP(pc.expected_amount) + ' to receive.') + '</p>';
         } else if (rc) b += '<p class="N_info">' + esc(paymentLine(pc)) + '</p>';
         if (!rc) b += '<fieldset class="N_fs"><legend class="N_lbl">How was it paid?</legend>' + METHODS.map(function (m) { return '<label class="N_chk"><input type="radio" name="N_method" data-f="method" value="' + m[0] + '"' + (f.method === m[0] ? ' checked' : '') + '> <span>' + esc(m[1]) + '</span></label>'; }).join('') + '</fieldset>';
+        b += field('N_amt', 'Amount received (PHP)', inp('N_amt', 'amount', f.amount, 'inputmode="decimal"' + (e.amount ? ' aria-invalid="true" aria-describedby="N_amt-e"' : '')), e.amount, cc && cc.kind === 'unread');
         if (rc ? !pc.reference : f.method !== 'cash') b += field('N_ref', 'Payment reference', inp('N_ref', 'reference', f.reference, e.reference ? 'aria-invalid="true" aria-describedby="N_ref-e"' : ''), e.reference);
-        b += field('N_amt', 'Amount received (PHP)', inp('N_amt', 'amount', f.amount, 'inputmode="decimal"' + (e.amount ? ' aria-invalid="true" aria-describedby="N_amt-e"' : '')), e.amount, rc && cc && cc.kind === 'unread');
         if (!rc) b += field('N_note', f.method === 'cash' ? 'Note (needed for cash)' : 'Note (optional)', '<textarea class="N_input N_ta" id="N_note" data-f="note" rows="2">' + esc(f.note) + '</textarea>', e.note);
         if (rc) b += '<div class="N_field"><label class="N_chk"><input type="checkbox" data-f="checked"' + (f.checked ? ' checked' : '') + '> <span>I saw this payment in our GCash or bank account</span></label>' + (e.checked ? '<p class="N_ferr" role="alert"><span aria-hidden="true">✕</span> ' + esc(e.checked) + '</p>' : '') + '</div>';
         b += sheetErr(sh);
@@ -948,6 +948,7 @@
     var live = S.notice ? '<div class="N_okbox" role="status">' + esc(S.notice) + '</div>' : '';
     S.el.innerHTML = '<div class="N_root">' + tabsHtml() + live + '<div class="N_body" role="tabpanel" aria-labelledby="N_tab_' + S.tab + '"' + (S.sheet ? ' inert aria-hidden="true"' : '') + '>' + body + '</div></div>' + sheetHtml();
     revealTab();
+    if (S.sheet && S.sheet.refocus) { var rf = S.sheet.refocus; S.sheet.refocus = null; try { var rb = S.el.querySelector('[data-n="' + rf + '"]'); if (rb && rb.focus) rb.focus(); } catch (e) { /* no focus in tests */ } return; }
     if (S.sheet && S.sheet.focus !== false) { try { var h = S.el.querySelector('[data-n-focus]'); if (h && h.focus) h.focus(); } catch (e) { /* no focus in tests */ } S.sheet.focus = false; }
   }
 
@@ -1043,7 +1044,7 @@
   function startConfirm() {
     var p = payOf(S.sheet.id), rc = hasReceipt(p);
     S.sheet = { kind: 'confirm', id: p.id, step: 'form', key: mintKey('confirm'), busy: false, msg: '', errs: {}, focus: true,
-      f: { checked: false, method: 'messenger_gcash', reference: '', amount: rc ? (receiptCmp(p) && receiptCmp(p).kind !== 'unread' ? fromCentavos(receiptCmp(p).amt) : '') : (p.expected_amount ? fromCentavos(toCentavos(p.expected_amount)) : ''), note: '' } }; // the receipt path never pre-fills the expected amount
+      f: { checked: false, method: 'messenger_gcash', reference: '', amount: rc || receiptCmp(p) ? (receiptCmp(p) && receiptCmp(p).kind !== 'unread' ? fromCentavos(receiptCmp(p).amt) : '') : (p.expected_amount ? fromCentavos(toCentavos(p.expected_amount)) : ''), note: '' } }; // the receipt path never pre-fills the expected amount
     draw();
   }
   function fill(res, p) { var o = {}; for (var k in res) o[k] = res[k]; if (p) { if (!o.guest_name) o.guest_name = p.guest_name; if (!o.checkin) o.checkin = p.checkin_date; if (!o.checkout) o.checkout = p.checkout_date; } return o; }
@@ -1105,7 +1106,7 @@
     if (a === 'photo-retry') { var pq = payOf(sh.id); if (pq && pq.receipt_image_path) { ensurePhoto(sh.id, pq.receipt_image_path, true); draw(); } return; }
     if (a === 'photo-zoom') { var pz = payOf(sh.id), ez = S.photos[sh.id]; sh.zoom = true; sh.z200 = false; if (pz && pz.receipt_image_path && (!ez || ez.state !== 'ok' || clock() - ez.at >= PHOTO_FRESH)) ensurePhoto(sh.id, pz.receipt_image_path, true); sh.focus = true; draw(); return; }
     if (a === 'photo-unzoom') { sh.zoom = false; sh.focus = true; draw(); return; }
-    if (a === 'photo-fit') { sh.z200 = !sh.z200; draw(); return; }
+    if (a === 'photo-fit') { sh.z200 = !sh.z200; sh.refocus = 'photo-fit'; draw(); return; }
     if (a === 'rq-approve') return doReview('approve');
     if (a === 'rq-void-start') { sh.step = 'void'; sh.msg = ''; sh.errs = {}; sh.focus = true; draw(); return; }
     if (a === 'rq-void-send') return doReview('void');
@@ -1131,8 +1132,12 @@
   function onVisible() {
     var doc = (typeof document !== 'undefined') ? document : null;
     if (!S || !doc || doc.visibilityState !== 'visible') return;
-    if (S.sheet && S.sheet.busy) return;
-    if (clock() - (S.loadedAt || 0) > ((S.tab === 'today' || S.tab === 'inquiries') ? LIVE_MS : 5 * 60000) && !S.sheet) loadTab(S.tab, true); // refresh on return after five minutes; never under an open sheet
+    if (S.sheet) return; // never under an open sheet
+    var now = clock();
+    // Only the inquiries list and the waiting count go stale at a minute (load() applies LIVE_MS); the overview and every other tab keep the five-minute rule (R1.8).
+    if (S.tab === 'today') { load('inq'); load('waiting'); var ov = S.d.overview || {}; if (!ov.ok || now - (ov.at || 0) > 5 * 60000) load('overview', true); }
+    else if (S.tab === 'inquiries') load('inq');
+    else if (now - (S.loadedAt || 0) > 5 * 60000) loadTab(S.tab, true);
   }
 
   // ------------------------------------------------------------------------------------------------ mount / unmount
@@ -1163,6 +1168,8 @@
     mount: mount, unmount: unmount,
     _setRpcTimeout: function (ms) { RPC_TIMEOUT_MS = ms; },
     _setSeriesConcurrency: function (n) { SERIES_CONCURRENCY = n; },
+    // R1.8: the shell or a push may say a list changed; the next look is a fresh read, and nothing is read under an open sheet.
+    refresh: function (kind) { if (!S || (S.sheet && S.sheet.busy)) return; if (kind === 'inq' || kind === 'waiting') { if (S.d[kind]) S.d[kind].ok = false; if (!S.sheet) load(kind, true); } },
     _setClock: function (fn) { clock = fn || function () { return Date.now(); }; },
     lib: { lastMonths: lastMonths, buildSeries: buildSeries, chipFor: chipFor, canManage: canManage, manilaToday: manilaToday, addDays: addDays, nightsBetween: nightsBetween, fmtDate: fmtDate, fmtDateTime: fmtDateTime, toCentavos: toCentavos, fromCentavos: fromCentavos, formatPHP: formatPHP, formatPercent: formatPercent, formatNumber: formatNumber,
       formatMetricValue: formatMetricValue, parseAmount: parseAmount, periodPreset: periodPreset, comparablePeriod: comparablePeriod, compareMode: compareMode, pctDelta: pctDelta, fmtDeltaPct: fmtDeltaPct, deltaLine: deltaLine,

@@ -948,3 +948,50 @@ test('N version: the confirm flow ships as Staff 3.4.54', () => {
   const app = fs.readFileSync(path.join(root, 'app.js'), 'utf8'), pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8')), sw = fs.readFileSync(path.join(root, 'sw.js'), 'utf8');
   assert.match(app, /3\.4\.54/); assert.equal(pkg.version, '3.4.54'); assert.match(sw, /cs-shell-v79/);
 });
+
+// ------------------------------------------------------------------------------------------------ confirm flow fix round r1
+test('N r1 refresh hook: N_Manage.refresh reads the list again, and nothing under an open sheet', async () => {
+  const t = await boot({}); const n0 = t.sent('staff_inquiry_payments_v1').length;
+  t.M.refresh('inq'); await tick(); assert.equal(t.sent('staff_inquiry_payments_v1').length, n0 + 1, 'no sheet: a fresh read');
+  t.M.refresh('money'); await tick(); assert.equal(t.sent('staff_inquiry_payments_v1').length, n0 + 1, 'an unknown kind reads nothing');
+  await t.click('tab', 'inquiries'); await t.click('inq-open', Q1.id); const n1 = t.sent('staff_inquiry_payments_v1').length;
+  t.M.refresh('inq'); await tick(); assert.equal(t.sent('staff_inquiry_payments_v1').length, n1, 'a sheet is open: no read');
+});
+
+test('N r1 live lists: at a minute only the inquiries list and the waiting count reload; the overview waits five', async () => {
+  let now = NOW; const t = await boot({}); t.M._setClock(() => now); const fire = async () => { for (const f of t.ctx.document.listeners.visibilitychange || []) f(); await tick(); };
+  const ov = () => t.sent('get_admin_overview_v1').length, iq = () => t.sent('staff_inquiry_payments_v1').length, o0 = ov(), i0 = iq();
+  now += 90000; await fire(); assert.equal(iq(), i0 + 1, 'inquiries reload at 90 s'); assert.equal(ov(), o0, 'the overview does not');
+  now += 3 * 60000; await fire(); assert.equal(ov(), o0, 'under five minutes since the overview: still not');
+  now += 90000; await fire(); assert.equal(ov(), o0 + 1, 'over five minutes: the overview reloads');
+});
+
+test('N r1 Needs you: the Checking card is not a live region', async () => {
+  const t = await boot({ client: fakeClient({ get_admin_overview_v1: () => new Promise(() => {}), staff_inquiry_payments_v1: () => ({ data: [], error: null }) }) });
+  assert.match(t.html(), /N_wait">Checking…/); assert.ok(!/N_wait" role=/.test(t.html()));
+});
+
+test('N r1 confirm form: Amount received comes before Payment reference on the receipt path', async () => {
+  const L = { ...Q1, id: 'b3000000-0000-4000-8000-000000000003', reference: null }; const t2 = await boot({ sub: 'inquiries', handlers: { staff_inquiry_payments_v1: () => ({ data: [L], error: null }) } }); assert.ok(L.comparison_id, 'receipt path');
+  await t2.click('inq-open', L.id); await t2.click('cf-start'); const h2 = t2.html(); assert.ok(h2.indexOf('Payment reference') > 0 && h2.indexOf('Amount received (PHP)') < h2.indexOf('Payment reference'));
+});
+
+test('N r1 receipt sent without a comparison: Confirm opens with an empty amount and the check-this mark, never the expected amount', async () => {
+  const S1 = { ...Q2, id: 'b4000000-0000-4000-8000-000000000004', receipt_sent: true, receipt_at: '2026-10-14T02:00:00Z', receipt_image_path: null };
+  const t = await boot({ sub: 'inquiries', handlers: { staff_inquiry_payments_v1: () => ({ data: [S1], error: null }) } });
+  await t.click('inq-open', S1.id); await t.click('cf-start');
+  assert.match(t.html(), /id="N_amt"[^>]*value=""/); assert.ok(!/4,?100/.test(t.html().match(/<input[^>]*id="N_amt"[^>]*>/)[0]), 'expected amount not used');
+  assert.match(t.html(), /Amount received \(PHP\) <span class="N_mark">check this<\/span>/); assert.match(t.text(), /could not be read/);
+});
+
+test('N r1 request sheet: the receipt box shows whenever a photo path is set, even with no comparison_id', async () => {
+  const OLD = { ...Q1, id: 'b5000000-0000-4000-8000-000000000005', comparison_id: null, candidate_amount: null, receipt_sent: null, receipt_at: null, contact_channel: null, receipt_image_path: 'r/old.jpg' };
+  const t = await boot({ client: storageClient({ staff_inquiry_payments_v1: () => [OLD] }), sub: 'inquiries' });
+  await t.click('inq-open', OLD.id); await tick(); assert.match(t.html(), /N_rcpt/); assert.match(t.html(), /<img class="N_photo"/);
+});
+
+test('N r1 zoom: the fit/200 percent toggle is a button, with a 44 px target and a focus ring', async () => {
+  const t = await boot({ client: storageClient({}), sub: 'inquiries' }); await t.click('inq-open', Q1.id); await tick(); await t.click('photo-zoom');
+  assert.match(t.html(), /<button class="N_zbtn" type="button" data-n="photo-fit" aria-pressed="false"/); await t.click('photo-fit'); assert.match(t.html(), /aria-pressed="true"/);
+  assert.match(CSS, /\.N_zbtn \{[^}]*min-height: 44px/); assert.match(CSS, /\.N_zbtn:focus-visible \{[^}]*outline/);
+});

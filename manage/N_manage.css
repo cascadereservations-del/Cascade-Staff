@@ -150,7 +150,9 @@ button.N_link { background: none; border: 0; padding: 0; font: inherit; cursor: 
 .N_nw { white-space: nowrap; }
 .N_zoom { overflow: auto; max-height: calc(92dvh - 9rem); touch-action: pan-x pan-y pinch-zoom; background: var(--muted); border-radius: var(--r-md); }
 .N_zoom img.N_photo { display: block; width: 100%; max-width: none; max-height: none; height: auto; border: 0; border-radius: 0; }
-.N_zoom.N_z2 img.N_photo { width: 200%; }
+.N_zbtn { display: block; width: 100%; min-height: 44px; margin: 0; padding: 0; border: 0; background: none; cursor: zoom-in; font: inherit; color: inherit; }
+.N_zbtn:focus-visible { outline: 3px solid var(--ring); outline-offset: -3px; }
+.N_zoom.N_z2 .N_zbtn { width: 200%; cursor: zoom-out; }
 .N_wait { min-height: 72px; box-sizing: border-box; }
 .N_pl, .N_sheet details .N_info { white-space: pre-line; }
 .N_help { margin: 0; color: var(--fg-2); font-size: 0.8125rem; line-height: 1.35; }
