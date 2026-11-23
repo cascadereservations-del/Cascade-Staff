@@ -66,6 +66,17 @@
   var LEVELS = { out: { word: 'Out', glyph: 'xcircle' }, low: { word: 'Low', glyph: 'alert' }, ok: { word: 'OK', glyph: 'check' } };
   var RANK = { out: 0, low: 1, ok: 2 };
   function byName(a, b) { return a.name.localeCompare(b.name); }
+  // s132 (Lloyd 2026-11-23): groups run in update order. Groups that are mostly consumables come first, then the
+  // groups that change most often; the slowest movers sit last so nobody scrolls past them to update.
+  // A group not in the list goes after the listed ones of its kind, by name.
+  var TURN_ORDER = ['toiletries', 'cleaning supplies', 'kitchen supplies', 'pantry', 'linen', 'kitchen utensils', 'bathroom & utility', 'bedroom / sleeping area', 'appliances', 'living area'];
+  function groupOrder(items) {
+    var by = {};
+    (items || []).forEach(function (i) { var g = by[i.category] || (by[i.category] = { n: 0, c: 0 }); g.n++; if (i.consumable) g.c++; });
+    var rank = function (cat) { var t = TURN_ORDER.indexOf(String(cat || '').trim().toLowerCase()); return t < 0 ? TURN_ORDER.length : t; };
+    var tier = function (cat) { var g = by[cat]; return g && g.c * 2 >= g.n && g.c > 0 ? 0 : 1; };
+    return function (a, b) { return tier(a) - tier(b) || rank(a) - rank(b) || String(a).localeCompare(String(b)); };
+  }
   function summary(items) { var low = 0, out = 0; items.forEach(function (i) { var l = level(i); if (l === 'out') out++; else if (l === 'low') low++; }); return { low: low + out, out: out }; }
   // s107 B9: Low, To count (only when something needs counting), All, Consumables, then the categories; each carries its count.
   function chipsFor(items, needN) {
@@ -73,7 +84,7 @@
     if (needN) list.push({ k: 'need', t: 'To count', n: needN });
     list.push({ k: 'all', t: 'All', n: items.length }, { k: 'cons', t: 'Consumables', n: items.filter(function (i) { return i.consumable; }).length });
     items.forEach(function (i) { cats[i.category] = (cats[i.category] || 0) + 1; });
-    Object.keys(cats).sort().forEach(function (c) { list.push({ k: 'c:' + c, t: c, n: cats[c] }); });
+    Object.keys(cats).sort(groupOrder(items)).forEach(function (c) { list.push({ k: 'c:' + c, t: c, n: cats[c] }); });
     return list;
   }
   // Needs a count (s84 1b): a consumable never counted in the app, or not for 30 days. Only meaningful when the catalogue says when (countedAt).
@@ -90,14 +101,14 @@
     return chip === 'all' || chip === 'need' || chip === 'out' || chip.indexOf('c:') === 0 ? out.sort(byName) : out.sort(function (a, b) { return RANK[level(a)] - RANK[level(b)] || byName(a, b); });
   }
   // Groups for the list (s84). Low first: worst group first (an Out, then a Low, then all OK), then more Out+Low, then name; inside a group Out, Low, OK, name.
-  // All / Consumables: groups by category name, rows by name. A category chip is one group (the screen draws no header for it).
+  // All / Consumables: groups in update order (groupOrder), rows by name. A category chip is one group (the screen draws no header for it).
   function groupsFor(items, chip, q) {
     var rows = visible(items, chip, q), by = {}, order = [];
     rows.forEach(function (i) { if (!by[i.category]) { by[i.category] = { cat: i.category, rows: [], low: 0, out: 0 }; order.push(i.category); } var g = by[i.category], l = level(i); g.rows.push(i); if (l === 'out') g.out++; else if (l === 'low') g.low++; });
     var gs = order.map(function (c) { return by[c]; });
     var worst = function (g) { return g.out ? 0 : g.low ? 1 : 2; };
     if (chip === 'low') gs.sort(function (a, b) { return worst(a) - worst(b) || (b.out + b.low) - (a.out + a.low) || a.cat.localeCompare(b.cat); });
-    else gs.sort(function (a, b) { return a.cat.localeCompare(b.cat); });
+    else { var go = groupOrder(rows); gs.sort(function (a, b) { return go(a.cat, b.cat); }); }
     if (chip === 'cons') gs.forEach(function (g) { g.rows.sort(byName); });
     return gs;
   }
@@ -2575,7 +2586,7 @@
   function finish() { if (!M) return; if (M.act && M.act.kind === 'optusual') { M.act = newMenu(M.act.itemId); drawLayer(); drawUndo(); return; } var fromShop = M.act && (M.act.shopId || M.act.fromShop); if (fromShop) { M.act = null; drawLayer(); draw(); } else closeSheet(); }
 
   root.I_Stock = { mount: mount, unmount: unmount, lib: {
-    esc: esc, canPrice: canPrice, groupsFor: groupsFor, codeIndex: codeIndex, I_codeIndex: codeIndex, normCode: normCode, validCode: validCode, attachCall: attachCall, priceCall: priceCall, levelsCall: levelsCall, createCall: createCall, reportCall: reportCall, REPORTS: REPORTS, normalize: normalize, normalizeCatalogue: normalizeCatalogue, level: level, summary: summary, chipsFor: chipsFor, visible: visible, barPct: barPct, parseQty: parseQty, stepQty: stepQty,
+    esc: esc, canPrice: canPrice, groupsFor: groupsFor, groupOrder: groupOrder, codeIndex: codeIndex, I_codeIndex: codeIndex, normCode: normCode, validCode: validCode, attachCall: attachCall, priceCall: priceCall, levelsCall: levelsCall, createCall: createCall, reportCall: reportCall, REPORTS: REPORTS, normalize: normalize, normalizeCatalogue: normalizeCatalogue, level: level, summary: summary, chipsFor: chipsFor, visible: visible, barPct: barPct, parseQty: parseQty, stepQty: stepQty,
     newKey: newKey, errKind: errKind, ERR: ERR, countCall: countCall, usageCall: usageCall, receiptCall: receiptCall, shopAddCall: shopAddCall, shopSetCall: shopSetCall, normalizeShop: normalizeShop,
     fitSize: fitSize, phpText: phpText, photoSetCall: photoSetCall, recatCall: recatCall, mintCall: mintCall, labelsCall: labelsCall,
     manilaToday: manilaToday, demoItems: demoItems, PROPERTY_ID: PROPERTY_ID, canManage: canManage, canUse: canUse, state: function () { return M; }, /* test seam: the open state, so a test can put a role on a sheet the UI never opens for it */

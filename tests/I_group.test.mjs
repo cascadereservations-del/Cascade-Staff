@@ -45,10 +45,10 @@ test('I_group search drops groups with no matching rows', async () => {
   eq(L.groupsFor(norm(L), 'low', 'nothing here'), []);
 });
 
-test('I_group All and Consumables: groups by category name, rows by name', async () => {
+test('I_group All and Consumables: consumable groups first (s132 update order), rows by name', async () => {
   const L = await lib();
   const all = L.groupsFor(norm(L), 'all', '');
-  eq(all.map((x) => x.cat), ['Bath', 'Kitchen', 'Linen', 'Zed']);
+  eq(all.map((x) => x.cat), ['Bath', 'Kitchen', 'Zed', 'Linen']); // s132: Linen is lasting, so after the consumable groups
   eq(all[0].rows.map((r) => r.name), ['Hand soap', 'Shampoo', 'Toilet paper']);
   const cons = L.groupsFor(norm(L), 'cons', '');
   eq(cons.map((x) => x.cat), ['Bath', 'Kitchen', 'Zed']); // Linen is not consumable
@@ -89,4 +89,22 @@ test('I_group the cleaner gets the same groups (a layout, not a privilege)', asy
   const e = await setup({ role: 'cleaner', client: mockClient({ catalogue: { items: raw } }) });
   await e.mount('');
   assert.equal([...e.html().matchAll(/class="I_gh"/g)].length, 4);
+});
+
+test('s132 I_group All: consumable groups first, then update order, slowest last; unknown groups after their kind by name', async () => {
+  const L = await lib();
+  const mk = (id, cat, cons) => L.normalize(item(id, id, 3, 1, { category: cat, consumable: cons }), 'owner');
+  const items = [mk('a', 'Living Area', false), mk('b', 'Appliances', false), mk('c', 'Kitchen utensils', false), mk('d', 'Linen', false),
+    mk('e', 'Kitchen supplies', true), mk('f', 'Toiletries', true), mk('g', 'Cleaning Supplies', true), mk('h', 'Zed lasting', false), mk('i', 'Aaa used', true),
+    mk('j', 'Bedroom / Sleeping Area', false), mk('k', 'Bathroom & Utility', false)];
+  const want = ['Toiletries', 'Cleaning Supplies', 'Kitchen supplies', 'Aaa used', 'Linen', 'Kitchen utensils', 'Bathroom & Utility', 'Bedroom / Sleeping Area', 'Appliances', 'Living Area', 'Zed lasting'];
+  eq(L.groupsFor(items, 'all', '').map((x) => x.cat), want);
+  eq(L.chipsFor(items, 0).filter((c) => c.k.indexOf('c:') === 0).map((c) => c.t), want);
+});
+
+test('s132 I_group a mostly-lasting group stays with the lasting groups even with one consumable in it', async () => {
+  const L = await lib();
+  const mk = (id, cat, cons) => L.normalize(item(id, id, 3, 1, { category: cat, consumable: cons }), 'owner');
+  const items = [mk('a', 'Kitchen utensils', false), mk('b', 'Kitchen utensils', false), mk('c', 'Kitchen utensils', true), mk('d', 'Living Area', false), mk('e', 'Toiletries', true)];
+  eq(L.groupsFor(items, 'all', '').map((x) => x.cat), ['Toiletries', 'Kitchen utensils', 'Living Area']);
 });

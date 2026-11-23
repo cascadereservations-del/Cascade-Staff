@@ -17,7 +17,7 @@ const rule = async (sel) => { const fs = await import('node:fs'); const css = fs
 
 test('I_s107 B9 chips: Low, To count, All, Consumables, then the categories, each with its count', async () => {
   const L = (await setup({ role: 'owner' })).lib, items = cat().items.map((r) => L.normalize(r, 'owner'));
-  assert.equal(JSON.stringify(L.chipsFor(items, 2).map((c) => [c.k, c.n])), JSON.stringify([['low', 2], ['need', 2], ['all', 4], ['cons', 3], ['c:Bathroom', 1], ['c:Kitchen', 1], ['c:Linen', 2]]));
+  assert.equal(JSON.stringify(L.chipsFor(items, 2).map((c) => [c.k, c.n])), JSON.stringify([['low', 2], ['need', 2], ['all', 4], ['cons', 3], ['c:Linen', 2], ['c:Bathroom', 1], ['c:Kitchen', 1]]));
   assert.equal(L.chipsFor(items, 0).map((c) => c.k).slice(0, 3).join(), 'low,all,cons');
   const e = await make(); await e.mount('');
   assert.match(e.html(), /data-k="low"[^>]*>Low <span class="I_cn">2<\/span>/); assert.match(e.html(), /data-k="all"[^>]*>All <span class="I_cn">4<\/span>/);
