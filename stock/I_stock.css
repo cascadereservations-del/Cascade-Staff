@@ -237,12 +237,12 @@ div.I_row { cursor: default; }
 .I_uhero { align-items: center; margin-top: 4px; }
 .I_uname { font: 650 var(--v5-t-body)/1.25 var(--font-ui); overflow-wrap: anywhere; }
 .I_kind { justify-self: start; display: inline-flex; align-items: center; gap: 4px; padding: 4px 10px; border-radius: var(--v5-r-full); background: var(--v5-sunk); font: 600 var(--v5-t-2)/1.2 var(--font-ui); }
-.I_opts { display: grid; gap: 10px; margin: 16px 0; }
-.I_opt { display: flex; align-items: center; gap: 12px; width: 100%; min-height: 72px; padding: 8px 12px; border: 1px solid color-mix(in srgb, var(--u-t) 35%, transparent); border-radius: var(--v5-r-card); background: var(--u-w); color: var(--fg); font: inherit; text-align: left; cursor: pointer; }
-.I_ob { flex: none; display: inline-flex; align-items: center; justify-content: center; width: 44px; height: 44px; border-radius: var(--v5-r-full); background: var(--v5-surf); font-size: var(--v5-t-section); line-height: 1; }
-.I_opt_t { flex: 1; min-width: 0; display: grid; gap: 2px; }
-.I_opt_t b { font: 650 var(--v5-t-body)/1.25 var(--font-ui); color: var(--u-t); }
-.I_opt_t small { font-size: var(--v5-t-2); color: var(--fg-2); }
+.I_uopts { display: grid; gap: 10px; margin: 16px 0; }
+.I_uopt { display: flex; align-items: center; gap: 12px; width: 100%; min-height: 72px; padding: 8px 12px; border: 1px solid color-mix(in srgb, var(--u-t) 35%, transparent); border-radius: var(--v5-r-card); background: var(--u-w); color: var(--fg); font: inherit; text-align: left; cursor: pointer; }
+.I_uob { flex: none; display: inline-flex; align-items: center; justify-content: center; width: 44px; height: 44px; border-radius: var(--v5-r-full); background: var(--v5-surf); font-size: var(--v5-t-section); line-height: 1; }
+.I_uopt_t { flex: 1; min-width: 0; display: grid; gap: 2px; }
+.I_uopt_t b { font: 650 var(--v5-t-body)/1.25 var(--font-ui); color: var(--u-t); }
+.I_uopt_t small { font-size: var(--v5-t-2); color: var(--fg-2); }
 .I_chev { flex: none; color: var(--u-t); font-size: var(--v5-t-section); line-height: 1; }
 .I_umore { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 8px; }
 .I_umore .btn { min-height: 44px; white-space: normal; }
@@ -282,12 +282,12 @@ div.I_row { cursor: default; }
 .I_swk::after { content: ""; position: absolute; top: 2px; left: 2px; width: 22px; height: 22px; border-radius: 50%; background: var(--fg-2); }
 .I_sw[aria-checked="true"] .I_swk { background: var(--u-t); border-color: var(--u-t); }
 .I_sw[aria-checked="true"] .I_swk::after { left: 22px; background: var(--v5-bg); }
-.I_outs { display: grid; gap: 8px; }
-.I_out { display: flex; align-items: center; gap: 12px; width: 100%; min-height: 64px; padding: 8px 12px; border: 2px solid transparent; border-radius: var(--v5-r-card); background: var(--v5-sunk); color: var(--fg); font: inherit; text-align: left; cursor: pointer; }
+.I_uouts { display: grid; gap: 8px; }
+.I_uout { display: flex; align-items: center; gap: 12px; width: 100%; min-height: 64px; padding: 8px 12px; border: 2px solid transparent; border-radius: var(--v5-r-card); background: var(--v5-sunk); color: var(--fg); font: inherit; text-align: left; cursor: pointer; }
 .I_oe { flex: none; font-size: var(--v5-t-section); line-height: 1; }
 .I_oi { flex: none; width: 22px; height: 22px; border-radius: 50%; border: 2px solid var(--v5-field-line); }
-.I_out[aria-pressed="true"] { border-color: var(--u-t); background: var(--u-w); }
-.I_out[aria-pressed="true"] .I_oi { border-color: var(--u-t); background: radial-gradient(circle, var(--u-t) 45%, transparent 50%); }
+.I_uout[aria-pressed="true"] { border-color: var(--u-t); background: var(--u-w); }
+.I_uout[aria-pressed="true"] .I_oi { border-color: var(--u-t); background: radial-gradient(circle, var(--u-t) 45%, transparent 50%); }
 .I_money { display: flex; align-items: center; gap: 8px; padding-left: 12px; }
 .I_money b { color: var(--fg-2); font-size: var(--v5-t-section); }
 .I_info { display: flex; gap: 8px; padding: 12px; border-radius: var(--v5-r-card); background: var(--v5-info-w); color: var(--v5-info-t); font-size: var(--v5-t-2); }

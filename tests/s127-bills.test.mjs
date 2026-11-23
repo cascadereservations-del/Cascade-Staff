@@ -211,6 +211,6 @@ test('s127 r1 Today card: a later failed load keeps the card already shown; a la
   n = 0; h = await todayHtml('owner', flaky({ error: { code: '42501', message: 'denied' }, data: null }), (app) => app.click({ 'data-act': 'refresh' })); assert.doesNotMatch(h, /T_bills/, 'a refusal clears the card');
 });
 
-test('s127 release: 3.4.50 with cs-shell-v75', () => {
-  assert.equal(JSON.parse(read('package.json')).version, '3.4.50'); assert.match(read('app.js'), /version: '3.4.50'/); assert.match(read('sw.js'), /CACHE_NAME = 'cs-shell-v75'/); assert.match(read('app.js'), /var PC_SHELL = 'cs-shell-v75';/);
+test('s127 release: 3.4.51 with cs-shell-v76', () => {
+  assert.equal(JSON.parse(read('package.json')).version, '3.4.51'); assert.match(read('app.js'), /version: '3.4.51'/); assert.match(read('sw.js'), /CACHE_NAME = 'cs-shell-v76'/); assert.match(read('app.js'), /var PC_SHELL = 'cs-shell-v76';/);
 });

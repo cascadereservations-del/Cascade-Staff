@@ -2360,8 +2360,8 @@
     var hist = allowed('history');
     return '<div class="F_sheethead I_sh"><h2 class="hd I_sht" id="I_sh_t" tabindex="-1">Update</h2><button class="btn btn-secondary btn-sm F_close" type="button" data-act="close">' + gi('close', 's16') + 'Close</button></div>' +
       '<div class="I_hero I_uhero">' + visual(it, 'I_bigem I_herop') + '<div class="I_herob"><b class="I_uname">' + esc(it.name) + '</b><p class="help">' + esc(it.category + ' · ' + (it.qty == null ? 'Not counted' : uq(it.qty, it.unit) + ' on hand')) + '</p><span class="I_kind">' + (it.consumable ? '☕ Gets used up' : UE.cook + ' Lasts') + '</span></div></div>' + errBox(a) +
-      '<div class="I_opts" role="group" aria-label="What happened">' + kinds.map(function (k) {
-        var o = UOPT[k]; return '<button class="I_opt I_hue_' + o.hue + '" type="button" data-act="upd-pick" data-kind="' + k + '"><span class="I_ob" aria-hidden="true">' + o.em + '</span><span class="I_opt_t"><b>' + esc(o.t) + '</b><small>' + esc(o.s) + '</small></span><span class="I_chev" aria-hidden="true">›</span></button>'; }).join('') + '</div>' +
+      '<div class="I_uopts" role="group" aria-label="What happened">' + kinds.map(function (k) {
+        var o = UOPT[k]; return '<button class="I_uopt I_hue_' + o.hue + '" type="button" data-act="upd-pick" data-kind="' + k + '"><span class="I_uob" aria-hidden="true">' + o.em + '</span><span class="I_uopt_t"><b>' + esc(o.t) + '</b><small>' + esc(o.s) + '</small></span><span class="I_chev" aria-hidden="true">›</span></button>'; }).join('') + '</div>' +
       (more.length || hist ? '<div class="I_umore">' + more.map(function (c) { return '<button class="btn btn-secondary" type="button" data-act="begin" data-kind="' + c.kind + '">' + c.text + '</button>'; }).join('') + (hist ? '<button class="btn btn-secondary" type="button" data-act="history-open">\u{1F558} History</button>' : '') + '</div>' : '');
   }
   function renderUpdForm(a, it) {
@@ -2376,8 +2376,8 @@
     } else if (k === 'lin') {
       var n = wholeQty(v.qty) || 1, q0 = it.qty == null ? 0 : it.qty, lower = fmt(Math.max(0, q0 - n)), o = v.now || 'cleaned';
       body = segField(a, 'what', 'What happened?', [['stained', UE.stn, 'Stained', 'makeup, rust, blood'], ['damaged', UE.dmg, 'Damaged', 'torn, burnt, bleached']]) + stepper('qty', 'How many (' + esc(unit) + ')?', v.qty, false) +
-        '<div class="field"><span class="lbl">What now?</span><div class="I_outs" role="group" aria-label="What now">' + [['cleaned', UE.cln, 'Cleaned, back in use', 'Stock stays ' + fmt(q0)], ['needs_replacing', UE.rep, 'Needs replacing', fmt(q0) + ' → ' + lower + ', admin gets a task to buy one'], ['replaced', UE.ok, 'Already replaced', fmt(q0) + ' → ' + lower + ', no task']].map(function (r) {
-          return '<button class="I_out" type="button" data-act="upd-set" data-f="now" data-v="' + r[0] + '" aria-pressed="' + (o === r[0]) + '"><span class="I_oe" aria-hidden="true">' + r[1] + '</span><span class="I_opt_t"><b>' + esc(r[2]) + '</b><small>' + esc(r[3]) + '</small></span><i class="I_oi" aria-hidden="true"></i></button>'; }).join('') + '</div></div>' +
+        '<div class="field"><span class="lbl">What now?</span><div class="I_uouts" role="group" aria-label="What now">' + [['cleaned', UE.cln, 'Cleaned, back in use', 'Stock stays ' + fmt(q0)], ['needs_replacing', UE.rep, 'Needs replacing', fmt(q0) + ' → ' + lower + ', admin gets a task to buy one'], ['replaced', UE.ok, 'Already replaced', fmt(q0) + ' → ' + lower + ', no task']].map(function (r) {
+          return '<button class="I_uout" type="button" data-act="upd-set" data-f="now" data-v="' + r[0] + '" aria-pressed="' + (o === r[0]) + '"><span class="I_oe" aria-hidden="true">' + r[1] + '</span><span class="I_uopt_t"><b>' + esc(r[2]) + '</b><small>' + esc(r[3]) + '</small></span><i class="I_oi" aria-hidden="true"></i></button>'; }).join('') + '</div></div>' +
         photoField(a, 'Photo (optional)', UE.cam, 'photo') + noteField(a, it);
     } else if (k === 'recv') {
       var pu = it.purchaseUnit || 'pack', pk = parseQty(v.packs), mng = canManage(M.role);

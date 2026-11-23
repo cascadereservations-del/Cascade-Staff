@@ -168,11 +168,11 @@ test('s130: the old notes markup and styles are gone', () => {
   assert.doesNotMatch(app, /notegroup|Notes from earlier stays/);
 });
 
-test('s130: version pins - Staff 3.4.50, cs-shell-v75', () => {
-  assert.match(read('app.js'), /'3.4.50'/);
-  assert.match(read('app.js'), /PC_SHELL = 'cs-shell-v75'/);
-  assert.match(read('sw.js'), /cs-shell-v75/);
-  assert.equal(JSON.parse(read('package.json')).version, '3.4.50');
+test('s130: version pins - Staff 3.4.51, cs-shell-v76', () => {
+  assert.match(read('app.js'), /'3.4.51'/);
+  assert.match(read('app.js'), /PC_SHELL = 'cs-shell-v76'/);
+  assert.match(read('sw.js'), /cs-shell-v76/);
+  assert.equal(JSON.parse(read('package.json')).version, '3.4.51');
 });
 
 test('s130: demo seeds - a legacy free-text guest and a typed one, and the demo save bumps the version', async () => {
