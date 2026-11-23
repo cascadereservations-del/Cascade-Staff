@@ -207,6 +207,91 @@
   function isDenied(e) { return !!e && (e.code === '42501' || e.status === 401 || e.status === 403 || /only an owner|permission denied|not authori|jwt|42501/i.test(errText(e))); }
   function isOffline(e) { return !!e && !isDenied(e) && !isMissing(e) && (e.status === 0 || e.name === 'FunctionsFetchError' || /timeout|failed to fetch|network|load failed|abort/i.test(errText(e))); }
 
+  // ---- s135: the guest guide source (guide v8 in-guide messages). Pure helpers first, all tested. Guest text is escaped with esc() into text nodes: no raw HTML ever. ----
+  var GUIDE_RULE = 'Never send door codes or payment details here. Use Airbnb messages for those.';
+  var GUIDE_MAX = 1000;                            // client-side cap on one reply (the server has the last word)
+  var GUIDE_RETRY_MS = 1500;                       // one automatic retry of an uncertain send, same client_msg_id
+  var GUIDE_CACHE_MS = 120000;
+  var UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  var GUIDE_SUB = /^guide:([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/i;
+  var CMID_RE = /^[A-Za-z0-9_-]{8,80}$/;
+  // the guide RPCs are "not released" only for a missing function: a plain "not found" answer from a released one is a missing thread
+  function isFnMissing(e) { return !!e && (e.code === 'PGRST202' || e.status === 404 || /PGRST202|could not find the function/i.test(errText(e))); }
+  function dateOnly(v) { var m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(v || '')); return m ? m[1] + '-' + m[2] + '-' + m[3] : null; }
+  function gRow(r) { // one row of staff_guide_threads_v1
+    if (!r || typeof r.id !== 'string' || !UUID_RE.test(r.id)) return null;
+    var l = r.last && typeof r.last === 'object' && r.last.body != null ? r.last : null;
+    return { id: r.id.toLowerCase(), guest_label: r.guest_label ? String(r.guest_label) : 'Guest', channel: r.channel === 'airbnb' ? 'airbnb' : 'direct', status: r.status === 'resolved' ? 'resolved' : 'open',
+      checkin_date: dateOnly(r.checkin_date), checkout_date: dateOnly(r.checkout_date), last_guest_at: r.last_guest_at || null, last_staff_at: r.last_staff_at || null,
+      unread: Math.max(0, Math.floor(+r.unread || 0)), last: l ? { from: l.from === 'staff' ? 'staff' : 'guest', body: String(l.body), at: l.at || null } : null };
+  }
+  function gRows(data) { return isArr(data) ? data.map(gRow).filter(Boolean) : null; } // null when the answer is not a list at all
+  function gMsg(m, i) {
+    if (!m || m.body == null) return null;
+    return { id: m.id == null ? 'm' + i : String(m.id), from: m.from === 'staff' ? 'staff' : 'guest', body: String(m.body), at: m.at || null, staff_user_id: m.staff_user_id || null };
+  }
+  function gThread(res) { // staff_guide_thread_v1 -> { thread, messages } or null
+    if (!res || typeof res !== 'object' || !res.thread) return null;
+    var th = gRow(Object.assign({ id: res.thread.id }, res.thread)); if (!th) return null;
+    return { thread: th, messages: isArr(res.messages) ? res.messages.map(gMsg).filter(Boolean) : [] };
+  }
+  function gLastAt(r) { var best = 0; [r.last_guest_at, r.last_staff_at, r.last && r.last.at].forEach(function (t) { var ms = Date.parse(t); if (isFinite(ms) && ms > best) best = ms; }); return best ? new Date(best).toISOString() : null; }
+  // chats with something unread first, then the newest activity; stable for equal rows
+  function gSort(rows) {
+    return (isArr(rows) ? rows : []).map(function (r, i) { return { r: r, i: i }; }).sort(function (a, b) {
+      var au = a.r.unread > 0 ? 1 : 0, bu = b.r.unread > 0 ? 1 : 0; if (au !== bu) return bu - au;
+      var at = Date.parse(gLastAt(a.r)) || 0, bt = Date.parse(gLastAt(b.r)) || 0; return bt !== at ? bt - at : a.i - b.i;
+    }).map(function (x) { return x.r; });
+  }
+  function gUnreadTotal(rows) { return (isArr(rows) ? rows : []).reduce(function (n, r) { return n + r.unread; }, 0); }
+  function gDay(iso) { var m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(iso || '')); return m ? { d: +m[3], mo: +m[2] - 1 } : null; }
+  function gStay(r) { // "12 to 15 Dec", "28 Dec to 2 Jan", "From 12 Dec", "" when there are no dates
+    var a = gDay(r && r.checkin_date), b = gDay(r && r.checkout_date);
+    if (a && b) return a.mo === b.mo ? a.d + ' to ' + b.d + ' ' + MON[b.mo] : a.d + ' ' + MON[a.mo] + ' to ' + b.d + ' ' + MON[b.mo];
+    if (a) return 'From ' + a.d + ' ' + MON[a.mo];
+    if (b) return 'Until ' + b.d + ' ' + MON[b.mo];
+    return '';
+  }
+  function gRel(ts, nowMs_) { // relative: Just now, 5 min ago, 3 h ago, then the list-time words
+    var ms = Date.parse(ts); if (!isFinite(ms)) return '';
+    var diff = nowMs_ - ms; if (diff < 0) diff = 0;
+    if (diff < 60000) return 'Just now';
+    if (diff < HOUR) return Math.floor(diff / 60000) + ' min ago';
+    if (diff < DAY) return Math.floor(diff / HOUR) + ' h ago';
+    return fmtListTime(ts, nowMs_);
+  }
+  function gCmid(rand) { // the idempotency key of one send: 8 to 80 characters (server rule), new for every message
+    var hex = '', f = typeof rand === 'function' ? rand : function () { return Math.floor(Math.random() * 16); };
+    for (var i = 0; i < 32; i++) hex += (f() & 15).toString(16);
+    return 'gm-' + hex;
+  }
+  function gReplyArgs(threadId, body, cmid) { return { p_thread_id: threadId, p_body: body, p_client_msg_id: cmid }; }
+  // one reply answer -> { ok, id, at, already } | { ok: false, retry, text }. A retry is only worth it when the answer may simply not have arrived.
+  function gReplyOutcome(res) {
+    var e = res && res.error, d = res && res.data;
+    if (e) {
+      if (isDenied(e)) return { ok: false, retry: false, kind: 'denied', text: 'Your account cannot reply to guide messages.' };
+      if (isFnMissing(e)) return { ok: false, retry: false, kind: 'missing', text: 'Guide messages are not on the server yet.' };
+      if (isOffline(e) || (+e.status >= 500)) return { ok: false, retry: true, kind: 'offline', text: 'The connection dropped, so this may not have been sent.' };
+      return { ok: false, retry: false, kind: 'other', text: 'The server did not accept this reply.' };
+    }
+    if (d && d.ok === true) return { ok: true, id: d.id == null ? '' : String(d.id), at: d.at || null, already: !!d.already };
+    if (d && d.ok === false) return { ok: false, retry: false, kind: 'other', text: 'The server did not accept this reply.' };
+    return { ok: false, retry: true, kind: 'offline', text: 'No answer came back, so this may not have been sent.' };
+  }
+  // The server list is the truth. A local message that is not on it yet stays (sending or failed); one the server already has (answer lost on the way) is dropped.
+  function gMerge(serverMsgs, locals) {
+    var out = (serverMsgs || []).slice();
+    (locals || []).forEach(function (m) {
+      var since = Date.parse(m.at) || 0;
+      var onRecord = out.some(function (s) { return s.from === 'staff' && s.body === m.body && (Date.parse(s.at) || 0) >= since - 60000; });
+      if (!onRecord) out.push({ id: 'local:' + m.cmid, from: 'staff', body: m.body, at: m.at, staff_user_id: null, local: m });
+    });
+    return out;
+  }
+  // The Guide source is shown only once the list RPC has answered with a list. A missing function or a refusal hides it for good (this visit), without a word.
+  function gAvail(res) { if (res && res.error) return isFnMissing(res.error) || isDenied(res.error) ? false : null; return isArr(res && res.data) ? true : false; }
+
   // ---- links ----
   function threadUrl(psid) { return PSID_RE.test(String(psid || '')) ? MESSENGER_THREAD + encodeURIComponent(psid) : null; }
   function pageInboxUrl() { try { if (typeof window !== 'undefined' && window.CS && typeof window.CS.MESSENGER_INBOX === 'string') return window.CS.MESSENGER_INBOX; } catch (e) { /* use the constant */ } return PAGE_INBOX; }
@@ -258,9 +343,30 @@
   }
   function rowOf(t) { var last = t.history[t.history.length - 1], lg = replyWindow(t.history, clock()).lastGuestAt; return { psid: t.psid, psid_short: t.psid_short, guest_name: t.guest_name, updated_at: t.updated_at, last_role: last ? last.role : null, last_text: last ? last.text.slice(0, 160) : '', last_guest_at: lg, open_handoffs: t.handoffs.filter(function (h) { return h.status === 'open'; }).length, human_until: t.human_until, last_risk: t.last_risk }; }
 
+  // s135: sample guide conversations for the demo (no network). Rows are built from the threads, like the server does.
+  function demoGuide(nowMs_) {
+    var iso = function (agoMin) { return new Date(nowMs_ - agoMin * 60000).toISOString(); };
+    var day = function (offset) { return new Date(nowMs_ + 8 * HOUR + offset * DAY).toISOString().slice(0, 10); };
+    var mk = function (id, label, channel, status, inOff, outOff, msgs) { return { id: id, guest_label: label, channel: channel, status: status, checkin_date: day(inOff), checkout_date: day(outOff), messages: msgs }; };
+    return [
+      mk('11111111-1111-4111-8111-111111111111', 'Sample guest A', 'airbnb', 'open', -1, 2, [{ id: 'g1', from: 'guest', body: 'Hi! Is there a place to hang wet towels?', at: iso(90) }, { id: 'g2', from: 'guest', body: 'Also, what time is the checklist reminder?', at: iso(12) }]),
+      mk('22222222-2222-4222-8222-222222222222', 'Sample guest B', 'direct', 'open', 3, 6, [{ id: 'g3', from: 'guest', body: 'Can we arrive a little early on the day?', at: iso(60 * 20) }, { id: 'g4', from: 'staff', body: 'Hello! We will try. We will confirm the day before.', at: iso(60 * 19), staff_user_id: 'demo-staff' }]),
+      mk('33333333-3333-4333-8333-333333333333', 'Sample guest C', 'airbnb', 'resolved', -9, -6, [{ id: 'g5', from: 'guest', body: 'Thank you, we loved the stay.', at: iso(60 * 24 * 5) }])
+    ];
+  }
+  function demoGuideRow(t, readIds) {
+    var last = t.messages[t.messages.length - 1], g = null, s = null; t.messages.forEach(function (m) { if (m.from === 'guest') g = m.at; else s = m.at; });
+    var unread = t.status === 'open' && !readIds[t.id] ? t.messages.filter(function (m, i) { return m.from === 'guest' && i > lastStaffIdx(t.messages); }).length : 0;
+    return { id: t.id, guest_label: t.guest_label, channel: t.channel, status: t.status, checkin_date: t.checkin_date, checkout_date: t.checkout_date, last_guest_at: g, last_staff_at: s, unread: unread, last: last ? { from: last.from, body: last.body, at: last.at } : null };
+  }
+  function lastStaffIdx(msgs) { var k = -1; msgs.forEach(function (m, i) { if (m.from === 'staff') k = i; }); return k; }
+
   // ------------------------------------------------------------------------------------------------ mounted module
   var S = null, X_gen = 0; // state of the mounted instance; null when not mounted
   var drafts = {};         // QoL: unsent reply text per conversation, in memory only, so a draft survives a trip to the list and back (a reload or a refusal clears it)
+  var guideKnown = null;   // s135: null until the guide list RPC has answered; true shows the Guide source, false (not released, or refused) hides it. Cleared by reset().
+  var gkeep = null;        // the last guide list read (two minutes), like keep
+  var gdrafts = {};        // unsent guide reply text per thread, memory only
   var NO_SW = {};          // marker: swReg() gave no registration
   var pushKnown = null;    // the push card's state after the first probe (F11); cleared by reset()
   var keep = null;         //the last list read, kept in memory for two minutes so a list -> thread -> list trip paints at once (cleared on a role refusal and by reset() at sign-out)
@@ -310,7 +416,8 @@
   var SKELETON = '<div class="X_root" data-xr="root" data-x-view="list">' +
     '<section class="X_listpane" aria-label="Conversations"><div data-xr="list"></div><div data-xr="push"></div></section>' +
     '<section class="X_threadpane" aria-label="Conversation"><div data-xr="thead"></div><div data-xr="msgs"></div>' +
-    '<div class="X_comp" data-xr="compwrap" hidden><div data-xr="cwin"></div><div data-xr="ctext"></div><div data-xr="cquick"></div><div data-xr="cmsg"></div><div data-xr="cdraft"></div><div data-xr="cfoot"></div></div></section>' +
+    '<div class="X_comp" data-xr="compwrap" hidden><div data-xr="cwin"></div><div data-xr="ctext"></div><div data-xr="cquick"></div><div data-xr="cmsg"></div><div data-xr="cdraft"></div><div data-xr="cfoot"></div></div>' +
+    '<div class="X_comp" data-xr="gcompwrap" hidden><div data-xr="gbanner"></div><div data-xr="gtext"></div><div data-xr="gmsg"></div><div data-xr="gfoot"></div></div></section>' +
     '<div data-xr="sheet"></div><div class="X_sr" data-xr="live" role="status" aria-live="polite"></div></div>';
   function region(name) { return S && S.el.querySelector ? S.el.querySelector('[data-xr="' + name + '"]') : null; }
   function put(name, html) { var k = region(name); if (k) k.innerHTML = html; }
@@ -329,8 +436,10 @@
   // -- list --
   function visibleRows() { var rows = sortRows(S.list.rows || []); return S.filter === 'needs' ? rows.filter(function (r) { return r.open_handoffs > 0; }) : rows; }
   function drawList() {
+    if (S.src === 'guide') { drawGList(); return; }
     var L = S.list, now = nowMs(), rows = L.rows, needN = rows ? rows.filter(function (r) { return r.open_handoffs > 0; }).length : 0, h = '';
     h += '<div class="X_bar"><h1 class="X_h" tabindex="-1" data-xfocus>Inbox</h1><div class="X_barr">' + (L.at ? '<span class="X_sub">Updated ' + esc(fmtTime(L.at)) + '</span>' : '') + btn('refresh', 'Refresh', 'btn-ghost', S.busy ? ' disabled' : '') + '</div></div>';
+    h += srcToggle();
     if (rows) {
       h += '<div class="X_seg" role="group" aria-label="Show">' +
         '<button type="button" class="X_tab" aria-pressed="' + (S.filter === 'needs') + '" data-xa="filter" data-v="needs">Needs you (' + needN + ')</button>' +
@@ -362,6 +471,7 @@
 
   // -- thread --
   function drawThreadHead() {
+    if (S.src === 'guide') { drawGThreadHead(); return; }
     var T = S.thread, h = '';
     if (!S.psid) { put('thead', '<div class="X_empty" data-x-wide-only><h2 class="X_h3">Pick a conversation</h2><p class="X_p">The chat opens here.</p></div>'); return; }
     var d = T.data, now = nowMs();
@@ -389,6 +499,7 @@
     return h + '</li>';
   }
   function drawMsgs() {
+    if (S.src === 'guide') { drawGMsgs(); return; }
     var d = S.thread.data; if (!S.psid || !d) { put('msgs', ''); return; }
     var items = buildTimeline(d.history, d.handoffs), h = '';
     if (d.history.length >= HISTORY_CAP) h += '<p class="X_cap">Older messages are in Messenger.</p>';
@@ -447,6 +558,7 @@
     put('cfoot', h);
   }
   function drawComposer() {
+    if (S.src === 'guide') { drawGComposer(); return; }
     var show = !!(S.psid && S.thread.data);
     var w = region('compwrap'); if (w) w.hidden = !show;
     drawCompWin(); drawCompText(); drawCompQuick(); drawCompMsg(); drawCompDraft(); drawCompFoot();
@@ -489,7 +601,7 @@
     put('push', h + '</div>');
   }
 
-  function setView() { var r = region('root'); if (r && r.setAttribute) r.setAttribute('data-x-view', S.psid ? 'thread' : 'list'); }
+  function setView() { var r = region('root'); if (r && r.setAttribute) r.setAttribute('data-x-view', S.psid || S.gid ? 'thread' : 'list'); }
   function drawAll() { setView(); drawList(); drawPush(); drawThreadHead(); drawMsgs(); drawComposer(); drawSheet(); }
 
   // ------------------------------------------------------------------------------------------------ loading
@@ -553,17 +665,18 @@
     if (!visible()) return; // paused; the visibility handler restarts it
     if (!S.busy) {
       if (S.psid) { loadThread(true); syncComp(); }
-      if (nowMs() - (S.list.at || 0) >= LIST_EVERY - 5000) loadList(true);
+      if (S.gid) loadGThread(true);
+      if (nowMs() - (S.list.at || 0) >= LIST_EVERY - 5000) { loadList(true); if (S.g.avail !== false && (S.client || S.demo)) loadGList(true); }
     }
     schedule();
   }
   function onVis() {
     if (!S) return;
     if (!visible()) { if (S.tick) { clearTimeout(S.tick); S.tick = null; } return; }
-    if (!S.busy) { loadList(true); if (S.psid) loadThread(true); }
+    if (!S.busy) { loadList(true); if (S.psid) loadThread(true); if (S.g.avail !== false && (S.client || S.demo)) loadGList(true); if (S.gid) loadGThread(true); }
     schedule();
   }
-  function refreshAll() { if (S.busy) return; loadList(true); if (S.psid) loadThread(true); }
+  function refreshAll() { if (S.busy) return; loadList(true); if (S.psid) loadThread(true); if (S.g.avail !== false && (S.client || S.demo)) loadGList(true); if (S.gid) loadGThread(true); }
 
   // ------------------------------------------------------------------------------------------------ writes
   function setBusy(v) { S.busy = v; drawSheet(); drawCompFoot(); drawCompText(); drawThreadHead(); drawList(); }
@@ -694,6 +807,236 @@
     }).catch(function (e) { fail(e === 'blocked' || e === 'not_configured' || e === 'absent' ? e : 'failed'); });
   }
 
+  // ------------------------------------------------------------------------------------------------ s135: the Guide source (guest guide in-guide messages)
+  // Same panes as Messenger: the list, a thread, a reply box. Its own state (S.g list, S.gt thread, S.gc reply). Hidden, without a word, until staff_guide_threads_v1 answers with a list.
+  function badge(n, word) { return '<span class="X_badge"><span aria-hidden="true">' + (n > 99 ? '99+' : n) + '</span><span class="X_sr"> ' + esc(n + ' ' + word) + '</span></span>'; }
+  function srcToggle() {
+    if (!S || S.g.avail !== true) return '';
+    var rows = S.list.rows, needN = rows ? rows.filter(function (r) { return r.open_handoffs > 0; }).length : 0, un = S.g.rows ? gUnreadTotal(S.g.rows) : 0, onG = S.src === 'guide';
+    return '<div class="X_seg X_src" role="group" aria-label="Inbox source">' +
+      '<button type="button" class="X_tab" aria-pressed="' + !onG + '" data-xa="src" data-v="msgr">Messenger' + (needN ? ' ' + badge(needN, 'need you') : '') + '</button>' +
+      '<button type="button" class="X_tab" aria-pressed="' + onG + '" data-xa="src" data-v="guide">Guide' + (un ? ' ' + badge(un, 'unread') : '') + '</button></div>';
+  }
+  function gVisible() { var f = S.g.filter; return gSort((S.g.rows || []).filter(function (r) { return r.status === f; })); }
+  function gRowHtml(r, now) {
+    var cur = S.gid === r.id, stay = gStay(r), last = r.last ? (r.last.from === 'staff' ? 'You: ' : '') + r.last.body : 'No messages yet';
+    return '<li><button type="button" class="X_row' + (cur ? ' X_cur' : '') + (r.unread ? ' X_unread' : '') + '" data-xa="gopen" data-v="' + esc(r.id) + '"' + (cur ? ' aria-current="true"' : '') + '>' +
+      '<span class="X_rowtop"><span class="X_name">' + esc(r.guest_label) + '</span><span class="X_time">' + esc(gRel(gLastAt(r), now)) + '</span></span>' +
+      (stay ? '<span class="X_sub">' + esc('Stay ' + stay) + '</span>' : '') +
+      '<span class="X_prev">' + esc(last) + '</span>' +
+      '<span class="X_chips"><span class="X_chip X_ch_' + r.channel + '">' + (r.channel === 'airbnb' ? 'Airbnb' : 'Direct') + '</span>' + (r.status === 'resolved' ? chip({ k: 'cassy', glyph: '✓', word: 'Resolved' }) : '') + (r.unread ? badge(r.unread, 'unread') : '') + '</span></button></li>';
+  }
+  function drawGList() {
+    var G = S.g, now = nowMs(), rows = G.rows, h = '';
+    var openN = rows ? rows.filter(function (r) { return r.status === 'open'; }).length : 0;
+    h += '<div class="X_bar"><h1 class="X_h" tabindex="-1" data-xfocus>Inbox</h1><div class="X_barr">' + (G.at ? '<span class="X_sub">Updated ' + esc(fmtTime(G.at)) + '</span>' : '') + btn('refresh', 'Refresh', 'btn-ghost', G.busy ? ' disabled' : '') + '</div></div>';
+    h += srcToggle();
+    if (rows) {
+      h += '<div class="X_seg" role="group" aria-label="Show">' +
+        '<button type="button" class="X_tab" aria-pressed="' + (G.filter === 'open') + '" data-xa="gfilter" data-v="open">Open (' + openN + ')</button>' +
+        '<button type="button" class="X_tab" aria-pressed="' + (G.filter === 'resolved') + '" data-xa="gfilter" data-v="resolved">Resolved (' + (rows.length - openN) + ')</button></div>';
+    }
+    if (G.stale && rows) h += note('warn', 'Could not refresh just now. Showing what was read at ' + (G.at ? fmtTime(G.at) : 'the last read') + '.');
+    if (!rows) {
+      if (G.loading) h += '<div class="X_skel" aria-hidden="true"></div><div class="X_skel" aria-hidden="true"></div><div class="X_skel" aria-hidden="true"></div>';
+      else h += '<div class="X_card"><h2 class="X_h3">No connection</h2><p class="X_p">' + esc(G.offline ? 'You are offline, or the connection dropped.' : 'The guide messages could not be read.') + '</p>' + btn('refresh', 'Try again', 'btn-primary') + '</div>';
+    } else {
+      var vis = gVisible();
+      if (!rows.length) h += '<div class="X_card"><h2 class="X_h3">No guide messages yet</h2><p class="X_p">A conversation appears here when a guest writes from the guest guide.</p></div>';
+      else if (!vis.length) h += '<div class="X_card"><h2 class="X_h3">' + (G.filter === 'open' ? 'Nothing open' : 'Nothing resolved yet') + '</h2><p class="X_p">' + (G.filter === 'open' ? 'Every guide conversation is resolved.' : 'Resolved conversations are listed here.') + '</p>' + btn('gfilter', G.filter === 'open' ? 'Show resolved' : 'Show open', 'btn-secondary', ' data-v="' + (G.filter === 'open' ? 'resolved' : 'open') + '"') + '</div>';
+      else h += '<ul class="X_rows" aria-label="Guide conversations">' + vis.map(function (r) { return gRowHtml(r, now); }).join('') + '</ul>';
+    }
+    put('list', h);
+  }
+  function drawGThreadHead() {
+    var T = S.gt, h = '';
+    if (!S.gid) { put('thead', '<div class="X_empty" data-x-wide-only><h2 class="X_h3">Pick a conversation</h2><p class="X_p">The chat opens here.</p></div>'); return; }
+    var d = T.data;
+    h += '<div class="X_back">' + btn('gback', '‹ All conversations', 'btn-ghost') + '</div>';
+    if (!d) {
+      if (T.loading) h += '<div class="X_skel" aria-hidden="true"></div><div class="X_skel" aria-hidden="true"></div>';
+      else if (T.notFound) h += '<div class="X_card"><h2 class="X_h3">This conversation no longer exists</h2><p class="X_p">Go back to the list.</p></div>';
+      else if (T.denied) h += '<div class="X_card"><h2 class="X_h3">The inbox is for owner and admin</h2></div>';
+      else h += '<div class="X_card"><h2 class="X_h3">No connection</h2><p class="X_p">This conversation could not be read.</p>' + btn('refresh', 'Try again', 'btn-primary') + '</div>';
+      put('thead', h); return;
+    }
+    var th = d.thread, stay = gStay(th), open = th.status === 'open';
+    h += '<div class="X_thtop"><h2 class="X_h" tabindex="-1" data-xfocus>' + esc(th.guest_label) + '</h2><span class="X_sub">' + esc((th.channel === 'airbnb' ? 'Airbnb' : 'Direct') + (stay ? ', stay ' + stay : '')) + '</span></div>';
+    h += '<div class="X_chips"><span class="X_chip X_ch_' + th.channel + '">' + (th.channel === 'airbnb' ? 'Airbnb' : 'Direct') + '</span>' + (open ? chip({ k: 'needs', glyph: '●', word: 'Open' }) : chip({ k: 'cassy', glyph: '✓', word: 'Resolved' })) + '</div>';
+    h += '<div class="X_actions">' + btn(open ? 'gresolve' : 'greopen', open ? 'Resolve' : 'Reopen', open ? 'btn-secondary' : 'btn-primary', S.gbusy ? ' disabled' : '') + btn('refresh', 'Refresh', 'btn-ghost') + '</div>';
+    if (T.stale) h += note('warn', 'Could not refresh just now. Showing what was read at ' + (T.at ? fmtTime(T.at) : 'the last read') + '.');
+    put('thead', h);
+  }
+  function gBubble(m) {
+    var staff = m.from === 'staff', loc = m.local, ms = Date.parse(m.at), h;
+    h = '<li class="X_msg ' + (staff ? 'X_host' : 'X_guest') + (loc ? ' X_g' + loc.state : '') + '"><div class="X_bub"><div class="X_who"><span>' + (staff ? 'Host' : 'Guest') + '</span><span>' + (isFinite(ms) ? esc(fmtTime(ms)) : '') + '</span></div>' +
+      '<p class="X_txt">' + esc(m.body) + '</p>' + (loc && loc.state === 'sending' ? '<p class="X_gstate">Sending</p>' : '') + '</div></li>';
+    if (loc && loc.state === 'failed') h += '<li class="X_gfail"><p class="X_note X_bad" role="alert"><span aria-hidden="true">▲</span> ' + esc('Not sent. ' + (loc.err || '')) + '</p><div class="X_actions">' +
+      btn('gretry', 'Send again', 'btn-primary', ' data-v="' + esc(loc.cmid) + '"') + btn('gdiscard', 'Discard', 'btn-ghost', ' data-v="' + esc(loc.cmid) + '"') + '</div></li>';
+    return h;
+  }
+  function drawGMsgs() {
+    var d = S.gt.data; if (!S.gid || !d) { put('msgs', ''); return; }
+    var items = gMerge(d.messages, S.gt.locals), h = '';
+    if (!items.length) h += '<p class="X_p X_pad">No messages in this conversation.</p>';
+    h += '<ol class="X_msgs" aria-label="Messages">' + items.map(gBubble).join('') + '</ol>';
+    put('msgs', h);
+  }
+  function drawGBanner() { put('gbanner', '<div class="X_note X_warn X_rule" id="X_gbanner"><span aria-hidden="true">▲</span> ' + esc(GUIDE_RULE) + '</div>'); }
+  function drawGText() {
+    var d = S.gt.data; if (!d) { put('gtext', ''); return; }
+    put('gtext', '<label class="X_lbl" for="X_gtext">Reply to ' + esc(d.thread.guest_label) + '</label><textarea id="X_gtext" class="X_ta" data-xf="gtext" maxlength="' + GUIDE_MAX + '" rows="3" aria-describedby="X_gbanner" placeholder="Write the reply. The guest reads it in the guest guide.">' + esc(S.gc.text) + '</textarea>');
+  }
+  function drawGMsg() { var m = S.gc.msg; put('gmsg', m ? note(S.gc.msgKind || 'bad', m) : ''); }
+  function drawGFoot() {
+    var d = S.gt.data; if (!d) { put('gfoot', ''); return; }
+    var c = S.gc, len = c.text.length;
+    put('gfoot', '<div class="X_foot2">' + (len >= GUIDE_MAX - 100 ? '<span class="X_count' + (len >= GUIDE_MAX - 20 ? ' X_warnt' : '') + '" aria-live="polite">' + len + ' of ' + GUIDE_MAX + ' characters</span>' : '<span></span>') +
+      '<span class="X_btns">' + btn('gsend', c.sending ? 'Sending' : 'Send reply', 'btn-primary', !c.text.trim() || len > GUIDE_MAX || c.sending ? ' disabled' + (c.sending ? ' aria-busy="true"' : '') : '') + '</span></div>');
+  }
+  function drawGComposer() {
+    var show = !!(S.gid && S.gt.data);
+    var w = region('gcompwrap'); if (w) w.hidden = !show;
+    var m = region('compwrap'); if (m) m.hidden = true;
+    drawGBanner(); drawGText(); drawGMsg(); drawGFoot();
+  }
+  function gSetText(v) { S.gc.text = String(v == null ? '' : v); if (!S.gid) return; if (S.gc.text) { delete gdrafts[S.gid]; gdrafts[S.gid] = S.gc.text; var k = Object.keys(gdrafts); while (k.length > 20) delete gdrafts[k.shift()]; } else delete gdrafts[S.gid]; }
+  function gResetCompose() { S.gc = { text: (S.gid && gdrafts[S.gid]) || '', msg: '', msgKind: '', sending: false }; }
+  function gUpdateRow(id, fn) {
+    var hit = false;
+    [S.g.rows, gkeep && gkeep.rows].forEach(function (rows) { (rows || []).forEach(function (r) { if (r.id === id) { fn(r); hit = true; } }); });
+    return hit;
+  }
+
+  // -- loading --
+  function loadGList(quiet) {
+    var G = S.g, gen = S.gen;
+    if (G.busy || G.avail === false) return Promise.resolve();
+    G.busy = true; if (!G.rows && !quiet && S.src === 'guide') { G.loading = true; drawGList(); }
+    var done = function (rows, err, avail) {
+      if (!S || S.gen !== gen) return;
+      G.busy = false; G.loading = false;
+      if (avail === false) { // not released yet (or refused): the source goes away without a word
+        G.avail = false; G.rows = null; gkeep = null; if (!S.demo) guideKnown = false;
+        if (S.src === 'guide') { S.src = 'msgr'; S.gid = ''; go('#inbox'); drawAll(); } else drawList();
+        return;
+      }
+      if (rows) { G.avail = true; if (!S.demo) guideKnown = true; G.rows = rows; G.at = nowMs(); G.stale = false; G.offline = false; gkeep = { rows: rows, at: G.at, role: S.role }; }
+      else if (G.rows) G.stale = true;
+      else G.offline = !!(err && isOffline(err)) || !online();
+      drawList();
+    };
+    if (S.demo) return Promise.resolve().then(function () { done(S.demoG.map(function (t) { return gRow(demoGuideRow(t, S.demoRead)); }), null, true); });
+    if (!S.client || !online()) { done(null, { message: 'offline' }); return Promise.resolve(); }
+    var args = S.opts.propertyId ? { p_property_id: S.opts.propertyId } : {};
+    return callRpc('staff_guide_threads_v1', args).then(function (res) {
+      var av = gAvail(res);
+      if (av === false) { done(null, res.error, false); return; }
+      if (res.error) { done(null, res.error); return; }
+      done(gRows(res.data), null, true);
+    });
+  }
+  function loadGThread(quiet) {
+    if (!S.gid) return Promise.resolve();
+    var T = S.gt, id = S.gid, gen = S.gen;
+    if (T.busy) return Promise.resolve();
+    T.busy = true; if (!T.data && !quiet) { T.loading = true; drawGThreadHead(); }
+    var done = function (data, err) {
+      if (!S || S.gen !== gen || S.gid !== id) return;
+      T.busy = false; T.loading = false;
+      if (data) {
+        var first = !T.data, last = data.messages[data.messages.length - 1], sig = data.messages.length + '|' + (last ? last.id : '') + '|' + data.thread.status;
+        T.data = data; T.at = nowMs(); T.stale = false; T.notFound = T.denied = false;
+        T.locals = T.locals.filter(function (m) { return !(m.state === 'failed' && gMerge(data.messages, [m]).length === data.messages.length); }); // a failed one that is on record did go out
+        gUpdateRow(id, function (r) { r.unread = 0; }); // reading the thread marks it read on the server
+        var changed = sig !== T.sig; T.sig = sig;
+        if (changed || first) { drawGThreadHead(); drawGMsgs(); if (first) { drawGComposer(); scrollEnd(); } } else drawGThreadHead();
+        drawList();
+      } else if (err && isDenied(err)) { T.denied = true; T.data = null; gdrafts = {}; drawGThreadHead(); }
+      else if (err && !isOffline(err) && (err.code === 'P0002' || /not.?found/i.test(errText(err)))) { T.data = null; T.notFound = true; drawGThreadHead(); drawGMsgs(); drawGComposer(); }
+      else if (T.data) { T.stale = true; drawGThreadHead(); }
+      else drawGThreadHead();
+    };
+    if (S.demo) return Promise.resolve().then(function () {
+      var t = S.demoG.filter(function (x) { return x.id === id; })[0]; if (!t) { done(null, { code: 'P0002', message: 'not found' }); return; }
+      var row = gRow(demoGuideRow(t, S.demoRead)); S.demoRead[id] = true;
+      done({ thread: row, messages: t.messages.map(gMsg) });
+    });
+    if (!S.client || !online()) { done(null, { message: 'offline' }); return Promise.resolve(); }
+    return callRpc('staff_guide_thread_v1', { p_thread_id: id }).then(function (res) {
+      if (res.error) { done(null, res.error); return; }
+      var t = gThread(res.data); if (!t) done(null, { code: 'P0002', message: 'not found' }); else done(t);
+    });
+  }
+
+  // -- writes --
+  function doGSend() {
+    var c = S.gc, d = S.gt.data; if (!d || c.sending) return;
+    var body = c.text.trim(); if (!body || body.length > GUIDE_MAX) return;
+    if (!S.demo && !online()) { c.msg = NOT_SENT_OFFLINE; c.msgKind = 'bad'; drawGMsg(); return; }
+    var m = { cmid: S.opts.newKey ? String(S.opts.newKey('gm')) : gCmid(), body: body, at: new Date(nowMs()).toISOString(), state: 'sending', err: '' };
+    if (!CMID_RE.test(m.cmid)) m.cmid = gCmid(); // the server needs 8 to 80 safe characters
+    S.gt.locals.push(m); gSetText(''); c.msg = ''; c.msgKind = ''; c.sending = true;
+    drawGMsgs(); drawGText(); drawGMsg(); drawGFoot(); scrollEnd(); focusSel('#X_gtext');
+    gSendTry(m, 0);
+  }
+  function gSendTry(m, attempt) {
+    var gen = S.gen, id = S.gid, c = S.gc, T = S.gt;
+    var finish = function (res) {
+      if (!S || S.gen !== gen) return;
+      var o = gReplyOutcome(res);
+      if (o.ok) { // on record: the message moves from "local" to the thread (answer {already:true} means an earlier try had landed)
+        var at = o.at || m.at, d = T.data;
+        T.locals = T.locals.filter(function (x) { return x !== m; });
+        if (d && S.gid === id) {
+          var have = o.id && d.messages.some(function (x) { return x.id === o.id; });
+          if (!have) d.messages.push({ id: o.id || 'sent:' + m.cmid, from: 'staff', body: m.body, at: at, staff_user_id: null });
+          d.thread.last_staff_at = at; d.thread.last = { from: 'staff', body: m.body, at: at };
+        }
+        gUpdateRow(id, function (r) { r.last_staff_at = at; r.last = { from: 'staff', body: m.body, at: at }; });
+        c.sending = false; T.sig = null; buzz('success'); say('Reply sent');
+        drawGMsgs(); drawGFoot(); drawList(); scrollEnd(); return;
+      }
+      if (o.retry && attempt === 0) { // may not have arrived: one more try with the SAME client_msg_id, so a first copy that did land is not doubled
+        var t = setTimeout(function () { var i = S && S.timers.indexOf(t); if (S && i >= 0) S.timers.splice(i, 1); if (!S || S.gen !== gen) return; gSendTry(m, 1); }, GUIDE_RETRY_MS);
+        S.timers.push(t); return;
+      }
+      m.state = 'failed'; m.err = o.text; c.sending = false; buzz('error'); say('Reply not sent');
+      drawGMsgs(); drawGFoot();
+    };
+    if (S.demo) { Promise.resolve().then(function () { var t = S.demoG.filter(function (x) { return x.id === id; })[0], at = new Date(nowMs()).toISOString(); if (t) { t.messages.push({ id: 'demo-' + m.cmid, from: 'staff', body: m.body, at: at, staff_user_id: 'demo-staff' }); S.demoRead[id] = true; } finish({ data: { ok: true, id: 'demo-' + m.cmid, at: at }, error: null }); }); return; }
+    if (!S.client) { finish({ data: null, error: { message: 'offline' } }); return; }
+    callRpc('staff_guide_reply_v1', gReplyArgs(id, m.body, m.cmid)).then(finish);
+  }
+  function doGRetry(cmid) {
+    var m = S.gt.locals.filter(function (x) { return x.cmid === cmid && x.state === 'failed'; })[0]; if (!m || S.gc.sending) return;
+    if (!S.demo && !online()) { S.gc.msg = NOT_SENT_OFFLINE; S.gc.msgKind = 'bad'; drawGMsg(); return; }
+    m.state = 'sending'; m.err = ''; S.gc.sending = true; drawGMsgs(); drawGFoot(); gSendTry(m, 0); // the same key as before
+  }
+  function doGDiscard(cmid) {
+    var m = S.gt.locals.filter(function (x) { return x.cmid === cmid && x.state === 'failed'; })[0]; if (!m) return;
+    S.gt.locals = S.gt.locals.filter(function (x) { return x !== m; });
+    if (!S.gc.text.trim()) { gSetText(m.body); drawGText(); } // the words go back in the box, nothing is lost
+    drawGMsgs(); drawGFoot();
+  }
+  function doGResolve(resolved) {
+    var d = S.gt.data; if (!d || S.gbusy) return;
+    var id = d.thread.id, was = d.thread.status, to = resolved ? 'resolved' : 'open', gen = S.gen;
+    if (!S.demo && !online()) { tell('You are offline, so nothing changed.'); return; }
+    S.gbusy = true; d.thread.status = to; gUpdateRow(id, function (r) { r.status = to; }); drawGThreadHead(); drawList();
+    var finish = function (res) {
+      if (!S || S.gen !== gen) return;
+      S.gbusy = false;
+      var bad = !res || res.error || (res.data && res.data.ok === false);
+      if (bad) { d.thread.status = was; gUpdateRow(id, function (r) { r.status = was; }); buzz('error'); tell(resolved ? 'Could not resolve this conversation. Nothing changed.' : 'Could not reopen this conversation. Nothing changed.'); }
+      else { buzz('success'); say(resolved ? 'Conversation resolved' : 'Conversation reopened'); T_sigReset(); }
+      drawGThreadHead(); drawList();
+    };
+    if (S.demo) { Promise.resolve().then(function () { var t = S.demoG.filter(function (x) { return x.id === id; })[0]; if (t) t.status = to; finish({ data: { ok: true }, error: null }); }); return; }
+    callRpc('staff_guide_resolve_v1', { p_thread_id: id, p_resolved: !!resolved }).then(finish);
+  }
+  function T_sigReset() { if (S && S.gt) S.gt.sig = null; }
+
   // ------------------------------------------------------------------------------------------------ events
   function go(hash) { if (S && S.opts.navigate) S.opts.navigate(hash); }
   function resetCompose() { S.c = { text: (S.psid && drafts[S.psid]) || '', msg: '', msgKind: '', msgLinks: false, drafting: false, draftErr: '', options: null, mark: true, pending: null }; }
@@ -705,6 +1048,14 @@
     if (S.busy && (a === 'open' || a === 'back' || a === 'refresh' || a === 'filter' || a === 'dash' || a === 'sheet-x' || a === 'edit' || a === 'push' || a === 'resume' || a === 'review' || a === 'draft' || a === 'quick' || a === 'pick')) return; // a write is in flight: nothing may orphan it
     if (a === 'open') { if (ev.preventDefault) ev.preventDefault(); if (PSID_RE.test(v || '')) go('#inbox/' + encodeURIComponent(v)); return; }
     if (a === 'back') { go('#inbox'); return; }
+    if (a === 'src') { go(v === 'guide' ? '#inbox/guide' : '#inbox'); return; } // s135: the Guide source and the guide thread links, all in the hash so the back button works
+    if (a === 'gopen') { if (ev.preventDefault) ev.preventDefault(); if (UUID_RE.test(v || '')) go('#inbox/guide:' + v.toLowerCase()); return; }
+    if (a === 'gback') { go('#inbox/guide'); return; }
+    if (a === 'gfilter') { S.g.filter = v === 'resolved' ? 'resolved' : 'open'; drawList(); return; }
+    if (a === 'gsend') { doGSend(); return; }
+    if (a === 'gretry') { if (CMID_RE.test(v || '')) doGRetry(v); return; }
+    if (a === 'gdiscard') { if (CMID_RE.test(v || '')) doGDiscard(v); return; }
+    if (a === 'gresolve' || a === 'greopen') { doGResolve(a === 'gresolve'); return; }
     if (a === 'dash') { go('#door/dashboard/guests/conversations'); return; }
     if (a === 'refresh') { refreshAll(); return; }
     if (a === 'filter') { S.filter = v === 'all' ? 'all' : 'needs'; ls('set', 'cs_x_filter', S.filter); drawList(); return; }
@@ -733,6 +1084,7 @@
   function onInput(ev) {
     if (!S) return; var t = ev.target; if (!t || !t.getAttribute) return; var f = t.getAttribute('data-xf'); if (!f) return;
     if (f === 'text') { setText(t.value); drawCompFoot(); return; } // the box itself is not redrawn
+    if (f === 'gtext') { gSetText(t.value); drawGFoot(); return; }
     if (f === 'mark') { S.c.mark = !!t.checked; }
   }
   function onKey(ev) {
@@ -754,10 +1106,14 @@
     if (!canUse(opts.role)) { if (opts.navigate) opts.navigate('#home'); return; }
     var sub = String(opts.sub || ''); try { sub = decodeURIComponent(sub); } catch (e) { sub = ''; }
     var f = ls('get', 'cs_x_filter'), now = nowMs();
-    S = { el: el, opts: opts, client: opts.client, demo: !!opts.demo, role: opts.role, gen: ++X_gen, psid: PSID_RE.test(sub) ? sub : '', filter: f === 'all' ? 'all' : 'needs', busy: false, sheet: null, timers: [], tick: null,
-      list: { rows: null, at: 0, busy: false, loading: false, stale: false }, thread: { data: null, at: 0, busy: false, loading: false, sig: null }, push: { state: 'hidden', busy: false, msg: '' }, c: null };
-    resetCompose();
-    if (S.demo) S.demoThreads = demoData(now).threads;
+    var gm = GUIDE_SUB.exec(sub), onGuide = sub === 'guide' || !!gm; // s135: #inbox/guide is the Guide list, #inbox/guide:<thread uuid> a Guide thread (the push link)
+    S = { el: el, opts: opts, client: opts.client, demo: !!opts.demo, role: opts.role, gen: ++X_gen, src: onGuide ? 'guide' : 'msgr', gid: gm ? gm[1].toLowerCase() : '', psid: !onGuide && PSID_RE.test(sub) ? sub : '', filter: f === 'all' ? 'all' : 'needs', busy: false, sheet: null, timers: [], tick: null,
+      list: { rows: null, at: 0, busy: false, loading: false, stale: false }, thread: { data: null, at: 0, busy: false, loading: false, sig: null }, push: { state: 'hidden', busy: false, msg: '' }, c: null,
+      g: { avail: opts.demo ? true : guideKnown, rows: null, at: 0, busy: false, loading: false, stale: false, offline: false, filter: 'open' }, gt: { data: null, at: 0, busy: false, loading: false, sig: null, locals: [] }, gc: null, gbusy: false, demoG: null, demoRead: {} };
+    resetCompose(); gResetCompose();
+    if (S.demo) { S.demoThreads = demoData(now).threads; S.demoG = demoGuide(now); }
+    if (S.src === 'guide' && S.g.avail === false) { S.src = 'msgr'; S.gid = ''; go('#inbox'); } // a deep link to a source this server does not have yet: back to Messenger, quietly
+    if (!S.demo && gkeep && gkeep.role === opts.role && now - gkeep.at < GUIDE_CACHE_MS && S.g.avail === true) { S.g.rows = gkeep.rows; S.g.at = gkeep.at; }
     if (!S.demo && keep && keep.role === opts.role && now - keep.at < 120000) { S.list.rows = keep.rows; S.list.at = keep.at; } // not stale: stale only comes from a failed read
     S.onClick = onClick; S.onInput = onInput; S.onKey = onKey; S.onVis = onVis;
     el.innerHTML = SKELETON;
@@ -765,7 +1121,7 @@
     S.onSubmit = function (e) { if (e && e.preventDefault) e.preventDefault(); }; el.addEventListener('submit', S.onSubmit);
     try { if (typeof document !== 'undefined' && document.addEventListener) document.addEventListener('visibilitychange', S.onVis); } catch (e) { /* ok */ }
     drawAll();
-    if (S.demo || S.client) { loadList(false); if (S.psid) loadThread(false); pushProbe(); } else { S.list.loading = false; drawList(); if (S.psid) drawThreadHead(); }
+    if (S.demo || S.client) { loadList(false); if (S.psid) loadThread(false); if (S.g.avail !== false) { var gp = loadGList(S.src !== 'guide'), gg = S.gen; if (S.gid) { if (S.g.avail === true) loadGThread(false); else gp.then(function () { if (S && S.gen === gg && S.gid && S.g.avail !== false) loadGThread(false); }); } } pushProbe(); } else { S.list.loading = false; drawList(); if (S.psid) drawThreadHead(); }
     schedule();
   }
   function unmount() {
@@ -781,12 +1137,13 @@
     mount: mount, unmount: unmount,
     _setClock: function (fn) { clock = fn || function () { return Date.now(); }; },
     _setRpcTimeout: function (ms) { RPC_TIMEOUT_MS = ms; },
-    reset: function () { keep = null; drafts = {}; pushKnown = null; }, // the shell calls this on sign-out
-    _clearKeep: function () { keep = null; }, _clearDrafts: function () { drafts = {}; },
+    reset: function () { keep = null; drafts = {}; pushKnown = null; guideKnown = null; gkeep = null; gdrafts = {}; }, // the shell calls this on sign-out
+    _clearKeep: function () { keep = null; gkeep = null; guideKnown = null; }, _clearDrafts: function () { drafts = {}; gdrafts = {}; }, _setGuideRetry: function (ms) { GUIDE_RETRY_MS = ms; },
     lib: { replyWindow: replyWindow, windowLeft: windowLeft, windowSentence: windowSentence, windowLastHour: windowLastHour, speakerOf: speakerOf, turnRisk: turnRisk, buildTimeline: buildTimeline, newestOpenHandoff: newestOpenHandoff,
       stateChips: stateChips, sortRows: sortRows, rowWindowChip: rowWindowChip, quickReplies: quickReplies, clock12: clock12, daysLeftWords: daysLeftWords, lastGuestText: lastGuestText, repliedAlready: repliedAlready, sendOutcome: sendOutcome, draftError: draftError, draftOptions: draftOptions, resumeOutcome: resumeOutcome,
       threadUrl: threadUrl, subscribeArgs: subscribeArgs, pushSupport: pushSupport, fmtTime: fmtTime, fmtStamp: fmtStamp, fmtListTime: fmtListTime, canUse: canUse, esc: esc,
-      REPLY_WINDOW_HOURS: REPLY_WINDOW_HOURS, MAX_TEXT: MAX_TEXT, HISTORY_CAP: HISTORY_CAP, SEND_NOTHING: SEND_NOTHING }
+      REPLY_WINDOW_HOURS: REPLY_WINDOW_HOURS, MAX_TEXT: MAX_TEXT, HISTORY_CAP: HISTORY_CAP, SEND_NOTHING: SEND_NOTHING,
+      guide: { rule: GUIDE_RULE, MAX: GUIDE_MAX, row: gRow, rows: gRows, msg: gMsg, thread: gThread, sort: gSort, unreadTotal: gUnreadTotal, stay: gStay, rel: gRel, lastAt: gLastAt, cmid: gCmid, replyArgs: gReplyArgs, replyOutcome: gReplyOutcome, merge: gMerge, avail: gAvail, isFnMissing: isFnMissing, CMID_RE: CMID_RE } }
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   if (typeof window !== 'undefined') window.X_Inbox = api;

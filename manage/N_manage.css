@@ -158,3 +158,17 @@ button.N_link { background: none; border: 0; padding: 0; font: inherit; cursor: 
 .N_help { margin: 0; color: var(--fg-2); font-size: 0.8125rem; line-height: 1.35; }
 .N_sheet details { margin: 0; }
 .N_sheet summary.N_link { cursor: pointer; }
+/* s135 (3.4.54): the Guest guide card on the KPIs tab. Tokens only; text 13px and up; every bar has its number beside it. */
+.N_gg { gap: 10px; }
+.N_ggtiles { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.N_ggtile { display: grid; gap: 2px; align-content: start; padding: 10px 12px; border: 1px solid var(--border); border-radius: var(--r-md); background: var(--card); }
+.N_ggspark { display: grid; gap: 4px; }
+.N_h4 { font: 600 max(0.8125rem, var(--v5-t-2))/1.3 var(--font-ui); margin: 4px 0 0; color: var(--fg-2); }
+.N_gglist, .N_ggfun { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.N_gglist > li, .N_ggfun > li { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 12px; align-items: baseline; font-size: max(0.8125rem, var(--v5-t-2)); }
+.N_ggl { overflow-wrap: anywhere; min-width: 0; }
+.N_ggw { color: var(--fg-2); }
+.N_ggv { color: var(--fg-2); text-align: right; }
+.N_ggfun > li { grid-template-columns: minmax(0, 1fr) auto; }
+.N_ggbar { grid-column: 1 / -1; display: block; height: 6px; border-radius: var(--r-full); background: var(--muted); position: relative; overflow: hidden; }
+.N_ggbar::after { content: ""; position: absolute; inset: 0 auto 0 0; width: var(--w, 0%); background: var(--primary); border-radius: inherit; }

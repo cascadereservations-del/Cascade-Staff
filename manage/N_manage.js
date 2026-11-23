@@ -299,6 +299,36 @@
   }
   function declineTold(channel, code) { return code === 'duplicate' ? 'duplicate' : channel === 'email' || channel === 'messenger' ? channel : null; }
 
+  // ---- s135: the "Guest guide" card on the KPIs tab (staff_guide_usage_v1, owner and admin). Every figure is the server's; this only trims to the top five and formats. ----
+  var GG_DAYS = 30;
+  var GG_FUNNEL = [['verify_start', 'Started verifying'], ['verify_ok', 'Verified a stay'], ['browse_guest', 'Browsed as a guest'], ['checklist_done', 'Finished the checklist'], ['message_sent', 'Sent a message']];
+  function ggInt(v) { var n = Number(v); return isFinite(n) && n > 0 ? Math.floor(n) : 0; }
+  function ggNum(n) { return String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ','); }
+  function ggList(v) { return Array.isArray(v) ? v.filter(function (x) { return x && typeof x === 'object'; }) : []; }
+  function ggTop(rows, key, n) { return rows.map(function (r, i) { return { r: r, i: i }; }).sort(function (a, b) { return b.r[key] !== a.r[key] ? b.r[key] - a.r[key] : a.i - b.i; }).slice(0, n).map(function (x) { return x.r; }); }
+  function ggLabel(s) { var t = String(s == null ? '' : s).replace(/[_-]+/g, ' ').replace(/\s+/g, ' ').trim(); return t ? t.charAt(0).toUpperCase() + t.slice(1) : 'Other'; }
+  function ggSeconds(v) { var n = Math.round(Number(v)); if (!isFinite(n) || n <= 0) return '0 s'; if (n < 60) return n + ' s'; var m = Math.floor(n / 60), s = n % 60; return m + ' min' + (s ? ' ' + s + ' s' : ''); }
+  // one number per day for the sparkline, zero for a day with no rows, so a quiet week reads as quiet and not as a shorter chart
+  function ggDense(byDay, since, days) {
+    var map = {}; ggList(byDay).forEach(function (r) { var k = String(r.day || '').slice(0, 10); if (/^\d{4}-\d{2}-\d{2}$/.test(k)) map[k] = (map[k] || 0) + ggInt(r.events); });
+    var s = String(since || '').slice(0, 10), out = [], i;
+    if (/^\d{4}-\d{2}-\d{2}$/.test(s)) { for (i = 0; i < days; i++) out.push(map[addDays(s, i)] || 0); return out; }
+    return Object.keys(map).sort().map(function (k) { return map[k]; });
+  }
+  function ggModel(raw, days) {
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
+    var f = raw.funnel && typeof raw.funnel === 'object' ? raw.funnel : {};
+    var m = { since: String(raw.since || '').slice(0, 10), days: days || GG_DAYS, devices: ggInt(raw.devices), verified: ggInt(raw.verified_stays), opens: ggInt(raw.opens),
+      sections: ggTop(ggList(raw.sections).map(function (s) { return { label: ggLabel(s.section), views: ggInt(s.views), devices: ggInt(s.devices), avg: ggSeconds(s.avg_seconds) }; }), 'views', 5),
+      taps: ggTop(ggList(raw.top_taps).map(function (t) { return { target: String(t.target == null ? '' : t.target), where: t.section ? ggLabel(t.section) : '', taps: ggInt(t.taps), devices: ggInt(t.devices) }; }).filter(function (t) { return t.target; }), 'taps', 5),
+      funnel: GG_FUNNEL.map(function (p) { return { key: p[0], label: p[1], n: ggInt(f[p[0]]) }; }),
+      searches: ggTop(ggList(raw.searches_without_result).map(function (s) { return { target: String(s.target == null ? '' : s.target), n: ggInt(s.n) }; }).filter(function (s) { return s.target; }), 'n', 5) };
+    m.perDay = ggDense(raw.by_day, m.since, m.days);
+    m.sent = ggInt(f.message_sent);
+    m.empty = !m.devices && !m.opens && !m.verified;
+    return m;
+  }
+
   // ---- errors: plain words ----
   function errCode(e) { return e && (e.code || (e.error && e.error.code)) || ''; }
   function errMsg(e) { return String((e && (e.message || (e.error && e.error.message))) || e || ''); }
@@ -340,6 +370,14 @@
       rq: function () { return { count: this.rqRows.length, total: this.rqRows.reduce(function (a, r) { return a + Number(r.gross_amount); }, 0).toFixed(2), truncated: false, rows: this.rqRows }; },
       rqRows: [{ id: 'n-demo-r1', transaction_date: d(-1), txn_type: 'expense', category: '', gross_amount: '1200.00', payee_name: 'Sample market', notes: 'Sample: scanned receipt', or_number: null, source: 'ocr', receipt_image_path: 'n/a', ocr_confidence: 0.5, created_at: d(-1) + 'T02:00:00Z' },
         { id: 'n-demo-r2', transaction_date: d(-5), txn_type: 'expense', category: 'supplies', gross_amount: '800.00', payee_name: 'Demo shop', notes: 'Stock bought, some items not priced', or_number: null, source: 'stock', receipt_image_path: null, ocr_confidence: null, s134_incomplete: true, created_at: d(-5) + 'T02:00:00Z' }],
+      guide: function () { // staff_guide_usage_v1 sample, 30 days
+        return { since: d(-29), devices: 14, verified_stays: 5, opens: 41,
+          by_day: [0, 3, 5, 8, 12, 20, 29].map(function (k) { return { day: d(-k), devices: 1 + k % 4, events: 4 + k }; }),
+          sections: [{ section: 'wifi', views: 33, devices: 12, avg_seconds: 18 }, { section: 'checklist', views: 21, devices: 7, avg_seconds: 95 }, { section: 'house_rules', views: 12, devices: 9, avg_seconds: 41 }, { section: 'nearby', views: 9, devices: 5, avg_seconds: 62 }, { section: 'delivery', views: 7, devices: 4, avg_seconds: 27 }, { section: 'contact', views: 2, devices: 2, avg_seconds: 8 }],
+          top_taps: [{ target: 'wifi_copy', section: 'wifi', taps: 24, devices: 11 }, { target: 'map_open', section: 'nearby', taps: 9, devices: 4 }, { target: 'checklist_item', section: 'checklist', taps: 8, devices: 5 }],
+          funnel: { verify_start: 9, verify_ok: 5, browse_guest: 7, checklist_done: 3, message_sent: 4 },
+          searches_without_result: [{ target: 'jollibee', n: 3 }, { target: 'pizza', n: 2 }] };
+      },
       seriesV1: function () {
         var y = +today.slice(0, 4), m = +today.slice(5, 7) - 1, months = [], pace = [], i, mo, cap = 30;
         for (i = 12; i >= 0; i--) {
@@ -408,7 +446,7 @@
     if (t === 'today') { load('overview', force); load('inq', force); load('waiting', force); }
     else if (t === 'inquiries') load('inq', force);
     else if (t === 'money') { load('txns', force); load('rq', force); }
-    else if (t === 'kpis') { load('kpi', force); loadSeries(force); }
+    else if (t === 'kpis') { load('kpi', force); loadSeries(force); if (canManage(S.role)) load('gg', force); }
   }
   // One get_hospitality_series_v1 call (13 months: twelve full ones and the running month) when the server has it and the chart module is loaded;
   // otherwise the older way: six monthly get_hospitality_metrics_v1 calls, two at a time. Kept in memory for the session.
@@ -468,7 +506,7 @@
     };
     if (S.demo) { // built-in sample, no network
       var dd = S.demoData, per = periodPreset(S.period, S.today), cmp = comparablePeriod(per, compareMode(S.period));
-      var sample = kind === 'overview' ? dd.overview : kind === 'inq' ? normalizePayments(dd.inquiries) : kind === 'waiting' ? normalizeWaiting(dd.waiting) : kind === 'txns' ? dd.txns : kind === 'rq' ? dd.rq() : kind === 'cats' ? dd.cats : { now: dd.metrics(per.start, per.endExclusive), prev: dd.metrics(cmp.start, cmp.endExclusive) };
+      var sample = kind === 'overview' ? dd.overview : kind === 'inq' ? normalizePayments(dd.inquiries) : kind === 'waiting' ? normalizeWaiting(dd.waiting) : kind === 'txns' ? dd.txns : kind === 'rq' ? dd.rq() : kind === 'cats' ? dd.cats : kind === 'gg' ? dd.guide() : { now: dd.metrics(per.start, per.endExclusive), prev: dd.metrics(cmp.start, cmp.endExclusive) };
       Promise.resolve().then(function () { done({ data: sample, error: null }); }); return;
     }
     if (!online() || !S.client) { Promise.resolve().then(function () { done({ data: null, error: { message: 'failed to fetch' } }); }); return; }
@@ -489,6 +527,8 @@
       callRpc('admin_review_queue_v1', { p_property_id: pid() }).then(done);
     } else if (kind === 'cats') {
       callRpc('expense_categories_v1', { p_property_id: pid() }).then(done);
+    } else if (kind === 'gg') {
+      callRpc('staff_guide_usage_v1', { p_days: GG_DAYS }).then(done); // guide v8: a missing function sets absent and the card never draws
     } else if (kind === 'kpi') {
       var p1 = periodPreset(S.period, S.today), p2 = comparablePeriod(p1, compareMode(S.period));
       var get = function (p) { return callRpc('get_hospitality_metrics_v1', { p_property_id: pid(), p_start: p.start, p_end_exclusive: p.endExclusive }); }; // features/insights/api.ts:9
@@ -700,6 +740,7 @@
           '<span class="N_val N_num' + (na ? ' N_na' : '') + '">' + esc(formatMetricValue(m)) + '</span></div>';
       }).join('') + '</section>';
     });
+    out += ggHtml();
     if (now && now.blockedNights > 0) out += '<p class="N_foot">' + esc(count(now.blockedNights, 'calendar-blocked night is', 'calendar-blocked nights are') + ' unexplained and still count as sellable, so occupancy may read low.') + '</p>';
     out += '<p class="N_foot"><a class="N_link" href="#door/dashboard/insights" data-n="go" data-v="insights">Desk tools: full KPIs in the dashboard</a></p>';
     return out;
@@ -797,6 +838,33 @@
     out += C.paceCard({ nextMonths: pace.map(function (p) { return { label: lab(p.month), booked: nm(p.otb_nights), bookedLastYear: nm(p.ly_otb_nights), capacity: nm(p.capacity_nights) }; }) });
     if (unk > 0) out += '<p class="N_foot">' + esc('Last year leaves out ' + count(unk, 'stay', 'stays') + ' with no booking date.') + '</p>';
     return out + '</div>';
+  }
+
+  // s135: the Guest guide card. Nothing is drawn while it loads, when the server does not have staff_guide_usage_v1 yet, or when the account may not read it.
+  function ggTile(label, n) { return '<div class="N_ggtile"><span class="N_hl">' + esc(label) + '</span><span class="N_hv N_num">' + esc(ggNum(n)) + '</span></div>'; }
+  function ggHtml() {
+    var g = S.d.gg; if (!g || g.absent || g.denied || !canManage(S.role)) return '';
+    var head = '<section class="N_card N_gg" aria-labelledby="N_gg1"><h3 class="N_h3" id="N_gg1">Guest guide</h3>';
+    if (g.err) return head + '<div class="N_err" role="alert"><span>' + esc('The guest guide figures could not be loaded.') + '</span><button class="btn btn-secondary btn-sm" type="button" data-n="retry" data-v="kpis">Try again</button></div></section>';
+    if (!g.ok) return '';
+    var m = ggModel(g.data, GG_DAYS); if (!m) return '';
+    var out = head + '<p class="N_sub">' + esc('The last ' + m.days + ' days, from the guide on guests\' phones.') + '</p>';
+    if (m.empty) return out + '<p class="N_sub">' + esc('No guide visits in this time yet.') + '</p></section>';
+    out += '<div class="N_ggtiles">' + ggTile('Devices', m.devices) + ggTile('Verified stays', m.verified) + ggTile('Opens', m.opens) + ggTile('Messages sent', m.sent) + '</div>';
+    if (m.perDay.length > 1 && m.perDay.some(function (v) { return v > 0; })) {
+      var total = m.perDay.reduce(function (a, v) { return a + v; }, 0);
+      out += '<div class="N_ggspark"><span class="N_hs">' + esc('Activity per day' + (m.since ? ', from ' + fmtDate(m.since, 'long') : '') + '. ' + ggNum(total) + ' in all.') + '</span>' + sparkLine(m.perDay, 'zero') + '</div>';
+    }
+    if (m.sections.length) out += '<h4 class="N_h4">Top sections</h4><ul class="N_gglist">' + m.sections.map(function (s) {
+      return '<li><span class="N_ggl">' + esc(s.label) + '</span><span class="N_ggv N_num">' + esc(ggNum(s.views) + (s.views === 1 ? ' view' : ' views') + ', ' + s.avg + ' on average') + '</span></li>'; }).join('') + '</ul>';
+    if (m.taps.length) out += '<h4 class="N_h4">Top taps</h4><ul class="N_gglist">' + m.taps.map(function (t) {
+      return '<li><span class="N_ggl">' + esc(t.target) + (t.where ? ' <span class="N_ggw">' + esc(t.where) + '</span>' : '') + '</span><span class="N_ggv N_num">' + esc(ggNum(t.taps) + (t.taps === 1 ? ' tap' : ' taps')) + '</span></li>'; }).join('') + '</ul>';
+    var top = m.funnel.reduce(function (a, s) { return s.n > a ? s.n : a; }, 0);
+    out += '<h4 class="N_h4">What guests do</h4><ol class="N_ggfun">' + m.funnel.map(function (s) {
+      return '<li><span class="N_ggl">' + esc(s.label) + '</span><span class="N_ggv N_num">' + esc(ggNum(s.n)) + '</span><span class="N_ggbar" aria-hidden="true" style="--w:' + (top ? Math.round(s.n / top * 100) : 0) + '%"></span></li>'; }).join('') + '</ol>';
+    if (m.searches.length) out += '<h4 class="N_h4">Delivery searches with no result</h4><ul class="N_gglist">' + m.searches.map(function (s) {
+      return '<li><span class="N_ggl">' + esc(s.target) + '</span><span class="N_ggv N_num">' + esc(ggNum(s.n) + (s.n === 1 ? ' time' : ' times')) + '</span></li>'; }).join('') + '</ul>';
+    return out + '</section>';
   }
 
   // ---- sheets ----
@@ -1183,7 +1251,7 @@
     lib: { lastMonths: lastMonths, buildSeries: buildSeries, chipFor: chipFor, canManage: canManage, manilaToday: manilaToday, addDays: addDays, nightsBetween: nightsBetween, fmtDate: fmtDate, fmtDateTime: fmtDateTime, toCentavos: toCentavos, fromCentavos: fromCentavos, formatPHP: formatPHP, formatPercent: formatPercent, formatNumber: formatNumber,
       formatMetricValue: formatMetricValue, parseAmount: parseAmount, periodPreset: periodPreset, comparablePeriod: comparablePeriod, compareMode: compareMode, pctDelta: pctDelta, fmtDeltaPct: fmtDeltaPct, deltaLine: deltaLine,
       normalizePayments: normalizePayments, paymentLine: paymentLine, validateConfirm: validateConfirm, confirmArgs: confirmArgs, confirmSentence: confirmSentence, declineSentence: declineSentence, declineReason: declineReason,
-      normalizeCats: normalizeCats, declineMessage: declineMessage, agoWords: agoWords, receiptCmp: receiptCmp, groupRef: groupRef, tone: tone, isMissing: isMissing, isDenied: isDenied, isOffline: isOffline, plainError: plainError, PRESETS: PRESETS, METHODS: METHODS, EXPENSE_CATEGORIES: EXPENSE_CATEGORIES, refusalWords: refusalWords, INCOMPLETE: INCOMPLETE, KPI_GROUPS: KPI_GROUPS, NO_CONNECTION: NO_CONNECTION }
+      guestGuide: { model: ggModel, dense: ggDense, seconds: ggSeconds, label: ggLabel, DAYS: GG_DAYS }, normalizeCats: normalizeCats, declineMessage: declineMessage, agoWords: agoWords, receiptCmp: receiptCmp, groupRef: groupRef, tone: tone, isMissing: isMissing, isDenied: isDenied, isOffline: isOffline, plainError: plainError, PRESETS: PRESETS, METHODS: METHODS, EXPENSE_CATEGORIES: EXPENSE_CATEGORIES, refusalWords: refusalWords, INCOMPLETE: INCOMPLETE, KPI_GROUPS: KPI_GROUPS, NO_CONNECTION: NO_CONNECTION }
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   if (typeof window !== 'undefined') window.N_Manage = api;

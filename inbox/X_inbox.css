@@ -109,3 +109,14 @@
 .X_quick { display: flex; gap: 8px; flex-wrap: wrap; }
 .X_quick > .X_btn { flex: 1 1 7rem; border: 1px solid var(--border); }
 .X_chip.X_wclose { background: var(--warn-soft); color: var(--warn); }
+
+/* s135: the Guide source. Tokens only; every state has words or a glyph, never colour alone. */
+.X_src .X_tab { display: inline-flex; align-items: center; justify-content: center; gap: 6px; }
+.X_badge { display: inline-flex; align-items: center; justify-content: center; min-width: 24px; min-height: 24px; padding: 0 7px; border-radius: var(--r-full); background: var(--primary); color: var(--primary-fg); font: 700 0.8125rem/1 var(--font-ui); }
+.X_row.X_unread .X_name, .X_row.X_unread .X_prev { color: var(--fg); font-weight: 700; }
+.X_chip.X_ch_airbnb, .X_chip.X_ch_direct { background: var(--muted); color: var(--fg); border: 1px solid var(--border); }
+.X_rule { font-weight: 600; }
+.X_gstate { margin: 2px 0 0; font-size: max(0.8125rem, var(--v5-t-label)); opacity: .9; }
+.X_msg.X_gsending .X_bub { opacity: .75; }
+.X_gfail { list-style: none; display: grid; gap: 8px; justify-items: end; }
+.X_gfail > .X_note { width: 100%; }
