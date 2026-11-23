@@ -1026,7 +1026,7 @@ test('N r2 old server: a photo with no amount read never says No receipt yet', a
 test('N r3 list card: no span ends in the separator, so a line never ends in a hanging dot (360 px)', async () => {
   const mk = (o) => row({ id: 'c' + o.n, guest_name: 'G' + o.n, ...o.r });
   const t = await boot({ sub: 'inquiries', handlers: { staff_inquiry_payments_v1: () => [mk({ n: 1, r: { candidate_amount: '2500.00' } }), mk({ n: 2, r: { candidate_amount: '2000.00' } }), mk({ n: 3, r: { candidate_amount: '3000.00' } }), mk({ n: 4, r: { candidate_amount: null } })] } });
-  const h = t.html(); assert.ok(!/[·]\s*<\/span>/.test(h), 'no N_nw span ends with the separator'); assert.ok(!/·\s*<\/span>\s*<\/span>/.test(h));
+  const h = t.html(); assert.ok(!/[·]\s*<\/span>/.test(h), 'no N_nw span ends with the separator'); assert.ok(!/·\s*<\/span>\s*<\/span>/.test(h)); assert.ok(!/·\s*<span/.test(h), 'no break point after a dot between spans (line 2 dates · nights)');
   assert.match(h, /<span class="N_nw">· receipt ₱500\.00 short<\/span>/); assert.match(h, /<span class="N_nw">· receipt ₱500\.00 over<\/span>/); assert.match(h, /<span class="N_nw">· check the photo<\/span>/); assert.match(h, /<span class="N_nw">· receipt matches<\/span>/);
   assert.match(t.text(), /to receive · receipt ₱500\.00 short/);
 });

@@ -620,7 +620,7 @@
     }
     return '<button class="N_card N_tap N_go' + (cmp ? ' N_due' : '') + '" type="button" data-n="inq-open" data-v="' + esc(p.id) + '" aria-label="' + esc('Open request from ' + name + (cmp ? ', receipt sent' : ', waiting for payment')) + '">' +
       '<span class="N_name">' + esc(name) + '</span>' +
-      '<span class="N_line">' + nw(fmtDate(p.checkin_date, 'weekday') + ' to ' + fmtDate(p.checkout_date, 'weekday')) + (nights !== null ? ' · ' + nw(count(nights, 'night', 'nights')) : '') + '</span>' +
+      '<span class="N_line">' + nw(fmtDate(p.checkin_date, 'weekday') + ' to ' + fmtDate(p.checkout_date, 'weekday')) + (nights !== null ? ' ' + nw('· ' + count(nights, 'night', 'nights')) : '') + '</span>' +
       (cmp ? '<span class="N_line N_num">' + l3 + '</span>' + l4 : '<span class="N_line">' + esc(holdLine(p, now)) + '</span>') + '<span class="N_chev" aria-hidden="true">›</span></button>';
   }
   function viewInquiries() {
