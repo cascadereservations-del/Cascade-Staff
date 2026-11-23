@@ -228,6 +228,7 @@
       if (has('direct_share')) out.admin.direct = num(a.direct_share);
       // s134: where the month's cost figures come from, what is waiting for review and what cleaning fees are still unpaid. Absent keys draw nothing.
       out.admin.kpiSource = a.kpi_source === 'legacy' ? 'legacy' : a.kpi_source === 'ledger' ? 'ledger' : '';
+      out.admin.ledgerFrom = /^\d{4}-(0[1-9]|1[0-2])/.test(String(a.kpi_ledger_from || '')) ? String(a.kpi_ledger_from).slice(0, 7) : ''; // 'YYYY-MM': the month the expense log took over the cost figures
       out.admin.costsPending = a.costs_pending_month && typeof a.costs_pending_month === 'object' ? { count: num(a.costs_pending_month.count) || 0, total: num(a.costs_pending_month.total) || 0 } : null;
       out.admin.cleaningOpen = num(a.cleaning_pay_open);
       s127Admin(out.admin, a);
@@ -534,13 +535,13 @@
     h += waterSection(a) + usageSection(d, a);
     var fc = [bills && bills.e ? ['⚡ Electricity, this bill (forecast)', bills.e.fPhp] : null, bills && bills.w ? ['💧 Water, this bill (forecast)', bills.w.fPhp] : null].filter(Boolean);
     h += '<h2 class="K_h">Money in utility and stock</h2><div class="card glass K_lines">' + fc.concat([
-      ['Electricity this month (estimate)', a.monthCost], ['Supplies bought', a.supplies, a.kpiSource === 'legacy' ? 'Before ' + LEDGER_FROM + ': from stock receipts' : ''], ['Supplies used per turnover', a.perTurnover],
-      ['Cleaning pay', a.cleaning, 'Cleaning fees for cleans this month' + (a.cleaningOpen > 0 ? ' · ' + peso(a.cleaningOpen) + ' requested, not paid yet' : '')]
+      ['Electricity this month (estimate)', a.monthCost], ['Supplies bought', a.supplies, a.kpiSource === 'legacy' ? (a.ledgerFrom ? 'Before ' + MONTHS_LONG[+a.ledgerFrom.slice(5, 7) - 1] + ': from stock receipts' : 'Earlier months: from stock receipts') : ''], ['Supplies used per turnover', a.perTurnover],
+      ['Cleaning pay', a.cleaning, a.kpiSource === 'ledger' ? 'Cleaning fees for cleans this month' + (a.cleaningOpen > 0 ? ' · ' + peso(a.cleaningOpen) + ' requested, not paid yet' : '') : '']
     ]).map(function (r) { return '<div class="K_line K_line-s"><span>' + esc(r[0]) + (r[2] ? '<span class="K_sub K_grey">' + esc(r[2]) + '</span>' : '') + '</span><b>' + esc(r[1] != null ? peso(r[1]) : 'Not yet') + '</b></div>'; }).join('') + '</div>';
     if (canSetRate(role)) h += '<a class="btn btn-secondary btn-block" href="#manage/kpis">' + gi('star', 's16') + 'Open the full key figures</a>';
     return h + metersCard();
   }
-  var LEDGER_FROM = 'November'; // the month the expense log became the source of the cost figures (s134); earlier months keep the stock-receipt figure
+  var MONTHS_LONG = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
   function pctOf(v) { return v != null ? Math.round(v * 100) + '%' : 'Not yet'; }
   // The month at a glance (Admin.dc.html): the net card, then occupancy, average rate and direct bookings. Only the parts the server sent.
   function monthGlance(a) {

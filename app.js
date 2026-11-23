@@ -417,8 +417,9 @@
   function A_expCard() {
     var e = state.expenses; if (!e || state.layout !== 'admin' || !/^(owner|admin|finance)$/.test(role() || '')) return '';
     var mi = Math.max(0, Math.min(11, (parseInt(String(e.month || '').slice(5, 7), 10) || 1) - 1)), mn = ['JANUARY', 'FEBRUARY', 'MARCH', 'APRIL', 'MAY', 'JUNE', 'JULY', 'AUGUST', 'SEPTEMBER', 'OCTOBER', 'NOVEMBER', 'DECEMBER'][mi];
-    var basis = Number(e.basis), usual = basis > 0 ? 'Usual month about ' + A_peso(Math.round(basis / 100) * 100) : 'Costs so far this month', pend = e.pending && Number(e.pending.count) > 0 ? ' · ' + Number(e.pending.count) + ' to review' : '';
-    return '<section class="card glass A_card F_span E_today" id="T_exp" aria-label="Expenses"><a class="E_tcopy" href="#expenses"><span class="E_teye">' + esc('EXPENSES · ' + mn) + '</span><b class="E_tnum">' + esc(A_peso(Math.round(Number(e.total) || 0))) + '</b><span class="E_tsub">' + esc(usual + pend) + '</span></a>' +
+    var basis = Number(e.basis), usual = basis > 0 ? 'Usual month about ' + A_peso(Math.round(basis / 100) * 100) : 'Costs so far this month', pc = e.pending_all && typeof e.pending_all === 'object' ? e.pending_all : e.pending, pn = pc ? Number(pc.count) : 0;
+    return '<section class="card glass A_card F_span E_today" id="T_exp" aria-label="Expenses"><div class="E_tcopy"><a class="E_tmain" href="#expenses"><span class="E_teye">' + esc('EXPENSES · ' + mn) + '</span><b class="E_tnum">' + esc(A_peso(Math.round(Number(e.total) || 0))) + '</b></a>' +
+      '<span class="E_tsub"><a class="E_tuse" href="#expenses">' + esc(usual) + '</a>' + (pn > 0 ? ' · <a class="E_trev" href="#expenses/review">' + esc(pn + ' to review') + '</a>' : '') + '</span></div>' +
       (e.can_write ? '<a class="btn btn-primary E_tadd" href="#expenses/add" aria-label="Add expense">' + ICON('plus', 's16') + 'Add</a>' : '') + '</section>';
   }
   function A_loadExpenses() {
@@ -2082,7 +2083,7 @@
       var box = $('H_mod-' + key); if (!box) return; box.innerHTML = '';
       H_mod.mounted = key; H_mod.sub = sub; var low = !!state.H_lowOnce; state.H_lowOnce = false; // read at mount: a redraw while the script loads must not eat the one-shot
       var bad = function () { if (H_mod.mounted === key) { H_mod.mounted = ''; H_mod.sub = ''; H_mod.n++; } if (current === key) H_fallback(key); };
-      try { var mr = window[m.global].mount(box, { client: DEMO && !m.demoClient ? null : sb, demo: DEMO, role: role(), sub: sub, low: low && key === 'stock', propertyId: pid(), cardNotes: A_cardNotes, upload: H_billUpload, houseTimes: A_houseT(), bookingId: A_houseBookingId, pushKey: H_pushKey, swReg: H_swReg, navigate: function (h) { location.hash = String(h).charAt(0) === '#' ? h : '#' + h; }, toast: toast, haptic: E_vibe, faces: A_loadFaces, setTitle: function (t) { var h = el.querySelector && el.querySelector('.ttl'); if (h) h.textContent = t || m.title; }, onChange: function () { if (!DEMO) loadHome({ again: true }); } }); if (mr && typeof mr.then === 'function') mr.then(null, bad); } catch (e) { bad(); } // a module that throws leaves a screen that works, not a blank one
+      try { var mr = window[m.global].mount(box, { client: DEMO && !m.demoClient ? null : sb, demo: DEMO, role: role(), sub: sub, low: low && key === 'stock', propertyId: pid(), cardNotes: A_cardNotes, upload: H_billUpload, houseTimes: A_houseT(), bookingId: A_houseBookingId, payUrl: function () { return LINKS.pay ? H_payUrl('admin.html') : ''; }, pushKey: H_pushKey, swReg: H_swReg, navigate: function (h) { location.hash = String(h).charAt(0) === '#' ? h : '#' + h; }, toast: toast, haptic: E_vibe, faces: A_loadFaces, setTitle: function (t) { var h = el.querySelector && el.querySelector('.ttl'); if (h) h.textContent = t || m.title; }, onChange: function () { if (!DEMO) loadHome({ again: true }); } }); if (mr && typeof mr.then === 'function') mr.then(null, bad); } catch (e) { bad(); } // a module that throws leaves a screen that works, not a blank one
     }, function () { if (current === key && token === H_mod.n) H_fallback(key); });
   }
 

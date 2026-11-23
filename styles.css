@@ -1557,8 +1557,12 @@ button.T_badge:focus-visible { outline: 2px solid var(--ring); outline-offset: 2
 
 /* s134 (3.4.53): the Expenses card on Today (owner, admin, finance). The module CSS is not loaded on Home, so the card carries its own rules. Tokens only, no new font size. */
 .E_today { display: grid; grid-template-columns: 1fr 64px; gap: 8px; align-items: center; min-height: 80px; padding: 8px 10px 8px 14px; }
-.E_today .E_tcopy { display: block; min-width: 0; color: var(--v5-ink); text-decoration: none; min-height: var(--v5-touch); }
+.E_today .E_tcopy { display: block; min-width: 0; color: var(--v5-ink); min-height: var(--v5-touch); }
+.E_today .E_tmain, .E_today .E_tuse { display: block; color: var(--v5-ink); text-decoration: none; }
+.E_today .E_tuse { display: inline; color: var(--v5-ink-2); }
+.E_today .E_trev { display: inline-block; padding: 14px 4px; margin: -14px 0; color: var(--v5-ink); font-weight: 600; text-decoration: none; } /* the hit area reaches 44 px without making the card taller */
 .E_today .E_teye { display: block; font: 700 var(--v5-t-min)/1.2 var(--font-ui); letter-spacing: .08em; text-transform: uppercase; color: var(--v5-ink-2); }
 .E_today .E_tnum { display: block; font: 400 var(--v5-t-num)/1 var(--v5-font-display); color: var(--v5-ink); }
 .E_today .E_tsub { display: block; font: 400 var(--v5-t-min)/1.2 var(--font-ui); color: var(--v5-ink-2); }
 .E_today .E_tadd { width: 64px; min-height: var(--v5-touch); padding: 0; gap: 4px; text-decoration: none; }
+.E_today .E_tadd.btn-primary { background: var(--v5-gold); border-color: var(--v5-gold); color: var(--v5-gold-fg); } /* mockup A: the one gold accent */

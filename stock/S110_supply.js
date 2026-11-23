@@ -147,14 +147,16 @@
     Promise.resolve().then(function () { return me.client.rpc('get_inventory_catalogue_v1', { p_property_id: me.pid }); }).then(function (r) {
       if (S !== me) return;
       var items = r && !r.error ? normItems(r.data) : null;
-      if (!items) { me.load = r && r.error && (r.error.code === '42501') ? 'forbidden' : 'error'; draw(); return; }
+      if (!items) { me.load = r && r.error && (r.error.code === '42501') ? 'forbidden' : 'error'; handFailed(me); draw(); return; }
       me.items = items; me.load = 'ready';
       var cats = {}; items.forEach(function (i) { cats[i.category] = 1; }); me.cats = Object.keys(cats).sort(); if (me.cats.indexOf(CATS[0]) < 0) me.cats.unshift(CATS[0]);
       if (!me.use && !me.man.itemId && items[0]) me.man.itemId = items[0].id;
       draw();
       if (me.hand) { var hp = me.hand; me.hand = null; receiptByPath(me, hp, 'expenses'); } // s134: a receipt already uploaded from Expenses: no second upload
-    }, function () { if (S === me) { me.load = 'error'; draw(); } });
+    }, function () { if (S === me) { me.load = 'error'; handFailed(me); draw(); } });
   }
+  // s134: the catalogue did not load while a receipt from Expenses was waiting: say so and keep the way back to the expense (nothing is held here: the receipt stays with the expense form).
+  function handFailed(me) { if (!me.hand) return; me.hand = null; me.msg = 'Couldn’t open this in Inventory.'; me.handBack = true; relRcpt(me); }
 
   function field(id, label, val, extra) { return '<div class="field"><label for="' + id + '">' + label + '</label><div class="input"><input id="' + id + '" autocomplete="off" ' + (extra || '') + ' value="' + esc(val) + '"></div></div>'; }
   function selectOpts(opts, val) { return opts.map(function (o) { return '<option value="' + esc(o[0]) + '"' + (o[0] === val ? ' selected' : '') + '>' + esc(o[1]) + '</option>'; }).join(''); }
@@ -211,7 +213,7 @@
   }
   function drawSupply() {
     var st = S.step;
-    if (S.load === 'error' || S.load === 'forbidden') return head('Report supply') + '<div class="errbox" role="alert">' + gi('alert') + '<span>' + esc(S.load === 'forbidden' ? 'This page is not open to your account. Ask Lloyd.' : 'The item list could not be loaded. Try again in a moment.') + '</span></div>';
+    if (S.load === 'error' || S.load === 'forbidden') return head('Report supply') + '<div class="errbox" role="alert">' + gi('alert') + '<span>' + esc(S.handBack ? S.msg : S.load === 'forbidden' ? 'This page is not open to your account. Ask Lloyd.' : 'The item list could not be loaded. Try again in a moment.') + '</span></div>' + (S.handBack ? '<button class="btn btn-secondary btn-block" type="button" data-sact="hand-back">Back to the expense</button>' : '');
     if (st === 'start') {
       return head('Report supply', 'A photo of the receipt is enough. We will read it, and you check each line.') +
         '<div class="S_start"><label class="btn btn-primary btn-block S_file">' + gi('camera', 's24') + 'Take a photo of the receipt<input type="file" accept="image/*" capture="environment" data-sfile="receipt" class="sr"></label>' +
@@ -343,10 +345,14 @@
   }
   function runSupply(me, call, handFrom) {
     Promise.resolve().then(call).then(function (r) {
-      if (S !== me) return;
+      var cx = r && r.error && r.error.context; // a refusal with a status carries its answer in the body
+      return cx && typeof cx.json === 'function' ? Promise.resolve(cx.json()).then(function (j) { return { r: r, body: j || null }; }, function () { return { r: r, body: null }; }) : { r: r, body: r && r.data || null };
+    }).then(function (w) {
+      if (S !== me) return; var r = w.r, body = w.body;
       var st = r && r.error && r.error.context && r.error.context.status;
-      if (st === 429 || (r && r.data && r.data.error === 'daily_limit')) throw { limit: true };
-      var id = r && !r.error && r.data && r.data.ok !== false ? r.data.draft_id : null;
+      if (st === 429 || (body && body.error === 'daily_limit')) throw { limit: true };
+      if (body && body.error === 'receipt_in_use') throw { inuse: true };
+      var id = r && !r.error && body && body.ok !== false ? body.draft_id : null;
       if (!id) throw { read: true };
       return me.client.rpc('inventory_receipt_draft_v1', { p_draft_id: id }).then(function (d) {
         if (S !== me) return;
@@ -355,7 +361,8 @@
       });
     }).then(null, function (e) {
       if (S !== me) return; me.step = 'start'; relRcpt(me);
-      if (handFrom) { me.msg = 'Couldn’t open this in Inventory.'; me.handBack = true; draw(); return; }
+      if (handFrom) { me.msg = e && e.inuse ? 'This receipt is already in Inventory.' : 'Couldn’t open this in Inventory.'; me.handBack = true; draw(); return; }
+      if (e && e.inuse) { me.msg = 'This receipt is already in Inventory.'; draw(); return; }
       me.msg = e && e.photo ? PHOTO_ERR[e.photo] : e && e.limit ? 'Receipts have been read enough times today. Enter it by hand instead.' : e && e.read ? 'The receipt could not be read. Try a clearer photo, or enter it by hand.' : errText(e); draw();
     });
   }

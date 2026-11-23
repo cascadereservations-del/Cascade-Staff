@@ -12,7 +12,7 @@
   var MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
   var MONL = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
   var DOW = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-  var MAX_FILE = 5 * 1024 * 1024, MAX_B64 = 8000000;
+  var MAX_FILE = 5 * 1024 * 1024, MAX_B64 = 8000000, SCAN_LOW = 0.6; // SCAN_LOW: a scan below this was hard to read (same as the old Manage form)
   var CHIPS = { bill: 'Bill', staff_pay: 'Staff pay', refund: 'Refund', stock: 'Stock', telegram: 'Telegram', receipt: 'Receipt', manual: 'Manual' }; // ML-28: only these chips are drawn
   var FILTERS = [['all', 'All', null], ['stock', 'Stock', 'stock'], ['bill', 'Bills', 'bill'], ['staff_pay', 'Staff pay', 'staff_pay'], ['manual', 'Manual', 'manual'], ['telegram', 'Telegram', 'telegram'], ['receipt', 'Receipt', 'receipt']];
   var CAT_ICON = { cleaning: 'sparkles', supplies: 'box', utilities: 'zap', internet: 'zap', maintenance: 'wrench', subscription: 'note' };
@@ -23,7 +23,7 @@
     tooBig: 'That file is over 5 MB.', wrongType: 'Use a photo or a PDF.', pdf: 'Attached. A PDF can’t be read - fill in the fields.',
     route: 'Did this go into stock? Add it in Inventory instead', removeAsk: 'Remove this receipt? The file is kept.', foot: 'One receipt per expense. PDF up to 5 MB.',
     match: 'Receipt matches this row', staffProof: 'Proof is in Pay staff', billProof: 'Payment screenshot from Bills', lockedGen: 'This entry was made somewhere else. Only the category and notes can change here.',
-    handFail: 'Couldn’t open this in Inventory.', loadFail: 'The expenses could not be loaded. Try again in a moment.', forbidden: 'This page is not open to your account.'
+    handFail: 'Couldn’t open this in Inventory.', late: 'The date can’t be later than tomorrow.', inInv: 'This receipt is already in Inventory.', again: 'Attach the receipt again.', loadFail: 'The expenses could not be loaded. Try again in a moment.', forbidden: 'This page is not open to your account.'
   };
 
   function pad2(n) { return (n < 10 ? '0' : '') + n; }
@@ -35,6 +35,8 @@
   function monthShift(ym, n) { var p = String(ym).split('-'), t = (+p[0]) * 12 + (+p[1] - 1) + n; return Math.floor(t / 12) + '-' + pad2((t % 12) + 1); }
   function monthName(ym) { var p = String(ym || '').split('-'); return MONL[(+p[1] || 1) - 1] || ''; }
   function monthShort(ym) { var p = String(ym || '').split('-'); return MON[(+p[1] || 1) - 1] || ''; }
+  function addDay(iso, n) { var m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(iso || '')); if (!m) return ''; var d = new Date(Date.UTC(+m[1], +m[2] - 1, +m[3] + n)); return d.getUTCFullYear() + '-' + pad2(d.getUTCMonth() + 1) + '-' + pad2(d.getUTCDate()); }
+  function fmtLong(iso) { var m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(iso || '')); return m ? DOW[new Date(Date.UTC(+m[1], +m[2] - 1, +m[3])).getUTCDay()] + ' ' + (+m[3]) + ' ' + MON[+m[2] - 1] + ' ' + m[1] : '—'; }
   function fmtDate(iso) { var m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(iso || '')); return m ? (+m[3]) + ' ' + MON[+m[2] - 1] : '—'; }
   function dayLabel(iso, today) {
     var m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(iso || '')); if (!m) return '';
@@ -72,7 +74,7 @@
   function catOk(slug, list) { return catList(list).some(function (c) { return c.slug === slug; }); }
   function validateExpense(f, cats, today) {
     var e = {};
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(f.date || '')) e.date = 'Choose the date of the expense.'; else if (today && f.date > today) e.date = 'The date cannot be in the future.';
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(f.date || '')) e.date = 'Choose the date of the expense.'; else if (today && f.date > addDay(today, 1)) e.date = M.late; // the server allows Manila tomorrow, never later
     if (parseAmount(f.amount) === null) e.amount = 'Enter the amount, more than zero, with at most two decimal places.';
     if (!catOk(f.category, cats)) e.category = 'Choose a category.';
     if (!String(f.notes || '').trim()) e.notes = 'Say what it was for.';
@@ -163,7 +165,8 @@
     switch (c) {
       case 'locked': return 'This receipt is kept in ' + (str(res.where) || 'another screen') + '. Open it there.';
       case 'duplicate_receipt': return dupMsg(res.ref || res.on || res.where);
-      case 'receipt_in_use': return 'This receipt is already used in Inventory.';
+      case 'receipt_in_use': return M.inInv;
+      case 'bad_path': case 'no_file': case 'no_upload_record': return M.again;
       case 'void': return 'This expense was voided, so its receipt cannot change.';
       case 'not_found': return 'This expense is no longer on the list.';
       case 'forbidden': case 'not_authorized': return 'Your account is not allowed to change receipts.';
@@ -177,6 +180,10 @@
     if (c === 'duplicate_receipt') return dupMsg(res.ref);
     if (c === 'locked') return 'This entry is locked. Only the category and notes can change here.';
     if (c === 'use_receipt_control') return 'Use the receipt buttons to change a receipt.';
+    if (c === 'receipt_in_use') return M.inInv;
+    if (c === 'bad_path' || c === 'no_file' || c === 'no_upload_record') return M.again;
+    if (c === 'amount_locked') return 'This amount comes from Inventory. Change the price there.';
+    if (c === 'future_date') return M.late;
     return m || 'Nothing was saved. Check the details and try again.';
   }
   function errCode(e) { return e && (e.code || (e.error && e.error.code)) || ''; }
@@ -193,7 +200,8 @@
   }
 
   // ------------------------------------------------------------------------------------------------ state
-  var S = null, G = 0, HELD = null; // HELD: the form, the receipt and the preview kept while the person is in Inventory (cleared by any mount except #expenses/add/back)
+  var S = null, G = 0, HELD = null, CARRY = null; // CARRY: the look-alike prompt that has to survive the remount when a save leaves #expenses/add (taken by the next mount within 10 s)
+ // HELD: the form, the receipt and the preview kept while the person is in Inventory (cleared by any mount except #expenses/add/back)
   function ic(n, s) { try { return typeof W.ICON === 'function' ? (W.ICON(n, s || 's20') || '') : ''; } catch (e) { return ''; } }
   function pid() { return (S && S.opts.propertyId) || FALLBACK_PROPERTY; }
   function online() { try { return !(typeof navigator !== 'undefined' && navigator.onLine === false); } catch (e) { return true; } }
@@ -243,7 +251,7 @@
   function load(more) {
     if (!S) return; if (!S.client) { S.err = 'offline'; draw(); return; }
     var gen = S.gen, args = { p_property_id: pid(), p_month: S.month + '-01', p_limit: 100, p_filter: S.chip === 'all' ? null : S.chip };
-    if (more && S.data && S.data.rows && S.data.rows.length) args.p_before = S.data.rows[S.data.rows.length - 1].created_at || null;
+    if (more && S.data && S.data.rows && S.data.rows.length) { var last = S.data.rows[S.data.rows.length - 1]; args.p_before = last.created_at || null; args.p_before_id = last.id || null; } // (created_at, id) is the cursor: two rows can share a created_at
     if (!more) { S.loading = true; S.err = ''; draw(); }
     callRpc('expenses_screen_v1', args).then(function (res) {
       if (!live(gen)) return; S.loading = false;
@@ -296,6 +304,8 @@
   function revoke(u) { if (u) { try { URL.revokeObjectURL(u); } catch (e) { /* ok */ } } }
   function attachWords(r) {
     if (r.net) return 'The connection dropped before the receipt was saved. Try again.';
+    if (r.status === 413 || r.code === 'too_large' || r.code === 'file_too_large') return M.tooBig;
+    if (r.status === 415 || r.code === 'unsupported_type' || r.code === 'unsupported_image_type') return M.wrongType;
     if (r.status === 404) return 'Receipts are not available in this version of the app yet.';
     if (r.status === 401 || r.status === 403) return 'Your account is not allowed to add receipts.';
     return 'The receipt could not be saved just now. Try again.';
@@ -366,22 +376,32 @@
     callRpc(name, args).then(function (res) {
       if (!live(gen)) return; sh.busy = false;
       if (res.error) { sh.msg = plainError(res.error); draw(); return; }
-      var x = res.data; if (x && x.ok === false) { sh.msg = (opts && opts.words ? opts.words(x) : saveWords(x)); sh.key = newKey(sh.keyPrefix || 'exp'); draw(); return; }
+      var x = res.data; if (x && x.ok === false) { sh.msg = (opts && opts.words ? opts.words(x) : saveWords(x)); sh.key = newKey(sh.keyPrefix || 'exp'); if (opts && opts.fail) opts.fail(sh, x); draw(); return; }
       onOk(x || {}, sh);
     });
   }
-  function doAdd() {
+  function doReviewAdd() {
     var sh = S.sheet, cats = S.data && S.data.categories; sh.errs = validateExpense(sh.f, cats, S.today);
     if (Object.keys(sh.errs).length) { sh.msg = 'Please fix the items marked below.'; draw(); return; }
+    sh.msg = ''; sh.step = 'review'; draw();
+  }
+  function doAdd() {
+    var sh = S.sheet, cats = S.data && S.data.categories; if (sh.step !== 'review') { doReviewAdd(); return; }
+    sh.errs = validateExpense(sh.f, cats, S.today);
+    if (Object.keys(sh.errs).length) { sh.step = 'form'; sh.msg = 'Please fix the items marked below.'; draw(); return; }
     sh.keyPrefix = 'exp-add';
-    write('admin_save_transaction_v2', { p_property_id: pid(), p_txn: expenseTxn(sh.f, sh.rc), p_idempotency_key: sh.key }, function (x) {
-      buzz('success'); closeSheet(); refresh();
-      if (x.lookalike && x.lookalike.id && x.id) { S.sheet = { kind: 'same', id: x.id, look: x.lookalike, key: newKey('exp-void'), keyPrefix: 'exp-void', reason: '', msg: '' }; draw(); } else tell('Saved.');
-    });
+    write('admin_save_transaction_v2', { p_property_id: pid(), p_txn: expenseTxn(sh.f, sh.rc), p_idempotency_key: sh.key }, function (x, sh0) {
+      buzz('success');
+      if (x.lookalike && x.lookalike.id && x.id) { // the question has to outlive the move off #expenses/add: it is carried through the remount
+        var q = { kind: 'same', id: x.id, look: x.lookalike, key: newKey('exp-void'), keyPrefix: 'exp-void', reason: '', msg: '' };
+        revoke(sh0.thumb); S.sheet = q; S.chooser = false; CARRY = { sheet: q, at: clock() }; leaveAddRoute(); refresh(); draw(); return;
+      }
+      closeSheet(); refresh(); tell('Saved.');
+    }, { fail: function (s0) { s0.step = 'form'; } });
   }
   function doEdit() {
     var sh = S.sheet, r = rowOf(sh.id); if (!r) return; var e = {};
-    if (!r.locked) { if (!/^\d{4}-\d{2}-\d{2}$/.test(sh.f.date || '')) e.date = 'Choose the date of the expense.'; else if (sh.f.date > S.today) e.date = 'The date cannot be in the future.'; if (!r.amount_locked && parseAmount(sh.f.amount) === null) e.amount = 'Enter the amount, more than zero, with at most two decimal places.'; }
+    if (!r.locked) { if (!/^\d{4}-\d{2}-\d{2}$/.test(sh.f.date || '')) e.date = 'Choose the date of the expense.'; else if (sh.f.date > addDay(S.today, 1)) e.date = M.late; if (!r.amount_locked && parseAmount(sh.f.amount) === null) e.amount = 'Enter the amount, more than zero, with at most two decimal places.'; }
     if (!catOk(sh.f.category, S.data && S.data.categories)) e.category = 'Choose a category.';
     if (String(sh.reason || '').trim().length < 3) e.reason = 'Say why you are changing it, at least three letters.';
     sh.errs = e; if (Object.keys(e).length) { sh.msg = 'Please fix the items marked below.'; draw(); return; }
@@ -400,9 +420,16 @@
     var args = { p_property_id: pid(), p_id: sh.id, p_reason: reason }; if (sameAs) args.p_same_as = sameAs;
     write('expense_void_v1', args, function () { buzz('success'); closeSheet(); tell(afterMsg || 'Voided.'); refresh(); });
   }
+  // Count it: the row as shown, with any change to the amount, category or what it was for sent in p_edits (a reason is required whenever there is an edit).
   function doCount() {
-    var sh = S.sheet;
-    write('admin_review_transaction_v1', { p_property_id: pid(), p_id: sh.id, p_action: 'approve', p_edits: {}, p_reason: null }, function () { buzz('success'); closeSheet(); tell('Counted.'); refresh(); });
+    var sh = S.sheet, r = rowOf(sh.id); if (!r || sh.busy) return; var f = sh.f || {}, edits = {}, t = function (v) { return String(v == null ? '' : v).trim(); };
+    if (!(r.amount_locked || r.locked)) {
+      var a = parseAmount(f.amount); if (a === null) { sh.errs = { amount: 'Enter the amount, more than zero, with at most two decimal places.' }; sh.msg = 'Please fix the items marked below.'; draw(); return; }
+      if (toC(a) !== toC(r.amount)) edits.gross_amount = a;
+    }
+    if (f.category && f.category !== r.category && catOk(f.category, S.data && S.data.categories)) edits.category = f.category;
+    if (t(f.notes) !== t(r.notes)) edits.notes = t(f.notes);
+    write('admin_review_transaction_v1', { p_property_id: pid(), p_id: sh.id, p_action: 'approve', p_edits: edits, p_reason: Object.keys(edits).length ? 'Edited while counting' : null }, function () { buzz('success'); closeSheet(); tell('Counted.'); refresh(); });
   }
   function doRemoveReceipt() {
     var sh = S.sheet, r = rowOf(sh.id); if (!r) return; var reason = String(sh.reason || '').trim();
@@ -419,15 +446,16 @@
 
   // ------------------------------------------------------------------------------------------------ sheets
   function openSheet(sh) { S.sheet = sh; S.chooser = false; draw(); }
-  function closeSheet() { if (S.sheet) { revoke(S.sheet.thumb); } S.sheet = null; S.chooser = false; draw(); if (S && S.opts.sub && /^add/.test(S.opts.sub)) { try { if (S.opts.navigate) S.opts.navigate('#expenses'); } catch (e) { /* ok */ } S.opts.sub = ''; } }
+  function leaveAddRoute() { if (S && S.opts.sub && /^add/.test(S.opts.sub)) { S.opts.sub = ''; try { if (S.opts.navigate) S.opts.navigate('#expenses'); } catch (e) { /* ok */ } } }
+  function closeSheet() { if (S.sheet) { revoke(S.sheet.thumb); } S.sheet = null; S.chooser = false; draw(); leaveAddRoute(); }
   function blankForm() { return { date: S.today, amount: '', category: '', payee: '', notes: '' }; }
   function openAdd(chooser) {
-    S.sheet = { kind: 'add', f: blankForm(), errs: {}, checks: {}, rc: null, thumb: null, pdf: false, stockHint: null, key: newKey('exp-add'), keyPrefix: 'exp-add', msg: '', busy: false, upl: false };
+    S.sheet = { kind: 'add', f: blankForm(), errs: {}, checks: {}, rc: null, thumb: null, pdf: false, stockHint: null, key: newKey('exp-add'), keyPrefix: 'exp-add', msg: '', busy: false, upl: false, step: 'form' };
     S.chooser = !!chooser; draw();
   }
   function restoreHeld() {
     var h = HELD; HELD = null; if (!h) return false;
-    S.sheet = { kind: 'add', f: h.f, errs: {}, checks: h.checks || {}, rc: h.rc, thumb: h.thumb, pdf: !!h.pdf, stockHint: h.stockHint, key: h.key, keyPrefix: 'exp-add', msg: '', busy: false, upl: false, scanMsg: h.scanMsg || '' };
+    S.sheet = { kind: 'add', f: h.f, errs: {}, checks: h.checks || {}, rc: h.rc, thumb: h.thumb, pdf: !!h.pdf, stockHint: h.stockHint, key: h.key, keyPrefix: 'exp-add', msg: '', busy: false, upl: false, scanMsg: h.scanMsg || '', step: 'form' };
     return true;
   }
   function clearHeld() { if (HELD) { revoke(HELD.thumb); HELD = null; } try { if (W.CS_receiptHand && W.CS_receiptHand.from === 'expenses') W.CS_receiptHand = null; } catch (e) { /* ok */ } }
@@ -449,38 +477,48 @@
       '<div class="E_sh"><h2 class="E_h" id="E_sh" tabindex="-1">' + esc(title) + '</h2><button class="E_x" type="button" data-e="' + (closeAct || 'close') + '" aria-label="Close">' + ic('close', 's20') + '</button></div>' + body + '</div>';
   }
   function errBox(sh) { return sh.msg ? '<div class="E_err" role="alert">' + esc(sh.msg) + '</div>' : ''; }
-  function btnPair(pl, pa, sl, sa, busy, danger) {
-    return '<div class="E_btns"><button class="btn ' + (danger ? 'btn-danger' : 'btn-primary') + ' btn-block" type="button" data-e="' + pa + '"' + (busy ? ' disabled aria-busy="true"' : '') + '>' + esc(busy ? 'Sending…' : pl) + '</button>' +
+  function btnPair(pl, pa, sl, sa, busy, danger, off) {
+    return '<div class="E_btns"><button class="btn ' + (danger ? 'btn-danger' : 'btn-primary') + ' btn-block" type="button" data-e="' + pa + '"' + (busy ? ' disabled aria-busy="true"' : off ? ' disabled' : '') + '>' + esc(busy ? 'Sending…' : pl) + '</button>' +
       (sl ? '<button class="btn btn-secondary btn-block" type="button" data-e="' + sa + '"' + (busy ? ' disabled' : '') + '>' + esc(sl) + '</button>' : '') + '</div>';
   }
   function receiptTile(sh) {
     var pdf = sh.pdf; return '<div class="E_rblock"><span class="E_th E_big' + (pdf ? ' E_pdf' : '') + '" aria-hidden="true">' + (pdf ? ic('note', 's24') : sh.thumb ? '<img src="' + esc(sh.thumb) + '" alt="">' : ic('image', 's24')) + '</span>' +
       '<div class="E_col"><b class="E_t">' + esc(pdf ? 'Receipt attached (PDF)' : 'Receipt attached') + '</b><div class="E_two"><button class="btn btn-secondary" type="button" data-e="chooser">Change</button><button class="btn btn-secondary" type="button" data-e="rc-clear">Remove</button></div></div></div>';
   }
+  function lowConf(c) { return typeof c === 'number' && c < SCAN_LOW; }
   function formBody(sh, edit) {
     var r = edit ? rowOf(sh.id) : null, lock = !!(r && r.locked), amtLock = !!(r && (r.amount_locked || r.locked)), f = sh.f, e = sh.errs || {}, ck = sh.checks || {}, h = '';
-    h += fld('E_date', 'Date', inp('E_date', 'date', f.date, 'type="date" max="' + esc(S.today) + '"' + (lock ? ' disabled' : '')), e.date, ck.date);
-    h += fld('E_amt', 'Amount', amtLock ? '<div class="E_input E_ro" id="E_amt">' + esc(peso(r.amount)) + '</div>' + (r && r.amount_locked && !r.locked ? '<p class="E_nudge">Change the price in Inventory</p>' : '') : inp('E_amt', 'amount', f.amount, 'inputmode="decimal" placeholder="0.00"'), e.amount, ck.amount);
+    h += fld('E_date', 'Date', inp('E_date', 'date', f.date, 'type="date" max="' + esc(addDay(S.today, 1)) + '"' + (lock ? ' disabled' : '')), e.date, ck.date);
+    h += fld('E_amt', 'Amount (PHP)', amtLock ? '<div class="E_input E_ro" id="E_amt">' + esc(peso(r.amount)) + '</div>' + (r && r.amount_locked && !r.locked ? '<p class="E_nudge">Change the price in Inventory</p>' : '') : inp('E_amt', 'amount', f.amount, 'inputmode="decimal" placeholder="0.00"'), e.amount, ck.amount);
     h += fld('E_cat', 'Category', catSelect('E_cat', f.category), e.category, ck.category);
     var nd = nudgeFor(f.category); if (nd) h += '<p class="E_nudge">' + esc(nd) + '</p>';
-    h += fld('E_payee', 'Paid to', inp('E_payee', 'payee', f.payee, lock ? 'disabled' : ''), e.payee, ck.payee);
     h += fld('E_notes', 'What was it for?', inp('E_notes', 'notes', f.notes), e.notes, ck.notes);
+    h += fld('E_payee', edit ? 'Paid to' : 'Paid to (optional)', inp('E_payee', 'payee', f.payee, lock ? 'disabled' : ''), e.payee, ck.payee);
     if (edit) h += fld('E_why', 'Why the change?', inp('E_why', 'reason', sh.reason || '', 'placeholder="A few words"'), e.reason);
     return h;
   }
   function sheetAdd(sh) {
     var h = errBox(sh);
+    if (sh.step === 'review') return shell('Add expense', h + addReview(sh));
     h += sh.rc ? receiptTile(sh) : '<button class="E_scan btn btn-secondary" type="button" data-e="chooser"' + (sh.upl ? ' disabled aria-busy="true"' : '') + '>' + ic('camera', 's20') + esc(sh.upl ? 'Reading the receipt…' : 'Scan or upload receipt') + '</button>';
     if (sh.scanMsg) h += '<p class="E_nudge" role="status">' + esc(sh.scanMsg) + '</p>';
+    if (sh.rc && lowConf(sh.rc.confidence)) h += '<p class="E_ferr" role="alert">The photo was hard to read. Please check every figure.</p>';
     if (routeVisible(S.role, sh)) h += '<button class="E_route" type="button" data-e="route"><span>' + esc(M.route) + '</span>' + ic('chev', 's16') + '</button>';
-    h += formBody(sh, false) + btnPair('Save expense', 'save', 'Cancel', 'close', sh.busy);
+    h += formBody(sh, false) + btnPair('Review and save', 'review-add', 'Cancel', 'close', sh.busy);
     return shell('Add expense', h);
+  }
+  // the check step: counted in the books at once, so the person reads it back before it is saved
+  function addReview(sh) {
+    var f = sh.f, h = '<p class="E_sub">Check this before you save. It is counted in the books at once.</p>';
+    h += kv('Date', esc(fmtLong(f.date)), true) + kv('Amount', '<b>' + esc(peso(parseAmount(f.amount))) + '</b>') + kv('Category', esc(catLabel(f.category, S.data && S.data.categories))) + kv('For', esc(String(f.notes || '').trim())) + (String(f.payee || '').trim() ? kv('Paid to', esc(String(f.payee).trim())) : '');
+    if (sh.rc) h += kv('Receipt', (sh.thumb && !sh.pdf ? '<span class="E_th" aria-hidden="true"><img src="' + esc(sh.thumb) + '" alt=""></span> ' : '') + esc(sh.pdf ? 'Receipt attached (PDF)' : 'Receipt attached'));
+    return h + btnPair('Save expense', 'save', 'Back', 'add-back', sh.busy);
   }
   function sheetEdit(sh) { return shell('Edit expense', errBox(sh) + formBody(sh, true) + btnPair('Save changes', 'edit-save', 'Cancel', 'to-detail', sh.busy)); }
   function kv(k, v, first) { return '<div class="E_kv' + (first ? ' E_first' : '') + '"><span>' + esc(k) + '</span><span>' + v + '</span></div>'; }
-  function linkBlock(sh, r) {
-    var can = r.receipt_can || {}, l = sh.link || {}, pdf = (l.mime || (r.receipt_ref && r.receipt_ref.mime) || '') === 'application/pdf', tile;
-    if (!r.has_receipt) return can.add ? '<button class="E_addrcp" type="button" data-e="chooser"' + (sh.upl ? ' disabled aria-busy="true"' : '') + '>' + ic('clip', 's20') + esc(sh.upl ? 'Saving the receipt…' : 'Add receipt') + '</button>' : '';
+  function linkBlock(sh, r, view) {
+    var can = view ? {} : r.receipt_can || {}, l = sh.link || {}, pdf = (l.mime || (r.receipt_ref && r.receipt_ref.mime) || '') === 'application/pdf', tile;
+    if (!r.has_receipt) return can.add ? '<button class="E_addrcp" type="button" data-e="chooser"' + (sh.upl ? ' disabled aria-busy="true"' : '') + '>' + ic('paperclip', 's16') + esc(sh.upl ? 'Saving the receipt…' : 'Add receipt') + '</button>' : '';
     if (pdf) tile = '<span class="E_th E_big E_pdf" aria-hidden="true">' + ic('note', 's24') + '</span>';
     else tile = l.state === 'ok' ? '<img class="E_img" src="' + esc(l.url) + '" alt="Receipt">' : '<span class="E_th E_big" aria-hidden="true">' + ic('image', 's24') + '</span>';
     var open = l.state === 'ok' ? '<a class="E_th E_big E_tile" href="' + esc(l.url) + '" target="_blank" rel="noopener" aria-label="View receipt">' + tile + '</a>' : '<span class="E_tile">' + tile + '</span>';
@@ -493,13 +531,14 @@
     var h = errBox(sh), pend = needsReview(r), kind = r.receipt_ref && r.receipt_ref.kind;
     h += '<div class="E_money">' + esc(peso(r.amount)) + '</div>';
     h += kv('Date', esc(fmtDate(r.date)), true) + kv('Category', esc(catLabel(r.category, S.data && S.data.categories))) + (str(r.payee) ? kv('Paid to', esc(r.payee)) : '') + (str(r.notes) ? kv('Notes', esc(r.notes)) : '') + kv('Added by', '<span class="E_pill">' + esc(chipLabel(r.chip)) + '</span>');
-    if (r.stock) h += kv('Stock', esc(Number(r.stock.lines) + (Number(r.stock.lines) === 1 ? ' line' : ' lines')));
+    if (r.stock) h += kv('Source', esc('Stock bought · ' + Number(r.stock.lines) + (Number(r.stock.lines) === 1 ? ' line' : ' lines'))) + '<button class="E_link" type="button" data-e="go-items">See the items in Inventory</button>';
+    var lk = !pend && lookText(r, S.data && S.data.rows); if (lk) h += '<p class="E_sub E_lookm">' + esc(lk) + '</p>';
     if (r.amount_locked && !r.locked) h += '<p class="E_nudge">Change the price in Inventory</p>';
     if (r.locked) {
       var staff = r.chip === 'staff_pay', bill = r.chip === 'bill';
       h += '<div class="E_lockbar">' + ic('lock', 's16') + '<span>' + esc(staff ? M.staffProof : bill ? M.billProof : M.lockedGen) + '</span></div>';
-      if (staff) h += '<button class="btn btn-secondary btn-block" type="button" data-e="go-pay">Open Pay staff</button>';
-      if (bill) h += '<button class="btn btn-secondary btn-block" type="button" data-e="go-bills">Open in Bills</button>';
+      var pu = payUrl(); if (staff && pu) h += '<a class="btn btn-secondary btn-block" href="' + esc(pu) + '">Open Pay staff</a>';
+      if (bill) h += '<button class="btn btn-secondary btn-block" type="button" data-e="go-bills" data-id="' + esc(r.id) + '">Open in Bills</button>';
     }
     if (!(r.locked && r.chip === 'staff_pay')) h += '<span class="E_rowsep">Receipt</span>' + linkBlock(sh, r);
     if (sh.pdfNote) h += '<p class="E_nudge" role="status">' + esc(sh.pdfNote) + '</p>';
@@ -512,22 +551,24 @@
     void kind; return shell(titleOf(r), h);
   }
   function sheetReview(sh) {
-    var r = rowOf(sh.id); if (!r) return ''; var look = r.lookalike || (r.lookalike_id && rowOf(r.lookalike_id));
-    var h = errBox(sh) + '<div class="E_money">' + esc(peso(r.amount)) + '</div><p class="E_sub">' + esc(catLabel(r.category, S.data && S.data.categories) + ' · ' + fmtDate(r.date) + ' · ' + chipLabel(r.chip)) + '</p>';
+    var r = rowOf(sh.id); if (!r) return ''; var look = r.lookalike || (r.lookalike_id && rowOf(r.lookalike_id)), f = sh.f || {}, e = sh.errs || {}, amtLock = !!(r.amount_locked || r.locked), off = sh.busy || (!amtLock && parseAmount(f.amount) === null);
+    var h = errBox(sh) + linkBlock(sh, r, true) + '<p class="E_sub">' + esc(fmtDate(r.date) + ' · ' + chipLabel(r.chip)) + '</p>';
+    if (lowConf(r.ocr_confidence)) h += '<p class="E_ferr" role="alert">The receipt was hard to read. Please check every figure.</p>';
     var lt = lookText(r, S.data && S.data.rows); if (lt) h += '<p class="E_look">' + esc(lt) + '</p>';
-    h += '<button class="E_opt" type="button" data-e="count"' + (sh.busy ? ' disabled' : '') + '>' + ic('check', 's20') + 'Count it</button>';
+    h += fld('E_ramt', 'Amount (PHP)', amtLock ? '<div class="E_input E_ro" id="E_ramt">' + esc(peso(r.amount)) + '</div>' : inp('E_ramt', 'amount', f.amount, 'inputmode="decimal" placeholder="0.00"'), e.amount) + fld('E_rcat', 'Category', catSelect('E_rcat', f.category), e.category) + fld('E_rnotes', 'What was it for?', inp('E_rnotes', 'notes', f.notes), e.notes);
+    h += '<button class="E_opt" type="button" data-e="count"' + (off ? ' disabled' : '') + '>' + ic('check', 's20') + 'Count it</button>';
     if (look) h += '<button class="E_opt" type="button" data-e="same-as"' + (sh.busy ? ' disabled' : '') + '>' + ic('note', 's20') + esc('Same purchase as ' + refText(look)) + '</button>';
     h += '<button class="E_opt" type="button" data-e="not-cost"' + (sh.busy ? ' disabled' : '') + '>' + ic('x', 's20') + 'Not a cost</button>';
     return shell('Needs review', h + '<div class="E_btns"><button class="btn btn-secondary btn-block" type="button" data-e="to-detail">Back</button></div>');
   }
   function sheetVoid(sh) {
     var r = rowOf(sh.id); if (!r) return '';
-    return shell('Void this expense?', errBox(sh) + '<p class="E_sub">' + esc(titleOf(r) + ' · ' + peso(r.amount)) + '</p>' + fld('E_why', 'Why?', inp('E_why', 'reason', sh.reason || '', 'placeholder="A few words"'), (sh.errs || {}).reason) +
-      btnPair('Void expense', 'void-go', 'Keep it', 'to-detail', sh.busy, true));
+    return shell('Void this expense?', errBox(sh) + '<p class="E_sub">' + esc(titleOf(r) + ' · ' + peso(r.amount)) + '</p><p class="E_sub">' + esc('This takes ' + peso(r.amount) + ' out of ' + monthName(monthOf(r.date)) + '’s costs. It can be restored from the dashboard’s audit history.') + '</p>' + fld('E_why', 'Why?', inp('E_why', 'reason', sh.reason || '', 'placeholder="A few words"'), (sh.errs || {}).reason) +
+      btnPair('Void expense', 'void-go', 'Keep it', 'to-detail', sh.busy, true, String(sh.reason || '').trim().length < 3));
   }
   function sheetRm(sh) {
     return shell('Remove this receipt?', errBox(sh) + '<p class="E_sub">' + esc(M.removeAsk) + '</p>' + fld('E_why', 'Why?', inp('E_why', 'reason', sh.reason || '', 'placeholder="A few words"'), (sh.errs || {}).reason) +
-      btnPair('Remove receipt', 'rc-go', 'Keep it', 'to-detail', sh.busy, true));
+      btnPair('Remove receipt', 'rc-go', 'Keep it', 'to-detail', sh.busy, true, String(sh.reason || '').trim().length < 3));
   }
   function sheetSame(sh) {
     var l = sh.look || {}, ref = refText(l);
@@ -542,8 +583,8 @@
 
   // ------------------------------------------------------------------------------------------------ screen
   function rowHtml(r, cats) {
-    var cl = catLabel(r.category, cats), icon = CAT_ICON[r.category] || 'wallet';
-    return '<div class="E_lr" role="button" tabindex="0" data-e="open" data-id="' + esc(r.id) + '"><span class="E_ic" aria-hidden="true">' + ic(icon, 's20') + '</span><span><span class="E_t">' + esc(titleOf(r)) + '</span><span class="E_sub">' + esc(cl + ' · ' + chipLabel(r.chip)) + (r.has_receipt ? ' <span class="E_clip" aria-label="Has a receipt">' + ic('clip', 's16') + '</span>' : '') + '</span></span><span class="E_a"><b>' + esc(peso(r.amount)) + '</b>' + (r.locked ? '<span class="E_lock" aria-label="Locked">' + ic('lock', 's16') + '</span>' : '') + '</span></div>';
+    var cl = catLabel(r.category, cats), icon = CAT_ICON[r.category] || 'wallet', lk = !needsReview(r) && lookText(r, S.data && S.data.rows);
+    return '<div class="E_lr" role="button" tabindex="0" data-e="open" data-id="' + esc(r.id) + '"><span class="E_ic" aria-hidden="true">' + ic(icon, 's20') + '</span><span><span class="E_t">' + esc(titleOf(r)) + '</span><span class="E_sub">' + esc(cl + ' · ' + chipLabel(r.chip)) + (r.has_receipt ? ' <span class="E_clip" aria-label="Has a receipt">' + ic('paperclip', 's16') + '</span>' : '') + '</span>' + (lk ? '<span class="E_sub E_lookm">' + esc(lk) + '</span>' : '') + '</span><span class="E_a"><b>' + esc(peso(r.amount)) + '</b>' + (r.locked ? '<span class="E_lock" aria-label="Locked">' + ic('lock', 's16') + '</span>' : '') + '</span></div>';
   }
   function viewScreen() {
     var d = S.data, h = '', cur = S.month === monthOf(S.today);
@@ -556,6 +597,7 @@
     if (basis) h += '<p class="E_sub">' + esc('Usual month ' + peso(d.basis, true) + (basisText(d.basis_months) ? ' (' + basisText(d.basis_months) + ')' : '')) + '</p>';
     if (d.prev_total != null) h += '<p class="E_sub">' + esc('Last month ' + peso(d.prev_total, true)) + '</p>';
     if (Number(pend.count) > 0) h += '<button class="E_warnline" type="button" data-e="to-review">' + esc(pend.count + ' waiting for review · ' + peso(pend.total, true) + ' not counted yet') + '</button>';
+    if (Number(d.unlinked) > 0) h += '<p class="E_sub E_unl">' + esc(Number(d.unlinked) + (Number(d.unlinked) === 1 ? ' stock purchase is' : ' stock purchases are') + ' not in the expenses yet.') + '</p>';
     h += '</div>';
     var bc = expenseCats(d.by_category);
     if (bc.length) {
@@ -581,6 +623,7 @@
       h += '</div>';
     }
     h += '<div class="E_chips" role="group" aria-label="Filter">' + FILTERS.map(function (f) { return '<button class="E_chip' + (S.chip === f[0] ? ' E_on' : '') + '" type="button" data-e="chip" data-id="' + f[0] + '" aria-pressed="' + (S.chip === f[0]) + '">' + esc(f[1]) + '</button>'; }).join('') + '</div>';
+    if (S.chip === 'review') h += '<button class="E_chip E_on E_catx" type="button" data-e="chip" data-id="all">Needs review ×</button>';
     if (S.cat) h += '<button class="E_chip E_on E_catx" type="button" data-e="cat-x">' + esc(catLabel(S.cat, cats)) + ' ×</button>';
     if (!list.length && !pendRows.length) h += '<div class="E_empty"><p class="E_p">' + esc('No expenses logged for ' + monthName(S.month) + ' yet.') + '</p></div>';
     else h += dayGroups(list).map(function (g) { return '<div class="E_day"><span>' + esc(dayLabel(g.date, S.today)) + '</span><span>' + esc(peso(g.total / 100, true)) + '</span></div>' + g.rows.map(function (r) { return rowHtml(r, cats); }).join(''); }).join('');
@@ -597,6 +640,14 @@
 
   // ------------------------------------------------------------------------------------------------ events
   function nav(h) { if (S && S.opts.navigate) S.opts.navigate(h); }
+  // The external Pay staff page (the same link the Today shortcut uses), given by the shell. '' when the app has none.
+  function payUrl() { try { var u = S && S.opts.payUrl; u = typeof u === 'function' ? u() : u; return typeof u === 'string' ? u : ''; } catch (e) { return ''; } }
+  // A bill row opens its own Bills screen when the receipt reference names the bill; otherwise Today.
+  function billTarget(r) { var ref = r && r.receipt_ref, id = ref && ref.kind === 'bill' && str(ref.id); return id ? '#bills/pay/' + encodeURIComponent(id) : '#home'; }
+  function startReview(r) {
+    var c = toC(r.amount), s2 = { kind: 'review', id: r.id, msg: '', busy: false, errs: {}, key: newKey('exp-rev'), keyPrefix: 'exp-rev', f: { amount: c > 0 ? (c / 100).toFixed(2) : '', category: r.category || '', notes: r.notes || '' } };
+    S.sheet = s2; S.chooser = false; draw(); loadLink(s2);
+  }
   function startEdit(r) { openSheet({ kind: 'edit', id: r.id, f: { date: r.date, amount: toC(r.amount) != null ? (toC(r.amount) / 100).toFixed(2) : '', category: r.category, payee: r.payee || '', notes: r.notes || '' }, reason: '', errs: {}, checks: {}, key: newKey('exp-edit'), keyPrefix: 'exp-edit', msg: '', busy: false }); }
   function onClick(ev) {
     if (!S) return; var t = ev.target, node = t && t.closest ? t.closest('[data-e]') : null; if (!node) return;
@@ -615,6 +666,7 @@
       case 'see-all': S.allReview = true; draw(); return;
       case 'unp': S.unp = !S.unp; draw(); return;
       case 'go-stock': nav('#supply'); return;
+      case 'go-items': closeSheet(); nav('#stock'); return;
       case 'to-review': { var el = S.el.querySelector ? S.el.querySelector('#E_review') : null; if (el && el.scrollIntoView) { try { el.scrollIntoView({ block: 'start' }); } catch (e) { /* ok */ } } return; }
       case 'add': openAdd(false); return;
       case 'scan': openAdd(true); return;
@@ -624,12 +676,14 @@
       case 'chooser-x': S.chooser = false; draw(); return;
       case 'rc-clear': if (sh && sh.kind === 'add') { revoke(sh.thumb); sh.thumb = null; sh.rc = null; sh.pdf = false; sh.stockHint = null; sh.scanMsg = ''; sh.checks = {}; draw(); } return;
       case 'route': doRoute(); return;
+      case 'review-add': doReviewAdd(); return;
+      case 'add-back': if (sh && sh.kind === 'add') { sh.step = 'form'; sh.msg = ''; draw(); } return;
       case 'save': doAdd(); return;
       case 'edit': { var r2 = sh && rowOf(sh.id); if (r2) startEdit(r2); return; }
       case 'edit-save': doEdit(); return;
       case 'to-detail': { var r3 = sh && rowOf(sh.id); if (r3) { var s3 = { kind: 'detail', id: r3.id, msg: '', busy: false }; S.sheet = s3; draw(); loadLink(s3); } else { closeSheet(); } return; }
       case 'sug': doSuggest(); return;
-      case 'review': if (sh) { S.sheet = { kind: 'review', id: sh.id, msg: '', busy: false }; draw(); } return;
+      case 'review': { var r4 = sh && rowOf(sh.id); if (r4) startReview(r4); return; }
       case 'count': doCount(); return;
       case 'same-as': { var rr = sh && rowOf(sh.id), lk = rr && (rr.lookalike || (rr.lookalike_id && rowOf(rr.lookalike_id))); if (rr && lk) doVoid('Same purchase as ' + refText(lk), lk.id || rr.lookalike_id, 'Marked as the same purchase.'); return; }
       case 'not-cost': doVoid('Not a cost', null, 'Removed from the costs.'); return;
@@ -638,8 +692,7 @@
       case 'rc-ask': if (sh) { S.sheet = { kind: 'rm', id: sh.id, reason: '', errs: {}, msg: '', busy: false }; draw(); } return;
       case 'rc-go': doRemoveReceipt(); return;
       case 'same-yes': { var lk2 = sh && sh.look; if (lk2) { sh.reason = 'Same purchase as ' + refText(lk2); var ssh = sh; ssh.id = sh.id; doVoid(sh.reason, lk2.id, 'Marked as the same purchase.'); } return; }
-      case 'go-pay': closeSheet(); nav('#pay'); return;
-      case 'go-bills': closeSheet(); nav('#bills'); return;
+      case 'go-bills': { var rb = rowOf(id); closeSheet(); nav(billTarget(rb)); return; }
       default: return;
     }
   }
@@ -647,21 +700,27 @@
     if (!S || !S.sheet) return; var t = ev.target; if (!t) return;
     if (ev.type === 'change' && t.getAttribute && t.getAttribute('data-e') === 'file') { var file = t.files && t.files[0]; if (file) pickFile(file); try { t.value = ''; } catch (e) { /* ok */ } return; }
     var f = t.getAttribute && t.getAttribute('data-f'); if (!f) return; var sh = S.sheet, v = t.value;
-    if (f === 'reason') { sh.reason = v; return; }
-    if (sh.f) { sh.f[f] = v; if (sh.checks) delete sh.checks[f]; if (sh.errs) delete sh.errs[f]; if (f === 'category' && ev.type === 'change') draw(); }
+    var qs = function (a) { return S.el && S.el.querySelector ? S.el.querySelector('[data-e="' + a + '"]') : null; }, off = function (a, v2) { var b = qs(a); if (b) b.disabled = v2; };
+    if (f === 'reason') { sh.reason = v; var go = sh.kind === 'void' ? 'void-go' : sh.kind === 'rm' ? 'rc-go' : ''; if (go) off(go, String(v).trim().length < 3); return; }
+    if (sh.f) {
+      sh.f[f] = v; if (sh.checks) delete sh.checks[f]; if (sh.errs) delete sh.errs[f];
+      if (sh.kind === 'review' && f === 'amount') { var rr = rowOf(sh.id); off('count', !!sh.busy || (!(rr && (rr.amount_locked || rr.locked)) && parseAmount(v) === null)); }
+      if (f === 'category' && ev.type === 'change') draw();
+    }
   }
 
   // ------------------------------------------------------------------------------------------------ mount
   function mount(el, opts) {
     opts = opts || {}; if (S) unmount();
     if (!/^(owner|admin|finance)$/.test(String(opts.role || ''))) { if (opts.navigate) opts.navigate('#home'); return; }
-    var sub = String(opts.sub || ''), back = sub === 'add/back';
+    var sub = String(opts.sub || ''), back = sub === 'add/back', carry = CARRY; CARRY = null;
     if (!back) clearHeld();
     S = { el: el, opts: opts, client: opts.client, role: opts.role, gen: ++G, today: manilaToday(), month: monthOf(manilaToday()), chip: 'all', cat: null, data: null, err: '', sheet: null, chooser: false, timers: [] };
     S.onClick = onClick; S.onInput = onInput;
     el.addEventListener('click', S.onClick); el.addEventListener('input', S.onInput); el.addEventListener('change', S.onInput);
     el.addEventListener('submit', function (e) { if (e && e.preventDefault) e.preventDefault(); });
-    if (back) restoreHeld(); else if (sub === 'add') openAdd(false);
+    if (sub === 'review') S.chip = 'review'; // the Today card's "n to review": the server's needs-review filter
+    if (back) restoreHeld(); else if (carry && !sub && clock() - carry.at < 10000) S.sheet = carry.sheet; else if (sub === 'add') openAdd(false);
     draw(); load(false);
   }
   function unmount() {
@@ -669,7 +728,7 @@
     try { S.el.removeEventListener('click', S.onClick); S.el.removeEventListener('input', S.onInput); S.el.removeEventListener('change', S.onInput); } catch (e) { /* ok */ }
     if (S.sheet) revoke(S.sheet.thumb); (S.timers || []).forEach(function (t) { clearTimeout(t); }); G++; S = null; // HELD survives: the person is in Inventory
   }
-  function reset() { unmount(); clearHeld(); }
+  function reset() { unmount(); clearHeld(); CARRY = null; }
 
   var api = {
     mount: mount, unmount: unmount, reset: reset,

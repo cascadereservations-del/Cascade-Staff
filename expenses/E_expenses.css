@@ -91,3 +91,7 @@
 .E_same b { display: block; font: 600 var(--v5-t-label)/1.3 var(--v5-font-ui); }
 .E_opt { position: relative; display: flex; align-items: center; gap: 12px; width: 100%; box-sizing: border-box; min-height: 56px; margin-top: 8px; padding: 0 14px; border: 1px solid var(--v5-line-2); border-radius: var(--v5-r-card); background: var(--v5-bg); color: var(--v5-ink); font: 600 var(--v5-t-label)/1.3 var(--v5-font-ui); text-align: left; cursor: pointer; }
 .E_file { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; }
+/* s134 fix round 1 */
+.E_lookm { color: var(--v5-ink-2); } /* a confirmed row that looks like another: grey, never the review colour */
+.E_unl { color: var(--v5-ink-2); }
+.E_sticky .btn-primary { background: var(--v5-gold); border-color: var(--v5-gold); color: var(--v5-gold-fg); }
