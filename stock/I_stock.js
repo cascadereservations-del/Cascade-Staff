@@ -2474,7 +2474,7 @@
       e.say = 'Received ' + n; e.line = 'received stock'; e.confirm = 'Take the stock you just added to ' + n + ' back out?'; e.call = ucs[0]; if (ucs.length > 1) e.more = ucs.slice(1);
     } else if (a.kind === 'group') {
       var gu = groupUndoCalls(a, d); if (!gu.length) return null; var gn = (d.rows || []).length || gu.length;
-      e.itemId = null; e.name = ''; e.say = 'Saved ' + gn + (gn === 1 ? ' change' : ' changes') + ' in ' + a.cat; e.line = 'updated ' + a.cat; e.confirm = 'Put the ' + gn + (gn === 1 ? ' change' : ' changes') + ' in ' + a.cat + ' back?'; e.call = gu[0]; if (gu.length > 1) e.more = gu.slice(1);
+      e.v2 = true; e.itemId = null; e.name = ''; e.say = 'Saved ' + gn + (gn === 1 ? ' change' : ' changes') + ' in ' + a.cat; e.line = 'updated ' + a.cat; e.confirm = 'Put the ' + gn + (gn === 1 ? ' change' : ' changes') + ' in ' + a.cat + ' back?'; e.call = gu[0]; if (gu.length > 1) e.more = gu.slice(1);
     } else if (a.kind === 'recv' && d.draft_id && !canManage(M.role)) {
       e.say = 'Received ' + n; e.line = 'received stock'; e.confirm = 'Take the stock you just added to ' + n + ' back out?'; e.call = { fn: 'inventory_receipt_undo_v1', args: { p_draft_id: d.draft_id } }; e.ttl = 86400000; // the staff receipt keeps its 24 hours
     } else if (a.kind === 'recv' && (d.movementId || d.purchaseId)) {
@@ -2878,7 +2878,7 @@
     (d.rows || []).forEach(function (r) {
       var res = r && r.result || {};
       if (a.mode === 'count') { if (res.movementId) calls.push({ fn: 'inventory_undo_v1', args: { p_movement_id: res.movementId, p_purchase_id: null } }); }
-      else if (a.mode === 'used') calls.push({ fn: 'undo_inventory_usage_v1', args: { p_usage_key: a.key + ':' + r.idx } });
+      else if (a.mode === 'used') { var uk = a.key + ':g' + r.idx; if (uk.length <= 160) calls.push({ fn: 'undo_inventory_usage_v1', args: { p_usage_key: uk } }); } // same as s_inventory_derive_key_v1: p_key || ':g' || idx; past 160 chars the server hashes it, so no undo is offered rather than a wrong key
       else (res.lines || []).forEach(function (l) { var x = l && l.result || {}; if (x.movementId || x.purchaseId) calls.push({ fn: 'inventory_undo_v1', args: { p_movement_id: x.movementId || null, p_purchase_id: x.purchaseId || null } }); });
     });
     return calls.reverse(); // the last row is undone first

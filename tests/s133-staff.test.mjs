@@ -236,3 +236,23 @@ test('s133 Total paid split follows the server weights: a Something else line we
   const free = L.buyPlan({ id: 'i1', perPack: 10, qty: 0, cost: null }, [{ id: 'o1', title: 'A', packSize: 30, price: null }], { lp_o1: '1', lx: '1' }); // nothing priced: weights 0, shares follow the units 30 : 10
   assert.equal(L.planTotal(free), null); same(L.buyShares(free, { total: '40' }), [30, 10]);
 });
+
+test('s133 group used undo key matches s_inventory_derive_key_v1 (key:g<idx>) and a too-long key offers no undo', async () => {
+  const L = await lib();
+  const calls = L.groupUndoCalls({ mode: 'used', key: 'stk-group-' + 'a'.repeat(32) }, { rows: [{ idx: 0 }, { idx: 1 }] });
+  same(calls.map((c) => c.args.p_usage_key), ['stk-group-' + 'a'.repeat(32) + ':g1', 'stk-group-' + 'a'.repeat(32) + ':g0']); // last row first
+  assert.equal(L.groupUndoCalls({ mode: 'used', key: 'k'.repeat(160) }, { rows: [{ idx: 0 }] }).length, 0); // 160 + ':g0' > 160: the server would hash it, so no undo is offered
+});
+
+test('s133 group used undo answered not_found does not report Undone.', async () => {
+  const e = await setup({ role: 'owner', client: mockClient({ catalogue: { items: [item('i1', 'Toilet paper', 4, 12, { countedAt: null })] }, rpc: {
+    inventory_group_update_v1: () => ({ data: { ok: true, rows: [{ idx: 0, result: {} }] }, error: null }),
+    undo_inventory_usage_v1: () => ({ data: { ok: false, reason: 'not_found' }, error: null }) } }) });
+  await e.mount(''); await e.act('group-open', { 'data-cat': 'Bathroom' });
+  await e.act('group-mode', { 'data-v': 'used' }); await e.input('I_f_g_i1', '1'); await e.submit();
+  assert.equal(e.client.rpcCalls('inventory_group_update_v1').length, 1);
+  const m = /data-id="(u\d+)"/.exec(e.undo()); assert.ok(m, 'an undo entry exists');
+  await e.act('undo', { 'data-id': m[1] }); await e.submit();
+  assert.match(e.client.rpcCalls('undo_inventory_usage_v1')[0][2].p_usage_key, /:g0$/);
+  assert.equal(e.toasts.some((t) => /^Undone\.$/.test(t)), false);
+});
