@@ -283,14 +283,15 @@
   function gMerge(serverMsgs, locals) {
     var out = (serverMsgs || []).slice();
     (locals || []).forEach(function (m) {
-      var since = Date.parse(m.at) || 0;
-      var onRecord = out.some(function (s) { return s.from === 'staff' && s.body === m.body && (Date.parse(s.at) || 0) >= since - 60000; });
+      var onRecord = !!m.id && out.some(function (s) { return s.id === m.id; }); // matched by the id staff_guide_reply_v1 returned, never by words and time
       if (!onRecord) out.push({ id: 'local:' + m.cmid, from: 'staff', body: m.body, at: m.at, staff_user_id: null, local: m });
     });
     return out;
   }
   // The Guide source is shown only once the list RPC has answered with a list. A missing function or a refusal hides it for good (this visit), without a word.
-  function gAvail(res) { if (res && res.error) return isFnMissing(res.error) || isDenied(res.error) ? false : null; return isArr(res && res.data) ? true : false; }
+  // Only a missing function (PGRST202 / 404) or a 42501 refusal on the LIST call hides it. A 401 or JWT error is an expired sign-in: temporary, the source stays.
+  function isAuthExpired(e) { return !!e && (e.status === 401 || /jwt/i.test(errText(e))) && e.code !== '42501'; }
+  function gAvail(res) { if (res && res.error) return !isAuthExpired(res.error) && (isFnMissing(res.error) || res.error.code === '42501') ? false : null; return isArr(res && res.data) ? true : false; }
 
   // ---- links ----
   function threadUrl(psid) { return PSID_RE.test(String(psid || '')) ? MESSENGER_THREAD + encodeURIComponent(psid) : null; }
@@ -855,7 +856,7 @@
     h += '<div class="X_back">' + btn('gback', '‹ All conversations', 'btn-ghost') + '</div>';
     if (!d) {
       if (T.loading) h += '<div class="X_skel" aria-hidden="true"></div><div class="X_skel" aria-hidden="true"></div>';
-      else if (T.notFound) h += '<div class="X_card"><h2 class="X_h3">This conversation no longer exists</h2><p class="X_p">Go back to the list.</p></div>';
+      else if (T.notFound) h += '<div class="X_card"><h2 class="X_h3">This conversation is no longer available</h2><p class="X_p">Go back to the list.</p></div>';
       else if (T.denied) h += '<div class="X_card"><h2 class="X_h3">The inbox is for owner and admin</h2></div>';
       else h += '<div class="X_card"><h2 class="X_h3">No connection</h2><p class="X_p">This conversation could not be read.</p>' + btn('refresh', 'Try again', 'btn-primary') + '</div>';
       put('thead', h); return;
@@ -952,8 +953,9 @@
         var changed = sig !== T.sig; T.sig = sig;
         if (changed || first) { drawGThreadHead(); drawGMsgs(); if (first) { drawGComposer(); scrollEnd(); } } else drawGThreadHead();
         drawList();
-      } else if (err && isDenied(err)) { T.denied = true; T.data = null; gdrafts = {}; drawGThreadHead(); }
-      else if (err && !isOffline(err) && (err.code === 'P0002' || /not.?found/i.test(errText(err)))) { T.data = null; T.notFound = true; drawGThreadHead(); drawGMsgs(); drawGComposer(); }
+      } else if (err && err.code === 'P0002') { T.data = null; T.notFound = true; delete gdrafts[id]; drawGThreadHead(); drawGMsgs(); drawGComposer(); } // a missing thread: neutral words, only this thread's draft goes
+      else if (err && !isAuthExpired(err) && isDenied(err)) { T.denied = true; T.data = null; delete gdrafts[id]; drawGThreadHead(); }
+      else if (err && !isOffline(err) && !isAuthExpired(err) && /not.?found/i.test(errText(err))) { T.data = null; T.notFound = true; delete gdrafts[id]; drawGThreadHead(); drawGMsgs(); drawGComposer(); }
       else if (T.data) { T.stale = true; drawGThreadHead(); }
       else drawGThreadHead();
     };
@@ -976,7 +978,7 @@
     if (!S.demo && !online()) { c.msg = NOT_SENT_OFFLINE; c.msgKind = 'bad'; drawGMsg(); return; }
     var m = { cmid: S.opts.newKey ? String(S.opts.newKey('gm')) : gCmid(), body: body, at: new Date(nowMs()).toISOString(), state: 'sending', err: '' };
     if (!CMID_RE.test(m.cmid)) m.cmid = gCmid(); // the server needs 8 to 80 safe characters
-    S.gt.locals.push(m); gSetText(''); c.msg = ''; c.msgKind = ''; c.sending = true;
+    S.gt.locals.push(m); gSetText(''); if (S.gid) gdrafts[S.gid] = body; /* kept until the server confirms, so a remount cannot lose it */ c.msg = ''; c.msgKind = ''; c.sending = true;
     drawGMsgs(); drawGText(); drawGMsg(); drawGFoot(); scrollEnd(); focusSel('#X_gtext');
     gSendTry(m, 0);
   }
@@ -986,7 +988,7 @@
       if (!S || S.gen !== gen) return;
       var o = gReplyOutcome(res);
       if (o.ok) { // on record: the message moves from "local" to the thread (answer {already:true} means an earlier try had landed)
-        var at = o.at || m.at, d = T.data;
+        var at = o.at || m.at, d = T.data; m.id = o.id || m.id; if (gdrafts[id] === m.body) delete gdrafts[id];
         T.locals = T.locals.filter(function (x) { return x !== m; });
         if (d && S.gid === id) {
           var have = o.id && d.messages.some(function (x) { return x.id === o.id; });
@@ -1045,6 +1047,7 @@
     if (!S) return; var t = ev.target && ev.target.closest ? ev.target.closest('[data-xa]') : null; if (!t) return;
     var a = t.getAttribute('data-xa'), v = t.getAttribute('data-v');
     if (t.disabled || t.getAttribute('aria-busy') === 'true') return;
+    if ((S.busy || S.gc.sending) && (a === 'src' || a === 'gopen' || a === 'gback' || a === 'gfilter')) return; // a Messenger write or a Guide send is in flight: do not leave the screen under it
     if (S.busy && (a === 'open' || a === 'back' || a === 'refresh' || a === 'filter' || a === 'dash' || a === 'sheet-x' || a === 'edit' || a === 'push' || a === 'resume' || a === 'review' || a === 'draft' || a === 'quick' || a === 'pick')) return; // a write is in flight: nothing may orphan it
     if (a === 'open') { if (ev.preventDefault) ev.preventDefault(); if (PSID_RE.test(v || '')) go('#inbox/' + encodeURIComponent(v)); return; }
     if (a === 'back') { go('#inbox'); return; }

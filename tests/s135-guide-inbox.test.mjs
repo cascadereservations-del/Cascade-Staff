@@ -66,8 +66,41 @@ test('s135 merge: a local message that the server already has is not shown twice
   const { X } = load(), G = X.lib.guide, at = iso(1);
   const local = { cmid: 'gm-abcdefgh', body: 'On its way', at, state: 'sending' };
   assert.equal(G.merge([{ id: 'm1', from: 'guest', body: 'hi', at: iso(5) }], [local]).length, 2);
-  assert.equal(G.merge([{ id: 'm1', from: 'guest', body: 'hi', at: iso(5) }, { id: 'm2', from: 'staff', body: 'On its way', at }], [local]).length, 2, 'on record: only the server copy');
-  assert.equal(G.merge([{ id: 'm9', from: 'guest', body: 'On its way', at }], [local]).length, 2, 'a guest saying the same words is not our reply');
+  const withId = Object.assign({}, local, { id: 'm2' });
+  assert.equal(G.merge([{ id: 'm1', from: 'guest', body: 'hi', at: iso(5) }, { id: 'm2', from: 'staff', body: 'On its way', at }], [withId]).length, 2, 'matched by the returned id: only the server copy');
+  assert.equal(G.merge([{ id: 'm2', from: 'staff', body: 'On its way', at }], [local]).length, 2, 'no id yet: same words and time are NOT a match');
+  assert.equal(G.merge([{ id: 'm9', from: 'guest', body: 'On its way', at }], [withId]).length, 2, 'another id with the same words is not ours');
+});
+test('s135 a missing thread (P0002) says it is no longer available, and clears only that thread draft', async () => {
+  const env = load(), c = gclient({ staff_guide_thread_v1: () => ({ data: null, error: { code: 'P0002', message: 'thread_not_found' } }) });
+  const { el } = await mountIt(env, c, { sub: 'guide:' + T1 });
+  assert.match(el.html('thead'), /This conversation is no longer available/); assert.ok(!/no longer exists/.test(el.html('thead')));
+});
+test('s135 a thread error never wipes the drafts of other threads', async () => {
+  const env = load(); let mode = 'ok';
+  const c = gclient({ staff_guide_thread_v1: (a) => (a.p_thread_id === T2 ? { data: null, error: { code: 'P0002', message: 'gone' } } : { data: gthread(), error: null }) });
+  const m1 = await mountIt(env, c, { sub: 'guide:' + T1 }); await typeG(m1.el, 'draft for one'); env.X.unmount();
+  await mountIt(env, c, { sub: 'guide:' + T2 });
+  const m3 = await mountIt(env, c, { sub: 'guide:' + T1 });
+  assert.match(m3.el.html('gtext'), />draft for one<\/textarea>/);
+});
+test('s135 a 401 or JWT error on the list keeps the Guide source (an expired sign-in is temporary); 42501 on the list hides it', async () => {
+  for (const [err, shown] of [[{ status: 401, message: 'Unauthorized' }, true], [{ code: 'PGRST301', message: 'JWT expired' }, true], [{ code: '42501', message: 'permission denied' }, false]]) {
+    const env = load(), c = gclient({ staff_guide_threads_v1: () => ({ data: null, error: err }) });
+    await mountIt(env, c, { sub: '' }); env.X.unmount();
+    const c2 = gclient(); const m2 = await mountIt(env, c2, { sub: '' });
+    assert.equal(named(c2, 'staff_guide_threads_v1').length, shown ? 1 : 0, JSON.stringify(err));
+  }
+});
+test('s135 busy guard: while a Guide send is in flight the source switch, row open, back and filter do nothing; the unsent words stay in the draft', async () => {
+  const env = load(); let release; const gate = new Promise((r) => { release = r; });
+  const c = gclient({ staff_guide_reply_v1: () => gate });
+  const { el, navs } = await mountIt(env, c, { sub: 'guide:' + T1 });
+  await typeG(el, 'Still sending'); await el.click('gsend');
+  await el.click('gback'); await el.click('gfilter', 'resolved'); assert.deepEqual(navs, []);
+  env.X.unmount(); const m2 = await mountIt(env, c, { sub: 'guide:' + T1 });
+  assert.match(m2.el.html('gtext'), />Still sending<\/textarea>/, 'a remount mid-send keeps the words');
+  release({ data: { ok: true, id: 'x' }, error: null });
 });
 
 // ---------------------------------------------------------------------------------------------- the mounted list
