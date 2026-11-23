@@ -181,7 +181,8 @@
     var c = res && (res.error || res.reason), m = str(res && res.message);
     if (c === 'forbidden') return 'Your account is not allowed to do this.';
     if (c === 'duplicate_receipt') return dupMsg(res.ref || res.where);
-    if (c === 'locked') return 'This entry is locked. Only the category and notes can change here.';
+    if (c === 'locked') return str(res.where) === 'Pay staff' ? 'This category is set by Pay staff.' : 'This entry is locked. Only the category and notes can change here.';
+    if (c === 'system_category') return 'This category is set by the system and can’t be picked here.';
     if (c === 'use_receipt_control') return 'Use the receipt buttons to change a receipt.';
     if (c === 'receipt_in_use') return M.inInv;
     if (c === 'bad_path' || c === 'no_file' || c === 'no_upload_record') return M.again;

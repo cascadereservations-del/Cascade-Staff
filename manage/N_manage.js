@@ -283,7 +283,8 @@
       ],
       cats: [{ slug: 'cleaning', label: 'Cleaning', sort_order: 1 }, { slug: 'supplies', label: 'Supplies', sort_order: 2 }, { slug: 'utilities', label: 'Utilities', sort_order: 3 }, { slug: 'repairs', label: 'Repairs', sort_order: 4 }, { slug: 'other', label: 'Other', sort_order: 9 }],
       rq: function () { return { count: this.rqRows.length, total: this.rqRows.reduce(function (a, r) { return a + Number(r.gross_amount); }, 0).toFixed(2), truncated: false, rows: this.rqRows }; },
-      rqRows: [{ id: 'n-demo-r1', transaction_date: d(-1), txn_type: 'expense', category: '', gross_amount: '1200.00', payee_name: 'Sample market', notes: 'Sample: scanned receipt', or_number: null, source: 'ocr', receipt_image_path: 'n/a', ocr_confidence: 0.5, created_at: d(-1) + 'T02:00:00Z' }],
+      rqRows: [{ id: 'n-demo-r1', transaction_date: d(-1), txn_type: 'expense', category: '', gross_amount: '1200.00', payee_name: 'Sample market', notes: 'Sample: scanned receipt', or_number: null, source: 'ocr', receipt_image_path: 'n/a', ocr_confidence: 0.5, created_at: d(-1) + 'T02:00:00Z' },
+        { id: 'n-demo-r2', transaction_date: d(-5), txn_type: 'expense', category: 'supplies', gross_amount: '800.00', payee_name: 'Demo shop', notes: 'Stock bought, some items not priced', or_number: null, source: 'stock', receipt_image_path: null, ocr_confidence: null, s134_incomplete: true, created_at: d(-5) + 'T02:00:00Z' }],
       seriesV1: function () {
         var y = +today.slice(0, 4), m = +today.slice(5, 7) - 1, months = [], pace = [], i, mo, cap = 30;
         for (i = 12; i >= 0; i--) {
@@ -504,6 +505,17 @@
   function rqRows() { var q = S.d.rq; return q && q.ok && q.data && Array.isArray(q.data.rows) ? q.data.rows : []; }
   function rqOf(id) { var r = rqRows(); for (var i = 0; i < r.length; i++) if (r[i].id === id) return r[i]; return null; }
   function srcWords(src) { var k = String(src || '').toLowerCase(); return /ocr|scan|receipt/.test(k) ? 'a scanned receipt' : /telegram/.test(k) ? 'Telegram' : /manual|staff|app/.test(k) ? 'an entry in the app' : /email|mail/.test(k) ? 'an e-mail' : 'another source'; }
+  // s134: a stock row whose amount is not fully priced. Same words as the Expenses screen (E_expenses.js M.incomplete); a test pins the match.
+  var INCOMPLETE = 'Amount incomplete - price the rest in Inventory';
+  function rqIncomplete(r) { return !!r && r.s134_incomplete === true; }
+  function refusalWords(res) {
+    var c = res && (res.error || res.reason), w = res && res.where;
+    if (c === 'amount_incomplete') return INCOMPLETE;
+    if (c === 'amount_locked') return 'That amount follows Inventory. Change the price in Inventory.';
+    if (c === 'system_category') return 'This category is set by the system and can’t be picked here.';
+    if (c === 'locked' && w === 'Pay staff') return 'This category is set by Pay staff.';
+    return null;
+  }
   function lowConf(c) { return typeof c === 'number' && c < SCAN_LOW; }
   function rqHtml() {
     var q = S.d.rq || {}; if (q.absent || q.denied) return '';
@@ -515,7 +527,7 @@
     return '<section class="N_card N_list" aria-labelledby="N_rq"><h3 class="N_h3 N_pad" id="N_rq">' + esc('Waiting for your review (' + total + ')') + '</h3>' +
       (d.truncated || total > rows.length ? '<p class="N_sub N_pad">' + esc('Showing ' + rows.length + ' of ' + total + '. The rest appear as you clear these.') + '</p>' : '') + rows.map(function (r) {
         var sub = fmtDate(r.transaction_date, 'weekday') + ' · ' + (r.category ? catName(r.category) : 'No category yet') + (r.receipt_image_path ? ' · Receipt photo' : '') + (lowConf(r.ocr_confidence) ? ' · Hard to read, please check' : '');
-        return '<button class="N_row" type="button" data-n="rq-open" data-v="' + esc(r.id) + '"><span class="N_rowmid"><span class="N_rowt">' + esc(r.payee_name || r.notes || (r.category ? catName(r.category) : 'A transaction')) + '</span><span class="N_rows' + (lowConf(r.ocr_confidence) ? ' N_dn' : '') + '">' + esc(sub) + '</span></span><span class="N_amt N_num">' + signOf(r.txn_type) + esc(formatPHP(r.gross_amount)) + '</span><span class="N_chev" aria-hidden="true">›</span></button>';
+        return '<button class="N_row" type="button" data-n="rq-open" data-v="' + esc(r.id) + '"><span class="N_rowmid"><span class="N_rowt">' + esc(r.payee_name || r.notes || (r.category ? catName(r.category) : 'A transaction')) + '</span><span class="N_rows' + (lowConf(r.ocr_confidence) ? ' N_dn' : '') + '">' + esc(sub) + '</span>' + (rqIncomplete(r) ? '<span class="N_rows E_inc N_inc">' + esc(INCOMPLETE) + '</span>' : '') + '</span><span class="N_amt N_num">' + signOf(r.txn_type) + esc(formatPHP(r.gross_amount)) + '</span><span class="N_chev" aria-hidden="true">›</span></button>';
       }).join('') + '</section>';
   }
   function viewMoney() {
@@ -730,12 +742,12 @@
         return sheetShell('Void a transaction', rb);
       }
       rb += '<p class="N_sub">' + esc('Added ' + fmtDate(rr.transaction_date, 'long') + (rr.source ? ' from ' + srcWords(rr.source) : '') + '. Check it, change what is wrong, then approve or void it.') + '</p>' +
-        (rr.receipt_image_path ? '<p class="N_box">A receipt photo is attached.</p>' : '') + (lowConf(rr.ocr_confidence) ? '<p class="N_ferr" role="alert"><span aria-hidden="true">!</span> The receipt was hard to read. Please check every figure.</p>' : '') +
+        (rqIncomplete(rr) ? '<p class="N_box E_inc N_inc" role="status">' + esc(INCOMPLETE) + '</p>' : '') + (rr.receipt_image_path ? '<p class="N_box">A receipt photo is attached.</p>' : '') + (lowConf(rr.ocr_confidence) ? '<p class="N_ferr" role="alert"><span aria-hidden="true">!</span> The receipt was hard to read. Please check every figure.</p>' : '') +
         field('N_rd', 'Date', '<input class="N_input" id="N_rd" type="date" data-f="date" value="' + esc(fr.date) + '"' + (er.date ? ' aria-invalid="true"' : '') + '>', er.date) +
         field('N_ra', 'Amount (PHP)', inp('N_ra', 'amount', fr.amount, 'inputmode="decimal"'), er.amount) +
         (isX ? field('N_rc', 'Category', catSelect('N_rc', fr.category), er.category) : '<p class="N_line">Category: ' + esc(rr.category ? catName(rr.category) : '—') + '</p>') +
         field('N_rn', 'What was it for?', inp('N_rn', 'notes', fr.notes)) + field('N_rp', 'Paid to', inp('N_rp', 'payee', fr.payee)) + field('N_ro', 'Receipt number (optional)', inp('N_ro', 'or_number', fr.or_number)) + sheetErr(sh) +
-        '<div class="N_btns"><button class="btn btn-primary btn-block" type="button" data-n="rq-approve"' + (sh.busy ? ' disabled aria-busy="true"' : '') + '>' + esc(sh.busy ? 'Sending…' : 'Approve') + '</button>' +
+        '<div class="N_btns"><button class="btn btn-primary btn-block" type="button" data-n="rq-approve"' + (sh.busy || rqIncomplete(rr) ? ' disabled' : '') + (sh.busy ? ' aria-busy="true"' : '') + '>' + esc(sh.busy ? 'Sending…' : 'Approve') + '</button>' +
         '<button class="btn btn-secondary btn-block" type="button" data-n="rq-void-start"' + (sh.busy ? ' disabled' : '') + '>Void…</button></div><button class="btn btn-ghost btn-block" type="button" data-n="sheet-close"' + (sh.busy ? ' disabled' : '') + '>Close</button>';
       return sheetShell('Review a transaction', rb);
     }
@@ -842,6 +854,7 @@
   }
   function doReview(action) {
     var sh = S.sheet, r = rqOf(sh.id); if (!r) return; var f = sh.f, edits = {};
+    if (action === 'approve' && rqIncomplete(r)) { sh.msg = INCOMPLETE; draw(); return; }
     if (action === 'approve') {
       sh.errs = validateReview(f, r); if (Object.keys(sh.errs).length) { sh.msg = 'Please fix the items marked below.'; draw(); return; }
       edits = changedEdits(f, r);
@@ -853,7 +866,7 @@
         var m = action === 'approve' ? 'Approved: ' + formatPHP('gross_amount' in edits ? edits.gross_amount : r.gross_amount) + (('category' in edits ? edits.category : r.category) ? ', ' + catName('category' in edits ? edits.category : r.category) : '') + '.' : 'Voided: ' + formatPHP(r.gross_amount) + '.';
         buzz('success'); tell(m); S.notice = m; S.sheet = null; refreshAfterWrite(); draw(); return;
       }
-      s2.msg = 'Nothing was changed. Please check it and try again.'; draw();
+      s2.msg = refusalWords(res) || 'Nothing was changed. Please check it and try again.'; draw();
     });
   }
 
@@ -969,7 +982,7 @@
     lib: { lastMonths: lastMonths, buildSeries: buildSeries, chipFor: chipFor, canManage: canManage, manilaToday: manilaToday, addDays: addDays, nightsBetween: nightsBetween, fmtDate: fmtDate, fmtDateTime: fmtDateTime, toCentavos: toCentavos, fromCentavos: fromCentavos, formatPHP: formatPHP, formatPercent: formatPercent, formatNumber: formatNumber,
       formatMetricValue: formatMetricValue, parseAmount: parseAmount, periodPreset: periodPreset, comparablePeriod: comparablePeriod, compareMode: compareMode, pctDelta: pctDelta, fmtDeltaPct: fmtDeltaPct, deltaLine: deltaLine,
       normalizePayments: normalizePayments, paymentLine: paymentLine, validateConfirm: validateConfirm, confirmArgs: confirmArgs, confirmSentence: confirmSentence, declineSentence: declineSentence, declineReason: declineReason,
-      normalizeCats: normalizeCats, declineMessage: declineMessage, tone: tone, isMissing: isMissing, isDenied: isDenied, isOffline: isOffline, plainError: plainError, PRESETS: PRESETS, METHODS: METHODS, EXPENSE_CATEGORIES: EXPENSE_CATEGORIES, KPI_GROUPS: KPI_GROUPS, NO_CONNECTION: NO_CONNECTION }
+      normalizeCats: normalizeCats, declineMessage: declineMessage, tone: tone, isMissing: isMissing, isDenied: isDenied, isOffline: isOffline, plainError: plainError, PRESETS: PRESETS, METHODS: METHODS, EXPENSE_CATEGORIES: EXPENSE_CATEGORIES, refusalWords: refusalWords, INCOMPLETE: INCOMPLETE, KPI_GROUPS: KPI_GROUPS, NO_CONNECTION: NO_CONNECTION }
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   if (typeof window !== 'undefined') window.N_Manage = api;
