@@ -108,7 +108,7 @@
     var gs = order.map(function (c) { return by[c]; });
     var worst = function (g) { return g.out ? 0 : g.low ? 1 : 2; };
     if (chip === 'low') gs.sort(function (a, b) { return worst(a) - worst(b) || (b.out + b.low) - (a.out + a.low) || a.cat.localeCompare(b.cat); });
-    else { var go = groupOrder(rows); gs.sort(function (a, b) { return go(a.cat, b.cat); }); }
+    else { var go = groupOrder(items); gs.sort(function (a, b) { return go(a.cat, b.cat); }); }
     if (chip === 'cons') gs.forEach(function (g) { g.rows.sort(byName); });
     return gs;
   }
