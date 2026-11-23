@@ -532,18 +532,33 @@ test('fix 16: the Today card counts reviews from every month and opens the needs
   assert.doesNotMatch(mk({ ...base, pending_all: { count: 0, total: 0 } }), /to review/, 'present and zero: nothing waits anywhere');
   const b = await boot({ sub: 'review' }); assert.equal(b.sent('expenses_screen_v1')[0][1].p_filter, 'review'); assert.match(b.html(), /data-id="all"[^>]*>Needs review ×/);
   await b.click('chip', 'all'); assert.equal(b.sent('expenses_screen_v1').at(-1)[1].p_filter, null);
-  assert.match(STY, /\.E_today \.E_trev \{ display: inline-block; padding: 14px 4px; margin: -14px 0;/, 'the tap target reaches 44 px without making the card taller');
+  assert.match(STY, /\.E_today \.E_trev \{ display: inline-block; padding: 15px 0; margin: -15px 0;/, 'the tap target reaches 44 px without making the card taller');
+  assert.match(STY, /\.E_today \.E_tsub \{ display: block; letter-spacing: -\.01em;/, 'the sub line stays on one line (mockup A)');
 });
 
 test('round 2: stock row edit is date/payee read-only; review line for earlier months; no dead receipt check', async () => {
   const STK = ROW({ id: 'k1', chip: 'stock', amount_locked: true, locked: false, stock: { lines: 1, items: 1 } });
   const b = await boot({ screen: SCREEN({ rows: [STK] }) }); await b.click('open', 'k1'); await b.click('edit');
   assert.match(b.html(), /id="E_date"[^>]*disabled/); assert.match(b.html(), /id="E_payee"[^>]*disabled/); assert.match(b.html(), /Change the price in Inventory/);
+  await b.type('date', '2099-01-01'); await b.type('payee', 'Someone Else'); // the inputs are disabled; even forced values must never reach the server
   await b.type('notes', 'New note'); await b.type('reason', 'fix words'); await b.click('edit-save');
   const sent = b.sent('admin_save_transaction_v2'); assert.equal(sent.length, 1); assert.deepEqual(Object.keys(sent[0][1].p_txn).sort(), ['id', 'notes', 'reason']);
+  assert.ok(!('transaction_date' in sent[0][1].p_txn) && !('payee_name' in sent[0][1].p_txn), 'stock row: no date or payee sent');
   const more = await boot({ sub: 'review', screen: SCREEN({ pending_all: { count: 5, total: 100 } }) });
   assert.match(more.text(), /3 more waiting in earlier months\./); assert.doesNotMatch(more.html(), /E_warn[^"]*"[^>]*>3 more/);
   const none = await boot({ sub: 'review', screen: SCREEN({ pending_all: { count: 2, total: 100 } }) }); assert.doesNotMatch(none.text(), /more waiting in earlier/);
   const all = await boot({ screen: SCREEN({ pending_all: { count: 5, total: 100 } }) }); assert.doesNotMatch(all.text(), /more waiting in earlier/, 'only on the review filter');
   assert.doesNotMatch(read('expenses/E_expenses.js'), /r\.ocr_confidence/);
+});
+
+test('round 3: a staff pay row edit never sends category (Pay staff owns it); a stock row with a late date still saves', async () => {
+  const S1 = ROW({ id: 's1', chip: 'staff_pay', locked: true, amount_locked: true, category: 'cleaning', receipt_can: { add: false, replace: false, remove: false } });
+  const b = await boot({ screen: SCREEN({ rows: [S1] }) }); await b.click('open', 's1'); await b.click('edit');
+  assert.match(b.html(), /<div class="E_input E_ro" id="E_cat">/, 'category is read-only'); assert.doesNotMatch(b.html(), /<select[^>]*id="E_cat"/);
+  await b.type('category', 'supplies'); await b.type('notes', 'Changed words'); await b.type('reason', 'fix words'); await b.click('edit-save');
+  const sent = b.sent('admin_save_transaction_v2'); assert.equal(sent.length, 1); assert.deepEqual(Object.keys(sent[0][1].p_txn).sort(), ['id', 'notes', 'reason']);
+  const STK = ROW({ id: 'k1', chip: 'stock', amount_locked: true, locked: false, date: '2099-12-31', stock: { lines: 1, items: 1 } });
+  const c = await boot({ screen: SCREEN({ rows: [STK] }) }); await c.click('open', 'k1'); await c.click('edit');
+  await c.type('notes', 'Later date row'); await c.type('reason', 'fix words'); await c.click('edit-save');
+  const s2 = c.sent('admin_save_transaction_v2'); assert.equal(s2.length, 1, 'no date validation on a stock row'); assert.deepEqual(Object.keys(s2[0][1].p_txn).sort(), ['id', 'notes', 'reason']);
 });

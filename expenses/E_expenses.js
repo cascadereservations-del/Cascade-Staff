@@ -94,7 +94,7 @@
       if (parseAmount(f.amount) !== null && toC(parseAmount(f.amount)) !== toC(r.amount)) p.gross_amount = parseAmount(f.amount);
       if (t(f.payee) !== t(r.payee)) p.payee_name = t(f.payee);
     }
-    if (f.category && f.category !== r.category) p.category = f.category;
+    if (!(r.locked && r.chip === 'staff_pay') && f.category && f.category !== r.category) p.category = f.category; // Pay staff owns a staff pay row's category (server: locked)
     if (t(f.notes) !== t(r.notes)) p.notes = t(f.notes);
     p.reason = t(reason);
     return p;
@@ -490,7 +490,8 @@
     var r = edit ? rowOf(sh.id) : null, lock = !!(r && (r.locked || r.amount_locked)), amtLock = !!(r && (r.amount_locked || r.locked)), f = sh.f, e = sh.errs || {}, ck = sh.checks || {}, h = '';
     h += fld('E_date', 'Date', inp('E_date', 'date', f.date, 'type="date" max="' + esc(addDay(S.today, 1)) + '"' + (lock ? ' disabled' : '')), e.date, ck.date);
     h += fld('E_amt', 'Amount (PHP)', amtLock ? '<div class="E_input E_ro" id="E_amt">' + esc(peso(r.amount)) + '</div>' + (r && r.amount_locked && !r.locked ? '<p class="E_nudge">Change the price in Inventory</p>' : '') : inp('E_amt', 'amount', f.amount, 'inputmode="decimal" placeholder="0.00"'), e.amount, ck.amount);
-    h += fld('E_cat', 'Category', catSelect('E_cat', f.category), e.category, ck.category);
+    var catLock = !!(r && r.locked && r.chip === 'staff_pay'), cl0 = catLock && catList(S.data && S.data.categories).filter(function (c) { return c.slug === r.category; })[0];
+    h += fld('E_cat', 'Category', catLock ? '<div class="E_input E_ro" id="E_cat">' + esc(cl0 ? cl0.label : r.category || '') + '</div>' : catSelect('E_cat', f.category), e.category, ck.category);
     var nd = nudgeFor(f.category); if (nd) h += '<p class="E_nudge">' + esc(nd) + '</p>';
     h += fld('E_notes', 'What was it for?', inp('E_notes', 'notes', f.notes), e.notes, ck.notes);
     h += fld('E_payee', edit ? 'Paid to' : 'Paid to (optional)', inp('E_payee', 'payee', f.payee, lock ? 'disabled' : ''), e.payee, ck.payee);
