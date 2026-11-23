@@ -43,7 +43,7 @@
 .N_note { padding: 14px 16px; border-radius: var(--r-md); background: var(--muted); color: var(--fg-2); font-size: max(0.8125rem, var(--v5-t-2)); line-height: 1.45; }
 .N_err { display: flex; gap: 8px; align-items: center; justify-content: space-between; flex-wrap: wrap; padding: 10px 12px; border-radius: var(--r-md); background: var(--danger-soft); color: var(--danger); font-size: max(0.8125rem, var(--v5-t-2)); }
 .N_okbox { padding: 10px 12px; border-radius: var(--r-md); background: var(--ok-soft); color: var(--ok); font-size: max(0.8125rem, var(--v5-t-2)); }
-.N_box { margin: 0; padding: 10px 12px; border-radius: var(--r-md); background: var(--muted); font-size: max(0.8125rem, var(--v5-t-2)); }
+.N_info { margin: 0; padding: 10px 12px; border-radius: var(--r-md); background: var(--muted); color: var(--fg); font-size: max(0.8125rem, var(--v5-t-2)); }
 .N_link { display: inline-flex; align-items: center; min-height: 44px; color: var(--primary); text-decoration: underline; }
 .N_kbar { display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "l l" "s b"; gap: 4px 8px; align-items: center; }
 .N_kbar .N_lbl { grid-area: l; }
@@ -64,7 +64,7 @@
 .N_btns { display: grid; gap: 8px; margin: 12px 0 8px; }
 .N_btns .btn, .N_sheet .btn { font-size: max(0.875rem, var(--v5-t-2)); }
 .N_scrim { position: fixed; inset: 0; background: var(--overlay); z-index: 40; }
-.N_sheet { position: fixed; left: 0; right: 0; bottom: 0; margin: 0 auto; max-width: 480px; max-height: 92vh; overflow-y: auto; overscroll-behavior: contain; z-index: 41; background: var(--v5-surf); border: 1px solid var(--v5-glass-edge); border-bottom: 0; border-radius: var(--v5-r-sheet) var(--v5-r-sheet) 0 0; padding: 16px 16px calc(16px + env(safe-area-inset-bottom)); box-shadow: 0 -12px 40px var(--v5-shadow); }
+.N_sheet { position: fixed; left: 0; right: 0; bottom: 0; margin: 0 auto; max-width: 480px; max-height: 92vh; max-height: 92dvh; overflow-y: auto; overscroll-behavior: contain; z-index: 41; background: var(--v5-surf); border: 1px solid var(--v5-glass-edge); border-bottom: 0; border-radius: var(--v5-r-sheet) var(--v5-r-sheet) 0 0; padding: 16px 16px calc(16px + env(safe-area-inset-bottom)); box-shadow: 0 -12px 40px var(--v5-shadow); }
 .N_grab { width: 40px; height: 4px; border-radius: 2px; background: var(--v5-line-2); margin: 0 auto 12px; }
 @media (prefers-reduced-motion: reduce) { .N_tap:active { transform: none; } }
 
@@ -124,3 +124,35 @@
 @media (min-width: 37.5rem) { .N_tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 button.N_link { background: none; border: 0; padding: 0; font: inherit; cursor: pointer; }
 .N_inc { display: inline-block; color: var(--v5-ink); background: var(--v5-warn-glass); border-radius: var(--v5-r-sm); padding: 2px 8px; margin-top: 2px; } /* s134: the amount is not complete; same warm cue as the Expenses screen (E_inc), repeated here because that stylesheet only loads with #expenses */
+
+/* ---- confirm flow (3.4.54): gold bar, sheet header and body, receipt box, sticky action bar, zoom ---- */
+.N_due { box-shadow: inset 4px 0 0 var(--accent); }
+.N_card.N_due { box-shadow: inset 4px 0 0 var(--accent), inset 0 1px 0 var(--v5-card-hi), 0 8px 24px var(--v5-card-shadow); }
+.N_go { position: relative; padding-right: 40px; }
+.N_go > .N_chev { position: absolute; right: 16px; top: 50%; transform: translateY(-50%); }
+.N_hd { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
+.N_hd .N_h { margin: 0; }
+.N_closeb { min-width: 44px; min-height: 44px; flex: none; }
+.N_shb { display: grid; gap: 12px; }
+.N_shb > .N_field, .N_shb > .N_fs { margin-bottom: 0; }
+.N_shb > p, .N_shb > dl, .N_shb > .N_sub { margin: 0; }
+.N_rcpt { display: block; height: clamp(11rem, 34dvh, 17rem); width: 100%; box-sizing: border-box; background: var(--muted); border: 1px solid var(--border); border-radius: var(--r-md); position: relative; overflow: hidden; padding: 0; margin: 0; cursor: pointer; color: var(--fg); font: inherit; }
+.N_rcpt img.N_photo { width: 100%; height: 100%; object-fit: contain; max-height: none; border: 0; border-radius: 0; }
+.N_rcpt.N_msgbox { display: grid; place-content: center; justify-items: center; gap: 8px; padding: 12px; text-align: center; cursor: default; color: var(--fg-2); font-size: max(0.8125rem, var(--v5-t-2)); line-height: 1.4; }
+.N_rcpt.N_msgbox p { margin: 0; }
+.N_rcz { position: absolute; right: 8px; bottom: 8px; display: inline-flex; align-items: center; min-height: 28px; padding: 0 10px; border-radius: var(--r-full); background: var(--v5-surf); color: var(--fg); border: 1px solid var(--border); font: 600 13px/1.2 var(--font-ui); }
+.N_act { container-type: inline-size; position: sticky; bottom: calc(-16px - env(safe-area-inset-bottom)); margin: 0 -16px calc(-16px - env(safe-area-inset-bottom)); padding: 10px 16px calc(12px + env(safe-area-inset-bottom)); background: var(--v5-surf); border-top: 1px solid var(--border); display: grid; gap: 8px; z-index: 2; }
+.N_act > p { margin: 0; }
+.N_act2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(8.5rem, 1fr)); gap: 8px; }
+.N_act2 .btn { padding: 0 8px; } /* at 320 px a 140 px button with 16 px padding broke "Confirm booking" onto two lines */
+@container (max-width: 17.4rem) { .N_act2 .btn-primary { order: -1; } }
+.N_warnb { margin: 0; padding: 10px 12px; border-radius: var(--r-md); background: var(--warn-soft); color: var(--warn); font-size: max(0.8125rem, var(--v5-t-2)); line-height: 1.45; }
+.N_nw { white-space: nowrap; }
+.N_zoom { overflow: auto; max-height: calc(92dvh - 9rem); touch-action: pan-x pan-y pinch-zoom; background: var(--muted); border-radius: var(--r-md); }
+.N_zoom img.N_photo { display: block; width: 100%; max-width: none; max-height: none; height: auto; border: 0; border-radius: 0; }
+.N_zoom.N_z2 img.N_photo { width: 200%; }
+.N_wait { min-height: 72px; box-sizing: border-box; }
+.N_pl, .N_sheet details .N_info { white-space: pre-line; }
+.N_help { margin: 0; color: var(--fg-2); font-size: 0.8125rem; line-height: 1.35; }
+.N_sheet details { margin: 0; }
+.N_sheet summary.N_link { cursor: pointer; }

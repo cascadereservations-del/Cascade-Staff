@@ -70,8 +70,10 @@ const OV = (over = {}) => ({ today: TODAY, sourceAsOf: null, calendarSync: null,
   readiness: { state: 'awaiting_review', lastCleaning: null, review: null, blockingWorkOrders: 1, lastCheckout: TODAY, nextCheckin: '2026-10-15', daysOverdue: null },
   blockingWorkOrders: [], lowStock: [{ id: 'i1', name: 'Soap', qty: '1', unit: 'pcs', reorderBelow: '3', out: false }], followUps: [], handoffs: [],
   finance: { pendingReviewCount: 2, pendingReviewAmount: '3000.00', paymentReviewCount: 1, unpaidCleanerFees: 3 }, notices: [], actions: [{ kind: 'inquiry' }], ...over });
-const Q1 = { id: 'b1000000-0000-4000-8000-000000000001', booking_ref: 'B1000000', guest_name: 'Ella Tan', checkin_date: '2026-10-20', checkout_date: '2026-10-22', pax: 2, expected_amount: '2500.00', comparison_id: 'c1000000-0000-4000-8000-000000000001', candidate_amount: '2500.00', reference: 'GC12345678', receipt_image_path: 'receipts/x.jpg', hold_expires_at: '2026-10-15T10:00:00Z' };
-const Q2 = { id: 'b2000000-0000-4000-8000-000000000002', booking_ref: 'B2000000', guest_name: 'Fe Ong', checkin_date: '2026-10-25', checkout_date: '2026-10-28', pax: 3, expected_amount: '4100.00', comparison_id: null, candidate_amount: null, reference: null, receipt_image_path: null, hold_expires_at: null };
+const Q1 = { id: 'b1000000-0000-4000-8000-000000000001', booking_ref: 'B1000000', guest_name: 'Ella Tan', checkin_date: '2026-10-20', checkout_date: '2026-10-22', pax: 2, expected_amount: '2500.00', comparison_id: 'c1000000-0000-4000-8000-000000000001', candidate_amount: '2500.00', reference: 'GC12345678', receipt_image_path: 'receipts/x.jpg', hold_expires_at: '2026-10-15T10:00:00Z', receipt_sent: true, receipt_at: '2026-10-14T02:48:00Z', contact_channel: 'email' };
+const LEG1 = { ...Q1, receipt_sent: null, receipt_at: null, contact_channel: null }; // an old server: the three new fields are missing
+const Q2 = { id: 'b2000000-0000-4000-8000-000000000002', booking_ref: 'B2000000', guest_name: 'Fe Ong', checkin_date: '2026-10-25', checkout_date: '2026-10-28', pax: 3, expected_amount: '4100.00', comparison_id: null, candidate_amount: null, reference: null, receipt_image_path: null, hold_expires_at: null, receipt_sent: false, receipt_at: null, contact_channel: 'messenger' };
+const LEG2 = { ...Q2, receipt_sent: null, receipt_at: null, contact_channel: null };
 const METRIC = (key, unit, value, coverage = 'complete') => ({ key, value, unit, coverage });
 const METRICS = (f = 1, extra = {}) => ({ propertyId: PROP, periodStart: 'x', periodEndExclusive: 'y', sourceAsOf: null, financeVisible: true, blockedNights: 0,
   metrics: { occupancy: METRIC('occupancy', 'percent', String(60 * f)), sold_nights: METRIC('sold_nights', 'night', String(Math.round(14 * f))), future_booked_nights: METRIC('future_booked_nights', 'night', '9'), average_length_of_stay: METRIC('average_length_of_stay', 'day', '2.5'),
@@ -186,15 +188,15 @@ async function openConfirm(t, which = Q1.id) {
 test('N confirm (receipt on file): form, then review restating guest, dates and amount, then ONE call with the dashboard keys', async () => {
   const t = await boot({ handlers: { staff_confirm_direct_booking_v1: () => ({ ok: true, outcome: 'confirmed', guest_name: 'Ella Tan', checkin: '2026-10-20', checkout: '2026-10-22' }) } });
   await openConfirm(t);
-  assert.match(t.text(), /I checked the money arrived/);
+  assert.match(t.text(), /I saw this payment in our GCash or bank account/); assert.match(t.html(), /data-f="amount" value="2500.00"/, 'the receipt path pre-fills the receipt amount');
   await t.click('cf-review'); // box not ticked
-  assert.match(t.text(), /Tick the box once you have checked the money arrived/);
+  assert.match(t.text(), /Tick the box once you have seen the payment in our account/);
   assert.equal(t.sent('staff_confirm_direct_booking_v1').length, 0);
   await t.type('checked', true, { type: 'checkbox', checked: true });
   await t.click('cf-send'); // forged tap on the form step: nothing may be sent
   assert.equal(t.sent('staff_confirm_direct_booking_v1').length, 0, 'a write never skips the review step');
   await t.click('cf-review');
-  assert.match(t.text(), /Ella Tan/); assert.match(t.text(), /20 Oct 2026 to 22 Oct 2026/); assert.match(t.text(), /2,500\.00/); assert.match(t.text(), /This cannot be undone here/);
+  assert.match(t.text(), /Ella Tan/); assert.match(t.text(), /20 October to 22 October/); assert.match(t.text(), /The guest will be told by e-mail: the address, parking, the ID request and how to pay the balance/); assert.match(t.text(), /2,500\.00/); assert.match(t.text(), /This cannot be undone here/);
   assert.equal(t.sent('staff_confirm_direct_booking_v1').length, 0, 'review alone sends nothing');
   await t.click('cf-send');
   const s = t.sent('staff_confirm_direct_booking_v1'); assert.equal(s.length, 1);
@@ -204,7 +206,7 @@ test('N confirm (receipt on file): form, then review restating guest, dates and 
   assert.ok(s[0][1].p_idempotency_key.length >= 16 && s[0][1].p_idempotency_key.length <= 120);
   const d = dash('features/bookings/confirm-model.ts');
   if (d) { const body = d.slice(d.indexOf('export function confirmArgs')); assert.deepEqual([...new Set(body.slice(0, body.indexOf('};')).match(/\bp_\w+/g))].sort(), keys(s[0][1])); }
-  assert.match(t.toasts.join(' '), /Booking confirmed for Ella Tan/);
+  assert.equal(t.toasts.join(' '), 'Booking confirmed for Ella Tan, 20 October to 22 October. The guest is being told by e-mail.');
   assert.ok(!t.html().includes('role="dialog"'), 'the sheet closes on a confirmed answer');
   assert.equal(t.sent('staff_inquiry_payments_v1').length, 2, 'the list is read again after the write');
 });
@@ -274,18 +276,19 @@ test('N decline: reason, review, then one call with p_booking_id, p_reason, p_id
   const t = await boot({ handlers: { staff_decline_direct_booking_v1: () => ({ ok: true, outcome: 'declined', guest_name: 'Ella Tan' }) } });
   await t.click('tab', 'inquiries'); await t.click('inq-open', Q1.id); await t.click('dc-start');
   await t.click('dc-review'); assert.match(t.text(), /Choose or write a reason first/); assert.equal(t.sent('staff_decline_direct_booking_v1').length, 0);
-  await t.click('dc-chip', 'No payment received'); await t.type('text', 'Nothing arrived by Friday ');
+  assert.match(t.text(), /Payment did not arrive/); assert.match(t.text(), /A receipt was sent for this request/); assert.match(t.text(), /The guest never sees this note/);
+  await t.click('dc-chip', 'payment'); await t.type('text', 'Nothing arrived by Friday ');
   await t.click('dc-send'); assert.equal(t.sent('staff_decline_direct_booking_v1').length, 0, 'not before the review step');
-  await t.click('dc-review'); assert.match(t.text(), /No payment received: Nothing arrived by Friday/); assert.match(t.text(), /Ella Tan/); assert.equal(t.sent('staff_decline_direct_booking_v1').length, 0);
+  await t.click('dc-review'); assert.match(t.text(), /Payment did not arrive: Nothing arrived by Friday/); assert.match(t.text(), /Ella Tan/); assert.equal(t.sent('staff_decline_direct_booking_v1').length, 0);
   await t.click('dc-send');
   const s = t.sent('staff_decline_direct_booking_v1'); assert.equal(s.length, 1);
-  assert.deepEqual(keys(s[0][1]), ['p_booking_id', 'p_idempotency_key', 'p_reason']); assert.equal(s[0][1].p_reason, 'No payment received: Nothing arrived by Friday'); assert.equal(s[0][1].p_booking_id, Q1.id);
-  const d = dashRpcKeys('features/bookings/confirm-api.ts', 'staff_decline_direct_booking_v1'); if (d) assert.deepEqual(d, keys(s[0][1])); // confirm-api.ts:21
-  assert.match(t.toasts.join(' '), /Request declined for Ella Tan/);
+  assert.deepEqual(keys(s[0][1]), ['p_booking_id', 'p_idempotency_key', 'p_reason', 'p_reason_code']); assert.equal(s[0][1].p_reason, 'Payment did not arrive: Nothing arrived by Friday'); assert.equal(s[0][1].p_reason_code, 'payment'); assert.equal(s[0][1].p_booking_id, Q1.id);
+  const d = dashRpcKeys('features/bookings/confirm-api.ts', 'staff_decline_direct_booking_v1'); if (d) assert.deepEqual(d.filter((k) => k !== 'p_reason_code'), keys(s[0][1]).filter((k) => k !== 'p_reason_code')); // confirm-api.ts:21 (the dashboard has not sent the code yet)
+  assert.equal(t.toasts.join(' '), 'Request declined for Ella Tan. The guest is being told by e-mail.'); assert.ok(!t.html().includes('role="dialog"'), 'no copy sheet when the server tells the guest');
 });
 test('N decline: a refusal reads plainly and the sheet stays', async () => {
   const t = await boot({ handlers: { staff_decline_direct_booking_v1: () => ({ ok: false, outcome: 'invalid_state' }) } });
-  await t.click('tab', 'inquiries'); await t.click('inq-open', Q1.id); await t.click('dc-start'); await t.click('dc-chip', 'Duplicate request'); await t.click('dc-review'); await t.click('dc-send');
+  await t.click('tab', 'inquiries'); await t.click('inq-open', Q1.id); await t.click('dc-start'); await t.click('dc-chip', 'duplicate'); await t.click('dc-review'); await t.click('dc-send');
   assert.match(t.text(), /no longer waiting for a decision\. Nothing was changed/); assert.ok(t.html().includes('role="dialog"'));
 });
 
@@ -305,7 +308,7 @@ test('N Today: arrivals, departures, readiness, and a decision list whose rows g
   const t = await boot({});
   const x = t.text();
   assert.match(x, /Arriving today Ben Cruz/); assert.match(x, /Leaving today Carla Sy/); assert.match(x, /In the house Ana Reyes/); assert.match(x, /Next arrival Dino Lim, Tomorrow/);
-  assert.match(x, /Cleaned, awaiting your review/); assert.match(x, /2 inquiries waiting/); assert.match(x, /1 payment to review/); assert.match(x, /2 transactions await review/); assert.match(x, /3 cleaning fees unpaid/);
+  assert.match(x, /Cleaned, awaiting your review/); assert.match(x, /1 receipt to check Newest sent 12 min ago/); assert.match(x, /Show 3 more/); await t.click('needs-more'); assert.ok(!/Show \d+ more/.test(t.text())); assert.match(t.text(), /1 request waiting for payment Nothing to do yet/); assert.match(t.text(), /1 payment to review/); assert.match(t.text(), /2 transactions await review/); assert.match(t.text(), /3 cleaning fees unpaid/);
   assert.match(t.html(), /href="\.\/pay\/admin\.html"/); // resolves against the shell page, like app.js ./pay/admin.html
   await t.click('go', 'finance'); assert.deepEqual(t.nav, ['#door/dashboard/finance']);
   await t.click('tab', 'inquiries'); assert.match(t.text(), /Ella Tan/);
@@ -314,7 +317,7 @@ test('N Today: arrivals, departures, readiness, and a decision list whose rows g
 });
 test('N Today: finance null (no money role) says so; nothing waiting says so; a link target is always a valid hub route', async () => {
   const t = await boot({ handlers: { get_admin_overview_v1: () => ({ data: OV({ finance: null, lowStock: [], readiness: { state: 'ready', blockingWorkOrders: 0 }, actions: [] }), error: null }), staff_inquiry_payments_v1: () => ({ data: [], error: null }) } });
-  assert.match(t.text(), /Nothing is waiting for a decision/); assert.match(t.text(), /Money figures are not available for your role/);
+  assert.match(t.text(), /All clear\. Nothing needs you right now/); assert.match(t.text(), /Money figures are not available for your role/);
   const lib = fs.readFileSync(path.join(root, 'lib.js'), 'utf8'); const hub = lib.slice(lib.indexOf('var A_HUB'), lib.indexOf('function A_hubRoutes'));
   const routes = new Set([...hub.matchAll(/\['([a-z/-]+)'/g)].map((m) => m[1]));
   for (const r of new Set([...SRC.matchAll(/dashLink\('([a-z/-]+)'/g), ...SRC.matchAll(/#door\/dashboard\/([a-z/-]+)"/g)].map((m) => m[1]))) assert.ok(routes.has(r), 'hub route: ' + r);
@@ -322,10 +325,11 @@ test('N Today: finance null (no money role) says so; nothing waiting says so; a 
 test('N Inquiries: cards show guest, dates, nights, amount to receive and how they paid; the detail shows the evidence and both actions', async () => {
   const t = await boot({ sub: 'inquiries' });
   const x = t.text();
-  assert.match(x, /Ella Tan/); assert.match(x, /Tue 20 Oct to Thu 22 Oct · 2 nights/); assert.match(x, /To receive .*2,500\.00/); assert.match(x, /Receipt on file · .*2,500\.00 · ref \.\.\.5678/); assert.match(x, /No receipt yet/);
+  assert.match(x, /Receipt sent · 1/); assert.match(x, /Waiting for payment · 1/); assert.match(x, /Ella Tan Tue 20 Oct to Thu 22 Oct · 2 nights ₱2,500\.00 · receipt matches Sent 12 min ago/); assert.match(x, /Fe Ong Sun 25 Oct to Wed 28 Oct · 3 nights No hold/);
+  assert.match(t.html(), /class="N_card N_tap N_go N_due"/); assert.ok(t.html().split('N_due').length === 2, 'only the receipt card carries the gold bar');
   await t.click('inq-open', Q1.id);
-  assert.match(t.text(), /Confirm booking/); assert.match(t.text(), /Decline/); assert.match(t.text(), /A receipt photo is on file/); assert.match(t.html(), /href="#door\/dashboard\/bookings\/inquiries"/);
-  assert.match(t.text(), /Dates held until 15 Oct, 6:00 pm/);
+  assert.match(t.text(), /Confirm booking/); assert.match(t.text(), /Decline/); assert.match(t.text(), /cannot be shown on this device/); assert.match(t.html(), /href="#door\/dashboard\/bookings\/inquiries"/);
+  assert.match(t.text(), /Amounts match/); assert.match(t.text(), /Receipt shows ₱2,500\.00/); assert.match(t.text(), /Reference GC12 3456 78/); assert.match(t.text(), /Receipt sent 12 min ago/); assert.match(t.text(), /Dates held until Thu 6:00 pm/); assert.match(t.text(), /Booking B1000000/);
 });
 test('N KPIs: one card per group, label left and number right, delta versus the previous period, refresh, link to the dashboard', async () => {
   const t = await boot({ sub: 'kpis', handlers: { get_hospitality_metrics_v1: (a) => ({ data: a.p_start === '2026-10-01' ? METRICS(1) : METRICS(0.8), error: null }) } });
@@ -402,7 +406,7 @@ test('N demo: built-in sample, no network at all, all four tabs render, a write 
   assert.match(t.text(), /Occupancy/);
   await t.click('tab', 'inquiries'); assert.match(t.text(), /Sample Guest D/);
   await t.click('inq-open', 'n-demo-q1'); await t.click('cf-start'); await t.type('checked', true, { type: 'checkbox', checked: true }); await t.click('cf-review'); await t.click('cf-send');
-  assert.ok(!t.text().includes('Sample Guest D'), 'the row left the sample list'); assert.match(t.toasts.join(' '), /Booking confirmed/);
+  assert.ok(!/data-v="n-demo-q1"/.test(t.html()), 'the row left the sample list'); assert.match(t.toasts.join(' '), /Booking confirmed/);
   await t.click('tab', 'money'); assert.match(t.html(), /<a class="btn btn-primary btn-block" href="#expenses\/add">Log an expense<\/a>/); assert.ok(!/exp-open|ex-review/.test(t.html()), 's134: one expense form, on the Expenses page');
   assert.equal(t.c, undefined);
 });
@@ -445,15 +449,15 @@ const REPLY = {
   notPending: { ...BASE, ok: false, outcome: 'invalid_state', reason: 'not_pending', status: 'cancelled' }
 };
 async function reviewed(t) { await openConfirm(t); await t.type('checked', true, { type: 'checkbox', checked: true }); await t.click('cf-review'); }
-async function declineReviewed(t) { await t.click('tab', 'inquiries'); await t.click('inq-open', Q1.id); await t.click('dc-start'); await t.click('dc-chip', 'Duplicate request'); await t.click('dc-review'); }
+async function declineReviewed(t) { await t.click('tab', 'inquiries'); await t.click('inq-open', Q1.id); await t.click('dc-start'); await t.click('dc-chip', 'duplicate'); await t.click('dc-review'); }
 test('N reply shapes: every SQL reply shape reads correctly (a replayed confirm is a success, a bare denied has no guest name)', async () => {
-  const cases = [[REPLY.confirmed, true, /Booking confirmed for Ella Tan, 20 Oct 2026 to 22 Oct 2026/], [REPLY.replay, true, /Booking confirmed for Ella Tan/], [REPLY.conflict, false, /clash with another stay/], [REPLY.reused, false, /A1B2C3D4/], [REPLY.denied, false, /not allowed to confirm/], [REPLY.notFound, false, /no longer waiting/]];
+  const cases = [[REPLY.confirmed, true, /Booking confirmed for Ella Tan, 20 October to 22 October/], [REPLY.replay, true, /Booking confirmed for Ella Tan/], [REPLY.conflict, false, /clash with another stay/], [REPLY.reused, false, /A1B2C3D4/], [REPLY.denied, false, /not allowed to confirm/], [REPLY.notFound, false, /no longer waiting/]];
   for (const [r, ok, re] of cases) {
     const t = await boot({ handlers: { staff_confirm_direct_booking_v1: () => r } }); await reviewed(t); await t.click('cf-send');
     if (ok) { assert.match(t.toasts.join(' '), re); assert.ok(!t.html().includes('role="dialog"')); } else { assert.match(t.text(), re); assert.ok(t.html().includes('role="dialog"')); }
   }
   const d = await boot({ handlers: { staff_decline_direct_booking_v1: () => REPLY.declined } }); await declineReviewed(d); await d.click('dc-send');
-  assert.match(d.toasts.join(' '), /Request declined for Ella Tan/);
+  assert.equal(d.toasts.join(' '), 'Request declined for Ella Tan. No message was sent.');
   const n = await boot({ handlers: { staff_decline_direct_booking_v1: () => REPLY.notPending } }); await declineReviewed(n); await n.click('dc-send');
   assert.match(n.text(), /no longer waiting for a decision/);
 });
@@ -499,9 +503,9 @@ test('N no client, not demo: every tab shows the calm error with Try again, neve
   }
 });
 test('N review wording: each review step says what happens next, as the SQL does', async () => {
-  const t = await boot({}); await reviewed(t); assert.match(t.text(), /The guest is messaged when you confirm\./);
+  const t = await boot({}); await reviewed(t); assert.match(t.text(), /The guest will be told by e-mail: the address, parking, the ID request and how to pay the balance\./);
   const d = await boot({}); await declineReviewed(d);
-  assert.match(d.text(), /The booking and its calendar entry are cancelled, and its income row is voided\. The guest is not messaged yet\. You can copy a polite message for them next\./);
+  assert.match(d.text(), /The dates are released and the income row is voided\. This cannot be undone here\./); assert.match(d.text(), /No message is sent for a duplicate request\./);
 });
 
 test('N timeout: a hung write settles as a dropped connection after the limit, keeps the key, frees the sheet; a late answer is ignored', async () => {
@@ -676,16 +680,17 @@ test('N review queue: demo approves locally with no network', async () => {
 });
 test('N inquiries: the receipt photo shows inline from a signed link; failure offers Try again; decline then offers a polite message to copy', async () => {
   let ok = false; const signed = [];
-  const c = fakeClient({ get_admin_overview_v1: () => OV(), staff_inquiry_payments_v1: () => [Q1, Q2], staff_decline_direct_booking_v1: () => ({ ...BASE, ok: true, outcome: 'declined' }) });
+  const c = fakeClient({ get_admin_overview_v1: () => OV(), staff_inquiry_payments_v1: () => [LEG1, LEG2], staff_decline_direct_booking_v1: () => ({ ...BASE, ok: true, outcome: 'declined' }) }); // an old server: the copy sheet and the three-argument decline
   c.storage = { from: (b) => ({ createSignedUrl: (p, s) => { signed.push([b, p, s]); return Promise.resolve(ok ? { data: { signedUrl: 'https://x.test/s?t=1' }, error: null } : { data: null, error: { message: 'x' } }); } }) };
   let copied = null; const t = await boot({ client: c, sub: 'inquiries', clipboard: { writeText: (x) => { copied = x; return Promise.resolve(); } } });
   await t.click('inq-open', Q1.id); await tick(); assert.deepEqual(signed[0], ['booking-receipts', 'receipts/x.jpg', 300]); assert.match(t.text(), /could not be opened/);
   ok = true; await t.click('photo-retry'); await tick(); assert.match(t.html(), /<img class="N_photo" src="https:\/\/x\.test\/s\?t=1"/);
-  await t.click('dc-start'); await t.click('dc-chip', 'Dates not available'); await t.click('dc-review'); await t.click('dc-send');
+  await t.click('dc-start'); await t.click('dc-chip', 'dates'); await t.click('dc-review'); await t.click('dc-send');
+  assert.deepEqual(keys(t.sent('staff_decline_direct_booking_v1')[0][1]), ['p_booking_id', 'p_idempotency_key', 'p_reason'], 'no reason code to an old server');
   assert.match(t.text(), /Message the guest/); const msg = t.html().match(/<textarea[^>]*id="N_msg"[^>]*>([^<]*)</)[1];
-  assert.match(msg, /Hello Ella/); assert.match(msg, /20 Oct 2026 to 22 Oct 2026/); assert.match(msg, /no longer available/); assert.ok(!/!/.test(msg), 'no exclamation marks');
+  assert.match(msg, /Hello Ella/); assert.match(msg, /Tue, Oct 20 to Thu, Oct 22/); assert.match(msg, /no longer available/); assert.ok(!/!/.test(msg), 'no exclamation marks');
   await t.click('msg-copy'); assert.equal(copied, msg); assert.match(t.text(), /Copied\./);
-  const no = await boot({ client: c, sub: 'inquiries' }); await no.click('inq-open', Q1.id); await tick(); await no.click('dc-start'); await no.click('dc-chip', 'Duplicate request'); await no.click('dc-review'); await no.click('dc-send'); await no.click('msg-copy'); assert.match(no.text(), /Press and hold/);
+  const no = await boot({ client: c, sub: 'inquiries' }); await no.click('inq-open', Q1.id); await tick(); await no.click('dc-start'); await no.click('dc-chip', 'payment'); await no.click('dc-review'); await no.click('dc-send'); await no.click('msg-copy'); assert.match(no.text(), /Press and hold/);
 });
 const mkSeries = (o = {}) => {
   const months = [];

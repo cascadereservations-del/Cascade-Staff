@@ -171,11 +171,40 @@
     raw.forEach(function (o) {
       o = o || {}; var id = str(o.id); if (!id) return;
       out.push({ id: id, booking_ref: str(o.booking_ref), guest_name: str(o.guest_name), checkin_date: str(o.checkin_date), checkout_date: str(o.checkout_date), pax: typeof o.pax === 'number' ? o.pax : null,
-        expected_amount: amountStr(o.expected_amount), comparison_id: str(o.comparison_id), candidate_amount: amountStr(o.candidate_amount), reference: str(o.reference), receipt_image_path: str(o.receipt_image_path), hold_expires_at: str(o.hold_expires_at) });
+        expected_amount: amountStr(o.expected_amount), comparison_id: str(o.comparison_id), candidate_amount: amountStr(o.candidate_amount), reference: str(o.reference), receipt_image_path: str(o.receipt_image_path), hold_expires_at: str(o.hold_expires_at),
+        // confirm flow (3.4.54): null means the server is old and did not send the field, so the old single list and old words apply
+        receipt_sent: typeof o.receipt_sent === 'boolean' ? o.receipt_sent : null, receipt_at: str(o.receipt_at), contact_channel: o.contact_channel === 'messenger' || o.contact_channel === 'email' || o.contact_channel === 'none' ? o.contact_channel : null });
     });
     return out;
   }
   function hasReceipt(p) { return !!(p && p.comparison_id); }
+  // ---- confirm flow (3.4.54): the words and rules the Needs you card, the Inquiries groups and the request sheet share ----
+  var MONTH_LONG = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+  var GUEST_SITE = 'https://tinyurl.com/Stay-at-Cascade'; // the booking-site address the guest e-mails and chat replies already use (SITE_URL in the edge repo's facts.ts); no new address
+  function legacyRow(p) { return !p || p.receipt_sent === null; }
+  function isSent(p) { return !!p && (p.receipt_sent === true || (p.receipt_sent === null && hasReceipt(p))); }
+  function fmtDay(iso) { if (!iso) return '—'; var d = new Date(utc(iso)); return d.getUTCDate() + ' ' + MONTH_LONG[d.getUTCMonth()]; } // "4 December"
+  function fmtDayMail(iso) { var d = new Date(utc(iso)); return DOW[d.getUTCDay()] + ', ' + MON[d.getUTCMonth()] + ' ' + d.getUTCDate(); } // "Fri, Dec 4": the confirmation e-mail's date format
+  function manilaParts(ts) { var ms = Date.parse(ts); if (!isFinite(ms)) return null; var d = new Date(ms + 8 * 3600000), h = d.getUTCHours(); return { ms: ms, dow: DOW[d.getUTCDay()], time: (h % 12 || 12) + ':' + pad2(d.getUTCMinutes()) + ' ' + (h >= 12 ? 'pm' : 'am'), day: isoOf(ms + 8 * 3600000) }; }
+  function fmtTimeOnly(ts) { var q = manilaParts(ts); return q ? q.time : '—'; }
+  function fmtHoldAt(ts) { var q = manilaParts(ts); return q ? q.dow + ' ' + q.time : '—'; } // "Tue 3:00 pm"
+  function holdEnded(ts, now) { var ms = Date.parse(ts); return isFinite(ms) && ms <= (now == null ? clock() : now); }
+  // under a minute "just now", under an hour "{n} min ago", under a day "{n} h ago", else the date and time. The clock is injected.
+  function agoWords(ts, now) {
+    var ms = Date.parse(ts); if (!isFinite(ms)) return ''; var d = (now == null ? clock() : now) - ms;
+    if (d < 60000) return 'just now'; if (d < 3600000) return Math.floor(d / 60000) + ' min ago'; if (d < 86400000) return Math.floor(d / 3600000) + ' h ago'; return fmtDateTime(ts);
+  }
+  function groupRef(r) { var t = String(r == null ? '' : r).replace(/\s+/g, ''); return t.replace(/(.{4})(?=.)/g, '$1 '); } // 1234 5678 9012
+  // the receipt against the amount to receive. Null when no receipt was sent; unread when the photo gave no amount (never a zero).
+  function receiptCmp(p) {
+    if (!isSent(p)) return null;
+    var r = p.candidate_amount === null ? null : toCentavos(p.candidate_amount), e = p.expected_amount === null ? null : toCentavos(p.expected_amount);
+    if (r === null || r <= 0) return { kind: 'unread' };
+    if (e === null) return { kind: 'known', amt: r, diff: 0 };
+    var d = r - e; return { kind: d === 0 ? 'ok' : d < 0 ? 'short' : 'over', amt: r, diff: Math.abs(d) };
+  }
+  function cents(c) { return formatPHP(fromCentavos(c)); }
+  function nw(t) { return '<span class="N_nw">' + esc(t) + '</span>'; }
   function paymentLine(p) {
     if (!hasReceipt(p)) return 'No receipt yet';
     var parts = ['Receipt on file']; if (p.candidate_amount !== null) parts.push(formatPHP(p.candidate_amount)); if (p.reference) parts.push('ref ...' + p.reference.slice(-4));
@@ -185,7 +214,7 @@
   function methodLabel(v) { for (var i = 0; i < METHODS.length; i++) if (METHODS[i][0] === v) return METHODS[i][1]; return v; }
   function validateConfirm(f, payment) {
     var e = {}, receipt = hasReceipt(payment);
-    if (receipt && !f.checked) e.checked = 'Tick the box once you have checked the money arrived.';
+    if (receipt && !f.checked) e.checked = 'Tick the box once you have seen the payment in our account.';
     if (parseAmount(f.amount) === null) e.amount = 'Enter the amount received, more than zero, with at most two decimal places.';
     var needsRef = receipt ? !payment.reference : f.method !== 'cash';
     if (needsRef && !String(f.reference || '').trim()) e.reference = 'Enter the payment reference.';
@@ -199,10 +228,13 @@
     return { p_booking_id: bookingId, p_method: method, p_reference: reference === '' || (!receipt && method === 'cash') ? null : reference, p_amount: parseAmount(f.amount),
       p_note: String(f.note || '').trim() === '' ? null : String(f.note).trim(), p_comparison_id: receipt ? payment.comparison_id : null, p_idempotency_key: key };
   }
-  function confirmSentence(r) {
+  // channel: the list row's contact_channel. Known: the new words ("4 December", who is told how). Null (an old server): today's words.
+  function confirmSentence(r, channel) {
     r = r || {};
     switch (r.outcome) {
-      case 'confirmed': return 'Booking confirmed for ' + (r.guest_name || 'the guest') + (r.checkin && r.checkout ? ', ' + fmtDate(r.checkin, 'long') + ' to ' + fmtDate(r.checkout, 'long') : '') + '.';
+      case 'confirmed':
+        if (channel === 'email' || channel === 'messenger' || channel === 'none') return 'Booking confirmed for ' + (r.guest_name || 'the guest') + (r.checkin && r.checkout ? ', ' + fmtDay(r.checkin) + ' to ' + fmtDay(r.checkout) : '') + '.' + (channel === 'none' ? ' Message the guest yourself.' : ' The guest is being told ' + (channel === 'email' ? 'by e-mail.' : 'on Messenger.'));
+        return 'Booking confirmed for ' + (r.guest_name || 'the guest') + (r.checkin && r.checkout ? ', ' + fmtDate(r.checkin, 'long') + ' to ' + fmtDate(r.checkout, 'long') : '') + '.';
       case 'conflict': return 'These dates clash with another stay, so nothing was confirmed.';
       case 'invalid_state': return 'This booking is no longer waiting for a decision. Nothing was changed.';
       case 'reference_reused': return 'That payment reference was already used for booking ' + (r.prior_ref || 'another booking') + ', so nothing was confirmed.';
@@ -214,9 +246,13 @@
       default: return 'Nothing was confirmed. Please try again.';
     }
   }
-  function declineSentence(r) {
+  // told: 'email' | 'messenger' | 'duplicate' when the server sends (or deliberately does not send) the message; null keeps today's words
+  function declineSentence(r, told, name) {
     r = r || {};
-    if (r.ok === true) return 'Request declined' + (r.guest_name ? ' for ' + r.guest_name : '') + '.';
+    if (r.ok === true) {
+      var who = r.guest_name || name, base = 'Request declined' + (who ? ' for ' + who : '') + '.';
+      return told === 'email' ? base + ' The guest is being told by e-mail.' : told === 'messenger' ? base + ' The guest is being told on Messenger.' : told === 'duplicate' ? base + ' No message was sent.' : base;
+    }
     switch (r.outcome) {
       case 'invalid_state': return 'This booking is no longer waiting for a decision. Nothing was changed.';
       case 'note_required': return 'Choose or write a reason first.';
@@ -224,8 +260,11 @@
       default: return 'Nothing was declined. Please try again.';
     }
   }
-  var DECLINE_REASONS = ['Dates not available', 'No payment received', 'Guest asked to cancel', 'Duplicate request'];
-  function declineReason(chip, text) { var t = String(text || '').trim(); return [chip, t].filter(Boolean).join(': ') || null; }
+  // chips in the contract's order, each with the reason_code it sends. A text-only reason sends 'other'.
+  var DECLINE_CHIPS = [['dates', 'Dates not available'], ['payment', 'No payment received'], ['guest_cancel', 'Guest asked to cancel'], ['duplicate', 'Duplicate request']];
+  function chipLabel(code, receiptSent) { if (code === 'payment' && receiptSent) return 'Payment did not arrive'; for (var i = 0; i < DECLINE_CHIPS.length; i++) if (DECLINE_CHIPS[i][0] === code) return DECLINE_CHIPS[i][1]; return null; }
+  function declineReason(chip, text, receiptSent) { var t = String(text || '').trim(); return [chip ? chipLabel(chip, receiptSent) : null, t].filter(Boolean).join(': ') || null; }
+  function reasonCode(chip) { return chipLabel(chip, false) ? chip : 'other'; }
 
   // ---- expense: transactions-page.tsx:38 CATEGORIES.expense and :47 blank() ----
   var EXPENSE_CATEGORIES = ['cleaning', 'supplies', 'utilities', 'internet', 'subscription', 'maintenance', 'furnishing', 'cohost_fee', 'guest_refund', 'airbnb_adjustment', 'loan', 'other']; // used only until expense_categories_v1 answers
@@ -241,12 +280,24 @@
   function catOk(slug, list) { return (list || catList()).some(function (c) { return c.slug === slug; }); }
   function catName(slug) { var l = catList(); for (var i = 0; i < l.length; i++) if (l[i].slug === slug) return l[i].label; return catLabel(slug); }
   var SCAN_LOW = 0.6; // below this the photo was hard to read
-  // the plain, gracious decline line the host can paste into Messenger (no exclamation marks, no promises)
-  function declineMessage(p, chip) {
-    var first = String(p && p.guest_name || '').trim().split(/\s+/)[0] || 'there', dates = p && p.checkin_date && p.checkout_date ? ' from ' + fmtDate(p.checkin_date, 'long') + ' to ' + fmtDate(p.checkout_date, 'long') : '';
-    var why = chip === 'Dates not available' ? ' because those dates are no longer available' : chip === 'No payment received' ? ' because we have not received the payment' : '';
-    return 'Hello ' + first + ', thank you for your interest in Cascade Hideaway. I am sorry to let you know that we are unable to confirm your stay' + dates + why + '. If other dates would suit you, I would be glad to look at them with you. Warm regards, Cascade Hideaway';
+  // The guest's decline text, R1.6 of PLAN-confirm-flow.md. The server sends the same words (golden strings: tests/fixtures/guest-decline-golden.json,
+  // copied to the edge repo). The staff note is never part of it. 'duplicate' sends nothing, so it has no text.
+  // channel 'email' says "to this e-mail"; anything else (Messenger, or no channel on file) says "here in the chat".
+  // Lloyd 2026-11-24: every "Reply" that opens a sentence reads "Please reply".
+  function declineMessage(p, code, receiptSent, channel) {
+    if (code === 'duplicate') return '';
+    var first = String(p && p.guest_name || '').trim().split(/\s+/)[0] || 'there', dates = p && p.checkin_date && p.checkout_date ? fmtDayMail(p.checkin_date) + ' to ' + fmtDayMail(p.checkout_date) : 'your dates';
+    var here = channel === 'email' ? 'to this e-mail' : 'here in the chat', thanks = 'Thank you for choosing Cascade Hideaway. ';
+    var refund = receiptSent ? 'If you already sent a payment, please reply ' + here + ' with the GCash name and number it came from, and we will return it in full.' : null, paras;
+    var more = 'We would still love to host you. Please reply ' + here + ' with other dates that suit you, or see what is open at ' + GUEST_SITE + ', and we will gladly check them for you.';
+    if (code === 'dates') paras = [thanks + 'We are sorry: ' + dates + ' are no longer available, so we could not confirm this request.', refund, more];
+    else if (code === 'payment' && !receiptSent) paras = [thanks + 'We held ' + dates + ' for you, but the payment did not reach us in time, so the hold has ended and this request is closed.', 'Still planning to come? Please reply ' + here + ' and, if the dates are still open, we will gladly hold them for you again. You can also check dates at ' + GUEST_SITE + '.'];
+    else if (code === 'payment') paras = [thanks + 'We could not find the payment for ' + dates + ' in our account, so we could not confirm this request.', 'If the payment did leave your account, please reply ' + here + ' with the GCash name and number it came from. We will trace it and return it in full.', 'Once that is sorted, we would be glad to hold the dates for you again if they are still open.'];
+    else if (code === 'guest_cancel') paras = ['As you asked, we have cancelled your request for ' + dates + '. Nothing more is needed from you.', refund, 'You are welcome any time. When new dates come up, reply ' + here + ' or visit ' + GUEST_SITE + '.'];
+    else paras = [thanks + 'We are sorry, we could not confirm your request for ' + dates + '.', refund, more];
+    return 'Hello ' + first + ',\n\n' + paras.filter(Boolean).join('\n\n') + '\n\nWarm regards,\nCascade Hideaway\nHotel Comfort. Home Warmth. 🌿';
   }
+  function declineTold(channel, code) { return code === 'duplicate' ? 'duplicate' : channel === 'email' || channel === 'messenger' ? channel : null; }
 
   // ---- errors: plain words ----
   function errCode(e) { return e && (e.code || (e.error && e.error.code)) || ''; }
@@ -273,10 +324,14 @@
         readiness: { state: 'awaiting_review', lastCleaning: null, review: null, blockingWorkOrders: 0, lastCheckout: today, nextCheckin: d(1), daysOverdue: null },
         blockingWorkOrders: [], lowStock: [{ id: 'n-demo-i1', name: 'Sample item', qty: '2', unit: 'pcs', reorderBelow: '4', out: false }], followUps: [], handoffs: [],
         finance: { pendingReviewCount: 1, pendingReviewAmount: '1200.00', paymentReviewCount: 0, unpaidCleanerFees: 2 }, notices: [], actions: [] },
+      // receipt_sent and receipt_at are relative to the injected clock, so the demo always reads "12 min ago"
       inquiries: [
-        { id: 'n-demo-q1', booking_ref: 'DEMO0001', guest_name: 'Sample Guest D', checkin_date: d(5), checkout_date: d(7), pax: 2, expected_amount: '2500.00', comparison_id: 'n-demo-c1', candidate_amount: '2500.00', reference: 'DEMO1234', receipt_image_path: 'n/a', hold_expires_at: null },
-        { id: 'n-demo-q2', booking_ref: 'DEMO0002', guest_name: 'Sample Guest E', checkin_date: d(12), checkout_date: d(15), pax: 3, expected_amount: '4100.00', comparison_id: null, candidate_amount: null, reference: null, receipt_image_path: null, hold_expires_at: null }
+        { id: 'n-demo-q1', booking_ref: 'DEMO0001', guest_name: 'Sample Guest D', checkin_date: d(5), checkout_date: d(8), pax: 2, expected_amount: '2500.00', comparison_id: 'n-demo-c1', candidate_amount: '2500.00', reference: 'DEMO12345678', receipt_image_path: 'n/a', hold_expires_at: new Date(clock() + 26 * 3600000).toISOString(), receipt_sent: true, receipt_at: new Date(clock() - 12 * 60000).toISOString(), contact_channel: 'email' },
+        { id: 'n-demo-q3', booking_ref: 'DEMO0003', guest_name: 'Sample Guest F', checkin_date: d(9), checkout_date: d(12), pax: 2, expected_amount: '4100.00', comparison_id: 'n-demo-c3', candidate_amount: '3600.00', reference: 'DEMO55556666', receipt_image_path: 'n/a', hold_expires_at: new Date(clock() + 30 * 3600000).toISOString(), receipt_sent: true, receipt_at: new Date(clock() - 40 * 60000).toISOString(), contact_channel: 'messenger' },
+        { id: 'n-demo-q4', booking_ref: 'DEMO0004', guest_name: 'Sample Guest G', checkin_date: d(14), checkout_date: d(17), pax: 4, expected_amount: '4100.00', comparison_id: 'n-demo-c4', candidate_amount: null, reference: null, receipt_image_path: 'n/a', hold_expires_at: null, receipt_sent: true, receipt_at: new Date(clock() - 2 * 3600000).toISOString(), contact_channel: 'none' },
+        { id: 'n-demo-q2', booking_ref: 'DEMO0002', guest_name: 'Sample Guest E', checkin_date: d(18), checkout_date: d(21), pax: 3, expected_amount: '4100.00', comparison_id: null, candidate_amount: null, reference: null, receipt_image_path: null, hold_expires_at: new Date(clock() + 20 * 3600000).toISOString(), receipt_sent: false, receipt_at: null, contact_channel: 'email' }
       ],
+      waiting: { waiting: 1, oldest_at: new Date(clock() - 3 * 3600000).toISOString() },
       txns: [
         { id: 'n-demo-t1', transaction_date: d(-1), txn_type: 'expense', category: 'supplies', gross_amount: '640.00', payee_name: 'Sample shop', notes: 'Sample: kitchen supplies', status: 'confirmed' },
         { id: 'n-demo-t2', transaction_date: d(-2), txn_type: 'income', category: 'direct_income', gross_amount: '5000.00', payee_name: null, notes: 'Sample: deposit', status: 'confirmed' }
@@ -343,8 +398,14 @@
     draw(); loadTab(t, false);
   }
 
+  // The two lists the Needs you card reads live: older than a minute they are read again when the tab is shown or the app comes back (the overview keeps five).
+  var LIVE = { inq: true, waiting: true }, LIVE_MS = 60000;
+  function normalizeWaiting(raw) {
+    var o = Array.isArray(raw) ? raw[0] : raw; if (!o || typeof o !== 'object') return { waiting: 0, oldest_at: null };
+    var n = Number(o.waiting); return { waiting: isFinite(n) && n > 0 ? Math.floor(n) : 0, oldest_at: str(o.oldest_at) };
+  }
   function loadTab(t, force) {
-    if (t === 'today') { load('overview', force); load('inq', force); }
+    if (t === 'today') { load('overview', force); load('inq', force); load('waiting', force); }
     else if (t === 'inquiries') load('inq', force);
     else if (t === 'money') { load('txns', force); load('rq', force); }
     else if (t === 'kpis') { load('kpi', force); loadSeries(force); }
@@ -395,19 +456,19 @@
   // load(kind): each kind has its own state { ok, data, err, absent, busy }. A missing RPC sets absent and hides that section.
   function load(kind, force) {
     S.today = manilaToday(); // a screen opened past midnight uses today's periods
-    var st = S.d[kind] || (S.d[kind] = {}); if (st.busy) return; if (st.ok && !force && !stale()) return;
+    var st = S.d[kind] || (S.d[kind] = {}); if (st.busy) return; if (st.ok && !force && (LIVE[kind] ? clock() - (st.at || 0) <= LIVE_MS : !stale())) return;
     st.busy = true; st.err = ''; var gen = S.gen, key = kind === 'kpi' ? S.period : '';
     draw();
     var done = function (res) {
       if (!S || S.gen !== gen) return; st.busy = false;
       if (res.error) { if (isMissing(res.error)) { st.absent = true; st.ok = false; } else if (isDenied(res.error)) { st.denied = true; st.ok = false; } else { st.err = plainError(res.error, false); st.ok = false; } }
-      else { st.ok = true; st.absent = false; st.denied = false; st.data = res.data; S.loadedAt = clock(); }
+      else { st.ok = true; st.absent = false; st.denied = false; st.data = res.data; st.at = clock(); S.loadedAt = clock(); }
       if (kind === 'kpi' && key !== S.period) { st.ok = false; loadTab('kpis', true); return; }
       draw();
     };
     if (S.demo) { // built-in sample, no network
       var dd = S.demoData, per = periodPreset(S.period, S.today), cmp = comparablePeriod(per, compareMode(S.period));
-      var sample = kind === 'overview' ? dd.overview : kind === 'inq' ? normalizePayments(dd.inquiries) : kind === 'txns' ? dd.txns : kind === 'rq' ? dd.rq() : kind === 'cats' ? dd.cats : { now: dd.metrics(per.start, per.endExclusive), prev: dd.metrics(cmp.start, cmp.endExclusive) };
+      var sample = kind === 'overview' ? dd.overview : kind === 'inq' ? normalizePayments(dd.inquiries) : kind === 'waiting' ? normalizeWaiting(dd.waiting) : kind === 'txns' ? dd.txns : kind === 'rq' ? dd.rq() : kind === 'cats' ? dd.cats : { now: dd.metrics(per.start, per.endExclusive), prev: dd.metrics(cmp.start, cmp.endExclusive) };
       Promise.resolve().then(function () { done({ data: sample, error: null }); }); return;
     }
     if (!online() || !S.client) { Promise.resolve().then(function () { done({ data: null, error: { message: 'failed to fetch' } }); }); return; }
@@ -415,6 +476,8 @@
       callRpc('get_admin_overview_v1', { p_property_id: pid() }).then(done); // admin-dashboard features/today/api.ts:31
     } else if (kind === 'inq') {
       callRpc('staff_inquiry_payments_v1', { p_property_id: pid() }).then(function (r) { done(r.error ? r : { data: normalizePayments(r.data), error: null }); }); // features/bookings/confirm-api.ts:13
+    } else if (kind === 'waiting') {
+      callRpc('concierge_waiting_v1', {}).then(function (r) { done(r.error ? r : { data: normalizeWaiting(r.data), error: null }); }); // 42501 for anyone but owner or admin: treated as "not shown"
     } else if (kind === 'txns') {
       var q; // features/finance/api.ts:36-45 the default list: not void, not hidden, not the Airbnb mirror rows; limited to the newest ten
       try {
@@ -449,10 +512,69 @@
   }
   function count(n, one, many) { return n + ' ' + (n === 1 ? one : many); }
 
+  // ---- "Needs you" (R1.8): the first card of Manage > Today. One list, one order, only the receipt row carries the gold bar. ----
+  function srcState(st) { if (!st) return 'wait'; if (st.absent) return 'absent'; if (st.denied) return 'denied'; if (st.err) return 'err'; return st.data !== undefined && st.data !== null ? 'ok' : 'wait'; }
+  function rowBtn(cls, act, v, title, sub, tag) {
+    var inner = '<span class="N_rowmid"><span class="N_rowt">' + esc(title) + '</span>' + (sub ? '<span class="N_rows">' + esc(sub) + '</span>' : '') + '</span><span class="N_chev" aria-hidden="true">›</span>';
+    return tag === 'a' ? '<a class="N_row' + cls + '" href="' + esc(v) + '" data-n="' + act + '" data-v="' + esc(v) + '">' + inner + '</a>' : '<button class="N_row' + cls + '" type="button" data-n="' + act + '" data-v="' + esc(v) + '">' + inner + '</button>';
+  }
+  function byNewestReceipt(a, b) { var x = Date.parse(a.receipt_at), y = Date.parse(b.receipt_at); x = isFinite(x) ? x : -Infinity; y = isFinite(y) ? y : -Infinity; return y === x ? 0 : y > x ? 1 : -1; }
+  function byHold(a, b) { var x = Date.parse(a.hold_expires_at), y = Date.parse(b.hold_expires_at); x = isFinite(x) ? x : Infinity; y = isFinite(y) ? y : Infinity; return x === y ? 0 : x > y ? 1 : -1; }
+  function stable(list, cmp) { return list.map(function (r, i) { return [r, i]; }).sort(function (a, b) { return cmp(a[0], b[0]) || a[1] - b[1]; }).map(function (x) { return x[0]; }); }
+  function sentRows() { var iq = S.d.inq; return stable(((iq && iq.data) || []).filter(function (p) { return !legacyRow(p) && p.receipt_sent === true; }), byNewestReceipt); }
+  function waitRows() { var iq = S.d.inq; return stable(((iq && iq.data) || []).filter(function (p) { return !legacyRow(p) && p.receipt_sent === false; }), byHold); }
+  function needsRows(ov, iq, wt) {
+    var out = [], fin = ov && ov.finance, now = clock();
+    if (iq) {
+      var all = iq.data || [];
+      if (all.some(legacyRow)) { if (all.length) out.push(rowBtn('', 'tab', 'inquiries', count(all.length, 'inquiry waiting', 'inquiries waiting'), 'Confirm or decline')); }
+      else {
+        var sent = sentRows(), newest = sent.length && sent[0].receipt_at ? agoWords(sent[0].receipt_at, now) : '';
+        if (sent.length) out.push(rowBtn(' N_due', 'needs-sent', sent.length === 1 ? sent[0].id : '', count(sent.length, 'receipt to check', 'receipts to check'), newest ? 'Newest sent ' + newest : 'Tap to confirm or decline'));
+      }
+    }
+    if (wt && wt.waiting > 0) out.push(rowBtn('', 'nav', '#inbox', count(wt.waiting, 'guest waiting for a reply', 'guests waiting for a reply'), wt.oldest_at ? 'Waiting since ' + (manilaParts(wt.oldest_at) && manilaParts(wt.oldest_at).day === manilaToday(now) ? fmtTimeOnly(wt.oldest_at) : fmtDateTime(wt.oldest_at)) : '', 'a'));
+    var row8 = null;
+    if (iq && !(iq.data || []).some(legacyRow)) {
+      var wr = waitRows();
+      if (wr.length) {
+        var ended = wr.some(function (p) { return p.hold_expires_at && holdEnded(p.hold_expires_at, now); }), next = wr.filter(function (p) { return p.hold_expires_at && !holdEnded(p.hold_expires_at, now); })[0];
+        row8 = { first: ended, html: rowBtn('', 'tab', 'inquiries', count(wr.length, 'request waiting for payment', 'requests waiting for payment'), ended ? 'A hold has ended. Confirm or decline it.' : 'Nothing to do yet' + (next ? ' · next hold ends ' + fmtHoldAt(next.hold_expires_at) : '')) };
+      }
+    }
+    if (row8 && row8.first) out.push(row8.html);
+    if (ov) {
+      var r = ov.readiness || {};
+      if (r.blockingWorkOrders > 0) out.push(dashLink('operations/work-orders', count(r.blockingWorkOrders, 'work order blocks arrival', 'work orders block arrival'), 'Opens the dashboard'));
+      if (fin && fin.paymentReviewCount > 0) out.push(dashLink('finance', count(fin.paymentReviewCount, 'payment to review', 'payments to review'), 'Opens the dashboard'));
+      if (fin && fin.pendingReviewCount > 0) {
+        var rqOff = S.d.rq && (S.d.rq.absent || S.d.rq.denied), rqTxt = count(fin.pendingReviewCount, 'transaction awaits review', 'transactions await review');
+        out.push(rqOff ? dashLink('finance', rqTxt, formatPHP(fin.pendingReviewAmount)) : rowBtn('', 'tab', 'money', rqTxt, formatPHP(fin.pendingReviewAmount) + ' · Review in Money'));
+      }
+      if (fin && fin.unpaidCleanerFees > 0) out.push('<a class="N_row" href="./pay/admin.html"><span class="N_rowmid"><span class="N_rowt">' + esc(count(fin.unpaidCleanerFees, 'cleaning fee unpaid', 'cleaning fees unpaid')) + '</span><span class="N_rows">Opens Pay staff</span></span><span class="N_chev" aria-hidden="true">›</span></a>');
+      if (ov.lowStock && ov.lowStock.length) out.push(dashLink('inventory', count(ov.lowStock.length, 'item low on stock', 'items low on stock'), 'Opens the dashboard'));
+    }
+    if (row8 && !row8.first) out.push(row8.html);
+    return out;
+  }
+  function needsCard() {
+    var ovS = S.d.overview, iqS = S.d.inq, wtS = S.d.waiting, st = [srcState(ovS), srcState(iqS), srcState(wtS)];
+    var anyOk = st.indexOf('ok') >= 0, anyErr = st.indexOf('err') >= 0, pending = st.indexOf('wait') >= 0, body;
+    var rows = needsRows(st[0] === 'ok' ? ovS.data || {} : null, st[1] === 'ok' ? iqS : null, st[2] === 'ok' ? wtS.data : null);
+    if (!anyOk && anyErr && !pending) body = '<div class="N_pad">' + stateBox(st[0] === 'err' ? ovS : st[1] === 'err' ? iqS : wtS, 'Today', 'today') + '</div>';
+    else {
+      var shown = rows;
+      if (rows.length > 5 && !S.needsOpen) shown = rows.slice(0, 4).concat('<button class="N_row" type="button" data-n="needs-more" aria-expanded="false"><span class="N_rowmid"><span class="N_rowt">' + esc('Show ' + (rows.length - 4) + ' more') + '</span></span><span class="N_chev" aria-hidden="true">⌄</span></button>');
+      var fail = st[1] === 'err' ? 'Requests could not be loaded' : st[0] === 'err' ? 'Other items could not be loaded' : st[2] === 'err' ? 'Guest replies could not be loaded' : '';
+      if (fail) shown = shown.concat(rowBtn('', 'retry', 'today', fail, 'Try again'));
+      body = shown.length ? shown.join('') : pending ? '<p class="N_p N_pad N_wait" role="status">Checking…</p>' : '<p class="N_p N_pad">All clear. Nothing needs you right now.</p>';
+    }
+    return '<section class="N_card N_list" aria-labelledby="N_t3"><h3 class="N_h3 N_pad" id="N_t3">Needs you</h3>' + body + '</section>';
+  }
+
   function viewToday() {
-    var ov = S.d.overview || {}, iq = S.d.inq || {}, out = '';
-    var box = stateBox(ov, 'Today', 'today');
-    if (box) out += box;
+    var ov = S.d.overview || {}, out = needsCard();
+    if (ov.absent || ov.denied) out += stateBox(ov, 'Today', 'today');
     if (ov.ok) {
       var o = ov.data || {}, today = o.today || S.today, names = function (a) { return (a || []).map(function (s) { return s.guest || 'A guest'; }).join(', '); };
       out += '<section class="N_card" aria-labelledby="N_t1"><h3 class="N_h3" id="N_t1">' + esc(fmtDate(today, 'weekday')) + '</h3><dl class="N_dl">';
@@ -466,25 +588,13 @@
       out += '<section class="N_card" aria-labelledby="N_t2"><h3 class="N_h3" id="N_t2">Property readiness</h3><p>' + pill(kind, rtext) + '</p>';
       if (r.blockingWorkOrders > 0) out += '<p class="N_p">' + esc(count(r.blockingWorkOrders, 'work order blocks', 'work orders block') + ' the next arrival.') + '</p>';
       out += '</section>';
-      // what needs a decision
-      var rows = '', fin = o.finance, nIq = iq.ok ? (iq.data || []).length : (o.actions || []).filter(function (a) { return a.kind === 'inquiry'; }).length;
-      if (nIq > 0) rows += '<button class="N_row" type="button" data-n="tab" data-v="inquiries"><span class="N_rowmid"><span class="N_rowt">' + esc(count(nIq, 'inquiry waiting', 'inquiries waiting')) + '</span><span class="N_rows">Confirm or decline</span></span><span class="N_chev" aria-hidden="true">›</span></button>';
-      if (fin && fin.paymentReviewCount > 0) rows += dashLink('finance', count(fin.paymentReviewCount, 'payment to review', 'payments to review'), 'Opens the dashboard');
-      if (fin && fin.pendingReviewCount > 0) {
-        var rqOff = S.d.rq && (S.d.rq.absent || S.d.rq.denied), rqTxt = count(fin.pendingReviewCount, 'transaction awaits review', 'transactions await review');
-        rows += rqOff ? dashLink('finance', rqTxt, formatPHP(fin.pendingReviewAmount))
-          : '<button class="N_row" type="button" data-n="tab" data-v="money"><span class="N_rowmid"><span class="N_rowt">' + esc(rqTxt) + '</span><span class="N_rows">' + esc(formatPHP(fin.pendingReviewAmount) + ' · Review in Money') + '</span></span><span class="N_chev" aria-hidden="true">›</span></button>';
-      }
-      if (fin && fin.unpaidCleanerFees > 0) rows += '<a class="N_row" href="./pay/admin.html"><span class="N_rowmid"><span class="N_rowt">' + esc(count(fin.unpaidCleanerFees, 'cleaning fee unpaid', 'cleaning fees unpaid')) + '</span><span class="N_rows">Opens Pay staff</span></span><span class="N_chev" aria-hidden="true">›</span></a>';
-      if (r.blockingWorkOrders > 0) rows += dashLink('operations/work-orders', count(r.blockingWorkOrders, 'work order blocks arrival', 'work orders block arrival'), 'Opens the dashboard');
-      if (o.lowStock && o.lowStock.length) rows += dashLink('inventory', count(o.lowStock.length, 'item low on stock', 'items low on stock'), 'Opens the dashboard');
-      out += '<section class="N_card N_list" aria-labelledby="N_t3"><h3 class="N_h3 N_pad" id="N_t3">Needs a decision</h3>' + (rows || '<p class="N_p N_pad">Nothing is waiting for a decision.</p>') + '</section>';
-      if (fin === null) out += '<p class="N_foot">Money figures are not available for your role.</p>';
+      if (o.finance === null) out += '<p class="N_foot">Money figures are not available for your role.</p>';
     }
     return out;
   }
 
-  function stayCard(p) {
+  // ---- Inquiries (R1.2): receipt sent first (gold bar), then waiting for payment. An old server (no receipt_sent) keeps today's single list. ----
+  function stayCardOld(p) {
     var nights = p.checkin_date && p.checkout_date ? nightsBetween(p.checkin_date, p.checkout_date) : null;
     return '<button class="N_card N_tap" type="button" data-n="inq-open" data-v="' + esc(p.id) + '" aria-label="' + esc('Open request from ' + (p.guest_name || 'a guest')) + '">' +
       '<span class="N_cardtop"><span class="N_name">' + esc(p.guest_name || 'A guest') + '</span>' + (hasReceipt(p) ? pill('ok', 'Receipt') : pill('warn', 'No receipt')) + '</span>' +
@@ -492,13 +602,31 @@
       '<span class="N_line N_num">To receive ' + esc(formatPHP(p.expected_amount)) + '</span>' +
       '<span class="N_line">' + esc(paymentLine(p)) + '</span></button>';
   }
+  function holdLine(p, now) { return !p.hold_expires_at ? 'No hold' : (holdEnded(p.hold_expires_at, now) ? 'Hold ended ' : 'Held until ') + fmtHoldAt(p.hold_expires_at); }
+  function stayCard(p) {
+    var now = clock(), cmp = receiptCmp(p), nights = p.checkin_date && p.checkout_date ? nightsBetween(p.checkin_date, p.checkout_date) : null, name = p.guest_name || 'A guest';
+    var toRecv = p.expected_amount === null ? null : formatPHP(p.expected_amount), l3, l4 = '';
+    if (cmp) {
+      if (cmp.kind === 'ok') l3 = nw(toRecv) + ' · ' + nw('receipt matches');
+      else if (cmp.kind === 'short' || cmp.kind === 'over') l3 = nw(toRecv + ' to receive') + ' · ' + nw('receipt ' + cents(cmp.diff) + (cmp.kind === 'short' ? ' short' : ' over'));
+      else l3 = nw(toRecv ? toRecv + ' to receive' : 'Amount not known') + ' · ' + nw('check the photo');
+      if (p.receipt_at) l4 = '<span class="N_line">Sent ' + esc(agoWords(p.receipt_at, now)) + '</span>';
+    }
+    return '<button class="N_card N_tap N_go' + (cmp ? ' N_due' : '') + '" type="button" data-n="inq-open" data-v="' + esc(p.id) + '" aria-label="' + esc('Open request from ' + name + (cmp ? ', receipt sent' : ', waiting for payment')) + '">' +
+      '<span class="N_name">' + esc(name) + '</span>' +
+      '<span class="N_line">' + nw(fmtDate(p.checkin_date, 'weekday') + ' to ' + fmtDate(p.checkout_date, 'weekday')) + (nights !== null ? ' · ' + nw(count(nights, 'night', 'nights')) : '') + '</span>' +
+      (cmp ? '<span class="N_line N_num">' + l3 + '</span>' + l4 : '<span class="N_line">' + esc(holdLine(p, now)) + '</span>') + '<span class="N_chev" aria-hidden="true">›</span></button>';
+  }
   function viewInquiries() {
     var iq = S.d.inq || {}, box = stateBox(iq, 'Inquiries', 'inquiries');
     if (box) return box;
-    var rows = iq.data || [];
+    var rows = iq.data || [], foot = '<p class="N_foot"><a class="N_link" href="#door/dashboard/bookings/inquiries" data-n="go" data-v="bookings/inquiries">Open all inquiries in the dashboard</a></p>';
     if (!rows.length) return '<div class="N_note">No requests are waiting for a decision.</div>';
-    return '<p class="N_sub">' + esc(count(rows.length, 'request is', 'requests are') + ' waiting. Tap one to confirm or decline it.') + '</p>' + rows.map(stayCard).join('') +
-      '<p class="N_foot"><a class="N_link" href="#door/dashboard/bookings/inquiries" data-n="go" data-v="bookings/inquiries">Open all inquiries in the dashboard</a></p>';
+    if (rows.some(legacyRow)) return '<p class="N_sub">' + esc(count(rows.length, 'request is', 'requests are') + ' waiting. Tap one to confirm or decline it.') + '</p>' + rows.map(stayCardOld).join('') + foot;
+    var sent = sentRows(), wait = waitRows(), out = '';
+    if (sent.length) out += '<h3 class="N_h3 N_gap">' + esc('Receipt sent · ' + sent.length) + '</h3>' + sent.map(stayCard).join('');
+    if (wait.length) out += '<h3 class="N_h3 N_gap">' + esc('Waiting for payment · ' + wait.length) + '</h3>' + wait.map(stayCard).join('');
+    return out + foot;
   }
 
   function signOf(type) { return type === 'income' ? '+' : type === 'expense' ? '−' : ''; } // a transfer moves money between accounts: no sign
@@ -668,8 +796,22 @@
   // ---- sheets ----
   function field(id, label, control, err, mark) { return '<div class="N_field"><label class="N_lbl" for="' + id + '">' + esc(label) + (mark ? ' <span class="N_mark">check this</span>' : '') + '</label>' + control + (err ? '<p class="N_ferr" id="' + id + '-e" role="alert"><span aria-hidden="true">✕</span> ' + esc(err) + '</p>' : '') + '</div>'; }
   function inp(id, f, val, extra) { return '<input class="N_input" id="' + id + '" data-f="' + f + '" value="' + esc(val) + '" autocomplete="off" ' + (extra || '') + '>'; }
-  function sheetShell(title, body) {
-    return '<div class="N_scrim" aria-hidden="true"></div><div class="N_sheet" role="dialog" aria-modal="true" aria-labelledby="N_sh"><div class="N_grab" aria-hidden="true"></div><h2 class="N_h" id="N_sh" tabindex="-1" data-n-focus="1">' + esc(title) + '</h2>' + body + '</div>';
+  var DEMO_RECEIPT = 'data:image/svg+xml;utf8,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 420"><rect width="300" height="420" fill="#f4f1ea"/><text x="150" y="60" text-anchor="middle" font-family="sans-serif" font-size="20" fill="#333">Sample receipt</text><text x="150" y="120" text-anchor="middle" font-family="sans-serif" font-size="15" fill="#555">GCash transfer</text><text x="150" y="200" text-anchor="middle" font-family="sans-serif" font-size="34" fill="#222">PHP 2,500.00</text><text x="150" y="260" text-anchor="middle" font-family="sans-serif" font-size="14" fill="#777">Ref 1234 5678 9012</text><text x="150" y="380" text-anchor="middle" font-family="sans-serif" font-size="13" fill="#999">Sample only</text></svg>');
+  function sheetShell(title, body, bar, close) {
+    return '<div class="N_scrim" aria-hidden="true"></div><div class="N_sheet" role="dialog" aria-modal="true" aria-labelledby="N_sh"><div class="N_grab" aria-hidden="true"></div><div class="N_hd"><h2 class="N_h" id="N_sh" tabindex="-1" data-n-focus="1">' + esc(title) + '</h2>' +
+      (close ? '<button class="btn btn-ghost btn-sm N_closeb" type="button" data-n="' + close.act + '">' + esc(close.label) + '</button>' : '') + '</div><div class="N_shb">' + body + '</div>' + (bar || '') + '</div>';
+  }
+  // The sticky bar: an optional line, then the secondary button first and the primary last (the primary moves first on a very narrow bar).
+  function actBar(sub, secLabel, secAct, priLabel, priAct, busy, danger) {
+    return '<div class="N_act">' + (sub ? '<p class="N_sub">' + esc(sub) + '</p>' : '') + '<div class="N_act2"><button class="btn btn-secondary btn-block" type="button" data-n="' + secAct + '"' + (busy ? ' disabled' : '') + '>' + esc(secLabel) + '</button>' +
+      (priLabel ? '<button class="btn ' + (danger ? 'btn-danger' : 'btn-primary') + ' btn-block" type="button" data-n="' + priAct + '"' + (busy ? ' disabled aria-busy="true"' : '') + '>' + esc(busy ? 'Sending…' : priLabel) + '</button>' : '') + '</div></div>';
+  }
+  function receiptBox(p) {
+    var e = (S.photos && S.photos[p.id]) || {}, dash = '<a class="N_link" href="#door/dashboard/bookings/inquiries" data-n="go" data-v="bookings/inquiries">Open the request in the dashboard</a>';
+    if (e.state === 'ok') return '<button class="N_rcpt" type="button" data-n="photo-zoom" aria-label="View the receipt full size"><img class="N_photo" src="' + esc(e.url) + '" alt="Receipt photo sent by the guest" referrerpolicy="no-referrer"><span class="N_rcz">View full size</span></button>';
+    if (e.state === 'err') return '<div class="N_rcpt N_msgbox"><p class="N_p">The receipt photo could not be opened.</p><button class="btn btn-secondary btn-sm" type="button" data-n="photo-retry">Try again</button></div>';
+    if (e.state === 'none') return '<div class="N_rcpt N_msgbox"><p class="N_p">The receipt photo cannot be shown on this device.</p>' + dash + '</div>';
+    return '<div class="N_rcpt N_msgbox" role="status">Opening the receipt photo…</div>';
   }
   function payOf(id) { var rows = (S.d.inq && S.d.inq.data) || []; for (var i = 0; i < rows.length; i++) if (rows[i].id === id) return rows[i]; return null; }
   function sheetErr(sh) { return sh.msg ? '<div class="N_err" role="alert"><span>' + esc(sh.msg) + '</span></div>' : ''; }
@@ -686,48 +828,64 @@
     var sh = S.sheet; if (!sh) return '';
     if (sh.kind === 'inq') {
       var p = payOf(sh.id); if (!p) return '';
-      var absentActs = S.d.confirm && S.d.confirm.absent;
-      var body = '<dl class="N_dl"><dt>Dates</dt><dd>' + esc(fmtDate(p.checkin_date, 'weekday') + ' to ' + fmtDate(p.checkout_date, 'weekday') + ' · ' + count(nightsBetween(p.checkin_date, p.checkout_date), 'night', 'nights')) + '</dd>' +
-        '<dt>Guests</dt><dd>' + esc(p.pax == null ? '—' : p.pax) + '</dd><dt>To receive</dt><dd class="N_num">' + esc(formatPHP(p.expected_amount)) + '</dd><dt>Payment</dt><dd>' + esc(paymentLine(p)) + '</dd>' +
-        (p.hold_expires_at ? '<dt>Dates held until</dt><dd>' + esc(fmtDateTime(p.hold_expires_at)) + '</dd>' : '') + '<dt>Reference</dt><dd>' + esc(p.booking_ref || '—') + '</dd></dl>';
-      if (p.receipt_image_path) {
-        var ph = sh.photo || {};
-        body += ph.state === 'ok' ? '<a href="' + esc(ph.url) + '" target="_blank" rel="noopener"><img class="N_photo" src="' + esc(ph.url) + '" alt="Receipt photo sent by the guest" referrerpolicy="no-referrer"></a>'
-          : ph.state === 'err' ? '<p class="N_p">The receipt photo could not be opened. <button class="N_link" type="button" data-n="photo-retry">Try again</button></p>'
-          : ph.state === 'none' ? '<p class="N_p">A receipt photo is on file.</p>' : '<p class="N_p" role="status">Opening the receipt photo…</p>';
+      var absentActs = S.d.confirm && S.d.confirm.absent, cmp = receiptCmp(p), now = clock(), nights = p.checkin_date && p.checkout_date ? nightsBetween(p.checkin_date, p.checkout_date) : null;
+      if (sh.zoom) {
+        var zi = (S.photos && S.photos[p.id]) || {};
+        return sheetShell('Receipt', '<div class="N_zoom' + (sh.z200 ? ' N_z2' : '') + '">' + (zi.state === 'ok' ? '<img class="N_photo" data-n="photo-fit" src="' + esc(zi.url) + '" alt="Receipt photo sent by the guest" referrerpolicy="no-referrer">' : '<p class="N_p N_pad" role="status">Opening the receipt photo…</p>') + '</div>' + sheetErr(sh),
+          actBar('', 'Back to the request', 'photo-unzoom'), { label: 'Back to the request', act: 'photo-unzoom' });
       }
-      body += sheetErr(sh);
-      body += absentActs ? '<div class="N_note">Deciding on a request is not available in this version of the app yet.</div>' : '<div class="N_btns"><button class="btn btn-primary btn-block" type="button" data-n="cf-start">Confirm booking</button><button class="btn btn-secondary btn-block" type="button" data-n="dc-start">Decline</button></div>';
-      return sheetShell(p.guest_name || 'Request', body + '<button class="btn btn-ghost btn-block" type="button" data-n="sheet-close">Close</button>');
+      var body = '<p class="N_sub">' + esc(fmtDate(p.checkin_date, 'weekday') + ' to ' + fmtDate(p.checkout_date, 'weekday') + (nights !== null ? ' · ' + count(nights, 'night', 'nights') : '') + (p.pax == null ? '' : ' · ' + count(p.pax, 'guest', 'guests'))) + '</p>';
+      if (cmp) {
+        if (p.receipt_image_path) body += receiptBox(p);
+        body += '<p>' + (cmp.kind === 'ok' ? pill('ok', 'Amounts match') : cmp.kind === 'short' || cmp.kind === 'over' ? pill('warn', 'Receipt is ' + cents(cmp.diff) + (cmp.kind === 'short' ? ' short' : ' over')) : '<span class="N_chipd">Amount not read. Check the photo.</span>') + '</p>';
+      } else body += '<p class="N_info">' + esc(!p.hold_expires_at ? 'No receipt yet.' : holdEnded(p.hold_expires_at, now) ? 'No receipt yet. The hold ended ' + fmtHoldAt(p.hold_expires_at) + '.' : 'No receipt yet. The dates are held until ' + fmtHoldAt(p.hold_expires_at) + '.') + '</p>';
+      body += '<dl class="N_dl"><dt>To receive</dt><dd class="N_num N_nw">' + esc(formatPHP(p.expected_amount)) + '</dd>' + (cmp && cmp.kind !== 'unread' ? '<dt>Receipt shows</dt><dd class="N_num N_nw">' + esc(cents(cmp.amt)) + '</dd>' : '') +
+        (cmp && p.reference ? '<dt>Reference</dt><dd class="N_num">' + esc(groupRef(p.reference)) + '</dd>' : '') + (cmp && p.receipt_at ? '<dt>Receipt sent</dt><dd>' + esc(agoWords(p.receipt_at, now)) + '</dd>' : '') +
+        (cmp && p.hold_expires_at ? '<dt>Dates held until</dt><dd>' + esc((holdEnded(p.hold_expires_at, now) ? 'Hold ended ' : '') + fmtHoldAt(p.hold_expires_at)) + '</dd>' : '') + '<dt>Booking</dt><dd>' + esc(p.booking_ref || '—') + '</dd></dl>' + sheetErr(sh);
+      var bar = absentActs ? '<div class="N_act"><div class="N_note">Deciding on a request is not available in this version of the app yet.</div></div>'
+        : actBar(cmp ? 'Confirm sends the guest their stay details. Decline releases the dates and tells the guest.' : 'Paid another way? Confirm records the payment and tells the guest.', 'Decline', 'dc-start', 'Confirm booking', 'cf-start');
+      return sheetShell(p.guest_name || 'Request', body, bar, { label: 'Close', act: 'sheet-close' });
     }
     if (sh.kind === 'confirm') {
-      var pc = payOf(sh.id); if (!pc) return ''; var f = sh.f, e = sh.errs || {}, rc = hasReceipt(pc), b = '';
+      var pc = payOf(sh.id); if (!pc) return ''; var f = sh.f, e = sh.errs || {}, rc = hasReceipt(pc), b = '', cc = receiptCmp(pc), ch = pc.contact_channel;
       if (sh.step === 'form') {
-        b += '<p class="N_sub">' + esc(stayLine(pc)) + '. Dates are rechecked when you confirm.</p><p class="N_box">' + esc(paymentLine(pc)) + '</p>';
-        if (rc) b += '<div class="N_field"><label class="N_chk"><input type="checkbox" data-f="checked"' + (f.checked ? ' checked' : '') + '> <span>I checked the money arrived</span></label>' + (e.checked ? '<p class="N_ferr" role="alert"><span aria-hidden="true">✕</span> ' + esc(e.checked) + '</p>' : '') + '</div>';
-        else b += '<fieldset class="N_fs"><legend class="N_lbl">How was it paid?</legend>' + METHODS.map(function (m) { return '<label class="N_chk"><input type="radio" name="N_method" data-f="method" value="' + m[0] + '"' + (f.method === m[0] ? ' checked' : '') + '> <span>' + esc(m[1]) + '</span></label>'; }).join('') + '</fieldset>';
+        b += '<p class="N_sub">' + esc((pc.guest_name || 'A guest') + ', ' + fmtDay(pc.checkin_date) + ' to ' + fmtDay(pc.checkout_date) + '. Dates are rechecked when you confirm.') + '</p>';
+        if (rc && cc) {
+          if (cc.kind === 'unread') b += '<p class="N_info">The amount could not be read from the receipt. Check the photo and type it.</p>';
+          else b += '<div class="N_info"><dl class="N_dl"><dt>Receipt shows</dt><dd class="N_num N_nw">' + esc(cents(cc.amt)) + '</dd>' + (pc.reference ? '<dt>Reference</dt><dd class="N_num">' + esc(groupRef(pc.reference)) + '</dd>' : '') + '</dl></div>';
+          if (cc.kind === 'short' || cc.kind === 'over') b += '<p class="N_warnb"><span aria-hidden="true">!</span> ' + esc('The receipt shows ' + cents(cc.amt) + '. That is ' + cents(cc.diff) + (cc.kind === 'short' ? ' less than' : ' more than') + ' the ' + formatPHP(pc.expected_amount) + ' to receive.') + '</p>';
+        } else if (rc) b += '<p class="N_info">' + esc(paymentLine(pc)) + '</p>';
+        if (!rc) b += '<fieldset class="N_fs"><legend class="N_lbl">How was it paid?</legend>' + METHODS.map(function (m) { return '<label class="N_chk"><input type="radio" name="N_method" data-f="method" value="' + m[0] + '"' + (f.method === m[0] ? ' checked' : '') + '> <span>' + esc(m[1]) + '</span></label>'; }).join('') + '</fieldset>';
         if (rc ? !pc.reference : f.method !== 'cash') b += field('N_ref', 'Payment reference', inp('N_ref', 'reference', f.reference, e.reference ? 'aria-invalid="true" aria-describedby="N_ref-e"' : ''), e.reference);
-        b += field('N_amt', 'Amount received (PHP)', inp('N_amt', 'amount', f.amount, 'inputmode="decimal"' + (e.amount ? ' aria-invalid="true" aria-describedby="N_amt-e"' : '')), e.amount);
+        b += field('N_amt', 'Amount received (PHP)', inp('N_amt', 'amount', f.amount, 'inputmode="decimal"' + (e.amount ? ' aria-invalid="true" aria-describedby="N_amt-e"' : '')), e.amount, rc && cc && cc.kind === 'unread');
         if (!rc) b += field('N_note', f.method === 'cash' ? 'Note (needed for cash)' : 'Note (optional)', '<textarea class="N_input N_ta" id="N_note" data-f="note" rows="2">' + esc(f.note) + '</textarea>', e.note);
-        b += sheetErr(sh) + btns('Review', 'cf-review', 'Back', 'sheet-back');
-      } else {
-        var amt = parseAmount(f.amount), mth = rc ? 'GCash via Messenger (receipt on file)' : methodLabel(f.method), ref = (rc && pc.reference ? pc.reference : f.reference || '').trim();
-        b += '<p class="N_sub">Check these before you confirm. This cannot be undone here. The guest is messaged when you confirm.</p><dl class="N_dl"><dt>Guest</dt><dd>' + esc(pc.guest_name || 'A guest') + '</dd><dt>Dates</dt><dd>' + esc(fmtDate(pc.checkin_date, 'long') + ' to ' + fmtDate(pc.checkout_date, 'long')) + '</dd>' +
-          '<dt>Amount received</dt><dd class="N_num">' + esc(formatPHP(amt)) + '</dd><dt>Paid by</dt><dd>' + esc(mth) + '</dd>' + (ref ? '<dt>Reference</dt><dd>' + esc(ref) + '</dd>' : '') + (String(f.note || '').trim() ? '<dt>Note</dt><dd>' + esc(f.note.trim()) + '</dd>' : '') + '</dl>' +
-          sheetErr(sh) + btns('Confirm booking', 'cf-send', 'Back', 'cf-edit', sh.busy);
+        if (rc) b += '<div class="N_field"><label class="N_chk"><input type="checkbox" data-f="checked"' + (f.checked ? ' checked' : '') + '> <span>I saw this payment in our GCash or bank account</span></label>' + (e.checked ? '<p class="N_ferr" role="alert"><span aria-hidden="true">✕</span> ' + esc(e.checked) + '</p>' : '') + '</div>';
+        b += sheetErr(sh);
+        return sheetShell('Confirm booking', b, actBar('', 'Back', 'sheet-back', 'Review', 'cf-review'));
       }
-      return sheetShell('Confirm booking', b);
+      var amt = parseAmount(f.amount), mth = rc ? 'GCash via Messenger (receipt on file)' : methodLabel(f.method), ref = (rc && pc.reference ? pc.reference : f.reference || '').trim(), exp = pc.expected_amount === null ? null : toCentavos(pc.expected_amount), got = amt === null ? null : toCentavos(amt);
+      var diff = exp !== null && got !== null && exp !== got ? got - exp : 0;
+      b += '<p class="N_sub">Check these before you confirm. This cannot be undone here.</p><dl class="N_dl"><dt>Guest</dt><dd>' + esc(pc.guest_name || 'A guest') + '</dd><dt>Dates</dt><dd>' + esc(fmtDay(pc.checkin_date) + ' to ' + fmtDay(pc.checkout_date)) + '</dd>' +
+        '<dt>Amount received</dt><dd class="N_num N_nw">' + esc(formatPHP(amt)) + '</dd>' + (diff ? '<dt>Difference</dt><dd>' + pill('warn', cents(Math.abs(diff)) + (diff < 0 ? ' short' : ' over')) + '</dd>' : '') + '<dt>Paid by</dt><dd>' + esc(mth) + '</dd>' + (ref ? '<dt>Reference</dt><dd class="N_num">' + esc(groupRef(ref)) + '</dd>' : '') + (String(f.note || '').trim() ? '<dt>Note</dt><dd>' + esc(f.note.trim()) + '</dd>' : '') + '</dl>' +
+        '<p class="N_info">' + esc(ch === 'email' ? 'The guest will be told by e-mail: the address, parking, the ID request and how to pay the balance.' : ch === 'messenger' ? 'The guest will be told on Messenger: the address, parking, the ID request and how to pay the balance.' : ch === 'none' ? 'No e-mail or Messenger is on file for this guest. Nothing is sent. Message them yourself after you confirm.' : 'The guest is messaged when you confirm.') + '</p>' + sheetErr(sh);
+      return sheetShell('Confirm booking', b, actBar('', 'Back', 'cf-edit', 'Confirm booking', 'cf-send', sh.busy));
     }
     if (sh.kind === 'decline') {
-      var pd = payOf(sh.id); if (!pd) return ''; var db = '';
+      var pd = payOf(sh.id); if (!pd) return ''; var db = '', rs = pd.receipt_sent === true, dch = pd.contact_channel, dcode = reasonCode(sh.chip);
       if (sh.step === 'form') {
-        db += '<p class="N_sub">' + esc(stayLine(pd)) + '.</p><div class="N_field"><span class="N_lbl" id="N_why">Why?</span><div class="N_chips" role="group" aria-labelledby="N_why">' +
-          DECLINE_REASONS.map(function (r) { return '<button class="N_chip" type="button" data-n="dc-chip" data-v="' + esc(r) + '" aria-pressed="' + (sh.chip === r) + '">' + esc(r) + '</button>'; }).join('') + '</div></div>' +
-          field('N_dtxt', 'Anything to add (optional)', '<textarea class="N_input N_ta" id="N_dtxt" data-f="text" rows="2">' + esc(sh.text) + '</textarea>') + sheetErr(sh) + btns('Review', 'dc-review', 'Back', 'sheet-back');
-      } else {
-        db += '<p class="N_sub">Check this before you decline. The booking and its calendar entry are cancelled, and its income row is voided. The guest is not messaged yet. You can copy a polite message for them next.</p><dl class="N_dl"><dt>Guest</dt><dd>' + esc(pd.guest_name || 'A guest') + '</dd><dt>Dates</dt><dd>' + esc(fmtDate(pd.checkin_date, 'long') + ' to ' + fmtDate(pd.checkout_date, 'long')) + '</dd><dt>Reason</dt><dd>' + esc(declineReason(sh.chip, sh.text) || '') + '</dd></dl>' + sheetErr(sh) + btns('Decline request', 'dc-send', 'Back', 'dc-edit', sh.busy, true);
+        db += '<p class="N_sub">' + esc((pd.guest_name || 'A guest') + ', ' + fmtDay(pd.checkin_date) + ' to ' + fmtDay(pd.checkout_date) + '.') + '</p>';
+        if (rs) db += '<p class="N_warnb"><span aria-hidden="true">!</span> A receipt was sent for this request. If the money did arrive, please send it back to the guest. The app does not refund.</p>';
+        db += '<div class="N_field"><span class="N_lbl" id="N_why">Why?</span><div class="N_chips" role="group" aria-labelledby="N_why">' +
+          DECLINE_CHIPS.map(function (r) { return '<button class="N_chip" type="button" data-n="dc-chip" data-v="' + esc(r[0]) + '" aria-pressed="' + (sh.chip === r[0]) + '">' + esc(chipLabel(r[0], rs)) + '</button>'; }).join('') + '</div></div>' +
+          field('N_dtxt', 'Note for our records (optional)', '<textarea class="N_input N_ta" id="N_dtxt" data-f="text" rows="2" aria-describedby="N_dtxt-h">' + esc(sh.text) + '</textarea><p class="N_help" id="N_dtxt-h">The guest never sees this note.</p>') + sheetErr(sh);
+        return sheetShell('Decline request', db, actBar('', 'Back', 'sheet-back', 'Review', 'dc-review'));
       }
-      return sheetShell('Decline request', db);
+      var told = declineTold(dch, dcode);
+      db += '<p class="N_sub">Check this before you decline. The dates are released and the income row is voided. This cannot be undone here.</p><dl class="N_dl"><dt>Guest</dt><dd>' + esc(pd.guest_name || 'A guest') + '</dd><dt>Dates</dt><dd>' + esc(fmtDay(pd.checkin_date) + ' to ' + fmtDay(pd.checkout_date)) + '</dd><dt>Reason</dt><dd>' + esc(declineReason(sh.chip, sh.text, rs) || '') + '</dd></dl>' +
+        '<p class="N_info">' + esc(told === 'duplicate' ? 'No message is sent for a duplicate request.' : told === 'email' ? 'The guest will be told by e-mail now. A copy appears in the OPS chat.' : told === 'messenger' ? 'The guest will be told on Messenger now. A copy appears in the OPS chat.' : dch === 'none' ? 'No e-mail or Messenger is on file. Nothing is sent. You can copy a message for them next.' : 'The guest is not messaged yet. You can copy a polite message for them next.') + '</p>' +
+        (dcode === 'duplicate' ? '' : '<details><summary class="N_link">Read the message</summary><p class="N_info N_pl">' + esc(declineMessage(pd, dcode, rs, dch)) + '</p></details>') +
+        (rs ? '<p class="N_warnb"><span aria-hidden="true">!</span> A receipt was sent. Refund the guest if the money arrived.</p>' : '') + sheetErr(sh);
+      return sheetShell('Decline request', db, actBar('', 'Back', 'dc-edit', 'Decline request', 'dc-send', sh.busy, true));
     }
     if (sh.kind === 'msg') {
       return sheetShell('Message the guest', '<p class="N_sub">The request is declined. The guest has not been told yet. Copy this line, read it through, and send it in the conversation.</p>' +
@@ -743,7 +901,7 @@
         return sheetShell('Void a transaction', rb);
       }
       rb += '<p class="N_sub">' + esc('Added ' + fmtDate(rr.transaction_date, 'long') + (rr.source ? ' from ' + srcWords(rr.source) : '') + '. Check it, change what is wrong, then approve or void it.') + '</p>' +
-        (rqIncomplete(rr) ? '<p class="N_box E_inc N_inc" role="status">' + esc(INCOMPLETE) + '</p>' : '') + (rr.receipt_image_path ? '<p class="N_box">A receipt photo is attached.</p>' : '') + (lowConf(rr.ocr_confidence) ? '<p class="N_ferr" role="alert"><span aria-hidden="true">!</span> The receipt was hard to read. Please check every figure.</p>' : '') +
+        (rqIncomplete(rr) ? '<p class="N_info E_inc N_inc" role="status">' + esc(INCOMPLETE) + '</p>' : '') + (rr.receipt_image_path ? '<p class="N_info">A receipt photo is attached.</p>' : '') + (lowConf(rr.ocr_confidence) ? '<p class="N_ferr" role="alert"><span aria-hidden="true">!</span> The receipt was hard to read. Please check every figure.</p>' : '') +
         field('N_rd', 'Date', '<input class="N_input" id="N_rd" type="date" data-f="date" value="' + esc(fr.date) + '"' + (er.date ? ' aria-invalid="true"' : '') + '>', er.date) +
         field('N_ra', 'Amount (PHP)', inp('N_ra', 'amount', fr.amount, 'inputmode="decimal"'), er.amount) +
         (isX ? field('N_rc', 'Category', catSelect('N_rc', fr.category), er.category) : '<p class="N_line">Category: ' + esc(rr.category ? catName(rr.category) : '—') + '</p>') +
@@ -785,6 +943,7 @@
     if (!S) return;
     if (EXT[S.tab] && extMod(S.tab)) { drawExt(extMod(S.tab)); return; }
     extStop();
+    var sg = S.sheet; if (sg && sg.id && !sg.busy && (sg.kind === 'inq' || sg.kind === 'confirm' || sg.kind === 'decline') && S.d.inq && S.d.inq.ok === true && !payOf(sg.id)) { S.sheet = null; S.notice = 'This booking is no longer waiting for a decision. Nothing was changed.'; } // never leave the page inert with no sheet
     var body = S.tab === 'inquiries' ? viewInquiries() : S.tab === 'money' ? viewMoney() : S.tab === 'kpis' ? viewKpis() : viewToday();
     var live = S.notice ? '<div class="N_okbox" role="status">' + esc(S.notice) + '</div>' : '';
     S.el.innerHTML = '<div class="N_root">' + tabsHtml() + live + '<div class="N_body" role="tabpanel" aria-labelledby="N_tab_' + S.tab + '"' + (S.sheet ? ' inert aria-hidden="true"' : '') + '>' + body + '</div></div>' + sheetHtml();
@@ -795,7 +954,7 @@
   // ------------------------------------------------------------------------------------------------ actions
   function buzz(kind) { try { if (S.opts.haptic) S.opts.haptic(kind); } catch (e) { /* optional */ } }
   function tell(msg) { try { if (S.opts.toast) S.opts.toast(msg); } catch (e) { /* optional */ } }
-  function refreshAfterWrite() { ['overview', 'inq', 'txns', 'kpi', 'rq'].forEach(function (k) { if (S.d[k]) S.d[k].ok = false; }); loadTab(S.tab, true); }
+  function refreshAfterWrite() { ['overview', 'inq', 'waiting', 'txns', 'kpi', 'rq'].forEach(function (k) { if (S.d[k]) S.d[k].ok = false; }); loadTab(S.tab, true); }
 
   // After the server answered something we can read (an outcome), the key is replaced; after a dropped connection it is kept for a safe retry.
   function sendWrite(prefixName, name, args, onData) {
@@ -819,12 +978,17 @@
   }
   function onDemo(name) { return name === 'staff_decline_direct_booking_v1' ? { ok: true, outcome: 'declined' } : name === 'staff_confirm_direct_booking_v1' ? { ok: true, outcome: 'confirmed' } : { ok: true }; }
 
-  function loadPhoto(sh, path) { // the guest's receipt photo, shown inline from a short-lived signed link (owner and admin may read the bucket)
-    if (S.demo || !S.client || !S.client.storage) { sh.photo = { state: 'none' }; return; }
-    sh.photo = { state: 'loading' }; var gen = S.gen, fail = function () { if (S && S.gen === gen && S.sheet === sh) { sh.photo = { state: 'err' }; draw(); } };
-    try { Promise.resolve(S.client.storage.from('booking-receipts').createSignedUrl(path, 300)).then(function (r) { if (!S || S.gen !== gen || S.sheet !== sh) return; if (r && r.data && r.data.signedUrl) { sh.photo = { state: 'ok', url: r.data.signedUrl }; draw(); } else fail(); }, fail); } catch (e) { fail(); }
+  // One entry per booking for the session: S.photos[id] = { state, url, at }. A signed link lives 300 s, so an entry under 240 s old is reused and an older one is signed again.
+  var PHOTO_FRESH = 240000;
+  function ensurePhoto(id, path, force) {
+    if (!S.photos) S.photos = {};
+    if (S.demo) { S.photos[id] = { state: 'ok', url: DEMO_RECEIPT, at: clock() }; return; }
+    if (!S.client || !S.client.storage) { S.photos[id] = { state: 'none' }; return; }
+    var cur = S.photos[id]; if (!force && cur && cur.state === 'ok' && clock() - cur.at < PHOTO_FRESH) return;
+    var mine = S.photos[id] = { state: 'loading' }, gen = S.gen, done = function (e) { if (!S || S.gen !== gen || S.photos[id] !== mine) return; S.photos[id] = e; draw(); }, fail = function () { done({ state: 'err' }); };
+    try { Promise.resolve(S.client.storage.from('booking-receipts').createSignedUrl(path, 300)).then(function (r) { if (r && r.data && r.data.signedUrl) done({ state: 'ok', url: r.data.signedUrl, at: clock() }); else fail(); }, fail); } catch (e) { fail(); }
   }
-  function openInq(id) { var p = payOf(id); S.sheet = { kind: 'inq', id: id, msg: '', focus: true }; if (p && p.receipt_image_path) loadPhoto(S.sheet, p.receipt_image_path); draw(); }
+  function openInq(id) { var p = payOf(id); S.sheet = { kind: 'inq', id: id, msg: '', focus: true }; if (p && p.receipt_image_path) ensurePhoto(id, p.receipt_image_path); draw(); }
   function openReview(id) {
     var r = rqOf(id); if (!r) return; var c = toCentavos(r.gross_amount);
     S.sheet = { kind: 'review', id: id, step: 'form', busy: false, msg: '', errs: {}, reason: '', focus: true,
@@ -879,25 +1043,32 @@
   function startConfirm() {
     var p = payOf(S.sheet.id), rc = hasReceipt(p);
     S.sheet = { kind: 'confirm', id: p.id, step: 'form', key: mintKey('confirm'), busy: false, msg: '', errs: {}, focus: true,
-      f: { checked: false, method: 'messenger_gcash', reference: '', amount: p.expected_amount ? fromCentavos(toCentavos(p.expected_amount)) : '', note: '' } };
+      f: { checked: false, method: 'messenger_gcash', reference: '', amount: rc ? (receiptCmp(p) && receiptCmp(p).kind !== 'unread' ? fromCentavos(receiptCmp(p).amt) : '') : (p.expected_amount ? fromCentavos(toCentavos(p.expected_amount)) : ''), note: '' } }; // the receipt path never pre-fills the expected amount
     draw();
   }
+  function fill(res, p) { var o = {}; for (var k in res) o[k] = res[k]; if (p) { if (!o.guest_name) o.guest_name = p.guest_name; if (!o.checkin) o.checkin = p.checkin_date; if (!o.checkout) o.checkout = p.checkout_date; } return o; }
   function doConfirmSend() {
     var sh = S.sheet, p = payOf(sh.id); if (sh.step !== 'review') return; // a write only ever follows the review step
     sendWrite('confirm', 'staff_confirm_direct_booking_v1', confirmArgs(sh.id, sh.f, p, sh.key), function (res, s2) {
       res = res || {};
-      if (res.ok === true && res.outcome === 'confirmed') { buzz('success'); tell(confirmSentence(res)); S.notice = confirmSentence(res); S.sheet = null; if (S.demo) demoRemove(sh.id); refreshAfterWrite(); draw(); return; }
-      s2.msg = confirmSentence(res); s2.key = mintKey('confirm'); // a readable answer: the next try is a new decision
+      if (res.ok === true && res.outcome === 'confirmed') { var cs = confirmSentence(fill(res, p), p && p.contact_channel); buzz('success'); tell(cs); S.notice = cs; S.sheet = null; if (S.demo) demoRemove(sh.id); refreshAfterWrite(); draw(); return; }
+      s2.msg = confirmSentence(res, p && p.contact_channel); s2.key = mintKey('confirm'); // a readable answer: the next try is a new decision
       if (res.outcome === 'conflict' || res.outcome === 'invalid_state') refreshAfterWrite();
       s2.step = 'form'; draw();
     });
   }
   function doDeclineSend() {
     var sh = S.sheet, p0 = payOf(sh.id); if (sh.step !== 'review') return;
-    sendWrite('decline', 'staff_decline_direct_booking_v1', { p_booking_id: sh.id, p_reason: declineReason(sh.chip, sh.text) || '', p_idempotency_key: sh.key }, function (res, s2) {
+    var rs = !!p0 && p0.receipt_sent === true, code = reasonCode(sh.chip), ch = p0 ? p0.contact_channel : null, args = { p_booking_id: sh.id, p_reason: declineReason(sh.chip, sh.text, rs) || '', p_idempotency_key: sh.key };
+    if (p0 && !legacyRow(p0)) args.p_reason_code = code; // an old server has only the three-argument form
+    sendWrite('decline', 'staff_decline_direct_booking_v1', args, function (res, s2) {
       res = res || {};
-      if (res.ok === true) { buzz('success'); tell(declineSentence(res)); S.notice = declineSentence(res); S.sheet = { kind: 'msg', guest: p0 && p0.guest_name, text: declineMessage(p0, sh.chip), copied: false, msg: '', focus: true }; if (S.demo) demoRemove(sh.id); refreshAfterWrite(); draw(); return; }
-      s2.msg = declineSentence(res); s2.key = mintKey('decline'); s2.step = 'form'; draw();
+      if (res.ok === true) {
+        var told = declineTold(ch, code), ds = declineSentence(res, told, p0 && p0.guest_name); buzz('success'); tell(ds); S.notice = ds;
+        S.sheet = told ? null : { kind: 'msg', guest: p0 && p0.guest_name, text: declineMessage(p0, code, rs, ch), copied: false, msg: '', focus: true };
+        if (S.demo) demoRemove(sh.id); refreshAfterWrite(); draw(); return;
+      }
+      s2.msg = declineSentence(res, null, p0 && p0.guest_name); s2.key = mintKey('decline'); s2.step = 'form'; draw();
     });
   }
   function demoRemove(id) { S.demoData.inquiries = S.demoData.inquiries.filter(function (r) { return r.id !== id; }); }
@@ -917,22 +1088,33 @@
     if (a === 'tbl') { S.showTable = !S.showTable; draw(); return; }
     if (a === 'inq-open') return openInq(v);
     if (a === 'rq-open') return openReview(v);
+    if (a === 'needs-sent') { setTab('inquiries', true); if (v && payOf(v)) openInq(v); return; }
+    if (a === 'needs-more') { S.needsOpen = true; draw(); return; }
+    if (a === 'nav') { if (ev.preventDefault) ev.preventDefault(); S.sheet = null; S.opts.navigate(v); return; }
     if (!sh) return;
     if (a === 'sheet-close') { if (sh.busy) return; S.sheet = null; draw(); return; }
-    if (a === 'sheet-back') { if (sh.busy) return; if (sh.kind === 'review' && sh.step === 'void') { sh.step = 'form'; sh.msg = ''; sh.errs = {}; sh.focus = true; draw(); return; } if (sh.kind === 'confirm' || sh.kind === 'decline') { S.sheet = { kind: 'inq', id: sh.id, msg: '', focus: true }; } else S.sheet = null; draw(); return; }
+    if (a === 'sheet-back') { if (sh.busy) return; if (sh.kind === 'review' && sh.step === 'void') { sh.step = 'form'; sh.msg = ''; sh.errs = {}; sh.focus = true; draw(); return; } if (sh.kind === 'confirm' || sh.kind === 'decline') { S.sheet = { kind: 'inq', id: sh.id, msg: '', focus: true }; var pb = payOf(sh.id); if (pb && pb.receipt_image_path) ensurePhoto(sh.id, pb.receipt_image_path); } else S.sheet = null; draw(); return; }
     if (a === 'cf-start') return startConfirm();
     if (a === 'cf-review') { sh.errs = validateConfirm(sh.f, payOf(sh.id)); sh.msg = ''; if (Object.keys(sh.errs).length) { sh.msg = 'Please fix the items marked below.'; draw(); return; } sh.step = 'review'; sh.focus = true; draw(); return; }
     if (a === 'cf-edit' || a === 'dc-edit' || a === 'ex-edit') { if (sh.busy) return; sh.step = 'form'; sh.msg = ''; sh.focus = true; draw(); return; }
     if (a === 'cf-send') return doConfirmSend();
     if (a === 'dc-start') { S.sheet = { kind: 'decline', id: sh.id, step: 'form', key: mintKey('decline'), busy: false, msg: '', chip: null, text: '', focus: true }; draw(); return; }
     if (a === 'dc-chip') { sh.chip = sh.chip === v ? null : v; sh.msg = ''; draw(); return; }
-    if (a === 'dc-review') { if (!declineReason(sh.chip, sh.text)) { sh.msg = 'Choose or write a reason first.'; draw(); return; } sh.step = 'review'; sh.msg = ''; sh.focus = true; draw(); return; }
+    if (a === 'dc-review') { var pr = payOf(sh.id); if (!declineReason(sh.chip, sh.text, !!pr && pr.receipt_sent === true)) { sh.msg = 'Choose or write a reason first.'; draw(); return; } sh.step = 'review'; sh.msg = ''; sh.focus = true; draw(); return; }
     if (a === 'dc-send') return doDeclineSend();
-    if (a === 'photo-retry') { var pq = payOf(sh.id); if (pq && pq.receipt_image_path) { loadPhoto(sh, pq.receipt_image_path); draw(); } return; }
+    if (a === 'photo-retry') { var pq = payOf(sh.id); if (pq && pq.receipt_image_path) { ensurePhoto(sh.id, pq.receipt_image_path, true); draw(); } return; }
+    if (a === 'photo-zoom') { var pz = payOf(sh.id), ez = S.photos[sh.id]; sh.zoom = true; sh.z200 = false; if (pz && pz.receipt_image_path && (!ez || ez.state !== 'ok' || clock() - ez.at >= PHOTO_FRESH)) ensurePhoto(sh.id, pz.receipt_image_path, true); sh.focus = true; draw(); return; }
+    if (a === 'photo-unzoom') { sh.zoom = false; sh.focus = true; draw(); return; }
+    if (a === 'photo-fit') { sh.z200 = !sh.z200; draw(); return; }
     if (a === 'rq-approve') return doReview('approve');
     if (a === 'rq-void-start') { sh.step = 'void'; sh.msg = ''; sh.errs = {}; sh.focus = true; draw(); return; }
     if (a === 'rq-void-send') return doReview('void');
     if (a === 'msg-copy') { copyText(sh.text).then(function (ok) { if (!S || S.sheet !== sh) return; sh.copied = ok; sh.msg = ok ? '' : 'This phone would not copy it. Press and hold the text above, then choose Copy.'; draw(); }); return; }
+  }
+  // an image that will not load (an expired link, a bad file): the photo box shows the failed state with its retry button
+  function onImgError(ev) {
+    var t = ev && ev.target; if (!S || !t || !t.classList || !t.classList.contains('N_photo') || !S.sheet || S.sheet.kind !== 'inq') return;
+    var e = S.photos && S.photos[S.sheet.id]; if (e && e.state === 'ok' && e.url !== DEMO_RECEIPT) { S.photos[S.sheet.id] = { state: 'err' }; draw(); }
   }
   function onInput(ev) {
     if (!S) return; var t = ev.target; if (!t || !t.getAttribute) return; var f = t.getAttribute('data-f'); if (!f) return;
@@ -950,7 +1132,7 @@
     var doc = (typeof document !== 'undefined') ? document : null;
     if (!S || !doc || doc.visibilityState !== 'visible') return;
     if (S.sheet && S.sheet.busy) return;
-    if (clock() - (S.loadedAt || 0) > 5 * 60000 && !S.sheet) loadTab(S.tab, true); // refresh on return after five minutes; never under an open sheet
+    if (clock() - (S.loadedAt || 0) > ((S.tab === 'today' || S.tab === 'inquiries') ? LIVE_MS : 5 * 60000) && !S.sheet) loadTab(S.tab, true); // refresh on return after five minutes; never under an open sheet
   }
 
   // ------------------------------------------------------------------------------------------------ mount / unmount
@@ -959,18 +1141,19 @@
     if (S) unmount();
     if (!canManage(opts.role)) { if (opts.navigate) opts.navigate('#home'); return; }
     var today = manilaToday(), sub = tabOk(opts.sub) ? opts.sub : null, stored = ls('get', 'cs_n_tab'), sp = ls('get', 'cs_n_period');
-    S = { el: el, opts: opts, client: opts.client, demo: !!opts.demo, role: opts.role, gen: ++N_gen, today: today, d: {}, sheet: null, notice: '', loadedAt: 0,
+    S = { el: el, opts: opts, client: opts.client, demo: !!opts.demo, role: opts.role, gen: ++N_gen, today: today, d: {}, sheet: null, notice: '', loadedAt: 0, photos: {},
       tab: sub || (tabOk(stored) ? stored : 'today'), period: PRESETS.some(function (p) { return p[0] === sp; }) ? sp : 'mtd', demoData: demoData(today) };
-    if (!S.demo && !S.client) { ['overview', 'inq', 'txns', 'kpi'].forEach(function (k) { S.d[k] = { err: 'No connection.' }; }); }
-    S.onClick = onClick; S.onInput = onInput; S.onVis = onVisible;
+    if (!S.demo && !S.client) { ['overview', 'inq', 'waiting', 'txns', 'kpi'].forEach(function (k) { S.d[k] = { err: 'No connection.' }; }); }
+    S.onClick = onClick; S.onInput = onInput; S.onVis = onVisible; S.onErr = onImgError;
     el.addEventListener('click', S.onClick); el.addEventListener('input', S.onInput); el.addEventListener('change', S.onInput);
+    el.addEventListener('error', S.onErr, true);
     el.addEventListener('submit', function (e) { if (e && e.preventDefault) e.preventDefault(); });
     try { if (typeof document !== 'undefined' && document.addEventListener) document.addEventListener('visibilitychange', S.onVis); } catch (e) { /* ok */ }
     draw(); if (S.demo || S.client) loadTab(S.tab, true);
   }
   function unmount() {
     if (!S) return;
-    try { S.el.removeEventListener && S.el.removeEventListener('click', S.onClick); S.el.removeEventListener && S.el.removeEventListener('input', S.onInput); S.el.removeEventListener && S.el.removeEventListener('change', S.onInput); } catch (e) { /* ok */ }
+    try { S.el.removeEventListener && S.el.removeEventListener('click', S.onClick); S.el.removeEventListener && S.el.removeEventListener('input', S.onInput); S.el.removeEventListener && S.el.removeEventListener('change', S.onInput); S.el.removeEventListener && S.el.removeEventListener('error', S.onErr, true); } catch (e) { /* ok */ }
     try { if (typeof document !== 'undefined' && document.removeEventListener) document.removeEventListener('visibilitychange', S.onVis); } catch (e) { /* ok */ }
     extStop(); (S.timers || []).forEach(function (t) { clearTimeout(t); });
     N_gen++; S = null; // a late reply finds no state and is dropped
