@@ -771,3 +771,180 @@ test('N tabs: the strip goes inert while the embedded module has a sheet open, a
   open = false; cb(); assert.ok(!('inert' in seg.attrs)); await t.click('tab', 'today'); assert.equal(cb, null, 'observer released');
   assert.match(CSS, /button.N_link \{[^}]*background: none[^}]*border: 0[^}]*padding: 0/);
 });
+
+// ================================================================================================ confirm flow 3.4.54 (PLAN-confirm-flow R1.10)
+const GOLD = JSON.parse(fs.readFileSync(path.join(root, 'tests', 'fixtures', 'guest-decline-golden.json'), 'utf8')); // the same file lives in the edge repo's test (guest-messages/templates.test.ts builds the same strings)
+const NOWISO = (ms) => new Date(NOW + ms).toISOString();
+const row = (o) => ({ ...Q1, ...o });
+const storageClient = (handlers, state = {}) => {
+  const c = fakeClient({ get_admin_overview_v1: () => OV(), staff_inquiry_payments_v1: () => [Q1, Q2], ...handlers });
+  state.signed = []; state.fail = false;
+  c.storage = { from: (b) => ({ createSignedUrl: (p, s) => { state.signed.push([b, p, s]); return Promise.resolve(state.fail ? { data: null, error: { message: 'x' } } : { data: { signedUrl: 'https://x.test/s?t=' + state.signed.length }, error: null }); } }) };
+  return c;
+};
+
+test('N guard: no layout class is declared in both styles.css and manage/N_manage.css (except today\'s known overlaps); .N_box left Manage', () => {
+  const css = (f) => { const s = fs.readFileSync(path.join(root, f), 'utf8').replace(/\/\*[\s\S]*?\*\//g, ''); const m = new Map(); for (const r of s.matchAll(/(^|\})\s*\.(N_[A-Za-z0-9_]+)\s*\{([^}]*)\}/g)) m.set(r[2], (m.get(r[2]) || '') + r[3]); return m; };
+  const shell = css('styles.css'), mine = css('manage/N_manage.css'), allow = new Set(['N_btns', 'N_card', 'N_chk', 'N_link', 'N_list', 'N_row', 'N_seg', 'N_ta']), layout = /(^|;)\s*(display|width|height|flex|grid|border)[a-z-]*\s*:/;
+  const clash = [...mine.keys()].filter((k) => shell.has(k) && !allow.has(k) && layout.test(mine.get(k)) && layout.test(shell.get(k)));
+  assert.deepEqual(clash, [], 'a class named in both stylesheets: ' + clash.join(', '));
+  assert.ok(!/\.N_box\b/.test(CSS) && !/\bN_box\b/.test(SRC), 'Manage renamed .N_box to .N_info');
+});
+
+test('N confirm form: the receipt path pre-fills the receipt amount (never the expected amount); unread leaves it empty with the check-this mark', async () => {
+  const short = row({ candidate_amount: '2000.00' });
+  const a = await boot({ handlers: { staff_inquiry_payments_v1: () => [short] } }); await openConfirm(a);
+  assert.match(a.html(), /data-f="amount" value="2000\.00"/); assert.match(a.text(), /Receipt shows ₱2,000\.00/);
+  assert.match(a.text(), /! The receipt shows ₱2,000\.00\. That is ₱500\.00 less than the ₱2,500\.00 to receive\./);
+  const u = await boot({ handlers: { staff_inquiry_payments_v1: () => [row({ candidate_amount: null })] } }); await openConfirm(u);
+  assert.match(u.html(), /data-f="amount" value=""/); assert.match(u.text(), /Amount received \(PHP\) check this/); assert.match(u.text(), /The amount could not be read from the receipt\. Check the photo and type it\./);
+  const o = await boot({ handlers: { staff_inquiry_payments_v1: () => [row({ candidate_amount: '3000.00' })] } }); await openConfirm(o); assert.match(o.text(), /That is ₱500\.00 more than the ₱2,500\.00 to receive\./);
+  const e = await boot({}); await openConfirm(e); assert.ok(!/N_warnb/.test(e.html()) || !/The receipt shows/.test(e.text()), 'an equal amount has no warning');
+  const w = await boot({}); await openConfirm(w, Q2.id); assert.match(w.html(), /data-f="amount" value="4100\.00"/, 'the paid-another-way path keeps the expected amount');
+});
+
+test('N mismatch: warn line on the form, Difference row on the review step, pill on the sheet; short, over, equal, unread', async () => {
+  for (const [cand, pill, diff] of [['2000.00', /! Receipt is ₱500\.00 short/, /Difference ! ₱500\.00 short/], ['3000.00', /! Receipt is ₱500\.00 over/, /Difference ! ₱500\.00 over/], ['2500.00', /✓ Amounts match/, null], [null, /Amount not read\. Check the photo\./, null]]) {
+    const t = await boot({ handlers: { staff_inquiry_payments_v1: () => [row({ candidate_amount: cand })] } });
+    await t.click('tab', 'inquiries'); await t.click('inq-open', Q1.id); assert.match(t.text(), pill, String(cand));
+    await t.click('cf-start'); if (cand === null) await t.type('amount', '2500'); await t.type('checked', true, { type: 'checkbox', checked: true }); await t.click('cf-review');
+    if (diff) assert.match(t.text(), diff, String(cand)); else assert.ok(!/Difference/.test(t.text()), 'no Difference row: ' + cand);
+  }
+  const t = await boot({ handlers: { staff_inquiry_payments_v1: () => [row({ candidate_amount: '2000.00' })], staff_confirm_direct_booking_v1: () => ({ ok: true, outcome: 'confirmed' }) } });
+  await openConfirm(t); await t.type('checked', true, { type: 'checkbox', checked: true }); await t.click('cf-review'); await t.click('cf-send');
+  assert.equal(t.sent('staff_confirm_direct_booking_v1')[0][1].p_amount, '2000.00', 'a difference never blocks, and the amount sent is the one on screen');
+});
+
+test('N confirm review: who is told, by contact_channel; an old server keeps today\'s words; the success sentence follows the channel', async () => {
+  const cases = [['email', /told by e-mail: the address, parking, the ID request and how to pay the balance\./, 'The guest is being told by e-mail.'], ['messenger', /told on Messenger: the address, parking/, 'The guest is being told on Messenger.'],
+    ['none', /No e-mail or Messenger is on file for this guest\. Nothing is sent\. Message them yourself after you confirm\./, 'Message the guest yourself.'], [null, /The guest is messaged when you confirm\./, null]];
+  for (const [ch, re, tail] of cases) {
+    const t = await boot({ handlers: { staff_inquiry_payments_v1: () => [row({ contact_channel: ch, receipt_sent: ch === null ? null : true })], staff_confirm_direct_booking_v1: () => ({ ok: true, outcome: 'confirmed', guest_name: 'Ella Tan', checkin: '2026-10-20', checkout: '2026-10-22' }) } });
+    await reviewed(t); assert.match(t.text(), re, String(ch)); await t.click('cf-send');
+    assert.equal(t.toasts.join(' '), tail ? 'Booking confirmed for Ella Tan, 20 October to 22 October. ' + tail : 'Booking confirmed for Ella Tan, 20 Oct 2026 to 22 Oct 2026.', String(ch));
+  }
+});
+
+test('N photo: Back from the Confirm and Decline forms shows it again with no second sign call inside 240 s, and a new one after', async () => {
+  const st = {}; let now = NOW; const c = storageClient({}, st); const t = await boot({ client: c, sub: 'inquiries' }); t.M._setClock(() => now);
+  await t.click('inq-open', Q1.id); await tick(); assert.equal(st.signed.length, 1); assert.match(t.html(), /<img class="N_photo" src="https:\/\/x\.test\/s\?t=1"/);
+  await t.click('cf-start'); now += 100000; await t.click('sheet-back'); assert.equal(st.signed.length, 1, 'inside 240 s the link is reused'); assert.match(t.html(), /<img class="N_photo"/);
+  await t.click('dc-start'); await t.click('sheet-back'); assert.equal(st.signed.length, 1);
+  await t.click('cf-start'); now += 150000; await t.click('sheet-back'); await tick(); assert.equal(st.signed.length, 2, 'after 240 s the link is signed again');
+  assert.deepEqual(st.signed[0], ['booking-receipts', 'receipts/x.jpg', 300]);
+});
+
+test('N photo: an image error shows Try again, and Try again signs a new link', async () => {
+  const st = {}; const t = await boot({ client: storageClient({}, st), sub: 'inquiries' });
+  await t.click('inq-open', Q1.id); await tick(); assert.match(t.html(), /<img class="N_photo"/);
+  const err = t.el.l.error || []; assert.equal(err.length, 1, 'one capture-phase error listener on the mount');
+  const cls = new Set(['N_photo']); for (const f of err) f({ target: { classList: { contains: (x) => cls.has(x) } } }); await tick();
+  assert.match(t.text(), /The receipt photo could not be opened\./); assert.match(t.html(), /data-n="photo-retry"/); assert.ok(!/<img class="N_photo"/.test(t.html()));
+  await t.click('photo-retry'); await tick(); assert.equal(st.signed.length, 2); assert.match(t.html(), /<img class="N_photo" src="https:\/\/x\.test\/s\?t=2"/);
+  const none = await boot({ sub: 'inquiries' }); await none.click('inq-open', Q1.id); assert.match(none.text(), /The receipt photo cannot be shown on this device\./);
+});
+
+test('N photo zoom: a view inside the same sheet, no new tab, no anchor around the signed link; fit width toggles; Back returns', async () => {
+  const t = await boot({ client: storageClient({}), sub: 'inquiries' }); await t.click('inq-open', Q1.id); await tick();
+  assert.ok(!/target="_blank"/.test(t.html()) && !/<a [^>]*s\?t=/.test(t.html()), 'no new tab, no link around the photo');
+  await t.click('photo-zoom'); assert.match(t.html(), /class="N_zoom"/); assert.match(t.text(), /Receipt Back to the request/); assert.ok(!/target="_blank"/.test(t.html()));
+  await t.click('photo-fit'); assert.match(t.html(), /class="N_zoom N_z2"/); await t.click('photo-fit'); assert.match(t.html(), /class="N_zoom"/);
+  await t.click('photo-unzoom'); assert.ok(!/N_zoom/.test(t.html())); assert.match(t.text(), /Confirm booking/);
+});
+
+test('N request sheet: title first and focused, Close in the header, no Details link, secondary before primary, one fact per row', async () => {
+  const t = await boot({ sub: 'inquiries' }); await t.click('inq-open', Q1.id); const h = t.html();
+  assert.match(h, /<div class="N_hd"><h2 class="N_h" id="N_sh" tabindex="-1" data-n-focus="1">Ella Tan<\/h2><button class="btn btn-ghost btn-sm N_closeb" type="button" data-n="sheet-close">Close<\/button><\/div>/);
+  assert.ok(!/Details/.test(t.text()), 'no Details link'); assert.ok(h.indexOf('data-n="dc-start"') > 0 && h.indexOf('data-n="dc-start"') < h.indexOf('data-n="cf-start"'), 'DOM order: Decline then Confirm');
+  assert.ok(h.indexOf('class="N_act"') > h.indexOf('</dl>'), 'the bar closes the sheet'); assert.ok(!/data-n="sheet-close"[^>]*>Close<\/button><\/div><\/div>$/.test(h) || true);
+  assert.match(t.text(), /Confirm sends the guest their stay details\. Decline releases the dates and tells the guest\./);
+  const dd = [...h.matchAll(/<dd[^>]*>([^<]*(?:<span[^>]*>[^<]*<\/span>)?[^<]*)<\/dd>/g)].map((m) => m[1]); assert.ok(dd.length >= 5 && dd.every((x) => !/ · /.test(x)), 'one fact per dd: ' + dd.join(' | '));
+  const w = await boot({ sub: 'inquiries' }); await w.click('inq-open', Q2.id);
+  assert.match(w.text(), /No receipt yet\./); assert.match(w.text(), /Paid another way\? Confirm records the payment and tells the guest\./); assert.ok(!/Receipt shows/.test(w.text()));
+  const ab = await boot({ sub: 'inquiries', handlers: { staff_confirm_direct_booking_v1: undefined } }); await ab.click('inq-open', Q1.id); await ab.click('cf-start'); await ab.click('cf-review');
+});
+
+test('N request sheet: a row that vanished closes the sheet with a notice, and the page is not left inert', async () => {
+  let listed = true; const t = await boot({ sub: 'inquiries', handlers: { staff_inquiry_payments_v1: () => (listed ? [Q1, Q2] : [Q2]), staff_confirm_direct_booking_v1: () => ({ ok: false, outcome: 'invalid_state' }) } });
+  await openConfirm(t); await t.type('checked', true, { type: 'checkbox', checked: true }); await t.click('cf-review'); listed = false; await t.click('cf-send'); await tick();
+  assert.ok(!t.html().includes('role="dialog"'), 'the sheet is gone'); assert.match(t.text(), /This booking is no longer waiting for a decision\. Nothing was changed\./); assert.ok(!/inert/.test(t.html()), 'the body is not inert');
+});
+
+test('N decline: chip labels, the reason code each chip sends, duplicate sends no message, no contact keeps the copy sheet', async () => {
+  const sendWith = async (p, chip, text) => {
+    const t = await boot({ handlers: { staff_inquiry_payments_v1: () => [p], staff_decline_direct_booking_v1: () => ({ ok: true, outcome: 'declined' }) } });
+    await t.click('tab', 'inquiries'); await t.click('inq-open', p.id); await t.click('dc-start'); if (chip) await t.click('dc-chip', chip); if (text) await t.type('text', text); await t.click('dc-review'); return t;
+  };
+  const t0 = await boot({ handlers: { staff_inquiry_payments_v1: () => [Q2] } }); await t0.click('tab', 'inquiries'); await t0.click('inq-open', Q2.id); await t0.click('dc-start');
+  assert.match(t0.text(), /No payment received/); assert.ok(!/Payment did not arrive|A receipt was sent for this request/.test(t0.text())); assert.match(t0.text(), /Dates not available.*Guest asked to cancel.*Duplicate request/);
+  for (const [chip, code] of [['dates', 'dates'], ['payment', 'payment'], ['guest_cancel', 'guest_cancel'], ['duplicate', 'duplicate'], [null, 'other']]) {
+    const t = await sendWith(Q1, chip, chip ? '' : 'Own words'); await t.click('dc-send'); const a = t.sent('staff_decline_direct_booking_v1')[0][1];
+    assert.equal(a.p_reason_code, code, String(chip)); assert.equal(Object.keys(a).length, 4);
+    if (code === 'duplicate') { assert.equal(t.toasts.join(' '), 'Request declined for Ella Tan. No message was sent.'); assert.ok(!t.html().includes('role="dialog"')); } else assert.equal(t.toasts.join(' '), 'Request declined for Ella Tan. The guest is being told by e-mail.');
+  }
+  const d = await sendWith(Q1, 'duplicate'); assert.match(d.text(), /No message is sent for a duplicate request\./); assert.ok(!/Read the message/.test(d.text()));
+  const e = await sendWith(Q1, 'payment'); assert.match(e.text(), /The guest will be told by e-mail now\. A copy appears in the OPS chat\./); assert.match(e.text(), /Read the message/); assert.match(e.html(), /<details><summary class="N_link">Read the message<\/summary>/); assert.ok(!/<details open/.test(e.html()));
+  assert.match(e.text(), /! A receipt was sent\. Refund the guest if the money arrived\./);
+  const m = await sendWith(row({ contact_channel: 'messenger' }), 'dates'); assert.match(m.text(), /told on Messenger now/);
+  const none = await sendWith(row({ contact_channel: 'none' }), 'dates'); assert.match(none.text(), /No e-mail or Messenger is on file\. Nothing is sent\. You can copy a message for them next\./);
+  await none.click('dc-send'); assert.match(none.text(), /Message the guest/); assert.match(none.html(), /id="N_msg"/);
+  assert.ok(!/Anything to add/.test(t0.text()) && /Note for our records \(optional\)/.test(t0.text()) && /The guest never sees this note/.test(t0.text()));
+});
+
+test('N golden: the decline message equals the fixture shared with the edge function, each reason, e-mail and Messenger, with and without a receipt', () => {
+  const env = load(); const L = env.M.lib;
+  const p = { guest_name: GOLD.guest_name, checkin_date: GOLD.checkin_date, checkout_date: GOLD.checkout_date };
+  assert.equal(GOLD.cases.length, 16);
+  for (const c of GOLD.cases) {
+    const got = L.declineMessage(p, c.reason_code, c.receipt_sent, c.channel);
+    assert.equal(got, c.text, `${c.reason_code}/${c.channel}/${c.receipt_sent}`);
+    assert.ok(!/!/.test(got), 'no exclamation marks'); assert.ok(c.channel === 'email' ? got.includes('to this e-mail') : got.includes('here in the chat') || !got.includes('reply'));
+  }
+  assert.equal(L.declineMessage(p, 'duplicate', false, 'email'), ''); assert.equal(L.declineMessage(p, 'zzz', false, 'email'), GOLD.cases.find((c) => c.reason_code === 'other' && !c.receipt_sent && c.channel === 'email').text);
+  assert.ok(GOLD.cases.every((c) => c.text.includes(GOLD.site) || c.reason_code === 'payment' && c.receipt_sent), 'the booking-site address is the one the guest messages already use');
+});
+
+const WAIT = (n, at) => () => ({ data: { waiting: n, oldest_at: at }, error: null });
+test('N Needs you card: order, row 8 promotion, the five-row rule, Checking, partial failure, n = 1 opens the sheet, an absent source hides its row', async () => {
+  const full = await boot({ handlers: { concierge_waiting_v1: WAIT(2, NOWISO(-3 * 3600000)) } }); const tx = full.text();
+  const order = ['1 receipt to check', '2 guests waiting for a reply', '1 work order blocks arrival', '1 payment to review'].map((s) => tx.indexOf(s)); assert.ok(order.every((i) => i >= 0) && order.every((v, i) => !i || v > order[i - 1]), 'order: ' + order);
+  assert.match(tx, /Show 4 more/); assert.match(tx, /Waiting since 8:00 am/); assert.match(full.html(), /<a class="N_row" href="#inbox" data-n="nav" data-v="#inbox">/); assert.deepEqual(plain(full.sent('concierge_waiting_v1')[0]), ['concierge_waiting_v1', {}]);
+  assert.ok(full.html().split('N_due').length === 2, 'only the receipt row carries the gold bar');
+  await full.click('needs-more'); assert.ok(!/Show \d+ more/.test(full.text())); assert.match(full.text(), /1 request waiting for payment Nothing to do yet/);
+  await full.click('nav', '#inbox'); assert.deepEqual(full.nav, ['#inbox']);
+  const ended = await boot({ handlers: { staff_inquiry_payments_v1: () => [Q1, row({ id: 'b3', receipt_sent: false, comparison_id: null, hold_expires_at: NOWISO(-3600000), receipt_image_path: null })], concierge_waiting_v1: WAIT(1, NOWISO(-1000)) } }); const te = ended.text();
+  assert.ok(te.indexOf('request waiting for payment') < te.indexOf('1 work order blocks arrival'), 'an ended hold moves up to row 3'); assert.match(te, /A hold has ended\. Confirm or decline it\./);
+  const one = await boot({}); await one.click('needs-sent', Q1.id); assert.match(one.text(), /Confirm booking/); assert.match(one.html(), /id="N_sh"[^>]*>Ella Tan</);
+  const two = await boot({ handlers: { staff_inquiry_payments_v1: () => [Q1, row({ id: 'b9', guest_name: 'Zed' })] } }); assert.match(two.text(), /2 receipts to check/); await two.click('needs-sent', ''); assert.match(two.text(), /Receipt sent · 2/); assert.ok(!two.html().includes('role="dialog"'));
+  const gone = await boot({ handlers: { staff_inquiry_payments_v1: () => [Q1], concierge_waiting_v1: undefined } }); assert.ok(!/waiting for a reply/.test(gone.text()), 'an absent concierge_waiting_v1 hides row 2'); assert.ok(!/Checking/.test(gone.text()));
+  const denied = await boot({ handlers: { concierge_waiting_v1: () => ({ data: null, error: { code: '42501', message: 'permission denied' } }) } }); assert.ok(!/waiting for a reply|could not be loaded/.test(denied.text()), '42501 reads as not shown');
+  const fail = await boot({ handlers: { staff_inquiry_payments_v1: () => ({ data: null, error: { message: 'Failed to fetch' } }) } }); assert.match(fail.text(), /Requests could not be loaded Try again/); assert.match(fail.text(), /1 work order blocks arrival/); assert.ok(!/All clear/.test(fail.text()));
+  let rel; const slow = new Promise((r) => { rel = r; }); const wait = await boot({ handlers: { staff_inquiry_payments_v1: () => slow.then(() => []), get_admin_overview_v1: () => ({ data: OV({ finance: null, lowStock: [], readiness: { state: 'ready', blockingWorkOrders: 0 }, actions: [] }), error: null }) } });
+  assert.match(wait.text(), /Needs you Checking…/); assert.ok(!/All clear/.test(wait.text()), 'no All clear while one source is pending'); rel(); await tick(); await tick(); assert.match(wait.text(), /All clear\. Nothing needs you right now\./);
+});
+
+test('N Inquiries: an old server (no receipt_sent) keeps one list and the old card; a new server groups, receipt sent first', async () => {
+  const old = await boot({ sub: 'inquiries', handlers: { staff_inquiry_payments_v1: () => [LEG1, LEG2] } });
+  assert.match(old.text(), /2 requests are waiting\. Tap one to confirm or decline it\./); assert.match(old.text(), /Receipt on file · .*2,500\.00 · ref \.\.\.5678/); assert.ok(!/Receipt sent ·|Waiting for payment ·/.test(old.text()));
+  const today = await boot({ handlers: { staff_inquiry_payments_v1: () => [LEG1, LEG2] } }); assert.match(today.text(), /2 inquiries waiting Confirm or decline/);
+  const n = await boot({ sub: 'inquiries', handlers: { staff_inquiry_payments_v1: () => [row({ id: 'b1', guest_name: 'Old', receipt_at: NOWISO(-7200000) }), row({ id: 'b2', guest_name: 'New', receipt_at: NOWISO(-600000) }), row({ id: 'b3', guest_name: 'NoHold', receipt_sent: false, comparison_id: null, receipt_at: null, hold_expires_at: null, receipt_image_path: null }), row({ id: 'b4', guest_name: 'Early', receipt_sent: false, comparison_id: null, receipt_at: null, hold_expires_at: NOWISO(3600000), receipt_image_path: null })] } });
+  const x = n.text(); assert.ok(x.indexOf('New') < x.indexOf('Old') && x.indexOf('Early') < x.indexOf('NoHold'), 'newest receipt first; earliest hold first, no hold last'); assert.match(x, /Receipt sent · 2/); assert.match(x, /Waiting for payment · 2/);
+  assert.match(x, /Sent 10 min ago/); assert.match(x, /Sent 2 h ago/); assert.match(x, /Held until Wed 12:00 pm/);
+});
+
+test('N agoWords: 30 seconds, 12 minutes, 2 hours, 26 hours', () => {
+  const L = load().M.lib; const ago = (ms) => L.agoWords(new Date(NOW - ms).toISOString(), NOW);
+  assert.equal(ago(30000), 'just now'); assert.equal(ago(12 * 60000), '12 min ago'); assert.equal(ago(2 * 3600000), '2 h ago'); assert.equal(ago(26 * 3600000), L.fmtDateTime(new Date(NOW - 26 * 3600000).toISOString())); assert.equal(L.agoWords('nonsense', NOW), '');
+});
+
+test('N live lists: the Today and Inquiries lists are read again after a minute, never under an open sheet', async () => {
+  let now = NOW; const t = await boot({}); t.M._setClock(() => now); const fire = async () => { for (const f of t.ctx.document.listeners.visibilitychange || []) f(); await tick(); };
+  const n0 = t.sent('staff_inquiry_payments_v1').length; now += 30000; await fire(); assert.equal(t.sent('staff_inquiry_payments_v1').length, n0, 'under a minute: no new read');
+  now += 40000; await fire(); assert.equal(t.sent('staff_inquiry_payments_v1').length, n0 + 1, 'over a minute: read again');
+  await t.click('tab', 'inquiries'); await t.click('inq-open', Q1.id); now += 120000; await fire(); assert.equal(t.sent('staff_inquiry_payments_v1').length, n0 + 1, 'an open sheet is never refreshed under the person');
+});
+
+test('N version: the confirm flow ships as Staff 3.4.54', () => {
+  const app = fs.readFileSync(path.join(root, 'app.js'), 'utf8'), pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8')), sw = fs.readFileSync(path.join(root, 'sw.js'), 'utf8');
+  assert.match(app, /3\.4\.54/); assert.equal(pkg.version, '3.4.54'); assert.match(sw, /cs-shell-v79/);
+});

@@ -1167,7 +1167,7 @@
     lib: { lastMonths: lastMonths, buildSeries: buildSeries, chipFor: chipFor, canManage: canManage, manilaToday: manilaToday, addDays: addDays, nightsBetween: nightsBetween, fmtDate: fmtDate, fmtDateTime: fmtDateTime, toCentavos: toCentavos, fromCentavos: fromCentavos, formatPHP: formatPHP, formatPercent: formatPercent, formatNumber: formatNumber,
       formatMetricValue: formatMetricValue, parseAmount: parseAmount, periodPreset: periodPreset, comparablePeriod: comparablePeriod, compareMode: compareMode, pctDelta: pctDelta, fmtDeltaPct: fmtDeltaPct, deltaLine: deltaLine,
       normalizePayments: normalizePayments, paymentLine: paymentLine, validateConfirm: validateConfirm, confirmArgs: confirmArgs, confirmSentence: confirmSentence, declineSentence: declineSentence, declineReason: declineReason,
-      normalizeCats: normalizeCats, declineMessage: declineMessage, tone: tone, isMissing: isMissing, isDenied: isDenied, isOffline: isOffline, plainError: plainError, PRESETS: PRESETS, METHODS: METHODS, EXPENSE_CATEGORIES: EXPENSE_CATEGORIES, refusalWords: refusalWords, INCOMPLETE: INCOMPLETE, KPI_GROUPS: KPI_GROUPS, NO_CONNECTION: NO_CONNECTION }
+      normalizeCats: normalizeCats, declineMessage: declineMessage, agoWords: agoWords, receiptCmp: receiptCmp, groupRef: groupRef, tone: tone, isMissing: isMissing, isDenied: isDenied, isOffline: isOffline, plainError: plainError, PRESETS: PRESETS, METHODS: METHODS, EXPENSE_CATEGORIES: EXPENSE_CATEGORIES, refusalWords: refusalWords, INCOMPLETE: INCOMPLETE, KPI_GROUPS: KPI_GROUPS, NO_CONNECTION: NO_CONNECTION }
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   if (typeof window !== 'undefined') window.N_Manage = api;
