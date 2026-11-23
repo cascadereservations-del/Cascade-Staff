@@ -514,6 +514,7 @@
     if (c === 'amount_locked') return 'That amount follows Inventory. Change the price in Inventory.';
     if (c === 'system_category') return 'This category is set by the system and can’t be picked here.';
     if (c === 'locked' && w === 'Pay staff') return 'This category is set by Pay staff.';
+    if (c === 'locked') return 'This entry is locked. Only the category and notes can change here.';
     return null;
   }
   function lowConf(c) { return typeof c === 'number' && c < SCAN_LOW; }
@@ -866,6 +867,7 @@
         var m = action === 'approve' ? 'Approved: ' + formatPHP('gross_amount' in edits ? edits.gross_amount : r.gross_amount) + (('category' in edits ? edits.category : r.category) ? ', ' + catName('category' in edits ? edits.category : r.category) : '') + '.' : 'Voided: ' + formatPHP(r.gross_amount) + '.';
         buzz('success'); tell(m); S.notice = m; S.sheet = null; refreshAfterWrite(); draw(); return;
       }
+      if (res && (res.error || res.reason) === 'amount_incomplete') { var cur = rqOf(sh.id); if (cur) cur.s134_incomplete = true; } // the server knows better than the list: show the cue, disable Approve
       s2.msg = refusalWords(res) || 'Nothing was changed. Please check it and try again.'; draw();
     });
   }

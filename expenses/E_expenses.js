@@ -186,7 +186,7 @@
     if (c === 'use_receipt_control') return 'Use the receipt buttons to change a receipt.';
     if (c === 'receipt_in_use') return M.inInv;
     if (c === 'bad_path' || c === 'no_file' || c === 'no_upload_record') return M.again;
-    if (c === 'amount_locked') return 'This amount comes from Inventory. Change the price there.';
+    if (c === 'amount_locked') return 'That amount follows Inventory. Change the price in Inventory.';
     if (c === 'future_date') return M.late;
     if (c === 'amount_incomplete') return M.incomplete;
     if (c === 'not_found' || c === 'void') return M.removed;

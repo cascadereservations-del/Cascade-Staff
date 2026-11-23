@@ -80,7 +80,8 @@ for (const [name, res, words] of [
   ['amount_incomplete', { ok: false, error: 'amount_incomplete', where: 'Inventory' }, INC],
   ['amount_locked', { ok: false, error: 'amount_locked', where: 'Inventory' }, 'That amount follows Inventory. Change the price in Inventory.'],
   ['system_category', { ok: false, error: 'system_category' }, 'This category is set by the system and can’t be picked here.'],
-  ['locked by Pay staff', { ok: false, error: 'locked', where: 'Pay staff' }, 'This category is set by Pay staff.']
+  ['locked by Pay staff', { ok: false, error: 'locked', where: 'Pay staff' }, 'This category is set by Pay staff.'],
+  ['locked elsewhere', { ok: false, error: 'locked', where: 'Inventory' }, 'This entry is locked. Only the category and notes can change here.']
 ]) {
   test(`L2b refusal ${name}: the sheet says the words, keeps the row, sends once`, async () => {
     const t = await boot([RQ('r1')], () => res);
@@ -103,11 +104,18 @@ test('L2b saveWords: system_category, and locked depends on where', () => {
 });
 test('L2b: Manage and Expenses say the same words for the lines they share', async () => {
   const L = loadE().lib, t = await boot([]), W = (r) => t.M.lib.refusalWords(r);
-  for (const r of [{ error: 'amount_incomplete', where: 'Inventory' }, { error: 'system_category' }, { error: 'locked', where: 'Pay staff' }]) assert.equal(W(r), L.saveWords(r), r.error);
+  for (const r of [{ error: 'amount_incomplete', where: 'Inventory' }, { error: 'system_category' }, { error: 'locked', where: 'Pay staff' }, { error: 'amount_locked', where: 'Inventory' }, { error: 'locked', where: 'Inventory' }, { error: 'locked' }]) assert.equal(W(r), L.saveWords(r), r.error);
   assert.equal(t.M.lib.INCOMPLETE, INC); assert.match(ESRC, /incomplete: 'Amount incomplete - price the rest in Inventory'/);
 });
 test('L2b demo: the queue fixture holds one incomplete pending stock row', async () => {
   const win = {}, ctx = sandbox(win); vm.createContext(ctx); vm.runInContext(SRC, ctx); win.N_Manage._setClock(() => NOW);
   const el = new FakeEl(); win.N_Manage.mount(el, { demo: true, role: 'owner', sub: 'money', navigate() {}, toast() {}, haptic() {} }); await tick();
   assert.match(el.innerHTML.replace(/<[^>]+>/g, ' '), /Demo shop[\s\S]*Amount incomplete - price the rest in Inventory/); assert.equal((el.innerHTML.match(/Amount incomplete/g) || []).length, 1);
+});
+test('L2b: a server amount_incomplete refusal on a stale row shows the cue and disables Approve', async () => {
+  const t = await boot([RQ('r1')], () => ({ ok: false, error: 'amount_incomplete', where: 'Inventory' }));
+  await t.click('rq-open', 'r1'); assert.ok(!/\sdisabled/.test(approveBtn(t.html())));
+  await t.click('rq-approve'); assert.equal(t.sent().length, 1);
+  assert.match(approveBtn(t.html()), /\sdisabled/, 'Approve disabled after the refusal'); assert.match(t.html(), /role="status">Amount incomplete/);
+  await t.click('rq-approve'); assert.equal(t.sent().length, 1, 'no second send');
 });
