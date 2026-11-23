@@ -389,6 +389,12 @@ test('fix 1: the same-purchase prompt survives the move off #expenses/add, on ev
   // from the list's own Add button there is no move at all
   b = await boot({ rpc: SAVE_LOOK }); await b.click('add'); await fill(b, { amount: '540', category: 'supplies', notes: 'Stock' }); await b.click('review-add'); await b.click('save');
   assert.match(b.text(), /Same as/); assert.deepEqual(b.nav, []);
+  // in-page Add, answer No, remount inside ten seconds: nothing comes back
+  b = await boot({ sub: 'add', rpc: SAVE_LOOK }); await fill(b, { amount: '540', category: 'supplies', notes: 'Stock' }); await b.click('review-add'); await b.click('save');
+  await b.click('close'); assert.doesNotMatch(remount(b, '').html(), /Same as/, 'answered No: no prompt on a quick remount');
+  // a plain in-page Add (no /add route) never carries a prompt either
+  b = await boot({ rpc: SAVE_LOOK }); await b.click('add'); await fill(b, { amount: '540', category: 'supplies', notes: 'Stock' }); await b.click('review-add'); await b.click('save');
+  assert.doesNotMatch(remount(b, '').html(), /Same as/, 'only the /add route carries the prompt');
 });
 
 test('fix 2: the moved form keeps the old one: order, labels, a review step, check-this marks, hard-to-read warning, the server date rule', async () => {
@@ -527,4 +533,17 @@ test('fix 16: the Today card counts reviews from every month and opens the needs
   const b = await boot({ sub: 'review' }); assert.equal(b.sent('expenses_screen_v1')[0][1].p_filter, 'review'); assert.match(b.html(), /data-id="all"[^>]*>Needs review ×/);
   await b.click('chip', 'all'); assert.equal(b.sent('expenses_screen_v1').at(-1)[1].p_filter, null);
   assert.match(STY, /\.E_today \.E_trev \{ display: inline-block; padding: 14px 4px; margin: -14px 0;/, 'the tap target reaches 44 px without making the card taller');
+});
+
+test('round 2: stock row edit is date/payee read-only; review line for earlier months; no dead receipt check', async () => {
+  const STK = ROW({ id: 'k1', chip: 'stock', amount_locked: true, locked: false, stock: { lines: 1, items: 1 } });
+  const b = await boot({ screen: SCREEN({ rows: [STK] }) }); await b.click('open', 'k1'); await b.click('edit');
+  assert.match(b.html(), /id="E_date"[^>]*disabled/); assert.match(b.html(), /id="E_payee"[^>]*disabled/); assert.match(b.html(), /Change the price in Inventory/);
+  await b.type('notes', 'New note'); await b.type('reason', 'fix words'); await b.click('edit-save');
+  const sent = b.sent('admin_save_transaction_v2'); assert.equal(sent.length, 1); assert.deepEqual(Object.keys(sent[0][1].p_txn).sort(), ['id', 'notes', 'reason']);
+  const more = await boot({ sub: 'review', screen: SCREEN({ pending_all: { count: 5, total: 100 } }) });
+  assert.match(more.text(), /3 more waiting in earlier months\./); assert.doesNotMatch(more.html(), /E_warn[^"]*"[^>]*>3 more/);
+  const none = await boot({ sub: 'review', screen: SCREEN({ pending_all: { count: 2, total: 100 } }) }); assert.doesNotMatch(none.text(), /more waiting in earlier/);
+  const all = await boot({ screen: SCREEN({ pending_all: { count: 5, total: 100 } }) }); assert.doesNotMatch(all.text(), /more waiting in earlier/, 'only on the review filter');
+  assert.doesNotMatch(read('expenses/E_expenses.js'), /r\.ocr_confidence/);
 });

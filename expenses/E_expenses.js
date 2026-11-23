@@ -86,12 +86,12 @@
     if (rc && rc.path) { t.receipt_image_path = rc.path; if (typeof rc.confidence === 'number') t.ocr_confidence = rc.confidence; if (rc.raw) t.ocr_raw = rc.raw; }
     return t;
   }
-  // The edit payload: only what changed, plus id and the reason. An amount-locked row never sends the amount; a locked row sends only category and notes.
+  // The edit payload: only what changed, plus id and the reason. An amount-locked (stock) or locked row sends only category and notes.
   function editPayload(r, f, reason) {
     var p = { id: r.id }, t = function (v) { return String(v == null ? '' : v).trim(); };
-    if (!r.locked) {
+    if (!r.locked && !r.amount_locked) { // a stock row follows Inventory: date, amount and payee are read-only there
       if (f.date && f.date !== r.date) p.transaction_date = f.date;
-      if (!r.amount_locked && parseAmount(f.amount) !== null && toC(parseAmount(f.amount)) !== toC(r.amount)) p.gross_amount = parseAmount(f.amount);
+      if (parseAmount(f.amount) !== null && toC(parseAmount(f.amount)) !== toC(r.amount)) p.gross_amount = parseAmount(f.amount);
       if (t(f.payee) !== t(r.payee)) p.payee_name = t(f.payee);
     }
     if (f.category && f.category !== r.category) p.category = f.category;
@@ -394,14 +394,14 @@
       buzz('success');
       if (x.lookalike && x.lookalike.id && x.id) { // the question has to outlive the move off #expenses/add: it is carried through the remount
         var q = { kind: 'same', id: x.id, look: x.lookalike, key: newKey('exp-void'), keyPrefix: 'exp-void', reason: '', msg: '' };
-        revoke(sh0.thumb); S.sheet = q; S.chooser = false; CARRY = { sheet: q, at: clock() }; leaveAddRoute(); refresh(); draw(); return;
+        revoke(sh0.thumb); S.sheet = q; S.chooser = false; if (S.opts.sub && /^add/.test(S.opts.sub)) CARRY = { sheet: q, at: clock() }; leaveAddRoute(); refresh(); draw(); return;
       }
       closeSheet(); refresh(); tell('Saved.');
     }, { fail: function (s0) { s0.step = 'form'; } });
   }
   function doEdit() {
     var sh = S.sheet, r = rowOf(sh.id); if (!r) return; var e = {};
-    if (!r.locked) { if (!/^\d{4}-\d{2}-\d{2}$/.test(sh.f.date || '')) e.date = 'Choose the date of the expense.'; else if (sh.f.date > addDay(S.today, 1)) e.date = M.late; if (!r.amount_locked && parseAmount(sh.f.amount) === null) e.amount = 'Enter the amount, more than zero, with at most two decimal places.'; }
+    if (!r.locked && !r.amount_locked) { if (!/^\d{4}-\d{2}-\d{2}$/.test(sh.f.date || '')) e.date = 'Choose the date of the expense.'; else if (sh.f.date > addDay(S.today, 1)) e.date = M.late; if (parseAmount(sh.f.amount) === null) e.amount = 'Enter the amount, more than zero, with at most two decimal places.'; }
     if (!catOk(sh.f.category, S.data && S.data.categories)) e.category = 'Choose a category.';
     if (String(sh.reason || '').trim().length < 3) e.reason = 'Say why you are changing it, at least three letters.';
     sh.errs = e; if (Object.keys(e).length) { sh.msg = 'Please fix the items marked below.'; draw(); return; }
@@ -447,7 +447,7 @@
   // ------------------------------------------------------------------------------------------------ sheets
   function openSheet(sh) { S.sheet = sh; S.chooser = false; draw(); }
   function leaveAddRoute() { if (S && S.opts.sub && /^add/.test(S.opts.sub)) { S.opts.sub = ''; try { if (S.opts.navigate) S.opts.navigate('#expenses'); } catch (e) { /* ok */ } } }
-  function closeSheet() { if (S.sheet) { revoke(S.sheet.thumb); } S.sheet = null; S.chooser = false; draw(); leaveAddRoute(); }
+  function closeSheet() { if (S.sheet) { revoke(S.sheet.thumb); } CARRY = null; S.sheet = null; S.chooser = false; draw(); leaveAddRoute(); }
   function blankForm() { return { date: S.today, amount: '', category: '', payee: '', notes: '' }; }
   function openAdd(chooser) {
     S.sheet = { kind: 'add', f: blankForm(), errs: {}, checks: {}, rc: null, thumb: null, pdf: false, stockHint: null, key: newKey('exp-add'), keyPrefix: 'exp-add', msg: '', busy: false, upl: false, step: 'form' };
@@ -487,7 +487,7 @@
   }
   function lowConf(c) { return typeof c === 'number' && c < SCAN_LOW; }
   function formBody(sh, edit) {
-    var r = edit ? rowOf(sh.id) : null, lock = !!(r && r.locked), amtLock = !!(r && (r.amount_locked || r.locked)), f = sh.f, e = sh.errs || {}, ck = sh.checks || {}, h = '';
+    var r = edit ? rowOf(sh.id) : null, lock = !!(r && (r.locked || r.amount_locked)), amtLock = !!(r && (r.amount_locked || r.locked)), f = sh.f, e = sh.errs || {}, ck = sh.checks || {}, h = '';
     h += fld('E_date', 'Date', inp('E_date', 'date', f.date, 'type="date" max="' + esc(addDay(S.today, 1)) + '"' + (lock ? ' disabled' : '')), e.date, ck.date);
     h += fld('E_amt', 'Amount (PHP)', amtLock ? '<div class="E_input E_ro" id="E_amt">' + esc(peso(r.amount)) + '</div>' + (r && r.amount_locked && !r.locked ? '<p class="E_nudge">Change the price in Inventory</p>' : '') : inp('E_amt', 'amount', f.amount, 'inputmode="decimal" placeholder="0.00"'), e.amount, ck.amount);
     h += fld('E_cat', 'Category', catSelect('E_cat', f.category), e.category, ck.category);
@@ -553,7 +553,6 @@
   function sheetReview(sh) {
     var r = rowOf(sh.id); if (!r) return ''; var look = r.lookalike || (r.lookalike_id && rowOf(r.lookalike_id)), f = sh.f || {}, e = sh.errs || {}, amtLock = !!(r.amount_locked || r.locked), off = sh.busy || (!amtLock && parseAmount(f.amount) === null);
     var h = errBox(sh) + linkBlock(sh, r, true) + '<p class="E_sub">' + esc(fmtDate(r.date) + ' · ' + chipLabel(r.chip)) + '</p>';
-    if (lowConf(r.ocr_confidence)) h += '<p class="E_ferr" role="alert">The receipt was hard to read. Please check every figure.</p>';
     var lt = lookText(r, S.data && S.data.rows); if (lt) h += '<p class="E_look">' + esc(lt) + '</p>';
     h += fld('E_ramt', 'Amount (PHP)', amtLock ? '<div class="E_input E_ro" id="E_ramt">' + esc(peso(r.amount)) + '</div>' : inp('E_ramt', 'amount', f.amount, 'inputmode="decimal" placeholder="0.00"'), e.amount) + fld('E_rcat', 'Category', catSelect('E_rcat', f.category), e.category) + fld('E_rnotes', 'What was it for?', inp('E_rnotes', 'notes', f.notes), e.notes);
     h += '<button class="E_opt" type="button" data-e="count"' + (off ? ' disabled' : '') + '>' + ic('check', 's20') + 'Count it</button>';
@@ -624,6 +623,7 @@
     }
     h += '<div class="E_chips" role="group" aria-label="Filter">' + FILTERS.map(function (f) { return '<button class="E_chip' + (S.chip === f[0] ? ' E_on' : '') + '" type="button" data-e="chip" data-id="' + f[0] + '" aria-pressed="' + (S.chip === f[0]) + '">' + esc(f[1]) + '</button>'; }).join('') + '</div>';
     if (S.chip === 'review') h += '<button class="E_chip E_on E_catx" type="button" data-e="chip" data-id="all">Needs review ×</button>';
+    if (S.chip === 'review' && d.pending_all && Number(d.pending_all.count) > Number(pend.count)) h += '<p class="E_sub E_more_rv">' + esc((Number(d.pending_all.count) - Number(pend.count)) + ' more waiting in earlier months.') + '</p>';
     if (S.cat) h += '<button class="E_chip E_on E_catx" type="button" data-e="cat-x">' + esc(catLabel(S.cat, cats)) + ' ×</button>';
     if (!list.length && !pendRows.length) h += '<div class="E_empty"><p class="E_p">' + esc('No expenses logged for ' + monthName(S.month) + ' yet.') + '</p></div>';
     else h += dayGroups(list).map(function (g) { return '<div class="E_day"><span>' + esc(dayLabel(g.date, S.today)) + '</span><span>' + esc(peso(g.total / 100, true)) + '</span></div>' + g.rows.map(function (r) { return rowHtml(r, cats); }).join(''); }).join('');
