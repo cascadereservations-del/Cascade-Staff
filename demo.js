@@ -153,6 +153,19 @@
         .map(function (x) { return { id: x[0], name: x[1], category: x[2], unit: x[3], consumable: x[4], active: true, qty: 12 }; })
     };
   }
+  // s134: expenses_screen_v1 as the contract says (SPEC 6). p_limit 0 is the summary only (the Today card). Memory only: nothing is ever saved.
+  function expensesFixture(today, args) {
+    var d = function (n) { return CS.addDays(today, n); }, ym = today.slice(0, 7), month = ym + '-01', summary = !!(args && args.p_limit === 0);
+    var rows = [
+      { id: 'dx1', date: d(0), amount: '540.00', category: 'supplies', label: 'Supplies', payee: 'Sample hardware', notes: 'Light bulbs and tape', status: 'confirmed', chip: 'receipt', has_receipt: true, locked: false, amount_locked: false, stock: null, lookalike_id: null, created_at: d(0) + 'T02:00:00Z', receipt_ref: { kind: 'txn', id: 'dx1', mime: 'image/jpeg' }, receipt_can: { add: false, replace: true, remove: true } },
+      { id: 'dx2', date: d(-1), amount: '1200.00', category: 'cleaning', label: 'Cleaning', payee: 'Sample cleaner', notes: 'Cleaning fee', status: 'confirmed', chip: 'staff_pay', has_receipt: false, locked: true, amount_locked: true, stock: null, lookalike_id: null, created_at: d(-1) + 'T02:00:00Z', receipt_ref: null, receipt_can: { add: false, replace: false, remove: false } },
+      { id: 'dx3', date: d(-2), amount: '3420.00', category: 'supplies', label: 'Supplies', payee: 'Sample market', notes: 'Stock bought', status: 'confirmed', chip: 'stock', has_receipt: false, locked: false, amount_locked: true, stock: { lines: 4, items: 4 }, lookalike_id: null, created_at: d(-2) + 'T02:00:00Z', receipt_ref: null, receipt_can: { add: true, replace: false, remove: false } },
+      { id: 'dx4', date: d(-3), amount: '540.00', category: 'supplies', label: 'Supplies', payee: 'Sample hardware', notes: 'From Telegram', status: 'pending_review', chip: 'telegram', has_receipt: false, locked: false, amount_locked: false, stock: null, lookalike_id: 'dx1', created_at: d(-3) + 'T02:00:00Z', receipt_ref: null, receipt_can: { add: true, replace: false, remove: false } }];
+    var cats = [{ slug: 'supplies', label: 'Supplies' }, { slug: 'cleaning', label: 'Cleaning' }, { slug: 'utilities', label: 'Utilities' }, { slug: 'maintenance', label: 'Maintenance' }, { slug: 'other', label: 'Other' }];
+    return { ok: true, month: month, total: 5160, count: 3, prev_total: 41200, basis: 47413, basis_months: [d(-90).slice(0, 7), d(-30).slice(0, 7)], pending: { count: 1, total: 540 },
+      by_category: [{ category: 'supplies', label: 'Supplies', txn_type: 'expense', total: 3960, count: 2 }, { category: 'cleaning', label: 'Cleaning', txn_type: 'expense', total: 1200, count: 1 }],
+      rows: summary ? [] : rows, unpriced: { count: 0, items: [] }, unlinked: 0, categories: cats, can_write: true, more: false };
+  }
   // s110: kpi_tab_v1 as the contract says. The admin key is ABSENT for every role but owner and admin (demo has no finance view).
   function kpiFixture(r, today) {
     var k = { ok: true, month: today.slice(0, 7) + '-01',
@@ -218,7 +231,7 @@
   }
 
   // ---- the stand-in for the Supabase client: same four calls the pages make, answered from the fixtures ---------------------------
-  var WRITES = ['calendar_day_flag_set_v1', 'calendar_day_flag_clear_v1', 'ack_verifier_finding_v1', 'task_set_done_v1', 'task_add_reminder_v1', 'admin_add_pay_rate_v1', 'ops_notice_add_v1', 'ops_notice_close_v1',
+  var WRITES = ['admin_save_transaction_v2', 'expense_void_v1', 'expense_receipt_set_v1', 'admin_review_transaction_v1', 'calendar_day_flag_set_v1', 'calendar_day_flag_clear_v1', 'ack_verifier_finding_v1', 'task_set_done_v1', 'task_add_reminder_v1', 'admin_add_pay_rate_v1', 'ops_notice_add_v1', 'ops_notice_close_v1',
     'record_inventory_usage', 'record_inventory_receipt_v1', 'inventory_receipt_confirm_v1', 'inventory_receipt_undo_v1', 'inventory_receipt_cancel_v1', 'inventory_item_photo_set_v1', 'utility_rate_set_v1', 'admin_resolve_report_block_v1', 'admin_request_meter_resend_v1', 'kpi_target_set_v1']; // s110: stock, rate and meter-check writes say "nothing was saved"
   var clone = function (x) { return JSON.parse(JSON.stringify(x)); };
   function admin_(v) { return v === 'owner' || v === 'admin'; }
@@ -286,6 +299,7 @@
         case 'staff_pay_candidates_v1': return done(X.pay);
         case 'staff_signin_list_v1': return done(X.signin);
         case 'kpi_tab_v1': return done(X.kpi);
+        case 'expenses_screen_v1': return done(admin_(view) || view === 'finance' ? expensesFixture(X.home.today, args) : { ok: false, error: 'forbidden' });
         case 'today_bills_v1': { // s131: the cycle stays open from the last bill's reading date (the 21st a month back) until the next bill is entered; staff who may not pay get one check row instead of the list
           var cb = cycleOf(X.home.today), sy = +cb.from.slice(0, 4), sm = +cb.from.slice(5, 7), since = new Date(Date.UTC(sy, sm - 2, 21)).toISOString().slice(0, 10), mon = new Date(Date.UTC(sy, sm - 1, 1)).toLocaleString('en-US', { month: 'long', timeZone: 'UTC' });
           return done({ since: since, water_since: since, waiting_for: mon, water_waiting_for: mon, can_pay_list: mayPay, check_bills: !mayPay, last_reading_at: cb.last + 'T02:00:00Z', electric: { php: 4621, kwh: 383 }, water: { php: 212, m3: 7.2 }, due: mayPay ? billList(X.home.today) : [] }); }
@@ -314,8 +328,11 @@
           view = next; return Promise.resolve({ data: { user: D().user }, error: null });
         }
       },
-      functions: { invoke: function (name) {
+      functions: { invoke: function (name, o) {
         toast(NOTE); // memory only: the demo reads no receipt and stores no photo
+        var mode = o && o.body && o.body.mode; // s134: the receipt modes of Expenses
+        if (name === 'ocr-receipt' && mode === 'attach') return Promise.resolve({ data: { ok: true, receipt_path: 'demo/receipt.jpg', sha256: 'demo', mime: 'image/jpeg', suggest: { amount: 640, date: null, vendor: 'Sample shop', category: 'supplies', line_items: [], confidence: 0.9 }, stock_hint: { count: 0, names: [] } }, error: null });
+        if (name === 'ocr-receipt' && mode === 'sign') return Promise.resolve({ data: { ok: true, links: ((o && o.body && o.body.ids) || []).reduce(function (m, k) { m[k] = { url: idPlaceholder(), kind: 'txn', mime: 'image/jpeg' }; return m; }, {}) }, error: null });
         return Promise.resolve({ data: name === 'ocr-receipt' ? { ok: true, draft_id: 'demo-draft' } : { ok: true, path: 'demo/photo.jpg' }, error: null });
       } },
       storage: { from: function () { return { createSignedUrl: function () { return Promise.resolve({ data: { signedUrl: idPlaceholder() }, error: null }); } }; } }

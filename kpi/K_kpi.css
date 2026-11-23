@@ -209,3 +209,5 @@
 @media (max-width: 340px) { #K_glance, .KU_tiles { grid-template-columns: minmax(0, 1fr); } .K_lines { padding: 8px 12px; } .K_lines .K_line { gap: 8px; } .K_lines .K_ic { width: 32px; height: 32px; } }
 .K_lab, .K_h, .K_fh, .K_line b, .K_chart-h b, .K_end > *, .K_mid > *, .K_line-s > span, .K_cmp-h, .KU_means, .K_stat .K_sub { text-wrap: balance; }
 .K_p { text-wrap: pretty; }
+
+.K_grey { display: block; color: var(--v5-ink-3); text-decoration: none; }

@@ -240,30 +240,6 @@
   function catList() { var c = S && S.d.cats; var l = c && c.ok ? normalizeCats(c.data) : []; return l.length ? l : fallbackCats(); }
   function catOk(slug, list) { return (list || catList()).some(function (c) { return c.slug === slug; }); }
   function catName(slug) { var l = catList(); for (var i = 0; i < l.length; i++) if (l[i].slug === slug) return l[i].label; return catLabel(slug); }
-  function validateExpense(f, list) {
-    var e = {};
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(f.date || '')) e.date = 'Choose the date of the expense.';
-    if (parseAmount(f.amount) === null) e.amount = 'Enter the amount, more than zero, with at most two decimal places.';
-    if (!catOk(f.category, list)) e.category = 'Choose a category.';
-    if (!String(f.notes || '').trim()) e.notes = 'Say what it was for.';
-    return e;
-  }
-  // The p_txn object has exactly the keys the dashboard's blank() draft carries for an expense; a scanned receipt adds its three optional keys.
-  function expenseTxn(f, rc) {
-    var t = { txn_type: 'expense', category: f.category, transaction_date: f.date, gross_amount: parseAmount(f.amount), payee_name: String(f.payee || '').trim(), notes: String(f.notes || '').trim(), or_number: '', reason: '' };
-    if (rc && rc.path) { t.receipt_image_path = rc.path; if (typeof rc.confidence === 'number') t.ocr_confidence = rc.confidence; if (rc.raw) t.ocr_raw = rc.raw; }
-    return t;
-  }
-  // ocr-receipt reply -> form values. Only values the form would accept are used; each returned key is marked "check this".
-  function scanPrefill(r, list) {
-    var f = {}, items = Array.isArray(r && r.line_items) ? r.line_items : [], d = items.map(function (i) { return i && str(i.description); }).filter(Boolean);
-    if (r && r.amount != null && parseAmount(String(r.amount)) !== null) f.amount = parseAmount(String(r.amount));
-    if (r && /^\d{4}-\d{2}-\d{2}$/.test(r.date || '')) f.date = r.date;
-    if (r && str(r.vendor)) f.payee = String(r.vendor).trim();
-    if (r && catOk(r.category, list)) f.category = r.category;
-    if (d.length) f.notes = d.slice(0, 3).join(', ') + (d.length > 3 ? ' and more' : '');
-    return f;
-  }
   var SCAN_LOW = 0.6; // below this the photo was hard to read
   // the plain, gracious decline line the host can paste into Messenger (no exclamation marks, no promises)
   function declineMessage(p, chip) {
@@ -544,8 +520,7 @@
   }
   function viewMoney() {
     var t = S.d.txns || {}, out = '';
-    if (!S.d.save || !S.d.save.absent) out += '<button class="btn btn-primary btn-block" type="button" data-n="exp-open">Log an expense</button>';
-    else out += '<div class="N_note">Logging an expense is not available in this version of the app yet.</div>';
+    out += '<a class="btn btn-primary btn-block" href="#expenses/add">Log an expense</a>'; // s134: the one expense form lives in #expenses (expenses/E_expenses.js)
     out += rqHtml();
     var box = stateBox(t, 'The transaction list', 'money');
     out += '<h3 class="N_h3 N_gap">Latest 10 transactions</h3>';
@@ -694,17 +669,6 @@
   function catSelect(id, val) {
     return '<select class="N_select N_full" id="' + id + '" data-f="category"><option value=""' + (val ? '' : ' selected') + '>Choose a category</option>' + catList().map(function (c) { return '<option value="' + esc(c.slug) + '"' + (val === c.slug ? ' selected' : '') + '>' + esc(c.label) + '</option>'; }).join('') + '</select>';
   }
-  // Scanning needs the s89 server release; its category list is the sign that the release is live (an older save would silently ignore the receipt).
-  function scanAvailable() { return !!(S.demo || (S.d.cats && S.d.cats.ok && !(S.d.scan && S.d.scan.absent))); }
-  function scanBlock(sh) {
-    var busy = sh.scan === 'reading';
-    return '<div class="N_scan"><button class="btn btn-secondary btn-block" type="button" data-n="scan-pick"' + (busy ? ' disabled aria-busy="true"' : '') + '>' + esc(busy ? 'Reading the receipt…' : sh.receipt ? 'Scan another receipt' : 'Scan receipt') + '</button>' +
-      '<input class="N_sr" id="N_xs" type="file" accept="image/*" data-f="scan" tabindex="-1" aria-label="Receipt photo">' +
-      (sh.thumb ? '<img class="N_thumb" src="' + esc(sh.thumb) + '" alt="The receipt photo you took">' : '') +
-      (sh.scanMsg ? '<p class="N_p" role="status">' + esc(sh.scanMsg) + '</p>' : '') +
-      (sh.receipt && lowConf(sh.receipt.confidence) ? '<p class="N_ferr" role="alert"><span aria-hidden="true">!</span> The photo was hard to read. Please check every figure.</p>' : '') +
-      (sh.receipt ? '<button class="N_link" type="button" data-n="scan-clear">Remove the photo</button>' : '') + '</div>';
-  }
   function sheetHtml() {
     var sh = S.sheet; if (!sh) return '';
     if (sh.kind === 'inq') {
@@ -775,20 +739,6 @@
         '<button class="btn btn-secondary btn-block" type="button" data-n="rq-void-start"' + (sh.busy ? ' disabled' : '') + '>Void…</button></div><button class="btn btn-ghost btn-block" type="button" data-n="sheet-close"' + (sh.busy ? ' disabled' : '') + '>Close</button>';
       return sheetShell('Review a transaction', rb);
     }
-    if (sh.kind === 'expense') {
-      var f2 = sh.f, e2 = sh.errs || {}, ck = sh.checks || {}, xb = '';
-      if (sh.step === 'form') {
-        if (scanAvailable()) xb += scanBlock(sh); else if (sh.scanMsg) xb += '<p class="N_p" role="status">' + esc(sh.scanMsg) + '</p>';
-        xb += field('N_xd', 'Date', '<input class="N_input" id="N_xd" type="date" data-f="date" value="' + esc(f2.date) + '"' + (e2.date ? ' aria-invalid="true"' : '') + '>', e2.date, ck.date) +
-          field('N_xa', 'Amount (PHP)', inp('N_xa', 'amount', f2.amount, 'inputmode="decimal"'), e2.amount, ck.amount) +
-          field('N_xc', 'Category', catSelect('N_xc', f2.category), e2.category, ck.category) +
-          field('N_xn', 'What was it for?', inp('N_xn', 'notes', f2.notes), e2.notes, ck.notes) + field('N_xp', 'Paid to (optional)', inp('N_xp', 'payee', f2.payee), '', ck.payee) + sheetErr(sh) + btns('Review', 'ex-review', 'Cancel', 'sheet-close');
-      } else {
-        xb += '<p class="N_sub">Check this before you save. It is counted in the books at once.</p><dl class="N_dl"><dt>Date</dt><dd>' + esc(fmtDate(f2.date, 'long')) + '</dd><dt>Amount</dt><dd class="N_num">' + esc(formatPHP(parseAmount(f2.amount))) + '</dd><dt>Category</dt><dd>' + esc(catName(f2.category)) + '</dd>' +
-          '<dt>For</dt><dd>' + esc(f2.notes.trim()) + '</dd>' + (f2.payee.trim() ? '<dt>Paid to</dt><dd>' + esc(f2.payee.trim()) + '</dd>' : '') + (sh.receipt ? '<dt>Receipt</dt><dd>' + (sh.thumb ? '<img class="N_thumb" src="' + esc(sh.thumb) + '" alt="The receipt photo"> ' : '') + 'Receipt attached</dd>' : '') + '</dl>' + sheetErr(sh) + btns('Save expense', 'ex-send', 'Back', 'ex-edit', sh.busy);
-      }
-      return sheetShell('Log an expense', xb);
-    }
     return '';
   }
 
@@ -820,7 +770,6 @@
   }
   function draw() {
     if (!S) return;
-    if (S.thumbUrl && !(S.sheet && S.sheet.thumb === S.thumbUrl)) revokeThumb();
     if (EXT[S.tab] && extMod(S.tab)) { drawExt(extMod(S.tab)); return; }
     extStop();
     var body = S.tab === 'inquiries' ? viewInquiries() : S.tab === 'money' ? viewMoney() : S.tab === 'kpis' ? viewKpis() : viewToday();
@@ -908,76 +857,6 @@
     });
   }
 
-  // ---- scan a receipt: shrink on the phone, read it on the server, prefill the form and mark every filled field
-  var FN_TIMEOUT_MS = 60000;
-  function callFn(name, body) { // client.functions.invoke adds the session token; a non-2xx answer carries the Response in error.context
-    var st = S;
-    return new Promise(function (resolve) {
-      var done = false, t = setTimeout(function () { fin({ ok: false, status: 0, net: true }); }, FN_TIMEOUT_MS);
-      st.timers = st.timers || []; st.timers.push(t);
-      function fin(r) { if (done) return; done = true; clearTimeout(t); resolve(r); }
-      try {
-        Promise.resolve(st.client.functions.invoke(name, { body: body })).then(function (r) {
-          r = r || {};
-          if (!r.error) { var d = r.data; fin(d && d.ok === false ? { ok: false, status: 400, code: d.error, data: d } : { ok: true, status: 200, data: d }); return; }
-          var ctx = r.error.context;
-          if (ctx && typeof ctx.json === 'function') { Promise.resolve(ctx.json()).then(function (j) { return j || {}; }, function () { return {}; }).then(function (j) { fin({ ok: false, status: ctx.status | 0, code: j && typeof j.error === 'string' ? j.error : undefined, data: j }); }); return; }
-          fin({ ok: false, status: 0, net: true, error: r.error });
-        }, function (e) { fin({ ok: false, status: 0, net: true, error: e }); });
-      } catch (e) { fin({ ok: false, status: 0, net: true, error: e }); }
-    });
-  }
-  // longest edge 1600 px, JPEG .8, white behind any transparency (the shell may pass its own helper as opts.shrinkImage)
-  function shrinkReceipt(file) {
-    if (S.opts.shrinkImage) return Promise.resolve(S.opts.shrinkImage(file));
-    return new Promise(function (res, rej) {
-      var u = URL.createObjectURL(file), img = new Image();
-      img.onload = function () { URL.revokeObjectURL(u); res(img); }; img.onerror = function () { URL.revokeObjectURL(u); rej(new Error('image')); }; img.src = u;
-    }).then(function (img) {
-      var k = Math.min(1, 1600 / Math.max(img.naturalWidth, img.naturalHeight, 1)), cv = document.createElement('canvas'), cx;
-      cv.width = Math.max(1, Math.round(img.naturalWidth * k)); cv.height = Math.max(1, Math.round(img.naturalHeight * k));
-      cx = cv.getContext('2d'); cx.fillStyle = '#FFFFFF'; cx.fillRect(0, 0, cv.width, cv.height); cx.drawImage(img, 0, 0, cv.width, cv.height);
-      return new Promise(function (res, rej) { cv.toBlob(function (b) { b ? res(b) : rej(new Error('blob')); }, 'image/jpeg', 0.8); });
-    }).then(function (blob) {
-      return new Promise(function (res, rej) { var fr = new FileReader(); fr.onload = function () { res({ base64: String(fr.result).replace(/^data:[^,]*,/, ''), mime: 'image/jpeg' }); }; fr.onerror = function () { rej(new Error('read')); }; fr.readAsDataURL(blob); });
-    });
-  }
-  // the preview is a blob link, not a long data string in the page; draw() revokes it as soon as no open sheet shows it
-  function setThumb(sh, img) {
-    try { var bin = atob(img.base64), u8 = new Uint8Array(bin.length), i; for (i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i); revokeThumb(); S.thumbUrl = sh.thumb = URL.createObjectURL(new Blob([u8], { type: img.mime })); }
-    catch (e) { sh.thumb = null; }
-  }
-  function revokeThumb() { if (S && S.thumbUrl) { try { URL.revokeObjectURL(S.thumbUrl); } catch (e) { /* ok */ } S.thumbUrl = null; } }
-  var DEMO_SCAN = { ok: true, receipt_path: 'n-demo/receipt.jpg', amount: '640.00', date: null, vendor: 'Sample shop', category: 'supplies', line_items: [{ description: 'Sample kitchen supplies', qty: 1, unit_cost: 640 }], confidence: 0.9 };
-  function scanReceipt(file) {
-    var sh = S.sheet; if (!sh || sh.kind !== 'expense' || !file || sh.scan === 'reading') return;
-    sh.scan = 'reading'; sh.scanMsg = ''; sh.msg = ''; draw();
-    var gen = S.gen, live = function () { return !!S && S.gen === gen && S.sheet === sh; }, stop = function (m) { sh.scan = 'failed'; sh.scanMsg = m; draw(); };
-    shrinkReceipt(file).then(function (img) {
-      if (!live()) return;
-      if (!img || !img.base64 || img.base64.length > 8000000) { stop('That photo is too large. Take it again a little further back.'); return; }
-      setThumb(sh, img);
-      if (!online()) { stop(NO_CONNECTION + ' You can still fill the form in by hand.'); return; }
-      return (S.demo ? Promise.resolve({ ok: true, status: 200, data: DEMO_SCAN }) : S.client && S.client.functions && typeof S.client.functions.invoke === 'function' ? callFn('ocr-receipt', { mode: 'extract', image_base64: img.base64, mime_type: img.mime }) : Promise.resolve({ ok: false, status: 404 })).then(function (r) {
-        if (!live()) return;
-        var d = r.data || {};
-        if (r.ok && d.transaction_id) { // an older function added the photo to the review list by itself: do not log it twice
-          S.d.scan = { absent: true }; sh.thumb = null; if (S.d.rq) S.d.rq.ok = false; load('rq', true);
-          stop('This photo was added to Waiting for review. Approve it there instead of logging it again.'); return;
-        }
-        if (r.ok && d.receipt_path) {
-          var cl = catList(), pre = scanPrefill(d, cl), ck = {}; Object.keys(pre).forEach(function (k) { sh.f[k] = pre[k]; ck[k] = true; });
-          sh.checks = ck; sh.receipt = { path: d.receipt_path, confidence: typeof d.confidence === 'number' ? d.confidence : null,
-            raw: d.raw && typeof d.raw === 'object' && JSON.stringify(d.raw).length <= 20000 ? d.raw : null };
-          sh.scan = 'done'; sh.scanMsg = Object.keys(pre).length ? 'Read from the receipt. Please check the marked fields.' : 'The receipt is attached. Nothing could be read from it, so please fill the form in.'; sh.errs = {}; draw(); return;
-        }
-        if (d.error === 'ocr_failed' && d.receipt_path) { sh.receipt = { path: d.receipt_path, confidence: null, raw: null }; sh.scan = 'done'; sh.scanMsg = 'The receipt photo is attached, but it could not be read. Please fill the form in.'; draw(); return; }
-        if (r.status === 404) { S.d.scan = { absent: true }; sh.thumb = null; stop('Scanning is not available in this version of the app yet. Please fill the form in by hand.'); return; }
-        sh.thumb = null;
-        stop(r.net ? 'The connection dropped before the receipt was read. Try the photo again, or fill the form in by hand.' : r.status === 401 || r.status === 403 ? 'Your account is not allowed to scan receipts.' : 'The receipt could not be read just now. You can still fill the form in by hand.');
-      });
-    }).then(null, function () { if (live()) stop('That photo could not be read. You can still fill the form in by hand.'); });
-  }
   function copyText(text) {
     try { var cb = typeof navigator !== 'undefined' && navigator.clipboard; if (cb && typeof cb.writeText === 'function') return Promise.resolve(cb.writeText(text)).then(function () { return true; }, function () { return false; }); } catch (e) { /* fall through */ }
     return Promise.resolve(false);
@@ -1007,14 +886,6 @@
     });
   }
   function demoRemove(id) { S.demoData.inquiries = S.demoData.inquiries.filter(function (r) { return r.id !== id; }); }
-  function doExpenseSend() {
-    var sh = S.sheet; if (sh.step !== 'review') return;
-    var txn = expenseTxn(sh.f, sh.receipt);
-    sendWrite('save', 'admin_save_transaction_v1', { p_property_id: pid(), p_txn: txn, p_idempotency_key: sh.key }, function (res, s2) { // features/finance/api.ts:121
-      if (res && res.ok) { var m = 'Expense saved: ' + formatPHP(txn.gross_amount) + ', ' + catName(txn.category) + ', ' + fmtDate(txn.transaction_date, 'long') + '.'; buzz('success'); tell(m); S.notice = m; S.sheet = null; if (S.demo) S.demoData.txns.unshift({ id: 'n-demo-' + (S.demoData.txns.length + 1), transaction_date: txn.transaction_date, txn_type: 'expense', category: txn.category, gross_amount: txn.gross_amount, payee_name: txn.payee_name || null, notes: txn.notes, status: 'confirmed' }); refreshAfterWrite(); draw(); return; }
-      s2.msg = 'The expense was not saved. Please check it and try again.'; s2.key = mintKey('txn'); s2.step = 'form'; draw();
-    });
-  }
 
   function onClick(ev) {
     if (!S) return; if (ev.target && ev.target.closest && ev.target.closest('[data-n-ext]')) return; // clicks inside Bookings or Ops belong to them
@@ -1030,7 +901,6 @@
     if (a === 'mon') { S.monSel = +v; draw(); return; }
     if (a === 'tbl') { S.showTable = !S.showTable; draw(); return; }
     if (a === 'inq-open') return openInq(v);
-    if (a === 'exp-open') { S.sheet = { kind: 'expense', step: 'form', key: mintKey('txn'), busy: false, msg: '', errs: {}, focus: true, checks: {}, scan: '', f: { date: manilaToday(), amount: '', category: '', notes: '', payee: '' } }; draw(); if (!S.d.cats) load('cats', false); return; }
     if (a === 'rq-open') return openReview(v);
     if (!sh) return;
     if (a === 'sheet-close') { if (sh.busy) return; S.sheet = null; draw(); return; }
@@ -1044,21 +914,16 @@
     if (a === 'dc-review') { if (!declineReason(sh.chip, sh.text)) { sh.msg = 'Choose or write a reason first.'; draw(); return; } sh.step = 'review'; sh.msg = ''; sh.focus = true; draw(); return; }
     if (a === 'dc-send') return doDeclineSend();
     if (a === 'photo-retry') { var pq = payOf(sh.id); if (pq && pq.receipt_image_path) { loadPhoto(sh, pq.receipt_image_path); draw(); } return; }
-    if (a === 'scan-pick') { try { var fi = S.el.querySelector('#N_xs'); if (fi && fi.click) fi.click(); } catch (e) { /* no picker in tests */ } return; }
-    if (a === 'scan-clear') { sh.receipt = null; sh.thumb = null; sh.checks = {}; sh.scan = ''; sh.scanMsg = ''; draw(); return; }
     if (a === 'rq-approve') return doReview('approve');
     if (a === 'rq-void-start') { sh.step = 'void'; sh.msg = ''; sh.errs = {}; sh.focus = true; draw(); return; }
     if (a === 'rq-void-send') return doReview('void');
     if (a === 'msg-copy') { copyText(sh.text).then(function (ok) { if (!S || S.sheet !== sh) return; sh.copied = ok; sh.msg = ok ? '' : 'This phone would not copy it. Press and hold the text above, then choose Copy.'; draw(); }); return; }
-    if (a === 'ex-review') { if (sh.scan === 'reading') return; sh.errs = validateExpense(sh.f); sh.msg = ''; if (Object.keys(sh.errs).length) { sh.msg = 'Please fix the items marked below.'; draw(); return; } sh.step = 'review'; sh.focus = true; draw(); return; }
-    if (a === 'ex-send') return doExpenseSend();
   }
   function onInput(ev) {
     if (!S) return; var t = ev.target; if (!t || !t.getAttribute) return; var f = t.getAttribute('data-f'); if (!f) return;
     if (f === 'period') { var v = t.value; if (!PRESETS.some(function (p) { return p[0] === v; })) return; S.period = v; ls('set', 'cs_n_period', v); S.d.kpi = {}; draw(); load('kpi', true); return; }
     if (t.closest && t.closest('[data-n-ext]')) return;
     var sh = S.sheet; if (!sh) return;
-    if (f === 'scan') { scanReceipt(t.files && t.files[0]); return; }
     var val = t.type === 'checkbox' ? !!t.checked : t.value;
     if ((sh.kind === 'decline' || sh.kind === 'msg') && f === 'text') { sh.text = val; return; }
     if (sh.kind === 'review' && f === 'reason') { sh.reason = val; return; }
@@ -1092,7 +957,7 @@
     if (!S) return;
     try { S.el.removeEventListener && S.el.removeEventListener('click', S.onClick); S.el.removeEventListener && S.el.removeEventListener('input', S.onInput); S.el.removeEventListener && S.el.removeEventListener('change', S.onInput); } catch (e) { /* ok */ }
     try { if (typeof document !== 'undefined' && document.removeEventListener) document.removeEventListener('visibilitychange', S.onVis); } catch (e) { /* ok */ }
-    revokeThumb(); extStop(); (S.timers || []).forEach(function (t) { clearTimeout(t); });
+    extStop(); (S.timers || []).forEach(function (t) { clearTimeout(t); });
     N_gen++; S = null; // a late reply finds no state and is dropped
   }
 
@@ -1104,7 +969,7 @@
     lib: { lastMonths: lastMonths, buildSeries: buildSeries, chipFor: chipFor, canManage: canManage, manilaToday: manilaToday, addDays: addDays, nightsBetween: nightsBetween, fmtDate: fmtDate, fmtDateTime: fmtDateTime, toCentavos: toCentavos, fromCentavos: fromCentavos, formatPHP: formatPHP, formatPercent: formatPercent, formatNumber: formatNumber,
       formatMetricValue: formatMetricValue, parseAmount: parseAmount, periodPreset: periodPreset, comparablePeriod: comparablePeriod, compareMode: compareMode, pctDelta: pctDelta, fmtDeltaPct: fmtDeltaPct, deltaLine: deltaLine,
       normalizePayments: normalizePayments, paymentLine: paymentLine, validateConfirm: validateConfirm, confirmArgs: confirmArgs, confirmSentence: confirmSentence, declineSentence: declineSentence, declineReason: declineReason,
-      validateExpense: validateExpense, expenseTxn: expenseTxn, normalizeCats: normalizeCats, scanPrefill: scanPrefill, declineMessage: declineMessage, tone: tone, isMissing: isMissing, isDenied: isDenied, isOffline: isOffline, plainError: plainError, PRESETS: PRESETS, METHODS: METHODS, EXPENSE_CATEGORIES: EXPENSE_CATEGORIES, KPI_GROUPS: KPI_GROUPS, NO_CONNECTION: NO_CONNECTION }
+      normalizeCats: normalizeCats, declineMessage: declineMessage, tone: tone, isMissing: isMissing, isDenied: isDenied, isOffline: isOffline, plainError: plainError, PRESETS: PRESETS, METHODS: METHODS, EXPENSE_CATEGORIES: EXPENSE_CATEGORIES, KPI_GROUPS: KPI_GROUPS, NO_CONNECTION: NO_CONNECTION }
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   if (typeof window !== 'undefined') window.N_Manage = api;

@@ -289,36 +289,6 @@ test('N decline: a refusal reads plainly and the sheet stays', async () => {
   assert.match(t.text(), /no longer waiting for a decision\. Nothing was changed/); assert.ok(t.html().includes('role="dialog"'));
 });
 
-async function openExpense(t) { await t.click('tab', 'money'); await t.click('exp-open'); }
-test('N expense: date, amount, category, what for, paid to; review; then admin_save_transaction_v1 with the dashboard keys; list re-read', async () => {
-  const t = await boot({ handlers: { admin_save_transaction_v1: () => ({ ok: true, id: 'tx1', status: 'confirmed', auditId: null }) } });
-  await openExpense(t);
-  await t.click('ex-review'); assert.match(t.text(), /Enter the amount, more than zero/); assert.match(t.text(), /Say what it was for/); assert.equal(t.sent('admin_save_transaction_v1').length, 0);
-  await t.type('amount', '1,250.5'); await t.type('category', 'supplies'); await t.type('notes', 'Cleaning supplies'); await t.type('payee', 'Corner shop');
-  await t.click('ex-send'); assert.equal(t.sent('admin_save_transaction_v1').length, 0, 'not before the review step');
-  await t.click('ex-review'); assert.match(t.text(), /1,250\.50/); assert.match(t.text(), /supplies/); assert.match(t.text(), /14 Oct 2026/); assert.equal(t.sent('admin_save_transaction_v1').length, 0);
-  const reads = t.c.chains.length;
-  await t.click('ex-send');
-  const s = t.sent('admin_save_transaction_v1'); assert.equal(s.length, 1);
-  assert.deepEqual(keys(s[0][1]), ['p_idempotency_key', 'p_property_id', 'p_txn']);
-  assert.deepEqual(s[0][1].p_txn, { txn_type: 'expense', category: 'supplies', transaction_date: TODAY, gross_amount: '1250.50', payee_name: 'Corner shop', notes: 'Cleaning supplies', or_number: '', reason: '' });
-  assert.equal(s[0][1].p_property_id, PROP);
-  const d = dashRpcKeys('features/finance/api.ts', 'admin_save_transaction_v1'); if (d) assert.deepEqual(d, ['p_idempotency_key', 'p_property_id', 'p_txn']); // features/finance/api.ts:121
-  const tp = dash('features/finance/transactions-page.tsx');
-  if (tp) { // :47 blank() draft keys and :39-41 the expense categories
-    const blank = tp.match(/const blank = .*?=> \(\{(.*?)\}\);/s)[1]; assert.deepEqual([...blank.matchAll(/(\w+):/g)].map((m) => m[1]).sort(), keys(s[0][1].p_txn));
-    const cats = [...tp.match(/expense: \[(.*?)\]/s)[1].matchAll(/'(\w+)'/g)].map((m) => m[1]); assert.deepEqual(plain(t.M.lib.EXPENSE_CATEGORIES), cats);
-  }
-  assert.ok(t.c.chains.length > reads, 'the transaction list is read again after the write');
-  assert.match(t.toasts.join(' '), /Expense saved/); assert.ok(!t.html().includes('role="dialog"'));
-});
-test('N expense: the key is minted once per confirm; a dropped connection keeps it, a readable refusal replaces it; nothing else is offered (no edit, delete, bulk)', async () => {
-  let n = 0; const t = await boot({ handlers: { admin_save_transaction_v1: () => (++n === 1 ? { data: null, error: { message: 'Failed to fetch' } } : { ok: true, id: 'tx', status: 'confirmed' }) } });
-  await openExpense(t); await t.type('amount', '100'); await t.type('category', 'supplies'); await t.type('notes', 'Ice'); await t.click('ex-review'); await t.click('ex-send');
-  assert.match(t.text(), /connection dropped before an answer came/); await t.click('ex-send');
-  const ks = t.sent('admin_save_transaction_v1').map((c) => c[1].p_idempotency_key); assert.equal(ks[0], ks[1]);
-  assert.ok(!/data-n="(tx-edit|tx-delete|tx-bulk|journal)/.test(t.html()) && !/Edit|Delete|Void|Journal/.test(t.text()));
-});
 test('N probe: a missing RPC hides its section calmly (no error state, no demo rows)', async () => {
   const t = await boot({ client: fakeClient({}) }); // every RPC answers PGRST202
   assert.match(t.text(), /Today is not available in this version of the app yet/);
@@ -433,7 +403,7 @@ test('N demo: built-in sample, no network at all, all four tabs render, a write 
   await t.click('tab', 'inquiries'); assert.match(t.text(), /Sample Guest D/);
   await t.click('inq-open', 'n-demo-q1'); await t.click('cf-start'); await t.type('checked', true, { type: 'checkbox', checked: true }); await t.click('cf-review'); await t.click('cf-send');
   assert.ok(!t.text().includes('Sample Guest D'), 'the row left the sample list'); assert.match(t.toasts.join(' '), /Booking confirmed/);
-  await t.click('tab', 'money'); await t.click('exp-open'); await t.type('amount', '75'); await t.type('category', 'supplies'); await t.type('notes', 'Sample ice'); await t.click('ex-review'); await t.click('ex-send'); assert.match(t.text(), /Sample ice/);
+  await t.click('tab', 'money'); assert.match(t.html(), /<a class="btn btn-primary btn-block" href="#expenses\/add">Log an expense<\/a>/); assert.ok(!/exp-open|ex-review/.test(t.html()), 's134: one expense form, on the Expenses page');
   assert.equal(t.c, undefined);
 });
 test('N storage: only the selected tab and the KPI period are stored, under cs_n_*; a blocked storage changes nothing', async () => {
@@ -502,9 +472,6 @@ test('N copy: a request that left and died says a repeat is safe, never that not
   await reviewed(t); await t.click('cf-send'); assert.match(t.text(), /dropped before an answer came\. Tap again; a repeat is safe/); assert.ok(!/nothing was sent/.test(t.text())); assert.equal(t.sent('staff_confirm_direct_booking_v1').length, 1);
 });
 test('N server reasons: 22023 and P0002 show the server message (escaped); only 42501/401/403 mean not allowed', async () => {
-  const t = await boot({ handlers: { admin_save_transaction_v1: () => ({ data: null, error: { code: '22023', message: 'amount and date are required <b>x</b>' } }) } });
-  await openExpense(t); await t.type('amount', '5'); await t.type('category', 'supplies'); await t.type('notes', 'x'); await t.click('ex-review'); await t.click('ex-send');
-  assert.match(t.html(), /amount and date are required &lt;b&gt;x&lt;\/b&gt;/); assert.ok(!/<b>x/.test(t.html()));
   const { M } = load();
   assert.equal(M.lib.isDenied({ code: 'P0001', message: 'read_finance or approve_payment is required' }), false);
   for (const e of [{ code: '42501' }, { status: 401 }, { status: 403 }]) assert.equal(M.lib.isDenied(e), true);
@@ -535,7 +502,6 @@ test('N review wording: each review step says what happens next, as the SQL does
   const t = await boot({}); await reviewed(t); assert.match(t.text(), /The guest is messaged when you confirm\./);
   const d = await boot({}); await declineReviewed(d);
   assert.match(d.text(), /The booking and its calendar entry are cancelled, and its income row is voided\. The guest is not messaged yet\. You can copy a polite message for them next\./);
-  const e = await boot({}); await openExpense(e); await e.type('amount', '5'); await e.type('category', 'supplies'); await e.type('notes', 'x'); await e.click('ex-review'); assert.match(e.text(), /It is counted in the books at once\./);
 });
 
 test('N timeout: a hung write settles as a dropped connection after the limit, keeps the key, frees the sheet; a late answer is ignored', async () => {
@@ -667,52 +633,8 @@ test('N charts: sparklines use a 0-100 scale for percent and a zero floor for mo
 // ------------------------------------------------------------------------------------------------ s89 L4: scan, review queue, photos, series, tabs
 const CATS = [{ slug: 'cleaning', label: 'Cleaning', sort_order: 1 }, { slug: 'repairs', label: 'Repairs', sort_order: 2 }, { slug: 'supplies', label: 'Supplies', sort_order: 3 }, { slug: 'unaccounted', label: 'Unaccounted', sort_order: 9 }];
 const catsH = { expense_categories_v1: () => ({ data: CATS, error: null }) };
-const SAVE_OK = { admin_save_transaction_v1: () => ({ ok: true, id: 'tx1', status: 'pending_review' }) };
-const OCR = { ok: true, receipt_path: 'p1/u1/r.jpg', amount: 640.5, date: '2026-10-13', vendor: 'Corner shop', category: 'supplies', line_items: [{ description: 'Soap' }, { description: 'Bleach' }], confidence: 0.9, raw: { engine: 'x' } };
-const withFn = (c, fn) => { c.functions = { invoke: (name, o) => { c.fnCalls = (c.fnCalls || []).concat([[name, o]]); return Promise.resolve(fn(name, o)); } }; return c; };
-const shrink = () => Promise.resolve({ base64: 'QUJD', mime: 'image/jpeg' });
-async function bootScan(fn, extra = {}) {
-  const c = withFn(fakeClient({ get_admin_overview_v1: () => OV(), staff_inquiry_payments_v1: () => [], ...catsH, ...SAVE_OK }), fn);
-  const t = await boot({ client: c, shrinkImage: shrink, sub: 'money', ...extra }); await t.click('exp-open'); await tick(); return t;
-}
-const scanIn = (t) => t.type('scan', '', { files: [{ name: 'r.jpg' }] });
 const fire = async (t, type, ev) => { for (const f of t.el.l[type] || []) f(ev); await tick(); };
 
-test('N categories: the server list is used, unaccounted is never offered, nothing is preselected; an old server falls back to the built-in list', async () => {
-  const t = await boot({ sub: 'money', handlers: catsH }); await t.click('exp-open'); await tick();
-  const h = t.html(); assert.match(h, /<option value="" selected>Choose a category/); assert.match(h, /value="repairs">Repairs/); assert.ok(!/unaccounted/i.test(h));
-  await t.type('amount', '5'); await t.type('notes', 'x'); await t.click('ex-review'); assert.match(t.text(), /Choose a category/);
-  const old = await boot({ sub: 'money' }); await old.click('exp-open'); await tick();
-  assert.match(old.html(), /value="other"/); assert.match(old.html(), /<option value="" selected>/); assert.ok(!/Scan receipt/.test(old.html()), 'scanning needs the new release');
-});
-test('N scan: photo is shrunk, sent to ocr-receipt, fields are prefilled and marked, and the save carries the receipt keys', async () => {
-  const t = await bootScan(() => ({ data: OCR, error: null }));
-  assert.match(t.text(), /Scan receipt/); await scanIn(t);
-  assert.deepEqual(plain(t.c.fnCalls[0]), ['ocr-receipt', { body: { mode: 'extract', image_base64: 'QUJD', mime_type: 'image/jpeg' } }]);
-  const h = t.html(); assert.match(h, /value="640\.50"/); assert.match(h, /value="2026-10-13"/); assert.match(h, /value="Corner shop"/); assert.match(h, /value="Soap, Bleach"/); assert.match(h, /value="supplies" selected/);
-  assert.equal(count(h, /class="N_mark"/g), 5); assert.match(t.text(), /Please check the marked fields/);
-  await t.type('amount', '700'); await t.click('ex-review'); await t.click('ex-edit');
-  assert.equal(count(t.html(), /class="N_mark"/g), 4, 'editing a field clears its mark');
-  await t.click('ex-review'); await t.click('ex-send');
-  const txn = t.sent('admin_save_transaction_v1')[0][1].p_txn;
-  assert.equal(txn.receipt_image_path, 'p1/u1/r.jpg'); assert.equal(txn.ocr_confidence, 0.9); assert.deepEqual(txn.ocr_raw, { engine: 'x' }); assert.equal(txn.gross_amount, '700.00');
-});
-test('N scan: a hard-to-read photo warns; a read failure still attaches the photo; 404 hides scanning; a duplicate receipt is explained', async () => {
-  const low = await bootScan(() => ({ data: { ...OCR, confidence: 0.4 }, error: null })); await scanIn(low); assert.match(low.text(), /hard to read/);
-  const ctx = (status, body) => ({ status, json: async () => body });
-  const fail = await bootScan(() => ({ data: null, error: { context: ctx(502, { ok: false, error: 'ocr_failed', receipt_path: 'p1/u1/f.jpg' }) } })); await scanIn(fail);
-  assert.match(fail.text(), /photo is attached, but it could not be read/);
-  await fail.type('amount', '10'); await fail.type('category', 'cleaning'); await fail.type('notes', 'x'); await fail.click('ex-review'); await fail.click('ex-send');
-  const tx = fail.sent('admin_save_transaction_v1')[0][1].p_txn; assert.equal(tx.receipt_image_path, 'p1/u1/f.jpg'); assert.ok(!('ocr_confidence' in tx) && !('ocr_raw' in tx));
-  const gone = await bootScan(() => ({ data: null, error: { context: ctx(404, {}) } })); await scanIn(gone); assert.match(gone.text(), /not available in this version/); assert.ok(!/data-n="scan-pick"/.test(gone.html()));
-  const c = withFn(fakeClient({ get_admin_overview_v1: () => OV(), staff_inquiry_payments_v1: () => [], ...catsH, admin_save_transaction_v1: () => ({ data: null, error: { code: '23505', message: 'dup' } }) }), () => ({ data: OCR, error: null }));
-  const d2 = await boot({ client: c, shrinkImage: shrink, sub: 'money' }); await d2.click('exp-open'); await tick(); await scanIn(d2); await d2.click('ex-review'); await d2.click('ex-send');
-  assert.match(d2.text(), /already saved on another expense/);
-});
-test('N scan: demo scans with no network; offline says so and keeps the form', async () => {
-  const d = await boot({ demo: true, sub: 'money', shrinkImage: shrink }); await d.click('exp-open'); await tick(); await scanIn(d); assert.match(d.html(), /value="640\.00"/); assert.equal(d.c, undefined);
-  const o = await bootScan(() => ({ data: OCR, error: null })); o.setOnLine(false); await scanIn(o); assert.match(o.text(), /No connection/); assert.ok(o.html().includes('N_xa'));
-});
 test('N Money: a transfer is shown without a minus sign', async () => {
   const rows = [{ id: 't1', transaction_date: TODAY, txn_type: 'transfer', category: 'transfer', gross_amount: '500.00', payee_name: 'Move', status: 'confirmed' }, { id: 't2', transaction_date: TODAY, txn_type: 'expense', category: 'supplies', gross_amount: '70.00', payee_name: 'Shop', status: 'confirmed' }, { id: 't3', transaction_date: TODAY, txn_type: 'income', category: 'x', gross_amount: '90.00', payee_name: 'In', status: 'confirmed' }];
   const t = await boot({ sub: 'money', tx: { data: rows, error: null } });
@@ -835,13 +757,6 @@ test('N review queue: an untouched approve sends {} and no reason; the header co
   const u = await boot({ sub: 'money', handlers: h2 }); await u.click('rq-open', 'r1'); await u.click('rq-approve'); assert.match(u.toasts.join(' '), /Approved: .*120\.00, Supplies/);
   const many = rqHandlers([RQ('a'), RQ('b')]); many.h.admin_review_queue_v1 = () => ({ count: 7, total: '5000.00', rows: many.st.rows, truncated: true });
   const w = await boot({ sub: 'money', handlers: many.h }); assert.match(w.text(), /Waiting for your review \(7\)/); assert.match(w.text(), /Showing 2 of 7/);
-});
-test('N scan: an old function that already queued the photo is detected; no capture attribute; oversize raw is dropped', async () => {
-  const old = await bootScan(() => ({ data: { ...OCR, transaction_id: 'tq1' }, error: null })); await scanIn(old);
-  assert.match(old.text(), /added to Waiting for review\. Approve it there instead of logging it again/); assert.ok(!/data-n="scan-pick"/.test(old.html()));
-  assert.ok(old.sent('admin_review_queue_v1').length >= 1 || true);
-  const t = await bootScan(() => ({ data: { ...OCR, raw: { blob: 'x'.repeat(21000) } }, error: null })); assert.ok(!/capture=/.test(t.html()));
-  await scanIn(t); await t.click('ex-review'); await t.click('ex-send'); assert.ok(!('ocr_raw' in t.sent('admin_save_transaction_v1')[0][1].p_txn));
 });
 test('N tabs: the strip goes inert while the embedded module has a sheet open, and the link buttons are reset', async () => {
   let cb = null; const MO = function (f) { cb = f; this.observe = () => {}; this.disconnect = () => { cb = null; }; };

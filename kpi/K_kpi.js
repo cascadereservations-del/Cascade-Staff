@@ -226,6 +226,10 @@
       if (has('occupancy')) out.admin.occupancy = { pct: num(a.occupancy), sold: num(a.sold_nights), sellable: num(a.sellable_nights) };
       if (has('adr')) out.admin.adr = num(a.adr);
       if (has('direct_share')) out.admin.direct = num(a.direct_share);
+      // s134: where the month's cost figures come from, what is waiting for review and what cleaning fees are still unpaid. Absent keys draw nothing.
+      out.admin.kpiSource = a.kpi_source === 'legacy' ? 'legacy' : a.kpi_source === 'ledger' ? 'ledger' : '';
+      out.admin.costsPending = a.costs_pending_month && typeof a.costs_pending_month === 'object' ? { count: num(a.costs_pending_month.count) || 0, total: num(a.costs_pending_month.total) || 0 } : null;
+      out.admin.cleaningOpen = num(a.cleaning_pay_open);
       s127Admin(out.admin, a);
       if (a.target && typeof a.target === 'object') { var tg = a.target; out.admin.target = { net: num(tg.net_target) || 0, costs: num(tg.costs_basis), need: num(tg.revenue_needed), adr: num(tg.adr), monthNights: num(tg.nights_in_month), onBooks: num(tg.nights_on_books), occ: num(tg.needed_occupancy), needAdr: num(tg.needed_adr), at: tg.set_at || '' }; }
     }
@@ -530,18 +534,21 @@
     h += waterSection(a) + usageSection(d, a);
     var fc = [bills && bills.e ? ['⚡ Electricity, this bill (forecast)', bills.e.fPhp] : null, bills && bills.w ? ['💧 Water, this bill (forecast)', bills.w.fPhp] : null].filter(Boolean);
     h += '<h2 class="K_h">Money in utility and stock</h2><div class="card glass K_lines">' + fc.concat([
-      ['Electricity this month (estimate)', a.monthCost], ['Supplies bought', a.supplies], ['Supply cost per turnover', a.perTurnover], ['Cleaning pay', a.cleaning]
-    ]).map(function (r) { return '<div class="K_line K_line-s"><span>' + esc(r[0]) + '</span><b>' + esc(r[1] != null ? peso(r[1]) : 'Not yet') + '</b></div>'; }).join('') + '</div>';
+      ['Electricity this month (estimate)', a.monthCost], ['Supplies bought', a.supplies, a.kpiSource === 'legacy' ? 'Before ' + LEDGER_FROM + ': from stock receipts' : ''], ['Supplies used per turnover', a.perTurnover],
+      ['Cleaning pay', a.cleaning, 'Cleaning fees for cleans this month' + (a.cleaningOpen > 0 ? ' · ' + peso(a.cleaningOpen) + ' requested, not paid yet' : '')]
+    ]).map(function (r) { return '<div class="K_line K_line-s"><span>' + esc(r[0]) + (r[2] ? '<span class="K_sub K_grey">' + esc(r[2]) + '</span>' : '') + '</span><b>' + esc(r[1] != null ? peso(r[1]) : 'Not yet') + '</b></div>'; }).join('') + '</div>';
     if (canSetRate(role)) h += '<a class="btn btn-secondary btn-block" href="#manage/kpis">' + gi('star', 's16') + 'Open the full key figures</a>';
     return h + metersCard();
   }
+  var LEDGER_FROM = 'November'; // the month the expense log became the source of the cost figures (s134); earlier months keep the stock-receipt figure
   function pctOf(v) { return v != null ? Math.round(v * 100) + '%' : 'Not yet'; }
   // The month at a glance (Admin.dc.html): the net card, then occupancy, average rate and direct bookings. Only the parts the server sent.
   function monthGlance(a) {
     var h = '';
     if (a.net) {
       var n = a.net, bits = [n.revenue != null ? 'Revenue ' + peso(n.revenue) : '', n.costs != null ? 'costs ' + peso(n.costs) : ''].filter(Boolean);
-      h += '<div class="K_money" id="K_net"><span class="K_lab">Net this month so far</span><span class="K_big">' + esc(n.net != null ? peso(n.net) : 'Not yet') + '</span><span class="K_sub">' + esc(bits.join(' · ') || 'Revenue and costs are not in yet.') + '</span></div>';
+      h += '<div class="K_money" id="K_net"><span class="K_lab">Net this month so far</span><span class="K_big">' + esc(n.net != null ? peso(n.net) : 'Not yet') + '</span><span class="K_sub">' + esc(bits.join(' · ') || 'Revenue and costs are not in yet.') + '</span>' +
+        (a.costsPending && a.costsPending.count > 0 ? '<a class="K_sub K_grey" href="#expenses">' + esc(peso(a.costsPending.total) + ' of expenses waiting for review') + '</a>' : '') + '<a class="K_link" href="#expenses">See expenses</a></div>';
     }
     var tiles = '';
     if (a.occupancy) { var o = a.occupancy; tiles += stat('Occupancy', pctOf(o.pct), o.pct != null && o.sold != null && o.sellable != null ? o.sold + '\u00a0of\u00a0' + o.sellable + '\u00a0nights' : '', o.pct != null && o.sold != null && o.sellable != null ? 'ok' : ''); }

@@ -1575,7 +1575,7 @@
     items.push(['Cassy reply', 'Draft a warm reply to a guest message. You get two or three drafts to pick from.']);
     items.push(['Common links', 'The Cassy reply screen lists the Welcome guide, the Direct booking site, turn-by-turn directions and the Facebook page, each with a Copy button. Switch any of them on under the drafts to add them to the reply you copy.']);
     items.push(['Install on iPhone', 'Opened inside Messenger or Facebook, the app now shows Open in Safari. The Home Screen steps match the latest iPhone Safari.']);
-    if (admin) items.push(['Manage, all in one place', 'Scan a receipt to fill in an expense, approve or void rows waiting for review, and see bookings and work orders without opening the dashboard.']);
+    if (admin) items.push(['Expenses, with receipts', 'The Expenses page shows what the month cost. Add an expense, scan or upload its receipt, and open any row to see the receipt or fix the details.']);
     if (admin) items.push(['Clearer KPIs', 'Four headline numbers with a 12-month trend, last year beside each month, and the nights already booked ahead.']);
     items.push(['Cleaning fee', 'Ask for payment for your cleans and expenses. When you finish a clean, a card on Today takes you there.']);
     if (mgr) items.push(['Add a notice from Today', 'The Notices card has an Add a notice button. Water and Power are the first two choices.']);

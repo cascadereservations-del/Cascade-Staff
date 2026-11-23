@@ -117,6 +117,7 @@
       draft: null, lines: [], listeners: [], dead: false, confirmKey: newKey('rcpt'), result: null, photoNote: '', man: { itemId: '', qty: '1', key: '' } };
     var on = function (t, fn) { el.addEventListener(t, fn); S.listeners.push([t, fn]); };
     on('click', onClick); on('input', onInput); on('change', onChange); on('submit', onSubmit);
+    var hd = root.CS_receiptHand; if (!S.use && hd && hd.from === 'expenses' && typeof hd.path === 'string' && hd.path && S.client) { S.hand = hd.path; S.step = 'reading'; } if (hd) root.CS_receiptHand = null; // read once, never kept
     draw(); loadItems();
     return S;
   }
@@ -151,6 +152,7 @@
       var cats = {}; items.forEach(function (i) { cats[i.category] = 1; }); me.cats = Object.keys(cats).sort(); if (me.cats.indexOf(CATS[0]) < 0) me.cats.unshift(CATS[0]);
       if (!me.use && !me.man.itemId && items[0]) me.man.itemId = items[0].id;
       draw();
+      if (me.hand) { var hp = me.hand; me.hand = null; receiptByPath(me, hp, 'expenses'); } // s134: a receipt already uploaded from Expenses: no second upload
     }, function () { if (S === me) { me.load = 'error'; draw(); } });
   }
 
@@ -214,7 +216,7 @@
       return head('Report supply', 'A photo of the receipt is enough. We will read it, and you check each line.') +
         '<div class="S_start"><label class="btn btn-primary btn-block S_file">' + gi('camera', 's24') + 'Take a photo of the receipt<input type="file" accept="image/*" capture="environment" data-sfile="receipt" class="sr"></label>' +
         '<label class="btn btn-secondary btn-block S_file">' + gi('image', 's24') + 'Choose a photo or file<input type="file" accept="image/*" data-sfile="receipt" class="sr"></label>' +
-        '<button class="btn btn-ghost btn-block" type="button" data-sact="manual">Enter it by hand instead</button></div>' + errLine();
+        '<button class="btn btn-ghost btn-block" type="button" data-sact="manual">Enter it by hand instead</button></div>' + errLine() + (S.handBack ? '<button class="btn btn-secondary btn-block" type="button" data-sact="hand-back">Back to the expense</button>' : '');
     }
     if (st === 'reading') return head('Reading the receipt', 'One moment.') + '<div class="skel" style="height:96px"></div><p class="help" role="status">This can take up to half a minute.</p>';
     if (st === 'manual') {
@@ -275,6 +277,7 @@
     if (act === 'use-save') { saveUse(); return; }
     if (act === 'manual') { S.step = 'manual'; S.msg = ''; draw(); return; }
     if (act === 'rcpt-zoom') { if (S.rcpt && root.CSZoom) root.CSZoom.open(S.rcpt, { alt: 'The receipt photo', opener: t }); return; }
+    if (act === 'hand-back') { if (S.opts.navigate) S.opts.navigate('#expenses/add/back'); return; } // s134: the expense form comes back with its receipt and fields
     if (act === 'to-start') { S.step = 'start'; S.msg = ''; draw(); return; }
     if (act === 'man-save') { saveManual(); return; }
     if (!l && /^(line-|link-)/.test(act || '')) return;
@@ -327,9 +330,19 @@
     var me = S; if (!me || me.step === 'reading') return;
     if (/pdf/i.test(String(file.type || '')) || /\.pdf$/i.test(String(file.name || ''))) { me.msg = PHOTO_ERR.notimage; draw(); return; }
     me.step = 'reading'; me.msg = ''; draw();
-    resizeImage(file, RECEIPT_SIDE, 2 * PHOTO_MAX).then(function (b) { return keepRcpt(me, b); }).then(blobBase64).then(function (b64) {
-      return me.client.functions.invoke('ocr-receipt', { body: { mode: 'supply', image_base64: b64, mime_type: 'image/jpeg' } });
-    }).then(function (r) {
+    runSupply(me, function () {
+      return resizeImage(file, RECEIPT_SIDE, 2 * PHOTO_MAX).then(function (b) { return keepRcpt(me, b); }).then(blobBase64).then(function (b64) {
+        return me.client.functions.invoke('ocr-receipt', { body: { mode: 'supply', image_base64: b64, mime_type: 'image/jpeg' } });
+      });
+    });
+  }
+  // s134: a receipt Expenses already stored (receipt_path). Same draft, same review; the picture is not sent again. A failure keeps the way back to the expense.
+  function receiptByPath(me, path, from) {
+    if (!me || S !== me) return; me.step = 'reading'; me.msg = ''; me.handBack = false; draw();
+    runSupply(me, function () { return me.client.functions.invoke('ocr-receipt', { body: { mode: 'supply', receipt_path: path } }); }, from);
+  }
+  function runSupply(me, call, handFrom) {
+    Promise.resolve().then(call).then(function (r) {
       if (S !== me) return;
       var st = r && r.error && r.error.context && r.error.context.status;
       if (st === 429 || (r && r.data && r.data.error === 'daily_limit')) throw { limit: true };
@@ -342,6 +355,7 @@
       });
     }).then(null, function (e) {
       if (S !== me) return; me.step = 'start'; relRcpt(me);
+      if (handFrom) { me.msg = 'Couldn’t open this in Inventory.'; me.handBack = true; draw(); return; }
       me.msg = e && e.photo ? PHOTO_ERR[e.photo] : e && e.limit ? 'Receipts have been read enough times today. Enter it by hand instead.' : e && e.read ? 'The receipt could not be read. Try a clearer photo, or enter it by hand.' : errText(e); draw();
     });
   }

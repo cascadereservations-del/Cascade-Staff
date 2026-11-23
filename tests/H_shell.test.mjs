@@ -140,7 +140,7 @@ test('H_ home: pay links carry the badge counts in their hash, the cleaner home 
   assert.match(h, /href="\.\/pay\/#tasks=1&amp;cal=0"/); assert.match(h, /Cleaning fee/); assert.match(h, /Ask for payment for your cleans and expenses/); assert.doesNotMatch(h, /Ask for your pay/);
   assert.match(h, /House manual/); assert.match(h, /href="#stock"/); assert.match(h, /Cassy reply/);
   const a = await boot({ role: 'owner', hash: '#home', handlers: baseHandlers('owner') }); const ah = a.els['v-home'].innerHTML;
-  assert.match(ah, /href="\.\/pay\/admin\.html#tasks=0&amp;cal=0"/); assert.match(ah, /href="#manage"/); assert.match(ah, /Inquiries, expenses and key figures/); assert.match(ah, /href="#manage\/kpis"/); assert.match(ah, /href="#stock"/);
+  assert.match(ah, /href="\.\/pay\/admin\.html#tasks=0&amp;cal=0"/); assert.match(ah, /href="#manage"/); assert.match(ah, /Inquiries and key figures/); assert.match(ah, /href="#manage\/kpis"/); assert.match(ah, /href="#stock"/);
   const f = await boot({ role: 'finance', hash: '#home', handlers: baseHandlers('finance') }); assert.doesNotMatch(f.els['v-home'].innerHTML, /href="#manage"/, 'manage is owner and admin');
   assert.match(a.els['tabbar'].innerHTML, /Today/); assert.doesNotMatch(a.els['tabbar'].innerHTML, />Home</);
 });
@@ -271,7 +271,7 @@ test('H_ guard: no duplicate top-level H_ names in app.js or lib.js, the files p
   }
   const html = read('index.html'); for (const id of ['v-search', 'v-weather', 'v-stock', 'v-manage', 'H_offline', 'door-done']) assert.ok(html.includes('id="' + id + '"'), id);
   assert.match(html, /Your name, as Lloyd wrote it/); assert.match(html, /placeholder="Honey"/);
-  assert.equal(JSON.parse(read('package.json')).version, '3.4.52'); assert.match(read('sw.js'), /CACHE_NAME = 'cs-shell-v77'/);
+  assert.equal(JSON.parse(read('package.json')).version, '3.4.53'); assert.match(read('sw.js'), /CACHE_NAME = 'cs-shell-v78'/);
 });
 
 // the bodies of the three theme rules: :root, :root:not([data-theme="light"]) inside the dark media query, :root[data-theme="dark"]
@@ -335,6 +335,6 @@ test('H_ fix: the tour waits while the Add to Home Screen hint is showing; sign-
 test('H_ fix: the three module folders are precached best effort, apart from the required shell list', () => {
   const sw = read('sw.js'), ctx = vm.createContext({ self: { addEventListener() {}, location: { href: 'https://x/' } }, URL, Request: class {}, Promise });
   vm.runInContext(sw.replace(/^const /gm, 'var ').replace(/^if \(typeof module[^\n]*$/m, ''), ctx); const opt = vm.runInContext('OPTIONAL_URLS', ctx), req = vm.runInContext('SHELL_URLS', ctx);
-  assert.deepEqual([...opt], ['./weather/W_weather.js', './weather/W_weather.css', './stock/I_stock.js', './stock/I_stock.css', './stock/I_suppliers.js', './stock/I_suppliers.css', './manage/N_manage.js', './manage/N_manage.css', './manage/N_charts.js', './manage/N_charts.css', './manage/N_bookings.js', './manage/N_bookings.css', './manage/N_ops.js', './manage/N_ops.css', './guests/G_guests.js', './guests/G_guests.css', './inbox/X_inbox.js', './inbox/X_inbox.css', './calendar/K_bookcal.js', './calendar/K_bookcal.css', './kpi/K_kpi.js', './kpi/K_kpi.css', './stock/S110_supply.js', './bills/BL_bills.js', './bills/BL_bills.css']); for (const u of opt) assert.ok(!req.includes(u), u + ' is not in the required list');
+  assert.deepEqual([...opt], ['./weather/W_weather.js', './weather/W_weather.css', './stock/I_stock.js', './stock/I_stock.css', './stock/I_suppliers.js', './stock/I_suppliers.css', './manage/N_manage.js', './manage/N_manage.css', './manage/N_charts.js', './manage/N_charts.css', './manage/N_bookings.js', './manage/N_bookings.css', './manage/N_ops.js', './manage/N_ops.css', './guests/G_guests.js', './guests/G_guests.css', './inbox/X_inbox.js', './inbox/X_inbox.css', './calendar/K_bookcal.js', './calendar/K_bookcal.css', './kpi/K_kpi.js', './kpi/K_kpi.css', './stock/S110_supply.js', './bills/BL_bills.js', './bills/BL_bills.css', './expenses/E_expenses.js', './expenses/E_expenses.css']); for (const u of opt) assert.ok(!req.includes(u), u + ' is not in the required list');
   assert.match(sw, /SHELL_URLS\.concat\(OPTIONAL_URLS\)\.map\(\(u\) => cache\.add\(new Request\(u, \{ cache: 'reload' \}\)\)\.catch\(\(\) => \{\}\)\)/, 'a missing file is swallowed one by one');
 });

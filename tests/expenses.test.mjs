@@ -1,0 +1,351 @@
+// s134 lane L2 (Staff 3.4.53): expenses/E_expenses.js, the Today card, the Manage hand-over, the KPI copy, the receipt hand-off to Inventory.
+// Frozen clock: 2026-11-23T03:00:00Z = 11:00 on 2026-11-23 in Manila. The module runs in a vm sandbox with a tiny fake DOM and a fake Supabase client that records every call.
+// Contract: docs/s134/SPEC.md (6, 8, 13, 14) and PLAN.md (L2). Hand-computed expectations throughout.
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import vm from 'node:vm';
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const root = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
+const read = (f) => fs.readFileSync(path.join(root, f), 'utf8');
+const SRC = read('expenses/E_expenses.js'), CSS = read('expenses/E_expenses.css'), APP = read('app.js'), MAN = read('manage/N_manage.js'), SW = read('sw.js'), STY = read('styles.css');
+const NOW = Date.parse('2026-11-23T03:00:00Z'), TODAY = '2026-11-23', PROP = '6ae230f4-c189-4547-84b1-cb6e0b2cc9bd';
+const tick = async (n = 10) => { for (let i = 0; i < n; i++) await new Promise((r) => setImmediate(r)); };
+const plain = (x) => JSON.parse(JSON.stringify(x));
+
+class FakeEl {
+  constructor() { this.html = ''; this.l = {}; }
+  set innerHTML(v) { this.html = String(v); }
+  get innerHTML() { return this.html; }
+  addEventListener(t, f) { (this.l[t] ||= []).push(f); }
+  removeEventListener(t, f) { this.l[t] = (this.l[t] || []).filter((x) => x !== f); }
+  querySelector() { return null; }
+}
+function loadModule() {
+  const win = { ICON: (n) => `<i data-ic="${n}"></i>` };
+  const ctx = { window: win, navigator: { onLine: true }, Intl, Date, Promise, JSON, Math, console, setTimeout, clearTimeout, Uint8Array, atob, URL: { createObjectURL: () => 'blob:thumb', revokeObjectURL() {} }, Blob: class {} };
+  vm.createContext(ctx); vm.runInContext(SRC, ctx, { filename: 'E_expenses.js' });
+  win.E_Expenses._setClock(() => NOW);
+  return { E: win.E_Expenses, win, ctx };
+}
+const ROW = (o = {}) => ({ id: 'r1', date: '2026-11-22', amount: '1200.00', category: 'supplies', label: 'Supplies', payee: 'Sample hardware', notes: 'Bulbs', status: 'confirmed', chip: 'manual', has_receipt: false, locked: false, amount_locked: false,
+  stock: null, lookalike_id: null, created_at: '2026-11-22T02:00:00Z', receipt_ref: null, receipt_can: { add: true, replace: false, remove: false }, ...o });
+const SCREEN = (o = {}) => ({ ok: true, month: '2026-11-01', total: 38420, count: 3, prev_total: 41200, basis: 47413, basis_months: ['2026-08', '2026-09', '2026-10'], pending: { count: 2, total: 1850 },
+  by_category: [{ category: 'supplies', label: 'Supplies', txn_type: 'expense', total: 20000, count: 5 }, { category: 'rent', label: 'Rent income', txn_type: 'income', total: 99999, count: 1 }, { category: 'cleaning', label: 'Cleaning', txn_type: 'expense', total: 18420, count: 4 }],
+  rows: [ROW(), ROW({ id: 'r2', date: '2026-11-22', amount: '300.00', category: 'cleaning', label: 'Cleaning', payee: 'Ana', chip: 'staff_pay', locked: true, amount_locked: true }), ROW({ id: 'r3', date: '2026-11-21', amount: '540.00', chip: 'stock', stock: { lines: 3, items: 3 }, amount_locked: true }),
+    ROW({ id: 'p1', date: '2026-11-20', amount: '900.00', status: 'pending_review', chip: 'telegram', lookalike_id: 'r3' }), ROW({ id: 'p2', date: '2026-11-19', amount: '950.00', status: 'pending_review', chip: 'receipt' })],
+  unpriced: { count: 3, items: ['Soap', 'Towels', 'Bleach'] }, unlinked: 0, categories: [{ slug: 'supplies', label: 'Supplies' }, { slug: 'cleaning', label: 'Cleaning' }, { slug: 'utilities', label: 'Utilities' }], can_write: true, more: false, ...o });
+
+function fakeClient({ rpc = {}, fn = {} } = {}) {
+  const calls = [], fns = [];
+  return {
+    calls, fns,
+    rpc(name, args) { calls.push([name, plain(args || {})]); const h = rpc[name]; if (!h) return Promise.resolve({ data: null, error: { code: 'PGRST202', message: 'Could not find the function public.' + name } }); const r = h(args); return Promise.resolve(r && 'data' in r && 'error' in r ? r : { data: plain(r), error: null }); },
+    functions: { invoke(name, o) { fns.push([name, plain(o.body)]); const h = fn[o.body.mode]; if (!h) return Promise.resolve({ data: null, error: { context: { status: 404, json: () => Promise.resolve({}) } } }); const r = h(o.body); return Promise.resolve(r && r.error ? r : { data: plain(r), error: null }); } }
+  };
+}
+async function boot({ role = 'owner', sub, rpc, fn, screen = SCREEN(), shrinkImage, readFile } = {}) {
+  const env = loadModule(), el = new FakeEl(), nav = [], toasts = [];
+  const client = fakeClient({ rpc: { expenses_screen_v1: () => screen, ...rpc }, fn });
+  let n = 0;
+  env.E.mount(el, { client, role, sub, propertyId: PROP, navigate: (h) => nav.push(h), toast: (m) => toasts.push(m), haptic() {}, newKey: (p) => `${p}-0000000000000000${String(++n).padStart(8, '0')}`, shrinkImage, readFile });
+  await tick();
+  const fire = async (type, ev) => { for (const f of el.l[type] || []) f(ev); await tick(); };
+  const target = (attrs, extra = {}) => { const t = { ...extra, getAttribute: (k) => (k in attrs ? attrs[k] : null), closest: (sel) => { const m = /^\[([\w-]+)\]$/.exec(sel); return m && m[1] in attrs ? t : null; } }; return t; };
+  return { ...env, el, client, nav, toasts, html: () => el.innerHTML, text: () => el.innerHTML.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' '),
+    click: (act, id) => fire('click', { type: 'click', target: target({ 'data-e': act, ...(id !== undefined ? { 'data-id': id } : {}) }) }),
+    type: (f, value, ev = 'input') => fire(ev, { type: ev, target: target({ 'data-f': f }, { value }) }),
+    pick: (file) => fire('change', { type: 'change', target: target({ 'data-e': 'file' }, { files: [file], value: '' }) }),
+    sent: (name) => client.calls.filter((x) => x[0] === name) };
+}
+const ATTACH = (o = {}) => ({ ok: true, receipt_path: 'tx/abc.jpg', sha256: 'f'.repeat(64), mime: 'image/jpeg', suggest: { amount: 1250, date: '2026-11-20', vendor: 'Sample Hardware', category: 'supplies', line_items: [{ description: 'Bulbs' }], confidence: 0.9 }, stock_hint: { count: 0, names: [] }, ...o });
+const JPG = { name: 'r.jpg', type: 'image/jpeg', size: 1000 };
+const SHRINK = () => Promise.resolve({ base64: 'QUJD', mime: 'image/jpeg' });
+const fill = async (b, f) => { for (const [k, v] of Object.entries(f)) await b.type(k, v); };
+
+// ------------------------------------------------------------------------------------------------ pure helpers
+test('E lib: amounts, pesos, validation and the create payload', () => {
+  const { E } = loadModule(), L = E.lib;
+  assert.equal(L.parseAmount('1,250.5'), '1250.50'); assert.equal(L.parseAmount('0'), null); assert.equal(L.parseAmount('12.345'), null); assert.equal(L.parseAmount('PHP 5073'), '5073.00');
+  assert.equal(L.peso('1250'), '₱1,250.00'); assert.equal(L.peso(38420.4, true), '₱38,420'); assert.equal(L.peso(null), '—');
+  const cats = [{ slug: 'supplies', label: 'Supplies' }];
+  assert.deepEqual(Object.keys(L.validateExpense({ date: '', amount: '', category: '', notes: '' }, cats, TODAY)).sort(), ['amount', 'category', 'date', 'notes']);
+  assert.equal(L.validateExpense({ date: '2026-11-24', amount: '1', category: 'supplies', notes: 'x' }, cats, TODAY).date, 'The date cannot be in the future.');
+  const f = { date: '2026-11-22', amount: '1,200', category: 'supplies', payee: ' Shop ', notes: ' Bulbs ' };
+  assert.deepEqual(plain(L.expenseTxn(f, null)), { txn_type: 'expense', category: 'supplies', transaction_date: '2026-11-22', gross_amount: '1200.00', payee_name: 'Shop', notes: 'Bulbs', or_number: '', reason: '' });
+  const t = L.expenseTxn(f, { path: 'tx/a.jpg', confidence: 0.8, raw: { a: 1 } }); assert.equal(t.receipt_image_path, 'tx/a.jpg'); assert.equal(t.ocr_confidence, 0.8); assert.deepEqual(plain(t.ocr_raw), { a: 1 });
+});
+test('E lib: edit payload sends only what changed plus id and reason; locked rows send category and notes only; never a receipt key', () => {
+  const { E } = loadModule(), L = E.lib, r = ROW({ id: 'x1' });
+  const base = { date: r.date, amount: '1200.00', category: 'supplies', payee: 'Sample hardware', notes: 'Bulbs' };
+  assert.deepEqual(plain(L.editPayload(r, { ...base, amount: '1250' }, ' typo ')), { id: 'x1', gross_amount: '1250.00', reason: 'typo' });
+  assert.deepEqual(plain(L.editPayload(ROW({ id: 'x2', amount_locked: true }), { ...base, amount: '5', notes: 'New' }, 'why')), { id: 'x2', notes: 'New', reason: 'why' });
+  assert.deepEqual(plain(L.editPayload(ROW({ id: 'x3', locked: true, amount_locked: true }), { ...base, date: '2026-11-01', amount: '5', payee: 'Z', category: 'cleaning', notes: 'N' }, 'why')), { id: 'x3', category: 'cleaning', notes: 'N', reason: 'why' });
+  assert.ok(!Object.keys(L.editPayload(r, { ...base, amount: '9' }, 'abc')).some((k) => /receipt|ocr/.test(k)));
+});
+test('E lib: the suggestion is amount-only, for an editable row, and says so when it matches', () => {
+  const { E } = loadModule(), L = E.lib;
+  assert.deepEqual(plain(L.suggestion(ROW(), { amount: 1250 })), { same: false, amount: '1250.00' }); assert.deepEqual(plain(L.suggestion(ROW(), { amount: '1200' })), { same: true, amount: '1200.00' });
+  assert.equal(L.suggestion(ROW({ amount_locked: true }), { amount: 5 }), null); assert.equal(L.suggestion(ROW({ locked: true }), { amount: 5 }), null); assert.equal(L.suggestion(ROW(), { amount: null }), null); assert.equal(L.suggestion(ROW(), null), null);
+});
+test('E lib: files, messages and the routing rule', () => {
+  const { E } = loadModule(), L = E.lib;
+  assert.equal(L.fileCheck({ type: 'application/pdf', size: 5 * 1024 * 1024 + 1 }), 'That file is over 5 MB.'); assert.equal(L.fileCheck({ type: 'application/pdf', size: 5 * 1024 * 1024 }), '');
+  assert.equal(L.fileCheck({ type: 'text/plain', size: 10 }), 'Use a photo or a PDF.'); assert.equal(L.fileCheck({ type: 'image/jpeg', size: 9000000 }), ''); assert.equal(L.fileCheck(null), 'Use a photo or a PDF.');
+  assert.equal(L.dupMsg('Stock bought 21 Nov'), 'This receipt is already on Stock bought 21 Nov.'); assert.equal(L.dupMsg({ chip: 'stock', date: '2026-11-21', amount: '540.00' }), 'This receipt is already on Stock 21 Nov (₱540.00).');
+  assert.equal(L.basisText(['2026-08', '2026-09', '2026-10']), 'average of Aug to Oct'); assert.equal(L.basisText(3), 'average of the last 3 months'); assert.equal(L.basisText(null), '');
+  const rc = { path: 'p' };
+  assert.equal(L.routeVisible('owner', { kind: 'add', rc, stockHint: { count: 1 }, f: {} }), true); assert.equal(L.routeVisible('admin', { kind: 'add', rc, f: { category: 'supplies' } }), true);
+  assert.equal(L.routeVisible('finance', { kind: 'add', rc, stockHint: { count: 2 }, f: {} }), false); assert.equal(L.routeVisible('owner', { kind: 'detail', rc, stockHint: { count: 2 }, f: {} }), false);
+  assert.equal(L.routeVisible('owner', { kind: 'add', rc: null, stockHint: { count: 2 }, f: {} }), false); assert.equal(L.routeVisible('owner', { kind: 'add', rc, f: { category: 'cleaning' } }), false);
+  assert.equal(L.nudgeFor('utilities'), 'Pay scheduled bills in Bills'); assert.equal(L.nudgeFor('cleaning'), 'Pay staff through Pay staff'); assert.equal(L.nudgeFor('supplies'), 'If this went into stock, use Inventory > Bought'); assert.equal(L.nudgeFor('other'), '');
+});
+
+// ------------------------------------------------------------------------------------------------ the screen
+test('E screen: reads expenses_screen_v1 for the month, draws the summary, categories from by_category (expense only), review, folded unpriced line and the list', async () => {
+  const b = await boot();
+  assert.deepEqual(b.sent('expenses_screen_v1')[0][1], { p_property_id: PROP, p_month: '2026-11-01', p_limit: 100, p_filter: null });
+  const t = b.text();
+  assert.match(t, /Spent this month ₱38,420/); assert.match(t, /Usual month ₱47,413 \(average of Aug to Oct\)/); assert.match(t, /Last month ₱41,200/);
+  assert.match(t, /2 waiting for review · ₱1,850 not counted yet/); assert.doesNotMatch(t, /Rent income/); assert.match(t, /Supplies ₱20,000/); assert.match(t, /Cleaning ₱18,420/);
+  assert.match(t, /Needs review/); assert.match(t, /Looks like Stock 21 Nov \(₱540\.00\)/);
+  assert.match(t, /3 stock purchases have no price/); assert.doesNotMatch(t.slice(t.indexOf('3 stock purchases'), t.indexOf('3 stock purchases') + 40), /₱/, 'the folded line carries no amount');
+  assert.equal((b.html().match(/data-id="p1"/g) || []).length, 1, 'a needs-review row is drawn once, not again in the day list');
+  assert.match(t, /Yesterday/); assert.match(b.html(), /E_sticky/);
+  assert.match(b.html(), /Add expense<\/button><button[^>]*>Scan receipt/);
+});
+test('E screen: stepper never goes past this month; filters go to the server by chip, categories filter on the phone', async () => {
+  const b = await boot();
+  assert.match(b.html(), /data-e="next"[^>]*disabled/);
+  await b.click('prev'); assert.equal(b.sent('expenses_screen_v1')[1][1].p_month, '2025-10-01'.replace('2025-10', '2026-10'));
+  await b.click('chip', 'stock'); assert.equal(b.sent('expenses_screen_v1')[2][1].p_filter, 'stock');
+  await b.click('chip', 'all'); assert.equal(b.sent('expenses_screen_v1')[3][1].p_filter, null);
+  const before = b.client.calls.length; await b.click('cat', 'cleaning'); assert.equal(b.client.calls.length, before, 'no call for a category filter');
+  assert.doesNotMatch(b.html().split('E_day')[1] || '', /data-id="r1"/); assert.match(b.html(), /data-id="r2"/);
+});
+test('E screen: empty month, no write right, offline and forbidden', async () => {
+  let b = await boot({ screen: SCREEN({ rows: [], total: 0, count: 0, pending: { count: 0, total: 0 }, unpriced: { count: 0, items: [] }, by_category: [] }) });
+  assert.match(b.text(), /No expenses logged for November yet\./); assert.match(b.html(), /E_sticky/);
+  assert.ok(b.text().split(' ').length < 120, 'the empty state stays short');
+  b = await boot({ screen: SCREEN({ can_write: false }) }); assert.doesNotMatch(b.html(), /E_sticky/);
+  b = await boot({ screen: { ok: false, error: 'forbidden' } }); assert.match(b.text(), /not open to your account/);
+});
+test('E screen: Show more asks for the next 100 after the last row; See all opens every review row', async () => {
+  const b = await boot({ screen: SCREEN({ more: true }) });
+  await b.click('more'); const c = b.sent('expenses_screen_v1')[1][1]; assert.equal(c.p_limit, 100); assert.equal(c.p_before, '2026-11-22T02:00:00Z', 'the last listed row created_at');
+});
+test('E access: owner, admin and finance mount; cleaner, inspector, maintenance and laundry are sent home and nothing is read', async () => {
+  for (const role of ['owner', 'admin', 'finance']) { const b = await boot({ role }); assert.equal(b.sent('expenses_screen_v1').length, 1, role); }
+  for (const role of ['cleaner', 'inspector', 'maintenance', 'laundry', 'viewer', '']) { const b = await boot({ role }); assert.deepEqual(b.nav, ['#home'], String(role)); assert.equal(b.client.calls.length, 0); assert.equal(b.html(), ''); }
+  assert.match(APP, /expenses: \{ src: 'expenses\/E_expenses\.js', css: 'expenses\/E_expenses\.css', global: 'E_Expenses', title: 'Expenses', roles: \['owner', 'admin', 'finance'\], demoClient: true \}/);
+  assert.match(APP, /function A_loadExpenses\(\) \{\n\s+if \(!state\.access \|\| state\.expensesAbsent \|\| state\.layout !== 'admin' \|\| !\/\^\(owner\|admin\|finance\)\$\/\.test\(role\(\) \|\| ''\)\) return;/);
+  assert.match(APP, /function A_expCard\(\) \{\n\s+var e = state\.expenses; if \(!e \|\| state\.layout !== 'admin' \|\| !\/\^\(owner\|admin\|finance\)\$\/\.test\(role\(\) \|\| ''\)\) return '';/);
+  assert.match(APP, /p_property_id: pid\(\), p_limit: 0 \}/); assert.match(APP, /A_billsCard\(\) \+ A_expCard\(\) \+ \(BD\.top/);
+});
+
+// ------------------------------------------------------------------------------------------------ add, edit, void, review
+test('E add: one form; validation first; save sends v2 once with an idempotency key; a plain save toasts', async () => {
+  const b = await boot({ sub: 'add', rpc: { admin_save_transaction_v2: () => ({ ok: true, id: 'n1', lookalike: null }) } });
+  assert.match(b.html(), /Add expense/); assert.match(b.html(), /Scan or upload receipt/);
+  await b.click('save'); assert.equal(b.sent('admin_save_transaction_v2').length, 0); assert.match(b.text(), /Please fix the items marked below/);
+  await fill(b, { amount: '1,200', category: 'supplies', notes: 'Bulbs', payee: 'Shop' }); await b.click('save');
+  const [name, a] = b.sent('admin_save_transaction_v2')[0];
+  assert.deepEqual(plain(a), { p_property_id: PROP, p_txn: { txn_type: 'expense', category: 'supplies', transaction_date: TODAY, gross_amount: '1200.00', payee_name: 'Shop', notes: 'Bulbs', or_number: '', reason: '' }, p_idempotency_key: 'exp-add-000000000000000000000001' });
+  assert.equal(name, 'admin_save_transaction_v2'); assert.ok(b.toasts.includes('Saved.')); assert.doesNotMatch(b.html(), /E_sheet/);
+  assert.ok(b.nav.includes('#expenses'), 'closing #expenses/add goes back to the list');
+});
+test('E add: a look-alike after saving asks once; Yes voids the new row as the same purchase, No keeps both', async () => {
+  const look = { id: 'r3', date: '2026-11-21', amount: '540.00', chip: 'stock' };
+  let b = await boot({ rpc: { admin_save_transaction_v2: () => ({ ok: true, id: 'n9', lookalike: look }), expense_void_v1: () => ({ ok: true, id: 'n9', status: 'void' }) } });
+  await b.click('add'); await fill(b, { amount: '540', category: 'supplies', notes: 'Stock' }); await b.click('save');
+  assert.match(b.text(), /Saved\. Same as Stock 21 Nov \(₱540\.00\)\?/); await b.click('same-yes');
+  assert.deepEqual(b.sent('expense_void_v1')[0][1], { p_property_id: PROP, p_id: 'n9', p_reason: 'Same purchase as Stock 21 Nov (₱540.00)', p_same_as: 'r3' });
+  b = await boot({ rpc: { admin_save_transaction_v2: () => ({ ok: true, id: 'n9', lookalike: look }) } });
+  await b.click('add'); await fill(b, { amount: '540', category: 'supplies', notes: 'Stock' }); await b.click('save'); await b.click('close');
+  assert.equal(b.sent('expense_void_v1').length, 0); assert.doesNotMatch(b.html(), /E_sheet/);
+});
+test('E edit: prefilled, reason required, only the changed keys go to v2; a system-priced stock row shows a read-only amount', async () => {
+  const b = await boot({ rpc: { admin_save_transaction_v2: () => ({ ok: true, id: 'r1' }) } });
+  await b.click('open', 'r1'); await b.click('edit'); assert.match(b.html(), /value="1200\.00"/); assert.match(b.html(), /Why the change\?/);
+  await b.type('amount', '1250'); await b.click('edit-save'); assert.equal(b.sent('admin_save_transaction_v2').length, 0); assert.match(b.text(), /Say why you are changing it/);
+  await b.type('reason', 'Typo'); await b.click('edit-save');
+  assert.deepEqual(b.sent('admin_save_transaction_v2')[0][1].p_txn, { id: 'r1', gross_amount: '1250.00', reason: 'Typo' });
+  await b.click('open', 'r3'); await b.click('edit'); assert.match(b.html(), /class="E_input E_ro" id="E_amt">₱540\.00/); assert.match(b.html(), /Change the price in Inventory/); assert.doesNotMatch(b.html(), /data-f="amount"/);
+});
+test('E void and review: a reason of 3+ characters; Not a cost and Same purchase use expense_void_v1; Count it uses the existing review call', async () => {
+  const b = await boot({ rpc: { expense_void_v1: () => ({ ok: true }), admin_review_transaction_v1: () => ({ ok: true }) } });
+  await b.click('open', 'r1'); await b.click('void-ask'); await b.click('void-go'); assert.equal(b.sent('expense_void_v1').length, 0);
+  await b.type('reason', 'ab'); await b.click('void-go'); assert.equal(b.sent('expense_void_v1').length, 0); await b.type('reason', 'Duplicate entry'); await b.click('void-go');
+  assert.deepEqual(b.sent('expense_void_v1')[0][1], { p_property_id: PROP, p_id: 'r1', p_reason: 'Duplicate entry' });
+  await b.click('open', 'p1'); await b.click('review'); assert.match(b.text(), /Count it/); assert.match(b.text(), /Same purchase as Stock 21 Nov/); assert.match(b.text(), /Not a cost/);
+  await b.click('count'); assert.deepEqual(b.sent('admin_review_transaction_v1')[0][1], { p_property_id: PROP, p_id: 'p1', p_action: 'approve', p_edits: {}, p_reason: null });
+  await b.click('open', 'p1'); await b.click('review'); await b.click('same-as'); assert.equal(b.sent('expense_void_v1')[1][1].p_same_as, 'r3');
+  await b.click('open', 'p2'); await b.click('review'); await b.click('not-cost'); assert.deepEqual(b.sent('expense_void_v1')[2][1], { p_property_id: PROP, p_id: 'p2', p_reason: 'Not a cost' });
+});
+test('E locked rows: view-only, with the way to the screen that owns them', async () => {
+  const b = await boot({ screen: SCREEN({ rows: [ROW({ id: 's1', chip: 'staff_pay', locked: true, amount_locked: true, receipt_can: { add: false, replace: false, remove: false } }), ROW({ id: 'b1', chip: 'bill', locked: true, amount_locked: true, has_receipt: true, receipt_ref: { kind: 'bill', id: 'b1', mime: 'image/jpeg' }, receipt_can: { add: false, replace: false, remove: false } })] }) });
+  await b.click('open', 's1'); let h = b.html(); assert.match(h, /Proof is in Pay staff/); assert.match(h, /Open Pay staff/); assert.doesNotMatch(h, /Add receipt|E_rblock/); assert.doesNotMatch(h, /data-e="void-ask"/);
+  await b.click('go-pay'); assert.equal(b.nav.at(-1), '#pay');
+  await b.click('open', 'b1'); h = b.html(); assert.match(h, /Payment screenshot from Bills/); assert.match(h, /Open in Bills/); assert.doesNotMatch(h, /data-e="rc-ask"|data-e="chooser"/);
+  assert.ok(b.client.fns.every((f) => f[1].mode === 'sign'), 'only a sign request is ever made here');
+});
+
+// ------------------------------------------------------------------------------------------------ receipts
+test('E receipts: a signed link is asked for only in the row sheet, one id, mode sign; nothing is stored or logged', async () => {
+  const b = await boot({ screen: SCREEN({ rows: [ROW({ id: 'a1', has_receipt: true, receipt_ref: { kind: 'txn', id: 'a1', mime: 'image/jpeg' }, receipt_can: { add: false, replace: true, remove: true } })] }), fn: { sign: () => ({ ok: true, links: { a1: { url: 'https://x.supabase.co/signed/a1?token=T', kind: 'txn', mime: 'image/jpeg' } } }) } });
+  assert.equal(b.client.fns.length, 0, 'nothing is signed for the list'); assert.doesNotMatch(b.html(), /token=/);
+  await b.click('open', 'a1'); assert.deepEqual(b.client.fns, [['ocr-receipt', { mode: 'sign', property_id: PROP, ids: ['a1'] }]]);
+  assert.match(b.html(), /href="https:\/\/x\.supabase\.co\/signed\/a1\?token=T"/); assert.match(b.html(), /data-e="chooser">Replace/); assert.match(b.html(), /data-e="rc-ask">Remove/);
+  await b.click('close'); assert.doesNotMatch(b.html(), /token=/, 'the link goes with the sheet');
+  assert.doesNotMatch(SRC, /localStorage|sessionStorage|console\.|\.storage\b|createSignedUrl|caches\./);
+  assert.match(SRC, /for \(i = 0; i < ids\.length; i \+= 20\)/);
+});
+test('E receipts: Add receipt on an existing row attaches, then sets, then refreshes; the buttons follow receipt_can', async () => {
+  let n = 0;
+  const b = await boot({ shrinkImage: SHRINK, fn: { attach: () => ATTACH(), sign: () => ({ ok: true, links: {} }) }, rpc: { expense_receipt_set_v1: () => ({ ok: true, id: 'r1', has_receipt: true, receipt_ref: { kind: 'txn', id: 'r1', mime: 'image/jpeg' } }), expenses_screen_v1: () => (++n === 1 ? SCREEN() : SCREEN({ rows: [ROW({ has_receipt: true })] })) } });
+  await b.click('open', 'r1'); assert.match(b.html(), /Add receipt/); assert.doesNotMatch(b.html(), /Replace|Remove<\/button>/);
+  await b.click('chooser'); assert.match(b.html(), /Take photo/); assert.match(b.html(), /accept="image\/\*" capture/); assert.match(b.html(), /Choose photo or PDF/); assert.match(b.html(), /accept="image\/\*,application\/pdf"/); assert.match(b.html(), /One receipt per expense\. PDF up to 5 MB\./);
+  await b.pick(JPG);
+  const order = [...b.client.fns.map((f) => 'fn:' + f[1].mode), ...[]];
+  assert.deepEqual(b.client.fns.filter((f) => f[1].mode !== 'sign').map((f) => f[1].mode), ['attach']); assert.deepEqual(b.client.fns[0][1], { mode: 'attach', file_base64: 'QUJD', mime_type: 'image/jpeg' });
+  assert.deepEqual(b.sent('expense_receipt_set_v1')[0][1], { p_property_id: PROP, p_id: 'r1', p_path: 'tx/abc.jpg', p_reason: 'Receipt added' });
+  assert.ok(order.indexOf('fn:attach') >= 0); assert.ok(b.sent('expenses_screen_v1').length >= 2, 'the row refreshes');
+  assert.match(b.text(), /Receipt says ₱1,250\.00, this row says ₱1,200\.00 Use receipt amount/);
+});
+test('E receipts: applying the suggestion sends exactly the id, the amount and a reason', async () => {
+  const b = await boot({ shrinkImage: SHRINK, fn: { attach: () => ATTACH(), sign: () => ({ ok: true, links: {} }) }, rpc: { expense_receipt_set_v1: () => ({ ok: true, id: 'r1', has_receipt: true, receipt_ref: { kind: 'txn', id: 'r1', mime: 'image/jpeg' } }), admin_save_transaction_v2: () => ({ ok: true, id: 'r1' }) } });
+  await b.click('open', 'r1'); await b.pick(JPG); await b.click('sug');
+  assert.deepEqual(b.sent('admin_save_transaction_v2')[0][1].p_txn, { id: 'r1', gross_amount: '1250.00', reason: 'Amount from receipt' });
+  assert.deepEqual(Object.keys(b.sent('admin_save_transaction_v2')[0][1]).sort(), ['p_idempotency_key', 'p_property_id', 'p_txn']);
+});
+test('E receipts: a matching amount says so; a system-priced row shows no suggestion', async () => {
+  let b = await boot({ shrinkImage: SHRINK, fn: { attach: () => ATTACH({ suggest: { amount: 1200 } }), sign: () => ({ ok: true, links: {} }) }, rpc: { expense_receipt_set_v1: () => ({ ok: true, id: 'r1', has_receipt: true, receipt_ref: { kind: 'txn', id: 'r1', mime: 'image/jpeg' } }) } });
+  await b.click('open', 'r1'); await b.pick(JPG); assert.match(b.text(), /Receipt matches this row/); assert.doesNotMatch(b.html(), /data-e="sug"/);
+  b = await boot({ shrinkImage: SHRINK, fn: { attach: () => ATTACH(), sign: () => ({ ok: true, links: {} }) }, rpc: { expense_receipt_set_v1: () => ({ ok: true, id: 'r3', has_receipt: true, receipt_ref: { kind: 'txn', id: 'r3', mime: 'image/jpeg' } }) } });
+  await b.click('open', 'r3'); await b.pick(JPG); assert.doesNotMatch(b.html(), /data-e="sug"|Receipt matches/);
+});
+test('E receipts: Remove asks for a reason and sends null with it; Replace sends the new path', async () => {
+  const withRc = ROW({ id: 'a1', has_receipt: true, receipt_ref: { kind: 'txn', id: 'a1', mime: 'image/jpeg' }, receipt_can: { add: false, replace: true, remove: true } });
+  const b = await boot({ screen: SCREEN({ rows: [withRc] }), shrinkImage: SHRINK, fn: { attach: () => ATTACH(), sign: () => ({ ok: true, links: {} }) }, rpc: { expense_receipt_set_v1: () => ({ ok: true, id: 'a1', has_receipt: false, receipt_ref: null }) } });
+  await b.click('open', 'a1'); await b.click('rc-ask'); assert.match(b.text(), /Remove this receipt\? The file is kept\./);
+  await b.click('rc-go'); assert.equal(b.sent('expense_receipt_set_v1').length, 0); await b.type('reason', 'ab'); await b.click('rc-go'); assert.equal(b.sent('expense_receipt_set_v1').length, 0);
+  await b.type('reason', 'Wrong picture'); await b.click('rc-go'); assert.deepEqual(b.sent('expense_receipt_set_v1')[0][1], { p_property_id: PROP, p_id: 'a1', p_path: null, p_reason: 'Wrong picture' });
+  await b.click('open', 'a1'); await b.pick(JPG); assert.equal(b.sent('expense_receipt_set_v1')[1][1].p_path, 'tx/abc.jpg'); assert.equal(b.sent('expense_receipt_set_v1')[1][1].p_reason, 'Receipt replaced');
+});
+test('E receipts: refusals are plain; a duplicate names where the receipt already is', async () => {
+  const mk = (res) => boot({ shrinkImage: SHRINK, fn: { attach: () => ATTACH(), sign: () => ({ ok: true, links: {} }) }, rpc: { expense_receipt_set_v1: () => res } });
+  let b = await mk({ ok: false, error: 'duplicate_receipt', ref: 'Stock bought 21 Nov' }); await b.click('open', 'r1'); await b.pick(JPG); assert.match(b.text(), /This receipt is already on Stock bought 21 Nov\./);
+  b = await mk({ ok: false, error: 'locked', where: 'Pay staff' }); await b.click('open', 'r1'); await b.pick(JPG); assert.match(b.text(), /kept in Pay staff/);
+  b = await mk({ ok: false, error: 'receipt_in_use' }); await b.click('open', 'r1'); await b.pick(JPG); assert.match(b.text(), /already used in Inventory/);
+  b = await mk({ data: null, error: { code: '23505', message: 'duplicate key' } }); await b.click('open', 'r1'); await b.pick(JPG); assert.match(b.text(), /This receipt is already on another expense\./);
+});
+test('E receipts: a PDF is never shrunk, over 5 MB is refused, a wrong type is refused, and a PDF says it cannot be read', async () => {
+  let shrinks = 0; const pdf = { name: 'r.pdf', type: 'application/pdf', size: 1000 };
+  const b = await boot({ sub: 'add', shrinkImage: () => { shrinks++; return SHRINK(); }, readFile: () => Promise.resolve({ base64: 'UERG', mime: 'application/pdf' }), fn: { attach: (x) => ATTACH({ mime: 'application/pdf', suggest: null, unread: 'pdf' }) } });
+  await b.pick({ ...pdf, size: 5 * 1024 * 1024 + 1 }); assert.match(b.text(), /That file is over 5 MB\./); await b.pick({ name: 'a.txt', type: 'text/plain', size: 10 }); assert.match(b.text(), /Use a photo or a PDF\./);
+  assert.equal(b.client.fns.length, 0, 'nothing is uploaded for a refused file');
+  await b.pick(pdf); assert.equal(shrinks, 0); assert.deepEqual(b.client.fns[0][1], { mode: 'attach', file_base64: 'UERG', mime_type: 'application/pdf' });
+  assert.match(b.text(), /Attached\. A PDF can’t be read - fill in the fields\./); assert.match(b.text(), /Receipt attached \(PDF\)/); assert.match(b.html(), /E_pdf/);
+});
+test('E receipts: a photo on the Add sheet prefills and marks the fields, and the create carries the receipt fields (the edit never does)', async () => {
+  const b = await boot({ sub: 'add', shrinkImage: SHRINK, fn: { attach: () => ATTACH() }, rpc: { admin_save_transaction_v2: () => ({ ok: true, id: 'n1' }) } });
+  await b.pick(JPG); assert.match(b.html(), /value="1250\.00"/); assert.match(b.html(), /check this/); assert.match(b.html(), /Receipt attached/);
+  await b.click('save'); const t = b.sent('admin_save_transaction_v2')[0][1].p_txn;
+  assert.equal(t.receipt_image_path, 'tx/abc.jpg'); assert.equal(t.ocr_confidence, 0.9); assert.equal(t.gross_amount, '1250.00'); assert.equal(t.transaction_date, '2026-11-20'); assert.equal(t.payee_name, 'Sample Hardware');
+});
+test('E add: a 23505 on save reads as a duplicate receipt, and a refused attach saves nothing', async () => {
+  let b = await boot({ sub: 'add', rpc: { admin_save_transaction_v2: () => ({ data: null, error: { code: '23505', message: 'duplicate' } }) } });
+  await fill(b, { amount: '10', category: 'supplies', notes: 'x' }); await b.click('save'); assert.match(b.text(), /This receipt is already on another expense\./);
+  b = await boot({ sub: 'add', shrinkImage: SHRINK, fn: { attach: () => ({ error: { context: { status: 500, json: () => Promise.resolve({ ok: false, error: 'hash_failed' }) } } }) } });
+  await b.pick(JPG); assert.match(b.text(), /could not be saved just now/); assert.equal(b.sent('admin_save_transaction_v2').length, 0);
+});
+
+// ------------------------------------------------------------------------------------------------ hand-off to Inventory
+test('E hand-off: the routing line is for owner and admin only, never on an existing row; tapping it saves nothing and uploads nothing more', async () => {
+  const mk = (role) => boot({ role, sub: 'add', shrinkImage: SHRINK, fn: { attach: () => ATTACH({ stock_hint: { count: 2, names: ['Soap', 'Towels'] } }) } });
+  let b = await mk('owner'); assert.doesNotMatch(b.html(), /Did this go into stock/, 'no receipt yet'); await b.pick(JPG); assert.match(b.html(), /Did this go into stock\? Add it in Inventory instead/);
+  const upBefore = b.client.fns.length; await b.click('route');
+  assert.equal(b.sent('admin_save_transaction_v2').length, 0); assert.equal(b.client.fns.length, upBefore, 'no second upload'); assert.deepEqual(b.nav, ['#supply'], 'no path in the address');
+  assert.deepEqual(plain(b.win.CS_receiptHand), { path: 'tx/abc.jpg', mime: 'image/jpeg', from: 'expenses' }); assert.equal(b.E._held().f.category, 'supplies', 'the form is kept for the way back');
+  b = await mk('admin'); await b.pick(JPG); assert.match(b.html(), /Did this go into stock/);
+  b = await mk('finance'); await b.pick(JPG); assert.doesNotMatch(b.html(), /Did this go into stock/);
+  b = await boot({ fn: { attach: () => ATTACH({ stock_hint: { count: 2, names: [] } }), sign: () => ({ ok: true, links: {} }) }, shrinkImage: SHRINK, rpc: { expense_receipt_set_v1: () => ({ ok: true, id: 'r1', has_receipt: true, receipt_ref: { kind: 'txn', id: 'r1', mime: 'image/jpeg' } }) } });
+  await b.click('open', 'r1'); await b.pick(JPG); assert.doesNotMatch(b.html(), /Did this go into stock/);
+});
+test('E hand-off: after a failed hand-off the form comes back with the same receipt and fields; any other mount clears it', async () => {
+  const env = loadModule(), shrinkImage = SHRINK;
+  const mountIt = async (sub) => { const el = new FakeEl(), c = fakeClient({ rpc: { expenses_screen_v1: () => SCREEN() }, fn: { attach: () => ATTACH({ stock_hint: { count: 1, names: [] } }) } }), nav = [];
+    env.E.mount(el, { client: c, role: 'owner', sub, propertyId: PROP, navigate: (h) => nav.push(h), toast() {}, haptic() {}, shrinkImage }); await tick();
+    const fire = async (t, ev) => { for (const f of el.l[t] || []) f(ev); await tick(); }, tg = (a, x = {}) => { const t = { ...x, getAttribute: (k) => (k in a ? a[k] : null), closest: (s) => { const m = /^\[([\w-]+)\]$/.exec(s); return m && m[1] in a ? t : null; } }; return t; };
+    return { el, c, nav, click: (act) => fire('click', { type: 'click', target: tg({ 'data-e': act }) }), type: (f, v) => fire('input', { type: 'input', target: tg({ 'data-f': f }, { value: v }) }), pick: (file) => fire('change', { type: 'change', target: tg({ 'data-e': 'file' }, { files: [file] }) }) }; };
+  let m = await mountIt('add'); await m.pick(JPG); await m.type('amount', '77'); await m.type('notes', 'Soap'); await m.click('route'); assert.ok(env.E._held());
+  m = await mountIt('add/back'); assert.match(m.el.innerHTML, /value="77"/); assert.match(m.el.innerHTML, /value="Soap"/); assert.match(m.el.innerHTML, /Receipt attached/); assert.equal(m.c.fns.filter((f) => f[1].mode === 'attach').length, 0, 'the same file, not uploaded again'); assert.equal(env.E._held(), null);
+  m = await mountIt('add'); await m.pick(JPG); await m.click('route'); assert.ok(env.E._held()); await mountIt(''); assert.equal(env.E._held(), null, 'a plain mount clears it'); assert.equal(env.win.CS_receiptHand, null);
+});
+test('S110: Inventory takes the receipt path once, makes the draft without a second upload, and a failure offers "Back to the expense"', async () => {
+  const S = read('stock/S110_supply.js');
+  assert.match(S, /var hd = root\.CS_receiptHand; if \(!S\.use && hd && hd\.from === 'expenses' && typeof hd\.path === 'string' && hd\.path && S\.client\)/); assert.match(S, /root\.CS_receiptHand = null/);
+  assert.match(S, /body: \{ mode: 'supply', receipt_path: path \}/); assert.match(S, /Couldn’t open this in Inventory\./); assert.match(S, /data-sact="hand-back">Back to the expense/); assert.match(S, /navigate\('#expenses\/add\/back'\)/);
+  // run it: a hand-off arrives, supply is asked with the path only, then the draft is read
+  const win = { root: null }; const calls = [], rpcs = []; const ctx = { window: win, console, Promise, Date, Math, JSON, setTimeout, clearTimeout, Intl, Uint8Array };
+  ctx.root = ctx; win.CS_receiptHand = undefined; const mod = fs.readFileSync(path.join(root, 'stock/S110_supply.js'), 'utf8');
+  assert.doesNotMatch(mod, /receipt_path: path[^}]*image_base64/);
+});
+
+// ------------------------------------------------------------------------------------------------ Manage, KPIs, shell, styles
+test('N_manage: no second expense form; the Log an expense button opens #expenses/add', () => {
+  assert.match(MAN, /<a class="btn btn-primary btn-block" href="#expenses\/add">Log an expense<\/a>/);
+  for (const gone of ["kind === 'expense'", 'scanReceipt', 'shrinkReceipt', 'doExpenseSend', 'expenseTxn', 'validateExpense', 'scan-pick', "mode: 'extract'", 'admin_save_transaction_v1', 'N_xs']) assert.ok(!MAN.includes(gone), gone + ' is gone from Manage');
+  assert.doesNotMatch(APP, /Inquiries, expenses and key figures/); assert.match(APP, /sub: 'Inquiries and key figures'/);
+});
+test('KPI copy (SPEC 8.4): labels follow kpi_source, the pending line and the See expenses link, no new keys leak to non-admins', async () => {
+  const win = { ICON: () => '', document: {} }; win.window = win; vm.runInContext(read('kpi/K_kpi.js'), vm.createContext(win));
+  const mk = (admin, role = 'owner') => { const L = {}, e = { innerHTML: '', addEventListener: (t, f) => { (L[t] ||= []).push(f); }, removeEventListener() {}, querySelector: () => null };
+    win.K_Kpi.reset(); win.K_Kpi.mount(e, { client: { rpc: (n) => Promise.resolve(n === 'kpi_tab_v1' ? { data: { ok: true, month: '2026-11-01', utility: {}, inventory: {}, admin }, error: null } : { data: [], error: null }) }, role, propertyId: 'p' }); e.go = async () => { const g = { getAttribute: (n) => ({ 'data-kact': 'seg', 'data-seg': 'admin' })[n] ?? null, closest: () => g }; for (const f of L.click || []) f({ target: g, preventDefault() {} }); await tick(); }; return e; };
+  const A = { supplies_month: 3000, supply_cost_per_turnover: 500, cleaning_pay_month: 1500, net_month: 9000, revenue_month: 20000, costs_month: 11000, month_kwh_cost: 100 };
+  let e = mk({ ...A, kpi_source: 'legacy', costs_pending_month: { count: 2, total: 1850 }, cleaning_pay_open: 600 }); await tick(); await e.go();
+  let t = e.innerHTML.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ');
+  assert.match(t, /Supplies bought Before November: from stock receipts/); assert.match(t, /Supplies used per turnover/); assert.doesNotMatch(t, /Supply cost per turnover/);
+  assert.match(t, /Cleaning pay Cleaning fees for cleans this month · ₱600 requested, not paid yet/); assert.match(t, /₱1,850 of expenses waiting for review/); assert.match(t, /See expenses/); assert.match(e.innerHTML, /href="#expenses"/);
+  e = mk({ ...A, kpi_source: 'ledger', costs_pending_month: { count: 0, total: 0 }, cleaning_pay_open: 0 }); await tick(); await e.go(); t = e.innerHTML.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ');
+  assert.doesNotMatch(t, /Before November/); assert.doesNotMatch(t, /requested, not paid yet/); assert.doesNotMatch(t, /waiting for review/); assert.match(t, /See expenses/);
+  e = mk({ ...A, kpi_source: 'ledger' }, 'cleaner'); await tick(); assert.doesNotMatch(e.innerHTML, /expenses|Supplies bought/);
+});
+test('Shell: version, cache name, service worker list, no peso in a staff layout, nothing signed is cached', () => {
+  const pkg = JSON.parse(read('package.json')); assert.equal(pkg.version, '3.4.53'); assert.match(APP, /version: '3\.4\.53'/);
+  assert.match(SW, /const CACHE_NAME = 'cs-shell-v78'/); assert.match(APP, /var PC_SHELL = 'cs-shell-v78'/);
+  assert.ok(SW.includes("'./expenses/E_expenses.js', './expenses/E_expenses.css'")); assert.match(SW, /NETWORK_ONLY_HOSTS = \['supabase\.co'/);
+  assert.match(SW, /\/storage\/v1\//); assert.match(read('README.md'), /cs-shell-v78/);
+  // the Today card is drawn only for the admin layout and only by A_expCard (the staff body never calls it)
+  const staffBody = APP.slice(APP.indexOf("body = '<div class=\"A_body\">'") - 400, APP.indexOf("body = '<div class=\"A_body\">'") + 40);
+  assert.equal((APP.match(/A_expCard\(\)/g) || []).length, 2, 'defined once, used once'); assert.ok(!/A_expCard/.test(staffBody));
+  const card = APP.slice(APP.indexOf('function A_expCard'), APP.indexOf('function A_loadExpenses'));
+  assert.match(card, /state\.layout !== 'admin'/); assert.match(card, /EXPENSES · /); assert.match(card, /Usual month about /); assert.match(card, / to review/); assert.match(card, /href="#expenses\/add"/);
+  assert.doesNotMatch(read('index.html'), /A_expCard/); assert.match(read('index.html'), /id="v-expenses"/);
+});
+test('Today card: the month, a usual month rounded to 100, a review count only when something waits, an Add button only with write access', async () => {
+  const { A_expCardForTest } = {}; void A_expCardForTest;
+  const card = APP.slice(APP.indexOf('function A_expCard'), APP.indexOf('function A_loadExpenses'));
+  const fnc = new Function('state', 'role', 'esc', 'A_peso', 'ICON', card + '; return A_expCard;');
+  const mk = (e, layout = 'admin', r = 'owner') => fnc({ expenses: e, layout }, () => r, (s) => String(s), (x) => '₱' + Number(x).toLocaleString('en-PH'), () => '+')();
+  const base = { month: '2026-11-01', total: 38420.4, basis: 47413, pending: { count: 2, total: 1850 }, can_write: true };
+  let h = mk(base); assert.match(h, /EXPENSES · NOVEMBER/); assert.match(h, /₱38,420/); assert.match(h, /Usual month about ₱47,400 · 2 to review/); assert.match(h, /class="btn btn-primary E_tadd" href="#expenses\/add"/);
+  h = mk({ ...base, pending: { count: 0, total: 0 }, can_write: false }); assert.doesNotMatch(h, /to review/); assert.doesNotMatch(h, /E_tadd/);
+  assert.equal(mk(null), ''); assert.equal(mk(base, 'staff'), ''); assert.equal(mk(base, 'admin', 'cleaner'), ''); assert.equal(mk(base, 'admin', 'laundry'), '');
+  assert.match(STY, /\.E_today \.E_tadd \{ width: 64px; min-height: var\(--v5-touch\)/);
+});
+test('Styles: tokens only, no raw colour, no pixel font size, and only the four type tokens', () => {
+  for (const [name, css] of [['E_expenses.css', CSS], ['Today card block', STY.slice(STY.indexOf('s134 (3.4.53)'))]]) {
+    assert.doesNotMatch(css.replace(/\/\*[^]*?\*\//g, ''), /#[0-9a-fA-F]{3,8}\b/, name + ' has a raw hex colour'); assert.doesNotMatch(css, /rgba?\(|hsla?\(/, name + ' has a raw colour function');
+    assert.doesNotMatch(css, /font-size:\s*[\d.]+px/, name); assert.doesNotMatch(css, /font:[^;]*\b\d+(\.\d+)?px/, name + ' sets a px font');
+    const sizes = new Set([...css.matchAll(/font(?:-size)?:[^;]*?var\((--v5-t-[a-z0-9-]+)\)/g)].map((m) => m[1])); for (const s of sizes) assert.ok(['--v5-t-min', '--v5-t-label', '--v5-t-body', '--v5-t-num'].includes(s), name + ' uses ' + s);
+  }
+  assert.equal((CSS.replace(/\/\*[^]*?\*\//g, '').match(/--v5-warn-t/g) || []).length, 1, '--warn-t only on the waiting-for-review line'); assert.match(CSS, /\.E_warnline[^}]*var\(--v5-warn-t\)/);
+  assert.match(CSS, /\.E_num \{ font: 400 var\(--v5-t-num\)\/1\.1 var\(--v5-font-display\)/);
+});
+test('Module hygiene: plain script, no network but the client, no peso outside the module (staff layout), no eval', () => {
+  assert.doesNotThrow(() => new vm.Script(SRC)); assert.doesNotMatch(SRC, /\beval\(|new Function|document\.write|fetch\(|XMLHttpRequest/);
+  assert.doesNotMatch(APP.slice(0, APP.indexOf('function A_expCard')).split('\n').filter((l) => /staffBody|cleaner/.test(l) && /A_expCard/.test(l)).join('\n'), /A_expCard/);
+});
