@@ -19,30 +19,30 @@ const norm = (L, role = 'owner') => raw.map((r) => L.normalize(r, role));
 
 test('I_group Low first: the group with an Out leads, then Low groups by how many are low, then all-OK groups by name', async () => {
   const L = await lib();
-  const g = L.groupsFor(norm(L), 'low', '');
+  const g = L.groupsFor(norm(L), 'first', '');
   eq(g.map((x) => x.cat), ['Bath', 'Linen', 'Kitchen', 'Zed']);
   eq([g[0].out, g[0].low, g[1].out, g[1].low], [1, 1, 0, 2]);
 });
 
 test('I_group inside a group: Out, then Low, then OK, then name; the lowest item leads', async () => {
   const L = await lib();
-  const bath = L.groupsFor(norm(L), 'low', '')[0];
+  const bath = L.groupsFor(norm(L), 'first', '')[0];
   eq(bath.rows.map((r) => r.name), ['Hand soap', 'Toilet paper', 'Shampoo']);
 });
 
 test('I_group more Out+Low wins between two Low-only groups, then the name', async () => {
   const L = await lib();
   const more = norm(L).concat([L.normalize(item('m1', 'Mop', 1, 3, { category: 'Cleaning' }), 'owner')]);
-  const g = L.groupsFor(more, 'low', '');
+  const g = L.groupsFor(more, 'first', '');
   eq(g.map((x) => x.cat).slice(0, 3), ['Bath', 'Linen', 'Cleaning']);
 });
 
 test('I_group search drops groups with no matching rows', async () => {
   const L = await lib();
-  const g = L.groupsFor(norm(L), 'low', 'soap');
+  const g = L.groupsFor(norm(L), 'first', 'soap');
   eq(g.map((x) => x.cat), ['Bath', 'Kitchen']);
   eq(g[0].rows.map((r) => r.name), ['Hand soap']);
-  eq(L.groupsFor(norm(L), 'low', 'nothing here'), []);
+  eq(L.groupsFor(norm(L), 'first', 'nothing here'), []);
 });
 
 test('I_group All and Consumables: consumable groups first (s132 update order), rows by name', async () => {

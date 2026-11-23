@@ -64,7 +64,7 @@ test('I_s108 a cleaner editing an option has no price in the form and only the c
 
 test('I_s108 owner adds a product: price field, price sent, Saved, and the options are read again', async () => {
   const e = await make('owner'); await addForm(e);
-  assert.match(e.sheet(), /id="I_f_price"/); assert.match(e.sheet(), />Save</);
+  assert.match(e.sheet(), /id="I_f_price"/); assert.match(e.sheet(), />Add product</);
   const before = calls(e, 'inventory_item_options_v1').length;
   await fill(e, { title: 'Plush', supplierId: 's1', link: 'https://shopsuki.ph/products/plush', photo: IMG, price: '175' });
   await e.act('o8-avail'); // out of stock
@@ -81,16 +81,17 @@ test('I_s108 shopee links lose their tracking query, a shopsuki link keeps its o
   assert.equal(L.o8Link('https://SHOPSUKI.ph/products/joy?variant=9'), 'https://shopsuki.ph/products/joy?variant=9');
   assert.equal(L.o8Link('https://shopee.ph'), 'https://shopee.ph/');
   assert.equal(L.o8Link('https://mandauefoam.ph/products/graz-bath-rug-40x60-cm'), 'https://mandauefoam.ph/products/graz-bath-rug-40x60-cm', 's116: a Mandaue Foam link is accepted');
-  assert.equal(L.o8Link('https://mandauefoam.ph.evil.example/x'), null, 's116: a look-alike host is refused');
-  for (const bad of ['http://shopee.ph/x', 'https://example.com/x', 'https://shopee.ph.evil.com/x', 'https://evil.com/shopee.ph/x', 'javascript:alert(1)', '']) assert.equal(L.o8Link(bad), null, bad);
+  assert.equal(L.o8Link('https://example.com/x'), 'https://example.com/x', 's133: any https shop is accepted');
+  assert.equal(L.o8Link('https://mandauefoam.ph.evil.example/x'), 'https://mandauefoam.ph.evil.example/x', 's133: the host is no longer limited');
+  for (const bad of ['http://shopee.ph/x', 'https://localhost/x', 'https://a b.com/x', 'https://example.com/"x', 'https://example.com/' + 'a'.repeat(500), 'javascript:alert(1)', '']) assert.equal(L.o8Link(bad), null, bad);
   assert.equal(L.o8Link('https://www.shopee.ph/x?ref=1'), 'https://shopee.ph/x', 'a www. link is accepted without www and without its tracking query');
   assert.equal(L.o8Pic('https://down-ph.img.susercontent.com/file/abc'), 'https://down-ph.img.susercontent.com/file/abc'); assert.equal(L.o8Pic('https://example.com/a.jpg'), null);
   const e = await make('owner'); await addForm(e);
   await fill(e, { title: 'X', supplierId: 's1', link: 'https://shopee.ph/Joy-i.123.456?sp_atk=abc&utm_source=x' }); await e.submit();
   assert.equal(calls(e, 'inventory_option_request_v1')[0][2].p_payload.source_url, 'https://shopee.ph/Joy-i.123.456');
   const f = await make('owner'); await addForm(f);
-  await fill(f, { title: 'X', supplierId: 's1', link: 'https://example.com/product' }); await f.submit();
-  assert.equal(calls(f, 'inventory_option_request_v1').length, 0); assert.match(f.sheet(), /role="alert"[^>]*>.*shopsuki\.ph, shopee\.ph, mandauefoam\.ph or myhanabishi\.com/);
+  await fill(f, { title: 'X', supplierId: 's1', link: 'http://example.com/product' }); await f.submit();
+  assert.equal(calls(f, 'inventory_option_request_v1').length, 0); assert.match(f.sheet(), /role="alert"[^>]*>.*web address that starts with https/);
   await fill(f, { link: 'https://shopsuki.ph/p', photo: 'https://example.com/a.jpg' }); await f.submit();
   assert.equal(calls(f, 'inventory_option_request_v1').length, 0); assert.match(f.sheet(), /cdn\.shopify\.com or down-ph\.img\.susercontent\.com/);
   await fill(f, { photo: '', supplierId: '' }); await f.submit(); assert.match(f.sheet(), /Choose the shop/); assert.equal(calls(f, 'inventory_option_request_v1').length, 0);
@@ -114,7 +115,8 @@ test('I_s108 Remove asks first, sends delete with an empty payload, and the usua
 test('I_s108 the form stays on screen when the server says duplicate; every option row has Edit and Remove with 44 px targets', async () => {
   const e = await make('owner', { rpc: { inventory_option_request_v1: () => ({ data: null, error: { code: '22023', message: 'duplicate_option' } }) } });
   await e.mount(''); await e.open('i1');
-  assert.equal((e.sheet().match(/data-act="o8-edit"/g) || []).length, 2); assert.equal((e.sheet().match(/data-act="o8-del"/g) || []).length, 1);
+  await e.act('omenu', { 'data-id': 'o2' }); assert.equal((e.sheet().match(/data-act="o8-edit"/g) || []).length, 1); assert.equal((e.sheet().match(/data-act="o8-del"/g) || []).length, 1);
+  await e.act('omenu', { 'data-id': 'o1' }); assert.equal((e.sheet().match(/data-act="o8-edit"/g) || []).length, 1); assert.equal((e.sheet().match(/data-act="o8-del"/g) || []).length, 0);
   await e.act('o8-edit', { 'data-id': 'o2' }); await e.input('I_f_title', 'Softly Bath Tissue 12 rolls'); await e.submit();
   assert.match(e.sheet(), /That product is already in the list\./); assert.match(e.sheet(), /Edit product/);
   const fs = await import('node:fs'); const css = fs.readFileSync(new URL('../stock/I_stock.css', import.meta.url), 'utf8');
@@ -138,7 +140,7 @@ test('I_s108 approvals: Requests N in the More menu and a pill, the list shows w
   const del = req({ id: 'q3', action: 'delete', option_id: 'o2', option_title: 'Cloud Bath Tissue 12 rolls', payload: {}, current: { title: 'Cloud Bath Tissue 12 rolls', image_url: IMG } });
   const e = await make('owner', { reqs: [req(), mine, del] }); await e.mount('');
   const top = e.html();
-  assert.match(top, /data-act="o8-reqs">Requests 3<\/button>/); assert.match(top, /I_pill I_pinfo" type="button" data-act="o8-reqs"[^>]*>.*3 requests<\/button>/);
+  assert.match(top, /data-act="o8-reqs">Requests 3<\/button>/);
   await e.act('o8-reqs'); const s = e.sheet();
   assert.match(s, /3 waiting for you/); assert.equal((s.match(/class="I_req"/g) || []).length, 3); // the badge and the list use one selector
   assert.match(s, /New product · Toilet paper/); assert.match(s, /Change · Toilet paper/); assert.match(s, /Remove · Toilet paper/); assert.match(s, /Ana · Oct 30/);
@@ -147,7 +149,7 @@ test('I_s108 approvals: Requests N in the More menu and a pill, the list shows w
   assert.match(s, /<img class="I_rth" src="https:\/\/cdn\.shopify\.com[^"]+" alt="" width="56" height="56"/);
   assert.match(s, /<dt>Brand<\/dt><dd>Cloud → Cloud Soft<\/dd>/); assert.match(s, /<dt>Price<\/dt><dd>₱195 → ₱180<\/dd>/);
   assert.match(s, /<dt>Product<\/dt><dd>Cloud Bath Tissue 12 rolls<\/dd>/);
-  const none = await make('owner'); await none.mount(''); assert.doesNotMatch(none.html(), /3 requests|I_pill I_pinfo[^>]*o8-reqs/); assert.match(none.html(), /data-act="o8-reqs">Requests<\/button>/);
+  const none = await make('owner'); await none.mount(''); assert.doesNotMatch(none.html(), /3 requests/); assert.match(none.html(), /data-act="o8-reqs">Requests<\/button>/);
 });
 
 test('I_s108 approve with a price override and reject with a note: exact decide keys, then the list and the item options are read again', async () => {

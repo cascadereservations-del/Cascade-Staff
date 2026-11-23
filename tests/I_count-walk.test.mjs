@@ -98,7 +98,7 @@ test('I_count-walk Stop here goes to the summary with the rest unchanged', async
 
 test('I_count-walk the Needs a count chip lists consumables never counted or older than 30 days (frozen clock)', async () => {
   const e = await make(); await e.mount('');
-  assert.match(e.html(), /To count/); assert.match(e.html(), /2 to count/);
+  assert.match(e.html(), /To count/); assert.match(e.html(), /To count <span class="I_cn">2<\/span>/);
   await e.act('chip', { 'data-k': 'need' });
   const h = e.html().slice(e.html().indexOf('I_list'));
   assert.match(h, /Hand soap/); assert.match(h, /Toilet paper/);
@@ -121,14 +121,14 @@ test('I_count-walk finance never sees the button, the chip or the summary line; 
 test('I_count-walk probe-and-hide: a catalogue without countedAt has no chip and no summary line, but the walk still works', async () => {
   const old = { items: raw().items.map(({ countedAt, ...r }) => r) };
   const e = await make('owner', {}, old); await e.mount('');
-  assert.doesNotMatch(e.html(), /Needs a count/); assert.match(e.html(), /Count this group/);
+  assert.doesNotMatch(e.html(), /data-k="need"/); assert.match(e.html(), /Update this group/);
 });
 
 test('I_count-walk the button is on every group, and also under a category chip (a shelf count starts there)', async () => {
   const e = await make(); await e.mount('');
-  assert.equal([...e.html().matchAll(/data-act="walk"/g)].length, 3);
+  assert.equal([...e.html().matchAll(/data-act="group-open"/g)].length, 3); // s133: Update this group; its "count one at a time" starts the walk
   await e.act('chip', { 'data-k': 'c:Bath' });
-  assert.equal([...e.html().matchAll(/data-act="walk"/g)].length, 1);
+  assert.equal([...e.html().matchAll(/data-act="group-open"/g)].length, 1);
   await e.act('walk', { 'data-cat': 'Bath' }); assert.match(e.sheet(), /Item 1 of 3/);
 });
 

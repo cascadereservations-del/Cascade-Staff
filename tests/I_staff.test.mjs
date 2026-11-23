@@ -46,7 +46,7 @@ test('I_staff Undo of a use sends undo_inventory_usage_v1 with the usage key and
 test('I_staff the cleaner sees Count it and it sends reconcile_inventory_baseline_v1; Count a group and Needs a count show for her too', async () => {
   const e = await make('cleaner');
   await e.mount('');
-  assert.match(e.html(), /Count this group/); assert.match(e.html(), /to count/);
+  assert.match(e.html(), /Update this group/); assert.match(e.html(), /To count/);
   await e.open('i1');
   await e.begin('update');
   assert.match(e.sheet(), /data-act="upd-pick" data-kind="count"/); // Recount is one of the three options

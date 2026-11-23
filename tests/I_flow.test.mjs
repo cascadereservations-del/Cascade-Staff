@@ -185,8 +185,8 @@ test('I_flow opening an item and a tab go through navigate', async () => {
 test('I_flow header, order, chips and search', async () => {
   const e = await setup({ role: 'owner' });
   await e.mount('');
-  assert.match(e.html(), /2 low/); assert.match(e.html(), /1 out/);
-  assert.match(e.html(), /data-k="low" aria-pressed="true"/); // Low first is the default
+  assert.match(e.html(), /Low <span class="I_cn">2<\/span>/); assert.match(e.html(), /Out <span class="I_cn">1<\/span>/);
+  assert.doesNotMatch(e.html(), /aria-pressed="true">(Low|Out|All)/); // Low first is the default view: everything, worst first, no chip pressed
   const order = [...e.html().matchAll(/class="t">([^<]+)</g)].map((m) => m[1]);
   assert.deepEqual(order, ['Hand soap', 'Toilet paper', 'Bath towels']); // out, low, ok; the inactive lamp is hidden
   assert.match(e.html(), /<\/svg> Out/); assert.match(e.html(), /<\/svg> Low/); assert.match(e.html(), /<\/svg> OK/);
@@ -200,7 +200,7 @@ test('I_flow header, order, chips and search', async () => {
 test('I_flow Stock is fine when nothing is low', async () => {
   const e = await setup({ role: 'cleaner', client: mockClient({ catalogue: { items: [item('a', 'Candles', 9, 2)] } }) });
   await e.mount('');
-  assert.match(e.html(), /Stock is fine/); assert.doesNotMatch(e.html(), /items? low/);
+  assert.match(e.html(), /Low <span class="I_cn">0<\/span>/); assert.doesNotMatch(e.html(), /items? low/);
 });
 
 test('I_flow level bar and words: pure helpers', async () => {

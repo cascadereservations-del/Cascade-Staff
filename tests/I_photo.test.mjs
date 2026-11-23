@@ -122,12 +122,12 @@ test('I_photo Remove photo asks first, sends R7 with null and Undo puts the old 
   assert.deepEqual(photoCalls(e)[1][2], { p_item_id: 'i3', p_path: P2 });
 });
 
-test('I_photo display: one sign call per catalogue load for the paths shown, cached by path; lazy 48 px thumbnails in a reserved box; a placeholder glyph when none', async () => {
+test('I_photo display: one sign call per catalogue load for the paths shown, cached by path; lazy 64 px thumbnails in a reserved box; a placeholder glyph when none', async () => {
   const e = await make(); await e.mount('');
   assert.equal(signs(e).length, 1);
   assert.deepEqual(signs(e)[0][2], { purpose: 'inventory', action: 'sign', propertyId: PID, paths: [P1, P2] });
   const h = e.html();
-  assert.match(h, new RegExp('<span class="I_th" aria-hidden="true"><img data-uimg="1" src="' + URL1.replace(/[?.]/g, '\\$&') + '" alt="" width="48" height="48" loading="lazy"'));
+  assert.match(h, new RegExp('<span class="I_th" aria-hidden="true"><img data-uimg="1" src="' + URL1.replace(/[?.]/g, '\\$&') + '" alt="" width="64" height="64" loading="lazy"'));
   assert.match(h, /<span class="I_th" aria-hidden="true"><span class="I_emo">/); // Hand soap has none: the emoji holds the box (s132)
   e.client.calls.length = 0; e.advance(61000); e.unmount(); await e.mount('');
   assert.equal(signs(e).length, 1); assert.equal(JSON.stringify(signs(e)[0][2].paths), JSON.stringify([P2])); // P1 is cached; P2 was left out by the server
@@ -141,8 +141,8 @@ test('I_photo only the paths not yet cached are asked for again; a missing objec
 
 test('I_photo the card shows the photo with the item name as alt; on a scan result it is inline too', async () => {
   const e = await make(); await e.mount(''); await e.open('i1');
-  assert.match(e.sheet(), new RegExp('<div class="I_photo I_ph96"><img data-uimg="1" src="' + URL1.replace(/[?.]/g, '\\$&') + '" alt="Toilet paper" loading="lazy"'));
-  assert.ok(e.sheet().indexOf('I_photo') > e.sheet().indexOf('id="I_sh_t"')); // after the title on a plain open
+  assert.match(e.sheet(), new RegExp('<button class="I_heroz" type="button" data-act="zoom" data-i="0" aria-label="Zoom the photo of Toilet paper"><img data-uimg="1" src="' + URL1.replace(/[?.]/g, '\\$&') + '" alt="Toilet paper" decoding'));
+  assert.ok(e.sheet().indexOf('I_heroz') > e.sheet().indexOf('id="I_sh_t"')); // after the title on a plain open
   const s = await make(); await s.mount('');
   s.win.I_Stock.lib; // scan flow: the right product first
   s.client.calls.length = 0;

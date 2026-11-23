@@ -133,7 +133,7 @@ test('I_round2 R2-4: already_received from the server reads in plain words, refr
 
 test('I_round2 R2-12: Count this group is offered under a category chip too', async () => {
   const e = await make(); await e.mount(''); await e.act('chip', { 'data-k': 'c:Bathroom' });
-  assert.match(e.html(), /data-act="walk" data-cat="Bathroom"/);
+  assert.match(e.html(), /data-act="group-open" data-cat="Bathroom"/);
 });
 
 // ---- round 3 (session 85)

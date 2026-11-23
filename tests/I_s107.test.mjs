@@ -17,8 +17,8 @@ const rule = async (sel) => { const fs = await import('node:fs'); const css = fs
 
 test('I_s107 B9 chips: Low, To count, All, Consumables, then the categories, each with its count', async () => {
   const L = (await setup({ role: 'owner' })).lib, items = cat().items.map((r) => L.normalize(r, 'owner'));
-  assert.equal(JSON.stringify(L.chipsFor(items, 2).map((c) => [c.k, c.n])), JSON.stringify([['low', 2], ['need', 2], ['all', 4], ['cons', 3], ['c:Linen', 2], ['c:Bathroom', 1], ['c:Kitchen', 1]]));
-  assert.equal(L.chipsFor(items, 0).map((c) => c.k).slice(0, 3).join(), 'low,all,cons');
+  assert.equal(JSON.stringify(L.chipsFor(items, 2).map((c) => [c.k, c.n])), JSON.stringify([['low', 2], ['out', 1], ['need', 2], ['all', 4], ['cons', 3], ['c:Linen', 2], ['c:Bathroom', 1], ['c:Kitchen', 1]]));
+  assert.equal(L.chipsFor(items, 0).map((c) => c.k).slice(0, 3).join(), 'low,out,all');
   const e = await make(); await e.mount('');
   assert.match(e.html(), /data-k="low"[^>]*>Low <span class="I_cn">2<\/span>/); assert.match(e.html(), /data-k="all"[^>]*>All <span class="I_cn">4<\/span>/);
 });
@@ -26,12 +26,12 @@ test('I_s107 B9 chips: Low, To count, All, Consumables, then the categories, eac
 test('I_s107 B3 status pills: glyph, number and word; each filters or opens the Shopping list; Stock is fine when nothing is low', async () => {
   const e = await make('owner', { shop: SHOP }); await e.mount('');
   const h = e.html();
-  assert.match(h, /data-act="chip" data-k="low"><svg[^>]*>.*?<\/svg> 2 low<\/button>/); assert.match(h, /data-k="out"><svg[^>]*>.*?<\/svg> 1 out<\/button>/);
-  assert.match(h, /data-act="tab" data-to="shopping"><svg[^>]*>.*?<\/svg> 3 on list<\/button>/); assert.doesNotMatch(h, /I_sum/);
+  assert.match(h, /data-k="low"[^>]*>Low <span class="I_cn">2<\/span>/); assert.match(h, /data-k="out"[^>]*>Out <span class="I_cn">1<\/span>/); // s133: the pills are chips now, one row
+  assert.match(h, /data-k="list"[^>]*>On list <span class="I_cn">3<\/span>/); assert.doesNotMatch(h, /I_sum|I_pill/);
   await e.act('chip', { 'data-k': 'out' });
   assert.match(e.html(), /Hand soap/); assert.doesNotMatch(e.html().slice(e.html().indexOf('I_list')), /Toilet paper/);
   const fine = await make('owner', { cat: { items: [item('b1', 'Candles', 9, 2)] } }); await fine.mount('');
-  assert.match(fine.html(), /I_pok"><svg[^>]*>.*?<\/svg> Stock is fine/); assert.doesNotMatch(fine.html(), /data-k="out"/);
+  assert.match(fine.html(), /data-k="low"[^>]*>Low <span class="I_cn">0<\/span>/); assert.doesNotMatch(fine.html(), /data-k="out"/);
 });
 
 test('I_s107 B2 the More menu: Items tab holds add low, tidy, report and labels for the owner; Shopping holds share, image and PDF; a cleaner has no tidy or labels', async () => {
@@ -96,10 +96,11 @@ test('I_s107 B7 options sort: usual, preferred, in stock, then cheapest for pric
     { id: 'o1', supplier: 'Shopsuki', title: 'Usual tissue', usual: true, available: true, image_url: 'https://cdn.shopify.com/a.jpg', source_url: 'https://shopsuki.ph/p/1', price: 200 },
     { id: 'o2', supplier: 'Shopsuki', title: 'Other tissue', usual: false, available: true, image_url: 'https://cdn.shopify.com/b.jpg', source_url: null, price: 150 }] };
   const e = await make('owner', { rpc: { inventory_item_options_v1: () => ({ data: opts, error: null }) } }); await e.mount(''); await e.open('a1');
-  const s = e.sheet(), main = s.slice(s.indexOf('I_opts'), s.indexOf('<details class="I_other"'));
-  assert.match(main, /Usual tissue/); assert.doesNotMatch(main, /opt-usual/); assert.match(main, /data-act="opt-photo" data-id="o1"/);
-  assert.match(s, /<details class="I_other"><summary>Other options \(1\)<\/summary>[\s\S]*data-act="opt-usual" data-id="o2"[\s\S]*data-act="opt-photo" data-id="o2"/);
-  assert.match(s, /btn btn-ghost I_undobtn" type="button" data-act="opt-usual"/); assert.doesNotMatch(s, /btn-secondary I_undobtn/);
+  assert.match(e.sheet(), /Usual tissue/); assert.match(e.sheet(), /Other tissue/);
+  await e.act('omenu', { 'data-id': 'o1' }); assert.doesNotMatch(e.sheet(), /opt-usual/); assert.match(e.sheet(), /data-act="opt-photo" data-id="o1"/);
+  await e.act('omenu', { 'data-id': 'o2' }); const s = e.sheet();
+  assert.match(s, /data-act="opt-usual" data-id="o2"[\s\S]*data-act="opt-photo" data-id="o2"/);
+  assert.match(s, /btn btn-ghost I_pmi" type="button" data-act="opt-usual"/);
 });
 
 test('I_s107 B10 the shopping list is grouped by shop with an item count and, for price roles, a subtotal; a cleaner sees no money', async () => {

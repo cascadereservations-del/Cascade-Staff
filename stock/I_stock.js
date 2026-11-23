@@ -79,26 +79,31 @@
   }
   function summary(items) { var low = 0, out = 0; items.forEach(function (i) { var l = level(i); if (l === 'out') out++; else if (l === 'low') low++; }); return { low: low + out, out: out }; }
   // s107 B9: Low, To count (only when something needs counting), All, Consumables, then the categories; each carries its count.
-  function chipsFor(items, needN) {
-    var cats = {}, list = [{ k: 'low', t: 'Low', n: summary(items).low }];
+  function chipsFor(items, needN, listN) {
+    var cats = {}, sm = summary(items), list = [{ k: 'low', t: 'Low', n: sm.low }];
+    if (sm.out) list.push({ k: 'out', t: 'Out', n: sm.out }); // s133: Low and Out are real filters, one row of chips
     if (needN) list.push({ k: 'need', t: 'To count', n: needN });
+    if (listN) list.push({ k: 'list', t: 'On list', n: listN });
     list.push({ k: 'all', t: 'All', n: items.length }, { k: 'cons', t: 'Consumables', n: items.filter(function (i) { return i.consumable; }).length });
     items.forEach(function (i) { cats[i.category] = (cats[i.category] || 0) + 1; });
     Object.keys(cats).sort(groupOrder(items)).forEach(function (c) { list.push({ k: 'c:' + c, t: c, n: cats[c] }); });
     return list;
   }
   // Needs a count (s84 1b): a consumable never counted in the app, or not for 30 days. Only meaningful when the catalogue says when (countedAt).
+  function onList(it) { return (K.shop || []).some(function (r) { return r.itemId === it.id; }); }
   function needsCount(it) { return !!(K.hasCounted && it.consumable && (!it.counted || nowMs() - Date.parse(it.counted) > 30 * 86400000)); }
   function visible(items, chip, q) {
     var s = String(q || '').trim().toLowerCase(), out = items.filter(function (i) {
       if (s && i.name.toLowerCase().indexOf(s) < 0 && String(i.location || '').toLowerCase().indexOf(s) < 0) return false;
       if (chip === 'cons') return i.consumable;
       if (chip === 'out') return level(i) === 'out';
+      if (chip === 'low') return level(i) !== 'ok'; // s133: the count on the chip is the length of the list (ML-34)
+      if (chip === 'list') return onList(i);
       if (chip === 'need') return needsCount(i);
       if (chip.indexOf('c:') === 0) return i.category === chip.slice(2);
       return true;
     });
-    return chip === 'all' || chip === 'need' || chip === 'out' || chip.indexOf('c:') === 0 ? out.sort(byName) : out.sort(function (a, b) { return RANK[level(a)] - RANK[level(b)] || byName(a, b); });
+    return chip === 'all' || chip === 'need' || chip === 'out' || chip === 'list' || chip.indexOf('c:') === 0 ? out.sort(byName) : out.sort(function (a, b) { return RANK[level(a)] - RANK[level(b)] || byName(a, b); });
   }
   // Groups for the list (s84). Low first: worst group first (an Out, then a Low, then all OK), then more Out+Low, then name; inside a group Out, Low, OK, name.
   // All / Consumables: groups in update order (groupOrder), rows by name. A category chip is one group (the screen draws no header for it).
@@ -107,7 +112,7 @@
     rows.forEach(function (i) { if (!by[i.category]) { by[i.category] = { cat: i.category, rows: [], low: 0, out: 0 }; order.push(i.category); } var g = by[i.category], l = level(i); g.rows.push(i); if (l === 'out') g.out++; else if (l === 'low') g.low++; });
     var gs = order.map(function (c) { return by[c]; });
     var worst = function (g) { return g.out ? 0 : g.low ? 1 : 2; };
-    if (chip === 'low') gs.sort(function (a, b) { return worst(a) - worst(b) || (b.out + b.low) - (a.out + a.low) || a.cat.localeCompare(b.cat); });
+    if (chip === 'low' || chip === 'first') gs.sort(function (a, b) { return worst(a) - worst(b) || (b.out + b.low) - (a.out + a.low) || a.cat.localeCompare(b.cat); });
     else { var go = groupOrder(items); gs.sort(function (a, b) { return go(a.cat, b.cat); }); }
     if (chip === 'cons') gs.forEach(function (g) { g.rows.sort(byName); });
     return gs;
@@ -179,7 +184,8 @@
     rowsBad: 'That entry could not be read. Reload and try again.',
     sourceBad: 'That entry could not be sent from here. Reload and try again.',
     stockMoved: 'The stock changed while you were here. Reload and try again.',
-    itemGone: 'That item is no longer on the list. Reload and try again.'
+    itemGone: 'That item is no longer on the list. Reload and try again.',
+    countsExceed: 'The counts add up to more than the item has. Check the numbers, or count the item as a whole first.'
   };
   var REPORTS = [{ k: 'order', t: 'Order list', s: 'the order list' }, { k: 'all', t: 'All items', s: 'the full item list' }, { k: 'consumables', t: 'Consumables', s: 'the consumables list' }, { k: 'low', t: 'Low stock', s: 'the low-stock list' }, { k: 'misc', t: 'Miscellaneous', s: 'the miscellaneous list' }];
   var COOL_MS = 30000; // a sent report cannot be sent again to the same group for 30 seconds
@@ -247,7 +253,7 @@
     return [
       d('d1', 'Toilet paper', 'Bathroom', 'rolls', 4, 12, true, 18, 'pack', 12), d('d2', 'Bath towels', 'Linen', 'pieces', 14, 10, false, 220),
       d('d3', 'Hand soap', 'Bathroom', 'bottles', 0, 3, true, 95), d('d4', 'Dish soap', 'Kitchen', 'bottles', 5, 2, true, 80),
-      d('d5', 'Trash bags', 'Cleaning', 'rolls', 2, 4, true, 60, 'pack', 4), d('d6', 'Coffee pods', 'Kitchen', 'pods', 36, 20, true, 14),
+      d('d5', 'Trash bags', 'Cleaning', 'rolls', 3, 4, true, 60, 'pack', 4), d('d6', 'Coffee pods', 'Kitchen', 'pods', 36, 20, true, 14),
       d('d7', 'Bed sheets (queen)', 'Linen', 'sets', 6, 4, false, 650), d('d8', 'Floor cleaner', 'Cleaning', 'bottles', 3, 2, true, 120),
       d('d9', 'Shampoo sachets', 'Bathroom', 'sachets', 40, 24, true, 6), d('d10', 'Sponges', 'Cleaning', 'pieces', 9, 6, true, 15),
       d('d11', 'Light bulbs', 'Maintenance', 'pieces', 3, 2, false, 150), d('d12', 'Drinking water', 'Kitchen', 'gallons', 1, 2, true, 40),
@@ -258,19 +264,19 @@
   function demoShop() { return [{ id: 's1', item_id: 'd3', item_name: 'Hand soap', quantity: 6, purchase_unit: 'bottles', reason: 'Last one used today', status: 'proposed', proposed_at: '2026-10-12T02:00:00Z', proposed_by: 'someone' }, { id: 's2', item_id: 'd1', item_name: 'Toilet paper', quantity: 2, purchase_unit: 'pack', reason: '', status: 'approved', proposed_at: '2026-10-11T02:00:00Z', proposed_by: 'someone' }]; }
 
   /* ------------------------------------------------------------------ screen */
-  var K = { items: null, shop: null, q: '', chip: 'low', role: null, at: 0, keys: {}, v84: false, lastCode: '', cool: {}, scanned: null, denied: {}, noFinance: false, undos: [], uidn: 0, hasCounted: false, quick: null, pu: {}, opt: {}, badImg: {}, sm: null, sup: null, catAt: 0, hasLoc: false, viewInit: false, cart: null, optBad: {}, pend: {} }; // denied: actions the server refused or lacks, hidden for the whole visit (a re-mount keeps them) // survives unmount: the list shows at once while it refreshes
+  var K = { items: null, shop: null, q: '', chip: 'first', role: null, at: 0, keys: {}, v84: false, lastCode: '', cool: {}, scanned: null, denied: {}, noFinance: false, undos: [], uidn: 0, hasCounted: false, quick: null, pu: {}, opt: {}, badImg: {}, sm: null, sup: null, catAt: 0, hasLoc: false, viewInit: false, cart: null, optBad: {}, pend: {} }; // denied: actions the server refused or lacks, hidden for the whole visit (a re-mount keeps them) // survives unmount: the list shows at once while it refreshes
   var M = null; // the live mount
 
   function mount(el, opts) {
     unmount();
     opts = opts || {};
     var prevRole = K.role;
-    if (K.role !== opts.role) { K.role = opts.role; K.items = null; K.shop = null; K.q = ''; K.chip = 'low'; K.at = 0; K.keys = {}; K.v84 = false; K.lastCode = ''; K.cool = {}; K.scanned = null; K.denied = {}; K.noFinance = false; K.undos = []; K.hasCounted = false; K.sup = null; K.hasLoc = false; K.catAt = 0; K.usual = null; K.usualP = null; K.opt = {}; K.badImg = {}; K.cart = null; K.optBad = {}; K.pend = {}; if (prevRole !== null) recentClear(); } // a cached list is never shown to another role
+    if (K.role !== opts.role) { K.role = opts.role; K.items = null; K.shop = null; K.q = ''; K.chip = 'first'; K.at = 0; K.keys = {}; K.v84 = false; K.lastCode = ''; K.cool = {}; K.scanned = null; K.denied = {}; K.noFinance = false; K.undos = []; K.hasCounted = false; K.sup = null; K.hasLoc = false; K.catAt = 0; K.usual = null; K.usualP = null; K.opt = {}; K.badImg = {}; K.cart = null; K.optBad = {}; K.pend = {}; if (prevRole !== null) recentClear(); } // a cached list is never shown to another role
     M = {
       el: el, opts: opts, role: opts.role, demo: !!opts.demo, client: opts.client || null, pid: opts.propertyId || PROPERTY_ID,
       sub: String(opts.sub || ''), act: null, hist: {}, denied: K.denied, uid: null, loadErr: null, shopErr: null, loading: false, offlineStale: false, itemInfo: {}, listeners: []
     };
-    el.innerHTML = '<div class="I_wrap"><div class="I_top" data-i-top></div><div class="I_lbox" data-i-list></div><div data-i-undo class="I_undoslot"></div><div data-i-layer></div><div class="I_live sr" role="status" aria-live="polite" data-i-live></div></div>';
+    el.innerHTML = '<div class="I_wrap"><div class="I_top" data-i-top></div><div class="I_lbox" data-i-list></div><div data-i-undo class="I_undoslot"></div><div data-i-layer></div><div data-i-zoom></div><div class="I_live sr" role="status" aria-live="polite" data-i-live></div></div>';
     var on = function (type, fn) { el.addEventListener(type, fn); M.listeners.push([type, fn]); };
     on('click', onClick); on('change', onChange); on('input', onInput); on('submit', onSubmit); on('keydown', onKey); on('focusin', onFocus); on('focusout', onBlur);
     M.el.addEventListener('error', onImgErr, true); M.listeners.push(['error', onImgErr, true]); // a picture that will not load is replaced by the placeholder (error does not bubble: capture)
@@ -281,7 +287,7 @@
     if (M.demo) o8Demo();
     var goShop = false;
     if (opts.low) { K.viewInit = true; K.chip = 'low'; viewSave(false); } // s117: the folded Warnings row opens Items on Low for this entry only, over any saved view
-    else if (!K.viewInit) { K.viewInit = true; var vw = ssGet('cs_I_view'); if (vw && vw.role === K.role) { if (/^(low|need|all|cons|out|c:.{1,80})$/.test(String(vw.chip))) K.chip = vw.chip; if (vw.tab === 'shopping' && !M.sub) { M.sub = 'shopping'; goShop = true; } } } // s107 B14: the last tab and chip come back once per visit
+    else if (!K.viewInit) { K.viewInit = true; var vw = ssGet('cs_I_view'); if (vw && vw.role === K.role) { if (/^(first|low|need|all|cons|out|list|c:.{1,80})$/.test(String(vw.chip))) K.chip = vw.chip; if (vw.tab === 'shopping' && !M.sub) { M.sub = 'shopping'; goShop = true; } } } // s107 B14: the last tab and chip come back once per visit
     ensureSuppliers(); draw();
     if (goShop && opts.navigate) opts.navigate('#stock/shopping');
     if (!M.demo && !(K.items && K.at && nowMs() - K.at < 60000)) load(); // a fresh list for this role is kept when only the sub-route changed
@@ -346,23 +352,25 @@
   function puLoad() { if (K.puRead) return; K.puRead = true; try { var o = JSON.parse(root.localStorage.getItem('I_pu_v1') || 'null'); if (o) Object.keys(o).forEach(function (p) { if (o[p] && typeof o[p].url === 'string' && nowMs() - o[p].at < SIGN_STALE && !K.pu[p]) K.pu[p] = o[p]; }); } catch (e) { /* no store: sign again */ } }
   function puSave() { try { var o = {}; Object.keys(K.pu).forEach(function (p) { if (nowMs() - K.pu[p].at < SIGN_STALE) o[p] = K.pu[p]; }); root.localStorage.setItem('I_pu_v1', JSON.stringify(o)); } catch (e) { /* private mode */ } }
   function photoUrl(it) { puLoad(); var c = it && it.photo && K.pu[it.photo]; return c && nowMs() - c.at < SIGN_STALE ? c.url : ''; }
+  function isPath(p) { return typeof p === 'string' && /^items\//.test(p); }
   function signPhotos() {
     var me = M; if (!me || me.demo || !me.client || !me.client.functions || !me.client.functions.invoke || K.denied.sign || !K.items) return;
     var seen = {}, paths = [];
     K.items.forEach(function (i) { if (i.photo && !seen[i.photo] && !photoUrl(i)) { seen[i.photo] = 1; paths.push(i.photo); } });
+    Object.keys(K.opt).forEach(function (id) { var l = K.opt[id] && K.opt[id].list; (l || []).forEach(function (o) { if (isPath(o.image) && !seen[o.image] && !pathUrl(o.image)) { seen[o.image] = 1; paths.push(o.image); } }); }); // s133: a product photo is a storage path too
     for (var n = 0; n < paths.length; n += 200) (function (chunk) {
       Promise.resolve().then(function () { return me.client.functions.invoke('upload-photo', { body: { purpose: 'inventory', action: 'sign', propertyId: me.pid, paths: chunk } }); }).then(function (r) {
         if (r && r.error) throw r.error;
         var urls = r && r.data && r.data.urls; if (!urls) return;
         Object.keys(urls).forEach(function (p) { if (typeof urls[p] === 'string') K.pu[p] = { url: urls[p], at: nowMs() }; });
         puSave();
-        if (!me.dead && M === me) drawList(); // rows only: a card or file picker that is open is left alone
+        if (!me.dead && M === me) { drawList(); if (M.act && M.act.kind === 'menu' && !sheetTyping()) drawLayer(); } // rows, and the item card (its product photos)
       }).catch(function (e) { var k = errKind(e, online()); if (k === 'missing' || k === 'refused') K.denied.sign = true; /* thumbnails stay as placeholders */ });
     })(paths.slice(n, n + 200));
   }
   function thumb(it) {
     var u = photoUrl(it);
-    return '<span class="I_th" aria-hidden="true">' + (u && !K.badImg[u] ? '<img data-uimg="1" src="' + esc(u) + '" alt="" width="48" height="48" loading="lazy" decoding="async">' : '<span class="I_emo">' + itemEmoji(it) + '</span>') + '</span>';
+    return '<span class="I_th" aria-hidden="true">' + (u && !K.badImg[u] ? '<img data-uimg="1" src="' + esc(u) + '" alt="" width="64" height="64" loading="lazy" decoding="async">' : '<span class="I_emo">' + itemEmoji(it) + '</span>') + '</span>';
   }
   function photoBlock(it) {
     var u = photoUrl(it);
@@ -420,17 +428,18 @@
   }
   /* ---- s106 item options (Shopsuki): brand/size choices for one item, read from inventory_item_options_v1; hidden when the SQL is not there yet */
   function siteOf(u) { var h = /^https:\/\/([^\/]+)/i.exec(u || ''); h = h ? h[1].replace(/^www\./, '') : ''; return h === 'shopsuki.ph' ? 'Shopsuki' : h === 'shopee.ph' ? 'Shopee' : h === 'mandauefoam.ph' ? 'Mandaue Foam' : h === 'myhanabishi.com' ? 'Hanabishi' : h || 'the shop'; }
-  function normOpts(list) {
+  function normOpts(list, itemId) {
     return (Array.isArray(list) ? list : []).filter(function (o) { return o && o.id && o.title; }).map(function (o) {
       return { id: String(o.id), supplier: String(o.supplier || ''), title: String(o.title), brand: o.brand ? String(o.brand) : '', packLabel: o.pack_label ? String(o.pack_label) : '',
-        image: o8Pic(o.image_url) || '', link: o8Link(o.source_url) || '',
+        image: o8Pic(o.image_url, itemId) || '', link: o8Link(o.source_url) || '', qty: num(o.qty_on_hand),
         supplierId: o.supplier_id ? String(o.supplier_id) : '', packSize: num(o.pack_size), usual: !!o.usual, preferred: o.preferred === true, available: o.available === false ? false : o.available === true ? true : null, price: num(o.price) };
     });
   }
+  function demoPic(id) { var hue = (id.charCodeAt(1) * 47) % 360; return 'data:image/svg+xml,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96"><rect width="96" height="96" fill="hsl(' + hue + ',45%,86%)"/><circle cx="48" cy="48" r="24" fill="hsl(' + hue + ',45%,62%)"/></svg>'); }
   function demoOptions(id) {
-    var d = { d1: [['o1', 'Demo Mart', 'Softly Bath Tissue 12 rolls', 'Softly', 210, true], ['o2', 'Demo Mart', 'Cloud Bath Tissue 12 rolls', 'Cloud', 195, true], ['o3', 'Demo Mart', 'Plush Bath Tissue 8 rolls', 'Plush', 160, false]],
-      d5: [['o4', 'Demo Mart', 'Strong Trash Bags Large 10s', 'Strong', 230, true], ['o5', 'Demo Mart', 'Strong Trash Bags XL 10s', 'Strong', 260, true]] }[id] || [];
-    return d.map(function (x, n) { return { id: x[0], supplier: x[1], title: x[2], brand: x[3], packLabel: '', image: '', link: '', usual: n === 0, preferred: x[0] === 'o2', available: x[5], price: canPrice(M.role) ? x[4] : null }; });
+    var d = { d1: [['o1', 'Demo Mart', 'Softly Bath Tissue 12 rolls', 'Softly', 210, true, 2, 12], ['o2', 'Demo Mart', 'Cloud Bath Tissue 12 rolls', 'Cloud', 195, true, 1, 12], ['o3', 'Demo Mart', 'Plush Bath Tissue 8 rolls', 'Plush', 160, false, 0, 8], ['o6', 'Demo Mart', 'Tisyu 2-ply 12 rolls', 'Tisyu', 150, true, 0, 12], ['o7', 'Demo Mart', 'Wipe 9 rolls', 'Wipe', 117.8, true, 0, 9]],
+      d5: [['o4', 'Demo Mart', 'Strong Trash Bags Large 10s', 'Strong', 230, true, 1, 4], ['o5', 'Demo Mart', 'Strong Trash Bags XL 10s', 'Strong', 260, true, 1, 4]] }[id] || [];
+    return d.map(function (x, n) { return { id: x[0], supplier: x[1], title: x[2], brand: x[3], packLabel: '', image: demoPic(x[0]), link: n < 3 ? 'https://lazada.com.ph/products/' + x[0] : '', qty: x[6], packSize: x[7], usual: n === 0, preferred: x[0] === 'o2', available: x[5], price: canPrice(M.role) ? x[4] : null }; });
   }
   function loadOptions(id) {
     o8Reqs(); var me = M, c0 = K.opt[id]; if (!me || (c0 && nowMs() - c0.at < 60000) || K.denied.inventory_item_options_v1) return Promise.resolve(); // kept across mounts (the shell re-mounts on every sub-route change), read again after a minute
@@ -440,7 +449,7 @@
     return Promise.resolve().then(function () { return me.client.rpc('inventory_item_options_v1', { p_item_id: id }); }).then(function (r) {
       if (r && r.error) throw r.error;
       if (!r || !r.data || r.data.ok === false) throw { message: 'failed' };
-      K.opt[id] = { list: normOpts(r.data.options), at: nowMs() }; redrawMenu(id);
+      K.opt[id] = { list: normOpts(r.data.options, id), at: nowMs() }; redrawMenu(id); signPhotos();
     }).catch(function (e) {
       delete K.opt[id]; K.optBad[id] = nowMs(); // read again the next time the card opens (the shopping list waits a minute)
       if (errKind(e, online()) === 'missing') K.denied.inventory_item_options_v1 = true; // the SQL release is not applied yet: no section, no message
@@ -450,23 +459,6 @@
   function optById(itemId, id) { var st = M && K.opt[itemId]; return st && st.list ? st.list.filter(function (o) { return o.id === id; })[0] || null : null; }
   function sheetTyping() { var d = root.document, ae = d && d.activeElement, sh = M && M.el && M.el.querySelector ? M.el.querySelector('.sheet') : null; return !!(ae && sh && sh.contains(ae) && /^(INPUT|TEXTAREA|SELECT)$/i.test(ae.tagName || '')); } // a failed picture must not redraw the sheet under a thumb that is typing
   function onImgErr(ev) { var t = ev && ev.target; if (M && t && t.getAttribute && t.getAttribute('data-uimg')) { K.badImg[t.getAttribute('src')] = 1; drawList(); if (M.act && !M.act.sending && (M.act.kind === 'menu' || M.act.kind === 'update' || UKINDS[M.act.kind]) && !sheetTyping()) drawLayer(); return; } /* s132: a picture that will not load becomes the emoji */ if (M && t && t.getAttribute && t.getAttribute('data-oimg')) { K.badImg[t.getAttribute('src')] = 1; if (M.act && (M.act.kind === 'menu' || M.act.kind === 'o8list')) drawLayer(); } }
-  function optionsBlock(it) {
-    var st = K.opt[it.id]; if (!st || !st.list) return ''; var ed = o8On(); if (!st.list.length && !ed) return '';
-    var money = canPrice(M.role), mng = canManage(M.role), sorted = optSort(st.list, money), main = sorted.filter(function (o) { return o.usual; }), rest = sorted.filter(function (o) { return !o.usual; });
-    var btn = function (act, id, text) { return '<button class="btn btn-ghost I_undobtn" type="button" data-act="' + act + '" data-id="' + esc(id) + '">' + text + '</button>'; };
-    var one = function (o, other) {
-      var sub = [o.brand, o.supplier, o.packLabel].filter(Boolean).join(' · ');
-      return '<div class="I_opt"><span class="I_oth">' + (o.image && !K.badImg[o.image] ? '<img src="' + esc(o.image) + '" alt="' + esc(o.title) + '" width="56" height="56" loading="lazy" decoding="async" referrerpolicy="no-referrer" data-oimg="1">' : gi('image', 's16')) + '</span>' +
-        '<div class="I_ob"><p class="I_ot">' + esc(o.title) + (o.usual ? ' <span class="I_usual">Usual</span>' : '') + (o.preferred ? ' <span class="I_pref">' + gi('star', 's16') + 'Preferred</span>' : '') + '</p>' + (sub ? '<p class="help">' + esc(sub) + '</p>' : '') +
-        (money && o.price != null ? '<p class="help num">' + esc(peso(o.price)) + '</p>' : '') + (o.available === false ? '<p class="help I_oos">Out of stock</p>' : '') +
-        '<div class="I_obt">' + (o.link ? '<a class="btn btn-ghost I_undobtn" href="' + esc(o.link) + '" target="_blank" rel="noopener noreferrer">View on ' + esc(siteOf(o.link)) + '</a>' : '') +
-        (other && mng && !o.usual && allowed('optusual') ? btn('opt-usual', o.id, 'Make usual') : '') + (mng && o.image && allowed('photo') ? btn('opt-photo', o.id, 'Use as item photo') : '') +
-        (ed ? '<button class="btn btn-ghost I_undobtn" type="button" data-act="o8-edit" data-id="' + esc(o.id) + '" aria-label="Edit ' + esc(o.title) + '">Edit</button>' + (o.usual ? '' : '<button class="btn btn-ghost I_undobtn" type="button" data-act="o8-del" data-id="' + esc(o.id) + '" aria-label="Remove ' + esc(o.title) + '">Remove</button>') : '') + '</div></div></div>';
-    };
-    return '<div class="I_opts" role="group" aria-label="Options"><h3 class="I_opth">Options</h3>' + main.map(function (o) { return one(o, false); }).join('') +
-      (rest.length ? '<details class="I_other"' + (main.length ? '' : ' open') + '><summary>Other options (' + rest.length + ')</summary>' + rest.map(function (o) { return one(o, true); }).join('') + '</details>' : '') +
-      (ed ? '<button class="btn btn-secondary btn-block I_o8add" type="button" data-act="o8-add">' + gi('plus', 's16') + ' Add a product</button>' + o8Wait(it) : '') + '</div>';
-  }
   function renderOptUsual(a, it) {
     var o = optById(a.itemId, a.optId); if (!o) return null;
     return head('Make this the usual for ' + it.name + '?') + '<form data-i-form><p class="I_conf">' + esc(o.title) + (o.supplier ? ' from ' + esc(o.supplier) : '') + (canPrice(M.role) && o.price != null ? ' at ' + esc(peso(o.price)) : '') + '. Shopping lists and Add low items will use it.</p>' + actions(a, 'Yes, make it usual') + '</form>';
@@ -484,9 +476,17 @@
     var out = 'https://' + host + (m[2] || '/') + (host === 'shopee.ph' ? '' : m[3] || '');
     return out.length <= 500 ? out : null;
   }
-  var O8_LINK = ['shopsuki.ph', 'shopee.ph', 'mandauefoam.ph', 'myhanabishi.com'], O8_PIC = ['cdn.shopify.com', 'down-ph.img.susercontent.com'];
-  function o8Link(s) { return o8Url(s, O8_LINK); }
-  function o8Pic(s) { return o8Url(s, O8_PIC); }
+  var O8_PIC = ['cdn.shopify.com', 'down-ph.img.susercontent.com'];
+  // s133 (D-401): a shop link is any https address with a dot in the host, up to 500 characters (the server rule); Shopee links still lose their query (tracking).
+  function o8Link(s) {
+    var t = o8T(s); if (t.length > 500 || !/^https:\/\/[^\s\/]+\.[^\s\/]+(\/\S*)?$/.test(t) || /["'<>]/.test(t)) return null;
+    var m = /^https:\/\/([^\/?#]+)([^?#]*)(\?[^#]*)?(#.*)?$/.exec(t); if (!m) return null;
+    var host = m[1].toLowerCase().replace(/^www\.(shopee\.ph)$/, '$1'), out = 'https://' + host + (m[2] || '/') + (/(^|\.)shopee\.ph$/.test(host) ? '' : m[3] || '');
+    return out.length <= 500 ? out : null;
+  }
+  // A product photo is a picture link on the two shop CDNs, or a storage path of its own item: items/<item id>/<uuid>.(webp|jpg)
+  function o8PicPath(s, itemId) { var t = o8T(s), id = String(itemId || '').toLowerCase(); return id && /^items\/[0-9a-f-]{36}\/[0-9a-f-]{36}\.(webp|jpg)$/.test(t) && t.indexOf('items/' + id + '/') === 0 ? t : null; }
+  function o8Pic(s, itemId) { return o8PicPath(s, itemId) || o8Url(s, O8_PIC); }
   function o8Reqlist() { return K.req && M && K.req.role === M.role ? K.req.list : []; }
   function o8Pending() { return o8Reqlist().filter(function (r) { return r.status === 'pending'; }); } // the one selector for the badge, the pill and the list
   function o8Count() { return o8On() && canManage(M.role) ? o8Pending().length : 0; }
@@ -601,15 +601,17 @@
     if (diff('packSize')) p.pack_size = o8T(v.packSize) === '' ? null : parseQty(v.packSize);
     if (!o8T(v.supplierId)) return { msg: 'Choose the shop it is sold at.' };
     if (add || diff('supplierId')) p.supplier_id = o8T(v.supplierId);
-    var lk = o8Link(v.link); if (!lk) return { msg: 'Add the product link. It must be an https link from shopsuki.ph, shopee.ph, mandauefoam.ph or myhanabishi.com.' };
+    var lk = o8Link(v.link); if (!lk) return { msg: 'Add the link to the shop. It must be a web address that starts with https://, up to 500 characters.' };
     var olk = add ? '' : o8Link(o.link) || o8T(o.link);
     if (add || lk !== olk) p.source_url = lk;
-    if (o8T(v.photo) !== '') { var pu = o8Pic(v.photo); if (!pu) return { msg: 'The photo link must be an https image on cdn.shopify.com or down-ph.img.susercontent.com.' }; var opu = add ? '' : o8Pic(o.photo) || o8T(o.photo); if (add || pu !== opu) p.image_url = pu; }
+    if (a.upPath) { var up = o8PicPath(a.upPath, a.itemId); if (!up) return { msg: ERR.photofail }; p.image_url = up; }
+    else if (a.blob) { /* the picked picture goes up when Save is tapped */ }
+    else if (o8T(v.photo) !== '') { var pu = o8Pic(v.photo, a.itemId); if (!pu) return { msg: 'A picture link must be an https image from cdn.shopify.com or down-ph.img.susercontent.com. Or take a photo instead.' }; var opu = add ? '' : o8Pic(o.photo, a.itemId) || o8T(o.photo); if (add || pu !== opu) p.image_url = pu; }
     else if (!add && o8T(o.photo) !== '') p.image_url = null;
     if (money && o8T(v.price) !== '' && parseQty(v.price) == null) return { msg: 'The price must be a number above 0.' };
     if (money && diff('price')) p.price = o8T(v.price) === '' ? null : parseQty(v.price);
     if (add || v.avail !== o.avail) p.available = v.avail === '1';
-    if (!add && !Object.keys(p).length) return { msg: 'Nothing has changed yet.' };
+    if (!add && !Object.keys(p).length && !a.blob) return { msg: 'Nothing has changed yet.' };
     return { payload: p };
   }
   function o8Render(a) {
@@ -623,11 +625,36 @@
     return head(a.action === 'add' ? 'Add a product' : 'Edit product', it.name) + '<form data-i-form novalidate>' +
       textField('title', 'Product name', v.title, 'maxlength="160"') + textField('brand', 'Brand', v.brand, 'maxlength="60"') + textField('packLabel', 'Size or pack label', v.packLabel, 'maxlength="40"') +
       textField('packSize', 'Pieces per pack (optional)', v.packSize, 'inputmode="decimal"') + sel +
-      textField('link', 'Product link', v.link, 'inputmode="url" autocapitalize="off" maxlength="500"') + '<p class="help">A link from shopsuki.ph, shopee.ph, mandauefoam.ph or myhanabishi.com.</p>' +
-      textField('photo', 'Photo link (optional)', v.photo, 'inputmode="url" autocapitalize="off" maxlength="500"') +
+      textField('link', 'Link to the shop (any https address)', v.link, 'inputmode="url" autocapitalize="off" maxlength="500"') + '<p class="help I_linkshow" data-i-linkshow>' + esc(o8LinkShow(v.link)) + '</p>' + o8PhotoField(a, v) +
       (canPrice(M.role) ? textField('price', 'Price in PHP (optional)', v.price, 'inputmode="decimal"') : '') +
       '<div class="field"><button class="chip I_choice" type="button" data-act="o8-avail" aria-pressed="' + (v.avail === '1') + '">' + (v.avail === '1' ? gi('check', 's16') + ' ' : '') + 'In stock</button></div>' +
-      textField('note', 'Note (optional)', v.note, 'maxlength="500"') + actions(a, mng ? 'Save' : 'Send for approval') + '</form>';
+      textField('note', 'Note (optional)', v.note, 'maxlength="500"') + actions(a, a.action === 'add' ? (mng ? 'Add product' : 'Send for approval') : mng ? 'Save' : 'Send for approval') + '</form>';
+  }
+  function o8PhotoField(a, v) {
+    var pth = isPath(v.photo), cur = a.prev || (pth ? pathUrl(v.photo) : /^https:/.test(o8T(v.photo)) ? o8T(v.photo) : '');
+    return '<div class="field I_upf"><span class="lbl">Photo (optional)</span>' + (cur ? '<div class="I_photo I_ph96"><img src="' + esc(cur) + '" alt="Preview of the product photo" referrerpolicy="no-referrer"></div>' : '') +
+      '<div class="I_grid2"><label class="btn btn-secondary btn-block I_filebtn">' + gi('camera', 's16') + ' Take a photo<input class="sr" id="I_o8_cam" type="file" accept="image/*" capture="environment" aria-label="Take a photo of the product"></label>' +
+      '<label class="btn btn-secondary btn-block I_filebtn">' + gi('image', 's16') + ' From the phone<input class="sr" id="I_o8_pick" type="file" accept="image/*" aria-label="Choose a photo of the product from your phone"></label></div>' +
+      (a.photoErr ? '<p class="err" role="alert">' + esc(ERR[a.photoErr] || ERR.photofail) + '</p>' : '') + (cur ? '<button class="btn btn-ghost I_undobtn" type="button" data-act="o8-pic-clear">Remove the photo</button>' : '') +
+      (pth ? '' : textField('photo', 'or paste a picture link', v.photo, 'inputmode="url" autocapitalize="off" maxlength="500"')) + '</div>';
+  }
+  function o8PhotoPicked(ev) {
+    var t = ev.target, f = t && t.files && t.files[0], me = M, a = me && me.act; if (!f || !a || a.kind !== 'o8form' || a.sending) return;
+    Promise.resolve().then(function () { return resizePhoto(f); }).then(function (b) {
+      if (M !== me || me.act !== a) return;
+      relPrev(a); a.blob = b; a.upPath = null; a.prev = root.URL && root.URL.createObjectURL ? root.URL.createObjectURL(b) : null; a.photoErr = null; a.err = null; drawLayer();
+    }, function (e) { if (M !== me || me.act !== a) return; a.photoErr = e && e.photo || 'photofail'; drawLayer(); });
+    try { t.value = ''; } catch (x) { /* the same file can be chosen again */ }
+  }
+  // The picked picture goes up through upload-photo (purpose inventory, items/<item id>/<uuid>.webp) when Save is tapped; the form then saves image_url = that path.
+  function o8Upload(a, me) {
+    a.sending = true; a.err = null; drawLayer();
+    return Promise.resolve().then(function () { return blobBase64(a.blob); }).then(function (b64) { return me.client.functions.invoke('upload-photo', { body: { purpose: 'inventory', propertyId: me.pid, itemId: a.itemId, fileData: b64, mimeType: a.blob.type || 'image/webp' } }); }).then(function (u) {
+      if (me.dead) return;
+      if (u && u.error) throw u.error;
+      if (!u || !u.data || u.data.ok === false || !o8PicPath(u.data.path, a.itemId)) throw { message: 'failed' };
+      a.upPath = u.data.path; a.sending = false; o8Submit(a);
+    }).catch(function () { if (me.dead || M !== me) return; a.sending = false; a.err = 'o8'; a.msg = 'The photo could not be uploaded. Try again, or paste a picture link instead.'; drawLayer(); });
   }
   function o8Card(a, r) {
     var d = a.dec && a.dec.id === r.id ? a.dec : null, h = '<div class="I_req"><p class="I_ot">' + esc(O8_WORD[r.action] || 'Change') + ' · ' + esc(r.item) + '</p><p class="help">' + esc((r.requester || 'Staff') + (dateLabel(r.at) ? ' · ' + dateLabel(r.at) : '')) + '</p>' +
@@ -644,7 +671,7 @@
   function o8Menu(itemId) { M.act = newMenu(itemId); drawLayer(); }
   function o8Back(a) {
     if (a.kind === 'o8list') { if (a.dec) { a.dec = null; a.err = null; drawLayer(); return; } return closeSheet(); }
-    o8Menu(a.itemId);
+    relPrev(a); o8Menu(a.itemId);
   }
   function o8Click(act, t, a) {
     if (a && a.sending) return;
@@ -658,6 +685,7 @@
       if (act === 'o8-edit') { var o = optById(a.itemId, id); if (!o) return; var fv = o8FormVals(o); M.act = { kind: 'o8form', itemId: a.itemId, action: 'edit', optId: o.id, orig: Object.assign({}, fv), vals: fv }; drawLayer(); o8Sups(); return; }
       if (act === 'o8-del') { var od = optById(a.itemId, id); if (!od) return; M.act = { kind: 'o8del', itemId: a.itemId, optId: od.id, title: od.title }; drawLayer(); return; }
     }
+    if (a.kind === 'o8form' && act === 'o8-pic-clear') { relPrev(a); a.blob = null; a.upPath = null; a.vals.photo = ''; a.photoErr = null; a.err = null; drawLayer(); return; }
     if (a.kind === 'o8form' && act === 'o8-avail') { a.vals.avail = a.vals.avail === '1' ? '0' : '1'; a.err = null; drawLayer(); return; }
     if (a.kind === 'o8list' && (act === 'o8-approve' || act === 'o8-reject')) {
       var r = o8ReqBy(id); if (!r) return; var pp = r.payload.price;
@@ -672,6 +700,7 @@
     if (me.demo) { toast(DEMO_NOTE); return o8Menu(a.itemId); }
     if (!online()) { a.err = 'offline'; return drawLayer(); }
     if (!me.client) { a.err = 'missing'; return drawLayer(); }
+    if (a.kind === 'o8form' && a.blob && !a.upPath) return o8Upload(a, me);
     var sig = JSON.stringify(['o8', action, a.itemId, a.optId || null, payload, note]), ke = K.keys[sig]; // one key per set of values, kept across a retry; a changed form gets a new one
     if (!ke || nowMs() - ke.at > 600000) ke = K.keys[sig] = { key: newKey('opt'), at: nowMs() };
     a.sending = true; a.err = null; drawLayer();
@@ -748,7 +777,7 @@
     if (typeof root.fetch !== 'function') throw { photo: 'optfetch' };
     return Promise.resolve().then(function () { return root.fetch(url, { mode: 'cors', credentials: 'omit', referrerPolicy: 'no-referrer' }); }).then(function (r) { if (!r || !r.ok) throw 0; return r.blob(); }).then(null, function () { throw { photo: 'optfetch' }; });
   }
-  function onChange(ev) { var t = ev.target; if (M && t && (t.id === 'I_photo_in' || t.id === 'I_photo_pick')) photoPicked(ev); else if (M && t && (t.id === 'I_up_in' || t.id === 'I_up_pick')) updPhotoPicked(ev); else if (M && t && (t.id === 'I_np_in' || t.id === 'I_np_pick')) newPhoto(ev); }
+  function onChange(ev) { var t = ev.target; if (M && t && (t.id === 'I_photo_in' || t.id === 'I_photo_pick')) photoPicked(ev); else if (M && t && (t.id === 'I_up_in' || t.id === 'I_up_pick')) updPhotoPicked(ev); else if (M && t && (t.id === 'I_np_in' || t.id === 'I_np_pick')) newPhoto(ev); else if (M && t && (t.id === 'I_o8_cam' || t.id === 'I_o8_pick')) o8PhotoPicked(ev); }
   // s107 B7: usual first, then preferred, then in stock, then cheapest (price roles) or by title (everyone else).
   function optSort(list, money) {
     var av = function (o) { return o.available === true ? 0 : o.available === null ? 1 : 2; };
@@ -836,7 +865,7 @@
   function menuHtml(rt) {
     var bs = [], b = function (act, text, extra) { bs.push('<button class="btn btn-ghost I_mb" type="button" data-act="' + act + '"' + (extra || '') + '>' + text + '</button>'); };
     if (rt.shopping) { if (K.shop && K.shop.length) { b('shop-share', 'Share as text'); b('shop-image', 'Save as image'); if (allowed('report')) b('report', 'PDF to Telegram', ' data-k="order"'); } }
-    else if (K.items) { if (addLowCount()) b('addlow-open', 'Add low items to the shopping list'); if (allowed('tidy')) b('tidy', 'Tidy categories'); if (!M.denied.report) b('report', 'Send a report'); if (allowed('labels')) b('labels', 'Print QR labels'); }
+    else if (K.items) { if (addLowCount()) b('addlow-open', 'Add low items to the shopping list'); if (allowed('tidy')) b('tidy', 'Tidy categories'); if (allowed('ilog')) b('ilog-open', 'History'); if (!M.denied.report) b('report', 'Send a report'); if (allowed('labels')) b('labels', 'Print QR labels'); }
     if (canManage(M.role) && o8On()) b('o8-reqs', 'Requests' + (o8Count() ? ' ' + o8Count() : ''));
     return bs.length ? '<details class="I_menu"><summary class="btn btn-ghost I_mbtn" aria-label="More inventory actions">' + gi('more') + '</summary><div class="I_menuin">' + bs.join('') + '</div></details>' : '';
   }
@@ -846,18 +875,8 @@
       '<button class="btn btn-secondary" type="button" data-act="tab" data-to="" aria-pressed="' + !rt.shopping + '">Items</button>' +
       '<button class="btn btn-secondary" type="button" data-act="tab" data-to="shopping" aria-pressed="' + rt.shopping + '">Shopping list' + (n ? ' ' + n : '') + '</button></div>' + menuHtml(rt) + '</div>';
     if (rt.shopping || !K.items) return h;
-    var s = summary(K.items), needN = allowed('count') ? K.items.filter(needsCount).length : 0, cs = chipsFor(K.items, needN);
-    if (K.chip !== 'out' && K.chip !== 'suppliers' && !cs.some(function (c) { return c.k === K.chip; })) K.chip = 'low'; // a chip that no longer exists (nothing left to count) falls back
-    // s107 B3: one row of status pills (glyph, word and number, never colour alone); each is a filter or the Shopping list
-    var pl = function (act, k, glyph, text, tone) { return '<button class="chip I_pill ' + tone + '" type="button" data-act="' + act + '" data-' + (act === 'tab' ? 'to' : 'k') + '="' + k + '">' + gi(glyph, 's16') + ' ' + text + '</button>'; };
-    var pills = '';
-    if (s.low) pills += pl('chip', 'low', 'alert', s.low + ' low', 'I_pwarn');
-    if (s.out) pills += pl('chip', 'out', 'xcircle', s.out + ' out', 'I_pbad');
-    if (needN) pills += pl('chip', 'need', 'note', needN + ' to count', 'I_pinfo');
-    if (!s.low && !needN) pills = '<span class="chip I_pill I_pok">' + gi('check', 's16') + ' Stock is fine</span>' + pills;
-    if (n) pills += pl('tab', 'shopping', 'bag', n + ' on list', 'I_pinfo');
-    if (o8Count()) pills += pl('o8-reqs', 'x', 'note', o8Count() + (o8Count() === 1 ? ' request' : ' requests'), 'I_pinfo');
-    h += '<div class="I_pills" role="group" aria-label="Stock status">' + pills + '</div>';
+    var needN = allowed('count') ? K.items.filter(needsCount).length : 0, cs = chipsFor(K.items, needN, n);
+    if (K.chip !== 'suppliers' && !cs.some(function (c) { return c.k === K.chip; })) K.chip = 'first'; // a chip that no longer exists (nothing left to count) falls back
     // s107 B4: the search and the filter chips stay under the app bar while the list scrolls
     h += '<div class="I_find"><div class="I_srow' + (allowed('create') ? ' I_srow3' : '') + '"><div class="field"><label class="sr" for="I_q">Search items</label><div class="input"><input id="I_q" type="search" autocomplete="off" enterkeyhint="search" value="' + esc(K.q) + '" placeholder="Search items"></div></div>' +
       (K.v84 ? '<button class="chip I_scanbtn" type="button" data-act="scan" aria-label="Scan a barcode">' + gi('camera') + '</button>' : '') +
@@ -883,7 +902,7 @@
     }
     if (K.chip === 'suppliers') {
       if (supOK() && root.I_Suppliers.mountList) { box.innerHTML = '<div data-i-suphost></div>'; var sh = q('[data-i-suphost]'); try { root.I_Suppliers.mountList(sh, supCtx()); } catch (e) { box.innerHTML = '<p class="help">' + esc(ERR.missing) + '</p>'; } return; }
-      K.chip = 'low';
+      K.chip = 'first';
     }
     var gs = groupsFor(K.items, K.chip, K.q), h = '';
     if (M.offlineStale) h += '<div class="note soon" role="status"><span>No connection. This is the last list we have.</span></div>';
@@ -893,7 +912,7 @@
   }
   function renderGroup(g, n, header) {
     var note = g.out || g.low ? '<span class="I_ghn">' + (g.out ? '' + gi('xcircle', 's16') + ' ' + g.out + ' out' : '') + (g.out && g.low ? ', ' : '') + (g.low ? '' + gi('alert', 's16') + ' ' + g.low + ' low' : '') + '</span>' : '';
-    return '<section class="I_grp"' + (header ? ' aria-labelledby="I_gh_' + n + '"' : '') + '>' + (header ? '<h3 class="I_gh" id="I_gh_' + n + '"><span>' + esc(groupName(g.cat)) + '</span>' + note + '</h3>' : '') + '<div class="card list I_list">' + g.rows.map(renderRow).join('') + (allowed('count') ? '<div class="I_foot"><button class="btn btn-ghost I_gcount" type="button" data-act="walk" data-cat="' + esc(g.cat) + '" aria-label="Count this group, ' + esc(g.cat) + '">Count this group</button></div>' : '') + '</div></section>';
+    return '<section class="I_grp"' + (header ? ' aria-labelledby="I_gh_' + n + '"' : '') + '>' + (header ? '<h3 class="I_gh" id="I_gh_' + n + '"><span>' + esc(groupName(g.cat)) + '</span>' + note + '</h3>' : '') + '<div class="card list I_list">' + g.rows.map(renderRow).join('') + (allowed('group') ? '<div class="I_foot"><button class="btn btn-secondary I_gupd" type="button" data-act="group-open" data-cat="' + esc(g.cat) + '" aria-label="Update this group, ' + esc(g.cat) + ', ' + g.rows.length + ' items">Update this group (' + g.rows.length + ' items)</button></div>' : allowed('count') ? '<div class="I_foot"><button class="btn btn-ghost I_gcount" type="button" data-act="walk" data-cat="' + esc(g.cat) + '" aria-label="Count this group, ' + esc(g.cat) + '">Count this group</button></div>' : '') + '</div></section>';
   }
   function renderFail(kind) {
     return '<div class="empty I_fail" role="alert"><p class="hd">' + (kind === 'offline' ? 'No connection' : 'Inventory is not available right now') + '</p>' +
@@ -985,8 +1004,10 @@
     if (a.kind === 'scan' && a.phase === 'look') { var sg = [a.camState, a.err, a.note, a.takenId].join('|'); if (a.sg === sg && box.innerHTML) { bindVideo(); return; } a.sg = sg; } else a.sg = null; // a camera preview is not redrawn under the person's thumb
     var body = a.shopId && a.kind === 'menu' ? renderShopSheet(a) : renderSheet(a);
     if (body == null) { stopCam(); M.act = null; box.innerHTML = ''; return; }
+    var psh = box.querySelector ? box.querySelector('.sheet') : null, pst = psh && M.lastA === a ? psh.scrollTop : 0; M.lastA = a;
     box.innerHTML = '<div class="scrim on" data-act="close"></div><div class="sheet on I_sheet' + ((a.kind === 'menu' && !a.shopId) || a.kind === 'update' ? ' I_sheetm' : '') + (UKINDS[a.kind] ? ' I_uf I_hue_' + UOPT[a.kind].hue : '') + (a.kind === 'create' ? ' I_new' : '') + '" role="dialog" aria-modal="true" aria-labelledby="I_sh_t">' + body + '</div>';
     [main1, main2].forEach(function (n) { n && n.setAttribute && n.setAttribute('inert', ''); });
+    if (pst) { var nsh = box.querySelector ? box.querySelector('.sheet') : null; if (nsh) nsh.scrollTop = pst; }
     if (!a.focused) { a.focused = true; var h = q('#I_sh_t'); if (h && h.focus) h.focus(); }
     bindVideo();
   }
@@ -1028,6 +1049,8 @@
     if (a.kind === 'addlow') return renderAddLow(a);
     if (a.kind === 'copytext') return renderCopy(a);
     if (a.kind === 'create') return renderCreate(a);
+    if (a.kind === 'group') return renderGroupSheet(a);
+    if (a.kind === 'ilog') return renderLog(a);
     if (/^o8/.test(a.kind)) return o8Render(a);
     var it = itemOf(a); if (!it) return null;
     var v = a.vals || {}, m = M.role, h;
@@ -1042,7 +1065,7 @@
       var ac = menuActions(it, a), listedQ = shopRows.map(function (r) { return r.qty != null ? uq(r.qty, r.unit || '') : ''; }).filter(Boolean).join(', ');
       // s107 B6: the title and Close stay at the top of the sheet; the level, the one action for this role and the options come before the details
       h = '<div class="F_sheethead I_sh"><h2 class="hd I_sht" id="I_sh_t" tabindex="-1">' + esc(it.name) + '</h2><button class="btn btn-secondary btn-sm F_close" type="button" data-act="close">' + gi('close', 's16') + 'Close</button></div>' +
-        '<div class="I_hero">' + photoBlock(it) + '<div class="I_herob"><p class="help I_cat">' + esc(it.category + (it.consumable ? ' · consumable' : '')) + '</p>' +
+        (hasHero(it) ? heroBlock(it) : '') + '<div class="I_hero">' + (hasHero(it) ? '' : photoBlock(it)) + '<div class="I_herob"><p class="help I_cat">' + esc(it.category + (it.consumable ? ' · consumable' : '')) + '</p>' +
         '<p class="I_lvline">' + (it.qty == null ? '' : levelBadge(it) + ' ') + esc(amountText(it)) + (lasts != null ? ' · lasts about ' + esc(lasts) + ' days' : '') + '</p>' + updLine(it) +
         (M.denied.shop || !shopRows.length ? '' : '<p class="I_onlist">' + gi('bag', 's16') + ' On the list' + (listedQ ? ', ' + esc(listedQ) : '') + '</p>') + '</div></div>' +
         (a.note || (K.note && K.note.id === it.id) ? '<div class="okbox" role="status"><span>' + esc(a.note || K.note.text) + '</span></div>' : '') + errBox(a) +
@@ -1477,6 +1500,9 @@
     if (act === 'cart') { var cid = attr(t, 'data-id'), cr = cartRead(); if (cr[cid]) delete cr[cid]; else cr[cid] = 1; cartSave(); drawList(); return; } // s107 B11: a local tick, nothing is sent
     if (act === 'bought-open') { if (!allowed('bought') || (M.act && M.act.sending)) return; var pre = {}, pv = {}, cr2 = cartRead(); boughtRows().forEach(function (r) { if (cr2[r.id]) { pre[r.id] = 1; pv['packs_' + r.id] = fmt(r.qty || 1); } }); M.act = { kind: 'bought', step: 'pick', sel: pre, vals: pv, keys: {}, done: {} }; drawLayer(); loadShop(); return; } // the list is re-read first: a row someone else bought drops out
     if (act === 'walk') { if (a0 && a0.sending) return; return walkStart(attr(t, 'data-cat')); }
+    if (act === 'group-open') { if (M.act && M.act.sending) return; if (!M.act) groupOpen(attr(t, 'data-cat')); return; }
+    if (act === 'ilog-open') { if (M.act && M.act.sending) return; logOpen(); return; }
+    if (act === 'zoom' || act === 'zoom-close' || act === 'zoom-next' || act === 'zoom-prev') { if (zoomClick(act, t)) return; }
     if (act === 'scan') { if (M.act && M.act.sending) return; return openScan(null); }
     if (act === 'report') { if (!allowed('report') || (M.act && M.act.sending)) return; var rk = attr(t, 'data-k'); M.act = { kind: 'report', step: 'form', vals: { rkind: REPORTS.some(function (r) { return r.k === rk; }) ? rk : 'order', to: 'ops' } }; drawLayer(); return; }
     if (act === 'addlow-open') return addLowOpen();
@@ -1499,6 +1525,9 @@
     if (act === 'al-tick') { if (a.kind !== 'addlow') return; var tl = a.lines.filter(function (l) { return l.itemId === attr(t, 'data-id'); })[0]; if (tl && !tl.ok) { tl.on = !tl.on; if (!tl.on) tl.fail = false; a.bad = false; drawLayer(); } return; }
     if (act === 'more-toggle') { if (a.kind === 'create') a.more = !a.more; return; } // the browser opens or closes the details itself; this keeps the state for a redraw
     if (act === 'prod-add') { if (a.kind === 'create') { a.vals.np = Math.min(3, (+a.vals.np || 1) + 1); a.more = true; drawLayer(); refocus('I_f_p' + a.vals.np + '_name'); } return; }
+    if (a.kind === 'group' && groupClick(act, t, a)) return;
+    if (a.kind === 'ilog' && ilogClick(act, t, a)) return;
+    if (act === 'omenu') { if (a.kind === 'menu') { var om = attr(t, 'data-id'); a.omenu = a.omenu === om ? null : om; drawLayer(); var ob = q('[data-act="omenu"][data-id="' + om + '"]'); if (ob && ob.focus) ob.focus(); } return; }
     if (act === 'begin') return begin(attr(t, 'data-kind'));
     if (act === 'upd-pick') { if (a.kind === 'update') begin(attr(t, 'data-kind'), true); return; }
     if (act === 'upd-set') { if (UKINDS[a.kind]) { a.vals[attr(t, 'data-f')] = attr(t, 'data-v'); a.err = null; a.bad = false; a.focused = true; drawLayer(); } return; }
@@ -1530,8 +1559,8 @@
     if (act === 'pick') { if (a.phase !== 'pick' || !allowed('link')) return; M.act = { kind: 'link', step: 'confirm', pickId: attr(t, 'data-id'), code: a.code, format: a.format, mode: a.mode, fromPick: true }; drawLayer(); return; }
     if (act === 'rep-kind') { a.vals.rkind = attr(t, 'data-k'); a.bad = false; drawLayer(); return; }
     if (act === 'rep-to') { a.vals.to = attr(t, 'data-to') === 'finance' && canPrice(M.role) && !K.noFinance ? 'finance' : 'ops'; a.bad = false; drawLayer(); return; }
-    if (act === 'back') { if (a.upd && UKINDS[a.kind]) { relPrev(a); a.blob = null; a.upPath = null; a.kind = 'update'; a.vals = null; a.step = null; a.err = null; a.bad = false; a.focused = false; drawLayer(); return; } if (/^(scan|link|create|report|undo|bought|unlink|history|photo|photoremove|optusual|cconfirm|labels|tidy|rename|sort|addlow|copytext)$/.test(a.kind)) return flowBack(a); if (a.kind === 'shopset') { a.kind = 'menu'; a.step = null; a.err = null; drawLayer(); } else if (a.fromShop && a.step !== 'confirm') { M.act = null; drawLayer(); } else if (a.step === 'confirm' && a.kind !== 'low') { a.step = 'form'; a.err = null; drawLayer(); } else if (a.shopId) { a.kind = 'menu'; a.err = null; drawLayer(); } else { a.kind = 'menu'; a.vals = null; a.step = null; a.err = null; a.bad = false; drawLayer(); } return; }
-    if (act === 'step') { a.vals = a.vals || {}; var f = attr(t, 'data-f'); a.vals[f] = stepQty(a.vals[f], +attr(t, 'data-d'), attr(t, 'data-z') === '1'); a.err = null; a.bad = false; if (a.kind === 'count') { var sit = itemOf(a); a.chg = !!sit && countChanged(a, sit); } drawLayer(); var nb = q('[data-act="step"][data-f="' + f + '"][data-d="' + attr(t, 'data-d') + '"]'); if (nb && nb.focus) nb.focus(); return; }
+    if (act === 'back') { if (a.upd && UKINDS[a.kind]) { relPrev(a); a.blob = null; a.upPath = null; a.kind = 'update'; a.vals = null; a.step = null; a.err = null; a.bad = false; a.focused = false; drawLayer(); return; } if (/^(scan|link|create|report|undo|bought|unlink|history|photo|photoremove|optusual|cconfirm|labels|tidy|rename|sort|addlow|copytext|group|ilog)$/.test(a.kind)) return flowBack(a); if (a.kind === 'shopset') { a.kind = 'menu'; a.step = null; a.err = null; drawLayer(); } else if (a.fromShop && a.step !== 'confirm') { M.act = null; drawLayer(); } else if (a.step === 'confirm' && a.kind !== 'low') { a.step = 'form'; a.err = null; drawLayer(); } else if (a.shopId) { a.kind = 'menu'; a.err = null; drawLayer(); } else { a.kind = 'menu'; a.vals = null; a.step = null; a.err = null; a.bad = false; drawLayer(); } return; }
+    if (act === 'step') { a.vals = a.vals || {}; var f = attr(t, 'data-f'); a.vals[f] = stepQty(a.vals[f], +attr(t, 'data-d'), attr(t, 'data-z') === '1'); a.err = null; a.bad = false; if (a.kind === 'group') { groupStepped(a, f); return; } if (a.multi) syncMulti(a, itemOf(a)); var chg0 = !!a.chg; if (a.kind === 'count') { var sit = itemOf(a); a.chg = !!sit && countChanged(a, sit); } if (a.multi && UKINDS[a.kind] && chg0 === !!a.chg) { var sin = q('#I_f_' + f); if (sin) sin.value = a.vals[f]; updLive(a); var nb0 = q('[data-act="step"][data-f="' + f + '"][data-d="' + attr(t, 'data-d') + '"]'); if (nb0 && nb0.focus) nb0.focus(); return; } drawLayer(); var nb = q('[data-act="step"][data-f="' + f + '"][data-d="' + attr(t, 'data-d') + '"]'); if (nb && nb.focus) nb.focus(); return; }
     if (act === 'shop-bought') { var r = (K.shop || []).filter(function (x) { return x.id === a.shopId; })[0]; if (!r || !r.itemId || !canManage(M.role) || !allowed('recv', itemById(r.itemId))) return; M.act = { kind: 'recv', itemId: r.itemId, step: 'form', vals: { packs: fmt(r.qty || 1), supplier: K.sup ? K.sup.name : '', supplierId: K.sup && K.sup.id || '', cost: '', shopId: r.id }, fromShop: true }; drawLayer(); return; }
     if (act === 'shop-do') { var rr = (K.shop || []).filter(function (x) { return x.id === a.shopId; })[0]; if (!rr) return; a.kind = 'shopset'; a.status = attr(t, 'data-do'); a.step = 'confirm'; a.rowName = rr.name; drawLayer(); return; }
   }
@@ -1562,6 +1591,8 @@
     var m = M.role;
     if (kind === 'count') return I_FLAGS.count && canCount(m) && !M.denied.count;
     if (kind === 'update') return canUpdate(m) && !M.denied.update;
+    if (kind === 'group') return !!K.items && !M.denied.group && groupModes().length > 0; // s133: Update this group
+    if (kind === 'ilog') return K.v84 && !!K.items && !K.denied.inventory_log_v1; // s133: Inventory history
     if (kind === 'used') return I_FLAGS.usage && canUse(m) && !M.denied.used;
     if (kind === 'brk') return canUpdate(m) && !M.denied.brk && !(it && (it.consumable || isLinen(it)));
     if (kind === 'lin') return canUpdate(m) && !M.denied.lin && !(it && (it.consumable || !isLinen(it)));
@@ -1590,20 +1621,24 @@
       recv: { packs: '1', total: '', date: '', note: '', supplier: K.sup ? K.sup.name : '', supplierId: K.sup && K.sup.id || '', shopId: a.shopId || '' }, shop: { qty: '1', note: '' },
       low: {}, price: { cost: it && it.cost != null && canPrice(M.role) ? fmt(it.cost) : '' }, levels: { name: it ? it.name : '', reorder: it && it.reorder != null ? fmt(it.reorder) : '', par: it && it.par != null ? fmt(it.par) : '', location: it ? it.location : '', unit: it ? it.unit : '', category: it ? it.category : '' } };
     relPrev(a); a.blob = null; a.upPath = null; a.photoErr = null; a.chg = false; a.upd = !!fromUpd;
-    a.kind = kind; a.step = kind === 'low' ? 'confirm' : 'form'; a.vals = defaults[kind]; a.err = null; a.bad = false; a.key = null; a.sig = null; a.focused = false; drawLayer();
+    a.kind = kind; a.step = kind === 'low' ? 'confirm' : 'form'; a.vals = defaults[kind]; a.err = null; a.bad = false; a.key = null; a.sig = null; a.focused = false; a.multi = false; if (UKINDS[kind]) multiBegin(a, it); drawLayer();
     if (kind === 'levels' && allowed('history')) fetchHistory(a.itemId, function (d) { if (M && M.act === a && a.kind === 'levels') { a.sugg = d ? suggestBuyUp(itemById(a.itemId), d) : null; drawLayer(); } });
   }
   function onInput(ev) {
     if (!M) return;
     var id = ev.target && ev.target.id; if (!id) return;
     if (id === 'I_q') { K.q = ev.target.value; drawList(); return; }
+    if (id === 'I_f_lq' && M.act && M.act.kind === 'ilog') { M.act.q = ev.target.value; logSearch(M.act); return; }
     if (id.indexOf('I_f_') === 0 && M.act && M.act.vals) {
       M.act.vals[id.slice(4)] = ev.target.value; M.act.err = null;
       if (id === 'I_f_supplier') M.act.vals.supplierId = '';
       if (UKINDS[M.act.kind]) { // s132: a typed number moves the picture and the Save words, and a changed count asks why
         if (M.act.kind === 'count' && id === 'I_f_qty') { var cit = itemOf(M.act), ch = !!cit && countChanged(M.act, cit); if (ch !== !!M.act.chg) { M.act.chg = ch; drawLayer(); refocus('I_f_qty'); return; } }
+        if (M.act.multi) { if (id === 'I_f_total') M.act.vals.totTouched = true; var mit = itemOf(M.act); syncMulti(M.act, mit); if (M.act.kind === 'count') { var mch = !!mit && countChanged(M.act, mit); if (mch !== !!M.act.chg) { M.act.chg = mch; drawLayer(); refocus(id); return; } } updLive(M.act); }
         if (id === 'I_f_qty' || id === 'I_f_packs') updLive(M.act);
       }
+      if (M.act.kind === 'group' && /^I_f_(g_|go_)/.test(id)) { M.act.bad = false; groupLive(M.act); }
+      if (M.act.kind === 'o8form' && id === 'I_f_link') { var ls = q('[data-i-linkshow]'); if (ls) ls.textContent = o8LinkShow(ev.target.value); }
       if (id === 'I_f_find') { drawLayer(); refocus(id); } // the pick list follows what is typed
       if (M.act.kind === 'create') {
         if (M.act.errs) delete M.act.errs[id.slice(4)];
@@ -1616,12 +1651,15 @@
   }
   function onKey(ev) {
     if (!M || ev.key !== 'Escape') return;
+    if (M.zoom) { zoomClose(); return; } // the viewer closes first, and the opener gets the focus back
     var mo = M.el.querySelector ? M.el.querySelector('.I_menu[open]') : null;
     if (mo && !M.act) { mo.removeAttribute('open'); return; }
     if (M.act) closeSheet();
   }
   function valid(a) {
     var v = a.vals || {};
+    if (a.multi && UKINDS[a.kind]) return multiValid(a, itemOf(a));
+    if (a.kind === 'group') return !groupBad(a) && groupRows(a).length > 0;
     if (a.kind === 'count') return parseQty(v.qty, true) != null;
     if (a.kind === 'used' || a.kind === 'shop') return parseQty(v.qty) != null && String(v.note || '').length <= 200;
     if (a.kind === 'brk' || a.kind === 'lin') return wholeQty(v.qty) != null && String(v.note || '').length <= 200;
@@ -1653,6 +1691,8 @@
     if (/^o8/.test(a.kind)) return o8Submit(a);
     if (a.kind === 'tidy' || (a.kind === 'photo' && a.step !== 'confirm')) return;
     if (a.kind === 'walk') return walkSubmit(a);
+    if (a.kind === 'group') return groupSubmit(a);
+    if (a.kind === 'ilog') return;
     if (a.kind === 'bought') return boughtSubmit(a);
     if (a.kind === 'addlow') return addLowSubmit(a);
     if (a.kind === 'copytext') return closeSheet();
@@ -1669,10 +1709,12 @@
     var ke = K.keys[sig]; // one key per set of values, kept even if the sheet is reopened; dropped on success; forgotten after 10 minutes (a write that landed unseen must not replay a later identical one)
     if (!ke || nowMs() - ke.at > 600000) ke = K.keys[sig] = { key: newKey(a.kind), at: nowMs() };
     a.sig = sig; a.key = ke.key;
-    if (a.kind === 'count') return countCall(it, a.vals, a.key, 'Recount');
-    if (a.kind === 'used') return usageCall(M.pid, it, a.vals, a.key, today);
+    if (a.kind === 'group') return groupCall(M.pid, a.mode, groupRows(a), a.key);
+    if (a.kind === 'count') return a.multi ? optCountCallFor(it, a.vals, a.key) : countCall(it, a.vals, a.key, 'Recount');
+    if (a.kind === 'used') return a.multi && a.vals.opt ? optionUseCall(M.pid, it.id, a.vals.opt, parseQty(a.vals.qty), String(a.vals.note || '').trim().slice(0, 200) || 'Logged in the staff app', today, a.key) : usageCall(M.pid, it, a.vals, a.key, today);
     if (a.kind === 'brk') return { exec: function () { return updExec(a, function (path) { return damageCall(M.pid, it, a.vals, a.key, path, bookingNow()); }); } };
     if (a.kind === 'lin') return { exec: function () { return updExec(a, function (path) { return linenCall(M.pid, it, a.vals, a.key, path, today); }); } };
+    if (a.kind === 'recv' && a.multi) return buyCall(it, a.vals, a.key, today);
     if (a.kind === 'recv') return a.blob ? { exec: function () { return updExec(a, function (path) { return boughtCall(it, a.vals, a.key, today, path); }); } } : boughtCall(it, a.vals, a.key, today, null);
     if (a.kind === 'shop') return shopAddCall(M.pid, it, a.vals, a.key);
     if (a.kind === 'low') return shopAddCall(M.pid, it, { qty: fmt(lowQty(it)), note: 'Running low (from the staff app)' }, a.key);
@@ -1692,14 +1734,14 @@
     var r = (K.shop || []).filter(function (x) { return x.id === a.shopId; })[0];
     return shopSetCall(M.pid, r, a.status, a.key);
   }
-  var DONE = { count: function (it) { return 'Counted. ' + it.name + ' is saved.'; }, used: function () { return 'Logged. Thank you.'; }, recv: function (it) { return 'Stock received for ' + it.name + '.'; }, brk: function (it, a) { return (a.vals.what === 'missing' ? 'Marked missing: ' : 'Marked broken: ') + it.name + '.'; }, lin: function (it) { return 'Saved for ' + it.name + '. Thank you.'; }, shop: function () { return 'Added to the shopping list.'; }, shopset: function (it, a) { return a.status === 'approved' ? 'Approved.' : 'Removed from the list.'; },
+  var DONE = { group: function (it, a) { var n = (a.res && a.res.rows || []).length || groupRows(a).length; return 'Saved ' + n + (n === 1 ? ' change.' : ' changes.'); }, count: function (it) { return 'Counted. ' + it.name + ' is saved.'; }, used: function () { return 'Logged. Thank you.'; }, recv: function (it) { return 'Stock received for ' + it.name + '.'; }, brk: function (it, a) { return (a.vals.what === 'missing' ? 'Marked missing: ' : 'Marked broken: ') + it.name + '.'; }, lin: function (it) { return 'Saved for ' + it.name + '. Thank you.'; }, shop: function () { return 'Added to the shopping list.'; }, shopset: function (it, a) { return a.status === 'approved' ? 'Approved.' : 'Removed from the list.'; },
     undo: function () { return 'Undone.'; }, unlink: function () { return 'Unlinked.'; }, low: function () { return 'Passed on. Thank you.'; }, link: function (it) { return 'Linked. Scanning it now opens ' + it.name + '.'; }, price: function (it) { return 'Price saved for ' + it.name + '.'; }, levels: function (it, a) { var p = levelsCall(it, a.vals || {}).args.p_patch, det = Object.keys(p).some(function (k) { return k !== 'reorder_below' && k !== 'par_qty'; }); return (det ? 'Details' : 'Levels') + ' saved for ' + (p.name || it.name) + '.'; },
     create: function (it, a) { return 'Added ' + String(a.vals.name).trim() + '.'; }, report: function (it, a) { return 'Sent to the ' + (a.vals.to === 'finance' ? 'Finance' : 'OPS') + ' group.'; },
     photo: function (it) { return 'Photo saved for ' + it.name + '.'; }, photoremove: function (it) { return 'Photo removed from ' + it.name + '.'; }, optusual: function (it) { return 'Usual option saved for ' + it.name + '.'; }, labels: function () { return 'Label sheet sent to the Finance group.'; },
     rename: function (it, a) { var n = (a.res && a.res.moved || []).length; return 'Moved ' + n + (n === 1 ? ' item' : ' items') + ' into ' + (mergeTarget(a.from, a.vals.to) || String(a.vals.to).trim()) + '.'; },
     sort: function (it, a) { var n = (a.res && a.res.results || []).length, more = a.res && a.res.remaining > 0 ? ' ' + a.res.remaining + ' more are waiting. Sort again in a moment.' : ''; return (n ? 'Cassy sorted ' + n + (n === 1 ? ' item.' : ' items.') : 'Nothing was moved. Anything Cassy was unsure about stays in Uncategorised.') + more; } };
   function bodyOf(e) { try { return e && e.context && typeof e.context.json === 'function' ? Promise.resolve(e.context.json()).catch(function () { return null; }) : null; } catch (x) { return null; } }
-  var NEWK = { used: 1, brk: 1, lin: 1, unlink: 1, low: 1, link: 1, price: 1, levels: 1, create: 1, report: 1, undo: 1, photo: 1, photoremove: 1, optusual: 1, labels: 1, rename: 1, sort: 1 }; // actions that hide for the visit when the server says "not here"
+  var NEWK = { group: 1, used: 1, brk: 1, lin: 1, unlink: 1, low: 1, link: 1, price: 1, levels: 1, create: 1, report: 1, undo: 1, photo: 1, photoremove: 1, optusual: 1, labels: 1, rename: 1, sort: 1 }; // actions that hide for the visit when the server says "not here"
   function commit(a) {
     var me = M, it = itemOf(a) || { name: a.rowName || (a.entry && a.entry.name) || '' }, call = build(a), rep = a.kind === 'report', snap = it && { name: it.name, qty: it.qty, cost: it.cost, reorder: it.reorder, par: it.par, controlled: it.controlled, learns: it.consumable && it.active, location: it.location, unit: it.unit, category: it.category, photo: it.photo };
     if (me.demo) { toast(rep ? 'Demo only, nothing was sent.' : DEMO_NOTE); finish(); return; }
@@ -1721,7 +1763,7 @@
       if (rep) K.cool[a.vals.rkind + '|' + a.vals.to] = nowMs();
       if (a.kind === 'photo' || a.kind === 'photoremove') { var pit = itemById(a.itemId); if (pit) pit.photo = a.kind === 'photo' ? a.newPath || pit.photo : null; relPrev(a); }
       var od = r && r.data, oid = a.kind === 'undo' ? a.entry.itemId : a.itemId;
-      if (od && Array.isArray(od.options) && oid) { K.opt[oid] = { list: normOpts(od.options), at: nowMs() }; K.usual = null; K.usualAt = 0; } // the usual option moved: the list redraws, and the Usual supplier map is read again
+      if (od && Array.isArray(od.options) && oid) { K.opt[oid] = { list: normOpts(od.options, oid), at: nowMs() }; K.usual = null; K.usualAt = 0; } // the usual option moved: the list redraws, and the Usual supplier map is read again
       if (a.kind === 'recv') rememberSupplier(a.vals);
       if (a.kind === 'create' && a.vals.category === CASSY && a.res.item_id) cassyOne(a.res.item_id);
       var msg = DONE[a.kind](it, a);
@@ -1986,7 +2028,11 @@
   function fetchHistory(id, cb) {
     var me = M; if (!me || me.demo || !me.client) return cb(null);
     if (me.hist[id]) return cb(me.hist[id]);
-    Promise.resolve().then(function () { return me.client.rpc('inventory_item_history_v1', { p_item_id: id }); }).then(function (r) {
+    Promise.resolve().then(function () { return K.denied.history_v2 ? { error: { code: 'PGRST202' } } : me.client.rpc('inventory_item_history_v2', { p_item_id: id }); }).then(function (r2) {
+      if (r2 && !r2.error && !(r2.data && typeof r2.data === 'object' && Array.isArray(r2.data.changes))) return me.client.rpc('inventory_item_history_v1', { p_item_id: id }); // v2 is v1 plus a title: an answer without the changes list is not v2
+      if (r2 && r2.error && errKind(r2.error, true) === 'missing') { K.denied.history_v2 = true; return me.client.rpc('inventory_item_history_v1', { p_item_id: id }); } // the SQL release is not applied yet: the old read
+      return r2;
+    }).then(function (r) {
       if (me.dead) return;
       if (r && r.error) throw r.error;
       if (!r || !r.data || r.data.ok === false) throw { message: 'failed' };
@@ -2023,7 +2069,7 @@
       } else d = (c.before == null ? '' : fmt(c.before) + ' ') + '→ ' + (c.after == null ? '' : fmt(c.after)) + ' ' + unitWord(Number(c.after), unitOf(it));
       if (c.before == null && c.after == null && qn == null) d = '';
     }
-    return '<li><span class="I_hwhen">' + esc(manilaLabel(c.at)) + '</span><span class="I_hwhat"><b>' + (SOURCE_EM[c.source] ? '<em class="I_hsrc" aria-hidden="true">' + SOURCE_EM[c.source] + '</em> ' : '') + esc(w) + '</b>' + (d ? '<span>' + esc(d.trim()) + '</span>' : '') + (c.note ? '<span class="I_hnote">' + esc(String(c.note).trim().slice(0, 200)) + '</span>' : '') + '</span><span class="I_hwho">' + (c.who ? esc(String(c.who).split(' ')[0]) : '') + '</span></li>';
+    return '<li><span class="I_hwhen">' + esc(manilaLabel(c.at)) + '</span><span class="I_hwhat"><b>' + (SOURCE_EM[c.source] ? '<em class="I_hsrc" aria-hidden="true">' + SOURCE_EM[c.source] + '</em> ' : '') + esc(w) + '</b>' + (d ? '<span>' + esc(d.trim()) + '</span>' : '') + (c.option_title ? '<span class="I_hnote">' + esc(String(c.option_title).slice(0, 80)) + '</span>' : '') + (c.note ? '<span class="I_hnote">' + esc(String(c.note).trim().slice(0, 200)) + '</span>' : '') + '</span><span class="I_hwho">' + (c.who ? esc(String(c.who).split(' ')[0]) : '') + '</span></li>';
   }
   function renderHistory(a, it) {
     var h = head(it.name + ': history', it.category);
@@ -2199,7 +2245,7 @@
     count: [[UE.bkn, 'One broke'], [UE.cln, 'Found extra'], ['\u{1F4DD}', 'Not logged before']]
   };
   var ULABEL = { used: 'Note (optional)', brk: 'Note (optional)', lin: 'Note (optional)', recv: 'Note (optional)', count: 'Why is it different? (optional)' };
-  var UWORDS = { consumable_item: 'consumable', linen_item: 'linen', qty_invalid: 'qty', not_allowed: 'refused', rows_invalid: 'rowsBad', source_invalid: 'sourceBad', stock_moved: 'stockMoved', item_not_found: 'itemGone', forbidden: 'refused', bad_line: 'rowsBad' }; // the server's refusal reasons, answered in plain words by ERR; inventory_receipt_manual_v1 refuses with {error:'forbidden'} or 'bad_line'; stock_moved is no s132 write's answer, kept as a fallback for the older undo paths
+  var UWORDS = { counts_exceed: 'countsExceed', consumable_item: 'consumable', linen_item: 'linen', qty_invalid: 'qty', not_allowed: 'refused', rows_invalid: 'rowsBad', source_invalid: 'sourceBad', stock_moved: 'stockMoved', item_not_found: 'itemGone', forbidden: 'refused', bad_line: 'rowsBad' }; // the server's refusal reasons, answered in plain words by ERR; inventory_receipt_manual_v1 refuses with {error:'forbidden'} or 'bad_line'; stock_moved is no s132 write's answer, kept as a fallback for the older undo paths
   var SOURCE_EM = { count: UE.cnt, usage: UE.use, receipt: UE.buy, damage: UE.brk, linen: UE.lin, edit: UE.edit };
   var GROUP_CONS = { 'Kitchen supplies': 'yes', 'Kitchen utensils': 'no', 'Appliances': 'no' }; // the group sets the Is it a consumable? default on a new item
   var GROUP_EM = { 'Kitchen supplies': '☕', 'Kitchen utensils': '\u{1F37D}️', 'Appliances': '\u{1F50C}' };
@@ -2271,6 +2317,7 @@
   // What the form will do, worked out from what is typed: the units that move, the amount after, and the words on the Save button.
   function updUnits(a, it) {
     var v = a.vals || {};
+    if (a.multi && a.kind === 'recv') { var ml = multiOpts(it), pn = ml ? buyPlan(it, ml, v) : null; return pn && !pn.bad && pn.units > 0 ? pn.units : null; }
     if (a.kind === 'recv') { var p = parseQty(v.packs); return p == null ? null : Math.round(p * (it.perPack || 1) * 100) / 100; }
     return parseQty(v.qty, a.kind === 'count');
   }
@@ -2294,8 +2341,8 @@
   function flowInner(a, it) {
     var af = updAfter(a, it), now = it.qty, cnt = a.kind === 'count', top = it.reorder > 0 ? it.reorder * 2 : Math.max(now || 0, af || 0, 1);
     var pct = function (x) { return Math.max(0, Math.min(100, Math.round((x || 0) / top * 100))); };
-    return '<div class="I_flow"><div class="I_fn"><b>' + (now == null ? '?' : esc(fmt(now))) + '</b><small>' + (cnt ? 'app says' : 'now') + '</small></div><span class="I_farr" aria-hidden="true">→</span>' +
-      '<div class="I_fn I_fto"><b>' + (af == null ? '?' : esc(fmt(af))) + '</b><small>' + (cnt ? 'you counted' : 'after') + '</small></div>' +
+    return '<div class="I_flow"><div class="I_fn"><b>' + (now == null ? '?' : esc(fmt(now))) + '</b><small>' + (cnt ? (a.multi ? 'on record' : 'app says') : 'now') + '</small></div><span class="I_farr" aria-hidden="true">→</span>' +
+      '<div class="I_fn I_fto"><b>' + (af == null ? '?' : esc(fmt(af))) + '</b><small>' + (a.multi && multiParts(a, it) ? (cnt ? 'counted' : 'after') + ' (' + esc(multiParts(a, it)) + ')' : cnt ? 'you counted' : 'after') + '</small></div>' +
       '<span class="I_fbar" aria-hidden="true"><i style="width:' + pct(af) + '%"></i>' + (it.reorder > 0 ? '<em></em>' : '') + '</span></div>';
   }
   // A typed number changes the picture and the Save words in place, so the keyboard stays up.
@@ -2304,10 +2351,13 @@
     var f = q('[data-i-flow]'); if (f) f.innerHTML = flowInner(a, it);
     var s = q('[data-i-save]'); if (s && !a.sending) s.textContent = saveText(a, it);
     var pp = q('[data-i-perpack]'); if (pp) pp.textContent = perPackText(a, it);
+    if (a.multi) { // s133: the product rows, the derived count and the auto Total paid follow what is typed
+      var ml = multiOpts(it), ti = q('#I_f_total'); if (ml && a.kind === 'recv') { var pl = buyPlan(it, ml, a.vals), sh = buyShares(pl, a.vals); ml.concat([null]).forEach(function (o) { var f = o ? 'lp_' + o.id : 'lx', sn = q('[data-i-sub="' + f + '"]'); if (sn) sn.textContent = buySub(a, it, o, pl, sh); }); if (ti && !a.vals.totTouched && ti !== (root.document && root.document.activeElement)) ti.value = a.vals.total || ''; }
+    }
   }
   // Owner and admin see what one pack cost under the total (the staff form has no prices shown back).
   function perPackText(a, it) {
-    if (!a || a.kind !== 'recv' || !canManage(M.role)) return '';
+    if (!a || a.kind !== 'recv' || a.multi || !canManage(M.role)) return '';
     var v = a.vals || {}, pk = parseQty(v.packs), tt = String(v.total || '').trim() === '' ? null : parseQty(v.total, true);
     return pk && tt != null && tt > 0 ? '₱' + (Math.round(tt / pk * 100) / 100).toFixed(2) + ' per ' + (it && it.purchaseUnit || 'pack') : '';
   }
@@ -2352,6 +2402,7 @@
     if (a.kind === 'brk' || a.kind === 'lin') return 'Enter a whole number from 1 to 99.';
     if (a.kind === 'recv' && String(v.total || '').trim() !== '' && parseQty(v.total, true) == null) return 'Enter the amount paid, such as 180 or 180.50.';
     if (a.kind === 'recv' && String(v.date || '') !== '' && !/^\d{4}-\d{2}-\d{2}$/.test(String(v.date))) return 'Choose the date you bought it.';
+    if (a.multi && a.kind === 'recv') return 'Add at least one pack, such as 1 or 2.';
     return a.kind === 'recv' ? 'Enter a number such as 1 or 2.' : 'Enter a number such as 2 or 2.5.';
   }
   function renderUpdate(a, it) {
@@ -2366,8 +2417,9 @@
   }
   function renderUpdForm(a, it) {
     var v = a.vals || {}, k = a.kind, body = '', unit = unitOf(it), foot = 'Undo for 15 minutes after saving';
+    var ml = a.multi ? multiOpts(it) : null;
     if (k === 'used') {
-      body = stepper('qty', 'How many (' + esc(unit) + ')?', v.qty, false) + '<div data-i-flow>' + flowInner(a, it) + '</div>' + noteField(a, it);
+      body = (ml ? usedPick(a, it, ml) : '') + stepper('qty', 'How many (' + esc(unit) + ')?', v.qty, false) + '<div data-i-flow>' + flowInner(a, it) + '</div>' + noteField(a, it);
     } else if (k === 'brk') {
       body = segField(a, 'what', 'What happened?', [['broken', UE.bkn, 'Broken', 'chipped or worn out'], ['missing', UE.mis, 'Missing', 'lost or not found']]) + stepper('qty', 'How many (' + esc(unit) + ')?', v.qty, false) + '<div data-i-flow>' + flowInner(a, it) + '</div>' +
         photoField(a, 'Photo (optional)', UE.cam, 'photo') + noteField(a, it) +
@@ -2379,6 +2431,8 @@
         '<div class="field"><span class="lbl">What now?</span><div class="I_uouts" role="group" aria-label="What now">' + [['cleaned', UE.cln, 'Cleaned, back in use', 'Stock stays ' + fmt(q0)], ['needs_replacing', UE.rep, 'Needs replacing', fmt(q0) + ' → ' + lower + ', admin gets a task to buy one'], ['replaced', UE.ok, 'Already replaced', fmt(q0) + ' → ' + lower + ', no task']].map(function (r) {
           return '<button class="I_uout" type="button" data-act="upd-set" data-f="now" data-v="' + r[0] + '" aria-pressed="' + (o === r[0]) + '"><span class="I_oe" aria-hidden="true">' + r[1] + '</span><span class="I_uopt_t"><b>' + esc(r[2]) + '</b><small>' + esc(r[3]) + '</small></span><i class="I_oi" aria-hidden="true"></i></button>'; }).join('') + '</div></div>' +
         photoField(a, 'Photo (optional)', UE.cam, 'photo') + noteField(a, it);
+    } else if (k === 'recv' && ml) {
+      body = multiBuyBody(a, it, ml);
     } else if (k === 'recv') {
       var pu = it.purchaseUnit || 'pack', pk = parseQty(v.packs), mng = canManage(M.role);
       body = stepper('packs', 'How many packs?', v.packs, false) + '<p class="help I_packn">1 ' + esc(pu) + ' = ' + esc(uq(it.perPack || 1, unit)) + '</p>' + '<div data-i-flow>' + flowInner(a, it) + '</div>' +
@@ -2386,6 +2440,8 @@
         photoField(a, 'Receipt (optional)', UE.rcp, 'receipt') + (mng ? supplierField(a) + textField('date', 'Date', v.date || '', 'type="date"') : '') + noteField(a, it) +
         (mng ? '' : '<div class="I_info"><span aria-hidden="true">' + UE.info + '</span><span>Stock goes up now. The admin gets a task with the amount and the receipt and records the money.</span></div>');
       foot = mng ? 'Undo for 15 minutes after saving' : 'Undo for 24 hours after saving';
+    } else if (ml) {
+      body = multiCountBody(a, it, ml);
     } else {
       body = stepper('qty', 'How many are there now (' + esc(unit) + ')?', v.qty, true) + '<div data-i-flow>' + flowInner(a, it) + '</div>' + (a.chg ? noteField(a, it) : '') +
         (it.controlled ? '' : '<p class="help I_sfoot">' + esc(it.consumable && it.active ? LEARNS : 'After this, ' + it.name + ' is counted in the app. Telegram /count will skip it.') + '</p>');
@@ -2412,6 +2468,13 @@
     } else if (a.kind === 'lin') {
       var ln = wholeQty(v.qty); e.say = 'Saved ' + fmt(ln) + (v.what === 'damaged' ? ' damaged: ' : ' stained: ') + n; e.line = 'reported ' + fmt(ln) + (v.what === 'damaged' ? ' damaged' : ' stained'); e.confirm = 'Take back the ' + (v.what === 'damaged' ? 'damaged' : 'stained') + ' report for ' + n + '?';
       e.call = { fn: 'undo_linen_stain_v1', args: { p_idempotency_key: a.key } }; e.v2 = true;
+    } else if (a.kind === 'recv' && a.multi && Array.isArray(d.lines) && d.lines.length) { // s133: one undo per line, the last line first
+      var ucs = d.lines.map(function (l) { var r = l && l.result || {}; return r.movementId || r.purchaseId ? { fn: 'inventory_undo_v1', args: { p_movement_id: r.movementId || null, p_purchase_id: r.purchaseId || null } } : null; }).filter(Boolean).reverse();
+      if (!ucs.length) return null;
+      e.say = 'Received ' + n; e.line = 'received stock'; e.confirm = 'Take the stock you just added to ' + n + ' back out?'; e.call = ucs[0]; if (ucs.length > 1) e.more = ucs.slice(1);
+    } else if (a.kind === 'group') {
+      var gu = groupUndoCalls(a, d); if (!gu.length) return null; var gn = (d.rows || []).length || gu.length;
+      e.itemId = null; e.name = ''; e.say = 'Saved ' + gn + (gn === 1 ? ' change' : ' changes') + ' in ' + a.cat; e.line = 'updated ' + a.cat; e.confirm = 'Put the ' + gn + (gn === 1 ? ' change' : ' changes') + ' in ' + a.cat + ' back?'; e.call = gu[0]; if (gu.length > 1) e.more = gu.slice(1);
     } else if (a.kind === 'recv' && d.draft_id && !canManage(M.role)) {
       e.say = 'Received ' + n; e.line = 'received stock'; e.confirm = 'Take the stock you just added to ' + n + ' back out?'; e.call = { fn: 'inventory_receipt_undo_v1', args: { p_draft_id: d.draft_id } }; e.ttl = 86400000; // the staff receipt keeps its 24 hours
     } else if (a.kind === 'recv' && (d.movementId || d.purchaseId)) {
@@ -2585,6 +2648,409 @@
   function toast(msg) { say(msg); if (M && M.opts.toast) M.opts.toast(msg); }
   function finish() { if (!M) return; if (M.act && M.act.kind === 'optusual') { M.act = newMenu(M.act.itemId); drawLayer(); drawUndo(); return; } var fromShop = M.act && (M.act.shopId || M.act.fromShop); if (fromShop) { M.act = null; drawLayer(); draw(); } else closeSheet(); }
 
+  /* ======== s133 (D-399 to D-402): products with their own stock, Update this group, zoom viewer, inventory history ======== */
+  function r2(n) { return Math.round(n * 100) / 100; }
+  // An item shows the per-product screens only when it has 2 or more products and the server told us each one's quantity (qty_on_hand); otherwise today's screens and calls stay.
+  function multiOpts(it) { var st = it && K.opt[it.id], l = st && st.list; return l && l.length >= 2 && l.every(function (o) { return o.qty != null; }) ? l : null; }
+  function optOrder(list) { return list.slice().sort(function (a, b) { return (b.usual ? 1 : 0) - (a.usual ? 1 : 0) || (b.qty || 0) - (a.qty || 0) || String(a.title).localeCompare(b.title); }); }
+  function optSum(list) { return r2((list || []).reduce(function (s, o) { return s + (o.qty || 0); }, 0)); }
+  function unsortedOf(it, list) { return Math.max(0, r2((it && it.qty || 0) - optSum(list))); } // "Not sorted by brand": the item's quantity less what its products hold
+  function lineUnits(it, o, packs) { return r2(packs * packOf(it, o)); } // units = packs x pack_size
+  // The total paid split across lines by weight (price x packs), 2 places, the remainder on the last line (the server rule of inventory_receipt_lines_v1).
+  function splitTotal(total, weights) {
+    var n = weights.length, out = [], sum = weights.reduce(function (s, w) { return s + w; }, 0), used = 0, i, part;
+    if (!n || total == null) return out;
+    for (i = 0; i < n; i++) { if (i === n - 1) out.push(r2(total - used)); else { part = r2(sum > 0 ? total * weights[i] / sum : total / n); out.push(part); used = r2(used + part); } }
+    return out;
+  }
+  function blankQty(s) { var t = String(s == null ? '' : s).trim(); return t === '' || t === '0' || t === '0.0' || t === '0.00'; }
+  // What a multi-product Bought form will send: one line per product with packs above 0, plus an optional "something else" line (no product).
+  function buyPlan(it, list, v) {
+    var lines = [], bad = false;
+    (list || []).forEach(function (o) { var raw = v['lp_' + o.id]; if (blankQty(raw)) return; var p = parseQty(raw); if (p == null) { bad = true; return; } lines.push({ o: o, packs: p, units: lineUnits(it, o, p), price: o.price }); });
+    if (!blankQty(v.lx)) { var xp = parseQty(v.lx); if (xp == null) bad = true; else lines.push({ o: null, packs: xp, units: r2(xp * (it.perPack || 1)), price: null }); }
+    return { lines: lines, bad: bad, units: r2(lines.reduce(function (s, l) { return s + l.units; }, 0)) };
+  }
+  function planTotal(plan) { var any = false, t = 0; plan.lines.forEach(function (l) { if (l.price != null) { any = true; t += l.price * l.packs; } }); return any ? r2(t) : null; } // the sum of price x packs, the Total paid pre-fill
+  // What a multi-product count will send: each product's counted quantity, the Not sorted remainder and the item total (the sum of both).
+  function countPlan(it, list, v) {
+    var counts = [], bad = false, sum = 0;
+    (list || []).forEach(function (o) { var n = parseQty(v['cq_' + o.id], true); if (n == null) { bad = true; n = 0; } counts.push({ option_id: o.id, qty: n }); sum += n; });
+    var un = parseQty(v.cu, true); if (un == null) { bad = true; un = 0; }
+    return { counts: counts, unsorted: un, total: r2(sum + un), bad: bad };
+  }
+  // The four new calls and the log call: the contract names and keys (docs/s133/CONTRACT.md 2a to 2d, 5).
+  function optionCountCall(itemId, counts, unsorted, note, key) { return { fn: 'inventory_option_count_v1', args: { p_item_id: itemId, p_counts: counts, p_unsorted: unsorted, p_note: note, p_idempotency_key: key } }; }
+  function receiptLinesCall(itemId, lines, totalPaid, purchasedAt, supplierId, key) { return { fn: 'inventory_receipt_lines_v1', args: { p_item_id: itemId, p_lines: lines, p_total_paid: totalPaid, p_purchased_at: purchasedAt, p_supplier_id: supplierId || null, p_idempotency_key: key } }; }
+  function optionUseCall(pid, itemId, optionId, qty, note, sessionDate, key) { return { fn: 'inventory_option_use_v1', args: { p_property_id: pid, p_item_id: itemId, p_option_id: optionId || null, p_qty: qty, p_note: note, p_session_date: sessionDate, p_idempotency_key: key } }; }
+  function groupCall(pid, mode, rows, key) { return { fn: 'inventory_group_update_v1', args: { p_property_id: pid, p_mode: mode, p_rows: rows, p_idempotency_key: key } }; }
+  function logCall(pid, o) { o = o || {}; return { fn: 'inventory_log_v1', args: { p_property_id: pid, p_before: o.before || null, p_limit: Math.max(1, Math.min(100, o.limit || 50)), p_kind: o.kind && o.kind !== 'all' ? o.kind : null, p_item_id: o.itemId || null, p_oldest_first: !!o.oldest } }; }
+  function buyCall(it, v, key, today) {
+    var list = multiOpts(it) || [], plan = buyPlan(it, list, v), tt = String(v.total || '').trim() === '' ? null : parseQty(v.total, true);
+    var lines = plan.lines.map(function (l) { return { option_id: l.o ? l.o.id : null, packs: l.packs, unit_cost: l.price != null && canPrice(M.role) ? l.price : null }; });
+    return receiptLinesCall(it.id, lines, tt, /^\d{4}-\d{2}-\d{2}$/.test(String(v.date || '')) ? v.date : today, v.supplierId || null, key);
+  }
+  function optCountCallFor(it, v, key) {
+    var pl = countPlan(it, multiOpts(it) || [], v);
+    return optionCountCall(it.id, pl.counts, pl.unsorted, noteOf(v.note, 'Recount'), key);
+  }
+
+  /* ---- the Update forms for an item with several products (D, H and the brand pick of Used) */
+  function multiBegin(a, it) {
+    a.multi = false; var list = it && multiOpts(it); if (!list) return;
+    var v = a.vals, today = manilaToday(nowMs());
+    if (a.kind === 'count') { a.multi = true; list.forEach(function (o) { v['cq_' + o.id] = fmt(o.qty); }); a.u0 = unsortedOf(it, list); v.cu = fmt(a.u0); }
+    else if (a.kind === 'recv' && canManage(M.role)) { a.multi = true; list.forEach(function (o) { v['lp_' + o.id] = o.usual ? '1' : '0'; }); v.lx = '0'; v.date = today; }
+    else if (a.kind === 'used') { a.multi = true; var us = list.filter(function (o) { return o.usual; })[0] || list[0]; v.opt = us.id; }
+    if (a.multi) syncMulti(a, it);
+  }
+  // The derived fields follow what is typed: the count total, and the Total paid until the person types one of their own.
+  function syncMulti(a, it) {
+    var list = a.multi && it && multiOpts(it); if (!list) return; var v = a.vals;
+    if (a.kind === 'count') v.qty = fmt(countPlan(it, list, v).total);
+    else if (a.kind === 'recv' && !v.totTouched) { var t = planTotal(buyPlan(it, list, v)); v.total = t == null || !canPrice(M.role) ? '' : fmt(t); }
+  }
+  function multiValid(a, it) {
+    var list = multiOpts(it), v = a.vals || {}; if (!list) return false;
+    if (a.kind === 'count') return !countPlan(it, list, v).bad && String(v.note || '').length <= 200;
+    if (a.kind === 'recv') { var pl = buyPlan(it, list, v); return !pl.bad && pl.lines.length > 0 && (String(v.total || '').trim() === '' || parseQty(v.total, true) != null) && (!v.date || /^\d{4}-\d{2}-\d{2}$/.test(String(v.date))); }
+    if (a.kind === 'used') return parseQty(v.qty) != null && !!list.filter(function (o) { return o.id === v.opt; })[0] && String(v.note || '').length <= 200;
+    return false;
+  }
+  function multiParts(a, it) {
+    var list = multiOpts(it), v = a.vals || {}; if (!list) return '';
+    if (a.kind === 'count') { var pl = countPlan(it, list, v); return pl.counts.map(function (c) { return fmt(c.qty); }).concat(a.u0 > 0 ? [fmt(pl.unsorted)] : []).join(' + '); }
+    if (a.kind === 'recv') return buyPlan(it, list, v).lines.map(function (l) { return '+' + fmt(l.units); }).join(' ');
+    return '';
+  }
+  function optPhotoSpan(o, cls) {
+    var u = optImg(o);
+    return '<span class="' + cls + '" aria-hidden="true">' + (u && !K.badImg[u] ? '<img src="' + esc(u) + '" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer" data-oimg="1">' : gi('image', 's16')) + '</span>';
+  }
+  // One product row with its own stepper: field id f is a plain key of a.vals, so the shared step and input handlers drive it.
+  function prodStep(f, o, sub, val, cls) {
+    return '<div class="I_prow' + (cls ? ' ' + cls : '') + '">' + (o ? optPhotoSpan(o, 'I_pph') : '<span class="I_pph I_pnone" aria-hidden="true">?</span>') + '<div class="I_pbody"><b>' + esc(o ? o.title : 'Something else (not in the list)') + '</b><small data-i-sub="' + esc(f) + '">' + esc(sub) + '</small></div>' +
+      '<div class="I_pstep"><button class="btn btn-secondary I_sb" type="button" data-act="step" data-f="' + esc(f) + '" data-d="-1" data-z="1" aria-label="One less, ' + esc(o ? o.title : 'something else') + '">' + gi('minus') + '</button>' +
+      '<input class="I_pin" id="I_f_' + esc(f) + '" inputmode="decimal" autocomplete="off" aria-label="' + esc(o ? o.title : 'Something else') + '" value="' + esc(val) + '">' +
+      '<button class="btn btn-secondary I_sb" type="button" data-act="step" data-f="' + esc(f) + '" data-d="1" data-z="1" aria-label="One more, ' + esc(o ? o.title : 'something else') + '">' + gi('plus') + '</button></div></div>';
+  }
+  function buySub(a, it, o, plan, shares) {
+    var v = a.vals || {}, p = o ? parseQty(v['lp_' + o.id]) : parseQty(v.lx), money = canPrice(M.role);
+    if (!p) return o ? fmt(packOf(it, o)) + ' ' + unitOf(it) + ' per pack' + (money && o.price != null ? ' · ' + peso(o.price) + ' each' : '') : 'Adds to Not sorted';
+    var idx = -1; plan.lines.forEach(function (l, n) { if ((l.o ? l.o.id : null) === (o ? o.id : null)) idx = n; });
+    var cost = idx >= 0 && shares[idx] != null ? ' · ' + peso(shares[idx]) : '';
+    return fmt(p) + (p === 1 ? ' pack' : ' packs') + ' = ' + uq(o ? lineUnits(it, o, p) : r2(p * (it.perPack || 1)), unitOf(it)) + (money ? cost : '');
+  }
+  function buyShares(plan, v) {
+    var tt = String(v.total || '').trim() === '' ? null : parseQty(v.total, true);
+    if (tt != null && plan.lines.length) return splitTotal(tt, plan.lines.map(function (l) { return l.price != null ? l.price * l.packs : 0; }));
+    return plan.lines.map(function (l) { return l.price != null ? r2(l.price * l.packs) : null; });
+  }
+  function multiBuyBody(a, it, list) {
+    var v = a.vals || {}, plan = buyPlan(it, list, v), shares = buyShares(plan, v), unit = unitOf(it);
+    return '<div class="field"><span class="lbl">How many packs of each?</span>' + optOrder(list).map(function (o) { return prodStep('lp_' + o.id, o, buySub(a, it, o, plan, shares), v['lp_' + o.id] == null ? '0' : v['lp_' + o.id]); }).join('') +
+      prodStep('lx', null, buySub(a, it, null, plan, shares), v.lx == null ? '0' : v.lx, 'I_pelse') + '</div><div data-i-flow>' + flowInner(a, it) + '</div>' +
+      '<div class="field"><label for="I_f_total">Total paid</label><div class="input I_money"><b aria-hidden="true">₱</b><input id="I_f_total" inputmode="decimal" autocomplete="off" placeholder="0" value="' + esc(v.total || '') + '"></div></div>' +
+      supplierField(a) + textField('date', 'Date', v.date || '', 'type="date"') + '<p class="help">Units are ' + esc(unit) + ' for every brand. Packs only matter when buying.</p>';
+  }
+  function multiCountBody(a, it, list) {
+    var v = a.vals || {}, unit = unitOf(it);
+    return '<div class="field"><span class="lbl">How many of each are there now (' + esc(unit) + ')?</span>' + optOrder(list).map(function (o) { return prodStep('cq_' + o.id, o, 'on record ' + fmt(o.qty), v['cq_' + o.id] == null ? '0' : v['cq_' + o.id]); }).join('') +
+      (a.u0 > 0 ? prodStep('cu', { id: '_u', title: 'Not sorted by brand', image: '' }, 'was ' + fmt(a.u0) + ' (move it into the brands above)', v.cu == null ? '0' : v.cu, 'I_pelse') : '') + '</div>' +
+      '<div data-i-flow>' + flowInner(a, it) + '</div><p class="help">Units are ' + esc(unit) + ' for every brand. Packs only matter when buying.</p>' + (a.chg ? noteField(a, it) : '');
+  }
+  function usedPick(a, it, list) {
+    var v = a.vals || {};
+    return '<div class="field"><span class="lbl">Which brand?</span><div class="I_bpick" role="group" aria-label="Which brand">' + optOrder(list).map(function (o) {
+      return '<button class="I_bpb" type="button" data-act="upd-set" data-f="opt" data-v="' + esc(o.id) + '" aria-pressed="' + (v.opt === o.id) + '">' + optPhotoSpan(o, 'I_pph') + '<span class="I_pbody"><b>' + esc(o.title) + (o.usual ? ' <span class="I_usual">Usual</span>' : '') + '</b><small>' + esc(fmt(o.qty) + ' on hand') + '</small></span><i class="I_oi" aria-hidden="true"></i></button>'; }).join('') + '</div></div>';
+  }
+
+  /* ---- products block on the item card (B) */
+  function pathUrl(p) { puLoad(); var c = p && K.pu[p]; return c && nowMs() - c.at < SIGN_STALE ? c.url : ''; }
+  function optImg(o) { var p = o && o.image; if (!p) return ''; return /^(https:|data:image\/)/.test(p) ? p : pathUrl(p); }
+  function zoomList(it) {
+    var out = [], u = photoUrl(it); if (u && !K.badImg[u]) out.push({ url: u, title: it.name });
+    var st = K.opt[it.id]; if (st && st.list) optSort(st.list, canPrice(M.role)).forEach(function (o) { var iu = optImg(o); if (iu && !K.badImg[iu]) out.push({ url: iu, title: o.title, id: o.id }); });
+    return out;
+  }
+  function hasHero(it) { var u = photoUrl(it); return !!u && !K.badImg[u]; }
+  function heroBlock(it) {
+    var u = photoUrl(it);
+    return '<button class="I_heroz" type="button" data-act="zoom" data-i="0" aria-label="Zoom the photo of ' + esc(it.name) + '"><img data-uimg="1" src="' + esc(u) + '" alt="' + esc(it.name) + '" decoding="async"><span class="I_zchip">Tap to zoom</span></button>';
+  }
+  function optionsBlock(it) {
+    var st = K.opt[it.id]; if (!st || !st.list) return ''; var ed = o8On(); if (!st.list.length && !ed) return '';
+    var money = canPrice(M.role), mng = canManage(M.role), sorted = optSort(st.list, money), ml = multiOpts(it), a = M.act, zl = zoomList(it);
+    var row = function (o) {
+      var zi = -1; zl.forEach(function (z, n) { if (z.id === o.id) zi = n; });
+      var sub = [o.brand, o.supplier, o.packLabel].filter(Boolean).join(' · ') + (ml ? (sub0(o) ? ' · ' : '') + fmt(o.qty) + ' on hand' : '');
+      function sub0(x) { return !![x.brand, x.supplier, x.packLabel].filter(Boolean).length; }
+      var u = optImg(o), pic = u && !K.badImg[u] ? '<img src="' + esc(u) + '" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer" data-oimg="1">' : gi('image', 's16');
+      var open = a && a.omenu === o.id, mb = function (act, text, cls) { return '<button class="btn btn-ghost I_pmi' + (cls ? ' ' + cls : '') + '" type="button" data-act="' + act + '" data-id="' + esc(o.id) + '">' + text + '</button>'; };
+      var items = (!o.usual && mng && allowed('optusual') ? mb('opt-usual', 'Make usual') : '') + (mng && o.image && allowed('photo') ? mb('opt-photo', 'Use as item photo') : '') + (ed ? mb('o8-edit', 'Edit') + (o.usual ? '' : mb('o8-del', 'Remove', 'I_pdanger')) : '');
+      return '<div class="I_prodrow">' + (zi >= 0 ? '<button class="I_pimg" type="button" data-act="zoom" data-i="' + zi + '" aria-label="Zoom ' + esc(o.title) + '">' + pic + '</button>' : '<span class="I_pimg" aria-hidden="true">' + pic + '</span>') +
+        '<div class="I_pbody"><p class="I_ot">' + esc(o.title) + (o.usual ? ' <span class="I_usual">Usual</span>' : '') + (o.preferred ? ' <span class="I_pref">' + gi('star', 's16') + 'Preferred</span>' : '') + '</p>' + (sub ? '<p class="help">' + esc(sub) + '</p>' : '') +
+        (money && o.price != null ? '<p class="help num">' + esc(peso(o.price)) + '</p>' : '') + (o.available === false ? '<p class="help I_oos">Out of stock</p>' : '') +
+        (o.link ? '<a class="I_plink" href="' + esc(o.link) + '" target="_blank" rel="noopener noreferrer">View on ' + esc(siteOf(o.link)) + '</a>' : '') + '</div>' +
+        (items ? '<button class="btn btn-ghost I_pmore" type="button" data-act="omenu" data-id="' + esc(o.id) + '" aria-expanded="' + !!open + '" aria-label="More for ' + esc(o.title) + '">' + gi('more') + '</button>' : '') +
+        (open && items ? '<div class="I_pmenu" role="group" aria-label="Actions for ' + esc(o.title) + '">' + items + '</div>' : '') + '</div>';
+    };
+    var first = sorted.slice(0, 3), rest = sorted.slice(3), un = ml ? unsortedOf(it, ml) : 0;
+    return '<div class="I_opts" role="group" aria-label="Products"><h3 class="I_opth">Products · ' + sorted.length + (sorted.length > 1 ? ' · usual first' : '') + '</h3>' + first.map(row).join('') +
+      (rest.length ? '<details class="I_other"><summary>Show ' + rest.length + ' more ' + (rest.length === 1 ? 'product' : 'products') + '</summary>' + rest.map(row).join('') + '</details>' : '') +
+      (ml ? '<div class="I_ptot"><p><span>Total on hand</span><b>' + esc(fmt(it.qty == null ? optSum(ml) : it.qty)) + '</b></p>' + (un > 0 ? '<p class="help"><span>Not sorted by brand</span><b>' + esc(fmt(un)) + '</b></p>' : '') + '</div>' : '') +
+      (ed ? '<button class="btn btn-secondary btn-block I_o8add" type="button" data-act="o8-add">' + gi('plus', 's16') + ' Add a product</button>' + o8Wait(it) : '') + '</div>';
+  }
+
+  /* ---- Update this group (E): one sheet for a whole group, Count, Bought or Used up */
+  var GMODES = [['count', 'Count'], ['bought', 'Bought'], ['used', 'Used up']];
+  function groupModes() { return GMODES.filter(function (m) { return m[0] === 'count' ? allowed('count') : m[0] === 'bought' ? canManage(M.role) : allowed('used') || canUpdate(M.role); }); }
+  function groupItems(a) { return a.ids.map(itemById).filter(Boolean); }
+  function groupDefaults(a) {
+    var v = {}; groupItems(a).forEach(function (it) { v['g_' + it.id] = a.mode === 'count' ? (it.qty != null ? fmt(it.qty) : '0') : '0'; });
+    return v;
+  }
+  function groupOpen(cat) {
+    if (!K.items || !allowed('group')) return;
+    var g = groupsFor(K.items, K.chip, K.q).filter(function (x) { return x.cat === cat; })[0]; if (!g || !g.rows.length) return;
+    var modes = groupModes(); if (!modes.length) return;
+    var a = M.act = { kind: 'group', cat: cat, ids: g.rows.slice(0, 60).map(function (r) { return r.id; }), mode: modes[0][0], step: 'form', vals: {}, bad: false };
+    a.vals = groupDefaults(a); drawLayer();
+  }
+  // The rows the call will carry: only items that changed. A multi-product item in Bought or Used goes with the product picked (the usual by default).
+  function groupRows(a) {
+    var rows = [];
+    groupItems(a).forEach(function (it) {
+      var raw = a.vals['g_' + it.id], opts = K.opt[it.id] && K.opt[it.id].list, ml = multiOpts(it), sel = ml ? (a.vals['go_' + it.id] || (ml.filter(function (o) { return o.usual; })[0] || ml[0]).id) : null, o = sel && opts ? opts.filter(function (x) { return x.id === sel; })[0] : null;
+      if (a.mode === 'count') { var n = parseQty(raw, true); if (n != null && it.qty != null && n !== it.qty) rows.push({ item_id: it.id, qty: n }); else if (n != null && it.qty == null) rows.push({ item_id: it.id, qty: n }); }
+      else if (a.mode === 'used') { var u = parseQty(raw); if (u != null) { var r = { item_id: it.id, qty: u }; if (sel) r.option_id = sel; rows.push(r); } }
+      else { var p = parseQty(raw); if (p != null) rows.push({ item_id: it.id, lines: [{ option_id: sel, packs: p, unit_cost: o && o.price != null && canPrice(M.role) ? o.price : null }] }); }
+    });
+    return rows;
+  }
+  function groupBad(a) {
+    return groupItems(a).some(function (it) { var raw = a.vals['g_' + it.id]; return String(raw == null ? '' : raw).trim() !== '' && parseQty(raw, true) == null; });
+  }
+  function groupSub(a, it) {
+    var raw = a.vals['g_' + it.id], n = parseQty(raw, true), unit = it.unit || '';
+    if (n == null) return 'Enter a number';
+    if (a.mode === 'count') return it.qty == null ? 'Not counted · now ' + fmt(n) + ' ' + unit : n === it.qty ? 'was ' + fmt(it.qty) + ' ' + unit : 'was ' + fmt(it.qty) + ' → ' + fmt(n) + ' ' + unit;
+    if (!n) return (it.qty == null ? 'Not counted' : fmt(it.qty) + ' ' + unit + ' now');
+    if (a.mode === 'used') return 'used ' + fmt(n) + (it.qty != null ? ' · ' + fmt(it.qty) + ' → ' + fmt(Math.max(0, r2(it.qty - n))) : '');
+    return fmt(n) + (n === 1 ? ' pack' : ' packs') + ' = ' + uq(r2(n * (it.perPack || 1)), unit);
+  }
+  function groupSave(a) { var n = groupRows(a).length; return n ? 'Save ' + n + (n === 1 ? ' change' : ' changes') : 'Save'; }
+  function groupLive(a) {
+    if (!M || M.act !== a) return;
+    groupItems(a).forEach(function (it) { var s = q('[data-i-gs="' + it.id + '"]'); if (s) s.textContent = groupSub(a, it); });
+    var b = q('[data-i-save]'); if (b && !a.sending) b.textContent = groupSave(a);
+  }
+  function renderGroupSheet(a) {
+    var modes = groupModes(), its = groupItems(a), seg = '<div class="I_gseg" role="group" aria-label="What are you updating">' + modes.map(function (m) { return '<button class="I_gsegb" type="button" data-act="group-mode" data-v="' + m[0] + '" aria-pressed="' + (a.mode === m[0]) + '">' + m[1] + '</button>'; }).join('') + '</div>';
+    var rows = its.map(function (it) {
+      var ml = a.mode !== 'count' ? multiOpts(it) : null, sel = ml ? (a.vals['go_' + it.id] || (ml.filter(function (o) { return o.usual; })[0] || ml[0]).id) : '', u = photoUrl(it);
+      return '<div class="I_grow"><span class="I_gph" aria-hidden="true">' + (u && !K.badImg[u] ? '<img data-uimg="1" src="' + esc(u) + '" alt="" loading="lazy" decoding="async">' : itemEmoji(it)) + '</span><div class="I_pbody"><b>' + esc(it.name) + '</b><small data-i-gs="' + esc(it.id) + '">' + esc(groupSub(a, it)) + '</small>' +
+        (ml ? '<select class="I_gsel" id="I_f_go_' + esc(it.id) + '" aria-label="Which brand of ' + esc(it.name) + '">' + optOrder(ml).map(function (o) { return '<option value="' + esc(o.id) + '"' + (o.id === sel ? ' selected' : '') + '>' + esc(o.title) + '</option>'; }).join('') + '</select>' : '') + '</div>' +
+        '<div class="I_pstep"><button class="btn btn-secondary I_sb" type="button" data-act="step" data-f="g_' + esc(it.id) + '" data-d="-1" data-z="1" aria-label="One less, ' + esc(it.name) + '">' + gi('minus') + '</button><input class="I_pin" id="I_f_g_' + esc(it.id) + '" inputmode="decimal" autocomplete="off" aria-label="' + esc(it.name) + '" value="' + esc(a.vals['g_' + it.id]) + '">' +
+        '<button class="btn btn-secondary I_sb" type="button" data-act="step" data-f="g_' + esc(it.id) + '" data-d="1" data-z="1" aria-label="One more, ' + esc(it.name) + '">' + gi('plus') + '</button></div></div>'; }).join('');
+    return '<div class="F_sheethead I_sh"><h2 class="hd I_sht" id="I_sh_t" tabindex="-1">Update this group</h2><button class="btn btn-secondary btn-sm F_close" type="button" data-act="close">' + gi('close', 's16') + 'Close</button></div><p class="help">' + esc(groupName(a.cat)) + ' · ' + its.length + ' items</p>' + seg +
+      '<form data-i-form class="I_uform ' + (a.mode === 'bought' ? 'I_hue_buy' : a.mode === 'used' ? 'I_hue_use' : 'I_hue_cnt') + '">' + rows + errBox(a) + (a.bad ? '<div class="field"><span class="err">' + gi('alert', 's16') + ' ' + esc(groupBad(a) ? 'Enter a number such as 2 or 2.5.' : 'Change at least one item.') + '</span></div>' : '') +
+      '<button class="btn btn-block I_save" type="submit" data-i-save' + (a.sending ? ' disabled' : '') + '>' + esc(a.sending ? 'Saving…' : groupSave(a)) + '</button><p class="help I_sfoot">Undo for 15 minutes after saving · or <button class="btn btn-ghost I_undobtn" type="button" data-act="group-one">count one at a time</button></p></form>';
+  }
+  function groupClick(act, t, a) {
+    if (act === 'group-mode') { var m = attr(t, 'data-v'); if (groupModes().some(function (x) { return x[0] === m; })) { a.mode = m; a.vals = groupDefaults(a); a.err = null; a.bad = false; a.key = null; drawLayer(); } return true; }
+    if (act === 'group-one') { var cat = a.cat; M.act = null; drawLayer(); walkStart(cat); return true; }
+    return false;
+  }
+  function groupStepped(a, f) {
+    var id = String(f).slice(2), inp = q('#I_f_g_' + id); if (inp) inp.value = a.vals[f];
+    var it = itemById(id); if (it && a.mode !== 'count' && !K.opt[id]) { var me = M; loadOptions(id).then(function () { if (M === me && M.act === a && !sheetTyping()) drawLayer(); }); }
+    groupLive(a);
+  }
+  function groupSubmit(a) {
+    if (groupBad(a) || !groupRows(a).length) { a.bad = true; drawLayer(); return; }
+    a.bad = false; commit(a);
+  }
+  function groupUndoCalls(a, d) {
+    var calls = [];
+    (d.rows || []).forEach(function (r) {
+      var res = r && r.result || {};
+      if (a.mode === 'count') { if (res.movementId) calls.push({ fn: 'inventory_undo_v1', args: { p_movement_id: res.movementId, p_purchase_id: null } }); }
+      else if (a.mode === 'used') calls.push({ fn: 'undo_inventory_usage_v1', args: { p_usage_key: a.key + ':' + r.idx } });
+      else (res.lines || []).forEach(function (l) { var x = l && l.result || {}; if (x.movementId || x.purchaseId) calls.push({ fn: 'inventory_undo_v1', args: { p_movement_id: x.movementId || null, p_purchase_id: x.purchaseId || null } }); });
+    });
+    return calls.reverse(); // the last row is undone first
+  }
+
+  /* ---- zoom viewer (C): pinch, double-tap and swipe on one picture; Escape or Close leaves it and the opener gets the focus back */
+  var ZMAX = 4;
+  function zoomClamp(scale, tx, ty, w, h) { // keeps the picture covering the frame: at scale 1 it sits still
+    var s = Math.max(1, Math.min(ZMAX, scale)), mx = Math.max(0, (s - 1) * w / 2), my = Math.max(0, (s - 1) * h / 2);
+    return { scale: s, x: Math.max(-mx, Math.min(mx, tx)), y: Math.max(-my, Math.min(my, ty)) };
+  }
+  function zoomOpen(it, i, opener) {
+    var list = zoomList(it); if (!list.length) return;
+    M.zoom = { itemId: it.id, list: list, i: Math.max(0, Math.min(list.length - 1, i || 0)), scale: 1, x: 0, y: 0, opener: opener || null, ptr: {}, tap: null }; drawZoom();
+  }
+  function zoomClose() {
+    var z = M && M.zoom; if (!z) return; M.zoom = null; drawZoom();
+    var o = z.opener; if (o && o.isConnected !== false && o.focus) { try { o.focus(); } catch (e) { /* the opener is gone */ } }
+  }
+  function zoomGo(d) { var z = M.zoom; if (!z || z.list.length < 2) return; z.i = (z.i + d + z.list.length) % z.list.length; z.scale = 1; z.x = 0; z.y = 0; drawZoom(); }
+  function zoomApply() {
+    var z = M && M.zoom, im = q('[data-i-zimg]'); if (!z || !im) return;
+    var c = zoomClamp(z.scale, z.x, z.y, im.clientWidth || 300, im.clientHeight || 300); z.scale = c.scale; z.x = c.x; z.y = c.y;
+    im.style.transform = 'translate(' + c.x + 'px,' + c.y + 'px) scale(' + c.scale + ')';
+  }
+  function drawZoom() {
+    var box = q('[data-i-zoom]'), z = M && M.zoom; if (!box) return;
+    if (!z) { box.innerHTML = ''; var ly = q('[data-i-layer]'), tp = q('[data-i-top]'), ls = q('[data-i-list]'); if (ly && ly.removeAttribute) ly.removeAttribute('inert'); [tp, ls].forEach(function (n) { if (!n) return; if (M.act) { if (n.setAttribute) n.setAttribute('inert', ''); } else if (n.removeAttribute) n.removeAttribute('inert'); }); return; }
+    var cur = z.list[z.i];
+    box.innerHTML = '<div class="I_zview" role="dialog" aria-modal="true" aria-label="Photo viewer"><div class="I_zbar"><p class="I_zt" id="I_zt">' + esc(cur.title) + ' · ' + (z.i + 1) + ' of ' + z.list.length + '</p><button class="btn btn-secondary I_zclose" type="button" data-act="zoom-close" id="I_zclose">' + gi('close', 's16') + 'Close</button></div>' +
+      '<div class="I_zstage" data-i-zstage><img data-i-zimg src="' + esc(cur.url) + '" alt="' + esc(cur.title) + '" decoding="async" draggable="false" referrerpolicy="no-referrer"></div>' +
+      '<p class="I_zhint">Pinch or double-tap to zoom' + (z.list.length > 1 ? ', swipe for the next' : '') + '</p>' +
+      (z.list.length > 1 ? '<div class="I_zdots" aria-hidden="true">' + z.list.map(function (x, n) { return '<i' + (n === z.i ? ' class="on"' : '') + '></i>'; }).join('') + '</div><div class="I_znav"><button class="btn btn-secondary I_zb" type="button" data-act="zoom-prev" aria-label="Previous photo">‹</button><button class="btn btn-secondary I_zb" type="button" data-act="zoom-next" aria-label="Next photo">›</button></div>' : '') + '</div>';
+    ['[data-i-top]', '[data-i-list]', '[data-i-layer]'].forEach(function (s) { var n = q(s); if (n && n.setAttribute) n.setAttribute('inert', ''); });
+    var cb = q('#I_zclose'); if (cb && cb.focus) cb.focus();
+    var st = q('[data-i-zstage]'); if (st && st.addEventListener) { st.addEventListener('pointerdown', zDown); st.addEventListener('pointermove', zMove); st.addEventListener('pointerup', zUp); st.addEventListener('pointercancel', zUp); }
+    zoomApply();
+  }
+  function zDist(p) { var k = Object.keys(p); if (k.length < 2) return 0; var a = p[k[0]], b = p[k[1]]; return Math.sqrt((a.x - b.x) * (a.x - b.x) + (a.y - b.y) * (a.y - b.y)); }
+  function zDown(ev) {
+    var z = M && M.zoom; if (!z) return; z.ptr[ev.pointerId] = { x: ev.clientX, y: ev.clientY, x0: ev.clientX, y0: ev.clientY, t0: nowMs() };
+    if (ev.target && ev.target.setPointerCapture) { try { ev.target.setPointerCapture(ev.pointerId); } catch (e) { /* no capture */ } }
+    if (Object.keys(z.ptr).length === 2) { z.d0 = zDist(z.ptr); z.s0 = z.scale; }
+  }
+  function zMove(ev) {
+    var z = M && M.zoom, p = z && z.ptr[ev.pointerId]; if (!p) return;
+    var n = Object.keys(z.ptr).length, dx = ev.clientX - p.x, dy = ev.clientY - p.y; p.x = ev.clientX; p.y = ev.clientY;
+    if (n >= 2 && z.d0) { var d = zDist(z.ptr); if (d) z.scale = Math.max(1, Math.min(ZMAX, z.s0 * d / z.d0)); zoomApply(); return; }
+    if (z.scale > 1) { z.x += dx; z.y += dy; zoomApply(); }
+  }
+  function zUp(ev) {
+    var z = M && M.zoom, p = z && z.ptr[ev.pointerId]; if (!p) return;
+    delete z.ptr[ev.pointerId]; z.d0 = 0;
+    var mx = ev.clientX - p.x0, my = ev.clientY - p.y0, dt = nowMs() - p.t0, moved = Math.abs(mx) + Math.abs(my);
+    if (Object.keys(z.ptr).length) return;
+    if (z.scale <= 1.02 && Math.abs(mx) > 60 && Math.abs(mx) > Math.abs(my) * 1.5 && dt < 800) { zoomGo(mx < 0 ? 1 : -1); return; } // swipe
+    if (moved < 12 && dt < 400) { // a tap; two within 320 ms toggle the zoom
+      if (z.tap && nowMs() - z.tap.t < 320 && Math.abs(ev.clientX - z.tap.x) < 40) { z.tap = null; if (z.scale > 1) { z.scale = 1; z.x = 0; z.y = 0; } else { z.scale = 2.5; z.x = 0; z.y = 0; } zoomApply(); }
+      else z.tap = { t: nowMs(), x: ev.clientX };
+    }
+  }
+  function zoomClick(act, t) {
+    if (act === 'zoom') { var it = M.act && M.act.itemId ? itemById(M.act.itemId) : null; if (it) zoomOpen(it, +attr(t, 'data-i') || 0, t); return true; }
+    if (!M.zoom) return false;
+    if (act === 'zoom-close') { zoomClose(); return true; }
+    if (act === 'zoom-next') { zoomGo(1); return true; }
+    if (act === 'zoom-prev') { zoomGo(-1); return true; }
+    return false;
+  }
+
+  /* ---- Inventory history (I): the whole log in time order, from inventory_log_v1 */
+  var LKINDS = [['all', 'All'], ['count', 'Counts'], ['bought', 'Bought'], ['used', 'Used'], ['broken', 'Broken'], ['edit', 'Edits']];
+  var LWORD = { count: 'Count', bought: 'Bought', used: 'Used', broken: 'Broken', moved: 'Moved', edit: 'Edit', product: 'Product', created: 'Added', undo: 'Undo' };
+  var DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  function manilaMs(iso) { var t = Date.parse(iso); return isNaN(t) ? null : t; }
+  function manilaDay(iso) { var t = manilaMs(iso); return t == null ? '' : manilaToday(t); }
+  function manilaTime(iso) { var t = manilaMs(iso); if (t == null) return ''; var d = new Date(t + 8 * 3600000), h = d.getUTCHours(), m = d.getUTCMinutes(); return (h % 12 || 12) + ':' + (m < 10 ? '0' : '') + m + ' ' + (h < 12 ? 'am' : 'pm'); }
+  function dayLabel(day, today) {
+    var p = String(day).split('-'), d = new Date(Date.UTC(+p[0], +p[1] - 1, +p[2])), base = DAYS[d.getUTCDay()] + ' ' + +p[2] + ' ' + MONTHS[+p[1] - 1], yd = manilaToday(Date.parse(today + 'T12:00:00Z') - 86400000);
+    return day === today ? 'Today, ' + base : day === yd ? 'Yesterday, ' + base : base + (p[0] !== today.slice(0, 4) ? ' ' + p[0] : '');
+  }
+  // Log rows in time order (newest first, or oldest first) with the same time broken by the order the server sent.
+  function sortLog(rows, oldest) {
+    return rows.map(function (r, n) { return { r: r, n: n, t: manilaMs(r.at) || 0 }; }).sort(function (x, y) { return (oldest ? x.t - y.t : y.t - x.t) || (oldest ? x.n - y.n : x.n - y.n); }).map(function (x) { return x.r; });
+  }
+  function dayGroups(rows, oldest, today) {
+    var out = [], by = {};
+    sortLog(rows, oldest).forEach(function (r) { var d = manilaDay(r.at); if (!by[d]) { by[d] = { day: d, label: dayLabel(d, today), rows: [] }; out.push(by[d]); } by[d].rows.push(r); });
+    return out;
+  }
+  function normLog(list) {
+    return (Array.isArray(list) ? list : []).filter(function (r) { return r && r.at; }).map(function (r) {
+      return { at: String(r.at), kind: String(r.kind || 'edit'), itemId: r.item_id ? String(r.item_id) : '', item: String(r.item_name || ''), parts: Array.isArray(r.summary_parts) ? r.summary_parts.map(String) : [], before: num(r.qty_before), after: num(r.qty_after), delta: num(r.delta), unit: String(r.unit || ''),
+        option: r.option_title ? String(r.option_title) : '', money: r.money == null ? null : num(r.money), who: String(r.actor_first_name || ''), note: String(r.source_note || ''), undoneAt: r.undone_at ? String(r.undone_at) : '', undoneBy: String(r.undone_by_first_name || ''), group: r.group_key ? String(r.group_key) : '' };
+    });
+  }
+  function logSummary(r) {
+    var p = r.parts.slice(); if (r.option && p.join(' ').indexOf(r.option) < 0) p.push(r.option);
+    if (r.before != null && r.after != null) p.push(fmt(r.before) + ' → ' + fmt(r.after) + (r.unit ? ' ' + r.unit : ''));
+    return p.join(' · ');
+  }
+  function fetchLog(a, append) {
+    var me = M; if (!me) return;
+    if (me.demo) { var all = demoLog(), f = all.filter(function (r) { return (a.kindF === 'all' || logKindOf(r.kind) === a.kindF) && (!a.fid || r.item_id === a.fid); }); a.rows = normLog(f); a.next = null; a.state = 'ok'; drawLayer(); return; }
+    if (!me.client || !online()) { a.state = a.rows.length ? 'ok' : 'err'; a.err = online() ? null : 'offline'; drawLayer(); return; }
+    var seq = a.seq = (a.seq || 0) + 1; a.busy = true; if (!append) { a.state = a.rows.length ? 'ok' : 'loading'; }
+    var c = logCall(me.pid, { before: append ? a.next : null, kind: a.kindF, itemId: a.fid, oldest: a.oldest });
+    drawLayer();
+    Promise.resolve().then(function () { return me.client.rpc(c.fn, c.args); }).then(function (r) {
+      if (me.dead || a.seq !== seq) return;
+      if (r && r.error) throw r.error;
+      if (!r || !r.data || r.data.ok === false) throw { message: 'failed' };
+      var rows = normLog(r.data.rows); a.rows = append ? a.rows.concat(rows) : rows; a.next = r.data.next_before || null; a.state = 'ok'; a.busy = false; a.err = null; if (M === me && M.act === a) drawLayer();
+    }).catch(function (e) {
+      if (me.dead || a.seq !== seq) return; a.busy = false;
+      if (errKind(e, online()) === 'missing') { K.denied.inventory_log_v1 = true; M.act = null; toast(ERR.missing); drawLayer(); draw(); return; }
+      a.state = a.rows.length ? 'ok' : 'err'; a.err = errKind(e, online()); drawLayer();
+    });
+  }
+  function logKindOf(k) { return k === 'moved' || k === 'product' || k === 'created' ? 'edit' : k; }
+  function logOpen() {
+    if (!allowed('ilog') || M.act) return;
+    var a = M.act = { kind: 'ilog', rows: [], next: null, kindF: 'all', oldest: false, q: '', fid: null, state: 'loading', busy: false }; fetchLog(a, false);
+  }
+  function renderLog(a) {
+    var today = manilaToday(nowMs()), qs = String(a.q || '').trim().toLowerCase(), rows = qs ? a.rows.filter(function (r) { return r.item.toLowerCase().indexOf(qs) >= 0; }) : a.rows, gs = dayGroups(rows, a.oldest, today);
+    var chips = LKINDS.map(function (k) { return '<button class="chip" type="button" data-act="ilog-kind" data-k="' + k[0] + '" aria-pressed="' + (a.kindF === k[0]) + '">' + k[1] + '</button>'; }).join('');
+    var list = gs.map(function (g) {
+      return '<h3 class="I_lgday">' + esc(g.label) + '</h3>' + g.rows.map(function (r) {
+        var sum = logSummary(r), und = r.undoneAt ? '<span class="I_lgund">Undone ' + esc(manilaTime(r.undoneAt)) + (r.undoneBy ? ' by ' + esc(r.undoneBy) : '') + '</span>' : '';
+        var open = r.itemId && itemById(r.itemId);
+        return '<' + (open ? 'button type="button" data-act="ilog-item" data-id="' + esc(r.itemId) + '"' : 'div') + ' class="I_lgrow' + (r.undoneAt ? ' I_lgdone' : '') + '"><span class="I_lgt">' + esc(manilaTime(r.at)) + '</span><span class="I_lgk I_lgk_' + esc(r.kind) + '">' + esc(LWORD[r.kind] || 'Edit') + '</span><span class="I_lgb"><b>' + esc(r.item) + '</b>' +
+          (sum || r.money != null ? '<span class="I_lgs">' + (sum ? '<span class="I_lgtx">' + esc(sum) + '</span>' : '') + (r.money != null && canPrice(M.role) ? ' · ' + esc(peso(r.money)) : '') + '</span>' : '') + (und ? '<span class="I_lgs">' + und + '</span>' : '') +
+          (r.who || r.note ? '<span class="I_lgw">' + esc([r.who, r.note].filter(Boolean).join(' · ')) + '</span>' : '') + '</span></' + (open ? 'button' : 'div') + '>'; }).join('');
+    }).join('');
+    var body = a.state === 'loading' ? '<p class="help I_load" role="status">Loading the history…</p>' : a.state === 'err' ? '<div class="errbox" role="alert">' + gi('alert') + '<span>' + esc(a.err === 'offline' ? ERR.offline : ERR.other) + '</span></div><button class="btn btn-secondary btn-block" type="button" data-act="ilog-retry">Try again</button>' :
+      (gs.length ? list : '<p class="help">Nothing in the history for this view yet.</p>') + (a.next ? '<button class="btn btn-secondary btn-block I_lgmore" type="button" data-act="ilog-more"' + (a.busy ? ' disabled' : '') + '>' + (a.busy ? 'Loading…' : 'Show older') + '</button>' : '');
+    return '<div class="F_sheethead I_sh"><h2 class="hd I_sht" id="I_sh_t" tabindex="-1">Inventory history</h2><button class="btn btn-secondary btn-sm F_close" type="button" data-act="close">' + gi('close', 's16') + 'Close</button></div>' +
+      '<div class="I_lgtop"><div class="field"><label class="sr" for="I_f_lq">Search an item</label><div class="input"><input id="I_f_lq" type="search" autocomplete="off" placeholder="Search an item" value="' + esc(a.q) + '"></div></div>' +
+      '<button class="btn btn-secondary I_lgord" type="button" data-act="ilog-order" aria-pressed="' + a.oldest + '">' + (a.oldest ? 'Oldest first' : 'Newest first') + '</button></div>' +
+      '<div class="I_lgchips" role="group" aria-label="Show">' + chips + '</div>' + body;
+  }
+  // Called on every typed letter: client-side filter over what is loaded; one real item name also asks the server for that item alone.
+  function logSearch(a) {
+    var qs = String(a.q || '').trim().toLowerCase(), hit = qs.length >= 3 ? (K.items || []).filter(function (i) { return i.name.toLowerCase() === qs; }) : [], fid = hit.length === 1 ? hit[0].id : null;
+    if (fid !== a.fid) { a.fid = fid; fetchLog(a, false); return; }
+    drawLayer(); refocus('I_f_lq');
+  }
+  function demoLog() {
+    var now = nowMs(), at = function (h, m, d) { var x = new Date(now + 8 * 3600000 - (d || 0) * 86400000); x.setUTCHours(h, m, 0, 0); return new Date(x.getTime() - 8 * 3600000).toISOString(); };
+    var r = function (o) { return Object.assign({ item_id: 'd1', item_name: 'Toilet paper', summary_parts: [], qty_before: null, qty_after: null, delta: null, unit: 'rolls', option_title: null, money: null, actor_first_name: 'Lloyd', source_note: null, undone_at: null, undone_by_first_name: null, group_key: null }, o); };
+    return [
+      r({ at: at(16, 12), kind: 'bought', summary_parts: ['2 × Tisyu 12 rolls', '1 × Wipe 9 rolls'], qty_before: 11, qty_after: 44, money: 530.05 }),
+      r({ at: at(15, 40), kind: 'count', item_id: 'd15', item_name: 'Coffee (3-in-1)', qty_before: 75, qty_after: 72, unit: 'sachets', actor_first_name: 'Ana', source_note: 'Update this group, 2 items', group_key: 'g1' }),
+      r({ at: at(15, 40), kind: 'count', item_id: 'd4', item_name: 'Dish soap', qty_before: 7, qty_after: 5, unit: 'bottles', actor_first_name: 'Ana', source_note: 'Update this group, 2 items', group_key: 'g1' }),
+      r({ at: at(13, 5), kind: 'used', item_id: 'd5', item_name: 'Trash bags', summary_parts: ['1 roll'], option_title: 'Strong Trash Bags Large 10s', qty_before: 2, qty_after: 1, actor_first_name: 'Mae', source_note: 'during a guest stay' }),
+      r({ at: at(11, 20), kind: 'broken', item_id: 'd13', item_name: 'Drinking glass', summary_parts: ['1 broken'], qty_before: 6, qty_after: 5, unit: 'pcs', actor_first_name: 'Mae', undone_at: at(11, 24), undone_by_first_name: 'Mae' }),
+      r({ at: at(18, 30, 1), kind: 'edit', item_id: 'd5', item_name: 'Trash bags', summary_parts: ['Reorder level 2 → 3'] }),
+      r({ at: at(18, 28, 1), kind: 'product', item_id: 'd5', item_name: 'Trash bags', summary_parts: ['Added Strong Trash Bags XL 10s', 'shopsuki.ph', 'new photo'] }),
+      r({ at: at(9, 2, 1), kind: 'moved', item_id: 'd15', item_name: 'Coffee (3-in-1)', summary_parts: ['Group Pantry → Kitchen supplies'] }),
+      r({ at: at(8, 15, 1), kind: 'undo', item_id: 'd4', item_name: 'Dish soap', summary_parts: ['Took back a count'] }),
+      r({ at: at(17, 0, 2), kind: 'created', item_id: 'd14', item_name: 'Rice cooker', summary_parts: ['Added this item'], unit: 'pc' })
+    ];
+  }
+  function ilogClick(act, t, a) {
+    if (act === 'ilog-kind') { var k = attr(t, 'data-k'); if (LKINDS.some(function (x) { return x[0] === k; }) && k !== a.kindF) { a.kindF = k; a.next = null; fetchLog(a, false); } return true; }
+    if (act === 'ilog-order') { a.oldest = !a.oldest; a.next = null; fetchLog(a, false); return true; }
+    if (act === 'ilog-more') { if (a.next && !a.busy) fetchLog(a, true); return true; }
+    if (act === 'ilog-retry') { fetchLog(a, false); return true; }
+    if (act === 'ilog-item') { var id = attr(t, 'data-id'); if (itemById(id)) { M.act = null; drawLayer(); go('#stock/item/' + id, 'item/' + id, id); } return true; }
+    return false;
+  }
+  function o8LinkShow(s) { var l = o8Link(s); return l ? "Shows as 'View on " + siteOf(l) + "'" : o8T(s) ? 'Not a valid https link yet' : ''; }
+
   root.I_Stock = { mount: mount, unmount: unmount, lib: {
     esc: esc, canPrice: canPrice, groupsFor: groupsFor, groupOrder: groupOrder, codeIndex: codeIndex, I_codeIndex: codeIndex, normCode: normCode, validCode: validCode, attachCall: attachCall, priceCall: priceCall, levelsCall: levelsCall, createCall: createCall, reportCall: reportCall, REPORTS: REPORTS, normalize: normalize, normalizeCatalogue: normalizeCatalogue, level: level, summary: summary, chipsFor: chipsFor, visible: visible, barPct: barPct, parseQty: parseQty, stepQty: stepQty,
     newKey: newKey, errKind: errKind, ERR: ERR, countCall: countCall, usageCall: usageCall, receiptCall: receiptCall, shopAddCall: shopAddCall, shopSetCall: shopSetCall, normalizeShop: normalizeShop,
@@ -2592,6 +3058,8 @@
     manilaToday: manilaToday, demoItems: demoItems, PROPERTY_ID: PROPERTY_ID, canManage: canManage, canUse: canUse, state: function () { return M; }, /* test seam: the open state, so a test can put a role on a sheet the UI never opens for it */
     normOpts: normOpts, normReqs: normReqs, o8Link: o8Link, o8Pic: o8Pic, setUsualCall: setUsualCall, optSort: optSort, chipsFor: chipsFor,
     itemEmoji: itemEmoji, updKinds: updKinds, UOPT: UOPT, damageCall: damageCall, linenCall: linenCall, boughtCall: boughtCall, saveText: saveText, canUpdate: canUpdate, isLinen: isLinen, tilePct: tilePct, groupName: groupName, wholeQty: wholeQty,
+    multiOpts: multiOpts, optOrder: optOrder, optSum: optSum, unsortedOf: unsortedOf, lineUnits: lineUnits, splitTotal: splitTotal, buyPlan: buyPlan, planTotal: planTotal, countPlan: countPlan, optionCountCall: optionCountCall, receiptLinesCall: receiptLinesCall, optionUseCall: optionUseCall, groupCall: groupCall, logCall: logCall,
+    buyCall: buyCall, groupRows: groupRows, groupUndoCalls: groupUndoCalls, zoomClamp: zoomClamp, dayGroups: dayGroups, sortLog: sortLog, dayLabel: dayLabel, normLog: normLog, logSummary: logSummary, visible: visible, o8PicPath: o8PicPath, o8LinkShow: o8LinkShow, siteOf: siteOf, K: function () { return K; }, /* test seam */
     lowItems: lowItems, shopLines: shopLines, shopText: shopText, shopLayout: shopLayout, unitPrice: unitPrice, wrapText: wrapText, longDate: longDate
   } };
 })(typeof window !== 'undefined' ? window : this);

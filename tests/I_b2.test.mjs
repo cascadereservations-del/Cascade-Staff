@@ -77,11 +77,11 @@ test('I_b2 Count this group is a ghost button in the card footer, inside the lis
   for (const role of ['owner', 'cleaner']) {
     const e = await make(role);
     await e.mount('');
-    const m = /<div class="card list I_list">[\s\S]*?<div class="I_foot"><button class="btn btn-ghost I_gcount"[^>]*data-act="walk"[^>]*>Count this group<\/button><\/div><\/div><\/section>/.exec(e.html());
+    const m = /<div class="card list I_list">[\s\S]*?<div class="I_foot"><button class="btn btn-secondary I_gupd"[^>]*data-act="group-open"[^>]*>Update this group \(\d+ items?\)<\/button><\/div><\/div><\/section>/.exec(e.html());
     assert.ok(m, role);
-    assert.doesNotMatch(e.html(), /btn-secondary I_gcount/);
+    assert.doesNotMatch(e.html(), /I_gcount/);
   }
-  const f = await make('finance'); await f.mount(''); assert.doesNotMatch(f.html(), /I_gcount/);
+  const f = await make('finance'); await f.mount(''); assert.doesNotMatch(f.html(), /I_gcount|I_gupd/);
 });
 
 const rowOf = (h, id) => (new RegExp('<div class="I_it">(?:(?!<div class="I_it">)[\s\S])*?data-id="' + id + '"[\s\S]*?</div>').exec(h) || [''])[0];
@@ -117,6 +117,6 @@ test('I_b2 the quick action opens the card straight on the form with the current
 test('I_b2 rows say what needs action and the summary says it in plain words', async () => {
   const o = await make('owner'); await o.mount('');
   assert.match(o.html(), /I_tg I_tagl"><svg[^>]*>.*?<\/svg><span class="sr">On the list/);
-  assert.match(o.html(), /<svg[^>]*>.*?<\/svg> 3 low<\/button>/); assert.match(o.html(), /<svg[^>]*>.*?<\/svg> 1 out<\/button>/); assert.match(o.html(), /<svg[^>]*>.*?<\/svg> 2 on list<\/button>/); // s107 B3: glyph, number and word
+  assert.match(o.html(), /Low <span class="I_cn">3<\/span>/); assert.match(o.html(), /Out <span class="I_cn">1<\/span>/); assert.match(o.html(), /On list <span class="I_cn">2<\/span>/); // s133: chips with a count
   assert.doesNotMatch(o.html(), /\d items low/);
 });

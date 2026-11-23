@@ -26,34 +26,36 @@ const goodFetch = (e, log) => { e.win.fetch = async (url, init) => { log.push([u
 test('I_options the Options section: 56 px lazy thumbnail with alt, title, brand, supplier, Usual tag, price, Out of stock, View link', async () => {
   const e = await make('owner'); await e.mount(''); await e.open('i1');
   const s = e.sheet();
-  assert.match(s, /<h3 class="I_opth">Options<\/h3>/);
-  assert.match(s, /<img src="https:\/\/cdn\.shopify\.com\/[^"]+4902430093767\.jpg" alt="Joy Dishwashing Liquid Kalamansi 375ml" width="56" height="56" loading="lazy"/);
+  assert.match(s, /<h3 class="I_opth">Products · 2 · usual first<\/h3>/);
+  assert.match(s, /<img src="https:\/\/cdn\.shopify\.com\/[^"]+4902430093767\.jpg" alt="" loading="lazy"/);
   assert.match(s, /Joy · Shopsuki/); assert.match(s, /I_usual">Usual</); assert.equal((s.match(/I_usual">Usual</g) || []).length, 1);
   assert.match(s, /₱115\.65/); assert.match(s, /₱86\.85/); assert.match(s, /Out of stock/); assert.equal((s.match(/Out of stock/g) || []).length, 1);
-  assert.match(s, /<a class="btn btn-ghost I_undobtn" href="https:\/\/shopsuki\.ph\/products\/joy-375" target="_blank" rel="noopener noreferrer">View on Shopsuki<\/a>/);
+  assert.match(s, /<a class="I_plink" href="https:\/\/shopsuki\.ph\/products\/joy-375" target="_blank" rel="noopener noreferrer">View on Shopsuki<\/a>/);
   assert.equal(calls(e, 'inventory_item_options_v1').length, 1); assert.deepEqual(calls(e, 'inventory_item_options_v1')[0][2], { p_item_id: 'i1' });
   // the option without a picture keeps the reserved box with the placeholder glyph
-  assert.equal((s.match(/class="I_oth"/g) || []).length, 2); assert.equal((s.match(/<img src="https:\/\/cdn\.shopify/g) || []).length, 1);
+  assert.equal((s.match(/class="I_pimg"/g) || []).length, 2); assert.equal((s.match(/<img src="https:\/\/cdn\.shopify/g) || []).length, 1);
 });
 
 test('I_options a picture that fails to load falls back to the placeholder and stays that way after a redraw', async () => {
   const e = await make('owner'); await e.mount(''); await e.open('i1');
   const t = { getAttribute: (k) => ({ 'data-oimg': '1', src: IMG })[k] || null };
   for (const f of e.root.l.error || []) await f({ target: t });
-  assert.doesNotMatch(e.sheet(), /cdn\.shopify\.com/); assert.equal((e.sheet().match(/class="I_oth"/g) || []).length, 2);
+  assert.doesNotMatch(e.sheet(), /cdn\.shopify\.com/); assert.equal((e.sheet().match(/class="I_pimg"/g) || []).length, 2);
 });
 
 test('I_options role gating: owner and admin get Make usual and Use as item photo; finance sees prices only; the cleaner sees options with no money and no buttons', async () => {
   for (const role of ['owner', 'admin']) {
     const e = await make(role); await e.mount(''); await e.open('i1');
-    assert.match(e.sheet(), /data-act="opt-usual" data-id="o2"/, role); assert.doesNotMatch(e.sheet(), /data-act="opt-usual" data-id="o1"/, role + ': the usual one has no Make usual');
-    assert.match(e.sheet(), /data-act="opt-photo" data-id="o1"/, role + ': s107 review, the usual option keeps Use as item photo'); assert.doesNotMatch(e.sheet(), /data-act="opt-photo" data-id="o2"/, role + ': no picture, no photo button');
-    assert.match(e.sheet(), /<details class="I_other"><summary>Other options \(1\)<\/summary>/, role);
+    await e.act('omenu', { 'data-id': 'o2' }); // s133: the product actions sit in a menu on each product
+    assert.match(e.sheet(), /data-act="opt-usual" data-id="o2"/, role); assert.doesNotMatch(e.sheet(), /data-act="opt-photo" data-id="o2"/, role + ': no picture, no photo button');
+    await e.act('omenu', { 'data-id': 'o1' });
+    assert.doesNotMatch(e.sheet(), /data-act="opt-usual" data-id="o1"/, role + ': the usual one has no Make usual');
+    assert.match(e.sheet(), /data-act="opt-photo" data-id="o1"/, role + ': s107 review, the usual option keeps Use as item photo');
   }
   const f = await make('finance'); await f.mount(''); await f.open('i1');
   assert.match(f.sheet(), /₱115\.65/); assert.doesNotMatch(f.sheet(), /opt-usual|opt-photo/);
   const c = await make('cleaner'); await c.mount(''); await c.open('i1');
-  assert.match(c.sheet(), /Options/); assert.match(c.sheet(), /Joy Dishwashing Liquid Kalamansi/); assert.doesNotMatch(c.sheet(), /opt-usual|opt-photo/);
+  assert.match(c.sheet(), /Products/); assert.match(c.sheet(), /Joy Dishwashing Liquid Kalamansi/); assert.doesNotMatch(c.sheet(), /opt-usual|opt-photo/);
   assert.doesNotMatch(c.sheet(), /₱|PHP/, 'no money for a cleaner');
   // even a payload that wrongly carried a price renders none for a cleaner
   const w = await make('cleaner', { rpc: { inventory_item_options_v1: () => ({ data: opts('o1', true), error: null }) } }); await w.mount(''); await w.open('i1');
@@ -78,7 +80,7 @@ test('I_options Make usual: confirm first, then inventory_item_option_set_usual_
   await e.submit();
   const c = calls(e, 'inventory_item_option_set_usual_v1');
   assert.equal(c.length, 1); assert.deepEqual(c[0][2], { p_option_id: 'o2' });
-  assert.match(e.sheet(), /Options/); assert.match(e.sheet(), /data-act="opt-usual" data-id="o1"/); assert.doesNotMatch(e.sheet(), /data-act="opt-usual" data-id="o2"/, 'the tag moved to the other option');
+  assert.match(e.sheet(), /Products/); await e.act('omenu', { 'data-id': 'o1' }); assert.match(e.sheet(), /data-act="opt-usual" data-id="o1"/); await e.act('omenu', { 'data-id': 'o2' }); assert.doesNotMatch(e.sheet(), /data-act="opt-usual" data-id="o2"/, 'the tag moved to the other option');
   assert.match(e.sheet(), /Last change: changed the usual option/);
   const id = /data-act="undo" data-id="(u\d+)"/.exec(e.sheet())[1];
   await e.act('undo', { 'data-id': id });
@@ -91,7 +93,7 @@ test('I_options Make usual: confirm first, then inventory_item_option_set_usual_
 test('I_options Make usual that the server does not have yet hides the button for the visit', async () => {
   const e = await make('owner', { rpc: { inventory_item_option_set_usual_v1: () => ({ data: null, error: { code: 'PGRST202', message: 'Could not find the function' } }) } });
   await e.mount(''); await e.open('i1'); await e.act('opt-usual', { 'data-id': 'o2' }); await e.submit();
-  assert.doesNotMatch(e.sheet(), /opt-usual/); assert.match(e.sheet(), /Options/);
+  assert.doesNotMatch(e.sheet(), /opt-usual/); assert.match(e.sheet(), /Products/);
 });
 
 test('I_options Use as item photo: the picture is fetched, resized and confirmed, then the existing upload-photo and inventory_item_photo_set_v1 calls, with Undo', async () => {
@@ -130,7 +132,7 @@ test('I_options a cleaner cannot start Make usual or Use as item photo even by a
 test('I_options demo: synthetic options with no network; writes say Demo', async () => {
   const d = await setup({ role: 'owner', demo: true });
   await d.mount(''); await d.open('d1');
-  assert.match(d.sheet(), /Options/); assert.match(d.sheet(), /Softly Bath Tissue/); assert.match(d.sheet(), /Out of stock/); assert.match(d.sheet(), /I_usual">Usual</);
+  assert.match(d.sheet(), /Products/); assert.match(d.sheet(), /Softly Bath Tissue/); assert.match(d.sheet(), /Out of stock/); assert.match(d.sheet(), /I_usual">Usual</);
   await d.act('opt-usual', { 'data-id': 'o2' }); await d.submit();
   assert.match(d.toasts[d.toasts.length - 1], /Demo only/);
 });
@@ -156,7 +158,7 @@ test('I_options s107 Preferred tag: shown after Usual for preferred === true onl
   const s = e.sheet();
   assert.equal((s.match(/class="I_pref"/g) || []).length, 2); assert.match(s, /I_usual">Usual<\/span> <span class="I_pref"><svg[^>]*>.*?<\/svg>Preferred<\/span>/);
   assert.ok(s.indexOf('Joy 375ml') < s.indexOf('Joy 250ml') && s.indexOf('Joy 250ml') < s.indexOf('Joy 100ml'), 'server order kept');
-  assert.match(s, /data-act="opt-usual" data-id="o2"/); assert.doesNotMatch(s, /data-act="opt-usual" data-id="o1"/);
+  await e.act('omenu', { 'data-id': 'o2' }); assert.match(e.sheet(), /data-act="opt-usual" data-id="o2"/); assert.doesNotMatch(e.sheet(), /data-act="opt-usual" data-id="o1"/);
   const old = await make('owner'); await old.mount(''); await old.open('i1'); assert.doesNotMatch(old.sheet(), /I_pref/, 'old server sends no preferred key');
 });
 
