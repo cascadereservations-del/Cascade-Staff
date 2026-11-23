@@ -1015,5 +1015,12 @@ test('N r2 confirm form: paid another way keeps method, reference, amount, note 
 test('N r2 old server: a photo with no amount read never says No receipt yet', async () => {
   const OLD = { ...Q1, id: 'b5000000-0000-4000-8000-000000000005', comparison_id: null, candidate_amount: null, receipt_sent: null, receipt_at: null, contact_channel: null, receipt_image_path: 'r/old.jpg' };
   const t = await boot({ client: storageClient({ staff_inquiry_payments_v1: () => [OLD] }), sub: 'inquiries' });
-  await t.click('inq-open', OLD.id); await tick(); assert.match(t.html(), /<img class="N_photo"/); assert.match(t.text(), /The amount could not be read from the receipt\. Check the photo\./); assert.ok(!/No receipt yet/.test(t.text()));
+  await t.click('inq-open', OLD.id); await tick(); assert.match(t.html(), /<img class="N_photo"/); const sheet = t.html().slice(t.html().indexOf('class="N_sheet"')).replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ');
+  assert.match(sheet, /The amount could not be read from the receipt\. Check the photo\./); assert.ok(!/No receipt yet/.test(sheet));
+});
+
+test('N r2b old server: the list card stays exactly as 3.4.53 drew it (R1.2)', async () => {
+  const OLD = { ...Q1, id: 'b5000000-0000-4000-8000-000000000006', comparison_id: null, candidate_amount: null, receipt_sent: null, receipt_at: null, contact_channel: null, receipt_image_path: 'r/old.jpg' };
+  const t = await boot({ client: storageClient({ staff_inquiry_payments_v1: () => [OLD] }), sub: 'inquiries' });
+  assert.match(t.text(), /No receipt yet/); assert.ok(!/amount not read/.test(t.text()));
 });

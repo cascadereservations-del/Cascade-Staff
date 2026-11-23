@@ -206,7 +206,7 @@
   function cents(c) { return formatPHP(fromCentavos(c)); }
   function nw(t) { return '<span class="N_nw">' + esc(t) + '</span>'; }
   function paymentLine(p) {
-    if (!hasReceipt(p)) return p && p.receipt_image_path ? 'Receipt photo, amount not read' : 'No receipt yet'; // old server: a photo with no comparison
+    if (!hasReceipt(p)) return 'No receipt yet';
     var parts = ['Receipt on file']; if (p.candidate_amount !== null) parts.push(formatPHP(p.candidate_amount)); if (p.reference) parts.push('ref ...' + p.reference.slice(-4));
     return parts.join(' · ');
   }
