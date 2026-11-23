@@ -995,3 +995,25 @@ test('N r1 zoom: the fit/200 percent toggle is a button, with a 44 px target and
   assert.match(t.html(), /<button class="N_zbtn" type="button" data-n="photo-fit" aria-pressed="false"/); await t.click('photo-fit'); assert.match(t.html(), /aria-pressed="true"/);
   assert.match(CSS, /\.N_zbtn \{[^}]*min-height: 44px/); assert.match(CSS, /\.N_zbtn:focus-visible \{[^}]*outline/);
 });
+
+// ------------------------------------------------------------------------------------------------ confirm flow fix round r2
+test('N r2 refresh under a sheet: marked stale, read once when the sheet closes, never stuck on Loading', async () => {
+  const t = await boot({}); await t.click('tab', 'inquiries'); await t.click('inq-open', Q1.id); const n1 = t.sent('staff_inquiry_payments_v1').length;
+  t.M.refresh('inq'); await tick(); assert.equal(t.sent('staff_inquiry_payments_v1').length, n1, 'a sheet is open: no read');
+  assert.ok(!/Loading/.test(t.text()), 'no Loading while the sheet is open');
+  await t.click('sheet-close'); await tick();
+  assert.equal(t.sent('staff_inquiry_payments_v1').length, n1 + 1, 'exactly one fresh read after close'); assert.ok(!/Loading/.test(t.text()), 'no stuck Loading'); assert.match(t.text(), /Ella Tan/);
+  await t.click('inq-open', Q1.id); await t.click('sheet-close'); await tick(); assert.equal(t.sent('staff_inquiry_payments_v1').length, n1 + 1, 'no second read without a new refresh');
+});
+
+test('N r2 confirm form: paid another way keeps method, reference, amount, note in that order', async () => {
+  const t = await boot({ sub: 'inquiries' }); await t.click('inq-open', Q2.id); await t.click('cf-start'); const h = t.html(); assert.ok(!Q2.comparison_id, 'no receipt path');
+  const at = (x) => h.indexOf(x), o = [at('How was it paid?'), at('Payment reference'), at('Amount received (PHP)'), at('Note (optional)')];
+  assert.ok(o.every((x) => x > 0) && o.every((x, i) => i === 0 || x > o[i - 1]), 'order ' + o.join(','));
+});
+
+test('N r2 old server: a photo with no amount read never says No receipt yet', async () => {
+  const OLD = { ...Q1, id: 'b5000000-0000-4000-8000-000000000005', comparison_id: null, candidate_amount: null, receipt_sent: null, receipt_at: null, contact_channel: null, receipt_image_path: 'r/old.jpg' };
+  const t = await boot({ client: storageClient({ staff_inquiry_payments_v1: () => [OLD] }), sub: 'inquiries' });
+  await t.click('inq-open', OLD.id); await tick(); assert.match(t.html(), /<img class="N_photo"/); assert.match(t.text(), /The amount could not be read from the receipt\. Check the photo\./); assert.ok(!/No receipt yet/.test(t.text()));
+});

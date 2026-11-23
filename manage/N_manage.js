@@ -206,7 +206,7 @@
   function cents(c) { return formatPHP(fromCentavos(c)); }
   function nw(t) { return '<span class="N_nw">' + esc(t) + '</span>'; }
   function paymentLine(p) {
-    if (!hasReceipt(p)) return 'No receipt yet';
+    if (!hasReceipt(p)) return p && p.receipt_image_path ? 'Receipt photo, amount not read' : 'No receipt yet'; // old server: a photo with no comparison
     var parts = ['Receipt on file']; if (p.candidate_amount !== null) parts.push(formatPHP(p.candidate_amount)); if (p.reference) parts.push('ref ...' + p.reference.slice(-4));
     return parts.join(' · ');
   }
@@ -838,7 +838,8 @@
       if (p.receipt_image_path) body += receiptBox(p);
       if (cmp) {
         body += '<p>' + (cmp.kind === 'ok' ? pill('ok', 'Amounts match') : cmp.kind === 'short' || cmp.kind === 'over' ? pill('warn', 'Receipt is ' + cents(cmp.diff) + (cmp.kind === 'short' ? ' short' : ' over')) : '<span class="N_chipd">Amount not read. Check the photo.</span>') + '</p>';
-      } else body += '<p class="N_info">' + esc(!p.hold_expires_at ? 'No receipt yet.' : holdEnded(p.hold_expires_at, now) ? 'No receipt yet. The hold ended ' + fmtHoldAt(p.hold_expires_at) + '.' : 'No receipt yet. The dates are held until ' + fmtHoldAt(p.hold_expires_at) + '.') + '</p>';
+      } else if (p.receipt_image_path) body += '<p class="N_info">The amount could not be read from the receipt. Check the photo.</p>';
+      else body += '<p class="N_info">' + esc(!p.hold_expires_at ? 'No receipt yet.' : holdEnded(p.hold_expires_at, now) ? 'No receipt yet. The hold ended ' + fmtHoldAt(p.hold_expires_at) + '.' : 'No receipt yet. The dates are held until ' + fmtHoldAt(p.hold_expires_at) + '.') + '</p>';
       body += '<dl class="N_dl"><dt>To receive</dt><dd class="N_num N_nw">' + esc(formatPHP(p.expected_amount)) + '</dd>' + (cmp && cmp.kind !== 'unread' ? '<dt>Receipt shows</dt><dd class="N_num N_nw">' + esc(cents(cmp.amt)) + '</dd>' : '') +
         (cmp && p.reference ? '<dt>Reference</dt><dd class="N_num">' + esc(groupRef(p.reference)) + '</dd>' : '') + (cmp && p.receipt_at ? '<dt>Receipt sent</dt><dd>' + esc(agoWords(p.receipt_at, now)) + '</dd>' : '') +
         (cmp && p.hold_expires_at ? '<dt>Dates held until</dt><dd>' + esc((holdEnded(p.hold_expires_at, now) ? 'Hold ended ' : '') + fmtHoldAt(p.hold_expires_at)) + '</dd>' : '') + '<dt>Booking</dt><dd>' + esc(p.booking_ref || '—') + '</dd></dl>' + sheetErr(sh);
@@ -856,8 +857,9 @@
           if (cc.kind === 'short' || cc.kind === 'over') b += '<p class="N_warnb"><span aria-hidden="true">!</span> ' + esc('The receipt shows ' + cents(cc.amt) + '. That is ' + cents(cc.diff) + (cc.kind === 'short' ? ' less than' : ' more than') + ' the ' + formatPHP(pc.expected_amount) + ' to receive.') + '</p>';
         } else if (rc) b += '<p class="N_info">' + esc(paymentLine(pc)) + '</p>';
         if (!rc) b += '<fieldset class="N_fs"><legend class="N_lbl">How was it paid?</legend>' + METHODS.map(function (m) { return '<label class="N_chk"><input type="radio" name="N_method" data-f="method" value="' + m[0] + '"' + (f.method === m[0] ? ' checked' : '') + '> <span>' + esc(m[1]) + '</span></label>'; }).join('') + '</fieldset>';
-        b += field('N_amt', 'Amount received (PHP)', inp('N_amt', 'amount', f.amount, 'inputmode="decimal"' + (e.amount ? ' aria-invalid="true" aria-describedby="N_amt-e"' : '')), e.amount, cc && cc.kind === 'unread');
-        if (rc ? !pc.reference : f.method !== 'cash') b += field('N_ref', 'Payment reference', inp('N_ref', 'reference', f.reference, e.reference ? 'aria-invalid="true" aria-describedby="N_ref-e"' : ''), e.reference);
+        var amtF = field('N_amt', 'Amount received (PHP)', inp('N_amt', 'amount', f.amount, 'inputmode="decimal"' + (e.amount ? ' aria-invalid="true" aria-describedby="N_amt-e"' : '')), e.amount, cc && cc.kind === 'unread');
+        var refF = (rc ? !pc.reference : f.method !== 'cash') ? field('N_ref', 'Payment reference', inp('N_ref', 'reference', f.reference, e.reference ? 'aria-invalid="true" aria-describedby="N_ref-e"' : ''), e.reference) : '';
+        b += rc ? amtF + refF : refF + amtF; // receipt path: amount first; paid another way keeps method, reference, amount, note
         if (!rc) b += field('N_note', f.method === 'cash' ? 'Note (needed for cash)' : 'Note (optional)', '<textarea class="N_input N_ta" id="N_note" data-f="note" rows="2">' + esc(f.note) + '</textarea>', e.note);
         if (rc) b += '<div class="N_field"><label class="N_chk"><input type="checkbox" data-f="checked"' + (f.checked ? ' checked' : '') + '> <span>I saw this payment in our GCash or bank account</span></label>' + (e.checked ? '<p class="N_ferr" role="alert"><span aria-hidden="true">✕</span> ' + esc(e.checked) + '</p>' : '') + '</div>';
         b += sheetErr(sh);
@@ -948,6 +950,7 @@
     var live = S.notice ? '<div class="N_okbox" role="status">' + esc(S.notice) + '</div>' : '';
     S.el.innerHTML = '<div class="N_root">' + tabsHtml() + live + '<div class="N_body" role="tabpanel" aria-labelledby="N_tab_' + S.tab + '"' + (S.sheet ? ' inert aria-hidden="true"' : '') + '>' + body + '</div></div>' + sheetHtml();
     revealTab();
+    if (!S.sheet && S.pend) { var pk = Object.keys(S.pend); S.pend = null; pk.forEach(function (k) { load(k, true); }); } // a refresh skipped under a sheet is read once it closes
     if (S.sheet && S.sheet.refocus) { var rf = S.sheet.refocus; S.sheet.refocus = null; try { var rb = S.el.querySelector('[data-n="' + rf + '"]'); if (rb && rb.focus) rb.focus(); } catch (e) { /* no focus in tests */ } return; }
     if (S.sheet && S.sheet.focus !== false) { try { var h = S.el.querySelector('[data-n-focus]'); if (h && h.focus) h.focus(); } catch (e) { /* no focus in tests */ } S.sheet.focus = false; }
   }
@@ -1169,7 +1172,7 @@
     _setRpcTimeout: function (ms) { RPC_TIMEOUT_MS = ms; },
     _setSeriesConcurrency: function (n) { SERIES_CONCURRENCY = n; },
     // R1.8: the shell or a push may say a list changed; the next look is a fresh read, and nothing is read under an open sheet.
-    refresh: function (kind) { if (!S || (S.sheet && S.sheet.busy)) return; if (kind === 'inq' || kind === 'waiting') { if (S.d[kind]) S.d[kind].ok = false; if (!S.sheet) load(kind, true); } },
+    refresh: function (kind) { if (!S || (S.sheet && S.sheet.busy)) return; if (kind === 'inq' || kind === 'waiting') { if (S.sheet) { (S.pend || (S.pend = {}))[kind] = true; if (S.d[kind]) S.d[kind].at = 0; } else load(kind, true); } }, // under a sheet: mark stale and read when it closes; ok is left alone so the list never shows Loading
     _setClock: function (fn) { clock = fn || function () { return Date.now(); }; },
     lib: { lastMonths: lastMonths, buildSeries: buildSeries, chipFor: chipFor, canManage: canManage, manilaToday: manilaToday, addDays: addDays, nightsBetween: nightsBetween, fmtDate: fmtDate, fmtDateTime: fmtDateTime, toCentavos: toCentavos, fromCentavos: fromCentavos, formatPHP: formatPHP, formatPercent: formatPercent, formatNumber: formatNumber,
       formatMetricValue: formatMetricValue, parseAmount: parseAmount, periodPreset: periodPreset, comparablePeriod: comparablePeriod, compareMode: compareMode, pctDelta: pctDelta, fmtDeltaPct: fmtDeltaPct, deltaLine: deltaLine,
