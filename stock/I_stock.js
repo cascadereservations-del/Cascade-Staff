@@ -480,7 +480,7 @@
   // s133 (D-401): a shop link is any https address with a dot in the host, up to 500 characters (the server rule); Shopee links still lose their query (tracking).
   function o8Link(s) {
     var t = o8T(s); if (t.length > 500 || !/^https:\/\/[^\s\/]+\.[^\s\/]+(\/\S*)?$/.test(t) || /["'<>]/.test(t)) return null;
-    var m = /^https:\/\/([^\/?#]+)([^?#]*)(\?[^#]*)?(#.*)?$/.exec(t); if (!m) return null;
+    var m = /^https:\/\/([^\/?#]+)([^?#]*)(\?[^#]*)?(#.*)?$/.exec(t); if (!m || m[1].indexOf('@') >= 0) return null; // userinfo (https://shopee.ph@evil.example/) is refused
     var host = m[1].toLowerCase().replace(/^www\.(shopee\.ph)$/, '$1'), out = 'https://' + host + (m[2] || '/') + (/(^|\.)shopee\.ph$/.test(host) ? '' : m[3] || '');
     return out.length <= 500 ? out : null;
   }
@@ -1495,7 +1495,7 @@
     var act = attr(t, 'data-act'), a0 = M.act;
     if (act === 'admin') { if (ev.preventDefault) ev.preventDefault(); M.opts.navigate && M.opts.navigate('#door/inventory'); return; }
     if (act === 'tab') { viewSave(!!attr(t, 'data-to')); return go(attr(t, 'data-to') ? '#stock/' + attr(t, 'data-to') : '#stock', attr(t, 'data-to') || ''); }
-    if (act === 'chip') { K.chip = attr(t, 'data-k'); viewSave(false); draw(); return; }
+    if (act === 'chip') { var ck = attr(t, 'data-k'); K.chip = ck === K.chip && ck !== 'first' ? 'first' : ck; viewSave(false); draw(); return; }
     if (act === 'showall') { K.chip = 'all'; K.q = ''; viewSave(false); draw(); return; }
     if (act === 'cart') { var cid = attr(t, 'data-id'), cr = cartRead(); if (cr[cid]) delete cr[cid]; else cr[cid] = 1; cartSave(); drawList(); return; } // s107 B11: a local tick, nothing is sent
     if (act === 'bought-open') { if (!allowed('bought') || (M.act && M.act.sending)) return; var pre = {}, pv = {}, cr2 = cartRead(); boughtRows().forEach(function (r) { if (cr2[r.id]) { pre[r.id] = 1; pv['packs_' + r.id] = fmt(r.qty || 1); } }); M.act = { kind: 'bought', step: 'pick', sel: pre, vals: pv, keys: {}, done: {} }; drawLayer(); loadShop(); return; } // the list is re-read first: a row someone else bought drops out
@@ -1793,7 +1793,7 @@
     if (why === 'finance_only') { K.noFinance = true; a.vals.to = 'ops'; a.step = 'form'; a.err = 'financeOnly'; return drawLayer(); }
     a.err = UKINDS[a.kind] && UWORDS[why] ? UWORDS[why] : errKind(e, online()); // s132: the server's plain refusal reasons
     if (a.kind === 'create' && (a.err === 'offline' || (a.err === 'other' && !why && !(e && (e.code || e.status || (e.context && e.context.status)))))) a.lost = true; // A4: only a lost answer (no network, or no server answer at all) may replay as already added; a 4xx or any server answer never does
-    var dk = a.kind === 'undo' ? a.entry.call.fn : a.kind === 'photoremove' ? 'photo' : a.kind;
+    var dk = a.kind === 'undo' ? a.entry.call.fn : a.kind === 'photoremove' ? 'photo' : a.kind === 'group' ? 'group_' + a.mode : a.kind; // a refused group mode hides that mode only
     if (a.err === 'missing' && NEWK[a.kind]) { me.denied[dk] = true; if (a.kind === 'sort') me.denied.cat = true; if (a.itemId && !rep && a.kind !== 'create') { a.kind = a.upd ? 'update' : 'menu'; a.vals = null; a.step = null; } else me.act = null; a.err = null; toast(ERR.missing); if (rep || !a.itemId) draw(); return drawLayer(); } // not here yet: hide it, no error box
     if (!rep && (a.err === 'offline' || a.err === 'other')) { me.loading = false; load(); } // the write may have landed: look again
     if (a.err === 'refused' && a.upd && UKINDS[a.kind]) { toast(ERR.refused); return drawLayer(); } // s132: a refused Update save says so (toast and the line in the form); the typed values stay, nothing is hidden
@@ -2665,13 +2665,15 @@
   }
   function blankQty(s) { var t = String(s == null ? '' : s).trim(); return t === '' || t === '0' || t === '0.0' || t === '0.00'; }
   // What a multi-product Bought form will send: one line per product with packs above 0, plus an optional "something else" line (no product).
+  // The price per pack the server weighs a line by (inventory_receipt_lines_v1): the typed or option price, else the item's unit cost x the pack size; null when nothing is priced (weight 0).
+  function buyWeight(it, price, size) { return price != null ? price : it && it.cost != null ? r2(it.cost * size) : null; }
   function buyPlan(it, list, v) {
     var lines = [], bad = false;
-    (list || []).forEach(function (o) { var raw = v['lp_' + o.id]; if (blankQty(raw)) return; var p = parseQty(raw); if (p == null) { bad = true; return; } lines.push({ o: o, packs: p, units: lineUnits(it, o, p), price: o.price }); });
-    if (!blankQty(v.lx)) { var xp = parseQty(v.lx); if (xp == null) bad = true; else lines.push({ o: null, packs: xp, units: r2(xp * (it.perPack || 1)), price: null }); }
+    (list || []).forEach(function (o) { var raw = v['lp_' + o.id]; if (blankQty(raw)) return; var p = parseQty(raw); if (p == null) { bad = true; return; } lines.push({ o: o, packs: p, units: lineUnits(it, o, p), price: o.price, w: buyWeight(it, o.price, packOf(it, o)) }); });
+    if (!blankQty(v.lx)) { var xp = parseQty(v.lx); if (xp == null) bad = true; else lines.push({ o: null, packs: xp, units: r2(xp * (it.perPack || 1)), price: null, w: buyWeight(it, null, it.perPack || 1) }); }
     return { lines: lines, bad: bad, units: r2(lines.reduce(function (s, l) { return s + l.units; }, 0)) };
   }
-  function planTotal(plan) { var any = false, t = 0; plan.lines.forEach(function (l) { if (l.price != null) { any = true; t += l.price * l.packs; } }); return any ? r2(t) : null; } // the sum of price x packs, the Total paid pre-fill
+  function planTotal(plan) { var any = false, t = 0; plan.lines.forEach(function (l) { if (l.w != null) { any = true; t += l.w * l.packs; } }); return any ? r2(t) : null; } // the sum of price x packs, the Total paid pre-fill
   // What a multi-product count will send: each product's counted quantity, the Not sorted remainder and the item total (the sum of both).
   function countPlan(it, list, v) {
     var counts = [], bad = false, sum = 0;
@@ -2743,8 +2745,8 @@
   }
   function buyShares(plan, v) {
     var tt = String(v.total || '').trim() === '' ? null : parseQty(v.total, true);
-    if (tt != null && plan.lines.length) return splitTotal(tt, plan.lines.map(function (l) { return l.price != null ? l.price * l.packs : 0; }));
-    return plan.lines.map(function (l) { return l.price != null ? r2(l.price * l.packs) : null; });
+    if (tt != null && plan.lines.length) { var ws = plan.lines.map(function (l) { return l.w != null ? l.w * l.packs : 0; }); return splitTotal(tt, ws.some(function (w) { return w > 0; }) ? ws : plan.lines.map(function (l) { return l.units; })); } // every weight 0: the share follows the units (the server rule)
+    return plan.lines.map(function (l) { return l.w != null ? r2(l.w * l.packs) : null; });
   }
   function multiBuyBody(a, it, list) {
     var v = a.vals || {}, plan = buyPlan(it, list, v), shares = buyShares(plan, v), unit = unitOf(it);
@@ -2804,10 +2806,10 @@
 
   /* ---- Update this group (E): one sheet for a whole group, Count, Bought or Used up */
   var GMODES = [['count', 'Count'], ['bought', 'Bought'], ['used', 'Used up']];
-  function groupModes() { return GMODES.filter(function (m) { return m[0] === 'count' ? allowed('count') : m[0] === 'bought' ? canManage(M.role) : allowed('used') || canUpdate(M.role); }); }
+  function groupModes() { return GMODES.filter(function (m) { if (M.denied['group_' + m[0]]) return false; return m[0] === 'count' ? allowed('count') : m[0] === 'bought' ? canManage(M.role) : I_FLAGS.usage && (canUse(M.role) || canUpdate(M.role)); }); }
   function groupItems(a) { return a.ids.map(itemById).filter(Boolean); }
   function groupDefaults(a) {
-    var v = {}; groupItems(a).forEach(function (it) { v['g_' + it.id] = a.mode === 'count' ? (it.qty != null ? fmt(it.qty) : '0') : '0'; });
+    var v = {}; groupItems(a).forEach(function (it) { v['g_' + it.id] = a.mode === 'count' ? (it.qty != null ? fmt(it.qty) : '') : '0'; });
     return v;
   }
   function groupOpen(cat) {
@@ -2822,7 +2824,7 @@
     var rows = [];
     groupItems(a).forEach(function (it) {
       var raw = a.vals['g_' + it.id], opts = K.opt[it.id] && K.opt[it.id].list, ml = multiOpts(it), sel = ml ? (a.vals['go_' + it.id] || (ml.filter(function (o) { return o.usual; })[0] || ml[0]).id) : null, o = sel && opts ? opts.filter(function (x) { return x.id === sel; })[0] : null;
-      if (a.mode === 'count') { var n = parseQty(raw, true); if (n != null && it.qty != null && n !== it.qty) rows.push({ item_id: it.id, qty: n }); else if (n != null && it.qty == null) rows.push({ item_id: it.id, qty: n }); }
+      if (a.mode === 'count') { var n = String(raw == null ? '' : raw).trim() === '' ? null : parseQty(raw, true); if (n != null && (it.qty == null || n !== it.qty)) rows.push({ item_id: it.id, qty: n }); } // a blank box (never counted, left alone) sends nothing
       else if (a.mode === 'used') { var u = parseQty(raw); if (u != null) { var r = { item_id: it.id, qty: u }; if (sel) r.option_id = sel; rows.push(r); } }
       else { var p = parseQty(raw); if (p != null) rows.push({ item_id: it.id, lines: [{ option_id: sel, packs: p, unit_cost: o && o.price != null && canPrice(M.role) ? o.price : null }] }); }
     });
@@ -2890,11 +2892,12 @@
   }
   function zoomOpen(it, i, opener) {
     var list = zoomList(it); if (!list.length) return;
-    M.zoom = { itemId: it.id, list: list, i: Math.max(0, Math.min(list.length - 1, i || 0)), scale: 1, x: 0, y: 0, opener: opener || null, ptr: {}, tap: null }; drawZoom();
+    M.zoom = { itemId: it.id, list: list, i: Math.max(0, Math.min(list.length - 1, i || 0)), scale: 1, x: 0, y: 0, opener: opener || null, openI: opener && opener.getAttribute ? opener.getAttribute('data-i') : null, ptr: {}, tap: null }; drawZoom();
   }
   function zoomClose() {
     var z = M && M.zoom; if (!z) return; M.zoom = null; drawZoom();
-    var o = z.opener; if (o && o.isConnected !== false && o.focus) { try { o.focus(); } catch (e) { /* the opener is gone */ } }
+    var o = z.opener; if (o && o.isConnected === false && z.openI != null) o = q('[data-act="zoom"][data-i="' + z.openI + '"]'); // a redraw replaced the opener: find its twin
+    if (o && o.focus) { try { o.focus(); } catch (e) { /* the opener is gone */ } }
   }
   function zoomGo(d) { var z = M.zoom; if (!z || z.list.length < 2) return; z.i = (z.i + d + z.list.length) % z.list.length; z.scale = 1; z.x = 0; z.y = 0; drawZoom(); }
   function zoomApply() {
@@ -2967,15 +2970,24 @@
     sortLog(rows, oldest).forEach(function (r) { var d = manilaDay(r.at); if (!by[d]) { by[d] = { day: d, label: dayLabel(d, today), rows: [] }; out.push(by[d]); } by[d].rows.push(r); });
     return out;
   }
+  // money: null for non-finance; a bought row {unit_cost, total_cost}; a price edit {before, after}. Anything else is dropped.
+  function normMoney(m) {
+    if (!m || typeof m !== 'object') return null;
+    var t = num(m.total_cost), u = num(m.unit_cost), b = num(m.before), a = num(m.after);
+    if (t != null) return { total: t, unit: u };
+    if (b != null || a != null) return { before: b, after: a };
+    return null;
+  }
+  function moneyText(m) { return !m ? '' : m.total != null ? peso(m.total) : (m.before != null ? peso(m.before) : 'none') + ' → ' + (m.after != null ? peso(m.after) : 'none'); }
   function normLog(list) {
     return (Array.isArray(list) ? list : []).filter(function (r) { return r && r.at; }).map(function (r) {
       return { at: String(r.at), kind: String(r.kind || 'edit'), itemId: r.item_id ? String(r.item_id) : '', item: String(r.item_name || ''), parts: Array.isArray(r.summary_parts) ? r.summary_parts.map(String) : [], before: num(r.qty_before), after: num(r.qty_after), delta: num(r.delta), unit: String(r.unit || ''),
-        option: r.option_title ? String(r.option_title) : '', money: r.money == null ? null : num(r.money), who: String(r.actor_first_name || ''), note: String(r.source_note || ''), undoneAt: r.undone_at ? String(r.undone_at) : '', undoneBy: String(r.undone_by_first_name || ''), group: r.group_key ? String(r.group_key) : '' };
+        option: r.option_title ? String(r.option_title) : '', money: normMoney(r.money), who: String(r.actor_first_name || ''), note: String(r.source_note || ''), undoneAt: r.undone_at ? String(r.undone_at) : '', undoneBy: String(r.undone_by_first_name || ''), group: r.group_key ? String(r.group_key) : '' };
     });
   }
   function logSummary(r) {
     var p = r.parts.slice(); if (r.option && p.join(' ').indexOf(r.option) < 0) p.push(r.option);
-    if (r.before != null && r.after != null) p.push(fmt(r.before) + ' → ' + fmt(r.after) + (r.unit ? ' ' + r.unit : ''));
+    if (!p.length && r.before != null && r.after != null) p.push(fmt(r.before) + ' → ' + fmt(r.after) + (r.unit ? ' ' + r.unit : '')); // summary_parts already carries the change; only a row with no parts shows it
     return p.join(' · ');
   }
   function fetchLog(a, append) {
@@ -3009,11 +3021,11 @@
         var sum = logSummary(r), und = r.undoneAt ? '<span class="I_lgund">Undone ' + esc(manilaTime(r.undoneAt)) + (r.undoneBy ? ' by ' + esc(r.undoneBy) : '') + '</span>' : '';
         var open = r.itemId && itemById(r.itemId);
         return '<' + (open ? 'button type="button" data-act="ilog-item" data-id="' + esc(r.itemId) + '"' : 'div') + ' class="I_lgrow' + (r.undoneAt ? ' I_lgdone' : '') + '"><span class="I_lgt">' + esc(manilaTime(r.at)) + '</span><span class="I_lgk I_lgk_' + esc(r.kind) + '">' + esc(LWORD[r.kind] || 'Edit') + '</span><span class="I_lgb"><b>' + esc(r.item) + '</b>' +
-          (sum || r.money != null ? '<span class="I_lgs">' + (sum ? '<span class="I_lgtx">' + esc(sum) + '</span>' : '') + (r.money != null && canPrice(M.role) ? ' · ' + esc(peso(r.money)) : '') + '</span>' : '') + (und ? '<span class="I_lgs">' + und + '</span>' : '') +
+          (sum || (r.money && canPrice(M.role)) ? '<span class="I_lgs">' + (sum ? '<span class="I_lgtx">' + esc(sum) + '</span>' : '') + (r.money && canPrice(M.role) ? (sum ? ' · ' : '') + esc(moneyText(r.money)) : '') + '</span>' : '') + (und ? '<span class="I_lgs">' + und + '</span>' : '') +
           (r.who || r.note ? '<span class="I_lgw">' + esc([r.who, r.note].filter(Boolean).join(' · ')) + '</span>' : '') + '</span></' + (open ? 'button' : 'div') + '>'; }).join('');
     }).join('');
     var body = a.state === 'loading' ? '<p class="help I_load" role="status">Loading the history…</p>' : a.state === 'err' ? '<div class="errbox" role="alert">' + gi('alert') + '<span>' + esc(a.err === 'offline' ? ERR.offline : ERR.other) + '</span></div><button class="btn btn-secondary btn-block" type="button" data-act="ilog-retry">Try again</button>' :
-      (gs.length ? list : '<p class="help">Nothing in the history for this view yet.</p>') + (a.next ? '<button class="btn btn-secondary btn-block I_lgmore" type="button" data-act="ilog-more"' + (a.busy ? ' disabled' : '') + '>' + (a.busy ? 'Loading…' : 'Show older') + '</button>' : '');
+      (gs.length ? list : '<p class="help">Nothing in the history for this view yet.</p>') + (a.next ? '<button class="btn btn-secondary btn-block I_lgmore" type="button" data-act="ilog-more"' + (a.busy ? ' disabled' : '') + '>' + (a.busy ? 'Loading…' : a.oldest ? 'Show newer' : 'Show older') + '</button>' : '');
     return '<div class="F_sheethead I_sh"><h2 class="hd I_sht" id="I_sh_t" tabindex="-1">Inventory history</h2><button class="btn btn-secondary btn-sm F_close" type="button" data-act="close">' + gi('close', 's16') + 'Close</button></div>' +
       '<div class="I_lgtop"><div class="field"><label class="sr" for="I_f_lq">Search an item</label><div class="input"><input id="I_f_lq" type="search" autocomplete="off" placeholder="Search an item" value="' + esc(a.q) + '"></div></div>' +
       '<button class="btn btn-secondary I_lgord" type="button" data-act="ilog-order" aria-pressed="' + a.oldest + '">' + (a.oldest ? 'Oldest first' : 'Newest first') + '</button></div>' +
@@ -3027,13 +3039,14 @@
   }
   function demoLog() {
     var now = nowMs(), at = function (h, m, d) { var x = new Date(now + 8 * 3600000 - (d || 0) * 86400000); x.setUTCHours(h, m, 0, 0); return new Date(x.getTime() - 8 * 3600000).toISOString(); };
-    var r = function (o) { return Object.assign({ item_id: 'd1', item_name: 'Toilet paper', summary_parts: [], qty_before: null, qty_after: null, delta: null, unit: 'rolls', option_title: null, money: null, actor_first_name: 'Lloyd', source_note: null, undone_at: null, undone_by_first_name: null, group_key: null }, o); };
+    var r = function (o) { var x = Object.assign({ item_id: 'd1', item_name: 'Toilet paper', summary_parts: [], qty_before: null, qty_after: null, delta: null, unit: 'rolls', option_title: null, money: null, actor_first_name: 'Lloyd', source_note: null, undone_at: null, undone_by_first_name: null, group_key: null }, o); if (x.qty_before != null && x.qty_after != null) x.summary_parts = x.summary_parts.concat([fmt(x.qty_before) + ' to ' + fmt(x.qty_after)]); return x; };
     return [
-      r({ at: at(16, 12), kind: 'bought', summary_parts: ['2 × Tisyu 12 rolls', '1 × Wipe 9 rolls'], qty_before: 11, qty_after: 44, money: 530.05 }),
+      r({ at: at(16, 12), kind: 'bought', summary_parts: ['2 × Tisyu 12 rolls', '1 × Wipe 9 rolls'], qty_before: 11, qty_after: 44, money: { unit_cost: 12.5, total_cost: 530.05 } }),
       r({ at: at(15, 40), kind: 'count', item_id: 'd15', item_name: 'Coffee (3-in-1)', qty_before: 75, qty_after: 72, unit: 'sachets', actor_first_name: 'Ana', source_note: 'Update this group, 2 items', group_key: 'g1' }),
       r({ at: at(15, 40), kind: 'count', item_id: 'd4', item_name: 'Dish soap', qty_before: 7, qty_after: 5, unit: 'bottles', actor_first_name: 'Ana', source_note: 'Update this group, 2 items', group_key: 'g1' }),
       r({ at: at(13, 5), kind: 'used', item_id: 'd5', item_name: 'Trash bags', summary_parts: ['1 roll'], option_title: 'Strong Trash Bags Large 10s', qty_before: 2, qty_after: 1, actor_first_name: 'Mae', source_note: 'during a guest stay' }),
       r({ at: at(11, 20), kind: 'broken', item_id: 'd13', item_name: 'Drinking glass', summary_parts: ['1 broken'], qty_before: 6, qty_after: 5, unit: 'pcs', actor_first_name: 'Mae', undone_at: at(11, 24), undone_by_first_name: 'Mae' }),
+      r({ at: at(19, 5, 1), kind: 'edit', item_id: 'd1', item_name: 'Toilet paper', summary_parts: ['Price changed'], money: { before: 11.5, after: 12.5 } }),
       r({ at: at(18, 30, 1), kind: 'edit', item_id: 'd5', item_name: 'Trash bags', summary_parts: ['Reorder level 2 → 3'] }),
       r({ at: at(18, 28, 1), kind: 'product', item_id: 'd5', item_name: 'Trash bags', summary_parts: ['Added Strong Trash Bags XL 10s', 'shopsuki.ph', 'new photo'] }),
       r({ at: at(9, 2, 1), kind: 'moved', item_id: 'd15', item_name: 'Coffee (3-in-1)', summary_parts: ['Group Pantry → Kitchen supplies'] }),
@@ -3058,7 +3071,7 @@
     manilaToday: manilaToday, demoItems: demoItems, PROPERTY_ID: PROPERTY_ID, canManage: canManage, canUse: canUse, state: function () { return M; }, /* test seam: the open state, so a test can put a role on a sheet the UI never opens for it */
     normOpts: normOpts, normReqs: normReqs, o8Link: o8Link, o8Pic: o8Pic, setUsualCall: setUsualCall, optSort: optSort, chipsFor: chipsFor,
     itemEmoji: itemEmoji, updKinds: updKinds, UOPT: UOPT, damageCall: damageCall, linenCall: linenCall, boughtCall: boughtCall, saveText: saveText, canUpdate: canUpdate, isLinen: isLinen, tilePct: tilePct, groupName: groupName, wholeQty: wholeQty,
-    multiOpts: multiOpts, optOrder: optOrder, optSum: optSum, unsortedOf: unsortedOf, lineUnits: lineUnits, splitTotal: splitTotal, buyPlan: buyPlan, planTotal: planTotal, countPlan: countPlan, optionCountCall: optionCountCall, receiptLinesCall: receiptLinesCall, optionUseCall: optionUseCall, groupCall: groupCall, logCall: logCall,
+    multiOpts: multiOpts, optOrder: optOrder, optSum: optSum, unsortedOf: unsortedOf, lineUnits: lineUnits, splitTotal: splitTotal, buyPlan: buyPlan, buyShares: buyShares, groupDefaults: groupDefaults, groupSave: groupSave, groupModes: groupModes, moneyText: moneyText, planTotal: planTotal, countPlan: countPlan, optionCountCall: optionCountCall, receiptLinesCall: receiptLinesCall, optionUseCall: optionUseCall, groupCall: groupCall, logCall: logCall,
     buyCall: buyCall, groupRows: groupRows, groupUndoCalls: groupUndoCalls, zoomClamp: zoomClamp, dayGroups: dayGroups, sortLog: sortLog, dayLabel: dayLabel, normLog: normLog, logSummary: logSummary, visible: visible, o8PicPath: o8PicPath, o8LinkShow: o8LinkShow, siteOf: siteOf, K: function () { return K; }, /* test seam */
     lowItems: lowItems, shopLines: shopLines, shopText: shopText, shopLayout: shopLayout, unitPrice: unitPrice, wrapText: wrapText, longDate: longDate
   } };

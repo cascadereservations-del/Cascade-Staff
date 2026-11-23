@@ -110,6 +110,13 @@ test('s133 links: any https address up to 500 characters; pictures: a shop CDN o
   assert.equal(L.o8Pic('https://example.com/a.jpg', ID), null);
 });
 
+test('s133 links: a userinfo host (https://shopee.ph@evil.example/) is refused', async () => {
+  const L = await lib();
+  for (const bad of ['https://shopee.ph@evil.example/', 'https://user:pw@example.com/p', 'https://a@b.com', 'https://example.com@evil.example/x?y=1']) assert.equal(L.o8Link(bad), null, bad);
+  assert.equal(L.o8Link('https://example.com/a@b'), 'https://example.com/a@b', 'an @ in the path is fine');
+  assert.equal(L.o8Link('https://example.com/p?e=a@b.c'), 'https://example.com/p?e=a@b.c', 'an @ in the query is fine');
+});
+
 test('s133 group rows: count sends changes only, used sends the product, bought sends one line per item', async () => {
   const e = await setup({ role: 'owner' }); const L = e.lib, K = L.K();
   K.opt = {}; K.items = [L.normalize(item('i1', 'Soap', 4, 3), 'owner'), L.normalize(item('i2', 'Bleach', 2, 3), 'owner')];
@@ -118,6 +125,28 @@ test('s133 group rows: count sends changes only, used sends the product, bought 
   same(L.groupRows(a('used', { g_i1: '1', g_i2: '0' })).map((r) => r.item_id), ['i1']);
   const b = L.groupRows(a('bought', { g_i1: '2', g_i2: '' }));
   assert.equal(b.length, 1); assert.equal(b[0].item_id, 'i1'); assert.equal(b[0].lines[0].packs, 2); assert.equal(b[0].lines[0].option_id, null);
+});
+
+test('s133 group count: a never-counted item starts blank and one Save sends only what was typed', async () => {
+  const e = await setup({ role: 'owner' }); const L = e.lib, K = L.K();
+  K.opt = {}; K.items = [L.normalize(item('i1', 'Soap', 4, 3), 'owner'), L.normalize(item('i2', 'Bleach', null, 3), 'owner'), L.normalize(item('i3', 'Mop', null, 3), 'owner')];
+  const a = { ids: ['i1', 'i2', 'i3'], mode: 'count', vals: {} };
+  a.vals = L.groupDefaults(a);
+  same(a.vals, { g_i1: '4', g_i2: '', g_i3: '' }); // null stays blank, never 0
+  same(L.groupRows(a), []); assert.equal(L.groupSave(a), 'Save');
+  a.vals.g_i2 = '7'; a.vals.g_i3 = ' ';
+  same(L.groupRows(a), [{ item_id: 'i2', qty: 7 }]); assert.equal(L.groupSave(a), 'Save 1 change');
+  a.vals.g_i3 = '0'; same(L.groupRows(a).map((r) => r.item_id), ['i2', 'i3']); assert.equal(L.groupSave(a), 'Save 2 changes'); // a typed 0 is a real count
+  a.vals.g_i1 = '5'; assert.equal(L.groupSave(a), 'Save 3 changes');
+});
+
+test('s133 group modes: one refused mode hides only that mode; Used follows the usage flag', async () => {
+  const e = await setup({ role: 'owner', demo: true }); await e.mount(''); const L = e.lib, K = L.K();
+  const names = () => L.groupModes().map((m) => m[0]);
+  const all = names(); assert.equal(all.includes('count') && all.includes('bought'), true);
+  K.denied.group_bought = true; same(names().filter((n) => n === 'bought'), []); assert.equal(names().includes('count'), true);
+  delete K.denied.group_bought; K.denied.group_count = true; assert.equal(names().includes('count'), false); assert.equal(names().includes('bought'), true);
+  delete K.denied.group_count;
 });
 
 test('s133 zoom clamp: scale 1 sits still, the picture always covers the frame', async () => {
@@ -149,11 +178,11 @@ test('s133 history: newest first by default, oldest first when toggled, ties kee
   same(days(false), ['2026-11-23', '2026-11-21']); same(days(true), ['2026-11-21', '2026-11-23']);
 });
 
-test('s133 history: rows normalise every contract field and the summary reads before to after', async () => {
+test('s133 history: rows normalise every contract field and the summary does not repeat the change', async () => {
   const L = await lib();
-  const [r] = L.normLog([row({ kind: 'bought', summary_parts: ['2 packs'], option_title: 'Joy 375ml', money: 120.5, undone_at: '2026-11-23T06:00:00Z', undone_by_first_name: 'Lloyd', group_key: 'g1', source_note: 'Telegram' })]);
-  assert.equal(r.kind, 'bought'); assert.equal(r.option, 'Joy 375ml'); assert.equal(r.money, 120.5); assert.equal(r.undoneBy, 'Lloyd'); assert.equal(r.group, 'g1'); assert.equal(r.who, 'Ana'); assert.equal(r.note, 'Telegram');
-  assert.equal(L.logSummary(r), '2 packs · Joy 375ml · 4 → 6 rolls');
+  const [r] = L.normLog([row({ kind: 'bought', summary_parts: ['2 packs', '4 to 6'], option_title: 'Joy 375ml', money: { unit_cost: 60.25, total_cost: 120.5 }, undone_at: '2026-11-23T06:00:00Z', undone_by_first_name: 'Lloyd', group_key: 'g1', source_note: 'Telegram' })]);
+  assert.equal(r.kind, 'bought'); assert.equal(r.option, 'Joy 375ml'); same(r.money, { total: 120.5, unit: 60.25 }); assert.equal(r.undoneBy, 'Lloyd'); assert.equal(r.group, 'g1'); assert.equal(r.who, 'Ana'); assert.equal(r.note, 'Telegram');
+  assert.equal(L.logSummary(r), '2 packs · 4 to 6 · Joy 375ml');
   same(L.normLog(null), []); same(L.normLog([{ kind: 'count' }, null]), []);
   assert.equal(L.normLog([row({ money: null })])[0].money, null);
 });
@@ -180,4 +209,30 @@ test('s133 history sheet on a live client: one inventory_log_v1 call, then pagin
   await e.act('ilog-more');
   const c2 = e.client.rpcCalls('inventory_log_v1'); assert.equal(c2.length, 2); assert.equal(c2[1][2].p_before, '2026-11-22T00:00:00Z');
   assert.match(e.sheet(), /Old row/); assert.doesNotMatch(e.sheet(), /Show older/);
+});
+
+test('s133 history money: a bought row keeps total_cost, a price edit keeps before and after, null stays null', async () => {
+  const L = await lib();
+  const [b, p, n, junk] = L.normLog([row({ kind: 'bought', money: { unit_cost: 12.5, total_cost: 530.05 } }), row({ kind: 'edit', money: { before: 11.5, after: 12.5 } }), row({ money: null }), row({ money: 120 })]);
+  same(b.money, { total: 530.05, unit: 12.5 }); assert.equal(L.moneyText(b.money), '₱530.05');
+  same(p.money, { before: 11.5, after: 12.5 }); assert.equal(L.moneyText(p.money), '₱11.50 → ₱12.50');
+  assert.equal(n.money, null); assert.equal(L.moneyText(n.money), ''); assert.equal(junk.money, null, 'a bare number is not a contract shape');
+  assert.equal(L.moneyText({ before: null, after: 9 }), 'none → ₱9');
+});
+
+test('s133 history summary: the change is not added twice when summary_parts already carries it', async () => {
+  const L = await lib();
+  const [a, b] = L.normLog([row({ summary_parts: ['2 packs', '4 to 6'] }), row({ summary_parts: [] })]);
+  assert.equal(L.logSummary(a), '2 packs · 4 to 6'); assert.equal(L.logSummary(b), '4 → 6 rolls', 'a row with no parts still shows its change');
+});
+
+test('s133 Total paid split follows the server weights: a Something else line weighs unit cost x pack, all-zero follows the units', async () => {
+  const L = await lib();
+  const it = { id: 'i1', perPack: 12, qty: 6, cost: 2 }; // unit cost 2 a roll: the else line weighs 24 a pack
+  const list = [{ id: 'o1', title: 'A', packSize: 12, price: 100 }];
+  const plan = L.buyPlan(it, list, { lp_o1: '1', lx: '1' });
+  same(plan.lines.map((l) => l.w), [100, 24]); assert.equal(L.planTotal(plan), 124); // the auto-filled Total paid includes the else line
+  same(L.buyShares(plan, { total: '124' }), [100, 24]); same(L.buyShares(plan, { total: '62' }), [50, 12]);
+  const free = L.buyPlan({ id: 'i1', perPack: 10, qty: 0, cost: null }, [{ id: 'o1', title: 'A', packSize: 30, price: null }], { lp_o1: '1', lx: '1' }); // nothing priced: weights 0, shares follow the units 30 : 10
+  assert.equal(L.planTotal(free), null); same(L.buyShares(free, { total: '40' }), [30, 10]);
 });
