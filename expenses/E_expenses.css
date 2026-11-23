@@ -93,5 +93,7 @@
 .E_file { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; }
 /* s134 fix round 1 */
 .E_lookm { color: var(--v5-ink-2); } /* a confirmed row that looks like another: grey, never the review colour */
+.E_inc { display: inline-block; color: var(--v5-ink); background: var(--v5-warn-glass); border-radius: var(--v5-r-sm); padding: 2px 8px; margin-top: 2px; } /* the amount is not complete: same warm cue as needs review */
+.E_opt[disabled] { color: var(--v5-ink-2); background: transparent; border-style: dashed; cursor: not-allowed; } /* a disabled choice reads as off, in both themes (Count it on an incomplete amount) */
 .E_unl { color: var(--v5-ink-2); }
 .E_sticky .btn-primary { background: var(--v5-gold); border-color: var(--v5-gold); color: var(--v5-gold-fg); }

@@ -16,14 +16,14 @@
   var CHIPS = { bill: 'Bill', staff_pay: 'Staff pay', refund: 'Refund', stock: 'Stock', telegram: 'Telegram', receipt: 'Receipt', manual: 'Manual' }; // ML-28: only these chips are drawn
   var FILTERS = [['all', 'All', null], ['stock', 'Stock', 'stock'], ['bill', 'Bills', 'bill'], ['staff_pay', 'Staff pay', 'staff_pay'], ['manual', 'Manual', 'manual'], ['telegram', 'Telegram', 'telegram'], ['receipt', 'Receipt', 'receipt']];
   var CAT_ICON = { cleaning: 'sparkles', supplies: 'box', utilities: 'zap', internet: 'zap', maintenance: 'wrench', subscription: 'note' };
-  var FALLBACK_CATS = ['cleaning', 'supplies', 'utilities', 'internet', 'subscription', 'maintenance', 'furnishing', 'cohost_fee', 'guest_refund', 'airbnb_adjustment', 'loan', 'other'];
+  var FALLBACK_CATS = ['cleaning', 'supplies', 'utilities', 'internet', 'subscription', 'maintenance', 'furnishing', 'cohost_fee', 'loan', 'other'];
   var NO_CONNECTION = 'No connection, so nothing was sent.';
   var DROPPED = 'The connection dropped before an answer came. Tap again; a repeat is safe.';
   var M = {
     tooBig: 'That file is over 5 MB.', wrongType: 'Use a photo or a PDF.', pdf: 'Attached. A PDF can’t be read - fill in the fields.',
     route: 'Did this go into stock? Add it in Inventory instead', removeAsk: 'Remove this receipt? The file is kept.', foot: 'One receipt per expense. PDF up to 5 MB.',
     match: 'Receipt matches this row', staffProof: 'Proof is in Pay staff', billProof: 'Payment screenshot from Bills', lockedGen: 'This entry was made somewhere else. Only the category and notes can change here.',
-    handFail: 'Couldn’t open this in Inventory.', late: 'The date can’t be later than tomorrow.', inInv: 'This receipt is already in Inventory.', again: 'Attach the receipt again.', loadFail: 'The expenses could not be loaded. Try again in a moment.', forbidden: 'This page is not open to your account.'
+    incomplete: 'Amount incomplete - price the rest in Inventory', removed: 'This entry was removed. Refresh the list.', handFail: 'Couldn’t open this in Inventory.', late: 'The date can’t be later than tomorrow.', inInv: 'This receipt is already in Inventory.', again: 'Attach the receipt again.', loadFail: 'The expenses could not be loaded. Try again in a moment.', forbidden: 'This page is not open to your account.'
   };
 
   function pad2(n) { return (n < 10 ? '0' : '') + n; }
@@ -63,6 +63,7 @@
   }
   function chipLabel(c) { return Object.prototype.hasOwnProperty.call(CHIPS, c) ? CHIPS[c] : 'Manual'; }
   function chipKey(c) { return Object.prototype.hasOwnProperty.call(CHIPS, c) ? c : 'manual'; }
+  function incomplete(r) { return !!r && r.s134_incomplete === true; }
   function needsReview(r) { return !!r && r.status === 'pending_review'; }
   function titleOf(r) { return str(r && r.payee) || str(r && r.label) || 'Expense'; }
   function catList(list) {
@@ -141,7 +142,7 @@
   // The routing line is for roles that hold report_supply (owner and admin, not finance), on the Add sheet only, with a receipt attached.
   function canRoute(role) { return role === 'owner' || role === 'admin'; }
   function routeVisible(role, sh) {
-    if (!canRoute(role) || !sh || sh.kind !== 'add' || !sh.rc || !sh.rc.path) return false;
+    if (!canRoute(role) || !sh || sh.kind !== 'add' || !sh.rc || !sh.rc.path || sh.pdf) return false; // a PDF cannot be read into stock
     var n = sh.stockHint && Number(sh.stockHint.count); return (n >= 1) || (sh.f && sh.f.category === 'supplies');
   }
   function nudgeFor(cat) {
@@ -171,21 +172,24 @@
       case 'bad_path': case 'no_file': case 'no_upload_record': return M.again;
       case 'void': return 'This expense was voided, so its receipt cannot change.';
       case 'not_found': return 'This expense is no longer on the list.';
-      case 'forbidden': case 'not_authorized': return 'Your account is not allowed to change receipts.';
+      case 'forbidden': return 'Your account is not allowed to change receipts.';
       case 'reason_required': return 'Write a short reason, at least three letters.';
       default: return 'The receipt could not be saved. Check your connection and try again.';
     }
   }
   function saveWords(res) {
     var c = res && (res.error || res.reason), m = str(res && res.message);
-    if (c === 'forbidden' || c === 'not_authorized') return 'Your account is not allowed to do this.';
-    if (c === 'duplicate_receipt') return dupMsg(res.ref);
+    if (c === 'forbidden') return 'Your account is not allowed to do this.';
+    if (c === 'duplicate_receipt') return dupMsg(res.ref || res.where);
     if (c === 'locked') return 'This entry is locked. Only the category and notes can change here.';
     if (c === 'use_receipt_control') return 'Use the receipt buttons to change a receipt.';
     if (c === 'receipt_in_use') return M.inInv;
     if (c === 'bad_path' || c === 'no_file' || c === 'no_upload_record') return M.again;
     if (c === 'amount_locked') return 'This amount comes from Inventory. Change the price there.';
     if (c === 'future_date') return M.late;
+    if (c === 'amount_incomplete') return M.incomplete;
+    if (c === 'not_found' || c === 'void') return M.removed;
+    if (c === 'bad_same_as') return 'That entry can’t be matched. Choose another.';
     return m || 'Nothing was saved. Check the details and try again.';
   }
   function errCode(e) { return e && (e.code || (e.error && e.error.code)) || ''; }
@@ -306,8 +310,9 @@
   function revoke(u) { if (u) { try { URL.revokeObjectURL(u); } catch (e) { /* ok */ } } }
   function attachWords(r) {
     if (r.net) return 'The connection dropped before the receipt was saved. Try again.';
-    if (r.status === 413 || r.code === 'too_large' || r.code === 'file_too_large') return M.tooBig;
-    if (r.status === 415 || r.code === 'unsupported_type' || r.code === 'unsupported_image_type') return M.wrongType;
+    if (r.status === 413 || r.code === 'image_too_large') return M.tooBig;
+    if (r.status === 415 || r.code === 'unsupported_image_type') return M.wrongType;
+    if (r.code === 'daily_limit' || r.status === 429) return 'You’ve reached today’s upload limit. Try again tomorrow.';
     if (r.status === 404) return 'Receipts are not available in this version of the app yet.';
     if (r.status === 401 || r.status === 403) return 'Your account is not allowed to add receipts.';
     return 'The receipt could not be saved just now. Try again.';
@@ -424,7 +429,7 @@
   }
   // Count it: the row as shown, with any change to the amount, category or what it was for sent in p_edits (a reason is required whenever there is an edit).
   function doCount() {
-    var sh = S.sheet, r = rowOf(sh.id); if (!r || sh.busy) return; var f = sh.f || {}, edits = {}, t = function (v) { return String(v == null ? '' : v).trim(); };
+    var sh = S.sheet, r = rowOf(sh.id); if (!r || sh.busy || incomplete(r)) return; var f = sh.f || {}, edits = {}, t = function (v) { return String(v == null ? '' : v).trim(); };
     if (!(r.amount_locked || r.locked)) {
       var a = parseAmount(f.amount); if (a === null) { sh.errs = { amount: 'Enter the amount, more than zero, with at most two decimal places.' }; sh.msg = 'Please fix the items marked below.'; draw(); return; }
       if (toC(a) !== toC(r.amount)) edits.gross_amount = a;
@@ -493,7 +498,7 @@
     h += fld('E_date', 'Date', inp('E_date', 'date', f.date, 'type="date" max="' + esc(addDay(S.today, 1)) + '"' + (lock ? ' disabled' : '')), e.date, ck.date);
     h += fld('E_amt', 'Amount (PHP)', amtLock ? '<div class="E_input E_ro" id="E_amt">' + esc(peso(r.amount)) + '</div>' + (r && r.amount_locked && !r.locked ? '<p class="E_nudge">Change the price in Inventory</p>' : '') : inp('E_amt', 'amount', f.amount, 'inputmode="decimal" placeholder="0.00"'), e.amount, ck.amount);
     var catLock = catFixed(r), cl0 = catLock && catList(S.data && S.data.categories).filter(function (c) { return c.slug === r.category; })[0];
-    h += fld('E_cat', 'Category', catLock ? '<div class="E_input E_ro" id="E_cat">' + esc(cl0 ? cl0.label : r.category || '') + '</div>' : catSelect('E_cat', f.category), e.category, ck.category);
+    h += fld('E_cat', 'Category', catLock ? '<div class="E_input E_ro" id="E_cat">' + esc(cl0 ? cl0.label : str(r.label) || String(r.category || '').replace(/_/g, ' ')) + '</div>' : catSelect('E_cat', f.category), e.category, ck.category);
     var nd = nudgeFor(f.category); if (nd) h += '<p class="E_nudge">' + esc(nd) + '</p>';
     h += fld('E_notes', 'What was it for?', inp('E_notes', 'notes', f.notes), e.notes, ck.notes);
     h += fld('E_payee', edit ? 'Paid to' : 'Paid to (optional)', inp('E_payee', 'payee', f.payee, lock ? 'disabled' : ''), e.payee, ck.payee);
@@ -536,6 +541,7 @@
     h += kv('Date', esc(fmtDate(r.date)), true) + kv('Category', esc(catLabel(r.category, S.data && S.data.categories))) + (str(r.payee) ? kv('Paid to', esc(r.payee)) : '') + (str(r.notes) ? kv('Notes', esc(r.notes)) : '') + kv('Added by', '<span class="E_pill">' + esc(chipLabel(r.chip)) + '</span>');
     if (r.stock) h += kv('Source', esc('Stock bought · ' + Number(r.stock.lines) + (Number(r.stock.lines) === 1 ? ' line' : ' lines'))) + '<button class="E_link" type="button" data-e="go-items">See the items in Inventory</button>';
     var lk = !pend && lookText(r, S.data && S.data.rows); if (lk) h += '<p class="E_sub E_lookm">' + esc(lk) + '</p>';
+    if (incomplete(r)) h += '<p class="E_look E_inc">' + esc(M.incomplete) + '</p>';
     if (r.amount_locked && !r.locked) h += '<p class="E_nudge">Change the price in Inventory</p>';
     if (r.locked) {
       var staff = r.chip === 'staff_pay', bill = r.chip === 'bill';
@@ -554,9 +560,10 @@
     void kind; return shell(titleOf(r), h);
   }
   function sheetReview(sh) {
-    var r = rowOf(sh.id); if (!r) return ''; var look = r.lookalike || (r.lookalike_id && rowOf(r.lookalike_id)), f = sh.f || {}, e = sh.errs || {}, amtLock = !!(r.amount_locked || r.locked), off = sh.busy || (!amtLock && parseAmount(f.amount) === null);
+    var r = rowOf(sh.id); if (!r) return ''; var look = r.lookalike || (r.lookalike_id && rowOf(r.lookalike_id)), f = sh.f || {}, e = sh.errs || {}, amtLock = !!(r.amount_locked || r.locked), off = sh.busy || incomplete(r) || (!amtLock && parseAmount(f.amount) === null);
     var h = errBox(sh) + linkBlock(sh, r, true) + '<p class="E_sub">' + esc(fmtDate(r.date) + ' · ' + chipLabel(r.chip)) + '</p>';
     var lt = lookText(r, S.data && S.data.rows); if (lt) h += '<p class="E_look">' + esc(lt) + '</p>';
+    if (incomplete(r)) h += '<p class="E_look E_inc">' + esc(M.incomplete) + '</p>';
     h += fld('E_ramt', 'Amount (PHP)', amtLock ? '<div class="E_input E_ro" id="E_ramt">' + esc(peso(r.amount)) + '</div>' : inp('E_ramt', 'amount', f.amount, 'inputmode="decimal" placeholder="0.00"'), e.amount) + fld('E_rcat', 'Category', catSelect('E_rcat', f.category), e.category) + fld('E_rnotes', 'What was it for?', inp('E_rnotes', 'notes', f.notes), e.notes);
     h += '<button class="E_opt" type="button" data-e="count"' + (off ? ' disabled' : '') + '>' + ic('check', 's20') + 'Count it</button>';
     if (look) h += '<button class="E_opt" type="button" data-e="same-as"' + (sh.busy ? ' disabled' : '') + '>' + ic('note', 's20') + esc('Same purchase as ' + refText(look)) + '</button>';
@@ -586,7 +593,7 @@
   // ------------------------------------------------------------------------------------------------ screen
   function rowHtml(r, cats) {
     var cl = catLabel(r.category, cats), icon = CAT_ICON[r.category] || 'wallet', lk = !needsReview(r) && lookText(r, S.data && S.data.rows);
-    return '<div class="E_lr" role="button" tabindex="0" data-e="open" data-id="' + esc(r.id) + '"><span class="E_ic" aria-hidden="true">' + ic(icon, 's20') + '</span><span><span class="E_t">' + esc(titleOf(r)) + '</span><span class="E_sub">' + esc(cl + ' · ' + chipLabel(r.chip)) + (r.has_receipt ? ' <span class="E_clip" aria-label="Has a receipt">' + ic('paperclip', 's16') + '</span>' : '') + '</span>' + (lk ? '<span class="E_sub E_lookm">' + esc(lk) + '</span>' : '') + '</span><span class="E_a"><b>' + esc(peso(r.amount)) + '</b>' + (r.locked ? '<span class="E_lock" aria-label="Locked">' + ic('lock', 's16') + '</span>' : '') + '</span></div>';
+    return '<div class="E_lr" role="button" tabindex="0" data-e="open" data-id="' + esc(r.id) + '"><span class="E_ic" aria-hidden="true">' + ic(icon, 's20') + '</span><span><span class="E_t">' + esc(titleOf(r)) + '</span><span class="E_sub">' + esc(cl + ' · ' + chipLabel(r.chip)) + (r.has_receipt ? ' <span class="E_clip" aria-label="Has a receipt">' + ic('paperclip', 's16') + '</span>' : '') + '</span>' + (lk ? '<span class="E_sub E_lookm">' + esc(lk) + '</span>' : '') + (incomplete(r) ? '<span class="E_sub E_look E_inc">' + esc(M.incomplete) + '</span>' : '') + '</span><span class="E_a"><b>' + esc(peso(r.amount)) + '</b>' + (r.locked ? '<span class="E_lock" aria-label="Locked">' + ic('lock', 's16') + '</span>' : '') + '</span></div>';
   }
   function viewScreen() {
     var d = S.data, h = '', cur = S.month === monthOf(S.today);
@@ -616,7 +623,7 @@
       h += '<div class="E_card" id="E_review"><div class="E_secthead"><span class="E_eyebrow">Needs review</span>' + (pendRows.length > 3 && !S.allReview ? '<button class="E_link" type="button" data-e="see-all">' + esc('See all (' + (pend.count || pendRows.length) + ')') + '</button>' : '') + '</div>';
       h += shown.map(function (r, i) {
         var lt = lookText(r, rows);
-        return '<div class="E_rv' + (i === 0 ? ' E_first' : '') + '" role="button" tabindex="0" data-e="open" data-id="' + esc(r.id) + '"><span class="E_t">' + esc(titleOf(r)) + '</span><span class="E_a">' + esc(peso(r.amount)) + '</span><span class="E_sub">' + esc(fmtDate(r.date) + ' · ' + chipLabel(r.chip)) + '</span>' + (lt ? '<span class="E_look">' + esc(lt) + '</span>' : '') + '</div>';
+        return '<div class="E_rv' + (i === 0 ? ' E_first' : '') + '" role="button" tabindex="0" data-e="open" data-id="' + esc(r.id) + '"><span class="E_t">' + esc(titleOf(r)) + '</span><span class="E_a">' + esc(peso(r.amount)) + '</span><span class="E_sub">' + esc(fmtDate(r.date) + ' · ' + chipLabel(r.chip)) + '</span>' + (lt ? '<span class="E_look">' + esc(lt) + '</span>' : '') + (incomplete(r) ? '<span class="E_look E_inc">' + esc(M.incomplete) + '</span>' : '') + '</div>';
       }).join('');
       if (unp) {
         h += '<button class="E_foldline" type="button" data-e="unp" aria-expanded="' + (S.unp ? 'true' : 'false') + '"><span>' + esc(unp.count + (Number(unp.count) === 1 ? ' stock purchase has' : ' stock purchases have') + ' no price') + '</span>' + ic('chev', 's16') + '</button>';
@@ -707,7 +714,7 @@
     if (f === 'reason') { sh.reason = v; var go = sh.kind === 'void' ? 'void-go' : sh.kind === 'rm' ? 'rc-go' : ''; if (go) off(go, String(v).trim().length < 3); return; }
     if (sh.f) {
       sh.f[f] = v; if (sh.checks) delete sh.checks[f]; if (sh.errs) delete sh.errs[f];
-      if (sh.kind === 'review' && f === 'amount') { var rr = rowOf(sh.id); off('count', !!sh.busy || (!(rr && (rr.amount_locked || rr.locked)) && parseAmount(v) === null)); }
+      if (sh.kind === 'review' && f === 'amount') { var rr = rowOf(sh.id); off('count', !!sh.busy || incomplete(rr) || (!(rr && (rr.amount_locked || rr.locked)) && parseAmount(v) === null)); }
       if (f === 'category' && ev.type === 'change') draw();
     }
   }
@@ -737,7 +744,7 @@
     mount: mount, unmount: unmount, reset: reset,
     _held: function () { return HELD; },
     _setRpcTimeout: function (ms) { RPC_TIMEOUT_MS = ms; }, _setClock: function (fn) { clock = fn || function () { return Date.now(); }; },
-    lib: { esc: esc, peso: peso, parseAmount: parseAmount, toC: toC, monthOf: monthOf, monthShift: monthShift, monthName: monthName, fmtDate: fmtDate, dayLabel: dayLabel, chipLabel: chipLabel, chipKey: chipKey, needsReview: needsReview, titleOf: titleOf, catList: catList, catLabel: catLabel,
+    lib: { esc: esc, peso: peso, parseAmount: parseAmount, toC: toC, monthOf: monthOf, monthShift: monthShift, monthName: monthName, fmtDate: fmtDate, dayLabel: dayLabel, chipLabel: chipLabel, chipKey: chipKey, needsReview: needsReview, incomplete: incomplete, titleOf: titleOf, catList: catList, catLabel: catLabel,
       validateExpense: validateExpense, expenseTxn: expenseTxn, editPayload: editPayload, changedKeys: changedKeys, suggestion: suggestion, suggestPrefill: suggestPrefill, refText: refText, dupMsg: dupMsg, fileCheck: fileCheck, isPdf: isPdf, basisText: basisText,
       canRoute: canRoute, routeVisible: routeVisible, nudgeFor: nudgeFor, dayGroups: dayGroups, expenseCats: expenseCats, lookText: lookText, receiptWords: receiptWords, saveWords: saveWords, plainError: plainError, FILTERS: FILTERS, MESSAGES: M, MAX_FILE: MAX_FILE, manilaToday: manilaToday }
   };

@@ -361,8 +361,8 @@
       });
     }).then(null, function (e) {
       if (S !== me) return; me.step = 'start'; relRcpt(me);
-      if (handFrom) { me.msg = e && e.inuse ? 'This receipt is already in Inventory.' : 'Couldn’t open this in Inventory.'; me.handBack = true; draw(); return; }
-      if (e && e.inuse) { me.msg = 'This receipt is already in Inventory.'; draw(); return; }
+      if (handFrom) { me.msg = e && e.inuse ? 'This receipt is already on an expense.' : 'Couldn’t open this in Inventory.'; me.handBack = true; draw(); return; }
+      if (e && e.inuse) { me.msg = 'This receipt is already on an expense.'; draw(); return; }
       me.msg = e && e.photo ? PHOTO_ERR[e.photo] : e && e.limit ? 'Receipts have been read enough times today. Enter it by hand instead.' : e && e.read ? 'The receipt could not be read. Try a clearer photo, or enter it by hand.' : errText(e); draw();
     });
   }

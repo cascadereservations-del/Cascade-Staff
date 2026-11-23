@@ -457,8 +457,8 @@ test('fix 5-6: S110 keeps the way back when the catalogue does not load, and say
   await m.fire('hand-back'); assert.deepEqual(m.nav, ['#expenses/add/back']);
   m = await run(() => Promise.reject(new Error('Failed to fetch')), () => Promise.resolve({ data: null, error: null })); assert.match(m.el.innerHTML, /Back to the expense/, 'a rejected load too');
   const cat = () => Promise.resolve({ data: { items: [{ id: 'i1', name: 'Soap', unit: 'pc', category: 'Bathroom', active: true }] }, error: null });
-  m = await run(cat, () => Promise.resolve({ data: { ok: false, error: 'receipt_in_use' }, error: null })); assert.match(m.text(), /This receipt is already in Inventory\./); assert.match(m.el.innerHTML, /Back to the expense/);
-  m = await run(cat, () => Promise.resolve({ data: null, error: { context: { status: 409, json: () => Promise.resolve({ ok: false, error: 'receipt_in_use' }) } } })); assert.match(m.text(), /This receipt is already in Inventory\./, 'also when it arrives as a refusal with a status');
+  m = await run(cat, () => Promise.resolve({ data: { ok: false, error: 'receipt_in_use' }, error: null })); assert.match(m.text(), /This receipt is already on an expense./); assert.match(m.el.innerHTML, /Back to the expense/);
+  m = await run(cat, () => Promise.resolve({ data: null, error: { context: { status: 409, json: () => Promise.resolve({ ok: false, error: 'receipt_in_use' }) } } })); assert.match(m.text(), /This receipt is already on an expense./, 'also when it arrives as a refusal with a status');
   assert.equal(HELDSAFE(), true);
   function HELDSAFE() { return /relRcpt\(me\)/.test(read('stock/S110_supply.js').slice(read('stock/S110_supply.js').indexOf('function handFailed'))); }
 });
@@ -489,7 +489,7 @@ test('fix 8-9: the receipt mark is a paperclip; the demo has a bill and a staff-
 
 test('fix 10-13: attach and save refusals read as plain words that match the receipt codes', async () => {
   const att = (status, code) => ({ error: { context: { status, json: () => Promise.resolve({ ok: false, error: code }) } } });
-  for (const [status, code, re] of [[413, 'too_large', /That file is over 5 MB\./], [415, 'unsupported_type', /Use a photo or a PDF\./], [400, 'unsupported_image_type', /Use a photo or a PDF\./], [400, 'unsupported_type', /Use a photo or a PDF\./]]) {
+  for (const [status, code, re] of [[413, 'too_large', /That file is over 5 MB\./], [415, 'unsupported_type', /Use a photo or a PDF\./], [400, 'unsupported_image_type', /Use a photo or a PDF\./], [400, 'image_too_large', /That file is over 5 MB\./]]) {
     const b = await boot({ sub: 'add', shrinkImage: SHRINK, fn: { attach: () => att(status, code) } }); await b.pick(JPG); assert.match(b.text(), re, status + ' ' + code);
   }
   const { E } = loadModule(), L = E.lib;
@@ -570,4 +570,34 @@ test('round 4: a guest refund row keeps guest_refund (read-only) and a notes-onl
   const sent = b.sent('admin_save_transaction_v2'); assert.equal(sent.length, 1, 'notes-only edit is not blocked'); assert.deepEqual(Object.keys(sent[0][1].p_txn).sort(), ['id', 'notes', 'reason']);
   const css = fs.readFileSync(path.join(root, 'styles.css'), 'utf8');
   assert.match(css, /\.E_today \.E_tsub \{[^}]*white-space: nowrap; overflow: hidden; text-overflow: ellipsis;/);
+});
+
+test('r4: an incomplete amount shows its cue in the list, detail and review sheet, Count it is off, and the refusal code reads the same', async () => {
+  const INC = 'Amount incomplete - price the rest in Inventory';
+  const screen = SCREEN({ rows: [ROW({ id: 'c1', status: 'confirmed', s134_incomplete: true }), ROW({ id: 'pi', status: 'pending_review', chip: 'stock', amount_locked: true, s134_incomplete: true, lookalike: { id: 'zz', date: '2026-11-18', amount: '640.00', chip: 'receipt' } })] });
+  const b = await boot({ screen, rpc: { admin_review_transaction_v1: () => ({ ok: false, error: 'amount_incomplete', where: 'Inventory' }) } });
+  assert.equal((b.text().match(/Amount incomplete - price the rest in Inventory/g) || []).length, 2, 'list row and review card row');
+  await b.click('open', 'c1'); assert.match(b.text(), new RegExp(INC)); await b.click('close');
+  await b.click('open', 'pi'); assert.match(b.text(), new RegExp(INC)); await b.click('review');
+  assert.match(b.text(), new RegExp(INC)); assert.match(b.html(), /data-e="count" disabled/, 'Count it is disabled');
+  assert.match(b.text(), /Same purchase as Receipt 18 Nov \(₱640\.00\)/, 'the look-alike object is used when its row is not loaded');
+  await b.click('count'); assert.equal(b.sent('admin_review_transaction_v1').length, 0, 'a press on a disabled Count it sends nothing');
+  const L = loadModule().E.lib; assert.equal(L.saveWords({ ok: false, error: 'amount_incomplete' }), 'Amount incomplete - price the rest in Inventory');
+});
+
+test('r4: error words, refund label, PDF route, duplicate ref', async () => {
+  const { E } = loadModule(), L = E.lib;
+  assert.equal(L.saveWords({ error: 'not_found' }), 'This entry was removed. Refresh the list.'); assert.equal(L.saveWords({ error: 'void' }), 'This entry was removed. Refresh the list.');
+  assert.equal(L.saveWords({ error: 'bad_same_as' }), 'That entry can’t be matched. Choose another.');
+  assert.match(L.saveWords({ error: 'duplicate_receipt', where: 'Stock 21 Nov' }), /already on Stock 21 Nov/);
+  assert.match(L.saveWords({ error: 'duplicate_receipt', ref: { chip: 'stock', date: '2026-11-21', amount: '10.00' } }), /already on Stock 21 Nov/);
+  assert.equal(L.saveWords({ error: 'not_authorized' }), 'Nothing was saved. Check the details and try again.', 'dead code removed');
+  const att = (status, code) => ({ error: { context: { status, json: () => Promise.resolve({ ok: false, error: code }) } } });
+  const a = await boot({ sub: 'add', shrinkImage: SHRINK, fn: { attach: () => att(429, 'daily_limit') } }); await a.pick(JPG); assert.match(a.text(), /You’ve reached today’s upload limit\. Try again tomorrow\./);
+  const i = await boot({ sub: 'add', shrinkImage: SHRINK, fn: { attach: () => att(400, 'image_too_large') } }); await i.pick(JPG); assert.match(i.text(), /That file is over 5 MB\./);
+  assert.equal(L.routeVisible('owner', { kind: 'add', rc: { path: 'p' }, pdf: true, f: { category: 'supplies' } }), false, 'a PDF is not routed to Inventory');
+  assert.equal(L.routeVisible('owner', { kind: 'add', rc: { path: 'p' }, pdf: false, f: { category: 'supplies' } }), true);
+  assert.equal(L.catList().some((c) => c.slug === 'guest_refund' || c.slug === 'airbnb_adjustment'), false);
+  const b = await boot({ screen: SCREEN({ rows: [ROW({ id: 'g1', category: 'guest_refund', label: 'Guest refund', locked: true, chip: 'refund' })] }) });
+  await b.click('open', 'g1'); await b.click('edit'); assert.match(b.html(), /id="E_cat">Guest refund</); assert.doesNotMatch(b.html(), /guest_refund/);
 });
