@@ -72,6 +72,8 @@
   }
   function catLabel(slug, list) { var l = catList(list); for (var i = 0; i < l.length; i++) if (l[i].slug === slug) return l[i].label; return String(slug || 'Other').replace(/_/g, ' '); }
   function catOk(slug, list) { return catList(list).some(function (c) { return c.slug === slug; }); }
+  // A locked row keeps its category when Pay staff owns it or when it is not a pickable category (a guest refund): shown read-only, never sent.
+  function catFixed(r) { return !!(r && r.locked && (r.chip === 'staff_pay' || !catOk(r.category, S && S.data && S.data.categories))); }
   function validateExpense(f, cats, today) {
     var e = {};
     if (!/^\d{4}-\d{2}-\d{2}$/.test(f.date || '')) e.date = 'Choose the date of the expense.'; else if (today && f.date > addDay(today, 1)) e.date = M.late; // the server allows Manila tomorrow, never later
@@ -94,7 +96,7 @@
       if (parseAmount(f.amount) !== null && toC(parseAmount(f.amount)) !== toC(r.amount)) p.gross_amount = parseAmount(f.amount);
       if (t(f.payee) !== t(r.payee)) p.payee_name = t(f.payee);
     }
-    if (!(r.locked && r.chip === 'staff_pay') && f.category && f.category !== r.category) p.category = f.category; // Pay staff owns a staff pay row's category (server: locked)
+    if (!catFixed(r) && f.category && f.category !== r.category) p.category = f.category; // Pay staff owns a staff pay row's category (server: locked); a refund keeps guest_refund
     if (t(f.notes) !== t(r.notes)) p.notes = t(f.notes);
     p.reason = t(reason);
     return p;
@@ -402,7 +404,7 @@
   function doEdit() {
     var sh = S.sheet, r = rowOf(sh.id); if (!r) return; var e = {};
     if (!r.locked && !r.amount_locked) { if (!/^\d{4}-\d{2}-\d{2}$/.test(sh.f.date || '')) e.date = 'Choose the date of the expense.'; else if (sh.f.date > addDay(S.today, 1)) e.date = M.late; if (parseAmount(sh.f.amount) === null) e.amount = 'Enter the amount, more than zero, with at most two decimal places.'; }
-    if (!catOk(sh.f.category, S.data && S.data.categories)) e.category = 'Choose a category.';
+    if (!catFixed(r) && sh.f.category !== r.category && !catOk(sh.f.category, S.data && S.data.categories)) e.category = 'Choose a category.'; // an unchanged category is always allowed on edit (SPEC)
     if (String(sh.reason || '').trim().length < 3) e.reason = 'Say why you are changing it, at least three letters.';
     sh.errs = e; if (Object.keys(e).length) { sh.msg = 'Please fix the items marked below.'; draw(); return; }
     var p = editPayload(r, sh.f, sh.reason); if (!changedKeys(p).length) { sh.msg = 'Nothing was changed.'; draw(); return; }
@@ -490,7 +492,7 @@
     var r = edit ? rowOf(sh.id) : null, lock = !!(r && (r.locked || r.amount_locked)), amtLock = !!(r && (r.amount_locked || r.locked)), f = sh.f, e = sh.errs || {}, ck = sh.checks || {}, h = '';
     h += fld('E_date', 'Date', inp('E_date', 'date', f.date, 'type="date" max="' + esc(addDay(S.today, 1)) + '"' + (lock ? ' disabled' : '')), e.date, ck.date);
     h += fld('E_amt', 'Amount (PHP)', amtLock ? '<div class="E_input E_ro" id="E_amt">' + esc(peso(r.amount)) + '</div>' + (r && r.amount_locked && !r.locked ? '<p class="E_nudge">Change the price in Inventory</p>' : '') : inp('E_amt', 'amount', f.amount, 'inputmode="decimal" placeholder="0.00"'), e.amount, ck.amount);
-    var catLock = !!(r && r.locked && r.chip === 'staff_pay'), cl0 = catLock && catList(S.data && S.data.categories).filter(function (c) { return c.slug === r.category; })[0];
+    var catLock = catFixed(r), cl0 = catLock && catList(S.data && S.data.categories).filter(function (c) { return c.slug === r.category; })[0];
     h += fld('E_cat', 'Category', catLock ? '<div class="E_input E_ro" id="E_cat">' + esc(cl0 ? cl0.label : r.category || '') + '</div>' : catSelect('E_cat', f.category), e.category, ck.category);
     var nd = nudgeFor(f.category); if (nd) h += '<p class="E_nudge">' + esc(nd) + '</p>';
     h += fld('E_notes', 'What was it for?', inp('E_notes', 'notes', f.notes), e.notes, ck.notes);

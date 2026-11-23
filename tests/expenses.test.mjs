@@ -562,3 +562,12 @@ test('round 3: a staff pay row edit never sends category (Pay staff owns it); a 
   await c.type('notes', 'Later date row'); await c.type('reason', 'fix words'); await c.click('edit-save');
   const s2 = c.sent('admin_save_transaction_v2'); assert.equal(s2.length, 1, 'no date validation on a stock row'); assert.deepEqual(Object.keys(s2[0][1].p_txn).sort(), ['id', 'notes', 'reason']);
 });
+test('round 4: a guest refund row keeps guest_refund (read-only) and a notes-only edit saves; Today sub line never wraps', async () => {
+  const RF = ROW({ id: 'rf1', chip: 'refund', locked: true, amount_locked: true, category: 'guest_refund', receipt_can: { add: false, replace: false, remove: false } });
+  const b = await boot({ screen: SCREEN({ rows: [RF] }) }); await b.click('open', 'rf1'); await b.click('edit');
+  assert.match(b.html(), /<div class="E_input E_ro" id="E_cat">/, 'refund category is read-only'); assert.doesNotMatch(b.html(), /<select[^>]*id="E_cat"/);
+  await b.type('notes', 'Refund note'); await b.type('reason', 'fix words'); await b.click('edit-save');
+  const sent = b.sent('admin_save_transaction_v2'); assert.equal(sent.length, 1, 'notes-only edit is not blocked'); assert.deepEqual(Object.keys(sent[0][1].p_txn).sort(), ['id', 'notes', 'reason']);
+  const css = fs.readFileSync(path.join(root, 'styles.css'), 'utf8');
+  assert.match(css, /\.E_today \.E_tsub \{[^}]*white-space: nowrap; overflow: hidden; text-overflow: ellipsis;/);
+});

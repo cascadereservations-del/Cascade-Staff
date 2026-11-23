@@ -1563,6 +1563,6 @@ button.T_badge:focus-visible { outline: 2px solid var(--ring); outline-offset: 2
 .E_today .E_trev { display: inline-block; padding: 15px 0; margin: -15px 0; color: var(--v5-ink); font-weight: 600; text-decoration: none; } /* the hit area reaches 44 px without making the card taller */
 .E_today .E_teye { display: block; font: 700 var(--v5-t-min)/1.2 var(--font-ui); letter-spacing: .08em; text-transform: uppercase; color: var(--v5-ink-2); }
 .E_today .E_tnum { display: block; font: 400 var(--v5-t-num)/1 var(--v5-font-display); color: var(--v5-ink); }
-.E_today .E_tsub { display: block; letter-spacing: -.01em; font: 400 var(--v5-t-min)/1.2 var(--font-ui); color: var(--v5-ink-2); } /* mockup A .xcard .sub: one line at 375 px */
+.E_today .E_tsub { display: block; letter-spacing: -.01em; font: 400 var(--v5-t-min)/1.2 var(--font-ui); color: var(--v5-ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; } /* mockup A .xcard .sub: always one line, long counts end in an ellipsis */
 .E_today .E_tadd { width: 64px; min-height: var(--v5-touch); padding: 0; gap: 4px; text-decoration: none; }
 .E_today .E_tadd.btn-primary { background: var(--v5-gold); border-color: var(--v5-gold); color: var(--v5-gold-fg); } /* mockup A: the one gold accent */
