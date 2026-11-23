@@ -523,23 +523,25 @@
   function stable(list, cmp) { return list.map(function (r, i) { return [r, i]; }).sort(function (a, b) { return cmp(a[0], b[0]) || a[1] - b[1]; }).map(function (x) { return x[0]; }); }
   function sentRows() { var iq = S.d.inq; return stable(((iq && iq.data) || []).filter(function (p) { return !legacyRow(p) && p.receipt_sent === true; }), byNewestReceipt); }
   function waitRows() { var iq = S.d.inq; return stable(((iq && iq.data) || []).filter(function (p) { return !legacyRow(p) && p.receipt_sent === false; }), byHold); }
+  // an inquiry row (receipts, guests waiting, requests waiting for payment) is never folded under "Show more"; the String object carries the mark
+  function inqRow(html) { var o = new String(html); o.inq = true; return o; }
   function needsRows(ov, iq, wt) {
     var out = [], fin = ov && ov.finance, now = clock();
     if (iq) {
       var all = iq.data || [];
-      if (all.some(legacyRow)) { if (all.length) out.push(rowBtn('', 'tab', 'inquiries', count(all.length, 'inquiry waiting', 'inquiries waiting'), 'Confirm or decline')); }
+      if (all.some(legacyRow)) { if (all.length) out.push(inqRow(rowBtn('', 'tab', 'inquiries', count(all.length, 'inquiry waiting', 'inquiries waiting'), 'Confirm or decline'))); }
       else {
         var sent = sentRows(), newest = sent.length && sent[0].receipt_at ? agoWords(sent[0].receipt_at, now) : '';
-        if (sent.length) out.push(rowBtn(' N_due', 'needs-sent', sent.length === 1 ? sent[0].id : '', count(sent.length, 'receipt to check', 'receipts to check'), newest ? 'Newest sent ' + newest : 'Tap to confirm or decline'));
+        if (sent.length) out.push(inqRow(rowBtn(' N_due', 'needs-sent', sent.length === 1 ? sent[0].id : '', count(sent.length, 'receipt to check', 'receipts to check'), newest ? 'Newest sent ' + newest : 'Tap to confirm or decline')));
       }
     }
-    if (wt && wt.waiting > 0) out.push(rowBtn('', 'nav', '#inbox', count(wt.waiting, 'guest waiting for a reply', 'guests waiting for a reply'), wt.oldest_at ? 'Waiting since ' + (manilaParts(wt.oldest_at) && manilaParts(wt.oldest_at).day === manilaToday(now) ? fmtTimeOnly(wt.oldest_at) : fmtDateTime(wt.oldest_at)) : '', 'a'));
+    if (wt && wt.waiting > 0) out.push(inqRow(rowBtn('', 'nav', '#inbox', count(wt.waiting, 'guest waiting for a reply', 'guests waiting for a reply'), wt.oldest_at ? 'Waiting since ' + (manilaParts(wt.oldest_at) && manilaParts(wt.oldest_at).day === manilaToday(now) ? fmtTimeOnly(wt.oldest_at) : fmtDateTime(wt.oldest_at)) : '', 'a')));
     var row8 = null;
     if (iq && !(iq.data || []).some(legacyRow)) {
       var wr = waitRows();
       if (wr.length) {
         var ended = wr.some(function (p) { return p.hold_expires_at && holdEnded(p.hold_expires_at, now); }), next = wr.filter(function (p) { return p.hold_expires_at && !holdEnded(p.hold_expires_at, now); })[0];
-        row8 = { first: ended, html: rowBtn('', 'tab', 'inquiries', count(wr.length, 'request waiting for payment', 'requests waiting for payment'), ended ? 'A hold has ended. Confirm or decline it.' : 'Nothing to do yet' + (next ? ' · next hold ends ' + fmtHoldAt(next.hold_expires_at) : '')) };
+        row8 = { first: ended, html: inqRow(rowBtn('', 'tab', 'inquiries', count(wr.length, 'request waiting for payment', 'requests waiting for payment'), ended ? 'A hold has ended. Confirm or decline it.' : 'Nothing to do yet' + (next ? ' · next hold ends ' + fmtHoldAt(next.hold_expires_at) : ''))) };
       }
     }
     if (row8 && row8.first) out.push(row8.html);
@@ -564,7 +566,11 @@
     if (!anyOk && anyErr && !pending) body = '<div class="N_pad">' + stateBox(st[0] === 'err' ? ovS : st[1] === 'err' ? iqS : wtS, 'Today', 'today') + '</div>';
     else {
       var shown = rows;
-      if (rows.length > 5 && !S.needsOpen) shown = rows.slice(0, 4).concat('<button class="N_row" type="button" data-n="needs-more" aria-expanded="false"><span class="N_rowmid"><span class="N_rowt">' + esc('Show ' + (rows.length - 4) + ' more') + '</span></span><span class="N_chev" aria-hidden="true">⌄</span></button>');
+      var inqN = rows.filter(function (x) { return x.inq; }).length, slots = Math.max(0, 4 - inqN), ovN = rows.length - inqN;
+      if (rows.length > 5 && ovN - slots >= 2 && !S.needsOpen) {
+        var seen = 0; shown = rows.filter(function (x) { return x.inq || ++seen <= slots; }).map(String);
+        shown.push('<button class="N_row" type="button" data-n="needs-more" aria-expanded="false"><span class="N_rowmid"><span class="N_rowt">' + esc('Show ' + (ovN - slots) + ' more') + '</span></span><span class="N_chev" aria-hidden="true">⌄</span></button>');
+      }
       var fail = st[1] === 'err' ? 'Requests could not be loaded' : st[0] === 'err' ? 'Other items could not be loaded' : st[2] === 'err' ? 'Guest replies could not be loaded' : '';
       if (fail) shown = shown.concat(rowBtn('', 'retry', 'today', fail, 'Try again'));
       body = shown.length ? shown.join('') : pending ? '<p class="N_p N_pad N_wait">Checking…</p>' : '<p class="N_p N_pad">All clear. Nothing needs you right now.</p>';
@@ -607,9 +613,9 @@
     var now = clock(), cmp = receiptCmp(p), nights = p.checkin_date && p.checkout_date ? nightsBetween(p.checkin_date, p.checkout_date) : null, name = p.guest_name || 'A guest';
     var toRecv = p.expected_amount === null ? null : formatPHP(p.expected_amount), l3, l4 = '';
     if (cmp) {
-      if (cmp.kind === 'ok') l3 = nw(toRecv) + ' · ' + nw('receipt matches');
-      else if (cmp.kind === 'short' || cmp.kind === 'over') l3 = nw(toRecv + ' to receive') + ' · ' + nw('receipt ' + cents(cmp.diff) + (cmp.kind === 'short' ? ' short' : ' over'));
-      else l3 = nw(toRecv ? toRecv + ' to receive' : 'Amount not known') + ' · ' + nw('check the photo');
+      if (cmp.kind === 'ok') l3 = nw(toRecv) + ' ' + nw('· receipt matches');
+      else if (cmp.kind === 'short' || cmp.kind === 'over') l3 = nw(toRecv + ' to receive') + ' ' + nw('· receipt ' + cents(cmp.diff) + (cmp.kind === 'short' ? ' short' : ' over'));
+      else l3 = nw(toRecv ? toRecv + ' to receive' : 'Amount not known') + ' ' + nw('· check the photo');
       if (p.receipt_at) l4 = '<span class="N_line">Sent ' + esc(agoWords(p.receipt_at, now)) + '</span>';
     }
     return '<button class="N_card N_tap N_go' + (cmp ? ' N_due' : '') + '" type="button" data-n="inq-open" data-v="' + esc(p.id) + '" aria-label="' + esc('Open request from ' + name + (cmp ? ', receipt sent' : ', waiting for payment')) + '">' +
@@ -1099,7 +1105,7 @@
     if (a === 'sheet-close') { if (sh.busy) return; S.sheet = null; draw(); return; }
     if (a === 'sheet-back') { if (sh.busy) return; if (sh.kind === 'review' && sh.step === 'void') { sh.step = 'form'; sh.msg = ''; sh.errs = {}; sh.focus = true; draw(); return; } if (sh.kind === 'confirm' || sh.kind === 'decline') { S.sheet = { kind: 'inq', id: sh.id, msg: '', focus: true }; var pb = payOf(sh.id); if (pb && pb.receipt_image_path) ensurePhoto(sh.id, pb.receipt_image_path); } else S.sheet = null; draw(); return; }
     if (a === 'cf-start') return startConfirm();
-    if (a === 'cf-review') { sh.errs = validateConfirm(sh.f, payOf(sh.id)); sh.msg = ''; if (Object.keys(sh.errs).length) { sh.msg = 'Please fix the items marked below.'; draw(); return; } sh.step = 'review'; sh.focus = true; draw(); return; }
+    if (a === 'cf-review') { sh.errs = validateConfirm(sh.f, payOf(sh.id)); sh.msg = ''; if (Object.keys(sh.errs).length) { sh.msg = 'Please fix the marked items.'; draw(); return; } sh.step = 'review'; sh.focus = true; draw(); return; }
     if (a === 'cf-edit' || a === 'dc-edit' || a === 'ex-edit') { if (sh.busy) return; sh.step = 'form'; sh.msg = ''; sh.focus = true; draw(); return; }
     if (a === 'cf-send') return doConfirmSend();
     if (a === 'dc-start') { S.sheet = { kind: 'decline', id: sh.id, step: 'form', key: mintKey('decline'), busy: false, msg: '', chip: null, text: '', focus: true }; draw(); return; }

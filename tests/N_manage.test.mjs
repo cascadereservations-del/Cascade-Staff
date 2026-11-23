@@ -191,6 +191,7 @@ test('N confirm (receipt on file): form, then review restating guest, dates and 
   assert.match(t.text(), /I saw this payment in our GCash or bank account/); assert.match(t.html(), /data-f="amount" value="2500.00"/, 'the receipt path pre-fills the receipt amount');
   await t.click('cf-review'); // box not ticked
   assert.match(t.text(), /Tick the box once you have seen the payment in our account/);
+  assert.match(t.text(), /Please fix the marked items\./); assert.ok(!/items marked below/.test(t.text()));
   assert.equal(t.sent('staff_confirm_direct_booking_v1').length, 0);
   await t.type('checked', true, { type: 'checkbox', checked: true });
   await t.click('cf-send'); // forged tap on the form step: nothing may be sent
@@ -648,7 +649,7 @@ const RQ = (id, o = {}) => ({ id, transaction_date: '2026-10-12', txn_type: 'exp
 function rqHandlers(rows, extra = {}) { const st = { rows: [...rows] }; return { st, h: { admin_review_queue_v1: () => ({ count: st.rows.length, total: '999.50', rows: st.rows, truncated: false }), ...catsH, ...extra } }; }
 test('N review queue: a native list on Money, Today points to it; absent RPC keeps the dashboard link', async () => {
   const { h } = rqHandlers([RQ('r1'), RQ('r2', { payee_name: 'Shop', ocr_confidence: null })]);
-  const t = await boot({ handlers: h }); assert.match(t.text(), /2 transactions await review .*Review in Money/);
+  const t = await boot({ handlers: h }); assert.match(t.text(), /1 request waiting for payment/); await t.click('needs-more'); assert.match(t.text(), /2 transactions await review .*Review in Money/);
   await t.click('tab', 'money'); assert.match(t.text(), /Waiting for your review \(2\)/); assert.match(t.text(), /Market .*No category yet · Receipt photo · Hard to read/);
   assert.deepEqual(keys(t.sent('admin_review_queue_v1')[0][1]), ['p_property_id']);
   const old = await boot({ sub: 'money' }); assert.ok(!/Waiting for your review/.test(old.text()));
@@ -907,10 +908,13 @@ test('N golden: the decline message equals the fixture shared with the edge func
 const WAIT = (n, at) => () => ({ data: { waiting: n, oldest_at: at }, error: null });
 test('N Needs you card: order, row 8 promotion, the five-row rule, Checking, partial failure, n = 1 opens the sheet, an absent source hides its row', async () => {
   const full = await boot({ handlers: { concierge_waiting_v1: WAIT(2, NOWISO(-3 * 3600000)) } }); const tx = full.text();
-  const order = ['1 receipt to check', '2 guests waiting for a reply', '1 work order blocks arrival', '1 payment to review'].map((s) => tx.indexOf(s)); assert.ok(order.every((i) => i >= 0) && order.every((v, i) => !i || v > order[i - 1]), 'order: ' + order);
-  assert.match(tx, /Show 4 more/); assert.match(tx, /Waiting since 8:00 am/); assert.match(full.html(), /<a class="N_row" href="#inbox" data-n="nav" data-v="#inbox">/); assert.deepEqual(plain(full.sent('concierge_waiting_v1')[0]), ['concierge_waiting_v1', {}]);
+  const order = ['1 receipt to check', '2 guests waiting for a reply', '1 work order blocks arrival'].map((s) => tx.indexOf(s)); assert.ok(order.every((i) => i >= 0) && order.every((v, i) => !i || v > order[i - 1]), 'order: ' + order);
+  assert.match(tx, /Show 4 more/); assert.match(tx, /1 request waiting for payment Nothing to do yet/, 'R2: the waiting-for-payment row is never folded'); assert.ok(!/1 payment to review/.test(tx), 'overview rows fold first'); assert.match(tx, /Waiting since 8:00 am/); assert.match(full.html(), /<a class="N_row" href="#inbox" data-n="nav" data-v="#inbox">/); assert.deepEqual(plain(full.sent('concierge_waiting_v1')[0]), ['concierge_waiting_v1', {}]);
   assert.ok(full.html().split('N_due').length === 2, 'only the receipt row carries the gold bar');
-  await full.click('needs-more'); assert.ok(!/Show \d+ more/.test(full.text())); assert.match(full.text(), /1 request waiting for payment Nothing to do yet/);
+  await full.click('needs-more'); assert.ok(!/Show \d+ more/.test(full.text())); assert.match(full.text(), /1 request waiting for payment Nothing to do yet/); assert.match(full.text(), /1 payment to review/);
+  // a new request with no receipt is an inquiry row: never folded, even with many overview rows
+  const nr = await boot({ handlers: { staff_inquiry_payments_v1: () => [row({ id: 'b8', guest_name: 'New', receipt_sent: false, comparison_id: null, receipt_at: null, hold_expires_at: null, receipt_image_path: null })], concierge_waiting_v1: WAIT(2, NOWISO(-3 * 3600000)) } });
+  assert.match(nr.text(), /1 request waiting for payment/); assert.match(nr.text(), /2 guests waiting for a reply/); assert.match(nr.text(), /Show \d+ more/);
   await full.click('nav', '#inbox'); assert.deepEqual(full.nav, ['#inbox']);
   const ended = await boot({ handlers: { staff_inquiry_payments_v1: () => [Q1, row({ id: 'b3', receipt_sent: false, comparison_id: null, hold_expires_at: NOWISO(-3600000), receipt_image_path: null })], concierge_waiting_v1: WAIT(1, NOWISO(-1000)) } }); const te = ended.text();
   assert.ok(te.indexOf('request waiting for payment') < te.indexOf('1 work order blocks arrival'), 'an ended hold moves up to row 3'); assert.match(te, /A hold has ended\. Confirm or decline it\./);
@@ -1017,6 +1021,14 @@ test('N r2 old server: a photo with no amount read never says No receipt yet', a
   const t = await boot({ client: storageClient({ staff_inquiry_payments_v1: () => [OLD] }), sub: 'inquiries' });
   await t.click('inq-open', OLD.id); await tick(); assert.match(t.html(), /<img class="N_photo"/); const sheet = t.html().slice(t.html().indexOf('class="N_sheet"')).replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ');
   assert.match(sheet, /The amount could not be read from the receipt\. Check the photo\./); assert.ok(!/No receipt yet/.test(sheet));
+});
+
+test('N r3 list card: no span ends in the separator, so a line never ends in a hanging dot (360 px)', async () => {
+  const mk = (o) => row({ id: 'c' + o.n, guest_name: 'G' + o.n, ...o.r });
+  const t = await boot({ sub: 'inquiries', handlers: { staff_inquiry_payments_v1: () => [mk({ n: 1, r: { candidate_amount: '2500.00' } }), mk({ n: 2, r: { candidate_amount: '2000.00' } }), mk({ n: 3, r: { candidate_amount: '3000.00' } }), mk({ n: 4, r: { candidate_amount: null } })] } });
+  const h = t.html(); assert.ok(!/[·]\s*<\/span>/.test(h), 'no N_nw span ends with the separator'); assert.ok(!/·\s*<\/span>\s*<\/span>/.test(h));
+  assert.match(h, /<span class="N_nw">· receipt ₱500\.00 short<\/span>/); assert.match(h, /<span class="N_nw">· receipt ₱500\.00 over<\/span>/); assert.match(h, /<span class="N_nw">· check the photo<\/span>/); assert.match(h, /<span class="N_nw">· receipt matches<\/span>/);
+  assert.match(t.text(), /to receive · receipt ₱500\.00 short/);
 });
 
 test('N r2b old server: the list card stays exactly as 3.4.53 drew it (R1.2)', async () => {
