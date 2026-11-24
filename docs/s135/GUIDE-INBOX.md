@@ -43,7 +43,7 @@ Needs the guide v8 backend. Without it the app behaves exactly as 3.4.53 (see "F
 
 - The sparkline plots `by_day[].events` and is captioned "Activity per day". The contract has no per-day opens field. If `events` is not opens, change the caption or the field.
 - Client-side reply cap is 1000 characters (the contract gives none). Adjust `GUIDE_MAX` in X_inbox.js to the server's limit.
-- The push carries url `./#inbox`, so a tap lands on the Messenger list with the Guide badge showing. To open the thread directly, notify-staff-inbox can send url `./#inbox/guide:<thread uuid>`; the app already handles it.
+- The push carries url `./#inbox`, so a tap lands on the Messenger list with the Guide badge showing. To open the thread directly, notify-staff-inbox can send url `./#inbox/guide%3A<uuid>`; the app already handles it.
 
 ## Test output
 

@@ -4,7 +4,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import { settle, mkClient, load, iso, mountIt } from './X_harness.mjs';
+import { settle, mkClient, load, iso, mountIt, listRow } from './X_harness.mjs';
 
 const T1 = '11111111-1111-4111-8111-111111111111', T2 = '22222222-2222-4222-8222-222222222222';
 const EVIL = '<img src=x onerror=alert(1)>';
@@ -126,7 +126,7 @@ test('s135 the Open and Resolved filter; opening a row navigates to #inbox/guide
   const { el, navs } = await mountIt(env, c, { sub: 'guide' });
   assert.match(el.html('list'), /Open \(1\)/); assert.match(el.html('list'), /Resolved \(1\)/);
   assert.ok(!/Done guest/.test(el.html('list'))); await el.click('gfilter', 'resolved');
-  assert.match(el.html('list'), /Done guest/); assert.match(el.html('list'), /Resolved<\/span>|✓<\/span> Resolved/); assert.ok(!/Honey R\./.test(el.html('list')));
+  assert.match(el.html('list'), /Done guest/); assert.match(el.html('list'), /class="X_fchip" aria-pressed="true"[^>]*data-v="resolved"/); assert.ok(!/Honey R\./.test(el.html('list')));
   await el.click('gfilter', 'open'); await el.click('gopen', T1);
   assert.deepEqual(navs, ['#inbox/guide:' + T1]);
   await el.click('src', 'msgr'); assert.equal(navs[navs.length - 1], '#inbox');
@@ -150,7 +150,7 @@ test('s135 opening a thread reads it with {p_thread_id} and clears its unread ba
 test('s135 the rule banner sits in the reply box, always, with the exact words', async () => {
   const env = load(), c = gclient();
   const { el } = await mountIt(env, c, { sub: 'guide:' + T1 });
-  assert.ok(el.html('gbanner').includes(RULE)); assert.equal(env.X.lib.guide.rule, RULE);
+  assert.equal(el.html('gbanner').replace(/<[^>]+>/g, '').replace('▲', ''), RULE); assert.equal(env.X.lib.guide.rule, RULE);
   assert.equal(el.regions.gcompwrap.hidden, false); assert.equal(el.regions.compwrap.hidden, true);
   assert.match(el.html('gtext'), /aria-describedby="X_gbanner"/); assert.match(el.html('gtext'), /maxlength="1000"/);
   assert.match(el.html('gbanner'), /id="X_gbanner"/);
@@ -255,7 +255,7 @@ test('s135 reply: the box refuses an empty reply and one over the cap; nothing i
 // ---------------------------------------------------------------------------------------------- resolve and reopen
 test('s135 Resolve and Reopen call staff_guide_resolve_v1 with {p_thread_id, p_resolved} and flip the chip and button', async () => {
   const env = load(), c = gclient({ staff_guide_resolve_v1: () => ({ data: { ok: true }, error: null }) }); const { el } = await mountIt(env, c, { sub: 'guide:' + T1 });
-  assert.match(el.html('thead'), /data-xa="gresolve"/); assert.match(el.html('thead'), /Open<\/span>/);
+  assert.match(el.html('thead'), /data-xa="gresolve"/); assert.match(el.html('thead'), /Needs reply/);
   await el.click('gresolve'); assert.deepEqual(named(c, 'staff_guide_resolve_v1').map((x) => x[2]), [{ p_thread_id: T1, p_resolved: true }]);
   assert.match(el.html('thead'), /data-xa="greopen"/); assert.match(el.html('thead'), /Resolved/); assert.ok(!/data-xa="gresolve"/.test(el.html('thead')));
   await el.click('greopen'); assert.deepEqual(named(c, 'staff_guide_resolve_v1').map((x) => x[2])[1], { p_thread_id: T1, p_resolved: false }); assert.match(el.html('thead'), /data-xa="gresolve"/);
@@ -285,4 +285,80 @@ test('s135 release pins: 3.4.55, cs-shell-v80, Guide CSS and no new top-level gl
   const css = read('inbox/X_inbox.css'); for (const k of ['.X_badge', '.X_gfail', '.X_rule']) assert.ok(css.includes(k), k);
   assert.equal((css.match(/\{/g) || []).length, (css.match(/\}/g) || []).length);
   const { newGlobals } = load(); assert.deepEqual(newGlobals.filter((k) => !/^X_|^window$/.test(k)), []);
+});
+
+// ---------------------------------------------------------------------------------------------- s136 r2 fixes
+const blob = (f) => fs.readFileSync(new URL('../' + f, import.meta.url), 'utf8');
+test('s136 r2 banner: glyph and words share one row, only the first sentence is bold, weight 400 elsewhere', async () => {
+  const env = load(), c = gclient(); const { el } = await mountIt(env, c, { sub: 'guide:' + T1 });
+  assert.match(el.html('gbanner'), /<span aria-hidden="true">▲<\/span><span><strong>Never send door codes or payment details here\.<\/strong> Use Airbnb messages for those\.<\/span>/);
+  const css = blob('inbox/X_inbox.css'), rule = css.match(/\.X_note\.X_rule \{[^}]*\}/)[0];
+  assert.match(rule, /display: flex/); assert.match(rule, /align-items: baseline/); assert.match(rule, /gap: 8px/); assert.match(rule, /font-weight: 400/);
+});
+test('s136 r2 chips: Open is neutral, amber Needs reply only when the guest spoke last; no status chip on rows; no channel chip in the thread head', async () => {
+  const env = load(), c = gclient(); const { el } = await mountIt(env, c, { sub: 'guide:' + T1 });
+  assert.match(el.html('thead'), /X_chip X_needs"><span aria-hidden="true">●<\/span> Needs reply/); assert.ok(!/X_ch_airbnb/.test(el.html('thead'))); assert.match(el.html('thead'), /Airbnb, stay 12 to 15 Oct/);
+  const staffLast = gthread({ messages: [{ id: 'm1', from: 'guest', body: 'Hi', at: iso(60), staff_user_id: null }, { id: 'm2', from: 'staff', body: 'Hello', at: iso(5), staff_user_id: 'u' }] });
+  const env2 = load(), c2 = gclient({ staff_guide_thread_v1: () => ({ data: staffLast, error: null }) }); const m2 = await mountIt(env2, c2, { sub: 'guide:' + T1 });
+  assert.match(m2.el.html('thead'), /<span class="X_chip">Open<\/span>/); assert.ok(!/X_needs/.test(m2.el.html('thead')));
+  const env3 = load(), c3 = gclient({ staff_guide_threads_v1: () => ({ data: [grow(), grow({ id: T2, guest_label: 'Done guest', status: 'resolved', unread: 0 })], error: null }) });
+  const m3 = await mountIt(env3, c3, { sub: 'guide' }); await m3.el.click('gfilter', 'resolved');
+  assert.ok(!/Resolved<\/span>|X_cassy|X_needs/.test(m3.el.html('list').replace(/Resolved \(1\)/, '')), 'a list row carries no status chip');
+});
+test('s136 r2 source tab: the Messenger need-you count is amber, the Guide unread count stays blue', async () => {
+  const env = load(), c = gclient({ concierge_conversations_v1: () => ({ data: [listRow({ open_handoffs: 1 })], error: null }) });
+  const { el } = await mountIt(env, c, { sub: 'guide' });
+  assert.match(el.html('list'), /data-v="msgr">Messenger <span class="X_badge X_badge_warn">/);
+  assert.match(el.html('list'), /data-v="guide">Guide <span class="X_badge">/);
+  const css = blob('inbox/X_inbox.css'); assert.match(css, /\.X_badge\.X_badge_warn \{[^}]*var\(--warn-soft\)[^}]*var\(--warn\)/);
+  assert.match(blob('inbox/X_inbox.js'), /badge\(needN, 'need you', true\)/); assert.match(blob('inbox/X_inbox.js'), /badge\(un, 'unread'\)/);
+});
+test('s136 r2 Open and Resolved is a sub-filter of choice chips, not a second segmented control; chips and Resolve/Refresh are 44 px; placeholder token', async () => {
+  const env = load(), c = gclient(); const { el } = await mountIt(env, c, { sub: 'guide' });
+  assert.match(el.html('list'), /class="X_fchips" role="group" aria-label="Show"/); assert.equal(count(el.html('list'), 'class="X_seg'), 1, 'only the source switch is a segmented control');
+  const css = blob('inbox/X_inbox.css');
+  assert.match(css.match(/\.X_fchip \{[^}]*\}/)[0], /min-height: 44px/);
+  const pair = css.match(/\.X_actions\.X_pair > \.X_btn \{[^}]*\}/)[0]; assert.match(pair, /flex: 1 1 0/); assert.match(pair, /min-width: 0/); assert.match(pair, /min-height: 44px/);
+  assert.match(css, /\.X_actions\.X_pair \{ flex-wrap: nowrap; \}/);
+  assert.match(css, /\.X_ta::placeholder \{ color: var\(--fg-3\)/);
+  const e2 = load(), c2 = gclient(); const m = await mountIt(e2, c2, { sub: 'guide:' + T1 });
+  assert.match(m.el.html('thead'), /class="X_actions X_pair"><button[^>]*data-xa="gresolve"[^>]*>Resolve<\/button><button[^>]*data-xa="refresh"[^>]*>Refresh<\/button>/);
+  assert.match(m.el.html('gtext'), /placeholder="The guest reads this in the guide\."/);
+});
+test('s136 r2 safety: a run of 4+ digits or a code/payment word asks once before a Guide reply sends; Edit sends nothing; Send anyway sends once', async () => {
+  const { X } = load(), R = X.lib.guide.risky;
+  for (const t of ['The code is 4821', 'call 0917', 'use the PIN', 'send via GCash', 'my card', 'CVV?', 'the OTP', 'wifi Password', 'passcode']) assert.equal(R(t), true, t);
+  for (const t of ['Towels are in the hall cupboard.', 'Room 12, floor 3', 'Check-in is at 2 pm', 'the barcode scanner', 'cardboard box', 'decode it']) assert.equal(R(t), false, t);
+  const env = load(), c = gclient({ staff_guide_reply_v1: () => ({ data: { ok: true, id: 'srv-1', at: iso(0) }, error: null }) });
+  const { el } = await mountIt(env, c, { sub: 'guide:' + T1 });
+  await typeG(el, 'The door code is 4821'); await el.click('gsend');
+  assert.equal(named(c, 'staff_guide_reply_v1').length, 0, 'nothing sent before the confirm');
+  assert.match(el.html('sheet'), /This looks like a code or payment detail\. Send anyway\?/); assert.match(el.html('sheet'), /role="dialog"/);
+  await el.click('sheet-x'); assert.equal(el.html('sheet'), ''); assert.equal(named(c, 'staff_guide_reply_v1').length, 0);
+  await el.click('gsend'); assert.match(el.html('sheet'), /Send anyway\?/, 'the words stayed in the box, so Send asks again'); await el.click('gsure-go');
+  assert.equal(named(c, 'staff_guide_reply_v1').length, 1); assert.equal(named(c, 'staff_guide_reply_v1')[0][2].p_body, 'The door code is 4821'); assert.equal(el.html('sheet'), '');
+  await typeG(el, 'Towels are in the hall cupboard.'); await el.click('gsend');
+  assert.equal(named(c, 'staff_guide_reply_v1').length, 2, 'a plain reply sends with no sheet'); assert.equal(el.html('sheet'), '');
+});
+test('s136 r2 duplicate send: a remount mid-send resends under the SAME key; if the reloaded thread already holds the message the draft is cleared', async () => {
+  const env = load(); let release; const gate = new Promise((r) => { release = r; });
+  const c = gclient({ staff_guide_reply_v1: () => gate });
+  const m1 = await mountIt(env, c, { sub: 'guide:' + T1 });
+  await typeG(m1.el, 'Hooks are by the shower.'); await m1.el.click('gsend');
+  const key = named(c, 'staff_guide_reply_v1')[0][2].p_client_msg_id;
+  env.X.unmount();
+  const c2 = gclient({ staff_guide_reply_v1: () => ({ data: { ok: true, id: 'srv-9', at: iso(0), already: true }, error: null }) });
+  const m2 = await mountIt(env, c2, { sub: 'guide:' + T1 });
+  assert.match(m2.el.html('gtext'), />Hooks are by the shower\.<\/textarea>/, 'the words are back in the box');
+  await m2.el.click('gsend'); assert.equal(named(c2, 'staff_guide_reply_v1')[0][2].p_client_msg_id, key, 'same key as the first try');
+  release({ data: { ok: true, id: 'x' }, error: null });
+  // landed: the reloaded thread already holds that staff message, so the draft is cleared
+  const env3 = load(); const g2 = new Promise(() => {});
+  const c3 = gclient({ staff_guide_reply_v1: () => g2 });
+  const a = await mountIt(env3, c3, { sub: 'guide:' + T1 }); await typeG(a.el, 'Hooks are by the shower.'); await a.el.click('gsend'); env3.X.unmount();
+  const landed = gthread({ messages: [{ id: 'm1', from: 'guest', body: 'Hi', at: iso(60), staff_user_id: null }, { id: 'm9', from: 'staff', body: 'Hooks are by the shower.', at: iso(1), staff_user_id: 'u' }] });
+  const c4 = gclient({ staff_guide_thread_v1: () => ({ data: landed, error: null }) });
+  const b = await mountIt(env3, c4, { sub: 'guide:' + T1 });
+  assert.match(b.el.html('gtext'), /<textarea[^>]*><\/textarea>/, 'draft cleared'); assert.match(b.el.html('msgs'), /Hooks are by the shower\./);
+  assert.equal(named(c4, 'staff_guide_reply_v1').length, 0);
 });

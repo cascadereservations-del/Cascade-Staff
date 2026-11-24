@@ -119,3 +119,13 @@ test('service worker: a tap focuses an open window, else opens the app; only in-
   for (const evil of ['https://evil.example/x', '//evil.example', 'javascript:alert(1)']) { const x = worker([]); await x.run('notificationclick', { notification: note(evil) }); assert.deepEqual(x.opened, ['./#home'], evil); }
   assert.equal(closed.length, 5);
 });
+
+test('s136 C_target: the encoded guide thread link opens the thread; the raw colon falls back to home', async () => {
+  const uuid = '0b5f3c1e-aaaa-4bbb-8ccc-123456789abc';
+  const enc = worker([]); await enc.run('notificationclick', { notification: { close() {}, data: { url: './#inbox/guide%3A' + uuid } } });
+  assert.deepEqual(enc.opened, ['./#inbox/guide%3A' + uuid], 'encoded form is kept');
+  const raw = worker([]); await raw.run('notificationclick', { notification: { close() {}, data: { url: './#inbox/guide:' + uuid } } });
+  assert.deepEqual(raw.opened, ['./#home'], 'the raw colon is refused and falls back to home');
+  const p = worker(); await p.run('push', { data: { json: () => ({ title: 'T', body: 'B', tag: 'inbox', url: './#inbox/guide%3A' + uuid }) } });
+  assert.equal(p.shown[0].data.url, './#inbox/guide%3A' + uuid);
+});

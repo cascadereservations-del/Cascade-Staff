@@ -158,13 +158,15 @@ button.N_link { background: none; border: 0; padding: 0; font: inherit; cursor: 
 .N_help { margin: 0; color: var(--fg-2); font-size: 0.8125rem; line-height: 1.35; }
 .N_sheet details { margin: 0; }
 .N_sheet summary.N_link { cursor: pointer; }
-/* s135 (3.4.54): the Guest guide card on the KPIs tab. Tokens only; text 13px and up; every bar has its number beside it. */
-.N_gg { gap: 10px; }
-.N_ggtiles { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
-.N_ggtile { display: grid; gap: 2px; align-content: start; padding: 10px 12px; border: 1px solid var(--border); border-radius: var(--r-md); background: var(--card); }
-.N_ggspark { display: grid; gap: 4px; }
+/* s135 (3.4.55): the Guest guide card on the KPIs tab. Tokens only; text 13px and up; every bar has its number beside it. */
+.N_gg { gap: 4px; }
+.N_ggtop { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+.N_ggrows { display: grid; }
+.N_ggrows > .N_row { padding: 5px 0; min-height: 0; } /* static rows, nothing to tap: compact so the closed card stays short */
+.N_ggspark { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.N_ggspark .N_spark { flex: 0 0 120px; width: 120px; }
 .N_h4 { font: 600 max(0.8125rem, var(--v5-t-2))/1.3 var(--font-ui); margin: 4px 0 0; color: var(--fg-2); }
-.N_gglist, .N_ggfun { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.N_gglist, .N_ggfun { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
 .N_gglist > li, .N_ggfun > li { font-size: max(0.8125rem, var(--v5-t-2)); }
 .N_ggfun > li { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 12px; align-items: baseline; }
 /* list rows wrap: the label keeps its whole words (never "Checkli / st"), the value drops under it when the line is full */

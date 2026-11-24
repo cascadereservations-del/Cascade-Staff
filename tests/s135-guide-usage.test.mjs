@@ -63,15 +63,15 @@ test('s135 usage model: top five sections and taps, the five funnel steps in ord
   assert.deepEqual(m.sections.map((s) => s.avg), ['18 s', '1 min 35 s', '41 s', '1 min 2 s', '27 s']);
   assert.deepEqual(m.taps.map((t) => t.target), ['wifi_copy', 'map_open', 'd', 'c', 'b']);
   assert.deepEqual(m.taps.map((t) => t.label), ['Copied the wifi password', 'Opened a map', 'D', 'C', 'B']);
-  assert.deepEqual(m.funnel.map((s) => s.key), ['verify_start', 'verify_ok', 'browse_guest', 'checklist_done', 'message_sent']);
-  assert.deepEqual(m.funnel.map((s) => s.n), [9, 5, 7, 3, 4]);
-  assert.equal(m.perDay.length, 30); assert.equal(m.perDay[0], 4); assert.equal(m.perDay[5], 9); assert.equal(m.perDay[29], 2); assert.equal(m.perDay[1], 0);
+  assert.deepEqual(m.funnel.map((s) => s.key), ['verify_start', 'verify_ok', 'checklist_done']);
+  assert.deepEqual(m.funnel.map((s) => s.n), [9, 5, 3]); assert.deepEqual(m.side.map((s) => [s.key, s.n]), [['browse_guest', 7], ['message_sent', 4]]);
+  assert.equal(m.perDay.length, 30); assert.equal(m.perDay[0], 4); assert.equal(m.perDay[5], 9); assert.equal(m.perDay[29], 2); assert.equal(m.perDay[1], 0); // the window is the 30 Manila days ending 2026-10-14 (Manila today at the frozen clock)
   assert.deepEqual(m.searches, [{ target: 'jollibee', n: 3 }, { target: 'pizza', n: 2 }]);
   assert.equal(m.empty, false);
   assert.equal(G.model(USAGE({ devices: 0, opens: 0, verified_stays: 0 })).empty, true);
   assert.equal(G.model(null), null); assert.equal(G.model([]), null);
   const odd = plain(G.model({ devices: 'x', opens: -3, sections: [null, { section: '', views: '4' }], top_taps: [{ taps: 3 }], funnel: null, by_day: 'nope', searches_without_result: [{ target: 't' }] }));
-  assert.equal(odd.devices, 0); assert.equal(odd.opens, 0); assert.equal(odd.sections[0].label, 'Other'); assert.equal(odd.sections[0].views, 4); assert.equal(odd.taps.length, 0); assert.deepEqual(odd.perDay, []); assert.equal(odd.searches[0].n, 0);
+  assert.equal(odd.devices, 0); assert.equal(odd.opens, 0); assert.equal(odd.sections[0].label, 'Other'); assert.equal(odd.sections[0].views, 4); assert.equal(odd.taps.length, 0); assert.equal(odd.perDay.length, 30); assert.ok(odd.perDay.every((v) => v === 0)); assert.equal(odd.searches[0].n, 0);
   assert.equal(G.tapLabel('wifi_copy'), 'Copied the wifi password'); assert.equal(G.tapLabel('map_open'), 'Opened a map'); assert.equal(G.tapLabel('checklist_item'), 'Ticked a checklist item');
   assert.equal(G.tapLabel('call_host_now'), 'Call host now', 'unknown: cleaned, never the slug'); assert.equal(G.tapLabel('constructor'), 'Constructor'); assert.equal(G.tapLabel('x-y__z'), 'X y z');
   assert.equal(G.seconds(0), '0 s'); assert.equal(G.seconds(59.6), '1 min'); assert.equal(G.seconds(120), '2 min'); assert.equal(G.label('house_rules'), 'House rules'); assert.equal(G.DAYS, 30);
@@ -85,15 +85,18 @@ test('s135 usage rpc: the KPIs tab calls staff_guide_usage_v1 with exactly {p_da
 test('s135 usage card: devices, verified stays, opens, messages, sparkline, top sections with average time, top taps, funnel, empty searches', async () => {
   const t = boot({ usage: () => ({ data: USAGE(), error: null }) }); await t.ready();
   const h = t.html(), text = h.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ');
-  assert.match(h, /aria-labelledby="N_gg1"/); assert.match(text, /Guest guide/); assert.match(text, /The last 30 days/);
-  assert.match(text, /Devices 14/); assert.match(text, /Verified stays 5/); assert.match(text, /Opens 1,241/); assert.match(text, /Messages sent 4/);
-  assert.match(h, /<div class="N_ggspark">.*<svg class="N_spark"/s); assert.match(text, /Activity per day, from 15 Sep 2026/);
+  assert.match(h, /aria-labelledby="N_gg1"/); assert.match(text, /Guest guide/); assert.match(text, /Last 30 days\./); assert.ok(!/The last 30 days/.test(text));
+  assert.match(text, /Devices 14/); assert.match(text, /Opens 1,241/); assert.ok(!/Verified stays|Messages sent/.test(text));
+  assert.match(h, /<div class="N_row N_static N_kpi"><span class="N_rowmid"><span class="N_rowt">Devices<\/span><\/span><span class="N_val N_num">14<\/span><\/div>/); assert.equal((h.slice(h.indexOf('N_gg1')).match(/N_row N_static N_kpi/g) || []).length, 2);
+  assert.match(h, /<div class="N_ggspark">.*<svg class="N_spark"/s); assert.match(text, /Guide actions per day\. 15 in all\./); assert.ok(!/from 15 Sep/.test(text));
   assert.match(text, /Top sections/); assert.match(text, /Wifi 33 views · 18 s avg/); assert.match(text, /Checklist 21 views · 1 min 35 s avg/); assert.ok(!/Contact/.test(text), 'only five');
   assert.match(text, /Top taps/); assert.match(text, /Copied the wifi password 24 taps/, 'wifi is not said twice'); assert.match(text, /Opened a map Nearby 9 taps/); assert.ok(!/wifi_copy|map_open|checklist_item/.test(text), 'no raw slug');
-  assert.match(text, /What guests do/); for (const w of ['Started verifying 9', 'Verified a stay 5', 'Browsed as a guest 7', 'Finished the checklist 3', 'Sent a message 4']) assert.match(text, new RegExp(w));
-  assert.match(h, /N_ggbar" aria-hidden="true" style="--w:100%"/); assert.match(h, /style="--w:56%"/);
+  assert.match(text, /What guests do/); for (const w of ['Started verifying 9', 'Verified a stay 5', 'Finished the checklist 3', 'Browsed without verifying 7', 'Sent a message 4']) assert.match(text, new RegExp(w));
+  assert.match(h, /N_ggbar" aria-hidden="true" style="--w:100%"/); assert.match(h, /style="--w:56%"/); assert.match(h, /style="--w:33%"/);
+  const fun = h.match(/<ol class="N_ggfun">(.*?)<\/ol>/s)[1], side = h.match(/<\/ol><ul class="N_gglist">(.*?)<\/ul>/s)[1];
+  assert.equal((fun.match(/<li>/g) || []).length, 3); assert.ok(!/Browsed|Sent a message/.test(fun), 'only the real ordered steps carry bars'); assert.ok(/Browsed without verifying/.test(side) && /Sent a message/.test(side) && !/N_ggbar/.test(side));
   assert.match(text, /Delivery searches with no result/); assert.match(text, /jollibee 3 times/); assert.match(text, /pizza 2 times/);
-  assert.ok(h.indexOf('N_ggtiles') > h.indexOf('N_list'), 'the card follows the number rows');
+  assert.ok(h.indexOf('N_ggrows') > h.indexOf('N_list'), 'the card follows the number rows');
 });
 test('s135 usage card: an empty month says so; it never draws a chart of nothing', async () => {
   const t = boot({ usage: () => ({ data: USAGE({ devices: 0, opens: 0, verified_stays: 0, by_day: [], sections: [], top_taps: [], searches_without_result: [] }), error: null }) }); await t.ready();
@@ -107,9 +110,14 @@ test('s135 usage feature detect: a server without staff_guide_usage_v1 (PGRST202
   }
 });
 test('s135 usage card: a dropped connection shows one plain line with Try again; Try again reads it once more', async () => {
-  let n = 0; const t = boot({ usage: () => (++n === 1 ? { data: null, error: { message: 'Failed to fetch' } } : { data: USAGE(), error: null }) }); await t.ready();
+  let n = 0; const t = boot({ usage: () => (++n === 2 ? { data: null, error: { message: 'Failed to fetch' } } : { data: USAGE(), error: null }) }); await t.ready();
+  assert.match(t.html(), /Devices/); await t.click('refresh'); // the first answer was good (seen), the second drops
   assert.match(t.html(), /The guest guide figures could not be loaded/); assert.match(t.html(), /data-n="retry" data-v="kpis"/);
-  await t.click('retry', 'kpis'); assert.equal(usageCalls(t).length, 2); assert.match(t.html(), /Devices/); assert.ok(!/could not be loaded/.test(t.html()));
+  await t.click('retry', 'kpis'); assert.equal(usageCalls(t).length, 3); assert.match(t.html(), /Devices/); assert.ok(!/could not be loaded/.test(t.html()));
+});
+test('s136 r2 usage error card: before usage has answered OK once in this page session, a failure draws nothing (no card, no heading, no Try again)', async () => {
+  const t = boot({ usage: () => ({ data: null, error: { message: 'Failed to fetch' } }) }); await t.ready();
+  assert.equal(usageCalls(t).length, 1); assert.ok(!/Guest guide|could not be loaded|data-n="retry" data-v="kpis"/.test(t.html()), t.html().slice(0, 60)); assert.match(t.html(), /N_list/);
 });
 test('s135 usage card: guide names and search words are escaped, never HTML', async () => {
   const t = boot({ usage: () => ({ data: USAGE({ sections: [{ section: EVIL, views: 3, devices: 1, avg_seconds: 4 }], top_taps: [{ target: EVIL, section: EVIL, taps: 2, devices: 1 }], searches_without_result: [{ target: EVIL, n: 2 }] }), error: null }) }); await t.ready();
@@ -120,24 +128,24 @@ test('s135 usage demo: the demo shows a believable card with no client at all', 
   assert.match(t.html(), /Guest guide/); assert.match(t.html(), /Top sections/); assert.match(t.html(), /Devices/);
 });
 test('s135 usage card stays inside the owner and admin tab, and the stylesheet carries its rules', () => {
-  for (const k of ['.N_gg ', '.N_ggtiles', '.N_ggbar', '.N_gglist', '.N_h4']) assert.ok(CSS.includes(k), k);
+  for (const k of ['.N_gg ', '.N_ggrows', '.N_ggbar', '.N_gglist', '.N_h4']) assert.ok(CSS.includes(k), k);
   assert.equal((CSS.match(/\{/g) || []).length, (CSS.match(/\}/g) || []).length);
   assert.doesNotMatch(CSS.slice(CSS.indexOf('s135 (3.4.54)')), /#[0-9a-fA-F]{3,8}\b/, 'tokens only, no raw colours');
   assert.match(SRC, /canManage\(S\.role\)\) load\('gg', force\)/);
 });
 
-test('s136 r1 card layout: only tiles, activity and funnel stay open; sections, taps and searches sit in ONE closed details with a 44 px summary', async () => {
+test('s136 r1 card layout: only rows, activity and funnel stay open; sections, taps and searches sit in ONE closed details with a 44 px summary', async () => {
   const t = boot({ usage: () => ({ data: USAGE(), error: null }) }); await t.ready();
   const h = t.html(), card = h.slice(h.indexOf('N_gg1')), d = card.match(/<details class="N_ggmore">(.*?)<\/details>/s);
   assert.ok(d, 'one details'); assert.equal((card.match(/<details/g) || []).length, 1); assert.ok(!/<details[^>]*open/.test(card), 'closed by default');
   assert.match(d[1], /<summary class="N_ggsum">More: sections, taps, searches<\/summary>/);
   for (const w of ['Top sections', 'Top taps', 'Delivery searches with no result']) { assert.ok(d[1].includes(w), w + ' inside'); assert.ok(!card.replace(d[0], '').includes(w), w + ' not outside'); }
-  for (const w of ['N_ggtiles', 'N_ggspark', 'What guests do']) assert.ok(card.replace(d[0], '').includes(w), w + ' stays visible');
+  for (const w of ['N_ggrows', 'N_ggspark', 'What guests do']) assert.ok(card.replace(d[0], '').includes(w), w + ' stays visible');
   assert.match(CSS, /\.N_ggsum \{[^}]*min-height: var\(--touch, 44px\)/);
-  // height without a layout engine: count the rows that draw while closed (2 tiles rows, 1 activity block, 5 funnel rows) against the 560 px budget
-  const closed = card.replace(d[0], ''), rows = { tiles: 2, funnel: (closed.match(/<li>/g) || []).length };
-  const est = 16 * 2 + 28 /*h3*/ + 20 /*sub*/ + rows.tiles * 62 + 8 + 70 /*activity*/ + 24 /*h4*/ + rows.funnel * 28 + 44 /*summary*/ + 10 * 5 /*gaps*/;
-  assert.equal(rows.funnel, 5); assert.ok(est <= 560, 'estimated closed height ' + est + ' px');
+  // height without a layout engine: the closed card at 360 px was measured at 413 px in the in-app browser (s136 r2); this pins the parts that make it up
+  const closed = card.replace(d[0], '');
+  assert.equal((closed.match(/<li>/g) || []).length, 5, '3 funnel steps + 2 plain rows'); assert.equal((closed.match(/N_row N_static N_kpi/g) || []).length, 2);
+  assert.ok(!/N_ggtiles/.test(closed)); assert.match(CSS, /\.N_ggrows > \.N_row \{[^}]*padding: 5px 0/); assert.match(CSS, /\.N_gg \{ gap: 4px; \}/);
   const t2 = boot({ usage: () => ({ data: USAGE({ sections: [], top_taps: [], searches_without_result: [] }), error: null }) }); await t2.ready();
   assert.ok(!/N_ggmore/.test(t2.html()), 'nothing to fold, no details row');
 });
@@ -158,4 +166,22 @@ test('s136 r1 usage probe: a server without staff_guide_usage_v1 is probed once 
   const d = boot({ usage: () => ({ data: null, error: { code: '42501', message: 'x' } }) }); await d.ready();
   d.M.mount(d.el, { client: d.client, demo: false, role: 'owner', sub: 'kpis', navigate() {}, toast() {}, haptic() {} }); await tick();
   assert.equal(usageCalls(d).length, 2, 'denied is not cached: it still reads on each visit');
+});
+
+test('s136 r2 dense line: the axis is the 30 Manila dates ending at Manila today, not the server since (a UTC timestamptz); today is always the last point and the total is complete', async () => {
+  const { M } = boot({ sub: 'today' }), G = M.lib.guestGuide, DAY = 86400000;
+  // 2026-10-14 11:00 Manila (NOW = 03:00Z). since is the server's UTC timestamptz now - 30 days: its date is NOT the first Manila day of the window.
+  const since = new Date(NOW - 30 * DAY).toISOString(); // 2026-09-14T03:00:00.000Z
+  const byDay = [{ day: '2026-10-14', events: 7 }, { day: '2026-10-13', events: 2 }, { day: '2026-09-15', events: 3 }];
+  const m = plain(G.model({ since, devices: 1, opens: 1, by_day: byDay }, 30));
+  assert.equal(m.perDay.length, 30); assert.equal(m.perDay[29], 7, 'today is the last point'); assert.equal(m.perDay[28], 2); assert.equal(m.perDay[0], 3, '2026-09-15 is the first of 30 days ending 2026-10-14');
+  assert.equal(m.perDay.reduce((a, v) => a + v, 0), 12, 'the total is complete: nothing dropped, nothing shifted');
+  const old = plain(G.model({ since: '2026-09-15', devices: 1, opens: 1, by_day: byDay }, 30)); assert.deepEqual(old.perDay, m.perDay, 'same axis whatever since says');
+  // 02:00 Manila on 2026-10-15 is 18:00Z on 2026-10-14: the UTC date is still the 14th, the Manila day is already the 15th
+  const late = plain(G.model({ since, devices: 1, opens: 1, by_day: [{ day: '2026-10-15', events: 5 }, { day: '2026-10-14', events: 1 }] }, 30, '2026-10-15'));
+  assert.equal(late.perDay[29], 5, 'at 02:00 Manila the new Manila day is the last point'); assert.equal(late.perDay[28], 1); assert.equal(late.perDay.reduce((a, v) => a + v, 0), 6);
+  // the same through the real card at a frozen 02:00 Manila clock: the caption total counts today's rows
+  const t = boot({ usage: () => ({ data: USAGE({ since: new Date(Date.parse('2026-10-14T18:00:00Z') - 30 * DAY).toISOString(), by_day: [{ day: '2026-10-15', devices: 1, events: 5 }, { day: '2026-10-14', devices: 1, events: 1 }] }), error: null }) });
+  t.M._setClock(() => Date.parse('2026-10-14T18:00:00Z')); await t.click('refresh');
+  assert.match(t.html().replace(/<[^>]+>/g, ' '), /Guide actions per day\. 6 in all\./);
 });

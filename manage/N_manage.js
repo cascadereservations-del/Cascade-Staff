@@ -301,7 +301,8 @@
 
   // ---- s135: the "Guest guide" card on the KPIs tab (staff_guide_usage_v1, owner and admin). Every figure is the server's; this only trims to the top five and formats. ----
   var GG_DAYS = 30;
-  var GG_FUNNEL = [['verify_start', 'Started verifying'], ['verify_ok', 'Verified a stay'], ['browse_guest', 'Browsed as a guest'], ['checklist_done', 'Finished the checklist'], ['message_sent', 'Sent a message']];
+  var GG_FUNNEL = [['verify_start', 'Started verifying'], ['verify_ok', 'Verified a stay'], ['checklist_done', 'Finished the checklist']]; // the real ordered steps; bars are shares of the first
+  var GG_SIDE = [['browse_guest', 'Browsed without verifying'], ['message_sent', 'Sent a message']]; // not steps of the funnel: plain rows, no bars
   function ggInt(v) { var n = Number(v); return isFinite(n) && n > 0 ? Math.floor(n) : 0; }
   function ggNum(n) { return String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ','); }
   function ggList(v) { return Array.isArray(v) ? v.filter(function (x) { return x && typeof x === 'object'; }) : []; }
@@ -310,24 +311,25 @@
   // plain staff words for what guests tapped; the guide sends the slug, staff read the sentence. An unknown slug is cleaned (ggLabel), never shown raw.
   var GG_TAPS = { wifi_copy: 'Copied the wifi password', map_open: 'Opened a map', checklist_item: 'Ticked a checklist item', guide_open: 'Opened the guide', search_empty: 'Searched and found nothing' };
   function ggTapLabel(slug) { return Object.prototype.hasOwnProperty.call(GG_TAPS, slug) ? GG_TAPS[slug] : ggLabel(slug); }
+  var ggSeen = false;   // staff_guide_usage_v1 has answered OK once in this page session: only then may a later failure draw the "could not be loaded" card
   var ggAbsent = false; // staff_guide_usage_v1 known missing on this server: probed once per session, like the Inbox's guideKnown. Refresh or Try again probes again.
   function ggSeconds(v) { var n = Math.round(Number(v)); if (!isFinite(n) || n <= 0) return '0 s'; if (n < 60) return n + ' s'; var m = Math.floor(n / 60), s = n % 60; return m + ' min' + (s ? ' ' + s + ' s' : ''); }
   // one number per day for the sparkline, zero for a day with no rows, so a quiet week reads as quiet and not as a shorter chart
-  function ggDense(byDay, since, days) {
+  function ggDense(byDay, today, days) { // the `days` Manila dates ending at Manila today (never derived from the server's since, which is a UTC timestamp)
     var map = {}; ggList(byDay).forEach(function (r) { var k = String(r.day || '').slice(0, 10); if (/^\d{4}-\d{2}-\d{2}$/.test(k)) map[k] = (map[k] || 0) + ggInt(r.events); });
-    var s = String(since || '').slice(0, 10), out = [], i;
-    if (/^\d{4}-\d{2}-\d{2}$/.test(s)) { for (i = 0; i < days; i++) out.push(map[addDays(s, i)] || 0); return out; }
-    return Object.keys(map).sort().map(function (k) { return map[k]; });
+    var out = [], i; for (i = days - 1; i >= 0; i--) out.push(map[addDays(today, -i)] || 0);
+    return out;
   }
-  function ggModel(raw, days) {
+  function ggModel(raw, days, today) {
     if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
     var f = raw.funnel && typeof raw.funnel === 'object' ? raw.funnel : {};
     var m = { since: String(raw.since || '').slice(0, 10), days: days || GG_DAYS, devices: ggInt(raw.devices), verified: ggInt(raw.verified_stays), opens: ggInt(raw.opens),
       sections: ggTop(ggList(raw.sections).map(function (s) { return { label: ggLabel(s.section), views: ggInt(s.views), devices: ggInt(s.devices), avg: ggSeconds(s.avg_seconds) }; }), 'views', 5),
       taps: ggTop(ggList(raw.top_taps).map(function (t) { var tg = String(t.target == null ? '' : t.target), lb = tg ? ggTapLabel(tg) : '', wh = t.section ? ggLabel(t.section) : ''; return { target: tg, label: lb, where: wh && lb.toLowerCase().indexOf(wh.toLowerCase()) < 0 ? wh : '', taps: ggInt(t.taps), devices: ggInt(t.devices) }; }).filter(function (t) { return t.target; }), 'taps', 5),
       funnel: GG_FUNNEL.map(function (p) { return { key: p[0], label: p[1], n: ggInt(f[p[0]]) }; }),
+      side: GG_SIDE.map(function (p) { return { key: p[0], label: p[1], n: ggInt(f[p[0]]) }; }),
       searches: ggTop(ggList(raw.searches_without_result).map(function (s) { return { target: String(s.target == null ? '' : s.target), n: ggInt(s.n) }; }).filter(function (s) { return s.target; }), 'n', 5) };
-    m.perDay = ggDense(raw.by_day, m.since, m.days);
+    m.perDay = ggDense(raw.by_day, /^\d{4}-\d{2}-\d{2}$/.test(String(today || '')) ? today : manilaToday(), m.days);
     m.sent = ggInt(f.message_sent);
     m.empty = !m.devices && !m.opens && !m.verified;
     return m;
@@ -506,7 +508,7 @@
     var done = function (res) {
       if (!S || S.gen !== gen) return; st.busy = false;
       if (res.error) { if (isMissing(res.error)) { st.absent = true; st.ok = false; if (kind === 'gg' && !S.demo) ggAbsent = true; } else if (isDenied(res.error)) { st.denied = true; st.ok = false; } else { st.err = plainError(res.error, false); st.ok = false; } }
-      else { if (kind === 'gg') ggAbsent = false; st.ok = true; st.absent = false; st.denied = false; st.data = res.data; st.at = clock(); S.loadedAt = clock(); }
+      else { if (kind === 'gg') { ggAbsent = false; ggSeen = true; } st.ok = true; st.absent = false; st.denied = false; st.data = res.data; st.at = clock(); S.loadedAt = clock(); }
       if (kind === 'kpi' && key !== S.period) { st.ok = false; loadTab('kpis', true); return; }
       draw();
     };
@@ -847,23 +849,24 @@
   }
 
   // s135: the Guest guide card. Nothing is drawn while it loads, when the server does not have staff_guide_usage_v1 yet, or when the account may not read it.
-  function ggTile(label, n) { return '<div class="N_ggtile"><span class="N_hl">' + esc(label) + '</span><span class="N_hv N_num">' + esc(ggNum(n)) + '</span></div>'; }
+  function ggRow(label, n) { return '<div class="N_row N_static N_kpi"><span class="N_rowmid"><span class="N_rowt">' + esc(label) + '</span></span><span class="N_val N_num">' + esc(ggNum(n)) + '</span></div>'; }
   function ggHtml() {
     var g = S.d.gg; if (!g || g.absent || g.denied || !canManage(S.role)) return '';
-    var head = '<section class="N_card N_gg" aria-labelledby="N_gg1"><h3 class="N_h3" id="N_gg1">Guest guide</h3>';
-    if (g.err) return head + '<div class="N_err" role="alert"><span>' + esc('The guest guide figures could not be loaded.') + '</span><button class="btn btn-secondary btn-sm" type="button" data-n="retry" data-v="kpis">Try again</button></div></section>';
+    var head = '<section class="N_card N_gg" aria-labelledby="N_gg1"><div class="N_ggtop"><h3 class="N_h3" id="N_gg1">Guest guide</h3>';
+    if (g.err) return ggSeen ? head + '</div><div class="N_err" role="alert"><span>' + esc('The guest guide figures could not be loaded.') + '</span><button class="btn btn-secondary btn-sm" type="button" data-n="retry" data-v="kpis">Try again</button></div></section>' : ''; // before the first good answer, a failure draws nothing
     if (!g.ok) return '';
-    var m = ggModel(g.data, GG_DAYS); if (!m) return '';
-    var out = head + '<p class="N_sub">' + esc('The last ' + m.days + ' days, from the guide on guests\' phones.') + '</p>';
+    var m = ggModel(g.data, GG_DAYS, S.today); if (!m) return '';
+    var out = head + '<p class="N_sub">' + esc('Last ' + m.days + ' days.') + '</p></div>';
     if (m.empty) return out + '<p class="N_sub">' + esc('No guide visits in this time yet.') + '</p></section>';
-    out += '<div class="N_ggtiles">' + ggTile('Devices', m.devices) + ggTile('Verified stays', m.verified) + ggTile('Opens', m.opens) + ggTile('Messages sent', m.sent) + '</div>';
+    out += '<div class="N_ggrows">' + ggRow('Devices', m.devices) + ggRow('Opens', m.opens) + '</div>';
     if (m.perDay.length > 1 && m.perDay.some(function (v) { return v > 0; })) {
       var total = m.perDay.reduce(function (a, v) { return a + v; }, 0);
-      out += '<div class="N_ggspark"><span class="N_hs">' + esc('Activity per day' + (m.since ? ', from ' + fmtDate(m.since, 'long') : '') + '. ' + ggNum(total) + ' in all.') + '</span>' + sparkLine(m.perDay, 'zero') + '</div>';
+      out += '<div class="N_ggspark"><span class="N_hs">' + esc('Guide actions per day. ' + ggNum(total) + ' in all.') + '</span>' + sparkLine(m.perDay, 'zero') + '</div>';
     }
-    var top = m.funnel.reduce(function (a, s) { return s.n > a ? s.n : a; }, 0);
+    var top = m.funnel.reduce(function (a, s) { return s.n > a ? s.n : a; }, 0), first = m.funnel[0].n || top;
     out += '<h4 class="N_h4">What guests do</h4><ol class="N_ggfun">' + m.funnel.map(function (s) {
-      return '<li><span class="N_ggl">' + esc(s.label) + '</span><span class="N_ggv N_num">' + esc(ggNum(s.n)) + '</span><span class="N_ggbar" aria-hidden="true" style="--w:' + (top ? Math.round(s.n / top * 100) : 0) + '%"></span></li>'; }).join('') + '</ol>';
+      return '<li><span class="N_ggl">' + esc(s.label) + '</span><span class="N_ggv N_num">' + esc(ggNum(s.n)) + '</span><span class="N_ggbar" aria-hidden="true" style="--w:' + (first ? Math.min(100, Math.round(s.n / first * 100)) : 0) + '%"></span></li>'; }).join('') + '</ol>' +
+      '<ul class="N_gglist">' + m.side.map(function (s) { return '<li><span class="N_ggl">' + esc(s.label) + '</span><span class="N_ggv N_num">' + esc(ggNum(s.n)) + '</span></li>'; }).join('') + '</ul>';
     var more = '';
     if (m.sections.length) more += '<h4 class="N_h4">Top sections</h4><ul class="N_gglist">' + m.sections.map(function (s) {
       return '<li><span class="N_ggl">' + esc(s.label) + '</span><span class="N_ggv N_num">' + esc(ggNum(s.views) + (s.views === 1 ? ' view' : ' views') + ' · ' + s.avg + ' avg') + '</span></li>'; }).join('') + '</ul>';
@@ -1255,7 +1258,7 @@
     _setSeriesConcurrency: function (n) { SERIES_CONCURRENCY = n; },
     // R1.8: the shell or a push may say a list changed; the next look is a fresh read, and nothing is read under an open sheet.
     refresh: function (kind) { if (!S || (S.sheet && S.sheet.busy)) return; if (kind === 'inq' || kind === 'waiting') { if (S.sheet) { (S.pend || (S.pend = {}))[kind] = true; if (S.d[kind]) S.d[kind].at = 0; } else load(kind, true); } }, // under a sheet: mark stale and read when it closes; ok is left alone so the list never shows Loading
-    _resetGuideKnown: function () { ggAbsent = false; }, // the shell may call this on sign-out; a new session probes again
+    _resetGuideKnown: function () { ggAbsent = false; ggSeen = false; }, // the shell may call this on sign-out; a new session probes again
     _setClock: function (fn) { clock = fn || function () { return Date.now(); }; },
     lib: { lastMonths: lastMonths, buildSeries: buildSeries, chipFor: chipFor, canManage: canManage, manilaToday: manilaToday, addDays: addDays, nightsBetween: nightsBetween, fmtDate: fmtDate, fmtDateTime: fmtDateTime, toCentavos: toCentavos, fromCentavos: fromCentavos, formatPHP: formatPHP, formatPercent: formatPercent, formatNumber: formatNumber,
       formatMetricValue: formatMetricValue, parseAmount: parseAmount, periodPreset: periodPreset, comparablePeriod: comparablePeriod, compareMode: compareMode, pctDelta: pctDelta, fmtDeltaPct: fmtDeltaPct, deltaLine: deltaLine,

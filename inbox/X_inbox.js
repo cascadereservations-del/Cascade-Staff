@@ -368,6 +368,7 @@
   var guideKnown = null;   // s135: null until the guide list RPC has answered; true shows the Guide source, false (not released, or refused) hides it. Cleared by reset().
   var gkeep = null;        // the last guide list read (two minutes), like keep
   var gdrafts = {};        // unsent guide reply text per thread, memory only
+  var gpending = {};       // the send in flight per thread: { cmid, body }, kept next to gdrafts so a remount resends under the SAME key and can tell the first try landed
   var NO_SW = {};          // marker: swReg() gave no registration
   var pushKnown = null;    // the push card's state after the first probe (F11); cleared by reset()
   var keep = null;         //the last list read, kept in memory for two minutes so a list -> thread -> list trip paints at once (cleared on a role refusal and by reset() at sign-out)
@@ -568,9 +569,13 @@
   // -- sheet: review before send, and the confirm before "Let Cassy answer again" --
   function drawSheet() {
     var sh = S.sheet, d = S.thread.data, h = '';
-    if (sh && d) {
+    if (sh && (d || sh.kind === 'gsure')) {
       var box;
-      if (sh.kind === 'review') {
+      if (sh.kind === 'gsure') {
+        box = '<h2 class="X_h3" id="X_sh" tabindex="-1" data-xfocus>Check before you send</h2><p class="X_p">This looks like a code or payment detail. Send anyway?</p>' +
+          '<blockquote class="X_quote">' + esc(S.gc.text.trim()) + '</blockquote>' +
+          '<div class="X_btns2">' + btn('sheet-x', 'Edit', 'btn-secondary') + btn('gsure-go', 'Send anyway', 'btn-primary') + '</div>';
+      } else if (sh.kind === 'review') {
         var open = newestOpenHandoff(d.handoffs);
         box = '<h2 class="X_h3" id="X_sh" tabindex="-1" data-xfocus>Check before you send</h2><p class="X_sub">To ' + esc(displayName(d)) + ' on Messenger. This is the exact text.</p>' +
           '<blockquote class="X_quote">' + esc(S.c.text.trim()) + '</blockquote><p class="X_sub">Your first name and Cascade Hideaway are added at the end.</p>' +
@@ -810,12 +815,12 @@
 
   // ------------------------------------------------------------------------------------------------ s135: the Guide source (guest guide in-guide messages)
   // Same panes as Messenger: the list, a thread, a reply box. Its own state (S.g list, S.gt thread, S.gc reply). Hidden, without a word, until staff_guide_threads_v1 answers with a list.
-  function badge(n, word) { return '<span class="X_badge"><span aria-hidden="true">' + (n > 99 ? '99+' : n) + '</span><span class="X_sr"> ' + esc(n + ' ' + word) + '</span></span>'; }
+  function badge(n, word, warn) { return '<span class="X_badge' + (warn ? ' X_badge_warn' : '') + '"><span aria-hidden="true">' + (n > 99 ? '99+' : n) + '</span><span class="X_sr"> ' + esc(n + ' ' + word) + '</span></span>'; }
   function srcToggle() {
     if (!S || S.g.avail !== true) return '';
     var rows = S.list.rows, needN = rows ? rows.filter(function (r) { return r.open_handoffs > 0; }).length : 0, un = S.g.rows ? gUnreadTotal(S.g.rows) : 0, onG = S.src === 'guide';
     return '<div class="X_seg X_src" role="group" aria-label="Inbox source">' +
-      '<button type="button" class="X_tab" aria-pressed="' + !onG + '" data-xa="src" data-v="msgr">Messenger' + (needN ? ' ' + badge(needN, 'need you') : '') + '</button>' +
+      '<button type="button" class="X_tab" aria-pressed="' + !onG + '" data-xa="src" data-v="msgr">Messenger' + (needN ? ' ' + badge(needN, 'need you', true) : '') + '</button>' +
       '<button type="button" class="X_tab" aria-pressed="' + onG + '" data-xa="src" data-v="guide">Guide' + (un ? ' ' + badge(un, 'unread') : '') + '</button></div>';
   }
   function gVisible() { var f = S.g.filter; return gSort((S.g.rows || []).filter(function (r) { return r.status === f; })); }
@@ -825,7 +830,7 @@
       '<span class="X_rowtop"><span class="X_name">' + esc(r.guest_label) + '</span><span class="X_time">' + esc(gRel(gLastAt(r), now)) + '</span></span>' +
       (stay ? '<span class="X_sub">' + esc('Stay ' + stay) + '</span>' : '') +
       '<span class="X_prev">' + esc(last) + '</span>' +
-      '<span class="X_chips"><span class="X_chip X_ch_' + r.channel + '">' + (r.channel === 'airbnb' ? 'Airbnb' : 'Direct') + '</span>' + (r.status === 'resolved' ? chip({ k: 'cassy', glyph: '✓', word: 'Resolved' }) : '') + (r.unread ? badge(r.unread, 'unread') : '') + '</span></button></li>';
+      '<span class="X_chips"><span class="X_chip X_ch_' + r.channel + '">' + (r.channel === 'airbnb' ? 'Airbnb' : 'Direct') + '</span>' + (r.unread ? badge(r.unread, 'unread') : '') + '</span></button></li>';
   }
   function drawGList() {
     var G = S.g, now = nowMs(), rows = G.rows, h = '';
@@ -833,9 +838,9 @@
     h += '<div class="X_bar"><h1 class="X_h" tabindex="-1" data-xfocus>Inbox</h1><div class="X_barr">' + (G.at ? '<span class="X_sub">Updated ' + esc(fmtTime(G.at)) + '</span>' : '') + btn('refresh', 'Refresh', 'btn-ghost', G.busy ? ' disabled' : '') + '</div></div>';
     h += srcToggle();
     if (rows) {
-      h += '<div class="X_seg" role="group" aria-label="Show">' +
-        '<button type="button" class="X_tab" aria-pressed="' + (G.filter === 'open') + '" data-xa="gfilter" data-v="open">Open (' + openN + ')</button>' +
-        '<button type="button" class="X_tab" aria-pressed="' + (G.filter === 'resolved') + '" data-xa="gfilter" data-v="resolved">Resolved (' + (rows.length - openN) + ')</button></div>';
+      h += '<div class="X_fchips" role="group" aria-label="Show">' + // a sub-filter of the Guide source: the app's choice chips (like Manage), not a second segmented control
+        '<button type="button" class="X_fchip" aria-pressed="' + (G.filter === 'open') + '" data-xa="gfilter" data-v="open">Open (' + openN + ')</button>' +
+        '<button type="button" class="X_fchip" aria-pressed="' + (G.filter === 'resolved') + '" data-xa="gfilter" data-v="resolved">Resolved (' + (rows.length - openN) + ')</button></div>';
     }
     if (G.stale && rows) h += note('warn', 'Could not refresh just now. Showing what was read at ' + (G.at ? fmtTime(G.at) : 'the last read') + '.');
     if (!rows) {
@@ -863,8 +868,9 @@
     }
     var th = d.thread, stay = gStay(th), open = th.status === 'open';
     h += '<div class="X_thtop"><h2 class="X_h" tabindex="-1" data-xfocus>' + esc(th.guest_label) + '</h2><span class="X_sub">' + esc((th.channel === 'airbnb' ? 'Airbnb' : 'Direct') + (stay ? ', stay ' + stay : '')) + '</span></div>';
-    h += '<div class="X_chips"><span class="X_chip X_ch_' + th.channel + '">' + (th.channel === 'airbnb' ? 'Airbnb' : 'Direct') + '</span>' + (open ? chip({ k: 'needs', glyph: '●', word: 'Open' }) : chip({ k: 'cassy', glyph: '✓', word: 'Resolved' })) + '</div>';
-    h += '<div class="X_actions">' + btn(open ? 'gresolve' : 'greopen', open ? 'Resolve' : 'Reopen', open ? 'btn-secondary' : 'btn-primary', S.gbusy ? ' disabled' : '') + btn('refresh', 'Refresh', 'btn-ghost') + '</div>';
+    var mm = gMerge(d.messages, T.locals), lastM = mm[mm.length - 1], needsReply = !!lastM && lastM.from === 'guest'; // amber only when the guest spoke last
+    h += '<div class="X_chips">' + (!open ? chip({ k: 'cassy', glyph: '✓', word: 'Resolved' }) : needsReply ? chip({ k: 'needs', glyph: '●', word: 'Needs reply' }) : '<span class="X_chip">Open</span>') + '</div>';
+    h += '<div class="X_actions X_pair">' + btn(open ? 'gresolve' : 'greopen', open ? 'Resolve' : 'Reopen', open ? 'btn-secondary' : 'btn-primary', S.gbusy ? ' disabled' : '') + btn('refresh', 'Refresh', 'btn-ghost') + '</div>';
     if (T.stale) h += note('warn', 'Could not refresh just now. Showing what was read at ' + (T.at ? fmtTime(T.at) : 'the last read') + '.');
     put('thead', h);
   }
@@ -883,10 +889,13 @@
     h += '<ol class="X_msgs" aria-label="Messages">' + items.map(gBubble).join('') + '</ol>';
     put('msgs', h);
   }
-  function drawGBanner() { put('gbanner', '<div class="X_note X_warn X_rule" id="X_gbanner"><span aria-hidden="true">▲</span> ' + esc(GUIDE_RULE) + '</div>'); }
+  function drawGBanner() {
+    var cut = GUIDE_RULE.indexOf('. ') + 1, first = cut > 0 ? GUIDE_RULE.slice(0, cut) : GUIDE_RULE, rest = cut > 0 ? GUIDE_RULE.slice(cut) : ''; // only the first sentence is bold
+    put('gbanner', '<div class="X_note X_warn X_rule" id="X_gbanner"><span aria-hidden="true">▲</span><span><strong>' + esc(first) + '</strong>' + esc(rest) + '</span></div>');
+  }
   function drawGText() {
     var d = S.gt.data; if (!d) { put('gtext', ''); return; }
-    put('gtext', '<label class="X_lbl" for="X_gtext">Reply to ' + esc(d.thread.guest_label) + '</label><textarea id="X_gtext" class="X_ta" data-xf="gtext" maxlength="' + GUIDE_MAX + '" rows="3" aria-describedby="X_gbanner" placeholder="Write the reply. The guest reads it in the guest guide.">' + esc(S.gc.text) + '</textarea>');
+    put('gtext', '<label class="X_lbl" for="X_gtext">Reply to ' + esc(d.thread.guest_label) + '</label><textarea id="X_gtext" class="X_ta" data-xf="gtext" maxlength="' + GUIDE_MAX + '" rows="3" aria-describedby="X_gbanner" placeholder="The guest reads this in the guide.">' + esc(S.gc.text) + '</textarea>');
   }
   function drawGMsg() { var m = S.gc.msg; put('gmsg', m ? note(S.gc.msgKind || 'bad', m) : ''); }
   function drawGFoot() {
@@ -948,14 +957,16 @@
       if (data) {
         var first = !T.data, last = data.messages[data.messages.length - 1], sig = data.messages.length + '|' + (last ? last.id : '') + '|' + data.thread.status;
         T.data = data; T.at = nowMs(); T.stale = false; T.notFound = T.denied = false;
+        var pend = gpending[id]; // a send in flight when the screen unmounted: if the thread already holds it, it went out, so the draft goes
+        if (first && pend && data.messages.some(function (x) { return x.from === 'staff' && String(x.body).trim() === pend.body; })) { delete gpending[id]; if (gdrafts[id] === pend.body) delete gdrafts[id]; if (S.gc.text.trim() === pend.body) S.gc.text = ''; drawGText(); }
         T.locals = T.locals.filter(function (m) { return !(m.state === 'failed' && gMerge(data.messages, [m]).length === data.messages.length); }); // a failed one that is on record did go out
         gUpdateRow(id, function (r) { r.unread = 0; }); // reading the thread marks it read on the server
         var changed = sig !== T.sig; T.sig = sig;
         if (changed || first) { drawGThreadHead(); drawGMsgs(); if (first) { drawGComposer(); scrollEnd(); } } else drawGThreadHead();
         drawList();
-      } else if (err && err.code === 'P0002') { T.data = null; T.notFound = true; delete gdrafts[id]; drawGThreadHead(); drawGMsgs(); drawGComposer(); } // a missing thread: neutral words, only this thread's draft goes
-      else if (err && !isAuthExpired(err) && isDenied(err)) { T.denied = true; T.data = null; delete gdrafts[id]; drawGThreadHead(); }
-      else if (err && !isOffline(err) && !isAuthExpired(err) && /not.?found/i.test(errText(err))) { T.data = null; T.notFound = true; delete gdrafts[id]; drawGThreadHead(); drawGMsgs(); drawGComposer(); }
+      } else if (err && err.code === 'P0002') { T.data = null; T.notFound = true; delete gdrafts[id]; delete gpending[id]; drawGThreadHead(); drawGMsgs(); drawGComposer(); } // a missing thread: neutral words, only this thread's draft goes
+      else if (err && !isAuthExpired(err) && isDenied(err)) { T.denied = true; T.data = null; delete gdrafts[id]; delete gpending[id]; drawGThreadHead(); }
+      else if (err && !isOffline(err) && !isAuthExpired(err) && /not.?found/i.test(errText(err))) { T.data = null; T.notFound = true; delete gdrafts[id]; delete gpending[id]; drawGThreadHead(); drawGMsgs(); drawGComposer(); }
       else if (T.data) { T.stale = true; drawGThreadHead(); }
       else drawGThreadHead();
     };
@@ -972,12 +983,16 @@
   }
 
   // -- writes --
-  function doGSend() {
+  var GUIDE_RISKY = /\b(code|pin|passcode|gcash|card|cvv|otp|password)\b/i;
+  function gRisky(text) { return /\d{4,}/.test(text) || GUIDE_RISKY.test(text); } // a door code or a payment detail does not belong in the guide
+  function doGSend(confirmed) {
     var c = S.gc, d = S.gt.data; if (!d || c.sending) return;
     var body = c.text.trim(); if (!body || body.length > GUIDE_MAX) return;
+    if (!confirmed && gRisky(body)) { S.sheet = { kind: 'gsure', msg: '' }; drawSheet(); focusSel('#X_sh'); return; }
     if (!S.demo && !online()) { c.msg = NOT_SENT_OFFLINE; c.msgKind = 'bad'; drawGMsg(); return; }
-    var m = { cmid: S.opts.newKey ? String(S.opts.newKey('gm')) : gCmid(), body: body, at: new Date(nowMs()).toISOString(), state: 'sending', err: '' };
+    var pend = S.gid && gpending[S.gid], m = { cmid: pend && pend.body === body ? pend.cmid : (S.opts.newKey ? String(S.opts.newKey('gm')) : gCmid()), body: body, at: new Date(nowMs()).toISOString(), state: 'sending', err: '' };
     if (!CMID_RE.test(m.cmid)) m.cmid = gCmid(); // the server needs 8 to 80 safe characters
+    if (S.gid) { delete gpending[S.gid]; gpending[S.gid] = { cmid: m.cmid, body: body }; var pk = Object.keys(gpending); while (pk.length > 20) delete gpending[pk.shift()]; }
     S.gt.locals.push(m); gSetText(''); if (S.gid) gdrafts[S.gid] = body; /* kept until the server confirms, so a remount cannot lose it */ c.msg = ''; c.msgKind = ''; c.sending = true;
     drawGMsgs(); drawGText(); drawGMsg(); drawGFoot(); scrollEnd(); focusSel('#X_gtext');
     gSendTry(m, 0);
@@ -988,7 +1003,7 @@
       if (!S || S.gen !== gen) return;
       var o = gReplyOutcome(res);
       if (o.ok) { // on record: the message moves from "local" to the thread (answer {already:true} means an earlier try had landed)
-        var at = o.at || m.at, d = T.data; m.id = o.id || m.id; if (gdrafts[id] === m.body) delete gdrafts[id];
+        var at = o.at || m.at, d = T.data; m.id = o.id || m.id; if (gdrafts[id] === m.body) delete gdrafts[id]; delete gpending[id];
         T.locals = T.locals.filter(function (x) { return x !== m; });
         if (d && S.gid === id) {
           var have = o.id && d.messages.some(function (x) { return x.id === o.id; });
@@ -1055,7 +1070,8 @@
     if (a === 'gopen') { if (ev.preventDefault) ev.preventDefault(); if (UUID_RE.test(v || '')) go('#inbox/guide:' + v.toLowerCase()); return; }
     if (a === 'gback') { go('#inbox/guide'); return; }
     if (a === 'gfilter') { S.g.filter = v === 'resolved' ? 'resolved' : 'open'; drawList(); return; }
-    if (a === 'gsend') { doGSend(); return; }
+    if (a === 'gsend') { doGSend(false); return; }
+    if (a === 'gsure-go') { S.sheet = null; drawSheet(); doGSend(true); return; }
     if (a === 'gretry') { if (CMID_RE.test(v || '')) doGRetry(v); return; }
     if (a === 'gdiscard') { if (CMID_RE.test(v || '')) doGDiscard(v); return; }
     if (a === 'gresolve' || a === 'greopen') { doGResolve(a === 'gresolve'); return; }
@@ -1069,7 +1085,7 @@
       if (!canCompose() || !S.c.text.trim() || S.c.text.trim().length > MAX_TEXT) return;
       S.c.msg = ''; S.c.msgKind = ''; S.c.msgLinks = false; drawCompMsg(); S.sheet = { kind: 'review', msg: '' }; drawSheet(); focusSel('#X_sh'); return;
     }
-    if (a === 'edit' || a === 'sheet-x') { S.sheet = null; drawSheet(); focusSel('#X_text'); return; }
+    if (a === 'edit' || a === 'sheet-x') { S.sheet = null; drawSheet(); focusSel(S.src === 'guide' ? '#X_gtext' : '#X_text'); return; }
     if (a === 'send') { doSend(); return; }
     if (a === 'draft') { doDraft(); return; }
     if (a === 'quick') { // fills the box and nothing else: a second tap on Review and send is still needed
@@ -1140,13 +1156,13 @@
     mount: mount, unmount: unmount,
     _setClock: function (fn) { clock = fn || function () { return Date.now(); }; },
     _setRpcTimeout: function (ms) { RPC_TIMEOUT_MS = ms; },
-    reset: function () { keep = null; drafts = {}; pushKnown = null; guideKnown = null; gkeep = null; gdrafts = {}; }, // the shell calls this on sign-out
-    _clearKeep: function () { keep = null; gkeep = null; guideKnown = null; }, _clearDrafts: function () { drafts = {}; gdrafts = {}; }, _setGuideRetry: function (ms) { GUIDE_RETRY_MS = ms; },
+    reset: function () { keep = null; drafts = {}; pushKnown = null; guideKnown = null; gkeep = null; gdrafts = {}; gpending = {}; }, // the shell calls this on sign-out
+    _clearKeep: function () { keep = null; gkeep = null; guideKnown = null; }, _clearDrafts: function () { drafts = {}; gdrafts = {}; gpending = {}; }, _setGuideRetry: function (ms) { GUIDE_RETRY_MS = ms; },
     lib: { replyWindow: replyWindow, windowLeft: windowLeft, windowSentence: windowSentence, windowLastHour: windowLastHour, speakerOf: speakerOf, turnRisk: turnRisk, buildTimeline: buildTimeline, newestOpenHandoff: newestOpenHandoff,
       stateChips: stateChips, sortRows: sortRows, rowWindowChip: rowWindowChip, quickReplies: quickReplies, clock12: clock12, daysLeftWords: daysLeftWords, lastGuestText: lastGuestText, repliedAlready: repliedAlready, sendOutcome: sendOutcome, draftError: draftError, draftOptions: draftOptions, resumeOutcome: resumeOutcome,
       threadUrl: threadUrl, subscribeArgs: subscribeArgs, pushSupport: pushSupport, fmtTime: fmtTime, fmtStamp: fmtStamp, fmtListTime: fmtListTime, canUse: canUse, esc: esc,
       REPLY_WINDOW_HOURS: REPLY_WINDOW_HOURS, MAX_TEXT: MAX_TEXT, HISTORY_CAP: HISTORY_CAP, SEND_NOTHING: SEND_NOTHING,
-      guide: { rule: GUIDE_RULE, MAX: GUIDE_MAX, row: gRow, rows: gRows, msg: gMsg, thread: gThread, sort: gSort, unreadTotal: gUnreadTotal, stay: gStay, rel: gRel, lastAt: gLastAt, cmid: gCmid, replyArgs: gReplyArgs, replyOutcome: gReplyOutcome, merge: gMerge, avail: gAvail, isFnMissing: isFnMissing, CMID_RE: CMID_RE } }
+      guide: { risky: gRisky, rule: GUIDE_RULE, MAX: GUIDE_MAX, row: gRow, rows: gRows, msg: gMsg, thread: gThread, sort: gSort, unreadTotal: gUnreadTotal, stay: gStay, rel: gRel, lastAt: gLastAt, cmid: gCmid, replyArgs: gReplyArgs, replyOutcome: gReplyOutcome, merge: gMerge, avail: gAvail, isFnMissing: isFnMissing, CMID_RE: CMID_RE } }
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   if (typeof window !== 'undefined') window.X_Inbox = api;
