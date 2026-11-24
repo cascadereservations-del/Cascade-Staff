@@ -419,3 +419,9 @@ test('s136 r4 send guard: times, years, day ranges and dates stay quiet; codes i
   for (const t of ['Check-in is at 14.00', 'checkout 12.30 please', 'Welcome to 2026', 'You stay 24-27 Nov', 'Open 14.00-15.30', 'Arrive 2026-11-24', 'Out on 24/11/2026', '12:30 and 14.00', 'Room 12, floor 3']) assert.equal(R(t), false, t);
   for (const t of ['1234 5678', '12-34-56', '482913', '12.34.56', 'call 0917 123 4567', 'it is 48 21', 'it is 4-8-2-1', 'try 48.21', 'at 14.00 the number is 4821']) assert.equal(R(t), true, t);
 });
+
+test('s136 r5 send guard: only real calendar and clock values stay quiet; door-like numbers ask', () => {
+  const { X } = load(), R = X.lib.guide.risky;
+  for (const t of ['Door 48-21', 'Door 48/21', 'Gate 99-99', 'Door 2012-3456', 'Door 1234-56-78', 'Door 12-34 56']) assert.equal(R(t), true, t);
+  for (const t of ['Open 14.00', 'Check-in 12.30', 'Welcome 2026', 'Stay 24-27 Nov', 'Open 14.00-15.30', 'On 2026-11-24', 'On 24/11/2026', '12:30 and 14.00', 'Room 12, floor 3', 'Season 2026-27', 'Year 2026-2027']) assert.equal(R(t), false, t);
+});

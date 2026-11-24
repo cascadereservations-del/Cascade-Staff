@@ -396,8 +396,8 @@
       rqRows: [{ id: 'n-demo-r1', transaction_date: d(-1), txn_type: 'expense', category: '', gross_amount: '1200.00', payee_name: 'Sample market', notes: 'Sample: scanned receipt', or_number: null, source: 'ocr', receipt_image_path: 'n/a', ocr_confidence: 0.5, created_at: d(-1) + 'T02:00:00Z' },
         { id: 'n-demo-r2', transaction_date: d(-5), txn_type: 'expense', category: 'supplies', gross_amount: '800.00', payee_name: 'Demo shop', notes: 'Stock bought, some items not priced', or_number: null, source: 'stock', receipt_image_path: null, ocr_confidence: null, s134_incomplete: true, created_at: d(-5) + 'T02:00:00Z' }],
       guests: function () { // staff_guide_guests_v1 sample (invented names)
-        var gs = [['Guest A.', -3, 0, -4, 14, true, true], ['Guest B.', -9, -7, -10, 9, true, false], ['Guest C.', -14, -12, -15, 3, false, true], ['Guest D.', -20, -18, -20, 1, false, false]];
-        return { total: gs.length, guests: gs.map(function (g, i) { return { thread_id: 'n-demo-g' + (i + 1), guest_label: g[0], checkin_date: d(g[1]), checkout_date: d(g[2]), first_seen: d(g[3]) + 'T02:00:00Z', last_seen: d(g[2]) + 'T02:00:00Z', opens: g[4], checklist_done: g[5], messaged: g[6] }; }) };
+        var gs = [['Guest A.', -3, 0, -4, 14, true, true, '11111111-1111-4111-8111-111111111111'], ['Guest B.', -9, -7, -10, 9, true, false], ['Guest C.', -14, -12, -15, 3, false, true, '33333333-3333-4333-8333-333333333333'], ['Guest D.', -20, -18, -20, 1, false, false]];
+        return { total: gs.length, guests: gs.map(function (g, i) { return { thread_id: g[7] || 'n-demo-g' + (i + 1), guest_label: g[0], checkin_date: d(g[1]), checkout_date: d(g[2]), first_seen: d(g[3]) + 'T02:00:00Z', last_seen: d(g[2]) + 'T02:00:00Z', opens: g[4], checklist_done: g[5], messaged: g[6] }; }) };
       },
       guide: function () { // staff_guide_usage_v1 sample, 30 days
         return { since: d(-29), devices: 14, verified_stays: 5, opens: 41,
@@ -533,7 +533,7 @@
     var done = function (res) {
       if (!S || S.gen !== gen) return; st.busy = false;
       if (res.error) { if (isMissing(res.error)) { st.absent = true; st.ok = false; if (kind === 'gg' && !S.demo) ggAbsent = true; if (kind === 'ggg' && !S.demo) gggAbsent = true; } else if (isDenied(res.error)) { st.denied = true; st.ok = false; } else { st.err = plainError(res.error, false); st.ok = false; } }
-      else { if (kind === 'gg') { ggAbsent = false; ggSeen = true; } if (kind === 'ggg') gggAbsent = false; st.ok = true; st.absent = false; st.denied = false; st.data = res.data; st.at = clock(); S.loadedAt = clock(); }
+      else { if (kind === 'gg') { ggAbsent = false; ggSeen = true; } if (kind === 'ggg') gggAbsent = false; st.ok = true; st.absent = false; st.denied = false; st.data = res.data; st.at = clock(); if (kind !== 'ggg' && kind !== 'gg') S.loadedAt = clock(); }
       if (kind === 'kpi' && key !== S.period) { st.ok = false; loadTab('kpis', true); return; }
       draw();
     };
@@ -881,7 +881,7 @@
     var bits = [(g.first ? 'First opened ' + g.first + ' · ' : '') + (g.opens === 1 ? '1 open' : ggNum(g.opens) + ' opens')]; if (g.checklist) bits.push('✓ Checklist'); if (g.messaged) bits.push('✉ Messaged');
     var mid = '<span class="N_rowmid"><span class="N_rowt">' + esc(g.label + (g.dates ? ' · ' + g.dates : '')) + '</span><span class="N_rows N_ggmeta">' + bits.map(function (t) { return '<span>' + esc(t) + '</span>'; }).join('') + '</span></span>';
     // a messaged guest has a thread in the inbox: the row opens it (approved mockup). The DOM carries the row index only, never the thread id; the click looks the id up in the model.
-    return g.messaged ? '<button class="N_row" type="button" data-n="ggg-open" data-v="' + i + '">' + mid + '<span class="N_chev" aria-hidden="true">›</span></button>' : '<div class="N_row N_static">' + mid + '</div>';
+    return g.messaged && UUID_RE.test(g.id) ? '<button class="N_row" type="button" data-n="ggg-open" data-v="' + i + '">' + mid + '<span class="N_chev" aria-hidden="true">›</span></button>' : '<div class="N_row N_static">' + mid + '</div>';
   }
   function gggHtml() { // the guests block of the More fold: nothing when the server lacks the function or the account may not read it
     var st = S.d.ggg; if (!st || st.absent || st.denied) return '';
@@ -898,7 +898,7 @@
   }
   function ggHtml() {
     var g = S.d.gg; if (!g || g.absent || g.denied || !canManage(S.role)) return '';
-    var head = '<section class="N_card N_gg" aria-labelledby="N_gg1"><div class="N_ggtop"><h3 class="N_h3" id="N_gg1">Guest guide</h3>';
+    var head = '<section class="N_card N_gg" aria-labelledby="N_gg1"><div class="N_ggtop"><h3 class="N_h3" id="N_gg1" tabindex="-1">Guest guide</h3>';
     if (g.err) return ggSeen ? head + '</div><div class="N_err" role="alert"><span>' + esc('The guest guide figures could not be loaded.') + '</span><button class="btn btn-secondary btn-sm" type="button" data-n="retry" data-v="kpis">Try again</button></div></section>' : ''; // before the first good answer, a failure draws nothing
     if (!g.ok) return '';
     var m = ggModel(g.data, GG_DAYS, S.today); if (!m) return '';
@@ -1084,7 +1084,7 @@
     S.el.innerHTML = '<div class="N_root">' + tabsHtml() + live + '<div class="N_body" role="tabpanel" aria-labelledby="N_tab_' + S.tab + '"' + (S.sheet ? ' inert aria-hidden="true"' : '') + '>' + body + '</div></div>' + sheetHtml();
     revealTab();
     if (keepSum && !S.ggRefocus) S.ggRefocus = 'sum';
-    if (S.ggRefocus) { var rk = S.ggRefocus; S.ggRefocus = ''; try { var rf0 = S.el.querySelector(rk === 'sum' ? '.N_ggsum' : '#N_ggg'); if (rf0 && rf0.focus) rf0.focus(); } catch (e) { /* no focus in tests */ } } // the redraw replaced the control the person used: focus goes back to the fold, or to the list heading after Show all
+    if (S.ggRefocus) { var rk = S.ggRefocus; S.ggRefocus = ''; try { var rf0 = S.el.querySelector(rk === 'sum' ? '.N_ggsum' : '#N_ggg'); if (!rf0 && rk === 'sum') rf0 = S.el.querySelector('#N_gg1'); if (rf0 && rf0.focus) { if (rk === 'sum') rf0.focus({ preventScroll: true }); else rf0.focus(); } } catch (e) { /* no focus in tests */ } } // the redraw replaced the control the person used: focus goes back to the fold, or to the list heading after Show all
     if (!S.sheet && S.pend) { var pk = Object.keys(S.pend); S.pend = null; pk.forEach(function (k) { load(k, true); }); } // a refresh skipped under a sheet is read once it closes
     if (S.sheet && S.sheet.refocus) { var rf = S.sheet.refocus; S.sheet.refocus = null; try { var rb = S.el.querySelector('[data-n="' + rf + '"]'); if (rb && rb.focus) rb.focus(); } catch (e) { /* no focus in tests */ } return; }
     if (S.sheet && S.sheet.focus !== false) { try { var h = S.el.querySelector('[data-n-focus]'); if (h && h.focus) h.focus(); } catch (e) { /* no focus in tests */ } S.sheet.focus = false; }
@@ -1321,6 +1321,7 @@
     // R1.8: the shell or a push may say a list changed; the next look is a fresh read, and nothing is read under an open sheet.
     refresh: function (kind) { if (!S || (S.sheet && S.sheet.busy)) return; if (kind === 'inq' || kind === 'waiting') { if (S.sheet) { (S.pend || (S.pend = {}))[kind] = true; if (S.d[kind]) S.d[kind].at = 0; } else load(kind, true); } }, // under a sheet: mark stale and read when it closes; ok is left alone so the list never shows Loading
     _resetGuideKnown: function () { ggAbsent = false; ggSeen = false; gggAbsent = false; if (S) { delete S.d.ggg; S.ggOpen = false; S.gggAll = false; } }, // the shell may call this on sign-out; a new session probes again
+    _loadedAt: function () { return S ? S.loadedAt : null; }, // test hook
     _setClock: function (fn) { clock = fn || function () { return Date.now(); }; },
     lib: { lastMonths: lastMonths, buildSeries: buildSeries, chipFor: chipFor, canManage: canManage, manilaToday: manilaToday, addDays: addDays, nightsBetween: nightsBetween, fmtDate: fmtDate, fmtDateTime: fmtDateTime, toCentavos: toCentavos, fromCentavos: fromCentavos, formatPHP: formatPHP, formatPercent: formatPercent, formatNumber: formatNumber,
       formatMetricValue: formatMetricValue, parseAmount: parseAmount, periodPreset: periodPreset, comparablePeriod: comparablePeriod, compareMode: compareMode, pctDelta: pctDelta, fmtDeltaPct: fmtDeltaPct, deltaLine: deltaLine,

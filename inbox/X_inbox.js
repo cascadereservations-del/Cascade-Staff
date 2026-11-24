@@ -991,11 +991,12 @@
   var GUIDE_RISKY = /\b(codes?|pins?|passcodes?|gcash|cards?|cvv|otp|passwords?)\b/i;
   // A door code or a payment detail does not belong in the guide. Whole words that are plainly a time (14.00, 12:30, 14.00-15.30), a year (2026, 2026-27), a day range (24-27 Nov) or a date (2026-11-24, 24/11/2026)
   // are set aside first. In what is left, digits joined by single spaces, dots or dashes count as one run (48 21, 4-8-2-1, 1234 5678, 12-34-56), and a run of 4+ digits asks once.
-  var GUIDE_PLAIN = [/^(?:[01]?\d|2[0-3])[.:][0-5]\d(?:[-\u2013](?:[01]?\d|2[0-3])[.:][0-5]\d)?$/, /^(?:19|20)\d\d(?:[-\u2013](?:\d\d|\d{4}))?$/, /^\d{1,2}[-\u2013]\d{1,2}$/, /^\d{4}-\d{2}-\d{2}$/, /^\d{1,2}\/\d{1,2}(?:\/\d{2,4})?$/];
+  var GUIDE_PLAIN = [/^(?:[01]?\d|2[0-3])[.:][0-5]\d(?:[-\u2013](?:[01]?\d|2[0-3])[.:][0-5]\d)?$/, /^(?:19|20)\d\d$/, /^(?:0?[1-9]|[12]\d|3[01])[-\u2013](?:0?[1-9]|[12]\d|3[01])$/, /^(?:19|20)\d\d-(?:0[1-9]|1[0-2])-(?:0[1-9]|[12]\d|3[01])$/, /^(?:0?[1-9]|[12]\d|3[01])\/(?:0?[1-9]|1[0-2])(?:\/(?:\d{2}|(?:19|20)\d\d))?$/];
+  function yearRange(c) { var m = /^((?:19|20)\d\d)[-\u2013](\d\d|(?:19|20)\d\d)$/.exec(c); if (!m) return false; var a = +m[1], b = m[2].length === 2 ? Math.floor(a / 100) * 100 + +m[2] : +m[2]; return b === a || b === a + 1; }
   function gRisky(text) {
     var s = String(text); if (GUIDE_RISKY.test(s)) return true;
-    var kept = s.split(/\s+/).map(function (w) { var c = w.replace(/^[^\d]+|[^\d]+$/g, ''); return GUIDE_PLAIN.some(function (re) { return re.test(c); }) ? '|' : w; }).join(' ');
-    return (kept.match(/\d+(?:[\s.-]\d+)*/g) || []).some(function (r) { return r.replace(/\D/g, '').length >= 4; });
+    var kept = s.split(/\s+/).map(function (w) { var c = w.replace(/^[^\d]+|[^\d]+$/g, ''); return yearRange(c) || GUIDE_PLAIN.some(function (re) { return re.test(c); }) ? '|' : w; }).join(' ');
+    return (kept.match(/\d+(?:[\s./-]\d+)*/g) || []).some(function (r) { return r.replace(/\D/g, '').length >= 4; });
   }
   function doGSend(confirmed) {
     var c = S.gc, d = S.gt.data; if (!d || c.sending) return;

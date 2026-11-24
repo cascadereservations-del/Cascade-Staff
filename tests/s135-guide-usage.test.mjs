@@ -23,8 +23,8 @@ class FakeEl {
   addEventListener(t, f) { (this.l[t] ||= []).push(f); }
   removeEventListener(t, f) { this.l[t] = (this.l[t] || []).filter((x) => x !== f); }
   querySelector(sel) {
-    const has = sel === '.N_ggsum' ? 'class="N_ggsum"' : sel === '#N_ggg' ? 'id="N_ggg"' : null; if (!has || !this.html.includes(has)) return null;
-    return (this.nodes[sel] ||= { el: this, gen: this.gen, sel, classList: { contains: (c) => sel === '.' + c }, focus: () => { this.doc.activeElement = this.nodes[sel]; } });
+    const has = sel === '.N_ggsum' ? 'class="N_ggsum"' : sel === '#N_ggg' ? 'id="N_ggg"' : sel === '#N_gg1' ? 'id="N_gg1"' : null; if (!has || !this.html.includes(has)) return null;
+    return (this.nodes[sel] ||= { el: this, gen: this.gen, sel, classList: { contains: (c) => sel === '.' + c }, focus: (o) => { this.doc.activeElement = this.nodes[sel]; this.doc.lastFocusOpts = o; } });
   }
   contains(n) { return !!n && n.el === this && n.gen === this.gen; }
 }
@@ -233,7 +233,7 @@ test('s136 guests fold: summary text, and the RPC is read lazily with exactly {p
   const t2 = boot({ sub: 'today', usage: okUsage, guests: () => ({ data: GUESTS(3), error: null }) }); await t2.ready(); assert.equal(guestCalls(t2).length, 0);
 });
 test('s136 guests rows: hand-computed lines, heading count, checklist and messaged marks, plain rows unless messaged (a messaged row opens its thread, see the r4 tests)', async () => {
-  const g = { total: 3, guests: [GUEST(1, { guest_label: 'Honey R.', checkin_date: '2026-11-24', checkout_date: '2026-11-27', first_seen: '2026-11-23T03:00:00Z', opens: 14, checklist_done: true, messaged: true }),
+  const g = { total: 3, guests: [GUEST(1, { thread_id: U1, guest_label: 'Honey R.', checkin_date: '2026-11-24', checkout_date: '2026-11-27', first_seen: '2026-11-23T03:00:00Z', opens: 14, checklist_done: true, messaged: true }),
     GUEST(2, { guest_label: 'Ken T.', checkin_date: '2026-10-30', checkout_date: '2026-11-02', first_seen: '2026-10-29T17:00:00Z', opens: 1 }), GUEST(3, { guest_label: null, checkin_date: null, checkout_date: null, first_seen: null, opens: 0 })] };
   const t = boot({ usage: okUsage, guests: () => ({ data: g, error: null }) }); await t.ready(); await openFold(t);
   const txt = gtext(t);
@@ -305,12 +305,12 @@ test('s136 r4 focus: after a remount with the absent answer remembered, opening 
   assert.match(u.html(), /N_ggmore/, 'other rows exist, the fold stays'); await toggleOn(u); u.doc.activeElement = u.doc.body; await u.click('mon', '0');
   assert.ok(u.doc.activeElement.isBody, 'the remembered absent open drew nothing and left no pending refocus'); assert.equal(guestCalls(u).length, 1);
 });
-test('s136 r4 messaged rows: a button with the index only; navigate gets the exact hash; a non-uuid id does nothing', async () => {
+test('s136 r4 messaged rows: a button with the index only; navigate gets the exact hash; a non-uuid id draws a static row', async () => {
   const g = { total: 3, guests: [GUEST(1, { thread_id: U2, messaged: true }), GUEST(2, { thread_id: 'th2' }), GUEST(3, { thread_id: 'not-a-uuid', messaged: true })] };
   const t = boot({ usage: okUsage, guests: () => ({ data: g, error: null }) }); await t.ready(); await openFold(t);
   const h = t.html(); assert.ok(!h.includes(U2) && !h.toLowerCase().includes(U2.toLowerCase()) && !h.includes('not-a-uuid'), 'no thread id in the page');
   assert.match(h, /<button class="N_row" type="button" data-n="ggg-open" data-v="0">.*?<span class="N_chev" aria-hidden="true">\u203a<\/span><\/button>/);
-  const blk = h.slice(h.indexOf('class="N_ggguests"'), h.indexOf('Top sections')); assert.match(blk, /data-v="2"/); assert.ok(!/data-v="1"/.test(blk), 'the guest who never messaged stays plain');
+  const blk = h.slice(h.indexOf('class="N_ggguests"'), h.indexOf('Top sections')); assert.ok(!/data-v="2"/.test(blk) && !/data-v="1"/.test(blk), 'a never-messaged guest and a messaged guest with a non-uuid id both stay plain rows (no button, no chevron)'); assert.equal((blk.match(/N_chev/g) || []).length, 1);
   await t.click('ggg-open', '0'); assert.deepEqual(t.nav, ['#inbox/guide:' + U2.toLowerCase()]);
   await t.click('ggg-open', '2'); await t.click('ggg-open', '1'); await t.click('ggg-open', '99'); await t.click('ggg-open', 'x'); assert.equal(t.nav.length, 1, 'non-uuid, not messaged, out of range: nothing');
 });
@@ -319,4 +319,19 @@ test('s136 r4 guests cache: its own five minutes, not the page-wide loadedAt', a
   await openFold(t); assert.equal(guestCalls(t).length, 1);
   await openFold(t, false); now += 4 * 60000; await t.click('tab', 'today'); await t.click('tab', 'kpis'); /* other kinds reload and move the page-wide loadedAt */ await openFold(t); assert.equal(guestCalls(t).length, 1, 'four minutes: cached');
   await openFold(t, false); now += 2 * 60000; await openFold(t); assert.equal(guestCalls(t).length, 2, 'six minutes since the guests read: read again, though the page loaded two minutes ago');
+});
+
+test('s136 r5 focus: a redraw the person did not start keeps focus on the summary without scrolling; the guests reply that removes the fold moves focus to the card heading', async () => {
+  const t = boot({ usage: okUsage, guests: () => ({ data: GUESTS(3), error: null }) }); await t.ready();
+  await toggleOn(t); await tick();
+  t.doc.lastFocusOpts = undefined; t.doc.activeElement = t.el.querySelector('.N_ggsum'); t.doc.activeElement = t.el.querySelector('.N_ggsum');
+  await t.click('mon', '0'); // any draw while the summary is focused
+  assert.equal(t.doc.activeElement.sel, '.N_ggsum', 'focus stays on the summary'); assert.equal(t.doc.lastFocusOpts && t.doc.lastFocusOpts.preventScroll, true, 'the refocus never scrolls');
+  assert.match(t.html(), /id="N_gg1" tabindex="-1"/, 'the card heading can take focus');
+});
+test('s136 r5 guests and gg replies do not move the page-wide loadedAt', async () => {
+  let now = NOW; const t = boot({ usage: okUsage, guests: () => ({ data: GUESTS(2), error: null }) }); t.M._setClock(() => now); await t.ready();
+  const before = t.M._loadedAt();
+  now += 3 * 60000; await openFold(t); assert.equal(guestCalls(t).length, 1);
+  assert.ok(before > 0); assert.equal(t.M._loadedAt(), before, 'opening the guests fold leaves S.loadedAt unchanged');
 });
