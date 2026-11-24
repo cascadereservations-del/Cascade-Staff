@@ -362,6 +362,34 @@ test('s136 r2 duplicate send: a remount mid-send resends under the SAME key; if 
   assert.match(b.el.html('gtext'), /<textarea[^>]*><\/textarea>/, 'draft cleared'); assert.match(b.el.html('msgs'), /Hooks are by the shower\./);
   assert.equal(named(c4, 'staff_guide_reply_v1').length, 0);
 });
+test('s136 r3 remount check: an older identical staff reply or a guest message with the same words keeps the draft; a recent staff copy clears it', async () => {
+  const pendThenRemount = async (messages) => {
+    const env = load(); const c1 = gclient({ staff_guide_reply_v1: () => new Promise(() => {}) });
+    const a = await mountIt(env, c1, { sub: 'guide:' + T1 }); await typeG(a.el, 'Thank you!'); await a.el.click('gsend'); env.X.unmount();
+    const c2 = gclient({ staff_guide_thread_v1: () => ({ data: gthread({ messages }), error: null }) });
+    const b = await mountIt(env, c2, { sub: 'guide:' + T1 }); return b.el.html('gtext');
+  };
+  const guest = { id: 'm1', from: 'guest', body: 'Hi', at: iso(300), staff_user_id: null };
+  assert.match(await pendThenRemount([guest, { id: 'm2', from: 'staff', body: 'Thank you!', at: iso(30), staff_user_id: 'u' }]), />Thank you!<\/textarea>/, 'an earlier identical staff reply is not this send');
+  assert.match(await pendThenRemount([guest, { id: 'm3', from: 'guest', body: 'Thank you!', at: iso(0), staff_user_id: null }]), />Thank you!<\/textarea>/, 'a guest message with the same words is not this send');
+  assert.match(await pendThenRemount([guest, { id: 'm4', from: 'staff', body: 'Thank you!', at: iso(1), staff_user_id: 'u' }]), /<textarea[^>]*><\/textarea>/, 'a recent staff copy means it landed');
+});
+test('s136 r3 safety words: plurals and digits split by spaces, dots or dashes confirm; barcode, cardboard and decode stay clear', () => {
+  const { X } = load(), R = X.lib.guide.risky;
+  for (const t of ['the door codes', 'two pins', 'passcodes', 'cards accepted', 'passwords', 'it is 48 21', 'it is 4-8-2-1', 'call 0917 123 4567', 'try 48.21']) assert.equal(R(t), true, t);
+  for (const t of ['the barcode scanner', 'cardboard box', 'decode it', 'Room 12, floor 3', 'at 2 pm, 3 pm']) assert.equal(R(t), false, t);
+});
+test('s136 r3 failed bubble: sending the same words again retries that bubble under the same key, never a second bubble', async () => {
+  const env = load(); env.X._setGuideRetry(0); let n = 0;
+  const c = gclient({ staff_guide_reply_v1: () => { n++; return n <= 2 ? { data: null, error: { message: 'Failed to fetch' } } : { data: { ok: true, id: 'srv-3', at: iso(0) }, error: null }; } });
+  const { el } = await mountIt(env, c, { sub: 'guide:' + T1 });
+  await typeG(el, 'Please use the side gate.'); await el.click('gsend'); await wait();
+  assert.equal(count(el.html('msgs'), 'Please use the side gate.'), 1); assert.match(el.html('msgs'), /Not sent\./);
+  const key = named(c, 'staff_guide_reply_v1')[0][2].p_client_msg_id;
+  await typeG(el, 'Please use the side gate.'); await el.click('gsend'); await wait();
+  const all = named(c, 'staff_guide_reply_v1'); assert.equal(all.length, 3); assert.equal(all[2][2].p_client_msg_id, key);
+  assert.equal(count(el.html('msgs'), 'Please use the side gate.'), 1, 'one bubble'); assert.ok(!/Not sent/.test(el.html('msgs')));
+});
 test('s136 r2 rate limit: {ok:false, reason:"rate"} says so in words, is not retried, and keeps the draft; a replay still answers already', async () => {
   const { X } = load(), G = X.lib.guide;
   const o = G.replyOutcome({ data: { ok: false, reason: 'rate' }, error: null });

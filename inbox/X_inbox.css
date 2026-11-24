@@ -121,7 +121,8 @@
 .X_badge.X_badge_warn { background: var(--warn-soft); color: var(--warn); }
 .X_fchips { display: flex; flex-wrap: wrap; gap: 8px; }
 .X_fchip { min-height: 44px; padding: 0 14px; border-radius: var(--r-md); border: 1px solid var(--border); background: var(--muted); color: var(--fg); font: 600 0.8125rem/1.2 var(--font-ui); cursor: pointer; }
-.X_fchip[aria-pressed="true"] { background: var(--primary-soft); color: var(--primary); border-color: var(--primary); }
+.X_fchip[aria-pressed="true"] { background: var(--primary-soft); color: var(--primary); border-color: var(--primary); box-shadow: inset 0 0 0 1px var(--primary); } /* the fill alone is under 1.1:1 against the unselected fill in light mode, so the selected chip also gets a 2px primary edge (10:1 on the unselected fill) and a tick */
+.X_fchip[aria-pressed="true"]::before { content: "\2713"; margin-right: 6px; font-weight: 700; }
 .X_fchip:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
 .X_actions.X_pair { flex-wrap: nowrap; }
 .X_actions.X_pair > .X_btn { flex: 1 1 0; min-width: 0; min-height: 44px; padding-left: 8px; padding-right: 8px; }

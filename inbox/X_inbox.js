@@ -959,7 +959,7 @@
         var first = !T.data, last = data.messages[data.messages.length - 1], sig = data.messages.length + '|' + (last ? last.id : '') + '|' + data.thread.status;
         T.data = data; T.at = nowMs(); T.stale = false; T.notFound = T.denied = false;
         var pend = gpending[id]; // a send in flight when the screen unmounted: if the thread already holds it, it went out, so the draft goes
-        if (first && pend && data.messages.some(function (x) { return x.from === 'staff' && String(x.body).trim() === pend.body; })) { delete gpending[id]; if (gdrafts[id] === pend.body) delete gdrafts[id]; if (S.gc.text.trim() === pend.body) S.gc.text = ''; drawGText(); }
+        if (first && pend && data.messages.some(function (x) { return x.from === 'staff' && String(x.body).trim() === pend.body && gRecent(x.at, pend.at); })) { delete gpending[id]; if (gdrafts[id] === pend.body) delete gdrafts[id]; if (S.gc.text.trim() === pend.body) S.gc.text = ''; drawGText(); }
         T.locals = T.locals.filter(function (m) { return !(m.state === 'failed' && gMerge(data.messages, [m]).length === data.messages.length); }); // a failed one that is on record did go out
         gUpdateRow(id, function (r) { r.unread = 0; }); // reading the thread marks it read on the server
         var changed = sig !== T.sig; T.sig = sig;
@@ -984,8 +984,10 @@
   }
 
   // -- writes --
-  var GUIDE_RISKY = /\b(code|pin|passcode|gcash|card|cvv|otp|password)\b/i;
-  function gRisky(text) { return /\d{4,}/.test(text) || GUIDE_RISKY.test(text); } // a door code or a payment detail does not belong in the guide
+  // a staff copy counts as the pending send only if it is no earlier than the send minus 2 minutes (an older identical reply is not it)
+  function gRecent(at, pendAt) { var t = Date.parse(at), pt = Date.parse(pendAt); return isNaN(pt) || (!isNaN(t) && t >= pt - 120000); }
+  var GUIDE_RISKY = /\b(codes?|pins?|passcodes?|gcash|cards?|cvv|otp|passwords?)\b/i;
+  function gRisky(text) { return /\d{4,}/.test(String(text).replace(/[\s.-]/g, '')) || GUIDE_RISKY.test(text); } // a door code or a payment detail does not belong in the guide
   function doGSend(confirmed) {
     var c = S.gc, d = S.gt.data; if (!d || c.sending) return;
     var body = c.text.trim(); if (!body || body.length > GUIDE_MAX) return;
@@ -993,7 +995,9 @@
     if (!S.demo && !online()) { c.msg = NOT_SENT_OFFLINE; c.msgKind = 'bad'; drawGMsg(); return; }
     var pend = S.gid && gpending[S.gid], m = { cmid: pend && pend.body === body ? pend.cmid : (S.opts.newKey ? String(S.opts.newKey('gm')) : gCmid()), body: body, at: new Date(nowMs()).toISOString(), state: 'sending', err: '' };
     if (!CMID_RE.test(m.cmid)) m.cmid = gCmid(); // the server needs 8 to 80 safe characters
-    if (S.gid) { delete gpending[S.gid]; gpending[S.gid] = { cmid: m.cmid, body: body }; var pk = Object.keys(gpending); while (pk.length > 20) delete gpending[pk.shift()]; }
+    if (S.gid) { delete gpending[S.gid]; gpending[S.gid] = { cmid: m.cmid, body: body, at: m.at }; var pk = Object.keys(gpending); while (pk.length > 20) delete gpending[pk.shift()]; }
+    var dup = S.gt.locals.filter(function (x) { return x.state === 'failed' && x.cmid === m.cmid; })[0];
+    if (dup) { dup.state = 'sending'; dup.err = ''; gSetText(''); c.msg = ''; c.msgKind = ''; c.sending = true; drawGMsgs(); drawGText(); drawGMsg(); drawGFoot(); gSendTry(dup, 0); return; } // the same key already has a failed bubble: retry it, never a second one
     S.gt.locals.push(m); gSetText(''); if (S.gid) gdrafts[S.gid] = body; /* kept until the server confirms, so a remount cannot lose it */ c.msg = ''; c.msgKind = ''; c.sending = true;
     drawGMsgs(); drawGText(); drawGMsg(); drawGFoot(); scrollEnd(); focusSel('#X_gtext');
     gSendTry(m, 0);

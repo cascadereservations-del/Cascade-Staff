@@ -2043,7 +2043,7 @@
     return pr;
   }
   // 3.2: a module that keeps a list or a draft in memory (guests, inbox) drops it on sign-out and on an account switch; a throwing reset never blocks sign-out.
-  function H_resetModules() { ['G_Guests', 'X_Inbox', 'S110_Supply', 'K_Kpi', 'BL_Bills', 'E_Expenses'].forEach(function (n) { try { var g = window[n]; if (g && typeof g.reset === 'function') g.reset(); } catch (e) { /* never block sign-out */ } }); }
+  function H_resetModules() { ['G_Guests', 'X_Inbox', 'S110_Supply', 'K_Kpi', 'BL_Bills', 'E_Expenses'].forEach(function (n) { try { var g = window[n]; if (g && typeof g.reset === 'function') g.reset(); } catch (e) { /* never block sign-out */ } }); try { var nm = window.N_Manage; if (nm && typeof nm._resetGuideKnown === 'function') nm._resetGuideKnown(); } catch (e) { /* never block sign-out */ } }
   function H_unmount() {
     var k = H_mod.mounted; H_mod.mounted = ''; H_mod.sub = ''; H_mod.n++;
     var g = k && window[H_MODULES[k].global]; try { if (g && typeof g.unmount === 'function') g.unmount(); } catch (e) { /* never block navigation or sign-out */ }

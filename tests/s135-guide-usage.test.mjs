@@ -130,7 +130,8 @@ test('s135 usage demo: the demo shows a believable card with no client at all', 
 test('s135 usage card stays inside the owner and admin tab, and the stylesheet carries its rules', () => {
   for (const k of ['.N_gg ', '.N_ggrows', '.N_ggbar', '.N_gglist', '.N_h4']) assert.ok(CSS.includes(k), k);
   assert.equal((CSS.match(/\{/g) || []).length, (CSS.match(/\}/g) || []).length);
-  assert.doesNotMatch(CSS.slice(CSS.indexOf('s135 (3.4.54)')), /#[0-9a-fA-F]{3,8}\b/, 'tokens only, no raw colours');
+  const at = CSS.indexOf('.N_gg {'); assert.ok(at >= 0, 'the guide section marker is in the stylesheet');
+  assert.doesNotMatch(CSS.slice(at), /#[0-9a-fA-F]{3,8}\b/, 'tokens only, no raw colours');
   assert.match(SRC, /canManage\(S\.role\)\) load\('gg', force\)/);
 });
 
@@ -153,6 +154,22 @@ test('s136 r1 card rows: labels never break inside a word (css), values wrap ins
   const row = CSS.match(/\.N_gglist > li \{[^}]*\}/)[0]; assert.match(row, /display: flex/); assert.match(row, /flex-wrap: wrap/);
   const lab = CSS.match(/^\.N_ggl \{[^}]*\}/m)[0]; assert.match(lab, /overflow-wrap: break-word/); assert.match(lab, /word-break: normal/); assert.doesNotMatch(lab, /anywhere|break-all/);
   assert.match(CSS, /\.N_gglist > li > \.N_ggv \{[^}]*flex: 0 1 auto/);
+});
+const widths = (html) => html.split('--w:').slice(1).map((x) => Number(x.split('%')[0]));
+test('s136 r3 funnel bars: step 1 is 100%, a later step bigger than step 1 is capped at 100%, the last is its true share', async () => {
+  const t = boot({ usage: () => ({ data: USAGE({ funnel: { verify_start: 4, verify_ok: 6, checklist_done: 2 } }), error: null }) }); await t.ready();
+  assert.deepEqual(widths(t.html()), [100, 100, 50]);
+});
+test('s136 r3 sign-out: the shell reset clears the guide card memory (seen and absent) through N_Manage._resetGuideKnown, next to X_Inbox.reset', async () => {
+  const app = fs.readFileSync(path.join(root, 'app.js'), 'utf8');
+  const fn = app.slice(app.indexOf('function H_resetModules()'), app.indexOf(String.fromCharCode(10), app.indexOf('function H_resetModules()')));
+  const seen = []; const win = { X_Inbox: { reset() { seen.push('inbox'); } }, N_Manage: { _resetGuideKnown() { seen.push('guide'); } } };
+  vm.runInNewContext(fn + '; H_resetModules();', { window: win }); assert.deepEqual(seen, ['inbox', 'guide']);
+  // and the memory it clears is the real one: absent once, then a reset probes again (seen is cleared by the same call)
+  const t = boot({ usage: null }); await t.ready(); assert.equal(usageCalls(t).length, 1);
+  t.M.mount(t.el, { client: t.client, demo: false, role: 'owner', sub: 'kpis', navigate() {}, toast() {}, haptic() {} }); await tick(); assert.equal(usageCalls(t).length, 1, 'absent is remembered');
+  win.N_Manage = t.M; vm.runInNewContext(fn + '; H_resetModules();', { window: win });
+  t.M.mount(t.el, { client: t.client, demo: false, role: 'owner', sub: 'kpis', navigate() {}, toast() {}, haptic() {} }); await tick(); assert.equal(usageCalls(t).length, 2, 'after the shell reset the next visit probes again');
 });
 test('s136 r1 usage probe: a server without staff_guide_usage_v1 is probed once per session; refresh probes again; denied is unchanged; found clears it', async () => {
   const t = boot({ usage: null }); await t.ready();
