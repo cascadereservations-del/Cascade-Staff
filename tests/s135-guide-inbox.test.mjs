@@ -402,3 +402,20 @@ test('s136 r2 rate limit: {ok:false, reason:"rate"} says so in words, is not ret
   env.X.unmount(); const m2 = await mountIt(env, gclient(), { sub: 'guide:' + T1 });
   assert.match(m2.el.html('gtext'), />Hooks are by the shower\.<\/textarea>/, 'the draft is kept');
 });
+
+// ---- s136 round 4 ----
+test('s136 r4 dup retry keeps the draft: failed send, retype, send again, unmount mid-retry, remount -> the words are back in the box', async () => {
+  const env = load(); env.X._setGuideRetry(0); let n = 0;
+  const c = gclient({ staff_guide_reply_v1: () => { n++; return n <= 2 ? { data: null, error: { message: 'Failed to fetch' } } : new Promise(() => {}); } });
+  const a = await mountIt(env, c, { sub: 'guide:' + T1 });
+  await typeG(a.el, 'Please use the side gate.'); await a.el.click('gsend'); await wait(); assert.match(a.el.html('msgs'), /Not sent\./);
+  await typeG(a.el, 'Please use the side gate.'); await a.el.click('gsend'); await wait();
+  assert.equal(named(c, 'staff_guide_reply_v1').length, 3, 'the retry is in flight'); env.X.unmount();
+  const b = await mountIt(env, gclient(), { sub: 'guide:' + T1 });
+  assert.match(b.el.html('gtext'), />Please use the side gate\.<\/textarea>/, 'draft kept after a retry through the duplicate branch');
+});
+test('s136 r4 send guard: times, years, day ranges and dates stay quiet; codes in any join still ask', () => {
+  const { X } = load(), R = X.lib.guide.risky;
+  for (const t of ['Check-in is at 14.00', 'checkout 12.30 please', 'Welcome to 2026', 'You stay 24-27 Nov', 'Open 14.00-15.30', 'Arrive 2026-11-24', 'Out on 24/11/2026', '12:30 and 14.00', 'Room 12, floor 3']) assert.equal(R(t), false, t);
+  for (const t of ['1234 5678', '12-34-56', '482913', '12.34.56', 'call 0917 123 4567', 'it is 48 21', 'it is 4-8-2-1', 'try 48.21', 'at 14.00 the number is 4821']) assert.equal(R(t), true, t);
+});

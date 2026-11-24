@@ -985,9 +985,18 @@
 
   // -- writes --
   // a staff copy counts as the pending send only if it is no earlier than the send minus 2 minutes (an older identical reply is not it)
+  // gRecent compares the server's staff-copy time with the time this device stamped on the pending send, so it trusts the device clock: a clock that runs more than 2 minutes slow
+  // can make a real staff copy look old (the send is then kept as pending and tried again with the same key, which the server answers as already done). No behaviour depends on it beyond that.
   function gRecent(at, pendAt) { var t = Date.parse(at), pt = Date.parse(pendAt); return isNaN(pt) || (!isNaN(t) && t >= pt - 120000); }
   var GUIDE_RISKY = /\b(codes?|pins?|passcodes?|gcash|cards?|cvv|otp|passwords?)\b/i;
-  function gRisky(text) { return /\d{4,}/.test(String(text).replace(/[\s.-]/g, '')) || GUIDE_RISKY.test(text); } // a door code or a payment detail does not belong in the guide
+  // A door code or a payment detail does not belong in the guide. Whole words that are plainly a time (14.00, 12:30, 14.00-15.30), a year (2026, 2026-27), a day range (24-27 Nov) or a date (2026-11-24, 24/11/2026)
+  // are set aside first. In what is left, digits joined by single spaces, dots or dashes count as one run (48 21, 4-8-2-1, 1234 5678, 12-34-56), and a run of 4+ digits asks once.
+  var GUIDE_PLAIN = [/^(?:[01]?\d|2[0-3])[.:][0-5]\d(?:[-\u2013](?:[01]?\d|2[0-3])[.:][0-5]\d)?$/, /^(?:19|20)\d\d(?:[-\u2013](?:\d\d|\d{4}))?$/, /^\d{1,2}[-\u2013]\d{1,2}$/, /^\d{4}-\d{2}-\d{2}$/, /^\d{1,2}\/\d{1,2}(?:\/\d{2,4})?$/];
+  function gRisky(text) {
+    var s = String(text); if (GUIDE_RISKY.test(s)) return true;
+    var kept = s.split(/\s+/).map(function (w) { var c = w.replace(/^[^\d]+|[^\d]+$/g, ''); return GUIDE_PLAIN.some(function (re) { return re.test(c); }) ? '|' : w; }).join(' ');
+    return (kept.match(/\d+(?:[\s.-]\d+)*/g) || []).some(function (r) { return r.replace(/\D/g, '').length >= 4; });
+  }
   function doGSend(confirmed) {
     var c = S.gc, d = S.gt.data; if (!d || c.sending) return;
     var body = c.text.trim(); if (!body || body.length > GUIDE_MAX) return;
@@ -997,7 +1006,7 @@
     if (!CMID_RE.test(m.cmid)) m.cmid = gCmid(); // the server needs 8 to 80 safe characters
     if (S.gid) { delete gpending[S.gid]; gpending[S.gid] = { cmid: m.cmid, body: body, at: m.at }; var pk = Object.keys(gpending); while (pk.length > 20) delete gpending[pk.shift()]; }
     var dup = S.gt.locals.filter(function (x) { return x.state === 'failed' && x.cmid === m.cmid; })[0];
-    if (dup) { dup.state = 'sending'; dup.err = ''; gSetText(''); c.msg = ''; c.msgKind = ''; c.sending = true; drawGMsgs(); drawGText(); drawGMsg(); drawGFoot(); gSendTry(dup, 0); return; } // the same key already has a failed bubble: retry it, never a second one
+    if (dup) { dup.state = 'sending'; dup.err = ''; gSetText(''); if (S.gid) gdrafts[S.gid] = body; c.msg = ''; c.msgKind = ''; c.sending = true; drawGMsgs(); drawGText(); drawGMsg(); drawGFoot(); gSendTry(dup, 0); return; } // the same key already has a failed bubble: retry it, never a second one
     S.gt.locals.push(m); gSetText(''); if (S.gid) gdrafts[S.gid] = body; /* kept until the server confirms, so a remount cannot lose it */ c.msg = ''; c.msgKind = ''; c.sending = true;
     drawGMsgs(); drawGText(); drawGMsg(); drawGFoot(); scrollEnd(); focusSel('#X_gtext');
     gSendTry(m, 0);

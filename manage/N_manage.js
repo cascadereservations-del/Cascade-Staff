@@ -336,6 +336,7 @@
   }
   // s136: "Guests who used the guide" inside the More fold (staff_guide_guests_v1, owner and admin). Loaded when the fold is opened, never before.
   var GGG_SHOW = 10;     // rows shown before "Show all"
+  var UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i; // a guide thread id the inbox can open (#inbox/guide:<uuid>)
   var gggAbsent = false; // staff_guide_guests_v1 known missing on this server: probed once per session, cleared by Try again / Refresh and by _resetGuideKnown
   function gggDates(ci, co) { // "24\u201327 Nov", "30 Nov \u2013 2 Dec", one date when there is no separate check-out; '' when unknown (never a made-up date)
     var re = /^\d{4}-\d{2}-\d{2}$/, a = re.test(String(ci || '')) ? String(ci) : '', b = re.test(String(co || '')) ? String(co) : '';
@@ -526,7 +527,7 @@
     if (kind === 'gg' && ggAbsent && !S.ggProbe && !S.demo) { st.absent = true; st.ok = false; return; } // only the person's own Refresh / Try again probes again
     if (kind === 'ggg' && gggAbsent && !S.gggProbe && !S.demo) { st.absent = true; st.ok = false; return; }
     if (kind === 'ggg') S.gggProbe = false;
-    if (kind === 'gg') S.ggProbe = false; if (st.ok && !force && (LIVE[kind] ? clock() - (st.at || 0) <= LIVE_MS : !stale())) return;
+    if (kind === 'gg') S.ggProbe = false; if (st.ok && !force && (LIVE[kind] ? clock() - (st.at || 0) <= LIVE_MS : kind === 'ggg' ? clock() - (st.at || 0) <= 5 * 60000 : !stale())) return; // guests: its own five minutes, not the page-wide loadedAt
     st.busy = true; st.err = ''; var gen = S.gen, key = kind === 'kpi' ? S.period : '';
     draw();
     var done = function (res) {
@@ -876,10 +877,11 @@
 
   // s135: the Guest guide card. Nothing is drawn while it loads, when the server does not have staff_guide_usage_v1 yet, or when the account may not read it.
   function ggRow(label, n) { return '<div class="N_row N_static N_kpi"><span class="N_rowmid"><span class="N_rowt">' + esc(label) + '</span></span><span class="N_val N_num">' + esc(ggNum(n)) + '</span></div>'; }
-  function gggRow(g) {
-    var bits = [(g.first ? 'First opened ' + g.first + ' \u00b7 ' : '') + (g.opens === 1 ? '1 open' : ggNum(g.opens) + ' opens')]; if (g.checklist) bits.push('\u2713 Checklist'); if (g.messaged) bits.push('\u2709 Messaged');
-    // no thread-open action exists on this card (the inbox opens as #inbox only), so every row is plain text, never a button that goes nowhere
-    return '<div class="N_row N_static"><span class="N_rowmid"><span class="N_rowt">' + esc(g.label + (g.dates ? ' \u00b7 ' + g.dates : '')) + '</span><span class="N_rows N_ggmeta">' + bits.map(function (t) { return '<span>' + esc(t) + '</span>'; }).join('') + '</span></span></div>';
+  function gggRow(g, i) {
+    var bits = [(g.first ? 'First opened ' + g.first + ' · ' : '') + (g.opens === 1 ? '1 open' : ggNum(g.opens) + ' opens')]; if (g.checklist) bits.push('✓ Checklist'); if (g.messaged) bits.push('✉ Messaged');
+    var mid = '<span class="N_rowmid"><span class="N_rowt">' + esc(g.label + (g.dates ? ' · ' + g.dates : '')) + '</span><span class="N_rows N_ggmeta">' + bits.map(function (t) { return '<span>' + esc(t) + '</span>'; }).join('') + '</span></span>';
+    // a messaged guest has a thread in the inbox: the row opens it (approved mockup). The DOM carries the row index only, never the thread id; the click looks the id up in the model.
+    return g.messaged ? '<button class="N_row" type="button" data-n="ggg-open" data-v="' + i + '">' + mid + '<span class="N_chev" aria-hidden="true">›</span></button>' : '<div class="N_row N_static">' + mid + '</div>';
   }
   function gggHtml() { // the guests block of the More fold: nothing when the server lacks the function or the account may not read it
     var st = S.d.ggg; if (!st || st.absent || st.denied) return '';
@@ -918,8 +920,8 @@
       return '<li><span class="N_ggl">' + esc(t.label) + (t.where ? ' <span class="N_ggw">' + esc(t.where) + '</span>' : '') + '</span><span class="N_ggv N_num">' + esc(ggNum(t.taps) + (t.taps === 1 ? ' tap' : ' taps')) + '</span></li>'; }).join('') + '</ul>';
     if (m.searches.length) more += '<h4 class="N_h4">Delivery searches with no result</h4><ul class="N_gglist">' + m.searches.map(function (s) {
       return '<li><span class="N_ggl">' + esc(s.target) + '</span><span class="N_ggv N_num">' + esc(ggNum(s.n) + (s.n === 1 ? ' time' : ' times')) + '</span></li>'; }).join('') + '</ul>';
-    var gs = S.d.ggg; // the fold is drawn while guests may still load: not once the server is known to lack the function or the account may not read it
-    if (more || !(gs && (gs.absent || gs.denied))) out += '<details class="N_ggmore" data-n-fold="gg"' + (S.ggOpen ? ' open' : '') + '><summary class="N_ggsum">More: guests, sections, taps, searches</summary>' + gggHtml() + more + '</details>';
+    var gs = S.d.ggg; // the fold is drawn while guests may still load: not once the server is known to lack the function or the account may not read it (also after a remount: the module remembers the absent answer, the new state has none yet)
+    if (more || !((gs && (gs.absent || gs.denied)) || (!gs && gggAbsent && !S.gggProbe && !S.demo))) out += '<details class="N_ggmore" data-n-fold="gg"' + (S.ggOpen ? ' open' : '') + '><summary class="N_ggsum">More: guests, sections, taps, searches</summary>' + gggHtml() + more + '</details>';
     return out + '</section>';
   }
 
@@ -1076,10 +1078,12 @@
     if (EXT[S.tab] && extMod(S.tab)) { drawExt(extMod(S.tab)); return; }
     extStop();
     var sg = S.sheet; if (sg && sg.id && !sg.busy && (sg.kind === 'inq' || sg.kind === 'confirm' || sg.kind === 'decline') && S.d.inq && S.d.inq.ok === true && !payOf(sg.id)) { S.sheet = null; S.notice = 'This booking is no longer waiting for a decision. Nothing was changed.'; } // never leave the page inert with no sheet
+    var keepSum = false; try { var ae = typeof document !== 'undefined' ? document.activeElement : null; keepSum = !!(ae && ae.classList && ae.classList.contains('N_ggsum') && S.el.contains && S.el.contains(ae)); } catch (e) { /* no focus in tests */ } // the swap below replaces the summary the person is on
     var body = S.tab === 'inquiries' ? viewInquiries() : S.tab === 'money' ? viewMoney() : S.tab === 'kpis' ? viewKpis() : viewToday();
     var live = S.notice ? '<div class="N_okbox" role="status">' + esc(S.notice) + '</div>' : '';
     S.el.innerHTML = '<div class="N_root">' + tabsHtml() + live + '<div class="N_body" role="tabpanel" aria-labelledby="N_tab_' + S.tab + '"' + (S.sheet ? ' inert aria-hidden="true"' : '') + '>' + body + '</div></div>' + sheetHtml();
     revealTab();
+    if (keepSum && !S.ggRefocus) S.ggRefocus = 'sum';
     if (S.ggRefocus) { var rk = S.ggRefocus; S.ggRefocus = ''; try { var rf0 = S.el.querySelector(rk === 'sum' ? '.N_ggsum' : '#N_ggg'); if (rf0 && rf0.focus) rf0.focus(); } catch (e) { /* no focus in tests */ } } // the redraw replaced the control the person used: focus goes back to the fold, or to the list heading after Show all
     if (!S.sheet && S.pend) { var pk = Object.keys(S.pend); S.pend = null; pk.forEach(function (k) { load(k, true); }); } // a refresh skipped under a sheet is read once it closes
     if (S.sheet && S.sheet.refocus) { var rf = S.sheet.refocus; S.sheet.refocus = null; try { var rb = S.el.querySelector('[data-n="' + rf + '"]'); if (rb && rb.focus) rb.focus(); } catch (e) { /* no focus in tests */ } return; }
@@ -1214,6 +1218,7 @@
     S.ggOpen = open; if (!open) return;
     var st = S.d.ggg; if (st && (st.absent || st.denied)) return;
     S.ggRefocus = 'sum'; load('ggg', false);
+    S.ggRefocus = ''; // set only so the draw inside load() puts focus back on the summary; a cached open or a remembered absent answer draws nothing and must not leave it set for a later, unrelated draw
   }
   function onClick(ev) {
     if (!S) return; if (ev.target && ev.target.closest && ev.target.closest('[data-n-ext]')) return; // clicks inside Bookings or Ops belong to them
@@ -1225,6 +1230,7 @@
     if (a === 'tab') { setTab(v, true); return; }
     if (a === 'retry') { S.ggProbe = true; loadTab(['today', 'inquiries', 'money', 'kpis'].indexOf(v) >= 0 ? v : S.tab, true); return; }
     if (a === 'ggg-retry') { S.gggProbe = true; load('ggg', true); return; }
+    if (a === 'ggg-open') { var gm = S.d.ggg && S.d.ggg.ok ? gggModel(S.d.ggg.data) : null, gr = gm ? gm.guests[+v] : null; if (gr && gr.messaged && UUID_RE.test(gr.id) && S.opts.navigate) { if (ev.preventDefault) ev.preventDefault(); S.sheet = null; S.opts.navigate('#inbox/guide:' + gr.id.toLowerCase()); } return; }
     if (a === 'ggg-all') { S.gggAll = true; S.ggRefocus = 'list'; draw(); return; }
     if (a === 'refresh') { S.notice = ''; S.ggProbe = true; S.gggProbe = true; loadTab(S.tab, true); return; }
     S.notice = '';

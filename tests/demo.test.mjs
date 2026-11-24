@@ -111,7 +111,7 @@ test('links keep ?demo&role=, the switcher goes to the same screen, and the bar 
   const bar = D.barHtml('admin');
   assert.match(bar, /Demo data/); assert.equal((bar.match(/data-demo-role=/g) || []).length, 5);
   assert.equal((bar.match(/aria-pressed="true"/g) || []).length, 1); assert.match(bar, /data-demo-role="admin" aria-pressed="true"/);
-  assert.match(read('demo.js'), /\.demo-roles button\{min-height:44px;min-width:44px/);
+  assert.match(read('demo.js'), /\.demo-roles button\{flex:none;white-space:nowrap;min-height:44px;min-width:44px/);
 });
 
 test('one guard: every use of CSDemo in the pages sits behind DEMO, and the only createClient is in the not-demo branch', () => {

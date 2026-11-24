@@ -15,13 +15,18 @@ const EVIL = '<img src=x onerror=alert(1)>';
 const tick = async (n = 10) => { for (let i = 0; i < n; i++) await new Promise((r) => setImmediate(r)); };
 const plain = (x) => JSON.parse(JSON.stringify(x));
 
+// r4: focus-aware. A node belongs to one draw; replacing innerHTML detaches it and, like a browser, focus on a detached node falls back to the body.
 class FakeEl {
-  constructor() { this.html = ''; this.l = {}; }
-  set innerHTML(v) { this.html = String(v); }
+  constructor(doc) { this.html = ''; this.l = {}; this.doc = doc; this.gen = 0; this.nodes = {}; }
+  set innerHTML(v) { this.html = String(v); this.gen++; this.nodes = {}; const a = this.doc && this.doc.activeElement; if (a && a.el === this && a.gen !== this.gen) this.doc.activeElement = this.doc.body; }
   get innerHTML() { return this.html; }
   addEventListener(t, f) { (this.l[t] ||= []).push(f); }
   removeEventListener(t, f) { this.l[t] = (this.l[t] || []).filter((x) => x !== f); }
-  querySelector() { return null; }
+  querySelector(sel) {
+    const has = sel === '.N_ggsum' ? 'class="N_ggsum"' : sel === '#N_ggg' ? 'id="N_ggg"' : null; if (!has || !this.html.includes(has)) return null;
+    return (this.nodes[sel] ||= { el: this, gen: this.gen, sel, classList: { contains: (c) => sel === '.' + c }, focus: () => { this.doc.activeElement = this.nodes[sel]; } });
+  }
+  contains(n) { return !!n && n.el === this && n.gen === this.gen; }
 }
 const METRICS = { propertyId: 'p', periodStart: 'x', periodEndExclusive: 'y', sourceAsOf: null, financeVisible: true, blockedNights: 0,
   metrics: { occupancy: { key: 'occupancy', value: '60', unit: 'percent', coverage: 'complete' }, sold_nights: { key: 'sold_nights', value: '14', unit: 'night', coverage: 'complete' } } };
@@ -35,8 +40,8 @@ const USAGE = (o = {}) => Object.assign({ since: '2026-09-15', devices: 14, veri
   searches_without_result: [{ target: 'jollibee', n: 3 }, { target: 'pizza', n: 2 }] }, o);
 
 function boot({ usage, guests, role = 'owner', sub = 'kpis', demo = false } = {}) {
-  const win = {}, calls = [];
-  const ctx = { window: win, localStorage: undefined, navigator: { onLine: true }, Intl, Date, Promise, JSON, Math, console, setTimeout, clearTimeout, Uint8Array, document: { visibilityState: 'visible', addEventListener() {}, removeEventListener() {} }, history: { replaceState() {} } };
+  const win = {}, calls = [], doc = { visibilityState: 'visible', body: { isBody: true }, addEventListener() {}, removeEventListener() {} }; doc.activeElement = doc.body;
+  const ctx = { window: win, localStorage: undefined, navigator: { onLine: true }, Intl, Date, Promise, JSON, Math, console, setTimeout, clearTimeout, Uint8Array, document: doc, history: { replaceState() {} } };
   vm.createContext(ctx); vm.runInContext(SRC, ctx, { filename: 'N_manage.js' });
   win.N_Manage._setClock(() => NOW);
   const client = demo ? undefined : {
@@ -49,9 +54,9 @@ function boot({ usage, guests, role = 'owner', sub = 'kpis', demo = false } = {}
       return Promise.resolve({ data: null, error: { code: 'PGRST202', message: 'Could not find the function public.' + name } });
     }
   };
-  const el = new FakeEl(), nav = [];
+  const el = new FakeEl(doc), nav = [];
   win.N_Manage.mount(el, { client, demo, role, sub, navigate: (h) => nav.push(h), toast() {}, haptic() {} });
-  return { M: win.N_Manage, el, calls, client, nav, html: () => el.innerHTML, ready: async () => { await tick(); return undefined; },
+  return { M: win.N_Manage, el, doc, calls, client, nav, html: () => el.innerHTML, ready: async () => { await tick(); return undefined; },
     click: async (act, v) => { const t = { getAttribute: (k) => ({ 'data-n': act, 'data-v': v === undefined ? null : v })[k] ?? null }; t.closest = (sel) => (sel === '[data-n]' ? t : null); for (const f of el.l.click || []) f({ target: t, preventDefault() {} }); await tick(); } };
 }
 const usageCalls = (t) => t.calls.filter((c) => c[0] === 'staff_guide_usage_v1');
@@ -227,15 +232,15 @@ test('s136 guests fold: summary text, and the RPC is read lazily with exactly {p
   await openFold(t, false); await openFold(t); assert.equal(guestCalls(t).length, 1, 'closing and opening again uses the cached answer');
   const t2 = boot({ sub: 'today', usage: okUsage, guests: () => ({ data: GUESTS(3), error: null }) }); await t2.ready(); assert.equal(guestCalls(t2).length, 0);
 });
-test('s136 guests rows: hand-computed lines, heading count, checklist and messaged marks, plain rows (no thread-open action exists on the card)', async () => {
+test('s136 guests rows: hand-computed lines, heading count, checklist and messaged marks, plain rows unless messaged (a messaged row opens its thread, see the r4 tests)', async () => {
   const g = { total: 3, guests: [GUEST(1, { guest_label: 'Honey R.', checkin_date: '2026-11-24', checkout_date: '2026-11-27', first_seen: '2026-11-23T03:00:00Z', opens: 14, checklist_done: true, messaged: true }),
     GUEST(2, { guest_label: 'Ken T.', checkin_date: '2026-10-30', checkout_date: '2026-11-02', first_seen: '2026-10-29T17:00:00Z', opens: 1 }), GUEST(3, { guest_label: null, checkin_date: null, checkout_date: null, first_seen: null, opens: 0 })] };
   const t = boot({ usage: okUsage, guests: () => ({ data: g, error: null }) }); await t.ready(); await openFold(t);
   const txt = gtext(t);
   assert.match(txt, /Guests who used the guide \(3\)/); assert.match(txt, /Honey R\. · 24–27 Nov First opened 23 Nov · 14 opens ✓ Checklist ✉ Messaged/);
   assert.match(txt, /Ken T\. · 30 Oct – 2 Nov First opened 30 Oct · 1 open(?! ✓| ✉)/, 'cross-month range; 17:00Z is already the next Manila day'); assert.match(txt, /Guest 0 opens/, 'no label: "Guest", no invented dates');
-  const h = t.html(), block = h.slice(h.indexOf('class="N_ggguests"'), h.indexOf('Top sections')); assert.ok(!/ggg-all/.test(block), 'under ten: no Show all'); assert.equal((block.match(/class="N_row N_static"/g) || []).length, 3);
-  assert.ok(h.indexOf('id="N_ggg"') < h.indexOf('Top sections'), 'guests come first in the fold'); assert.ok(!/<button|<a /.test(block), 'no row is a button or a link');
+  const h = t.html(), block = h.slice(h.indexOf('class="N_ggguests"'), h.indexOf('Top sections')); assert.ok(!/ggg-all/.test(block), 'under ten: no Show all'); assert.equal((block.match(/class="N_row N_static"/g) || []).length, 2, 'the messaged row is a button');
+  assert.ok(h.indexOf('id="N_ggg"') < h.indexOf('Top sections'), 'guests come first in the fold'); assert.equal((block.match(/<button/g) || []).length, 1, 'only the messaged guest is a button'); assert.equal((block.match(/class="N_row N_static"/g) || []).length, 2, 'the other two stay plain'); assert.ok(!/<a /.test(block));
 });
 test('s136 guests cap: 14 guests show 10 and a "Show all (14)" row; tapping it shows all 14 and the row goes', async () => {
   const t = boot({ usage: okUsage, guests: () => ({ data: GUESTS(14), error: null }) }); await t.ready(); await openFold(t);
@@ -275,4 +280,43 @@ test('s136 guests reset: _resetGuideKnown clears the absent memory and drops the
 test('s136 guests css: the mockup rules ship and braces balance', () => {
   for (const k of ['.N_ggguests { display: grid; }', '.N_ggmeta { display: flex; flex-wrap: wrap; gap: 0 10px; }', '.N_ggguests > .N_row.N_static { padding-top: 8px; padding-bottom: 8px; min-height: 0; }']) assert.ok(CSS.includes(k), k);
   assert.equal((CSS.match(/\{/g) || []).length, (CSS.match(/\}/g) || []).length);
+});
+
+// ---- s136 round 4 ----
+const U1 = '0b1c2d3e-4f50-4a6b-8c7d-9e0f1a2b3c4d', U2 = 'AABBCCDD-1122-4334-8556-66778899AABB';
+const toggleOn = async (t, open = true) => { const sum = t.el.querySelector('.N_ggsum'); if (open && sum) sum.focus(); await openFold(t, open); }; // the person focuses the summary, then the fold toggles
+test('s136 r4 focus: first open keeps focus on the summary after the async reply; a cached reopen then a month chip never pulls focus to the fold', async () => {
+  let release; const gate = new Promise((r) => { release = r; });
+  const t = boot({ usage: okUsage, guests: () => gate }); await t.ready();
+  await toggleOn(t); assert.match(t.html(), /Loading/, 'the reply is still pending');
+  assert.equal(t.doc.activeElement && t.doc.activeElement.sel, '.N_ggsum', 'busy draw keeps focus on the summary');
+  release({ data: GUESTS(3), error: null }); await tick(); assert.match(gtext(t), /Guests who used the guide \(3\)/);
+  assert.equal(t.doc.activeElement.sel, '.N_ggsum', 'after the async reply focus is still on the summary, not the body'); assert.equal(t.doc.activeElement.gen, t.el.gen, 'a live node');
+  await toggleOn(t, false); await toggleOn(t); assert.equal(guestCalls(t).length, 1, 'cached open');
+  t.doc.activeElement = t.doc.body; await t.click('mon', '0'); assert.ok(t.doc.activeElement.isBody, 'a later unrelated draw does not move focus to the fold');
+});
+test('s136 r4 focus: after a remount with the absent answer remembered, opening and a later draw leave focus alone and the empty fold is not drawn', async () => {
+  const t = boot({ usage: () => ({ data: USAGE({ sections: [], top_taps: [], searches_without_result: [] }), error: null }), guests: null }); await t.ready();
+  await toggleOn(t); assert.equal(guestCalls(t).length, 1); assert.ok(!/N_ggmore/.test(t.html()));
+  t.M.mount(t.el, { client: t.client, demo: false, role: 'owner', sub: 'kpis', navigate() {}, toast() {}, haptic() {} }); await tick();
+  assert.ok(!/N_ggmore/.test(t.html()), 'remount: nothing to fold and guests known missing, so no fold');
+  const u = boot({ usage: okUsage, guests: null }); await u.ready(); await toggleOn(u); assert.equal(guestCalls(u).length, 1);
+  u.M.mount(u.el, { client: u.client, demo: false, role: 'owner', sub: 'kpis', navigate() {}, toast() {}, haptic() {} }); await tick();
+  assert.match(u.html(), /N_ggmore/, 'other rows exist, the fold stays'); await toggleOn(u); u.doc.activeElement = u.doc.body; await u.click('mon', '0');
+  assert.ok(u.doc.activeElement.isBody, 'the remembered absent open drew nothing and left no pending refocus'); assert.equal(guestCalls(u).length, 1);
+});
+test('s136 r4 messaged rows: a button with the index only; navigate gets the exact hash; a non-uuid id does nothing', async () => {
+  const g = { total: 3, guests: [GUEST(1, { thread_id: U2, messaged: true }), GUEST(2, { thread_id: 'th2' }), GUEST(3, { thread_id: 'not-a-uuid', messaged: true })] };
+  const t = boot({ usage: okUsage, guests: () => ({ data: g, error: null }) }); await t.ready(); await openFold(t);
+  const h = t.html(); assert.ok(!h.includes(U2) && !h.toLowerCase().includes(U2.toLowerCase()) && !h.includes('not-a-uuid'), 'no thread id in the page');
+  assert.match(h, /<button class="N_row" type="button" data-n="ggg-open" data-v="0">.*?<span class="N_chev" aria-hidden="true">\u203a<\/span><\/button>/);
+  const blk = h.slice(h.indexOf('class="N_ggguests"'), h.indexOf('Top sections')); assert.match(blk, /data-v="2"/); assert.ok(!/data-v="1"/.test(blk), 'the guest who never messaged stays plain');
+  await t.click('ggg-open', '0'); assert.deepEqual(t.nav, ['#inbox/guide:' + U2.toLowerCase()]);
+  await t.click('ggg-open', '2'); await t.click('ggg-open', '1'); await t.click('ggg-open', '99'); await t.click('ggg-open', 'x'); assert.equal(t.nav.length, 1, 'non-uuid, not messaged, out of range: nothing');
+});
+test('s136 r4 guests cache: its own five minutes, not the page-wide loadedAt', async () => {
+  let now = NOW; const t = boot({ usage: okUsage, guests: () => ({ data: GUESTS(2), error: null }) }); t.M._setClock(() => now); await t.ready();
+  await openFold(t); assert.equal(guestCalls(t).length, 1);
+  await openFold(t, false); now += 4 * 60000; await t.click('tab', 'today'); await t.click('tab', 'kpis'); /* other kinds reload and move the page-wide loadedAt */ await openFold(t); assert.equal(guestCalls(t).length, 1, 'four minutes: cached');
+  await openFold(t, false); now += 2 * 60000; await openFold(t); assert.equal(guestCalls(t).length, 2, 'six minutes since the guests read: read again, though the page loaded two minutes ago');
 });
