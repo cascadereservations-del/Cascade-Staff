@@ -307,6 +307,10 @@
   function ggList(v) { return Array.isArray(v) ? v.filter(function (x) { return x && typeof x === 'object'; }) : []; }
   function ggTop(rows, key, n) { return rows.map(function (r, i) { return { r: r, i: i }; }).sort(function (a, b) { return b.r[key] !== a.r[key] ? b.r[key] - a.r[key] : a.i - b.i; }).slice(0, n).map(function (x) { return x.r; }); }
   function ggLabel(s) { var t = String(s == null ? '' : s).replace(/[_-]+/g, ' ').replace(/\s+/g, ' ').trim(); return t ? t.charAt(0).toUpperCase() + t.slice(1) : 'Other'; }
+  // plain staff words for what guests tapped; the guide sends the slug, staff read the sentence. An unknown slug is cleaned (ggLabel), never shown raw.
+  var GG_TAPS = { wifi_copy: 'Copied the wifi password', map_open: 'Opened a map', checklist_item: 'Ticked a checklist item', guide_open: 'Opened the guide', search_empty: 'Searched and found nothing' };
+  function ggTapLabel(slug) { return Object.prototype.hasOwnProperty.call(GG_TAPS, slug) ? GG_TAPS[slug] : ggLabel(slug); }
+  var ggAbsent = false; // staff_guide_usage_v1 known missing on this server: probed once per session, like the Inbox's guideKnown. Refresh or Try again probes again.
   function ggSeconds(v) { var n = Math.round(Number(v)); if (!isFinite(n) || n <= 0) return '0 s'; if (n < 60) return n + ' s'; var m = Math.floor(n / 60), s = n % 60; return m + ' min' + (s ? ' ' + s + ' s' : ''); }
   // one number per day for the sparkline, zero for a day with no rows, so a quiet week reads as quiet and not as a shorter chart
   function ggDense(byDay, since, days) {
@@ -320,7 +324,7 @@
     var f = raw.funnel && typeof raw.funnel === 'object' ? raw.funnel : {};
     var m = { since: String(raw.since || '').slice(0, 10), days: days || GG_DAYS, devices: ggInt(raw.devices), verified: ggInt(raw.verified_stays), opens: ggInt(raw.opens),
       sections: ggTop(ggList(raw.sections).map(function (s) { return { label: ggLabel(s.section), views: ggInt(s.views), devices: ggInt(s.devices), avg: ggSeconds(s.avg_seconds) }; }), 'views', 5),
-      taps: ggTop(ggList(raw.top_taps).map(function (t) { return { target: String(t.target == null ? '' : t.target), where: t.section ? ggLabel(t.section) : '', taps: ggInt(t.taps), devices: ggInt(t.devices) }; }).filter(function (t) { return t.target; }), 'taps', 5),
+      taps: ggTop(ggList(raw.top_taps).map(function (t) { var tg = String(t.target == null ? '' : t.target), lb = tg ? ggTapLabel(tg) : '', wh = t.section ? ggLabel(t.section) : ''; return { target: tg, label: lb, where: wh && lb.toLowerCase().indexOf(wh.toLowerCase()) < 0 ? wh : '', taps: ggInt(t.taps), devices: ggInt(t.devices) }; }).filter(function (t) { return t.target; }), 'taps', 5),
       funnel: GG_FUNNEL.map(function (p) { return { key: p[0], label: p[1], n: ggInt(f[p[0]]) }; }),
       searches: ggTop(ggList(raw.searches_without_result).map(function (s) { return { target: String(s.target == null ? '' : s.target), n: ggInt(s.n) }; }).filter(function (s) { return s.target; }), 'n', 5) };
     m.perDay = ggDense(raw.by_day, m.since, m.days);
@@ -494,13 +498,15 @@
   // load(kind): each kind has its own state { ok, data, err, absent, busy }. A missing RPC sets absent and hides that section.
   function load(kind, force) {
     S.today = manilaToday(); // a screen opened past midnight uses today's periods
-    var st = S.d[kind] || (S.d[kind] = {}); if (st.busy) return; if (st.ok && !force && (LIVE[kind] ? clock() - (st.at || 0) <= LIVE_MS : !stale())) return;
+    var st = S.d[kind] || (S.d[kind] = {}); if (st.busy) return;
+    if (kind === 'gg' && ggAbsent && !S.ggProbe && !S.demo) { st.absent = true; st.ok = false; return; } // only the person's own Refresh / Try again probes again
+    if (kind === 'gg') S.ggProbe = false; if (st.ok && !force && (LIVE[kind] ? clock() - (st.at || 0) <= LIVE_MS : !stale())) return;
     st.busy = true; st.err = ''; var gen = S.gen, key = kind === 'kpi' ? S.period : '';
     draw();
     var done = function (res) {
       if (!S || S.gen !== gen) return; st.busy = false;
-      if (res.error) { if (isMissing(res.error)) { st.absent = true; st.ok = false; } else if (isDenied(res.error)) { st.denied = true; st.ok = false; } else { st.err = plainError(res.error, false); st.ok = false; } }
-      else { st.ok = true; st.absent = false; st.denied = false; st.data = res.data; st.at = clock(); S.loadedAt = clock(); }
+      if (res.error) { if (isMissing(res.error)) { st.absent = true; st.ok = false; if (kind === 'gg' && !S.demo) ggAbsent = true; } else if (isDenied(res.error)) { st.denied = true; st.ok = false; } else { st.err = plainError(res.error, false); st.ok = false; } }
+      else { if (kind === 'gg') ggAbsent = false; st.ok = true; st.absent = false; st.denied = false; st.data = res.data; st.at = clock(); S.loadedAt = clock(); }
       if (kind === 'kpi' && key !== S.period) { st.ok = false; loadTab('kpis', true); return; }
       draw();
     };
@@ -855,15 +861,17 @@
       var total = m.perDay.reduce(function (a, v) { return a + v; }, 0);
       out += '<div class="N_ggspark"><span class="N_hs">' + esc('Activity per day' + (m.since ? ', from ' + fmtDate(m.since, 'long') : '') + '. ' + ggNum(total) + ' in all.') + '</span>' + sparkLine(m.perDay, 'zero') + '</div>';
     }
-    if (m.sections.length) out += '<h4 class="N_h4">Top sections</h4><ul class="N_gglist">' + m.sections.map(function (s) {
-      return '<li><span class="N_ggl">' + esc(s.label) + '</span><span class="N_ggv N_num">' + esc(ggNum(s.views) + (s.views === 1 ? ' view' : ' views') + ', ' + s.avg + ' on average') + '</span></li>'; }).join('') + '</ul>';
-    if (m.taps.length) out += '<h4 class="N_h4">Top taps</h4><ul class="N_gglist">' + m.taps.map(function (t) {
-      return '<li><span class="N_ggl">' + esc(t.target) + (t.where ? ' <span class="N_ggw">' + esc(t.where) + '</span>' : '') + '</span><span class="N_ggv N_num">' + esc(ggNum(t.taps) + (t.taps === 1 ? ' tap' : ' taps')) + '</span></li>'; }).join('') + '</ul>';
     var top = m.funnel.reduce(function (a, s) { return s.n > a ? s.n : a; }, 0);
     out += '<h4 class="N_h4">What guests do</h4><ol class="N_ggfun">' + m.funnel.map(function (s) {
       return '<li><span class="N_ggl">' + esc(s.label) + '</span><span class="N_ggv N_num">' + esc(ggNum(s.n)) + '</span><span class="N_ggbar" aria-hidden="true" style="--w:' + (top ? Math.round(s.n / top * 100) : 0) + '%"></span></li>'; }).join('') + '</ol>';
-    if (m.searches.length) out += '<h4 class="N_h4">Delivery searches with no result</h4><ul class="N_gglist">' + m.searches.map(function (s) {
+    var more = '';
+    if (m.sections.length) more += '<h4 class="N_h4">Top sections</h4><ul class="N_gglist">' + m.sections.map(function (s) {
+      return '<li><span class="N_ggl">' + esc(s.label) + '</span><span class="N_ggv N_num">' + esc(ggNum(s.views) + (s.views === 1 ? ' view' : ' views') + ' · ' + s.avg + ' avg') + '</span></li>'; }).join('') + '</ul>';
+    if (m.taps.length) more += '<h4 class="N_h4">Top taps</h4><ul class="N_gglist">' + m.taps.map(function (t) {
+      return '<li><span class="N_ggl">' + esc(t.label) + (t.where ? ' <span class="N_ggw">' + esc(t.where) + '</span>' : '') + '</span><span class="N_ggv N_num">' + esc(ggNum(t.taps) + (t.taps === 1 ? ' tap' : ' taps')) + '</span></li>'; }).join('') + '</ul>';
+    if (m.searches.length) more += '<h4 class="N_h4">Delivery searches with no result</h4><ul class="N_gglist">' + m.searches.map(function (s) {
       return '<li><span class="N_ggl">' + esc(s.target) + '</span><span class="N_ggv N_num">' + esc(ggNum(s.n) + (s.n === 1 ? ' time' : ' times')) + '</span></li>'; }).join('') + '</ul>';
+    if (more) out += '<details class="N_ggmore"><summary class="N_ggsum">More: sections, taps, searches</summary>' + more + '</details>';
     return out + '</section>';
   }
 
@@ -1159,8 +1167,8 @@
     if (sh && sh.busy && (a === 'go' || a === 'tab' || a === 'refresh' || a === 'retry')) return; // a request is in flight: nothing may orphan its sheet
     if (a === 'go') { if (ev.preventDefault) ev.preventDefault(); S.sheet = null; S.opts.navigate('#door/dashboard/' + v); return; }
     if (a === 'tab') { setTab(v, true); return; }
-    if (a === 'retry') { loadTab(['today', 'inquiries', 'money', 'kpis'].indexOf(v) >= 0 ? v : S.tab, true); return; }
-    if (a === 'refresh') { S.notice = ''; loadTab(S.tab, true); return; }
+    if (a === 'retry') { S.ggProbe = true; loadTab(['today', 'inquiries', 'money', 'kpis'].indexOf(v) >= 0 ? v : S.tab, true); return; }
+    if (a === 'refresh') { S.notice = ''; S.ggProbe = true; loadTab(S.tab, true); return; }
     S.notice = '';
     if (a === 'mon') { S.monSel = +v; draw(); return; }
     if (a === 'tbl') { S.showTable = !S.showTable; draw(); return; }
@@ -1247,11 +1255,12 @@
     _setSeriesConcurrency: function (n) { SERIES_CONCURRENCY = n; },
     // R1.8: the shell or a push may say a list changed; the next look is a fresh read, and nothing is read under an open sheet.
     refresh: function (kind) { if (!S || (S.sheet && S.sheet.busy)) return; if (kind === 'inq' || kind === 'waiting') { if (S.sheet) { (S.pend || (S.pend = {}))[kind] = true; if (S.d[kind]) S.d[kind].at = 0; } else load(kind, true); } }, // under a sheet: mark stale and read when it closes; ok is left alone so the list never shows Loading
+    _resetGuideKnown: function () { ggAbsent = false; }, // the shell may call this on sign-out; a new session probes again
     _setClock: function (fn) { clock = fn || function () { return Date.now(); }; },
     lib: { lastMonths: lastMonths, buildSeries: buildSeries, chipFor: chipFor, canManage: canManage, manilaToday: manilaToday, addDays: addDays, nightsBetween: nightsBetween, fmtDate: fmtDate, fmtDateTime: fmtDateTime, toCentavos: toCentavos, fromCentavos: fromCentavos, formatPHP: formatPHP, formatPercent: formatPercent, formatNumber: formatNumber,
       formatMetricValue: formatMetricValue, parseAmount: parseAmount, periodPreset: periodPreset, comparablePeriod: comparablePeriod, compareMode: compareMode, pctDelta: pctDelta, fmtDeltaPct: fmtDeltaPct, deltaLine: deltaLine,
       normalizePayments: normalizePayments, paymentLine: paymentLine, validateConfirm: validateConfirm, confirmArgs: confirmArgs, confirmSentence: confirmSentence, declineSentence: declineSentence, declineReason: declineReason,
-      guestGuide: { model: ggModel, dense: ggDense, seconds: ggSeconds, label: ggLabel, DAYS: GG_DAYS }, normalizeCats: normalizeCats, declineMessage: declineMessage, agoWords: agoWords, receiptCmp: receiptCmp, groupRef: groupRef, tone: tone, isMissing: isMissing, isDenied: isDenied, isOffline: isOffline, plainError: plainError, PRESETS: PRESETS, METHODS: METHODS, EXPENSE_CATEGORIES: EXPENSE_CATEGORIES, refusalWords: refusalWords, INCOMPLETE: INCOMPLETE, KPI_GROUPS: KPI_GROUPS, NO_CONNECTION: NO_CONNECTION }
+      guestGuide: { tapLabel: ggTapLabel, model: ggModel, dense: ggDense, seconds: ggSeconds, label: ggLabel, DAYS: GG_DAYS }, normalizeCats: normalizeCats, declineMessage: declineMessage, agoWords: agoWords, receiptCmp: receiptCmp, groupRef: groupRef, tone: tone, isMissing: isMissing, isDenied: isDenied, isOffline: isOffline, plainError: plainError, PRESETS: PRESETS, METHODS: METHODS, EXPENSE_CATEGORIES: EXPENSE_CATEGORIES, refusalWords: refusalWords, INCOMPLETE: INCOMPLETE, KPI_GROUPS: KPI_GROUPS, NO_CONNECTION: NO_CONNECTION }
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   if (typeof window !== 'undefined') window.N_Manage = api;

@@ -1,4 +1,4 @@
-// s134 lane L2 (Staff 3.4.54): expenses/E_expenses.js, the Today card, the Manage hand-over, the KPI copy, the receipt hand-off to Inventory.
+// s134 lane L2 (Staff 3.4.53): expenses/E_expenses.js, the Today card, the Manage hand-over, the KPI copy, the receipt hand-off to Inventory.
 // Frozen clock: 2026-11-23T03:00:00Z = 11:00 on 2026-11-23 in Manila. The module runs in a vm sandbox with a tiny fake DOM and a fake Supabase client that records every call.
 // Contract: docs/s134/SPEC.md (6, 8, 13, 14) and PLAN.md (L2). Hand-computed expectations throughout.
 import test from 'node:test';
