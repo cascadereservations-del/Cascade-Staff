@@ -276,6 +276,7 @@
       return { ok: false, retry: false, kind: 'other', text: 'The server did not accept this reply.' };
     }
     if (d && d.ok === true) return { ok: true, id: d.id == null ? '' : String(d.id), at: d.at || null, already: !!d.already };
+    if (d && d.ok === false && d.reason === 'rate') return { ok: false, retry: false, kind: 'rate', text: 'Too many replies in this chat in the last hour. Try again later.' }; // 60 staff replies per thread per hour; the draft stays
     if (d && d.ok === false) return { ok: false, retry: false, kind: 'other', text: 'The server did not accept this reply.' };
     return { ok: false, retry: true, kind: 'offline', text: 'No answer came back, so this may not have been sent.' };
   }

@@ -185,3 +185,10 @@ test('s136 r2 dense line: the axis is the 30 Manila dates ending at Manila today
   t.M._setClock(() => Date.parse('2026-10-14T18:00:00Z')); await t.click('refresh');
   assert.match(t.html().replace(/<[^>]+>/g, ' '), /Guide actions per day\. 6 in all\./);
 });
+
+test('s136 r2 since: a Manila date string and an old UTC timestamptz give the same axis (it is built from Manila today, since is never parsed for it)', () => {
+  const { M } = boot({ sub: 'today' }), G = M.lib.guestGuide;
+  const by = [{ day: '2026-10-14', events: 7 }, { day: '2026-09-15', events: 3 }];
+  const a = plain(G.model({ since: '2026-09-15', devices: 1, opens: 1, by_day: by }, 30)), b = plain(G.model({ since: '2026-09-14T03:00:00+00:00', devices: 1, opens: 1, by_day: by }, 30)), c = plain(G.model({ devices: 1, opens: 1, by_day: by }, 30));
+  assert.deepEqual(a.perDay, b.perDay); assert.deepEqual(a.perDay, c.perDay); assert.equal(a.perDay[0], 3); assert.equal(a.perDay[29], 7); assert.equal(a.since, '2026-09-15');
+});

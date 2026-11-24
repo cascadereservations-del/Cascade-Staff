@@ -362,3 +362,15 @@ test('s136 r2 duplicate send: a remount mid-send resends under the SAME key; if 
   assert.match(b.el.html('gtext'), /<textarea[^>]*><\/textarea>/, 'draft cleared'); assert.match(b.el.html('msgs'), /Hooks are by the shower\./);
   assert.equal(named(c4, 'staff_guide_reply_v1').length, 0);
 });
+test('s136 r2 rate limit: {ok:false, reason:"rate"} says so in words, is not retried, and keeps the draft; a replay still answers already', async () => {
+  const { X } = load(), G = X.lib.guide;
+  const o = G.replyOutcome({ data: { ok: false, reason: 'rate' }, error: null });
+  assert.equal(o.ok, false); assert.equal(o.retry, false); assert.equal(o.kind, 'rate'); assert.equal(o.text, 'Too many replies in this chat in the last hour. Try again later.');
+  assert.equal(G.replyOutcome({ data: { ok: false, reason: 'other' } }).kind, 'other'); assert.equal(G.replyOutcome({ data: { ok: true, id: 'a', already: true } }).already, true);
+  const env = load(), c = gclient({ staff_guide_reply_v1: () => ({ data: { ok: false, reason: 'rate' }, error: null }) });
+  const { el } = await mountIt(env, c, { sub: 'guide:' + T1 });
+  await typeG(el, 'Hooks are by the shower.'); await el.click('gsend'); await wait();
+  assert.equal(named(c, 'staff_guide_reply_v1').length, 1, 'no retry'); assert.match(el.html('msgs'), /Not sent\. Too many replies in this chat in the last hour\. Try again later\./);
+  env.X.unmount(); const m2 = await mountIt(env, gclient(), { sub: 'guide:' + T1 });
+  assert.match(m2.el.html('gtext'), />Hooks are by the shower\.<\/textarea>/, 'the draft is kept');
+});
