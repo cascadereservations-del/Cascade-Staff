@@ -334,6 +334,24 @@
     m.empty = !m.devices && !m.opens && !m.verified;
     return m;
   }
+  // s136: "Guests who used the guide" inside the More fold (staff_guide_guests_v1, owner and admin). Loaded when the fold is opened, never before.
+  var GGG_SHOW = 10;     // rows shown before "Show all"
+  var gggAbsent = false; // staff_guide_guests_v1 known missing on this server: probed once per session, cleared by Try again / Refresh and by _resetGuideKnown
+  function gggDates(ci, co) { // "24\u201327 Nov", "30 Nov \u2013 2 Dec", one date when there is no separate check-out; '' when unknown (never a made-up date)
+    var re = /^\d{4}-\d{2}-\d{2}$/, a = re.test(String(ci || '')) ? String(ci) : '', b = re.test(String(co || '')) ? String(co) : '';
+    if (!a) return b ? fmtDate(b) : ''; if (!b || b === a) return fmtDate(a);
+    return a.slice(0, 7) === b.slice(0, 7) ? String(+a.slice(8, 10)) + '\u2013' + fmtDate(b) : fmtDate(a) + ' \u2013 ' + fmtDate(b);
+  }
+  function gggModel(raw) {
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
+    var list = ggList(raw.guests).map(function (g) {
+      var q = g.first_seen ? manilaParts(g.first_seen) : null, lb = String(g.guest_label == null ? '' : g.guest_label).replace(/\s+/g, ' ').trim();
+      return { id: g.thread_id == null ? '' : String(g.thread_id), label: lb || 'Guest', dates: gggDates(g.checkin_date, g.checkout_date), first: q ? fmtDate(q.day) : '', opens: ggInt(g.opens), checklist: g.checklist_done === true, messaged: g.messaged === true };
+    });
+    var m = { guests: list, total: Math.max(ggInt(raw.total), list.length), single: raw.single_property === true };
+    m.empty = m.single || !list.length; if (m.empty) m.total = 0;
+    return m;
+  }
 
   // ---- errors: plain words ----
   function errCode(e) { return e && (e.code || (e.error && e.error.code)) || ''; }
@@ -376,6 +394,10 @@
       rq: function () { return { count: this.rqRows.length, total: this.rqRows.reduce(function (a, r) { return a + Number(r.gross_amount); }, 0).toFixed(2), truncated: false, rows: this.rqRows }; },
       rqRows: [{ id: 'n-demo-r1', transaction_date: d(-1), txn_type: 'expense', category: '', gross_amount: '1200.00', payee_name: 'Sample market', notes: 'Sample: scanned receipt', or_number: null, source: 'ocr', receipt_image_path: 'n/a', ocr_confidence: 0.5, created_at: d(-1) + 'T02:00:00Z' },
         { id: 'n-demo-r2', transaction_date: d(-5), txn_type: 'expense', category: 'supplies', gross_amount: '800.00', payee_name: 'Demo shop', notes: 'Stock bought, some items not priced', or_number: null, source: 'stock', receipt_image_path: null, ocr_confidence: null, s134_incomplete: true, created_at: d(-5) + 'T02:00:00Z' }],
+      guests: function () { // staff_guide_guests_v1 sample (invented names)
+        var gs = [['Guest A.', -3, 0, -4, 14, true, true], ['Guest B.', -9, -7, -10, 9, true, false], ['Guest C.', -14, -12, -15, 3, false, true], ['Guest D.', -20, -18, -20, 1, false, false]];
+        return { total: gs.length, guests: gs.map(function (g, i) { return { thread_id: 'n-demo-g' + (i + 1), guest_label: g[0], checkin_date: d(g[1]), checkout_date: d(g[2]), first_seen: d(g[3]) + 'T02:00:00Z', last_seen: d(g[2]) + 'T02:00:00Z', opens: g[4], checklist_done: g[5], messaged: g[6] }; }) };
+      },
       guide: function () { // staff_guide_usage_v1 sample, 30 days
         return { since: d(-29), devices: 14, verified_stays: 5, opens: 41,
           by_day: [0, 3, 5, 8, 12, 20, 29].map(function (k) { return { day: d(-k), devices: 1 + k % 4, events: 4 + k }; }),
@@ -452,7 +474,7 @@
     if (t === 'today') { load('overview', force); load('inq', force); load('waiting', force); }
     else if (t === 'inquiries') load('inq', force);
     else if (t === 'money') { load('txns', force); load('rq', force); }
-    else if (t === 'kpis') { load('kpi', force); loadSeries(force); if (canManage(S.role)) load('gg', force); }
+    else if (t === 'kpis') { load('kpi', force); loadSeries(force); if (canManage(S.role)) load('gg', force); if (canManage(S.role) && S.ggOpen) load('ggg', force); }
   }
   // One get_hospitality_series_v1 call (13 months: twelve full ones and the running month) when the server has it and the chart module is loaded;
   // otherwise the older way: six monthly get_hospitality_metrics_v1 calls, two at a time. Kept in memory for the session.
@@ -502,19 +524,21 @@
     S.today = manilaToday(); // a screen opened past midnight uses today's periods
     var st = S.d[kind] || (S.d[kind] = {}); if (st.busy) return;
     if (kind === 'gg' && ggAbsent && !S.ggProbe && !S.demo) { st.absent = true; st.ok = false; return; } // only the person's own Refresh / Try again probes again
+    if (kind === 'ggg' && gggAbsent && !S.gggProbe && !S.demo) { st.absent = true; st.ok = false; return; }
+    if (kind === 'ggg') S.gggProbe = false;
     if (kind === 'gg') S.ggProbe = false; if (st.ok && !force && (LIVE[kind] ? clock() - (st.at || 0) <= LIVE_MS : !stale())) return;
     st.busy = true; st.err = ''; var gen = S.gen, key = kind === 'kpi' ? S.period : '';
     draw();
     var done = function (res) {
       if (!S || S.gen !== gen) return; st.busy = false;
-      if (res.error) { if (isMissing(res.error)) { st.absent = true; st.ok = false; if (kind === 'gg' && !S.demo) ggAbsent = true; } else if (isDenied(res.error)) { st.denied = true; st.ok = false; } else { st.err = plainError(res.error, false); st.ok = false; } }
-      else { if (kind === 'gg') { ggAbsent = false; ggSeen = true; } st.ok = true; st.absent = false; st.denied = false; st.data = res.data; st.at = clock(); S.loadedAt = clock(); }
+      if (res.error) { if (isMissing(res.error)) { st.absent = true; st.ok = false; if (kind === 'gg' && !S.demo) ggAbsent = true; if (kind === 'ggg' && !S.demo) gggAbsent = true; } else if (isDenied(res.error)) { st.denied = true; st.ok = false; } else { st.err = plainError(res.error, false); st.ok = false; } }
+      else { if (kind === 'gg') { ggAbsent = false; ggSeen = true; } if (kind === 'ggg') gggAbsent = false; st.ok = true; st.absent = false; st.denied = false; st.data = res.data; st.at = clock(); S.loadedAt = clock(); }
       if (kind === 'kpi' && key !== S.period) { st.ok = false; loadTab('kpis', true); return; }
       draw();
     };
     if (S.demo) { // built-in sample, no network
       var dd = S.demoData, per = periodPreset(S.period, S.today), cmp = comparablePeriod(per, compareMode(S.period));
-      var sample = kind === 'overview' ? dd.overview : kind === 'inq' ? normalizePayments(dd.inquiries) : kind === 'waiting' ? normalizeWaiting(dd.waiting) : kind === 'txns' ? dd.txns : kind === 'rq' ? dd.rq() : kind === 'cats' ? dd.cats : kind === 'gg' ? dd.guide() : { now: dd.metrics(per.start, per.endExclusive), prev: dd.metrics(cmp.start, cmp.endExclusive) };
+      var sample = kind === 'overview' ? dd.overview : kind === 'inq' ? normalizePayments(dd.inquiries) : kind === 'waiting' ? normalizeWaiting(dd.waiting) : kind === 'txns' ? dd.txns : kind === 'rq' ? dd.rq() : kind === 'cats' ? dd.cats : kind === 'gg' ? dd.guide() : kind === 'ggg' ? dd.guests() : { now: dd.metrics(per.start, per.endExclusive), prev: dd.metrics(cmp.start, cmp.endExclusive) };
       Promise.resolve().then(function () { done({ data: sample, error: null }); }); return;
     }
     if (!online() || !S.client) { Promise.resolve().then(function () { done({ data: null, error: { message: 'failed to fetch' } }); }); return; }
@@ -537,6 +561,8 @@
       callRpc('expense_categories_v1', { p_property_id: pid() }).then(done);
     } else if (kind === 'gg') {
       callRpc('staff_guide_usage_v1', { p_days: GG_DAYS }).then(done); // guide v8: a missing function sets absent and the card never draws
+    } else if (kind === 'ggg') {
+      callRpc('staff_guide_guests_v1', { p_days: GG_DAYS }).then(done); // lazily, when the More fold opens
     } else if (kind === 'kpi') {
       var p1 = periodPreset(S.period, S.today), p2 = comparablePeriod(p1, compareMode(S.period));
       var get = function (p) { return callRpc('get_hospitality_metrics_v1', { p_property_id: pid(), p_start: p.start, p_end_exclusive: p.endExclusive }); }; // features/insights/api.ts:9
@@ -850,6 +876,24 @@
 
   // s135: the Guest guide card. Nothing is drawn while it loads, when the server does not have staff_guide_usage_v1 yet, or when the account may not read it.
   function ggRow(label, n) { return '<div class="N_row N_static N_kpi"><span class="N_rowmid"><span class="N_rowt">' + esc(label) + '</span></span><span class="N_val N_num">' + esc(ggNum(n)) + '</span></div>'; }
+  function gggRow(g) {
+    var bits = [(g.first ? 'First opened ' + g.first + ' \u00b7 ' : '') + (g.opens === 1 ? '1 open' : ggNum(g.opens) + ' opens')]; if (g.checklist) bits.push('\u2713 Checklist'); if (g.messaged) bits.push('\u2709 Messaged');
+    // no thread-open action exists on this card (the inbox opens as #inbox only), so every row is plain text, never a button that goes nowhere
+    return '<div class="N_row N_static"><span class="N_rowmid"><span class="N_rowt">' + esc(g.label + (g.dates ? ' \u00b7 ' + g.dates : '')) + '</span><span class="N_rows N_ggmeta">' + bits.map(function (t) { return '<span>' + esc(t) + '</span>'; }).join('') + '</span></span></div>';
+  }
+  function gggHtml() { // the guests block of the More fold: nothing when the server lacks the function or the account may not read it
+    var st = S.d.ggg; if (!st || st.absent || st.denied) return '';
+    var t = 'Guests who used the guide';
+    if (st.ok) {
+      var m = gggModel(st.data); if (!m) return '';
+      if (m.empty) return '<h4 class="N_h4" id="N_ggg" tabindex="-1">' + esc(t + ' (0)') + '</h4><p class="N_sub">' + esc('No guest has signed in to the guide in the last 30 days.') + '</p>';
+      var shown = S.gggAll ? m.guests : m.guests.slice(0, GGG_SHOW);
+      return '<h4 class="N_h4" id="N_ggg" tabindex="-1">' + esc(t + ' (' + ggNum(m.total) + ')') + '</h4><div class="N_ggguests">' + shown.map(gggRow).join('') +
+        (m.total > shown.length ? '<button class="N_row" type="button" data-n="ggg-all"><span class="N_rowmid"><span class="N_rowt">' + esc('Show all (' + ggNum(m.total) + ')') + '</span></span><span class="N_chev" aria-hidden="true">\u2304</span></button>' : '') + '</div>';
+    }
+    if (st.err) return '<h4 class="N_h4" id="N_ggg">' + esc(t) + '</h4><div class="N_err" role="alert"><span>' + esc('The guest list could not be loaded.') + '</span><button class="btn btn-secondary btn-sm" type="button" data-n="ggg-retry">Try again</button></div>';
+    return '<h4 class="N_h4" id="N_ggg">' + esc(t) + '</h4><div class="N_note" role="status">Loading\u2026</div>';
+  }
   function ggHtml() {
     var g = S.d.gg; if (!g || g.absent || g.denied || !canManage(S.role)) return '';
     var head = '<section class="N_card N_gg" aria-labelledby="N_gg1"><div class="N_ggtop"><h3 class="N_h3" id="N_gg1">Guest guide</h3>';
@@ -874,7 +918,8 @@
       return '<li><span class="N_ggl">' + esc(t.label) + (t.where ? ' <span class="N_ggw">' + esc(t.where) + '</span>' : '') + '</span><span class="N_ggv N_num">' + esc(ggNum(t.taps) + (t.taps === 1 ? ' tap' : ' taps')) + '</span></li>'; }).join('') + '</ul>';
     if (m.searches.length) more += '<h4 class="N_h4">Delivery searches with no result</h4><ul class="N_gglist">' + m.searches.map(function (s) {
       return '<li><span class="N_ggl">' + esc(s.target) + '</span><span class="N_ggv N_num">' + esc(ggNum(s.n) + (s.n === 1 ? ' time' : ' times')) + '</span></li>'; }).join('') + '</ul>';
-    if (more) out += '<details class="N_ggmore"><summary class="N_ggsum">More: sections, taps, searches</summary>' + more + '</details>';
+    var gs = S.d.ggg; // the fold is drawn while guests may still load: not once the server is known to lack the function or the account may not read it
+    if (more || !(gs && (gs.absent || gs.denied))) out += '<details class="N_ggmore" data-n-fold="gg"' + (S.ggOpen ? ' open' : '') + '><summary class="N_ggsum">More: guests, sections, taps, searches</summary>' + gggHtml() + more + '</details>';
     return out + '</section>';
   }
 
@@ -1035,6 +1080,7 @@
     var live = S.notice ? '<div class="N_okbox" role="status">' + esc(S.notice) + '</div>' : '';
     S.el.innerHTML = '<div class="N_root">' + tabsHtml() + live + '<div class="N_body" role="tabpanel" aria-labelledby="N_tab_' + S.tab + '"' + (S.sheet ? ' inert aria-hidden="true"' : '') + '>' + body + '</div></div>' + sheetHtml();
     revealTab();
+    if (S.ggRefocus) { var rk = S.ggRefocus; S.ggRefocus = ''; try { var rf0 = S.el.querySelector(rk === 'sum' ? '.N_ggsum' : '#N_ggg'); if (rf0 && rf0.focus) rf0.focus(); } catch (e) { /* no focus in tests */ } } // the redraw replaced the control the person used: focus goes back to the fold, or to the list heading after Show all
     if (!S.sheet && S.pend) { var pk = Object.keys(S.pend); S.pend = null; pk.forEach(function (k) { load(k, true); }); } // a refresh skipped under a sheet is read once it closes
     if (S.sheet && S.sheet.refocus) { var rf = S.sheet.refocus; S.sheet.refocus = null; try { var rb = S.el.querySelector('[data-n="' + rf + '"]'); if (rb && rb.focus) rb.focus(); } catch (e) { /* no focus in tests */ } return; }
     if (S.sheet && S.sheet.focus !== false) { try { var h = S.el.querySelector('[data-n-focus]'); if (h && h.focus) h.focus(); } catch (e) { /* no focus in tests */ } S.sheet.focus = false; }
@@ -1162,6 +1208,13 @@
   }
   function demoRemove(id) { S.demoData.inquiries = S.demoData.inquiries.filter(function (r) { return r.id !== id; }); }
 
+  function onToggle(ev) { // <details> toggle does not bubble: listened to in the capture phase. Only a real change of state counts (a redraw re-opens the fold without a person).
+    if (!S || !ev || !ev.target || !ev.target.getAttribute || ev.target.getAttribute('data-n-fold') !== 'gg') return;
+    var open = !!ev.target.open; if (open === !!S.ggOpen) return;
+    S.ggOpen = open; if (!open) return;
+    var st = S.d.ggg; if (st && (st.absent || st.denied)) return;
+    S.ggRefocus = 'sum'; load('ggg', false);
+  }
   function onClick(ev) {
     if (!S) return; if (ev.target && ev.target.closest && ev.target.closest('[data-n-ext]')) return; // clicks inside Bookings or Ops belong to them
     var t = ev.target && ev.target.closest ? ev.target.closest('[data-n]') : null; if (!t) return;
@@ -1171,7 +1224,9 @@
     if (a === 'go') { if (ev.preventDefault) ev.preventDefault(); S.sheet = null; S.opts.navigate('#door/dashboard/' + v); return; }
     if (a === 'tab') { setTab(v, true); return; }
     if (a === 'retry') { S.ggProbe = true; loadTab(['today', 'inquiries', 'money', 'kpis'].indexOf(v) >= 0 ? v : S.tab, true); return; }
-    if (a === 'refresh') { S.notice = ''; S.ggProbe = true; loadTab(S.tab, true); return; }
+    if (a === 'ggg-retry') { S.gggProbe = true; load('ggg', true); return; }
+    if (a === 'ggg-all') { S.gggAll = true; S.ggRefocus = 'list'; draw(); return; }
+    if (a === 'refresh') { S.notice = ''; S.ggProbe = true; S.gggProbe = true; loadTab(S.tab, true); return; }
     S.notice = '';
     if (a === 'mon') { S.monSel = +v; draw(); return; }
     if (a === 'tbl') { S.showTable = !S.showTable; draw(); return; }
@@ -1239,13 +1294,14 @@
     if (!S.demo && !S.client) { ['overview', 'inq', 'waiting', 'txns', 'kpi'].forEach(function (k) { S.d[k] = { err: 'No connection.' }; }); }
     S.onClick = onClick; S.onInput = onInput; S.onVis = onVisible; S.onErr = onImgError;
     el.addEventListener('click', S.onClick); el.addEventListener('input', S.onInput); el.addEventListener('change', S.onInput);
-    el.addEventListener('error', S.onErr, true);
+    el.addEventListener('error', S.onErr, true); S.onToggle = onToggle; el.addEventListener('toggle', S.onToggle, true);
     el.addEventListener('submit', function (e) { if (e && e.preventDefault) e.preventDefault(); });
     try { if (typeof document !== 'undefined' && document.addEventListener) document.addEventListener('visibilitychange', S.onVis); } catch (e) { /* ok */ }
     draw(); if (S.demo || S.client) loadTab(S.tab, true);
   }
   function unmount() {
     if (!S) return;
+    try { S.el.removeEventListener && S.el.removeEventListener('toggle', S.onToggle, true); } catch (e) { /* ok */ }
     try { S.el.removeEventListener && S.el.removeEventListener('click', S.onClick); S.el.removeEventListener && S.el.removeEventListener('input', S.onInput); S.el.removeEventListener && S.el.removeEventListener('change', S.onInput); S.el.removeEventListener && S.el.removeEventListener('error', S.onErr, true); } catch (e) { /* ok */ }
     try { if (typeof document !== 'undefined' && document.removeEventListener) document.removeEventListener('visibilitychange', S.onVis); } catch (e) { /* ok */ }
     extStop(); (S.timers || []).forEach(function (t) { clearTimeout(t); });
@@ -1258,12 +1314,12 @@
     _setSeriesConcurrency: function (n) { SERIES_CONCURRENCY = n; },
     // R1.8: the shell or a push may say a list changed; the next look is a fresh read, and nothing is read under an open sheet.
     refresh: function (kind) { if (!S || (S.sheet && S.sheet.busy)) return; if (kind === 'inq' || kind === 'waiting') { if (S.sheet) { (S.pend || (S.pend = {}))[kind] = true; if (S.d[kind]) S.d[kind].at = 0; } else load(kind, true); } }, // under a sheet: mark stale and read when it closes; ok is left alone so the list never shows Loading
-    _resetGuideKnown: function () { ggAbsent = false; ggSeen = false; }, // the shell may call this on sign-out; a new session probes again
+    _resetGuideKnown: function () { ggAbsent = false; ggSeen = false; gggAbsent = false; if (S) { delete S.d.ggg; S.ggOpen = false; S.gggAll = false; } }, // the shell may call this on sign-out; a new session probes again
     _setClock: function (fn) { clock = fn || function () { return Date.now(); }; },
     lib: { lastMonths: lastMonths, buildSeries: buildSeries, chipFor: chipFor, canManage: canManage, manilaToday: manilaToday, addDays: addDays, nightsBetween: nightsBetween, fmtDate: fmtDate, fmtDateTime: fmtDateTime, toCentavos: toCentavos, fromCentavos: fromCentavos, formatPHP: formatPHP, formatPercent: formatPercent, formatNumber: formatNumber,
       formatMetricValue: formatMetricValue, parseAmount: parseAmount, periodPreset: periodPreset, comparablePeriod: comparablePeriod, compareMode: compareMode, pctDelta: pctDelta, fmtDeltaPct: fmtDeltaPct, deltaLine: deltaLine,
       normalizePayments: normalizePayments, paymentLine: paymentLine, validateConfirm: validateConfirm, confirmArgs: confirmArgs, confirmSentence: confirmSentence, declineSentence: declineSentence, declineReason: declineReason,
-      guestGuide: { tapLabel: ggTapLabel, model: ggModel, dense: ggDense, seconds: ggSeconds, label: ggLabel, DAYS: GG_DAYS }, normalizeCats: normalizeCats, declineMessage: declineMessage, agoWords: agoWords, receiptCmp: receiptCmp, groupRef: groupRef, tone: tone, isMissing: isMissing, isDenied: isDenied, isOffline: isOffline, plainError: plainError, PRESETS: PRESETS, METHODS: METHODS, EXPENSE_CATEGORIES: EXPENSE_CATEGORIES, refusalWords: refusalWords, INCOMPLETE: INCOMPLETE, KPI_GROUPS: KPI_GROUPS, NO_CONNECTION: NO_CONNECTION }
+      guestGuide: { guests: gggModel, guestDates: gggDates, tapLabel: ggTapLabel, model: ggModel, dense: ggDense, seconds: ggSeconds, label: ggLabel, DAYS: GG_DAYS }, normalizeCats: normalizeCats, declineMessage: declineMessage, agoWords: agoWords, receiptCmp: receiptCmp, groupRef: groupRef, tone: tone, isMissing: isMissing, isDenied: isDenied, isOffline: isOffline, plainError: plainError, PRESETS: PRESETS, METHODS: METHODS, EXPENSE_CATEGORIES: EXPENSE_CATEGORIES, refusalWords: refusalWords, INCOMPLETE: INCOMPLETE, KPI_GROUPS: KPI_GROUPS, NO_CONNECTION: NO_CONNECTION }
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   if (typeof window !== 'undefined') window.N_Manage = api;

@@ -179,6 +179,14 @@ button.N_link { background: none; border: 0; padding: 0; font: inherit; cursor: 
 .N_ggsum::after { content: "+"; color: var(--fg-3); font-size: 1.25rem; }
 .N_ggmore[open] > .N_ggsum::after { content: "-"; }
 .N_ggmore > .N_h4:first-of-type { margin-top: 0; }
+/* s136: guests who used the guide, inside the More fold. Same rows as .N_ggrows: flush to the card padding; a tappable row keeps the 44 px minimum. */
+.N_ggguests { display: grid; }
+.N_ggguests > .N_row { padding-left: 0; padding-right: 0; }
+.N_ggguests > .N_row.N_static { padding-top: 8px; padding-bottom: 8px; min-height: 0; }
+.N_ggmeta { display: flex; flex-wrap: wrap; gap: 0 10px; }
+.N_ggmeta > span { white-space: nowrap; }
+.N_ggmeta > span:first-child { white-space: normal; }
+.N_ggguests > .N_row:first-child { border-top: 0; }
 .N_ggw { color: var(--fg-2); }
 .N_ggv { color: var(--fg-2); text-align: right; }
 .N_ggbar { grid-column: 1 / -1; display: block; height: 6px; border-radius: var(--r-full); background: var(--muted); position: relative; overflow: hidden; }
