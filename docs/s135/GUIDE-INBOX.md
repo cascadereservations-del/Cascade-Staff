@@ -1,4 +1,4 @@
-# s135: Guide inbox and Guest guide usage card (Staff 3.4.54, cs-shell-v79)
+# s135: Guide inbox and Guest guide usage card (Staff 3.4.54, cs-shell-v79 (re-versioned to 3.4.55 / cs-shell-v80 on s136/staff))
 
 Branch `s135/guide-inbox`, from origin/main `2d83e23` (Staff 3.4.53, cs-shell-v78). Local commit only: not pushed, not deployed, no SQL run.
 Needs the guide v8 backend. Without it the app behaves exactly as 3.4.53 (see "Feature detect").

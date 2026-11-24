@@ -948,9 +948,9 @@ test('N live lists: the Today and Inquiries lists are read again after a minute,
   await t.click('tab', 'inquiries'); await t.click('inq-open', Q1.id); now += 120000; await fire(); assert.equal(t.sent('staff_inquiry_payments_v1').length, n0 + 1, 'an open sheet is never refreshed under the person');
 });
 
-test('N version: the confirm flow ships as Staff 3.4.54', () => {
+test('N version: the confirm flow ships as Staff 3.4.55', () => {
   const app = fs.readFileSync(path.join(root, 'app.js'), 'utf8'), pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8')), sw = fs.readFileSync(path.join(root, 'sw.js'), 'utf8');
-  assert.match(app, /3\.4\.54/); assert.equal(pkg.version, '3.4.54'); assert.match(sw, /cs-shell-v79/);
+  assert.match(app, /3\.4\.55/); assert.equal(pkg.version, '3.4.55'); assert.match(sw, /cs-shell-v80/);
 });
 
 // ------------------------------------------------------------------------------------------------ confirm flow fix round r1
