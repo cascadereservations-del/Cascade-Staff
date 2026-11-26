@@ -84,9 +84,9 @@ test('the install page, the manifest and the service worker agree', () => {
   assert.deepEqual(m.related_applications, [{ platform: 'webapp', url: 'https://cascadereservations-del.github.io/Cascade-Staff/manifest.webmanifest' }]);
   assert.equal(m.scope, '/Cascade-Staff/');
   const sw = read('sw.js');
-  assert.match(sw, /CACHE_NAME = 'cs-shell-v81'/);
+  assert.match(sw, /CACHE_NAME = 'cs-shell-v82'/);
   for (const f of ['./install/', './install/index.html', './install/install.js', './demo.js']) assert.ok(sw.includes("'" + f + "'"), f + ' is precached');
-  assert.match(read('app.js'), /version: '3.4.55'/);
+  assert.match(read('app.js'), /version: '3.4.56'/);
 });
 
 test('the in-app install card links to the install page when there is no prompt and no iPhone', () => {
@@ -112,7 +112,17 @@ test('3.4.3: common links live in lib.js and the Cassy pick screen copies them; 
   assert.deepEqual(CS.COMMON_LINKS.filter((l) => !l.info).map((l) => l.url), ['https://tinyurl.com/WelcomeToCascade', 'https://tinyurl.com/Stay-at-Cascade', 'https://www.google.com/maps/dir/?api=1&destination=6.1545469,125.1852321&travelmode=driving', 'https://www.facebook.com/profile.php?id=61578158229299']);
   // s109: Wi-Fi, address, location and times are info rows (text, copied as is, added to a draft as "Label: text")
   assert.deepEqual(CS.COMMON_LINKS.filter((l) => l.info).map((l) => l.id), ['wifi', 'address', 'area', 'times']);
-  assert.match(CS.withLinks('Hi.', ['wifi']), /^Hi\.\n\nWi-Fi: Network WelcomeToCascade-5G, password EnjoyYourStay@CH$/);
+  // s140: the Wi-Fi row carries no text in the public file; the app passes the loaded line in, and an unloaded row is left out
+  const wifiRow = CS.COMMON_LINKS.find((l) => l.id === 'wifi'); assert.equal(wifiRow.url, ''); assert.equal(wifiRow.server, true);
+  assert.deepEqual(CS.COMMON_LINKS.filter((l) => l.server).map((l) => l.id), ['wifi'], 'only the Wi-Fi row is read from the server');
+  assert.equal(CS.wifiLine('zz-net', 'zz-pass'), 'Network zz-net, password zz-pass'); assert.equal(CS.wifiLine('zz-net', ''), ''); assert.equal(CS.wifiLine(null, 'zz-pass'), ''); assert.equal(CS.wifiLine('zz-net', 7), '');
+  assert.equal(CS.withLinks('Hi.', ['wifi'], { wifi: CS.wifiLine('zz-net', 'zz-pass') }), 'Hi.\n\nWi-Fi: Network zz-net, password zz-pass');
+  assert.equal(CS.withLinks('Hi.', ['wifi']), 'Hi.', 'not loaded: no Wi-Fi line, no dangling label');
+  assert.equal(CS.withLinks('Hi.', ['wifi', 'times'], {}), 'Hi.\n\nCheck-in and check-out: Check-in from 2:00 pm, check-out by 12:00 noon');
+  // s140 guard: no public script or page names a Wi-Fi password; the demo shows a placeholder and never reads; nothing is stored on the phone
+  for (const f of ['lib.js', 'app.js', 'demo.js', 'sw.js', 'index.html']) assert.doesNotMatch(read(f), /password [A-Za-z0-9@#$%!._-]{6,}'/, f);
+  assert.match(read('app.js'), /if \(DEMO \|\| W\.status === 'loading'/); assert.match(read('app.js'), /Shown after sign-in/); assert.match(read('app.js'), /\.in\('key', \['wifi_ssid', 'wifi_password'\]\)/);
+  assert.match(read('app.js'), /if \(l\.server\) return rpServerRow\(l\);/); assert.doesNotMatch(read('app.js'), /setItem\([^)]*wifi/i, 'the Wi-Fi line is never stored on the phone');
   for (const l of CS.COMMON_LINKS.filter((x) => x.info)) assert.doesNotMatch(l.url, /^https?:/, l.id);
   assert.match(read('app.js'), /aria-label="Common links"[^]*CS\.COMMON_LINKS[^]*data-act="copy" data-copy=/);
   assert.equal(CS.pageLink({ href: 'https://x.test/Cascade-Staff/?team=staff#home' }), 'https://x.test/Cascade-Staff/?team=staff');
@@ -140,6 +150,6 @@ test('3.4.10: reply link switches add the chosen links to the draft, in list ord
   assert.deepEqual(CS.replyLinkIds('guide'), []);
   const app = read('app.js');
   assert.match(app, /aria-label="Add links to the reply"[^]*data-act="reply-link"[^]*aria-pressed=/);
-  assert.match(app, /copyText\(CS\.withLinks\(t, rpLinks\(\)\)\)/);
-  assert.match(app, /esc\(CS\.withLinks\(o\.text, rpLinks\(\)\)\)/);
+  assert.match(app, /copyText\(CS\.withLinks\(t, rpLinks\(\), rpExtra\(\)\)\)/);
+  assert.match(app, /esc\(CS\.withLinks\(o\.text, rpLinks\(\), rpExtra\(\)\)\)/);
 });

@@ -1,4 +1,4 @@
-# s135: Guide inbox and Guest guide usage card (Staff 3.4.54, cs-shell-v79 (re-versioned to 3.4.55 / cs-shell-v81 on s136/staff))
+# s135: Guide inbox and Guest guide usage card (Staff 3.4.54, cs-shell-v79 (re-versioned to 3.4.56 / cs-shell-v82 on s136/staff))
 
 Branch `s135/guide-inbox`, from origin/main `2d83e23` (Staff 3.4.53, cs-shell-v78). Local commit only: not pushed, not deployed, no SQL run.
 Needs the guide v8 backend. Without it the app behaves exactly as 3.4.53 (see "Feature detect").
@@ -15,7 +15,7 @@ Needs the guide v8 backend. Without it the app behaves exactly as 3.4.53 (see "F
    - Text safety: all guest and staff text goes through `esc()` into text nodes (the module's one rendering path, no raw HTML anywhere). Tests mount an `<img onerror>` label, last line and message and assert nothing unescaped is drawn.
    - Deep links: `#inbox/guide` is the Guide list, `#inbox/guide:<thread uuid>` opens the thread (encoded `%3A` and upper-case uuids work). A `guide:` value that is not a uuid is treated as a Messenger psid, as before.
 2. Manage > KPIs gains a "Guest guide" card (owner and admin) from `staff_guide_usage_v1({p_days: 30})`: devices, verified stays, opens, messages sent, a 30-day activity sparkline (dense, zero-filled), top 5 sections with views and average time, top 5 taps, the five-step verify funnel with bars, and top 5 delivery searches with no result. Empty month: one sentence.
-3. Version: Staff 3.4.55, `cs-shell-v81` (package.json, app.js `version` and `PC_SHELL`, sw.js `CACHE_NAME`, README). All tests that pin 3.4.53 / cs-shell-v78 were moved with it. No new shell file, so the sw file lists are unchanged.
+3. Version: Staff 3.4.56, `cs-shell-v82` (package.json, app.js `version` and `PC_SHELL`, sw.js `CACHE_NAME`, README). All tests that pin 3.4.53 / cs-shell-v78 were moved with it. No new shell file, so the sw file lists are unchanged.
 
 ## Feature detect (backend not released)
 
@@ -66,5 +66,5 @@ One failure is not from this branch: `s110 Today: a warning gets its own coloure
 ## Release order
 
 1. Backend SQL for guide v8 first (staff_guide_* RPCs, then the guide itself), including the notify-staff-inbox change if wanted.
-2. Then this app: push `main`, Pages serves the repo root; open the live `sw.js` and confirm `cs-shell-v81`.
+2. Then this app: push `main`, Pages serves the repo root; open the live `sw.js` and confirm `cs-shell-v82`.
 3. Safe in either order: with the backend absent the Guide source and the card simply do not appear. With the backend live and this app not yet shipped, nothing changes for staff.

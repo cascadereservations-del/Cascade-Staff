@@ -1342,14 +1342,15 @@
   var INSTALL_URL = 'https://cascadereservations-del.github.io/Cascade-Staff/install/';
   // The links staff paste into guest replies most often (3.4.3; directions and Facebook 3.4.10). Add a row here and the Cassy reply
   // screen lists it with a Copy button and an "Add to the reply" switch. guest = the words the guest sees in front of the link.
-  // s109: info rows (info: true) are text, not a link: Wi-Fi and the address are deliberately guest-readable (D-010, the guest guide shows them).
+  // s109: info rows (info: true) are text, not a link. s140: a server row (server: true) carries NO text in this public file: the app
+  // reads it with the staff session (app_settings) and passes it in as extra[id]; unloaded = no text, no Copy, left out of drafts.
   // shortcut: the times line is the house fallback (2:00 pm / 12:00 noon), not notices_v1.house_times; edit it here if the house times change.
   var COMMON_LINKS = [
     { id: 'guide', label: 'Welcome guide', guest: 'Our welcome guide', url: 'https://tinyurl.com/WelcomeToCascade' },
     { id: 'site', label: 'Direct booking site', guest: 'Book direct with us', url: 'https://tinyurl.com/Stay-at-Cascade' },
     { id: 'nav', label: 'Turn-by-turn directions', guest: 'Directions to Cascade (Google Maps)', url: 'https://www.google.com/maps/dir/?api=1&destination=6.1545469,125.1852321&travelmode=driving' },
     { id: 'facebook', label: 'Facebook page', guest: 'Our Facebook page', url: 'https://www.facebook.com/profile.php?id=61578158229299' },
-    { id: 'wifi', info: true, label: 'Wi-Fi details (booked guests)', guest: 'Wi-Fi', url: 'Network WelcomeToCascade-5G, password EnjoyYourStay@CH' },
+    { id: 'wifi', info: true, server: true, label: 'Wi-Fi details (booked guests)', guest: 'Wi-Fi', url: '' },
     { id: 'address', info: true, label: 'Full address (booked guests)', guest: 'Address', url: 'Block 47 Lot 39, Bria Homes, Conel Road, Barangay San Isidro, General Santos City' },
     { id: 'area', info: true, label: 'Location (before booking)', guest: 'Location', url: 'Inside Bria Homes, Conel Road, Barangay San Isidro, General Santos City' },
     { id: 'times', info: true, label: 'Check-in and check-out', guest: 'Check-in and check-out', url: 'Check-in from 2:00 pm, check-out by 12:00 noon' }
@@ -1357,10 +1358,18 @@
   // Only known link ids survive (a stored list may be stale), in COMMON_LINKS order, no repeats.
   function replyLinkIds(raw) { var want = Array.isArray(raw) ? raw : []; return COMMON_LINKS.filter(function (l) { return want.indexOf(l.id) >= 0; }).map(function (l) { return l.id; }); }
   // The draft as it is copied: the text, a blank line, then one "Label: link" line per chosen link. No links chosen = the text unchanged.
-  function withLinks(text, ids) {
+  // s140: the text of a row: a server row takes it from extra[id] (loaded by the app), every other row from the list above.
+  function linkText(l, extra) { return l.server ? String((extra && extra[l.id]) || '') : l.url; }
+  // s140: the Wi-Fi line as staff paste it; '' unless both parts came back from the server.
+  function wifiLine(ssid, password) {
+    var s = typeof ssid === 'string' ? ssid.trim() : '', p = typeof password === 'string' ? password.trim() : '';
+    return s && p ? 'Network ' + s + ', password ' + p : '';
+  }
+  function withLinks(text, ids, extra) {
     var keep = replyLinkIds(ids), t = String(text == null ? '' : text);
-    if (!keep.length) return t;
-    return t.replace(/\s+$/, '') + '\n\n' + COMMON_LINKS.filter(function (l) { return keep.indexOf(l.id) >= 0; }).map(function (l) { return l.guest + ': ' + l.url; }).join('\n');
+    var rows = COMMON_LINKS.filter(function (l) { return keep.indexOf(l.id) >= 0 && linkText(l, extra); });
+    if (!rows.length) return t;
+    return t.replace(/\s+$/, '') + '\n\n' + rows.map(function (l) { return l.guest + ': ' + linkText(l, extra); }).join('\n');
   }
   // The page the person is on, as the Open-in-Safari / Copy link buttons should carry it: same address, ?team= kept, no fragment.
   function pageLink(loc) { return String(loc && loc.href || '').replace(/#.*$/, ''); }
@@ -1984,7 +1993,7 @@
   function E_tabNeighbour(cur, dir) { var i = A_CAL_TABS.indexOf(cur) + dir; return i < 0 || i >= A_CAL_TABS.length ? null : A_CAL_TABS[i]; }
 
   return {
-    isInAppBrowser: isInAppBrowser, installState: installState, openInBrowserLink: openInBrowserLink, INSTALL_URL: INSTALL_URL, COMMON_LINKS: COMMON_LINKS, replyLinkIds: replyLinkIds, withLinks: withLinks, pageLink: pageLink,
+    isInAppBrowser: isInAppBrowser, installState: installState, openInBrowserLink: openInBrowserLink, INSTALL_URL: INSTALL_URL, COMMON_LINKS: COMMON_LINKS, linkText: linkText, wifiLine: wifiLine, replyLinkIds: replyLinkIds, withLinks: withLinks, pageLink: pageLink,
     taskKindLabel: taskKindLabel, manilaDayOf: manilaDayOf, taskDue: taskDue, taskDueLabel: taskDueLabel, dueFromDate: dueFromDate, taskGroups: taskGroups,
     taskDueCount: taskDueCount, reminderProblem: reminderProblem, canEditRates: canEditRates, rateNum: rateNum, rateLine: rateLine,
     earliestRateStart: earliestRateStart, rateProblem: rateProblem, rateArgs: rateArgs,

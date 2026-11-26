@@ -20,7 +20,7 @@
     url: 'https://qkgfhsdppslwunarczeq.supabase.co',
     key: 'sb_publishable_JFuRYZ9csmQULcMRmHXDSg_Abo9UeCj',
     propertyId: '6ae230f4-c189-4547-84b1-cb6e0b2cc9bd',
-    version: '3.4.55'
+    version: '3.4.56'
   };
   var LINKS = {
     checklist: 'https://cascadereservations-del.github.io/CH-Cleaners-Checklist/',
@@ -1792,11 +1792,40 @@
     state.replyLinks = CS.replyLinkIds(on);
     try { var ls = store('localStorage'); if (ls) ls.setItem('cs_reply_links', JSON.stringify(state.replyLinks)); } catch (e) {}
   }
+  // s140: the Wi-Fi details are not in the public files. A signed-in phone reads them from app_settings with its staff session and keeps
+  // them in memory only (no localStorage, no cache). The demo never reads: it shows a placeholder. status: '' | 'loading' | 'ok' | 'fail'.
+  function rpWifi() { return state.wifi || (state.wifi = { status: '', line: '' }); }
+  function rpExtra() { return { wifi: rpWifi().line }; }
+  function rpLoadWifi(force) {
+    var W = rpWifi();
+    if (DEMO || W.status === 'loading' || (W.status === 'ok' && !force)) return;
+    W.status = 'loading';
+    var slow = setTimeout(function () { done(''); }, 10000); // a read that never answers ends as "Could not load" with Retry
+    var done = function (line) {
+      clearTimeout(slow);
+      if (state.wifi !== W || (!line && W.line)) return; // signed out meanwhile, or a late miss after a good read
+      W.line = line; W.status = line ? 'ok' : 'fail';
+      var R = state.reply; if (current === 'reply' && R && !R.busy && (R.step === 'pick' || R.step === 'done')) renderReply();
+    };
+    try {
+      sb.from('app_settings').select('key,value').in('key', ['wifi_ssid', 'wifi_password']).then(function (r) {
+        var m = {}; ((r && !r.error && r.data) || []).forEach(function (x) { m[x.key] = x.value; });
+        done(CS.wifiLine(m.wifi_ssid, m.wifi_password));
+      }, function () { done(''); });
+    } catch (e) { done(''); }
+  }
+  function rpServerRow(l) {
+    var W = rpWifi(), head = '<div class="H_recent"><p class="sub" style="margin:0"><b>' + esc(l.label) + '</b><br><span class="num">';
+    if (W.line) return head + esc(W.line) + '</span></p><button class="btn btn-ghost btn-sm" type="button" data-act="copy" data-copy="' + esc(W.line) + '" aria-label="' + esc('Copy ' + l.label) + '">Copy</button></div>';
+    if (DEMO) return head + 'Shown after sign-in</span></p></div>';
+    if (W.status === 'fail') return head + 'Could not load</span></p><button class="btn btn-ghost btn-sm" type="button" data-act="wifi-retry" aria-label="' + esc('Try loading ' + l.label + ' again') + '">Retry</button></div>';
+    return head + 'Loading…</span></p></div>';
+  }
   function rpLinkSwitches() {
-    var on = rpLinks();
+    var on = rpLinks(), noWifi = on.indexOf('wifi') >= 0 && !rpWifi().line;
     return '<section class="card glass" aria-label="Add links to the reply"><h2 class="hd">Add links to the reply</h2><div class="stack" style="margin-top:8px">' + CS.COMMON_LINKS.map(function (l) {
       return '<button class="btn btn-secondary btn-sm" type="button" data-act="reply-link" data-id="' + esc(l.id) + '" aria-pressed="' + (on.indexOf(l.id) >= 0) + '">' + (on.indexOf(l.id) >= 0 ? ICON('check', 's16') : '') + esc(l.label) + '</button>';
-    }).join('') + '</div><p class="help" style="margin:8px 0 0">Links you switch on are added to the end of each draft and to what you copy. This phone remembers your choice.</p></section>';
+    }).join('') + '</div><p class="help" style="margin:8px 0 0">Links you switch on are added to the end of each draft and to what you copy. This phone remembers your choice.' + (noWifi ? ' Wi-Fi details are ' + (DEMO ? 'shown after sign-in' : rpWifi().status === 'fail' ? 'not loaded' : 'still loading') + ', so they are left out.' : '') + '</p></section>';
   }
   // focus: 'heading' (the new screen's heading), 'error' (the error message), or nothing (the user is mid-typing).
   function renderReply(focus) {
@@ -1806,7 +1835,7 @@
       body = rpErr(R) + '<div class="card"><h2 class="cap up" id="rp-h" tabindex="-1">Replying to · ' + esc(who) + '</h2><p class="rp-quote">' + esc(CS.clampText(X.guestText, 280)) + '</p></div>' +
         (X.header ? '<p class="sub" style="margin:0">' + esc(X.header) + '</p>' : '') + rpLinkSwitches() +
         X.options.map(function (o, i) {
-          return '<div class="card H_draft"><span class="cap up">' + esc(o.label || (X.options.length > 1 ? 'Reply ' + (i + 1) : 'Reply')) + '</span><p class="rp-reply">' + esc(CS.withLinks(o.text, rpLinks())) + '</p>' +
+          return '<div class="card H_draft"><span class="cap up">' + esc(o.label || (X.options.length > 1 ? 'Reply ' + (i + 1) : 'Reply')) + '</span><p class="rp-reply">' + esc(CS.withLinks(o.text, rpLinks(), rpExtra())) + '</p>' +
             '<button class="btn btn-primary btn-block" type="button" data-act="reply-copy" data-i="' + i + '" style="margin-top:12px">' + (R.copied === i ? ICON('check', 's16') + 'Copied' : 'Copy') + '</button></div>';
         }).join('') +
         (X.platform === 'messenger' ? ext(CS.MESSENGER_INBOX, ICON('chat', 's16') + 'Open Messenger inbox', 'btn btn-secondary btn-block', R.copied >= 0 ? ' id="rp-inbox"' : ' id="rp-inbox" hidden') : '') +
@@ -1818,6 +1847,7 @@
         '<p class="help" style="margin:0">Cassy writes the drafts in her own voice. You copy one and send it yourself.</p>' +
         '<section class="card glass H_how" aria-label="How it goes"><h2 class="hd">How it goes</h2><ol class="H_steps"><li>Paste, or screenshot, the guest’s message.</li><li>Pick a draft.</li><li>Copy it, then paste it in Messenger.</li></ol></section>' +
         '<section class="card glass" aria-label="Common links"><h2 class="hd">Common links</h2><div class="stack" style="margin-top:8px">' + CS.COMMON_LINKS.map(function (l) {
+          if (l.server) return rpServerRow(l);
           return '<div class="H_recent"><p class="sub" style="margin:0"><b>' + esc(l.label) + '</b><br><span class="num">' + esc(l.info ? l.url : CS.clampText(l.url.replace(/^https:\/\/(www\.)?/, ''), 40)) + '</span></p><button class="btn btn-ghost btn-sm" type="button" data-act="copy" data-copy="' + esc(l.url) + '" aria-label="' + esc('Copy ' + l.label + (l.info ? '' : ' link')) + '">Copy</button></div>';
         }).join('') + '</div><p class="help" style="margin:8px 0 0">Copy a link or a detail, then paste it into your reply. Wi-Fi and the full address are for booked guests only.</p></section>' +
         ((state.replyRecent || []).length ? '<section class="card glass" aria-label="Recent drafts"><h2 class="hd">Recent</h2><div class="stack" style="margin-top:8px">' + state.replyRecent.map(function (r, i) {
@@ -1913,7 +1943,7 @@
   function copyBtn(i) { return document.querySelector('#v-reply [data-act="reply-copy"][data-i="' + i + '"]'); }
   function copyReply(i) {
     var R = state.reply, t = R && R.result && R.result.replies[i]; if (t == null) return;
-    copyText(CS.withLinks(t, rpLinks())).then(function () {
+    copyText(CS.withLinks(t, rpLinks(), rpExtra())).then(function () {
       var b = copyBtn(i); R.copied = i; R.err = ''; if (b) b.innerHTML = ICON('check', 's16') + 'Copied'; rpLive('Copied'); var ib = $('rp-inbox'); if (ib) ib.hidden = false;
       clearTimeout(copyTimer); copyTimer = setTimeout(function () { if (R.copied === i) { R.copied = -1; var b2 = copyBtn(i); if (b2) b2.textContent = 'Copy'; rpLive(''); } }, 2000);
     }).catch(function () { R.err = 'Copy did not work on this phone. Press and hold the text to copy it.'; R.signout = false; if (current === 'reply') renderReply('error'); });
@@ -2208,7 +2238,7 @@
   // Runs once per device after sign-in (CS.phoneCheckDue, key cs_phone_check) and from More > This phone > Check this phone. Every row comes from a real probe
   // (CS.phoneCheckRows); Fix all runs the fixers in order from the one tap (CS.phoneFixPlan: alerts first, so the permission prompt rides the tap), then probes again.
   // The camera is opened only when its permission is 'prompt', and every track is stopped at once. Nothing changes Trust this device.
-  var PC_SHELL = 'cs-shell-v81'; // the service worker's cache for this version (sw.js CACHE_NAME; a test keeps them equal)
+  var PC_SHELL = 'cs-shell-v82'; // the service worker's cache for this version (sw.js CACHE_NAME; a test keeps them equal)
   var PC = { open: false, busy: false, rows: null, msg: '', camPerm: null };
   function PC_ls() { return store('localStorage'); }
   function PC_cameraPerm() {
@@ -2431,7 +2461,7 @@
     });
   }
   function signOutTo(msg) {
-    clearTimeout(H_rpT); state.H_q = ''; state.H_offKey = ''; H_unmount(); H_resetModules(); H_histGen++; H_calReset(); H_alReset(); closeSheet(); dropPhotos(); state.replyRecent = []; state.cleanDone = null; state.payWait = 0; state.payReqs = null; state.reviewN = 0; B_gone = {}; state.bheads = false; state.bookingsOldest = ''; state.bconfirm = ''; state.bmsg = ''; state.progress = null; state.progressAbsent = false; state.bills = null; state.billsAbsent = false; H_bSeq++; state.expenses = null; state.expensesAbsent = false; H_eSeq++; H_idClose(); state.reply = null; var rb = $('rp-body'); if (rb) rb.innerHTML = ''; rpLive(''); state.payload = null; state.bookings = null; state.bookingsDone = false; state.noticesDone = false; state.notices = null; state.noticesAbsent = false; state.nadd = null; state.fbOpen = false; state.tasks = null; state.access = null; state.layout = null; state.month = null; state.error = ''; CS.rememberRole(store('sessionStorage'), '');
+    clearTimeout(H_rpT); state.H_q = ''; state.H_offKey = ''; H_unmount(); H_resetModules(); H_histGen++; H_calReset(); H_alReset(); closeSheet(); dropPhotos(); state.replyRecent = []; state.wifi = null; state.cleanDone = null; state.payWait = 0; state.payReqs = null; state.reviewN = 0; B_gone = {}; state.bheads = false; state.bookingsOldest = ''; state.bconfirm = ''; state.bmsg = ''; state.progress = null; state.progressAbsent = false; state.bills = null; state.billsAbsent = false; H_bSeq++; state.expenses = null; state.expensesAbsent = false; H_eSeq++; H_idClose(); state.reply = null; var rb = $('rp-body'); if (rb) rb.innerHTML = ''; rpLive(''); state.payload = null; state.bookings = null; state.bookingsDone = false; state.noticesDone = false; state.notices = null; state.noticesAbsent = false; state.nadd = null; state.fbOpen = false; state.tasks = null; state.access = null; state.layout = null; state.month = null; state.error = ''; CS.rememberRole(store('sessionStorage'), '');
     return sb.auth.signOut().catch(function () {}).then(function () { showSignin(msg); });
   }
   function showSignin(msg) {
@@ -2546,7 +2576,7 @@
     setView(v);
     if (v === 'door') { renderDoor(); return; }
     renderTabs(v === 'hub' || v === 'search' ? 'more' : v === 'weather' ? 'calendar' : v === 'stock' && CS.isLaundry(role()) ? 'stock' : v === 'stock' || v === 'manage' || v === 'guests' || v === 'inbox' || v === 'supply' || v === 'bills' || v === 'expenses' ? '' : v); // B1: a sub-page marks no tab, never Today
-    if (H_MODULES[v]) renderModule(v); else if (v === 'search') renderSearch(); else if (v === 'hub') renderHub(); else if (v === 'home') renderHome(); else if (v === 'calendar') renderCalendar(); else if (v === 'tasks') renderTasks(); else if (v === 'payrates') { renderPayRates(); if (!state.rates) loadRates(); } else if (v === 'reply') renderReply(); else if (v === 'more') renderMore();
+    if (H_MODULES[v]) renderModule(v); else if (v === 'search') renderSearch(); else if (v === 'hub') renderHub(); else if (v === 'home') renderHome(); else if (v === 'calendar') renderCalendar(); else if (v === 'tasks') renderTasks(); else if (v === 'payrates') { renderPayRates(); if (!state.rates) loadRates(); } else if (v === 'reply') { rpLoadWifi(); renderReply(); } else if (v === 'more') renderMore();
     var typing = document.activeElement && /^(df-(label|kind)|t-(title|due|who|note)|n-(type|title|date|start|hours|detail))$/.test(document.activeElement.id || '');
     if (state.sheet) { if (v !== state.sheet.view) closeSheet(); else if (!typing) drawSheet(); }
   }
@@ -2753,6 +2783,7 @@
     else if (a === 'reply-mode') { var R1 = state.reply || (state.reply = newReply()); R1.mode = t.getAttribute('data-mode') === 'image' ? 'image' : 'text'; R1.step = 'form'; R1.err = ''; R1.signout = false; renderReply(); window.scrollTo(0, 0); if (R1.mode === 'text') rpFocus('rp-text'); }
     else if (a === 'reply-platform') { if (state.reply) { state.reply.platform = t.getAttribute('data-platform') === 'airbnb' ? 'airbnb' : 'messenger'; Array.prototype.forEach.call(document.querySelectorAll('#v-reply [data-act="reply-platform"]'), function (b) { b.setAttribute('aria-pressed', String(b === t)); }); } }
     else if (a === 'reply-send') sendReply();
+    else if (a === 'wifi-retry') { rpLoadWifi(true); renderReply(); }
     else if (a === 'reply-copy') copyReply(+t.getAttribute('data-i'));
     else if (a === 'reply-link') { var lid = t.getAttribute('data-id'); rpLinkToggle(lid); if (state.reply) state.reply.copied = -1; renderReply(); var lb = document.querySelector('#v-reply [data-act="reply-link"][data-id="' + lid + '"]'); if (lb) lb.focus(); rpLive(rpLinks().indexOf(lid) >= 0 ? 'Link added to the drafts' : 'Link removed from the drafts'); }
     else if (a === 'reply-copy-recent') { var rr = (state.replyRecent || [])[+t.getAttribute('data-i')]; if (rr) copyText(rr.text).then(function () { toast('Copied'); }, function () { toast('Copy did not work on this phone.'); }); }

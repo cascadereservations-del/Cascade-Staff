@@ -100,14 +100,17 @@ test('wiring: the reply view is gated by role in the route, the home and More ro
 
 // DOM shim: run the Cassy reply section of app.js against a stub page and read back the HTML it would draw.
 
-function replyHarness() {
+// s140: opts.demo = the demo (no read); opts.rows = what app_settings answers ({ error } or { data }); the read resolves on the next tick.
+function replyHarness(opts) {
+  const o = opts || {}, asked = [];
+  const sb = { from: (tbl) => ({ select: (cols) => ({ in: (col, keys) => { asked.push([tbl, cols, col, keys.join()]); return Promise.resolve(o.rows || { data: [], error: null }); } }) }) };
   const app = read('app.js').replace(/\r\n/g, '\n'), a = app.indexOf('var RP_NAME'), b = app.indexOf('// ---------------------------------------------------------------- More');
   assert.ok(a > 0 && b > a, 'reply section found');
   const els = { 'rp-body': { innerHTML: '' }, 'rp-live': { textContent: '' } };
-  const ctx = { CS, esc: CS.esc, ICON: (n) => '[' + n + ']', appbar: () => '<hdr/>', $: (id) => els[id] || null, state: { reply: null }, current: 'reply',
+  const ctx = { CS, esc: CS.esc, ICON: (n) => '[' + n + ']', appbar: () => '<hdr/>', $: (id) => els[id] || null, state: { reply: null }, current: 'reply', DEMO: !!o.demo, sb,
     window: { scrollTo() {} }, document: { querySelector: () => null }, navigator: {}, setTimeout, clearTimeout, console };
   vm.createContext(ctx); vm.runInContext(app.slice(a, b), ctx);
-  return { els, run: (code) => vm.runInContext(code, ctx) };
+  return { els, asked, run: (code) => vm.runInContext(code, ctx) };
 }
 const HOSTILE = '<img src=x onerror=alert(1)>';
 
@@ -140,4 +143,42 @@ test('wiring: sign-out clears the drawn view, #reply survives a reload, transpar
   assert.match(app, /state\.reply = null; var rb = \$\('rp-body'\); if \(rb\) rb\.innerHTML = ''/);
   assert.match(app, /fillStyle = '#FFFFFF'; cx\.fillRect\([^)]*\); cx\.drawImage/);
   assert.match(html, /id="v-reply"><div class="sr" id="rp-live" role="status" aria-live="polite"><\/div><div id="rp-body">/);
+});
+
+// s140: the Wi-Fi row is read with the staff session, never from the public files
+const tick = () => new Promise((r) => setTimeout(r, 0));
+const wifiRowOf = (html) => (/<b>Wi-Fi details \(booked guests\)<\/b>.*?<\/div>/.exec(html) || [''])[0];
+test('s140: the demo shows a placeholder, has no Copy for Wi-Fi, and never asks the server', async () => {
+  const h = replyHarness({ demo: true });
+  h.run('rpLoadWifi(); renderReply()'); await tick();
+  const row = wifiRowOf(h.els['rp-body'].innerHTML);
+  assert.match(row, /Shown after sign-in/); assert.doesNotMatch(row, /<button/); assert.equal(h.asked.length, 0);
+});
+test('s140: a signed-in phone loads the Wi-Fi line once, shows Copy, and adds it to a draft only when loaded', async () => {
+  const h = replyHarness({ rows: { data: [{ key: 'wifi_ssid', value: 'zz-net' }, { key: 'wifi_password', value: 'zz-<pass>' }], error: null } });
+  h.run('rpLoadWifi(); renderReply()');
+  assert.match(wifiRowOf(h.els['rp-body'].innerHTML), /Loading…/); assert.doesNotMatch(wifiRowOf(h.els['rp-body'].innerHTML), /<button/);
+  assert.equal(h.run("CS.withLinks('Hi.', ['wifi'], rpExtra())"), 'Hi.', 'not loaded yet: left out');
+  await tick();
+  const row = wifiRowOf(h.els['rp-body'].innerHTML);
+  assert.match(row, /Network zz-net, password zz-&lt;pass&gt;/, 'drawn escaped, after the read re-renders the pick screen');
+  assert.match(row, /data-act="copy" data-copy="Network zz-net, password zz-&lt;pass&gt;"/);
+  assert.equal(h.run("CS.withLinks('Hi.', ['wifi'], rpExtra())"), 'Hi.\n\nWi-Fi: Network zz-net, password zz-<pass>');
+  h.run('rpLoadWifi()'); await tick();
+  assert.deepEqual(h.asked, [['app_settings', 'key,value', 'key', 'wifi_ssid,wifi_password']], 'one read; a loaded line is not read again');
+});
+test('s140: a refused or half-empty read says Could not load with Retry, and Retry reads again', async () => {
+  for (const rows of [{ data: null, error: { code: '42501' } }, { data: [{ key: 'wifi_ssid', value: 'zz-net' }], error: null }, { data: [{ key: 'wifi_ssid', value: 'zz-net' }, { key: 'wifi_password', value: { a: 1 } }], error: null }]) {
+    const h = replyHarness({ rows });
+    h.run('rpLoadWifi(); renderReply()'); await tick();
+    const row = wifiRowOf(h.els['rp-body'].innerHTML);
+    assert.match(row, /Could not load/); assert.match(row, /data-act="wifi-retry"/); assert.doesNotMatch(row, /data-act="copy"/);
+    h.run('rpLoadWifi(true)'); await tick(); assert.equal(h.asked.length, 2);
+  }
+});
+test('s140: a read that lands while a reply is being written or typed does not redraw the screen', async () => {
+  const h = replyHarness({ rows: { data: [{ key: 'wifi_ssid', value: 'zz-net' }, { key: 'wifi_password', value: 'zz-pass' }], error: null } });
+  h.run("renderReply(); state.reply.step='form'; renderReply(); rpLoadWifi()");
+  h.els['rp-body'].innerHTML = 'UNTOUCHED'; await tick();
+  assert.equal(h.els['rp-body'].innerHTML, 'UNTOUCHED');
 });
