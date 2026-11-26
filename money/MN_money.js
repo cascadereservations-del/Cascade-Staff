@@ -64,6 +64,7 @@
       case 'reading_value_invalid': return 'The reading looks wrong. Enter the number on the meter, or leave it empty.';
       case 'already_paid': return 'This bill is already paid, so its reading date is locked. A correction needs the admin.';
       case 'older_bill_open': return 'An older bill is still open. Pay or skip it first, then set this reading date.';
+      case 'paying_by_other': return 'Someone else is paying this bill now. Set the reading date once they finish.';
       default: return res && res.sentence ? String(res.sentence) : NET;
     }
   }
