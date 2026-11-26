@@ -19,3 +19,4 @@
 .MN_photo .btn:has(input[type="file"]) { cursor: pointer; }
 .MN_photo .E_file { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; }
 :is(#v-money, #v-bills, #v-expenses) [data-i-flow]:empty, :is(#v-money, #v-bills, #v-expenses) [data-i-confirm]:empty, :is(#v-money, #v-bills, #v-expenses) [data-i-covers]:empty { display: none; }
+.MN_page a.I_uopt { text-decoration: none; }
