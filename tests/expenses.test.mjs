@@ -321,9 +321,9 @@ test('KPI copy (SPEC 8.4): labels follow kpi_source, the pending line and the Se
 });
 test('Shell: version, cache name, service worker list, no peso in a staff layout, nothing signed is cached', () => {
   const pkg = JSON.parse(read('package.json')); assert.equal(pkg.version, '3.4.56'); assert.match(APP, /version: '3.4.56'/);
-  assert.match(SW, /const CACHE_NAME = 'cs-shell-v82'/); assert.match(APP, /var PC_SHELL = 'cs-shell-v82'/);
+  assert.match(SW, /const CACHE_NAME = 'cs-shell-v83'/); assert.match(APP, /var PC_SHELL = 'cs-shell-v83'/);
   assert.ok(SW.includes("'./expenses/E_expenses.js', './expenses/E_expenses.css'")); assert.match(SW, /NETWORK_ONLY_HOSTS = \['supabase\.co'/);
-  assert.match(SW, /\/storage\/v1\//); assert.match(read('README.md'), /cs-shell-v82/);
+  assert.match(SW, /\/storage\/v1\//); assert.match(read('README.md'), /cs-shell-v83/);
   // the Today card is drawn only for the admin layout and only by A_expCard (the staff body never calls it)
   const staffBody = APP.slice(APP.indexOf("body = '<div class=\"A_body\">'") - 400, APP.indexOf("body = '<div class=\"A_body\">'") + 40);
   assert.equal((APP.match(/A_expCard\(\)/g) || []).length, 2, 'defined once, used once'); assert.ok(!/A_expCard/.test(staffBody));

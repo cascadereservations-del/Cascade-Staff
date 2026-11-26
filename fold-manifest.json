@@ -23,11 +23,11 @@
       "time": "2026-11-26T06:28:50.383Z"
     },
     "guide": {
-      "source": "s138-l3-system-guide",
-      "head": "b66747f",
-      "files": 50,
-      "bytes": 3839351,
-      "time": "2026-11-26T06:28:50.383Z",
+      "source": "s139-app-guide",
+      "head": "4c6b318",
+      "files": 68,
+      "bytes": 4504240,
+      "time": "2026-11-26T08:14:21.995Z",
       "adminGuide": true
     }
   }

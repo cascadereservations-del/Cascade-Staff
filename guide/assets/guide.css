@@ -1,41 +1,49 @@
-/* Cascade System Guide - styles. Palette follows the Operations Manual. */
+/* Cascade System Guide - styles.
+   Theme: Cascade design tokens v5 (navy ink, warm paper, champagne gold accent, DM Serif Display titles), the same sheet as the
+   Staff app (Cascade-Staff tokens.css). Do not bring back the old mahogany and gold palette or Cormorant Garamond / Raleway. */
+
+@font-face { font-family: 'Inter'; font-weight: 100 900; font-style: normal; font-display: swap; src: url('fonts/inter-var.woff2') format('woff2'); }
+@font-face { font-family: 'DM Serif Display'; font-weight: 400; font-style: normal; font-display: swap; src: url('fonts/dm-serif-display-400.woff2') format('woff2'); }
 
 :root {
-  --bg: #F0E9D8;
-  --surface: #F7F2E4;
-  --surface-raised: #FBF7EE;
-  --border: #D9CEBC;
-  --border-strong: #B8A88C;
-  --text: #3D2B1F;
-  --text-heading: #2E1F12;
-  --text-muted: #6B5242;
-  --bronze: #765110;      /* text-safe bronze */
-  --accent: #C9963A;      /* fills and borders, pair with dark text */
-  --accent-ink: #1C1006;
-  --success: #23684D;
-  --danger: #B91C1C;
-  --info: #1D4ED8;
-  --warn: #9A4A06;
-  --shadow: 0 2px 10px rgba(28, 16, 6, .08);
-  --font-d: 'Cormorant Garamond', Georgia, serif;
-  --font-b: 'Raleway', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --bg: #F6F3EE;
+  --surface: #FFFFFF;
+  --surface-raised: #FBF9F6;
+  --border: #E2DBD0;
+  --border-strong: #B9AFA1;
+  --text: #14202E;
+  --text-heading: #14202E;
+  --text-muted: #4A5563;
+  --bronze: #7A4E0E;      /* champagne gold, text-safe: the one complementary accent */
+  --accent: #17324D;      /* navy: buttons, pins, step numbers */
+  --accent-ink: #FFFFFF;
+  --gold: #C9A063;
+  --success: #1B6B45;
+  --danger: #B42332;
+  --info: #1F4C8F;
+  --warn: #8A4B06;
+  --shadow: 0 1px 2px rgba(40, 30, 20, .06), 0 6px 20px rgba(15, 27, 42, .08);
+  --font-d: 'DM Serif Display', Georgia, 'Times New Roman', serif;
+  --font-b: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
   --header-h: 56px;
-  --r: 12px;
+  --r: 16px;
   color-scheme: light;
 }
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme=light]) {
-    --bg: #16100A;
-    --surface: #1F1710;
-    --surface-raised: #291F16;
-    --border: #3A2E22;
-    --border-strong: #5A4835;
-    --text: #E9DFCD;
-    --text-heading: #F6EEDF;
-    --text-muted: #B8A791;
-    --bronze: #E3B660;
-    --accent: #C9963A;
+    --bg: #0E1621;
+    --surface: #16212E;
+    --surface-raised: #1D2A39;
+    --border: #2A3747;
+    --border-strong: #4A5C70;
+    --text: #EEF2F6;
+    --text-heading: #EEF2F6;
+    --text-muted: #B3BFCC;
+    --bronze: #E0B872;
+    --accent: #8FB4E0;
+    --accent-ink: #0E1621;
+    --gold: #C9A063;
     --success: #5FC79B;
     --danger: #F28B8B;
     --info: #8AB4FF;
@@ -45,16 +53,18 @@
   }
 }
 :root[data-theme=dark] {
-  --bg: #16100A;
-  --surface: #1F1710;
-  --surface-raised: #291F16;
-  --border: #3A2E22;
-  --border-strong: #5A4835;
-  --text: #E9DFCD;
-  --text-heading: #F6EEDF;
-  --text-muted: #B8A791;
-  --bronze: #E3B660;
-  --accent: #C9963A;
+  --bg: #0E1621;
+  --surface: #16212E;
+  --surface-raised: #1D2A39;
+  --border: #2A3747;
+  --border-strong: #4A5C70;
+  --text: #EEF2F6;
+  --text-heading: #EEF2F6;
+  --text-muted: #B3BFCC;
+  --bronze: #E0B872;
+  --accent: #8FB4E0;
+  --accent-ink: #0E1621;
+  --gold: #C9A063;
   --success: #5FC79B;
   --danger: #F28B8B;
   --info: #8AB4FF;
@@ -399,7 +409,7 @@ figure.diagram svg { display: block; width: 100%; height: auto; }
 .term-tip strong { display: block; margin-bottom: 2px; }
 
 /* ---------- search ---------- */
-.search { position: fixed; inset: 0; z-index: 80; display: flex; justify-content: center; align-items: flex-start; padding: 8vh 12px 12px; background: rgba(20, 12, 4, .55); }
+.search { position: fixed; inset: 0; z-index: 80; display: flex; justify-content: center; align-items: flex-start; padding: 8vh 12px 12px; background: rgba(10, 20, 32, .55); }
 .search-box { width: min(640px, 100%); max-height: 84vh; display: flex; flex-direction: column; border-radius: 14px; background: var(--surface-raised); border: 1px solid var(--border-strong); box-shadow: var(--shadow); overflow: hidden; }
 .search-input { width: 100%; min-height: 56px; padding: 0 18px; border: 0; border-bottom: 1px solid var(--border); background: transparent; color: var(--text); font: inherit; font-size: 1.05rem; }
 .search-input:focus { outline: none; }
@@ -457,6 +467,36 @@ figure.diagram svg { display: block; width: 100%; height: auto; }
 /* Admin guide unlock page */
 .lock-form { display: grid; gap: 10px; max-width: 360px; margin: 1.5rem 0; }
 .lock-form input[type="password"] { min-height: 44px; padding: 0 12px; border: 1px solid var(--border-strong); border-radius: 10px; background: var(--surface-raised); color: var(--text); font: inherit; }
-.lock-form button { min-height: 44px; border: 0; border-radius: 10px; background: var(--accent); color: var(--accent-ink, #1C1006); font: inherit; font-weight: 700; cursor: pointer; }
+.lock-form button { min-height: 44px; border: 0; border-radius: 10px; background: var(--accent); color: var(--accent-ink, #FFFFFF); font: inherit; font-weight: 700; cursor: pointer; }
 .lock-remember { display: flex; gap: 8px; align-items: center; color: var(--text-muted); }
 #lock-msg { min-height: 1.4em; margin: 0; color: var(--text-muted); }
+
+/* phone screenshots and number cards (s14 to s19, 2026-11-26) */
+figure.phone { display: grid; gap: 12px 24px; }
+figure.phone .annotated-frame, figure.phone > img { width: min(100%, 300px); margin-inline: auto; }
+figure.phone img, img.phone-shot { display: block; width: 100%; height: auto; border-radius: 20px; border: 1px solid var(--border-strong); box-shadow: var(--shadow); }
+img.phone-shot { width: min(100%, 240px); margin: 0 auto 12px; }
+figure.strip .annotated-frame, figure.strip > img { width: min(100%, 420px); }
+figure.strip img { display: block; width: 100%; height: auto; border-radius: 12px; border: 1px solid var(--border-strong); }
+@media (min-width: 760px) {
+  figure.phone { grid-template-columns: 300px 1fr; align-items: start; }
+  figure.phone .annotated-frame, figure.phone > img { grid-column: 1; grid-row: 1 / span 2; }
+  figure.phone ol.legend { grid-column: 2; grid-row: 1; margin-top: 0; }
+  figure.phone figcaption { grid-column: 2; grid-row: 2; }
+}
+.stat-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; margin: 1.2rem 0; }
+.stat-cards .stat { border: 1px solid var(--border); border-radius: var(--r); background: var(--surface); padding: 14px; }
+.stat-cards .stat strong { display: block; font-size: 1.5rem; line-height: 1.15; color: var(--text-heading); }
+.stat-cards .stat span { display: block; margin-top: 6px; font-size: .9rem; color: var(--text-muted); }
+.stat-cards .stat span strong { display: inline; font-size: inherit; }
+.stat-cards .stat s { display: block; margin-top: 6px; font-size: .8rem; color: var(--text-muted); }
+
+/* v5 type: DM Serif Display has one weight, so titles are never bold; sizes come down a step from the old serif */
+.brand-name, .chapter-title, .chapter h3, .wt-title, .dt-q, .chooser-brand, .chooser-card .card-title { font-weight: 400; letter-spacing: 0; }
+.brand-name { font-size: 1.15rem; }
+.chapter-title { font-size: clamp(1.7rem, 5.4vw, 2.3rem); line-height: 1.15; }
+.chapter h3 { font-size: 1.45rem; line-height: 1.25; }
+.wt-title, .dt-q { font-size: 1.2rem; }
+.chooser-card .card-title { font-size: 1.7rem; }
+.chooser-promise { font-family: var(--font-b); font-style: normal; font-size: 1rem; letter-spacing: .04em; }
+.brand-sub { letter-spacing: .1em; }

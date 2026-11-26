@@ -230,7 +230,7 @@ test('demo: today_bills_v1 shows since, waiting_for, and the check view for a no
 
 // ---- 10: version
 test('version 3.4.56, shell v80', () => {
-  assert.match(read('app.js'), /3.4.56/); assert.match(read('sw.js'), /cs-shell-v82/);
+  assert.match(read('app.js'), /3.4.56/); assert.match(read('sw.js'), /cs-shell-v83/);
 });
 
 test('s131 fix: older_bill_open has its own plain message', async () => {
