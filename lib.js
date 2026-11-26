@@ -899,7 +899,62 @@
     if (n(e.kwh) == null || n(w.php) == null || n(w.m3) == null) return null;
     var day = function (v) { return /^\d{4}-\d{2}-\d{2}/.test(String(v || '')) ? String(v).slice(0, 10) : ''; }, mon = function (v) { v = String(v == null ? '' : v).trim(); return v && v.length <= 20 ? v : ''; }; // s131: the keys the meter-cycle release adds; a payload without them draws as before
     return { since: String(r.since).slice(0, 10), waterSince: day(r.water_since), waiting: mon(r.waiting_for), waterWaiting: mon(r.water_waiting_for), canPayList: r.can_pay_list === true ? true : r.can_pay_list === false ? false : null, checkBills: r.check_bills === true,
-      last: last, ePhp: n(e.php), eKwh: n(e.kwh), wPhp: n(w.php), wM3: n(w.m3), due: (Array.isArray(r.due) ? r.due : []).map(billEntry).filter(Boolean) };
+      last: last, ePhp: n(e.php), eKwh: n(e.kwh), wPhp: n(w.php), wM3: n(w.m3), due: (Array.isArray(r.due) ? r.due : []).map(billEntry).filter(Boolean),
+      // s143: the keys the Money release adds (cycle_from, cycle_from_assumed, next_reading, last_bill per meter; last_paid). A payload without them has v2 false and draws as before.
+      meters: { electric: billMeter(e), water: billMeter(w) }, lastPaid: billLastPaid(r.last_paid), v2: !!(billDay(e.cycle_from) || billDay(w.cycle_from) || Array.isArray(r.last_paid)) };
+  }
+  function billDay(v) { return /^\d{4}-\d{2}-\d{2}/.test(String(v || '')) ? String(v).slice(0, 10) : ''; }
+  function billNum(v) { if (v === null || v === undefined || v === '') return null; v = Number(v); return isFinite(v) ? v : null; }
+  function billLastBill(x) {
+    if (!x || typeof x !== 'object' || Array.isArray(x)) return null;
+    return { id: String(x.id || ''), period: String(x.period || ''), from: billDay(x.from), to: billDay(x.to), toAssumed: x.to_assumed === true, usage: billNum(x.usage), est: billNum(x.estimate_php), paid: billNum(x.paid_php),
+      paidOn: billDay(x.paid_on), paidBy: String(x.paid_by_name || '').trim(), status: String(x.status || ''), hasProof: x.has_proof === true };
+  }
+  function billMeter(m) { return { from: billDay(m.cycle_from), fromAssumed: m.cycle_from_assumed === true, next: billDay(m.next_reading), last: billLastBill(m.last_bill) }; }
+  function billLastPaid(a) {
+    return (Array.isArray(a) ? a : []).filter(function (x) { return x && typeof x === 'object' && /^(electric|water|internet|netflix)$/.test(String(x.kind)); })
+      .map(function (x) { return { kind: x.kind, period: String(x.period || ''), paid: billNum(x.paid_php), paidOn: billDay(x.paid_on) }; });
+  }
+  // s143: "21 Oct \u2013 21 Nov"; assumed marks an end date the app worked out itself: "21 Oct \u2013 ~21 Nov". Empty when either date is missing.
+  function rangeLabel(from, to, assumed) { var f = billDay(from), t = billDay(to); return f && t ? dayLabel(f) + ' \u2013 ' + (assumed ? '~' : '') + dayLabel(t) : ''; }
+  // s143: the LAST BILL line under a meter on the bills card: {range, tone 'ok'|'due', text}. Whole pesos (frames 1-3). Paid shows what was paid. An open bill is "To pay" with its range marked "· est." while its end date is assumed (frame 1);
+  // when every last bill ends on an assumed date (the "Dates assumed" row is showing, frame 3) the range stays plain and the amount reads "<peso> est.". null draws nothing.
+  function billLast(m, allAssumed) {
+    var l = m && m.last; if (!l || l.status === 'skipped') return null;
+    var range = rangeLabel(l.from, l.to, l.toAssumed); if (!range) return null;
+    if (l.status === 'paid') return { range: range, tone: 'ok', text: '✓ Paid' + (l.paid == null ? '' : ' ' + billPeso(l.paid)) };
+    var amt = l.est == null ? '' : billPeso(Math.round(l.est));
+    if (allAssumed && l.toAssumed) return { range: range, tone: 'due', text: amt ? amt + ' est.' : '' };
+    return { range: range + (l.toAssumed ? ' · est.' : ''), tone: 'due', text: amt ? 'To pay ' + amt : '' };
+  }
+  // s143: where each meter's cycle starts. null for an old payload (the card keeps its old since logic). same: both meters share one date and one assumed flag, so the card title carries it; else each column says its own.
+  function billsCycle(b) {
+    var E = b && b.meters && b.meters.electric, W = b && b.meters && b.meters.water; if (!b || !b.v2 || !E || !W || (!E.from && !W.from)) return null;
+    var e = { from: E.from || b.since, assumed: E.fromAssumed }, w = { from: W.from || b.waterSince || b.since, assumed: W.fromAssumed };
+    return { e: e, w: w, same: e.from === w.from && e.assumed === w.assumed };
+  }
+  function sinceWord(from, assumed) { return 'since ' + (assumed ? 'about ' : '') + dayLabel(from); }
+  // s143: the state C row ("Dates assumed (the 21st)"): shown to those who may set the dates, when every meter that has a last bill ends it on an assumed date. Returns the sentence or ''.
+  function billsAssumedKinds(b) { // the meters whose last bill ends on an assumed date, when that holds for every meter that has a last bill; else []
+    if (!b || !b.v2 || !b.meters) return [];
+    var ks = ['electric', 'water'].filter(function (k) { return billLast(b.meters[k]); });
+    return ks.length && ks.every(function (k) { return b.meters[k].last.toAssumed; }) ? ks : [];
+  }
+  function billsAssumedRow(b, role) {
+    if (!b || !b.v2 || b.canPayList === false || !billsMayPay(role)) return '';
+    var ks = billsAssumedKinds(b); if (!ks.length) return '';
+    var days = [], d; ks.forEach(function (k) { d = +b.meters[k].last.to.slice(8, 10); if (days.indexOf(d) < 0) days.push(d); });
+    return 'Dates assumed (the ' + days.map(ordinal).join(' and ') + '). Type the real ones from the bills.';
+  }
+  // s143: a paid row leaves To pay (the server keeps only due and paying there); the paid ones that have no Last bill line (internet, subscription) show as one quiet line.
+  // Returns {lead, items:[{emoji, word, month}]} or null. lead is the month when all share it.
+  function billsPaidLine(b) {
+    if (!b || !b.v2 || b.canPayList === false) return null;
+    var open = {}; b.due.forEach(function (e) { open[e.kind] = 1; });
+    var seen = {}, items = b.lastPaid.filter(function (x) { if (x.kind === 'electric' || x.kind === 'water' || open[x.kind] || seen[x.kind]) return false; seen[x.kind] = 1; return true; });
+    if (!items.length) return null;
+    var mon = function (p) { return /^\d{4}-\d{2}$/.test(p) ? MONTHS[+p.slice(5, 7) - 1] : ''; }, same = items.every(function (x) { return x.period === items[0].period; });
+    return { lead: same ? mon(items[0].period) : '', items: items.map(function (x) { return { emoji: BILL_TILE[x.kind][0], word: BILL_LABEL[x.kind], month: same ? '' : mon(x.period).slice(0, 3) }; }) };
   }
   // s127: one bill of the To pay list on Today. Anything that is not the contract shape is dropped; a missing peso is null, never 0.
   var BILL_LABEL = { electric: 'Electricity', water: 'Water', internet: 'Internet', netflix: 'Subscription' }, BILL_TILE = { electric: ['⚡', 'e'], water: ['💧', 'w'], internet: ['🌐', 'n'], netflix: ['📺', 's'] };
@@ -907,19 +962,25 @@
     if (!x || typeof x !== 'object' || !x.id || !BILL_TILE[x.kind] || !/^(due|paying|paid)$/.test(String(x.status))) return null;
     var n = function (v) { if (v === null || v === undefined || v === '') return null; v = Number(v); return isFinite(v) ? v : null; }, d = n(x.due_day), t = String(x.label == null ? '' : x.label).trim();
     return { id: String(x.id), kind: x.kind, label: t || BILL_LABEL[x.kind], period: String(x.period || ''), status: x.status, est: n(x.estimate_php), paid: n(x.paid_php), isEst: x.is_estimate === true, dueDay: d >= 1 && d <= 31 ? Math.round(d) : null,
-      payingBy: String(x.paying_by_name || '').trim(), paidBy: String(x.paid_by_name || '').trim(), paidAt: String(x.paid_at || ''), canPay: x.can_pay === true };
+      payingBy: String(x.paying_by_name || '').trim(), paidBy: String(x.paid_by_name || '').trim(), paidAt: String(x.paid_at || ''), canPay: x.can_pay === true,
+      from: billDay(x.from), to: billDay(x.to), toAssumed: x.to_assumed === true, paidOn: billDay(x.paid_on), v2: 'to_assumed' in x || 'paid_on' in x }; // s143: the period the bill covers and the day it was paid (the old server sends neither)
   }
   function billPeso(v) { v = Number(v) || 0; return '₱' + v.toLocaleString('en-PH', { minimumFractionDigits: v % 1 ? 2 : 0, maximumFractionDigits: 2 }); }
   // What one To pay row says and does. ctx: {today, since, mayProof}. action: 'pay' (button), 'proof' (the row opens the screenshot) or '' (nothing to tap).
   function billRow(e, ctx) {
     var t = BILL_TILE[e.kind], r = { id: e.id, kind: e.kind, label: e.label, emoji: t[0], tile: t[1], status: e.status, amount: '', sub: '', action: '' };
     if (e.status === 'paid') {
-      var day = manilaDayOf(e.paidAt);
+      var day = e.paidOn || manilaDayOf(e.paidAt);
       r.sub = ['Paid ' + (e.paid == null ? '' : billPeso(e.paid)), day ? (day === (ctx && ctx.today) ? 'today' : dayLabel(day)) : '', e.paidBy].filter(Boolean).join(' · ');
       r.action = ctx && ctx.mayProof ? 'proof' : ''; return r;
     }
-    r.amount = e.est == null ? '' : billPeso(e.est);
+    r.amount = e.est == null ? '' : billPeso(e.v2 && e.isEst ? Math.round(e.est) : e.est); // s143: an estimate is a whole-peso figure, the same as its Last bill line
     if (e.status === 'paying') { r.sub = e.canPay ? 'You are paying this now' : (e.payingBy || 'Someone') + ' is paying this now'; r.action = e.canPay ? 'pay' : ''; return r; }
+    if (e.v2) { // s143 (frame 1): meters say "Due 27th · estimate", the rest "November · due 28th"
+      var meter = e.kind === 'electric' || e.kind === 'water', mon = /^\d{4}-\d{2}$/.test(e.period) ? MONTHS[+e.period.slice(5, 7) - 1] : '';
+      r.sub = (meter ? [e.dueDay ? 'Due ' + ordinal(e.dueDay) : '', e.isEst ? 'estimate' : ''] : [mon, e.dueDay ? 'due ' + ordinal(e.dueDay) : '']).filter(Boolean).join(' · ');
+      r.action = e.canPay ? 'pay' : ''; return r;
+    }
     r.sub = [e.isEst && ctx && ctx.last ? 'est. to ' + dayLabel(ctx.last) : '', e.dueDay ? 'due ' + ordinal(e.dueDay) : ''].filter(Boolean).join(' · ');
     r.action = e.canPay ? 'pay' : ''; return r;
   }
@@ -2010,7 +2071,7 @@
     fmtTime: fmtTime, fmt24: fmt24, ordinal: ordinal, plural: plural, agoLabel: agoLabel, clockLabel: clockLabel,
     monthGrid: monthGrid, dayState: dayState, dayStatus: dayStatus, mergeStays: mergeStays, sameGuest: sameGuest, dayMoves: dayMoves, blockWhy: blockWhy, flagName: flagName, FLAG_KINDS: FLAG_KINDS, blockedLines: blockedLines, blockedLineText: blockedLineText,
     canFlagDays: canFlagDays, guestContact: guestContact, canSeeGuestContact: canSeeGuestContact, MESSENGER_INBOX: MESSENGER_INBOX, rpcMissing: rpcMissing, tgLink: tgLink, warningInfo: warningInfo, findingKey: findingKey, initialOf: initialOf, sourceLabel: sourceLabel, stayDates: stayDates, monthInRange: monthInRange,
-    billRow: billRow, billPeso: billPeso, billsMayPay: billsMayPay, tierRibbon: tierRibbon, tierBadge: tierBadge, stayNames: stayNames, stayNamesProblem: stayNamesProblem, canEditStaying: canEditStaying, stayErrorText: stayErrorText, stayingView: stayingView, wxHazards: wxHazards, wxHourly: wxHourly, nextPrep: nextPrep, utilAlerts: utilAlerts, isInternetNotice: isInternetNotice, tierPerks: tierPerks, tierGuide: tierGuide, TIER_RULES: TIER_RULES, tierRule: tierRule, tierFromCounts: tierFromCounts, tierProgress: tierProgress, phoneCheckSummary: phoneCheckSummary, phoneCheckRows: phoneCheckRows, phoneFixPlan: phoneFixPlan, phoneCheckDue: phoneCheckDue, phoneCheckSave: phoneCheckSave, phoneCheckTried: phoneCheckTried, phoneCheckSettle: phoneCheckSettle, phoneCheckOpen: phoneCheckOpen, phoneCheckRead: phoneCheckRead, phoneBlockedSteps: phoneBlockedSteps, PHONE_CHECK_KEY: PHONE_CHECK_KEY, PHONE_CHECK_VER: PHONE_CHECK_VER, IOS_A2HS: IOS_A2HS, zoomClamp: zoomClamp, zoomStep: zoomStep, zoomToggle: zoomToggle, zoomPan: zoomPan, zoomAt: zoomAt, ZOOM_MAX: ZOOM_MAX, faceFrame: faceFrame, billsToday: billsToday, parseNotes: parseNotes, returningLabel: returningLabel, tierLabel: tierLabel, tierLine: tierLine, tierParts: tierParts, keyNote: keyNote, TOPIC_LABELS: TOPIC_LABELS, notableLine: notableLine, weatherIcon: weatherIcon, rainAlert: rainAlert, wxCard: wxCard, goodToKnow: goodToKnow, earlierLine: earlierLine, companionsLine: companionsLine, photoOwnerName: photoOwnerName, nameKey: nameKey, stayingLine: stayingLine, idOfLine: idOfLine, todayCardState: todayCardState,
+    billRow: billRow, billPeso: billPeso, billsAssumedKinds: billsAssumedKinds, billsMayPay: billsMayPay, tierRibbon: tierRibbon, tierBadge: tierBadge, stayNames: stayNames, stayNamesProblem: stayNamesProblem, canEditStaying: canEditStaying, stayErrorText: stayErrorText, stayingView: stayingView, wxHazards: wxHazards, wxHourly: wxHourly, nextPrep: nextPrep, utilAlerts: utilAlerts, isInternetNotice: isInternetNotice, tierPerks: tierPerks, tierGuide: tierGuide, TIER_RULES: TIER_RULES, tierRule: tierRule, tierFromCounts: tierFromCounts, tierProgress: tierProgress, phoneCheckSummary: phoneCheckSummary, phoneCheckRows: phoneCheckRows, phoneFixPlan: phoneFixPlan, phoneCheckDue: phoneCheckDue, phoneCheckSave: phoneCheckSave, phoneCheckTried: phoneCheckTried, phoneCheckSettle: phoneCheckSettle, phoneCheckOpen: phoneCheckOpen, phoneCheckRead: phoneCheckRead, phoneBlockedSteps: phoneBlockedSteps, PHONE_CHECK_KEY: PHONE_CHECK_KEY, PHONE_CHECK_VER: PHONE_CHECK_VER, IOS_A2HS: IOS_A2HS, zoomClamp: zoomClamp, zoomStep: zoomStep, zoomToggle: zoomToggle, zoomPan: zoomPan, zoomAt: zoomAt, ZOOM_MAX: ZOOM_MAX, faceFrame: faceFrame, billsToday: billsToday, rangeLabel: rangeLabel, billLast: billLast, billsCycle: billsCycle, sinceWord: sinceWord, billsAssumedRow: billsAssumedRow, billsPaidLine: billsPaidLine, parseNotes: parseNotes, returningLabel: returningLabel, tierLabel: tierLabel, tierLine: tierLine, tierParts: tierParts, keyNote: keyNote, TOPIC_LABELS: TOPIC_LABELS, notableLine: notableLine, weatherIcon: weatherIcon, rainAlert: rainAlert, wxCard: wxCard, goodToKnow: goodToKnow, earlierLine: earlierLine, companionsLine: companionsLine, photoOwnerName: photoOwnerName, nameKey: nameKey, stayingLine: stayingLine, idOfLine: idOfLine, todayCardState: todayCardState,
     orderWarnings: orderWarnings, brownoutText: brownoutText, lowStockText: lowStockText, foldLowStock: foldLowStock, warningSummary: warningSummary,
     weatherLine: weatherLine, rainLine: rainLine, weatherStale: weatherStale, WEATHER_STALE_MIN: WEATHER_STALE_MIN, esc: esc,
     A_HOUSE_FALLBACK: A_HOUSE_FALLBACK, A_houseTimes: A_houseTimes, A_turnoverClock: A_turnoverClock, A_turnoverLine: A_turnoverLine, A_hm: A_hm, A_NOTICE_TYPES: A_NOTICE_TYPES, A_noticesView: A_noticesView, A_noticeFilters: A_noticeFilters, A_dayMarks: A_dayMarks, A_noticeDay: A_noticeDay, A_guestMessage: A_guestMessage, A_CAL_TABS: A_CAL_TABS, A_calTab: A_calTab, A_stayShade: A_stayShade, A_hubGroups: A_hubGroups, A_hubNative: A_hubNative, A_hubRoutes: A_hubRoutes, A_hubRouteOk: A_hubRouteOk, A_hubDoorUrl: A_hubDoorUrl, A_whatsNew: A_whatsNew, A_shortTime: A_shortTime, A_PINNED: A_PINNED, A_noticeAddError: A_noticeAddError, A_NOTICE_HINT: A_NOTICE_HINT, A_flagDup: A_flagDup, A_facebookUrl: A_facebookUrl, A_fbPluginUrl: A_fbPluginUrl, A_noticeAddProblem: A_noticeAddProblem, A_noticeAddArgs: A_noticeAddArgs, A_plainRefusal: A_plainRefusal, A_hour12: A_hour12, A_timeRange: A_timeRange,

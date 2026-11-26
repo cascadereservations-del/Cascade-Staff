@@ -141,10 +141,10 @@ test('E screen: Show more asks for the next 100 after the last row; See all open
 test('E access: owner, admin and finance mount; cleaner, inspector, maintenance and laundry are sent home and nothing is read', async () => {
   for (const role of ['owner', 'admin', 'finance']) { const b = await boot({ role }); assert.equal(b.sent('expenses_screen_v1').length, 1, role); }
   for (const role of ['cleaner', 'inspector', 'maintenance', 'laundry', 'viewer', '']) { const b = await boot({ role }); assert.deepEqual(b.nav, ['#home'], String(role)); assert.equal(b.client.calls.length, 0); assert.equal(b.html(), ''); }
-  assert.match(APP, /expenses: \{ src: 'expenses\/E_expenses\.js', css: 'expenses\/E_expenses\.css', global: 'E_Expenses', title: 'Expenses', roles: \['owner', 'admin', 'finance'\], demoClient: true \}/);
+  assert.match(APP, /expenses: \{ src: 'expenses\/E_expenses\.js', css: \['stock\/I_stock\.css', 'money\/MN_money\.css', 'expenses\/E_expenses\.css'\], global: 'E_Expenses', title: 'Expenses', roles: \['owner', 'admin', 'finance'\], demoClient: true \}/);
   assert.match(APP, /function A_loadExpenses\(\) \{\n\s+if \(!state\.access \|\| state\.expensesAbsent \|\| state\.layout !== 'admin' \|\| !\/\^\(owner\|admin\|finance\)\$\/\.test\(role\(\) \|\| ''\)\) return;/);
-  assert.match(APP, /function A_expCard\(\) \{\n\s+var e = state\.expenses; if \(!e \|\| state\.layout !== 'admin' \|\| !\/\^\(owner\|admin\|finance\)\$\/\.test\(role\(\) \|\| ''\)\) return '';/);
-  assert.match(APP, /p_property_id: pid\(\), p_limit: 0 \}/); assert.match(APP, /A_billsCard\(\) \+ A_expCard\(\) \+ \(BD\.top/);
+  assert.match(APP, /function A_moneyCard\(\) \{\n\s+var e = state\.expenses; if \(!e \|\| state\.layout !== 'admin' \|\| !\/\^\(owner\|admin\|finance\)\$\/\.test\(role\(\) \|\| ''\)\) return '';/);
+  assert.match(APP, /p_property_id: pid\(\), p_limit: 3 \}/); assert.match(APP, /A_billsCard\(\) \+ A_moneyCard\(\) \+ \(BD\.top/); // s143: the Money card replaced the Expenses card
 });
 
 // ------------------------------------------------------------------------------------------------ add, edit, void, review
@@ -320,40 +320,39 @@ test('KPI copy (SPEC 8.4): labels follow kpi_source, the pending line and the Se
   e = mk({ ...A, kpi_source: 'ledger' }, 'cleaner'); await tick(); assert.doesNotMatch(e.innerHTML, /expenses|Supplies bought/);
 });
 test('Shell: version, cache name, service worker list, no peso in a staff layout, nothing signed is cached', () => {
-  const pkg = JSON.parse(read('package.json')); assert.equal(pkg.version, '3.4.56'); assert.match(APP, /version: '3.4.56'/);
-  assert.match(SW, /const CACHE_NAME = 'cs-shell-v83'/); assert.match(APP, /var PC_SHELL = 'cs-shell-v83'/);
+  const pkg = JSON.parse(read('package.json')); assert.equal(pkg.version, '3.4.57'); assert.match(APP, /version: '3.4.57'/);
+  assert.match(SW, /const CACHE_NAME = 'cs-shell-v84'/); assert.match(APP, /var PC_SHELL = 'cs-shell-v84'/);
   assert.ok(SW.includes("'./expenses/E_expenses.js', './expenses/E_expenses.css'")); assert.match(SW, /NETWORK_ONLY_HOSTS = \['supabase\.co'/);
-  assert.match(SW, /\/storage\/v1\//); assert.match(read('README.md'), /cs-shell-v83/);
-  // the Today card is drawn only for the admin layout and only by A_expCard (the staff body never calls it)
+  assert.match(SW, /\/storage\/v1\//); assert.match(read('README.md'), /cs-shell-v84/);
+  // the Today card is drawn only for the admin layout and only by A_moneyCard (the staff body never calls it)
   const staffBody = APP.slice(APP.indexOf("body = '<div class=\"A_body\">'") - 400, APP.indexOf("body = '<div class=\"A_body\">'") + 40);
-  assert.equal((APP.match(/A_expCard\(\)/g) || []).length, 2, 'defined once, used once'); assert.ok(!/A_expCard/.test(staffBody));
-  const card = APP.slice(APP.indexOf('function A_expCard'), APP.indexOf('function A_loadExpenses'));
-  assert.match(card, /state\.layout !== 'admin'/); assert.match(card, /EXPENSES · /); assert.match(card, /Usual month about /); assert.match(card, / to review/); assert.match(card, /href="#expenses\/add"/);
-  assert.doesNotMatch(read('index.html'), /A_expCard/); assert.match(read('index.html'), /id="v-expenses"/);
+  assert.equal((APP.match(/A_moneyCard\(\)/g) || []).length, 2, 'defined once, used once'); assert.ok(!/A_moneyCard/.test(staffBody)); assert.doesNotMatch(APP, /A_expCard/);
+  const card = APP.slice(APP.indexOf('function A_moneyCard'), APP.indexOf('function A_loadExpenses'));
+  assert.match(card, /state\.layout !== 'admin'/); assert.match(card, /'Money · '/); assert.match(card, /Usual month about /); assert.match(card, / to review/); assert.match(card, /href="#money"/);
+  assert.doesNotMatch(read('index.html'), /A_moneyCard|A_expCard/); assert.match(read('index.html'), /id="v-expenses"/);
 });
 test('Today card: the month, a usual month rounded to 100, a review count only when something waits, an Add button only with write access', async () => {
-  const { A_expCardForTest } = {}; void A_expCardForTest;
-  const card = APP.slice(APP.indexOf('function A_expCard'), APP.indexOf('function A_loadExpenses'));
-  const fnc = new Function('state', 'role', 'esc', 'A_peso', 'ICON', card + '; return A_expCard;');
-  const mk = (e, layout = 'admin', r = 'owner') => fnc({ expenses: e, layout }, () => r, (s) => String(s), (x) => '₱' + Number(x).toLocaleString('en-PH'), () => '+')();
+  const card = APP.slice(APP.indexOf('var H_eSeq = 0'), APP.indexOf('function A_loadExpenses'));
+  const fnc = new Function('state', 'role', 'esc', 'A_peso', 'A_nb', 'CS', 'ICON', card + '; return A_moneyCard;');
+  const mk = (e, layout = 'admin', r = 'owner') => fnc({ expenses: e, layout }, () => r, (s) => String(s), (x) => '₱' + Number(x).toLocaleString('en-PH'), (s) => String(s), { dayLabel: (d) => d, rangeLabel: (a, b) => a + ' – ' + b }, () => '+')();
   const base = { month: '2026-11-01', total: 38420.4, basis: 47413, pending: { count: 2, total: 1850 }, can_write: true };
-  let h = mk(base); assert.match(h, /EXPENSES · NOVEMBER/); assert.match(h, /₱38,420/); assert.match(h, /Usual month about ₱47,400<\/a> · <a class="E_trev" href="#expenses\/review">2 to review<\/a>/); assert.match(h, /class="btn btn-primary E_tadd" href="#expenses\/add"/);
-  h = mk({ ...base, pending: { count: 0, total: 0 }, can_write: false }); assert.doesNotMatch(h, /to review/); assert.doesNotMatch(h, /E_tadd/);
+  let h = mk(base); assert.match(h, /Money · November/); assert.match(h, /₱38,420/); assert.match(h, /Usual month about ₱47,400/); assert.match(h, /<a class="MN_rev" href="#expenses\/review">2 to review<\/a>/); assert.match(h, /class="btn btn-primary MN_log" href="#money">＋ Log money<\/a>/);
+  h = mk({ ...base, pending: { count: 0, total: 0 }, can_write: false }); assert.doesNotMatch(h, /to review/); assert.doesNotMatch(h, /MN_log|Log money/);
   assert.equal(mk(null), ''); assert.equal(mk(base, 'staff'), ''); assert.equal(mk(base, 'admin', 'cleaner'), ''); assert.equal(mk(base, 'admin', 'laundry'), '');
-  assert.match(STY, /\.E_today \.E_tadd \{ width: 64px; min-height: var\(--v5-touch\)/);
+  assert.match(STY, /\.MN_log \{ width: 100%; min-height: 48px;/); // s143: the Log money button is full width, 48 px
 });
 test('Styles: tokens only, no raw colour, no pixel font size, and only the four type tokens', () => {
-  for (const [name, css] of [['E_expenses.css', CSS], ['Today card block', STY.slice(STY.indexOf('s134 (3.4.53)'))]]) {
+  for (const [name, css] of [['E_expenses.css', CSS], ['Today card block', STY.slice(STY.indexOf('s143: Money on Today'), STY.indexOf('/* ---- s110:'))]]) {
     assert.doesNotMatch(css.replace(/\/\*[^]*?\*\//g, ''), /#[0-9a-fA-F]{3,8}\b/, name + ' has a raw hex colour'); assert.doesNotMatch(css, /rgba?\(|hsla?\(/, name + ' has a raw colour function');
     assert.doesNotMatch(css, /font-size:\s*[\d.]+px/, name); assert.doesNotMatch(css, /font:[^;]*\b\d+(\.\d+)?px/, name + ' sets a px font');
-    const sizes = new Set([...css.matchAll(/font(?:-size)?:[^;]*?var\((--v5-t-[a-z0-9-]+)\)/g)].map((m) => m[1])); for (const s of sizes) assert.ok(['--v5-t-min', '--v5-t-label', '--v5-t-body', '--v5-t-num'].includes(s), name + ' uses ' + s);
+    const sizes = new Set([...css.matchAll(/font(?:-size)?:[^;]*?var\((--v5-t-[a-z0-9-]+)\)/g)].map((m) => m[1])); for (const s of sizes) assert.ok(['--v5-t-min', '--v5-t-label', '--v5-t-body', '--v5-t-num'].concat(name === 'Today card block' ? ['--v5-t-2', '--v5-t-display'] : []).includes(s), name + ' uses ' + s); // s143: the Money total is display size, the rest of the card may use t-2
   }
   assert.equal((CSS.replace(/\/\*[^]*?\*\//g, '').match(/--v5-warn-t/g) || []).length, 1, '--warn-t only on the waiting-for-review line'); assert.match(CSS, /\.E_warnline[^}]*var\(--v5-warn-t\)/);
   assert.match(CSS, /\.E_num \{ font: 400 var\(--v5-t-num\)\/1\.1 var\(--v5-font-display\)/);
 });
 test('Module hygiene: plain script, no network but the client, no peso outside the module (staff layout), no eval', () => {
   assert.doesNotThrow(() => new vm.Script(SRC)); assert.doesNotMatch(SRC, /\beval\(|new Function|document\.write|fetch\(|XMLHttpRequest/);
-  assert.doesNotMatch(APP.slice(0, APP.indexOf('function A_expCard')).split('\n').filter((l) => /staffBody|cleaner/.test(l) && /A_expCard/.test(l)).join('\n'), /A_expCard/);
+  assert.doesNotMatch(APP.slice(0, APP.indexOf('function A_moneyCard')).split('\n').filter((l) => /staffBody|cleaner/.test(l) && /A_moneyCard/.test(l)).join('\n'), /A_moneyCard/);
 });
 
 // ------------------------------------------------------------------------------------------------ fix round 1 (Opus r1 audit, items 1-16)
@@ -484,7 +483,7 @@ test('fix 8-9: the receipt mark is a paperclip; the demo has a bill and a staff-
   const last = p1.rows[1], p2 = (await d.rpc('expenses_screen_v1', { p_property_id: PROP, p_limit: 100, p_before: last.created_at, p_before_id: last.id })).data;
   assert.equal(p1.rows.length + p2.rows.length, x.rows.length, 'two pages cover every row once'); assert.equal(new Set(p1.rows.concat(p2.rows).map((r) => r.id)).size, x.rows.length);
   const k = (await demoMod.client('owner', new Date('2026-11-23T03:00:00Z')).rpc('kpi_tab_v1', { p_property_id: PROP })).data; assert.equal(k.admin.kpi_ledger_from, '2026-11'); assert.equal(k.admin.kpi_source, 'ledger');
-  assert.match(STY, /\.E_today \.E_tadd\.btn-primary \{ background: var\(--v5-gold\); border-color: var\(--v5-gold\); color: var\(--v5-gold-fg\)/); assert.match(CSS, /\.E_sticky \.btn-primary \{ background: var\(--v5-gold\)/);
+  assert.match(CSS, /\.E_sticky \.btn-primary \{ background: var\(--v5-gold\)/);
 });
 
 test('fix 10-13: attach and save refusals read as plain words that match the receipt codes', async () => {
@@ -524,16 +523,15 @@ test('fix 15: stock purchases not yet in the expenses are said once, in grey', a
 });
 
 test('fix 16: the Today card counts reviews from every month and opens the needs-review filter', async () => {
-  const card = APP.slice(APP.indexOf('function A_expCard'), APP.indexOf('function A_loadExpenses')), fnc = new Function('state', 'role', 'esc', 'A_peso', 'ICON', card + '; return A_expCard;');
-  const mk = (e) => fnc({ expenses: e, layout: 'admin' }, () => 'owner', (s) => String(s), (x) => '₱' + Number(x).toLocaleString('en-PH'), () => '+')();
+  const card = APP.slice(APP.indexOf('var H_eSeq = 0'), APP.indexOf('function A_loadExpenses')), fnc = new Function('state', 'role', 'esc', 'A_peso', 'A_nb', 'CS', 'ICON', card + '; return A_moneyCard;');
+  const mk = (e) => fnc({ expenses: e, layout: 'admin' }, () => 'owner', (s) => String(s), (x) => '₱' + Number(x).toLocaleString('en-PH'), (s) => String(s), { dayLabel: (d) => d, rangeLabel: (a, b) => a + ' – ' + b }, () => '+')();
   const base = { month: '2026-11-01', total: 100, basis: 0, pending: { count: 2, total: 5 }, can_write: true };
-  assert.match(mk({ ...base, pending_all: { count: 7, total: 90 } }), /<a class="E_trev" href="#expenses\/review">7 to review<\/a>/, 'pending_all wins');
+  assert.match(mk({ ...base, pending_all: { count: 7, total: 90 } }), /<a class="MN_rev" href="#expenses\/review">7 to review<\/a>/, 'pending_all wins');
   assert.match(mk(base), />2 to review</, 'no pending_all: this month only');
   assert.doesNotMatch(mk({ ...base, pending_all: { count: 0, total: 0 } }), /to review/, 'present and zero: nothing waits anywhere');
   const b = await boot({ sub: 'review' }); assert.equal(b.sent('expenses_screen_v1')[0][1].p_filter, 'review'); assert.match(b.html(), /data-id="all"[^>]*>Needs review ×/);
   await b.click('chip', 'all'); assert.equal(b.sent('expenses_screen_v1').at(-1)[1].p_filter, null);
-  assert.match(STY, /\.E_today \.E_trev \{ display: inline-block; padding: 15px 0; margin: -15px 0;/, 'the tap target reaches 44 px without making the card taller');
-  assert.match(STY, /\.E_today \.E_tsub \{ display: block; letter-spacing: -\.01em;/, 'the sub line stays on one line (mockup A)');
+  assert.match(STY, /\.MN_rev \{ display: inline-flex; align-items: center; min-height: 44px;/, 'the review link is a 44 px target');
 });
 
 test('round 2: stock row edit is date/payee read-only; review line for earlier months; no dead receipt check', async () => {
@@ -562,14 +560,14 @@ test('round 3: a staff pay row edit never sends category (Pay staff owns it); a 
   await c.type('notes', 'Later date row'); await c.type('reason', 'fix words'); await c.click('edit-save');
   const s2 = c.sent('admin_save_transaction_v2'); assert.equal(s2.length, 1, 'no date validation on a stock row'); assert.deepEqual(Object.keys(s2[0][1].p_txn).sort(), ['id', 'notes', 'reason']);
 });
-test('round 4: a guest refund row keeps guest_refund (read-only) and a notes-only edit saves; Today sub line never wraps', async () => {
+test('round 4: a guest refund row keeps guest_refund (read-only) and a notes-only edit saves; no Expenses card rules left in styles.css', async () => {
   const RF = ROW({ id: 'rf1', chip: 'refund', locked: true, amount_locked: true, category: 'guest_refund', receipt_can: { add: false, replace: false, remove: false } });
   const b = await boot({ screen: SCREEN({ rows: [RF] }) }); await b.click('open', 'rf1'); await b.click('edit');
   assert.match(b.html(), /<div class="E_input E_ro" id="E_cat">/, 'refund category is read-only'); assert.doesNotMatch(b.html(), /<select[^>]*id="E_cat"/);
   await b.type('notes', 'Refund note'); await b.type('reason', 'fix words'); await b.click('edit-save');
   const sent = b.sent('admin_save_transaction_v2'); assert.equal(sent.length, 1, 'notes-only edit is not blocked'); assert.deepEqual(Object.keys(sent[0][1].p_txn).sort(), ['id', 'notes', 'reason']);
   const css = fs.readFileSync(path.join(root, 'styles.css'), 'utf8');
-  assert.match(css, /\.E_today \.E_tsub \{[^}]*white-space: nowrap; overflow: hidden; text-overflow: ellipsis;/);
+  assert.doesNotMatch(css, /E_today/, 's143: the old Expenses card rules are gone; the Money rows may grow with the text');
 });
 
 test('r4: an incomplete amount shows its cue in the list, detail and review sheet, Count it is off, and the refusal code reads the same', async () => {

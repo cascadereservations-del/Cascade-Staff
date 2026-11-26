@@ -271,7 +271,7 @@ test('H_ guard: no duplicate top-level H_ names in app.js or lib.js, the files p
   }
   const html = read('index.html'); for (const id of ['v-search', 'v-weather', 'v-stock', 'v-manage', 'H_offline', 'door-done']) assert.ok(html.includes('id="' + id + '"'), id);
   assert.match(html, /Your name, as Lloyd wrote it/); assert.match(html, /placeholder="Honey"/);
-  assert.equal(JSON.parse(read('package.json')).version, '3.4.56'); assert.match(read('sw.js'), /CACHE_NAME = 'cs-shell-v83'/);
+  assert.equal(JSON.parse(read('package.json')).version, '3.4.57'); assert.match(read('sw.js'), /CACHE_NAME = 'cs-shell-v84'/);
 });
 
 // the bodies of the three theme rules: :root, :root:not([data-theme="light"]) inside the dark media query, :root[data-theme="dark"]
@@ -308,7 +308,7 @@ test('H_ fix: a module that failed to load is retried on the next open; a throw 
   const app = await boot({ role: 'cleaner', hash: '#home', winInit: (win) => { win.H_loadAsset = (m) => { n++; if (n === 1) return Promise.reject(new Error('offline')); win[m.global] = { mount(el, o) { mounts.push(o); } }; return Promise.resolve(); }; }, handlers: baseHandlers('cleaner') });
   await hashTo(app, '#weather'); assert.equal(app.location.hash, '#calendar/notices', 'the first open falls back');
   await hashTo(app, '#weather'); assert.equal(n, 2, 'the second open loads again'); assert.equal(mounts.length, 1); assert.equal(app.location.hash, '#weather');
-  const src = read('app.js'); assert.match(src, /sc\.onerror = function \(\) \{ \[sc, l\]\.forEach/); assert.match(src, /pr\.catch\(function \(\) \{ if \(H_mod\.p\[key\] === pr\) delete H_mod\.p\[key\]/);
+  const src = read('app.js'); assert.match(src, /sc\.onerror = function \(\) \{ \[sc\]\.concat\(ls\)\.forEach/); assert.match(src, /pr\.catch\(function \(\) \{ if \(H_mod\.p\[key\] === pr\) delete H_mod\.p\[key\]/);
   const mk = (mod) => (win) => { win.H_loadAsset = (m) => { win[m.global] = mod; return Promise.resolve(); }; };
   const t = await boot({ role: 'owner', hash: '#home', winInit: mk({ mount() { throw new Error('boom'); } }), handlers: baseHandlers('owner') }); await hashTo(t, '#manage'); assert.equal(t.location.hash, '#hub', 'mount threw: the route falls back');
   const r = await boot({ role: 'owner', hash: '#home', winInit: mk({ mount() { return Promise.reject(new Error('late')); } }), handlers: baseHandlers('owner') }); await hashTo(r, '#manage'); assert.equal(r.location.hash, '#hub', 'an async failure falls back too');
@@ -335,6 +335,6 @@ test('H_ fix: the tour waits while the Add to Home Screen hint is showing; sign-
 test('H_ fix: the three module folders are precached best effort, apart from the required shell list', () => {
   const sw = read('sw.js'), ctx = vm.createContext({ self: { addEventListener() {}, location: { href: 'https://x/' } }, URL, Request: class {}, Promise });
   vm.runInContext(sw.replace(/^const /gm, 'var ').replace(/^if \(typeof module[^\n]*$/m, ''), ctx); const opt = vm.runInContext('OPTIONAL_URLS', ctx), req = vm.runInContext('SHELL_URLS', ctx);
-  assert.deepEqual([...opt], ['./weather/W_weather.js', './weather/W_weather.css', './stock/I_stock.js', './stock/I_stock.css', './stock/I_suppliers.js', './stock/I_suppliers.css', './manage/N_manage.js', './manage/N_manage.css', './manage/N_charts.js', './manage/N_charts.css', './manage/N_bookings.js', './manage/N_bookings.css', './manage/N_ops.js', './manage/N_ops.css', './guests/G_guests.js', './guests/G_guests.css', './inbox/X_inbox.js', './inbox/X_inbox.css', './calendar/K_bookcal.js', './calendar/K_bookcal.css', './kpi/K_kpi.js', './kpi/K_kpi.css', './stock/S110_supply.js', './bills/BL_bills.js', './bills/BL_bills.css', './expenses/E_expenses.js', './expenses/E_expenses.css']); for (const u of opt) assert.ok(!req.includes(u), u + ' is not in the required list');
+  assert.deepEqual([...opt], ['./weather/W_weather.js', './weather/W_weather.css', './stock/I_stock.js', './stock/I_stock.css', './stock/I_suppliers.js', './stock/I_suppliers.css', './manage/N_manage.js', './manage/N_manage.css', './manage/N_charts.js', './manage/N_charts.css', './manage/N_bookings.js', './manage/N_bookings.css', './manage/N_ops.js', './manage/N_ops.css', './guests/G_guests.js', './guests/G_guests.css', './inbox/X_inbox.js', './inbox/X_inbox.css', './calendar/K_bookcal.js', './calendar/K_bookcal.css', './kpi/K_kpi.js', './kpi/K_kpi.css', './stock/S110_supply.js', './bills/BL_bills.js', './bills/BL_bills.css', './expenses/E_expenses.js', './expenses/E_expenses.css', './money/MN_money.js', './money/MN_money.css']); for (const u of opt) assert.ok(!req.includes(u), u + ' is not in the required list');
   assert.match(sw, /SHELL_URLS\.concat\(OPTIONAL_URLS\)\.map\(\(u\) => cache\.add\(new Request\(u, \{ cache: 'reload' \}\)\)\.catch\(\(\) => \{\}\)\)/, 'a missing file is swallowed one by one');
 });

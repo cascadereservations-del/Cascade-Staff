@@ -20,7 +20,7 @@
     url: 'https://qkgfhsdppslwunarczeq.supabase.co',
     key: 'sb_publishable_JFuRYZ9csmQULcMRmHXDSg_Abo9UeCj',
     propertyId: '6ae230f4-c189-4547-84b1-cb6e0b2cc9bd',
-    version: '3.4.56'
+    version: '3.4.57'
   };
   var LINKS = {
     checklist: 'https://cascadereservations-del.github.io/CH-Cleaners-Checklist/',
@@ -67,7 +67,7 @@
     notices: null, noticesAbsent: false, noticesLoading: false, noticeFilter: 'all', nadd: null, fbOpen: false, ratesMore: false, calTab: 'calendar', calView: 'month', legendOpen: false, H_peekedCal: false, H_peekedTask: false, progress: null, progressAbsent: false, taskFilter: 'all', hubRoute: '', tasks: null, tasksErr: '', tasksLoading: false, showDone: false, lastDone: null, add: null, assignees: null, rates: null, ratesErr: '', rateForm: null, rateSaving: false, reply: null, bookings: null, bookingsDone: false, noticesDone: false, tasksDenied: false, noticesFailed: false, bookingsFailed: false, errorKind: '' };
   var $ = function (id) { return document.getElementById(id); };
   try { var lsLegend = store('localStorage'); state.legendOpen = !!lsLegend && lsLegend.getItem('cs_legend_open') === '1'; if (lsLegend && lsLegend.getItem('cs_cal_view') === 'bookings') state.calView = 'bookings'; } catch (e) {} // F2: the legend's More stays as it was left
-  var VIEWS = ['signin', 'home', 'calendar', 'tasks', 'payrates', 'more', 'door', 'reply', 'hub', 'weather', 'stock', 'manage', 'guests', 'inbox', 'search', 'kpis', 'supply', 'bills', 'expenses'];
+  var VIEWS = ['signin', 'home', 'calendar', 'tasks', 'payrates', 'more', 'door', 'reply', 'hub', 'weather', 'stock', 'manage', 'guests', 'inbox', 'search', 'kpis', 'supply', 'bills', 'expenses', 'money'];
   function pid() { return (state.access && state.access.property_ids && state.access.property_ids[0]) || CFG.propertyId; }
   function canReply() { return CS.canDraftReply(state.access && state.access.role); } // s82 decision 5: every signed-in staff role
   function canAddDetails() { return CS.canAddGuestDetails(state.access && state.access.role); } // the guest-details uploader stays owner and admin
@@ -360,35 +360,48 @@
   // "Waiting for the <month> bill" shows (info tone, never an alarm) once the expected reading day has passed and the bill has no reading date yet.
   function A_billsCard() {
     var b = state.bills; if (!b) return '';
-    var kwh = (Math.round(b.eKwh) || 0).toLocaleString('en-PH') + '\u00a0kWh', m3 = String(Math.round(b.wM3 * 10) / 10) + '\u00a0m³', noRate = 'Cost shows when the rate is in.';
+    var kwh = (Math.round(b.eKwh) || 0).toLocaleString('en-PH') + ' kWh', m3 = String(Math.round(b.wM3 * 10) / 10) + ' m³', noRate = 'Cost shows when the rate is in.';
     var col = function (php, use) { return php != null ? ['<b>' + esc(A_peso(Math.round(php))) + '</b>', use] : ['<b>' + esc(use) + '</b>', noRate]; }, e = col(b.ePhp, kwh), w = col(b.wPhp, m3); // s128: no peso, no "Not yet": the usage is the figure
-    var split = !!b.waterSince && b.waterSince !== b.since, since = function (d) { return '<span class="K_sub K_since">' + esc('since ' + A_nb(CS.dayLabel(d))) + '</span>'; };
+    // s143: with the Money keys each meter says where its own cycle starts ("since about 21 Nov" when the date is assumed) and what its last bill was; an old payload keeps the s131 logic and draws exactly as before.
+    var cy = CS.billsCycle(b), split = cy ? !cy.same : !!b.waterSince && b.waterSince !== b.since, since = function (d) { return '<span class="K_sub K_since">' + esc('since ' + A_nb(CS.dayLabel(d))) + '</span>'; },
+      sinceM = function (c) { return '<span class="K_sub K_since">' + esc(A_nb(CS.sinceWord(c.from, c.assumed))) + '</span>'; },
+      lastLine = function (m) { var l = cy ? CS.billLast(m, !!assumed) : null; return l ? '<span class="MN_last"><span class="MN_ln MN_lk">Last bill</span><span class="MN_ln">' + esc(A_nb(l.range)) + '</span>' + (l.text ? '<span class="' + (l.tone === 'ok' ? 'MN_ok' : 'MN_due') + '">' + esc(A_nb(l.text)) + '</span>' : '') + '</span>' : ''; };
     var wait = b.waiting && b.waterWaiting && b.waiting === b.waterWaiting ? [['', b.waiting]] : [['electricity ', b.waiting], ['water ', b.waterWaiting]].filter(function (x) { return x[1]; });
     var waiting = wait.map(function (x) { return '<p class="K_sub K_wait">' + pill('info', 'clock', 'Waiting for the ' + x[1] + ' ' + x[0] + 'bill') + ' ' + esc('Counting goes on until its reading date is entered.') + '</p>'; }).join('');
-    var hasUse = (b.eKwh > 0) || (b.wM3 > 0);
-    return '<section class="card glass A_card F_span K_bills" id="T_bills" aria-label="Bills so far"><span class="K_lab">' + esc(split ? 'This bill so far' : 'This bill so far · since ' + A_nb(CS.dayLabel(b.since))) + '</span><div class="K_two">' +
-      '<div><i class="K_e">⚡ Electricity</i>' + e[0] + '<span class="K_sub">' + esc(e[1]) + '</span>' + (split ? since(b.since) : '') + '</div>' +
-      '<div><i class="K_w">💧 Water</i>' + w[0] + '<span class="K_sub">' + esc(w[1]) + '</span>' + (split ? since(b.waterSince) : '') + '</div></div>' +
-      (b.last || !hasUse ? '<p class="K_sub">' + esc(b.last ? 'From the meter readings up to ' + A_nb(CS.dayLabel(b.last)) + (b.ePhp != null && b.wPhp != null ? ', at the latest rates.' : '.') : 'No meter reading in this bill yet.') + '</p>' : '') + waiting + A_billDues(b) + '</section>';
+    var hasUse = (b.eKwh > 0) || (b.wM3 > 0), assumed = CS.billsAssumedRow(b, role());
+    var title = cy ? 'This bill so far' + (cy.same ? ' · ' + A_nb(CS.sinceWord(cy.e.from, cy.e.assumed)) : '') : split ? 'This bill so far' : 'This bill so far · since ' + A_nb(CS.dayLabel(b.since));
+    return '<section class="card glass A_card F_span K_bills" id="T_bills"' + (cy && b.canPayList !== false ? ' data-money="1"' : '') + ' aria-label="Bills so far"><span class="K_lab">' + esc(title) + '</span><div class="K_two">' +
+      '<div><i class="K_e">⚡ Electricity</i>' + e[0] + '<span class="K_sub">' + esc(e[1]) + '</span>' + (split ? (cy ? sinceM(cy.e) : since(b.since)) : '') + lastLine(b.meters && b.meters.electric) + '</div>' +
+      '<div><i class="K_w">💧 Water</i>' + w[0] + '<span class="K_sub">' + esc(w[1]) + '</span>' + (split ? (cy ? sinceM(cy.w) : since(b.waterSince)) : '') + lastLine(b.meters && b.meters.water) + '</div></div>' +
+      (b.last || !hasUse ? '<p class="K_sub">' + esc(b.last ? 'From the meter readings up to ' + A_nb(CS.dayLabel(b.last)) + (b.ePhp != null && b.wPhp != null ? ', at the latest rates.' : '.') : 'No meter reading in this bill yet.') + '</p>' : '') + waiting +
+      (assumed ? '<div class="MN_row"><span>' + ICON('calendar', 's16') + ' ' + esc(assumed) + '</span><a class="MN_set" href="' + esc(A_setDatesHref(b)) + '">Set dates</a></div>' : '') + A_billDues(b) + '</section>';
   }
   // s127: the To pay list. Every role sees the rows and amounts; Pay shows only where the server said can_pay, and only owner, admin and finance open a paid row's screenshot.
   // s131: where the server says this caller may not pay (can_pay_list false) there are no To pay rows at all; from the 25th one plain row (no link: a bill photo must not be read as a supply receipt) asks the person at the property to look for the paper bills and hand them to the admin. An old payload without the key behaves as before.
+  // s143: Set dates opens that meter's own reading screen when exactly one meter's last bill is assumed, else the one reading screen with both.
+  function A_setDatesHref(b) { var k = CS.billsAssumedKinds(b); return k.length === 1 ? '#money/reading/' + k[0] : '#money/reading'; }
   function A_billCheck(b) {
     if (!b.checkBills) return '';
     return '<span class="K_lab BL_lab">Bills to check</span><div class="BL_dues"><div class="K_line BL_check"><span class="BL_tile BL_tile-e" aria-hidden="true">📬</span><span class="BL_who"><b>Check for the bills</b><span class="K_sub">' + esc('Look for the SOCOTECO and water bills at the gate and give them to the admin.') + '</span></span></div></div>';
   }
   function A_billDues(b) {
     if (b.canPayList === false) return A_billCheck(b);
-    if (!b.due || !b.due.length) return '';
+    var due = b.v2 ? (b.due || []).filter(function (e) { return e.status !== 'paid'; }) : b.due; // s143: the server keeps only due and paying here; a paid row shows in the Last bill line or the paid line
+    if (!due || !due.length) return b.v2 ? A_billPaidLine(b) : '';
     var ctx = { today: state.payload ? state.payload.today : '', last: b.last, mayProof: CS.billsMayPay(role()) };
-    return '<span class="K_lab BL_lab">To pay</span><div class="BL_dues">' + b.due.map(function (e) {
+    return '<span class="K_lab BL_lab">To pay</span><div class="BL_dues">' + due.map(function (e) {
       var r = CS.billRow(e, ctx), tile = '<span class="BL_tile BL_tile-' + r.tile + '" aria-hidden="true">' + r.emoji + '</span>',
         who = '<span class="BL_who"><b>' + esc(r.label) + '</b><span class="K_sub">' + esc(r.sub) + '</span></span>';
       if (r.status === 'paid') return r.action === 'proof'
         ? '<button class="K_line BL_paid BL_tap" type="button" data-act="bill-proof" data-id="' + esc(r.id) + '" aria-label="' + esc(r.label + ', paid. See the screenshot') + '">' + tile + who + ICON('checks', 's16') + ICON('chev', 's16') + '</button>'
         : '<div class="K_line BL_paid">' + tile + who + ICON('checks', 's16') + '</div>';
       return '<div class="K_line">' + tile + who + '<b class="BL_amt">' + esc(r.amount) + '</b>' + (r.action === 'pay' ? '<a class="btn btn-secondary btn-sm" href="#bills/pay/' + esc(r.id) + '" aria-label="' + esc('Pay ' + r.label) + '">Pay</a>' : '') + '</div>';
-    }).join('') + '</div>';
+    }).join('') + '</div>' + (b.v2 ? A_billPaidLine(b) : '');
+  }
+  // s143 (frame 2): what was paid this month and has no Last bill line (internet, subscription), as one quiet line.
+  function A_billPaidLine(b) {
+    var p = CS.billsPaidLine(b); if (!p) return '';
+    return '<p class="MN_paidline">' + (p.lead ? '<span>' + esc(p.lead) + '</span>' : '') + p.items.map(function (x) { return '<span><span aria-hidden="true">' + x.emoji + '</span> ' + esc(x.word + (x.month ? ' ' + x.month : '')) + ' <span class="MN_ok">✓\u00a0Paid</span></span>'; }).join('') + '</p>';
   }
   // s131: the notes string the Today payload holds for a guest (stored notes plus the server-joined cleaning reports), for the Edit notes screen to find the report row it was opened for.
   function A_cardNotes(gid) {
@@ -412,20 +425,27 @@
       state.bills = CS.billsToday(r.data);
     }).catch(function () { /* keep the last good card */ }).then(function () { if (my === H_bSeq && current === 'home' && state.layout) renderHome(); });
   }
-  // s134: the Expenses card on Today (owner, admin, finance). expenses_screen_v1 with p_limit 0 is the summary only. Hidden while loading and on any error; sign-out clears it.
-  var H_eSeq = 0;
-  function A_expCard() {
+  // s143: the Money card on Today (owner, admin, finance) replaces the Expenses card: the month, what is waiting, one "Log money" door and the latest three rows. expenses_screen_v1 with p_limit 3.
+  // Hidden while loading and on any error; sign-out clears it. An old server sends no title, by or covers: the row then falls back to the payee and the label.
+  var H_eSeq = 0, MN_METHOD = { gcash: 'GCash', bank: 'Bank', cash: 'Cash', card: 'Card', other: 'Other' };
+  function A_moneyRow(r) {
+    var cv = r.covers && r.covers.from && r.covers.to ? CS.rangeLabel(r.covers.from, r.covers.to) : '', meta = (cv ? ['covers ' + cv, MN_METHOD[r.method]] : [r.label, r.payee]).filter(Boolean).join(' · ');
+    return '<li><span>' + esc(r.date ? A_nb(CS.dayLabel(String(r.date).slice(0, 10))) : '') + '</span><span><b>' + esc(r.title || r.payee || r.label || 'Expense') + '</b>' + (meta ? '<span>' + esc(meta) + '</span>' : '') + '</span><span><span class="MN_amt">' + esc(r.amount == null || r.amount === '' || !isFinite(Number(r.amount)) ? '—' : A_peso(Number(r.amount))) + '</span>' + esc(r.by || '') + '</span></li>';
+  }
+  function A_moneyCard() {
     var e = state.expenses; if (!e || state.layout !== 'admin' || !/^(owner|admin|finance)$/.test(role() || '')) return '';
-    var mi = Math.max(0, Math.min(11, (parseInt(String(e.month || '').slice(5, 7), 10) || 1) - 1)), mn = ['JANUARY', 'FEBRUARY', 'MARCH', 'APRIL', 'MAY', 'JUNE', 'JULY', 'AUGUST', 'SEPTEMBER', 'OCTOBER', 'NOVEMBER', 'DECEMBER'][mi];
+    var mi = Math.max(0, Math.min(11, (parseInt(String(e.month || '').slice(5, 7), 10) || 1) - 1)), mn = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'][mi];
     var basis = Number(e.basis), usual = basis > 0 ? 'Usual month about ' + A_peso(Math.round(basis / 100) * 100) : 'Costs so far this month', pc = e.pending_all && typeof e.pending_all === 'object' ? e.pending_all : e.pending, pn = pc ? Number(pc.count) : 0;
-    return '<section class="card glass A_card F_span E_today" id="T_exp" aria-label="Expenses"><div class="E_tcopy"><a class="E_tmain" href="#expenses"><span class="E_teye">' + esc('EXPENSES · ' + mn) + '</span><b class="E_tnum">' + esc(A_peso(Math.round(Number(e.total) || 0))) + '</b></a>' +
-      '<span class="E_tsub"><a class="E_tuse" href="#expenses">' + esc(usual) + '</a>' + (pn > 0 ? ' · <a class="E_trev" href="#expenses/review">' + esc(pn + ' to review') + '</a>' : '') + '</span></div>' +
-      (e.can_write ? '<a class="btn btn-primary E_tadd" href="#expenses/add" aria-label="Add expense">' + ICON('plus', 's16') + 'Add</a>' : '') + '</section>';
+    var rows = (Array.isArray(e.rows) ? e.rows : []).filter(function (r) { return r && !r.hidden; }).slice(0, 3);
+    return '<section class="card glass A_card F_span" id="T_money" aria-label="Money"><div class="MN_head"><span class="MN_eye">' + esc('Money · ' + mn) + '</span>' + (pn > 0 ? '<a class="MN_rev" href="#expenses/review">' + esc(pn + ' to review') + '</a>' : '') + '</div>' +
+      '<b class="MN_tot">' + esc(A_peso(Math.round(Number(e.total) || 0))) + '</b><span class="K_sub">' + esc(usual) + '</span>' +
+      (e.can_write ? '<a class="btn btn-primary MN_log" href="#money">＋ Log money</a>' : '') +
+      (rows.length ? '<ul class="MN_hist">' + rows.map(A_moneyRow).join('') + '</ul>' : '') + '<a class="btn btn-ghost btn-sm" href="#expenses">See all</a></section>';
   }
   function A_loadExpenses() {
     if (!state.access || state.expensesAbsent || state.layout !== 'admin' || !/^(owner|admin|finance)$/.test(role() || '')) return;
     var my = ++H_eSeq;
-    Promise.resolve().then(function () { return sb.rpc('expenses_screen_v1', { p_property_id: pid(), p_limit: 0 }); }).then(function (r) {
+    Promise.resolve().then(function () { return sb.rpc('expenses_screen_v1', { p_property_id: pid(), p_limit: 3 }); }).then(function (r) {
       if (my !== H_eSeq) return;
       if (!r || r.error || !r.data || r.data.ok === false) { if (r && r.error && CS.rpcMissing(r.error)) state.expensesAbsent = true; state.expenses = null; return; } // an error hides the card
       state.expenses = r.data;
@@ -714,7 +734,7 @@
       // 3.2: the row opens the shell's own #inbox (which falls back to the dashboard's conversations page when the module is not shipped)
       var inboxShown = CS.canSeeGuestContact(role()) && !state.noticesAbsent && (v ? inbox != null : state.noticesLoading);
       var BD = B_build(); // the board sits above the Turnover card while something blocks an arrival or a guest is waiting; otherwise under it
-      body = '<div class="A_body">' + errBanner() + H_alertsCard() + A_turnTag() + PC_todayCard() + A_payBanner() + A_utilBar() + (wxTop ? wxCard : '') + S_sec('Guests') + todayCard() + nextCard() + A_tierGuide() + (BD.top ? BD.html : '') + S_sec('Turnover') + A_turnoverCard(false) + (wxTop ? '' : wxCard) + H_cleanDoneCard() + K_invCard() + A_billsCard() + A_expCard() + (BD.top ? '' : BD.html) + S_sec('Shortcuts') +
+      body = '<div class="A_body">' + errBanner() + H_alertsCard() + A_turnTag() + PC_todayCard() + A_payBanner() + A_utilBar() + (wxTop ? wxCard : '') + S_sec('Guests') + todayCard() + nextCard() + A_tierGuide() + (BD.top ? BD.html : '') + S_sec('Turnover') + A_turnoverCard(false) + (wxTop ? '' : wxCard) + H_cleanDoneCard() + K_invCard() + A_billsCard() + A_moneyCard() + (BD.top ? '' : BD.html) + S_sec('Shortcuts') +
         A_navCard('Guests and bookings', (bk ? row({ icon: 'clip', title: 'Bookings to confirm', sub: 'Open the pending bookings', href: bk.href, external: bk.external, count: bk.count, countLabel: bk.n === 1 ? ' booking to confirm' : ' bookings to confirm' }) : '') +
           row({ icon: 'calendar', title: 'Calendar', sub: 'Stays, blocked nights, notices', href: '#calendar', count: n || '' }) +
           '<div id="slot-inbox"' + (inboxShown ? '' : ' hidden') + (inboxShown && !v ? ' style="min-height:64px"' : '') + '>' + (inboxShown && v ? row({ icon: 'chat', title: 'Inbox', sub: inbox ? inbox + ' open' : 'No open messages', href: '#inbox', count: inbox || '', countLabel: ' open messages' }) : '') + '</div>' +
@@ -2050,16 +2070,18 @@
     guests:  { src: 'guests/G_guests.js',   css: 'guests/G_guests.css',   global: 'G_Guests',  title: 'Guests', roles: ['owner', 'admin'] },
     inbox:   { src: 'inbox/X_inbox.js',     css: 'inbox/X_inbox.css',     global: 'X_Inbox',   title: 'Inbox', roles: ['owner', 'admin'] },
     // s127: pay a bill and edit its details (#bills/pay/<id>, #bills/edit/<kind>). The pay helpers of pay/ (C_PayAdmin) load first; the server decides who may pay or edit.
-    bills:   { src: 'bills/BL_bills.js',    css: 'bills/BL_bills.css',    global: 'BL_Bills',  title: 'Bills', roles: ['owner', 'admin', 'finance'], demoClient: true, deps: [{ src: 'pay/C_admin-lib.js', global: 'C_PayAdmin' }] },
+    bills:   { src: 'bills/BL_bills.js',    css: ['stock/I_stock.css', 'money/MN_money.css', 'bills/BL_bills.css'],    global: 'BL_Bills',  title: 'Bills', roles: ['owner', 'admin', 'finance'], demoClient: true, deps: [{ src: 'pay/C_admin-lib.js', global: 'C_PayAdmin' }] },
     // s134: the expense log, its add and edit sheets and the receipts (#expenses, #expenses/add). Read by owner, admin and finance; the server decides who may write.
-    expenses: { src: 'expenses/E_expenses.js', css: 'expenses/E_expenses.css', global: 'E_Expenses', title: 'Expenses', roles: ['owner', 'admin', 'finance'], demoClient: true }
+    expenses: { src: 'expenses/E_expenses.js', css: ['stock/I_stock.css', 'money/MN_money.css', 'expenses/E_expenses.css'], global: 'E_Expenses', title: 'Expenses', roles: ['owner', 'admin', 'finance'], demoClient: true },
+    // s143: Log money (#money), the reading date (#money/reading, #money/reading/<kind>) and the pay and expense forms in the Inventory look. mount(box, opts) gets opts.sub '' | 'reading' | 'reading/<kind>'.
+    money:   { src: 'money/MN_money.js',   css: ['stock/I_stock.css', 'money/MN_money.css'], global: 'MN_Money', title: 'Money', roles: ['owner', 'admin', 'finance'], demoClient: true }
   };
   var H_mod = { mounted: '', sub: '', n: 0, p: {} }, H_sub = '';
   function H_domLoad(m) { // a stylesheet (never waited for) and a script; a 404 on the script rejects
     return new Promise(function (res, rej) {
-      var l = null; if (m.css) { l = document.createElement('link'); l.rel = 'stylesheet'; l.href = m.css; document.head.appendChild(l); }
+      var ls = (Array.isArray(m.css) ? m.css : m.css ? [m.css] : []).map(function (h) { var l = document.createElement('link'); l.rel = 'stylesheet'; l.href = h; document.head.appendChild(l); return l; }); // s143: css is one file or a list
       var sc = document.createElement('script'); sc.src = m.src; sc.onload = function () { res(); };
-      sc.onerror = function () { [sc, l].forEach(function (t) { try { if (t && t.parentNode) t.parentNode.removeChild(t); } catch (e) {} }); rej(new Error('load')); }; // the next open starts clean
+      sc.onerror = function () { [sc].concat(ls).forEach(function (t) { try { if (t && t.parentNode) t.parentNode.removeChild(t); } catch (e) {} }); rej(new Error('load')); }; // the next open starts clean
       document.head.appendChild(sc);
     });
   }
@@ -2073,7 +2095,7 @@
     return pr;
   }
   // 3.2: a module that keeps a list or a draft in memory (guests, inbox) drops it on sign-out and on an account switch; a throwing reset never blocks sign-out.
-  function H_resetModules() { ['G_Guests', 'X_Inbox', 'S110_Supply', 'K_Kpi', 'BL_Bills', 'E_Expenses'].forEach(function (n) { try { var g = window[n]; if (g && typeof g.reset === 'function') g.reset(); } catch (e) { /* never block sign-out */ } }); try { var nm = window.N_Manage; if (nm && typeof nm._resetGuideKnown === 'function') nm._resetGuideKnown(); } catch (e) { /* never block sign-out */ } }
+  function H_resetModules() { ['G_Guests', 'X_Inbox', 'S110_Supply', 'K_Kpi', 'BL_Bills', 'E_Expenses', 'MN_Money'].forEach(function (n) { try { var g = window[n]; if (g && typeof g.reset === 'function') g.reset(); } catch (e) { /* never block sign-out */ } }); try { var nm = window.N_Manage; if (nm && typeof nm._resetGuideKnown === 'function') nm._resetGuideKnown(); } catch (e) { /* never block sign-out */ } }
   function H_unmount() {
     var k = H_mod.mounted; H_mod.mounted = ''; H_mod.sub = ''; H_mod.n++;
     var g = k && window[H_MODULES[k].global]; try { if (g && typeof g.unmount === 'function') g.unmount(); } catch (e) { /* never block navigation or sign-out */ }
@@ -2081,7 +2103,7 @@
   // The folder is not shipped yet: weather goes to the Notices tab (which has the weather card), stock to the inventory door, manage to the admin hub.
   // 3.2: guests and inbox fall back to the same pages of the admin dashboard door (route() sends a role or setting that cannot open the door to #home).
   function H_fallback(key) {
-    var fb = key === 'kpis' || key === 'supply' || key === 'bills' || key === 'expenses' ? '#home' : key === 'weather' ? '#calendar/notices' : key === 'stock' ? (doorDef('inventory') && CS.doorAllowed('inventory', role()) ? '#door/inventory' : '#home') : key === 'guests' ? '#door/dashboard/guests' : key === 'inbox' ? '#door/dashboard/guests/conversations' : (state.layout === 'admin' ? '#hub' : '#home');
+    var fb = key === 'kpis' || key === 'supply' || key === 'bills' || key === 'expenses' || key === 'money' ? '#home' : key === 'weather' ? '#calendar/notices' : key === 'stock' ? (doorDef('inventory') && CS.doorAllowed('inventory', role()) ? '#door/inventory' : '#home') : key === 'guests' ? '#door/dashboard/guests' : key === 'inbox' ? '#door/dashboard/guests/conversations' : (state.layout === 'admin' ? '#hub' : '#home');
     history.replaceState(null, '', fb); route();
   }
   // 3.2: what a module needs to subscribe to a push topic without touching pay/. The key comes from the server when asked (as pay/ does); the registration is the shell's own worker.
@@ -2238,7 +2260,7 @@
   // Runs once per device after sign-in (CS.phoneCheckDue, key cs_phone_check) and from More > This phone > Check this phone. Every row comes from a real probe
   // (CS.phoneCheckRows); Fix all runs the fixers in order from the one tap (CS.phoneFixPlan: alerts first, so the permission prompt rides the tap), then probes again.
   // The camera is opened only when its permission is 'prompt', and every track is stopped at once. Nothing changes Trust this device.
-  var PC_SHELL = 'cs-shell-v83'; // the service worker's cache for this version (sw.js CACHE_NAME; a test keeps them equal)
+  var PC_SHELL = 'cs-shell-v84'; // the service worker's cache for this version (sw.js CACHE_NAME; a test keeps them equal)
   var PC = { open: false, busy: false, rows: null, msg: '', camPerm: null };
   function PC_ls() { return store('localStorage'); }
   function PC_cameraPerm() {
@@ -2575,7 +2597,7 @@
     if (H_mod.mounted && H_mod.mounted !== v) H_unmount();
     setView(v);
     if (v === 'door') { renderDoor(); return; }
-    renderTabs(v === 'hub' || v === 'search' ? 'more' : v === 'weather' ? 'calendar' : v === 'stock' && CS.isLaundry(role()) ? 'stock' : v === 'stock' || v === 'manage' || v === 'guests' || v === 'inbox' || v === 'supply' || v === 'bills' || v === 'expenses' ? '' : v); // B1: a sub-page marks no tab, never Today
+    renderTabs(v === 'hub' || v === 'search' ? 'more' : v === 'weather' ? 'calendar' : v === 'stock' && CS.isLaundry(role()) ? 'stock' : v === 'stock' || v === 'manage' || v === 'guests' || v === 'inbox' || v === 'supply' || v === 'bills' || v === 'expenses' || v === 'money' ? '' : v); // B1: a sub-page marks no tab, never Today
     if (H_MODULES[v]) renderModule(v); else if (v === 'search') renderSearch(); else if (v === 'hub') renderHub(); else if (v === 'home') renderHome(); else if (v === 'calendar') renderCalendar(); else if (v === 'tasks') renderTasks(); else if (v === 'payrates') { renderPayRates(); if (!state.rates) loadRates(); } else if (v === 'reply') { rpLoadWifi(); renderReply(); } else if (v === 'more') renderMore();
     var typing = document.activeElement && /^(df-(label|kind)|t-(title|due|who|note)|n-(type|title|date|start|hours|detail))$/.test(document.activeElement.id || '');
     if (state.sheet) { if (v !== state.sheet.view) closeSheet(); else if (!typing) drawSheet(); }
@@ -2604,7 +2626,7 @@
     CS.rememberRole(store('sessionStorage'), state.access.role); // per tab, so the pay and guest pages opened from here draw the same tab bar
     state.layout = CS.layoutForRole(state.access.role);
     state.name = CS.deriveDisplayName(state.user);
-    if (!/^#(home|calendar|tasks|payrates|reply|more|hub|weather|stock|manage|guests|inbox|notices|search|kpis|supply|bills|expenses)/.test(location.hash)) history.replaceState(null, '', '#home');
+    if (!/^#(home|calendar|tasks|payrates|reply|more|hub|weather|stock|manage|guests|inbox|notices|search|kpis|supply|bills|expenses|money)/.test(location.hash)) history.replaceState(null, '', '#home');
     route(); loadHome(); loadTasks(); maybeIosHint(); H_tourMaybe(); H_alAuto(); PC_auto();
   }
   function boot() {
