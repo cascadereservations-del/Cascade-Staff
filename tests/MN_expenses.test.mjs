@@ -30,14 +30,18 @@ function loadModule() {
 }
 const SCREEN = (o = {}) => ({ ok: true, month: '2026-11-01', total: 1000, count: 1, prev_total: 0, basis: 0, basis_months: [], pending: { count: 0, total: 0 }, by_category: [], rows: [], unpriced: { count: 0, items: [] }, unlinked: 0,
   categories: [{ slug: 'supplies', label: 'Supplies' }, { slug: 'cleaning', label: 'Cleaning' }, { slug: 'utilities', label: 'Utilities' }], can_write: true, more: false, ...o });
-async function boot({ sub = 'other', rpc = {}, screen = SCREEN() } = {}) {
+// remount: false = navigate only records the route; 'sync' / 'async' = the shell's behaviour, unmount() then mount() with the sub of the new hash (at once, or a task later like a hashchange)
+async function boot({ sub = 'other', rpc = {}, screen = SCREEN(), remount = false } = {}) {
   const env = loadModule(), el = new FakeEl(), nav = [], calls = []; let n = 0;
   const client = { rpc(name, args) { calls.push([name, plain(args || {})]); const h = name === 'expenses_screen_v1' ? () => screen : rpc[name]; if (!h) return Promise.resolve({ data: null, error: { code: 'PGRST202', message: 'Could not find the function public.' + name } }); return Promise.resolve({ data: plain(h(args)), error: null }); }, functions: { invoke: () => Promise.resolve({ data: null, error: { message: 'none' } }) } };
-  env.E.mount(el, { client, role: 'owner', sub, propertyId: PROP, navigate: (h) => nav.push(h), toast() {}, haptic() {}, newKey: (p) => `${p}-0000000000000000${String(++n).padStart(8, '0')}` });
+  const opts = (s) => ({ client, role: 'owner', sub: s, propertyId: PROP, navigate, toast() {}, haptic() {}, newKey: (p) => `${p}-0000000000000000${String(++n).padStart(8, '0')}` });
+  function navigate(h) { nav.push(h); if (!remount) return; const go = () => { env.E.unmount(); env.E.mount(el, opts(h.replace(/^#expenses\/?/, ''))); }; if (remount === 'async') setImmediate(go); else go(); }
+  env.E.mount(el, opts(sub));
   await tick();
   const tg = (a, x = {}) => { const t = { ...x, getAttribute: (k) => (k in a ? a[k] : null), closest: (s) => { const m = /^\[([\w-]+)\]$/.exec(s); return m && m[1] in a ? t : null; } }; return t; };
-  const fire = async (type, ev) => { for (const f of el.l[type] || []) f(ev); await tick(); };
+  const fire = async (type, ev) => { for (const f of [...(el.l[type] || [])]) f(ev); await tick(); };
   return { ...env, el, nav, calls, html: () => el.innerHTML, text: () => el.innerHTML.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' '),
+    again: async (s) => { env.E.unmount(); env.E.mount(el, opts(s)); await tick(); },
     click: (act, id) => fire('click', { type: 'click', target: tg({ 'data-e': act, ...(id !== undefined ? { 'data-id': id } : {}) }) }),
     pk: (k, id) => fire('click', { type: 'click', target: tg({ 'data-e': 'pk', 'data-k': k, 'data-id': id }) }),
     type: (f, value) => fire('input', { type: 'input', target: tg({ 'data-f': f }, { value }) }),
@@ -59,6 +63,8 @@ test('E lib: validateOther needs a day not in the future, an amount, a category 
   assert.deepEqual(plain(L.validateOther({ date: T, amount: '350', category: 'supplies', method: 'cash', notes: '' }, cats, T)), {});
   assert.ok(L.validateOther({ date: '2026-11-24', amount: '350', category: 'supplies', method: 'cash' }, cats, T).date, 'tomorrow is refused here (a paid-on day)');
   assert.ok(L.validateOther({ date: T, amount: '350', category: 'supplies', method: 'crypto' }, cats, T).method);
+  assert.match(L.validateOther({ date: T, amount: '350', category: 'supplies', method: '' }, cats, T).method, /GCash, Bank or Cash/);
+  assert.ok(L.validateOther({ date: T, amount: '350', category: 'supplies', method: 'card' }, cats, T).method, 'the form offers three ways; card is not one of them');
 });
 test('E lib: the payload carries payment_method; the Undo window is 15 minutes, counted in whole minutes left', () => {
   const { E } = loadModule(), L = E.lib;
@@ -72,7 +78,7 @@ test('E lib: the payload carries payment_method; the Undo window is 15 minutes, 
 
 test('frame 8: #expenses/other draws the I_hue_use form: amount, What for, Paid to, Paid on, How you paid, Receipt, Note, Save', async () => {
   const b = await boot(); const h = b.html();
-  assert.match(h, /class="I_uform I_hue_use MN_cnt"/); assert.match(h, /class="I_band I_hue_use"/);
+  assert.match(h, /class="I_uform I_hue_use MN_form"/); assert.match(h, /class="I_band I_hue_use"/);
   const at = ['Amount paid', 'What for', 'Paid to (optional)', 'Paid on', 'How you paid', 'Receipt (optional)', 'Note (optional)', 'Save expense'].map((t) => h.indexOf(t));
   assert.ok(at.every((v, i) => v >= 0 && (i === 0 || v > at[i - 1])), at.join(','));
   assert.match(h, /data-e="pk" data-k="method" data-id="gcash"/); assert.match(h, /data-e="pk" data-k="category" data-id="utilities"/);
@@ -91,10 +97,10 @@ test('frame 8: leaving a field empty names it and sends nothing', async () => {
 test('frame 8: after saving, Undo shows for 15 minutes, voids the row, hands the form back, and a second save uses a NEW key', async () => {
   const b = await boot({ rpc: { admin_save_transaction_v2: () => ({ ok: true, id: 'n9' }), expense_void_v1: () => ({ ok: true, id: 'n9' }) } });
   await fillOk(b); await b.click('other-save');
-  assert.match(b.html(), /Saved ₱350\.00\. Undo for 15 minutes\./); assert.match(b.html(), /data-e="undo"/); assert.ok(b.nav.includes('#expenses'), 'the route leaves the form');
+  assert.match(b.text(), /Saved · ₱350\b/); assert.doesNotMatch(b.text(), /350\.00/); assert.match(b.html(), /data-e="undo"/); assert.ok(b.nav.includes('#expenses'), 'the route leaves the form');
   b.advance(5 * MIN); await b.click('undo');
   const v = b.sent('expense_void_v1'); assert.equal(v.length, 1); assert.equal(v[0][1].p_id, 'n9'); assert.ok(v[0][1].p_reason.length >= 3);
-  assert.match(b.html(), /class="I_uform I_hue_use MN_cnt"/); assert.match(b.html(), /id="E_amt"[^>]*value="350"/, 'the form is back with what was typed');
+  assert.match(b.html(), /class="I_uform I_hue_use MN_form"/); assert.match(b.html(), /id="E_amt"[^>]*value="350"/, 'the form is back with what was typed');
   await b.click('other-save'); const saves = b.sent('admin_save_transaction_v2');
   assert.equal(saves.length, 2); assert.notEqual(saves[0][1].p_idempotency_key, saves[1][1].p_idempotency_key, 'never the first request replayed');
 });
@@ -117,8 +123,45 @@ test('log rows: a new row shows the title, the period covered and the way paid; 
 test('#expenses/add is untouched: the old form still opens and saves without a way paid', async () => {
   const b = await boot({ sub: 'add' }); assert.match(b.html(), /Add expense/); assert.doesNotMatch(b.html(), /I_uform/);
 });
-test('the Expenses CSS keeps to the four type tokens and adds only MN_ pieces and the page override', () => {
+test('the Expenses CSS keeps to the type tokens and no longer defines any MN_ piece (they live once in money/MN_money.css)', () => {
   const css = read('expenses/E_expenses.css').replace(/\/\*[^]*?\*\//g, '');
-  for (const c of ['MN_cnt', 'MN_chips', 'MN_cover', 'MN_covers', 'MN_copy', 'MN_req', 'MN_photo', 'MN_amount']) assert.match(css, new RegExp('#v-expenses \\.' + c + '\\b'), c);
-  assert.doesNotMatch(css, /#[0-9a-fA-F]{3,8}\b/);
+  assert.doesNotMatch(css, /MN_/); assert.doesNotMatch(css, /#[0-9a-fA-F]{3,8}\b/); assert.doesNotMatch(css, /rgba?\(|hsla?\(/); assert.doesNotMatch(css, /font-size:\s*[\d.]+(px|rem|em)/);
+  assert.match(read('money/MN_money.css'), /\.MN_photo\b/);
+});
+
+// ---- s143 fix round 1: findings 1, 8
+const SAVE = { admin_save_transaction_v2: () => ({ ok: true, id: 'n9' }), expense_void_v1: () => ({ ok: true, id: 'n9' }) };
+const fill480 = async (b) => { await b.type('amount', '480'); await b.type('payee', 'Zz Shop'); await b.pk('category', 'supplies'); await b.pk('method', 'cash'); await b.type('notes', 'Faucet'); };
+
+for (const mode of ['sync', 'async']) {
+  test('finding 1 (' + mode + ' remount): the shell remounts on the route change, and the Undo bar and the typed form still survive it', async () => {
+    const b = await boot({ remount: mode, rpc: SAVE }); await fill480(b); await b.click('other-save');
+    assert.equal(b.sent('admin_save_transaction_v2').length, 1); assert.ok(b.nav.includes('#expenses'), 'the route left the form');
+    assert.ok(b.sent('expenses_screen_v1').length >= 2, 'the module really was mounted again (the list was read twice)');
+    assert.match(b.text(), /Saved · ₱480 Zz Shop/); assert.match(b.html(), /data-e="undo"/); assert.doesNotMatch(b.html(), /id="E_amt"/, 'the form itself is closed');
+    b.advance(5 * MIN); await b.click('undo');
+    const v = b.sent('expense_void_v1'); assert.equal(v.length, 1); assert.equal(v[0][1].p_id, 'n9');
+    assert.equal(b.nav.at(-1), '#expenses/other'); assert.doesNotMatch(b.html(), /data-e="undo"/, 'the bar is spent');
+    const h = b.html(); assert.match(h, /id="E_amt"[^>]*value="480"/); assert.match(h, /value="Zz Shop"/); assert.match(h, /value="Faucet"/); assert.match(h, /aria-pressed="true"[^>]*>Cash/); assert.match(h, /data-id="supplies"[^>]*aria-pressed="true"|aria-pressed="true"[^>]*data-id="supplies"/);
+    await b.click('other-save'); const saves = b.sent('admin_save_transaction_v2'); assert.equal(saves.length, 2); assert.notEqual(saves[0][1].p_idempotency_key, saves[1][1].p_idempotency_key);
+  });
+}
+test('finding 1: the Undo bar is gone after 15 minutes and after reset(); the handed-back form is only kept for a moment', async () => {
+  const a = await boot({ remount: 'sync', rpc: SAVE }); await fill480(a); await a.click('other-save'); assert.match(a.html(), /data-e="undo"/);
+  a.advance(15 * MIN + 1000); await a.again(''); assert.doesNotMatch(a.html(), /data-e="undo"/, 'expired');
+  const r = await boot({ remount: 'sync', rpc: SAVE }); await fill480(r); await r.click('other-save'); assert.match(r.html(), /data-e="undo"/);
+  r.E.reset(); await r.again(''); assert.doesNotMatch(r.html(), /data-e="undo"/, 'sign-out clears it'); await r.again('other'); assert.match(r.html(), /id="E_amt"[^>]*value=""/);
+  const u = await boot({ rpc: SAVE }); await fill480(u); await u.click('other-save'); u.advance(MIN); await u.click('undo'); assert.match(u.html(), /id="E_amt"[^>]*value="480"/);
+  u.advance(11000); await u.again('other'); assert.match(u.html(), /id="E_amt"[^>]*value=""/, 'a form handed back 11 s ago is not offered again');
+});
+test('finding 8 (mockup frame 8): How you paid is GCash, Bank, Cash; the receipt is a Take a photo / Choose a photo pair; note quick picks; the saved bar reads Saved · amount payee', async () => {
+  const b = await boot({ rpc: SAVE }); const h = b.html();
+  assert.deepEqual([...h.matchAll(/data-k="method" data-id="(\w+)"/g)].map((m) => m[1]), ['gcash', 'bank', 'cash']); assert.doesNotMatch(h, /data-k="method" data-id="(card|other)"/);
+  const photo = h.slice(h.indexOf('class="MN_photo"')); assert.match(photo, /Take a photo<input[^>]*capture="environment"/); assert.match(photo, /Choose a photo<input[^>]*accept="image\/\*,application\/pdf"/); assert.equal((photo.match(/type="file"/g) || []).length >= 2, true);
+  assert.deepEqual([...h.matchAll(/data-e="note-pick" data-id="([^"]+)"/g)].map((m) => m[1]), ['Aircon filter', 'Faucet', 'Light bulb', 'Delivery fee']);
+  await b.click('note-pick', 'Faucet'); assert.match(b.html(), /id="E_notes"[^>]*value="Faucet"|value="Faucet"[^>]*id="E_notes"/); assert.match(b.html(), /data-id="Faucet"[^>]*aria-pressed="true"|aria-pressed="true"[^>]*data-id="Faucet"/);
+  assert.match(h, /💸 Other expense/); assert.match(h, /Anything that is not a bill or stock/); assert.match(h, /Undo for 15 minutes after saving/);
+  await b.type('amount', '480'); await b.type('payee', 'Zz Shop'); await b.pk('category', 'supplies'); await b.pk('method', 'bank'); await b.click('other-save');
+  assert.match(b.text(), /Saved · ₱480 Zz Shop/); assert.equal(b.sent('admin_save_transaction_v2')[0][1].p_txn.notes, 'Faucet'); assert.equal(b.sent('admin_save_transaction_v2')[0][1].p_txn.payment_method, 'bank');
+  const { E } = loadModule(); assert.equal(E.lib.pesoShort(480), '₱480'); assert.equal(E.lib.pesoShort('480.5'), '₱480.50');
 });

@@ -29,8 +29,8 @@
       case 'paid_on_invalid': return 'The day you paid cannot be after today or before the reading date on the bill. Check the two dates.'; // s143
       case 'bad_method': return 'Choose how you paid: GCash, Bank or Cash.'; // s143
       case 'reading_date_required': return 'Enter the meter reading date shown on the bill.'; // s131
-      case 'reading_date_invalid': if (/^\d{4}-\d{2}-\d{2}$/.test(String(res.before || ''))) return 'The reading date must be before ' + res.before + ', the reading date of a later bill that is already paid. Check the date on the bill.'; // s131b
-        if (/^\d{4}-\d{2}-\d{2}$/.test(String(res.after || ''))) return 'The reading date must be after ' + res.after + ', the reading date of the last bill, and not in the future. Check the date on the bill.'; // s143
+      case 'reading_date_invalid': if (/^\d{4}-\d{2}-\d{2}$/.test(String(res.before || ''))) return 'The reading date must be before ' + shortDay(res.before) + ', the reading date of a later bill that is already paid. Check the date on the bill.'; // s131b
+        if (/^\d{4}-\d{2}-\d{2}$/.test(String(res.after || ''))) return 'The reading date must be after ' + shortDay(res.after) + ', the reading date of the last bill, and not in the future. Check the date on the bill.'; // s143
         return 'The reading date must be after the last bill’s reading date, no earlier than the month before this bill, and not in the future. Check the date on the bill.';
       case 'older_bill_open': return 'Log the older bill of this meter first (pay it or skip it), then this one.'; // s131
       case 'bad_proof': return 'The screenshot or the amount is missing or not valid. Add the screenshot again and check the amount.';
@@ -157,7 +157,7 @@
   function flowHtml() { var a = amountOf(S.amountText); if (!sheetParts(S.d).editable || a == null || matchesEstimate(a, estOf(S.d))) return ''; return '<div class="I_flow"><div class="I_fn"><b>' + esc(peso(estOf(S.d))) + '</b><small>estimate</small></div><span class="I_farr" aria-hidden="true">→</span><div class="I_fn I_fto"><b>' + esc(peso(a)) + '</b><small>you pay</small></div></div>'; }
   function confirmHtml() { var a = amountNow(); return S.confirmedFor != null && S.confirmedFor === a ? '<div class="MN_row" role="status"><span>ℹ️ ' + esc(overBandCopy(a, S.confirmEst)) + '</span></div>' : ''; }
   function coversHtml() { var c = coversText(); return c ? '<div class="MN_covers">📆 <span>This payment covers <b>' + esc(c) + '</b></span></div>' : ''; }
-  function saveLabel() { if (S.busy) return 'Saving…'; var a = amountNow(), w = kindWord(S.d.bill).toLowerCase(); return (S.confirmedFor != null && S.confirmedFor === a ? 'Yes, mark ' + w + ' paid' : 'Mark ' + w + ' paid') + (a == null ? '' : ' · ' + peso(a)); }
+  function saveLabel() { if (S.busy) return 'Saving…'; var a = amountNow(), w = kindWord(S.d.bill); return (S.confirmedFor != null && S.confirmedFor === a ? 'Yes, mark ' + w + ' paid' : 'Mark ' + w + ' paid') + (a == null ? '' : ' · ' + peso(a)); }
   function copyRow(text, act, what) { return '<div class="MN_copy"><span>' + esc(text) + '</span><button class="btn btn-ghost btn-sm" type="button" data-bact="' + act + '" aria-label="Copy the ' + esc(what) + '">Copy</button></div>'; }
   function renderPay() { if (S.newSrv) renderPayNew(); else renderPayOld(); }
   function renderPayNew() {

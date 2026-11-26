@@ -153,7 +153,9 @@
     return '';
   }
   // s143 helpers (pure).
-  var METHODS = [['gcash', 'GCash'], ['bank', 'Bank'], ['cash', 'Cash'], ['card', 'Card']];
+  var METHODS = [['gcash', 'GCash'], ['bank', 'Bank'], ['cash', 'Cash'], ['card', 'Card']]; // the server accepts all four (and 'other'); the Other expense form offers the first three (frame 8)
+  var PAY_CHIPS = METHODS.slice(0, 3);
+  var NOTE_PICKS = ['Aircon filter', 'Faucet', 'Light bulb', 'Delivery fee']; // quick picks for the note (frame 8)
   var UNDO_MS = 15 * 60 * 1000;
   function methodLabel(m) { for (var i = 0; i < METHODS.length; i++) if (METHODS[i][0] === m) return METHODS[i][1]; return m === 'other' ? 'Other' : ''; }
   function methodOk(m) { return METHODS.some(function (x) { return x[0] === m; }); }
@@ -169,7 +171,7 @@
     if (!/^\d{4}-\d{2}-\d{2}$/.test(f.date || '')) e.date = 'Choose the day you paid.'; else if (today && f.date > today) e.date = 'The day you paid cannot be in the future.';
     if (parseAmount(f.amount) === null) e.amount = 'Enter the amount, more than zero, with at most two decimal places.';
     if (!catOk(f.category, cats)) e.category = 'Choose what it was for.';
-    if (!methodOk(f.method)) e.method = 'Choose how you paid: GCash, Bank, Cash or Card.';
+    if (!PAY_CHIPS.some(function (m) { return m[0] === f.method; })) e.method = 'Choose how you paid: GCash, Bank or Cash.';
     return e;
   }
   function otherTxn(f, rc) { var t = expenseTxn(f, rc); t.payment_method = f.method; return t; }
@@ -233,7 +235,8 @@
   }
 
   // ------------------------------------------------------------------------------------------------ state
-  var S = null, G = 0, HELD = null, CARRY = null; // CARRY: the look-alike prompt that has to survive the remount when a save leaves #expenses/add (taken by the next mount within 10 s)
+  var S = null, G = 0, HELD = null, CARRY = null, PENDING = null, RESTORE = null; // PENDING: the Other expense just saved (its Undo); RESTORE: the form handed back by Undo. Both outlive the remount the shell does on every route change (PENDING 15 minutes, RESTORE 10 seconds); reset() clears them.
+  // CARRY: the look-alike prompt that has to survive the remount when a save leaves #expenses/add (taken by the next mount within 10 s)
  // HELD: the form, the receipt and the preview kept while the person is in Inventory (cleared by any mount except #expenses/add/back)
   function ic(n, s) { try { return typeof W.ICON === 'function' ? (W.ICON(n, s || 's20') || '') : ''; } catch (e) { return ''; } }
   function pid() { return (S && S.opts.propertyId) || FALLBACK_PROPERTY; }
@@ -506,21 +509,30 @@
     var f = JSON.parse(JSON.stringify(sh.f)); sh.keyPrefix = 'exp-other';
     write('admin_save_transaction_v2', { p_property_id: pid(), p_txn: otherTxn(sh.f, sh.rc), p_idempotency_key: sh.key }, function (x, sh0) {
       buzz('success'); revoke(sh0.thumb);
-      S.undo = x && x.id ? { id: x.id, at: clock(), f: f, amount: parseAmount(f.amount), msg: '', busy: false } : null; S.sheet = null; S.chooser = false; S.openBills = null;
-      leaveAddRoute(); draw(); refresh(); tell('Saved.'); if (S.undo) armUndo();
+      // The record lives at module level: leaving the form changes the route, the shell remounts, and the new mount reads PENDING (the Undo bar and the typed form must survive that).
+      PENDING = x && x.id ? { id: x.id, at: clock(), f: f, amount: parseAmount(f.amount), payee: String(f.payee || '').trim(), msg: '', busy: false } : null;
+      var me = S; S.undo = PENDING; S.sheet = null; S.chooser = false; S.openBills = null;
+      leaveAddRoute();
+      if (S !== me) { tell('Saved.'); changed(); return; } // remounted at once: the new mount drew the bar, loaded the list and armed the timer
+      draw(); refresh(); tell('Saved.'); if (S.undo) armUndo();
     });
   }
-  function armUndo() { var gen = S.gen; S.timers.push(setTimeout(function () { if (live(gen) && S.undo) { S.undo = null; draw(); } }, UNDO_MS + 500)); }
+  function armUndo() { if (S.undoArmed) return; S.undoArmed = true; var gen = S.gen; S.timers.push(setTimeout(function () { if (live(gen) && S.undo) { S.undo = null; PENDING = null; draw(); } }, Math.max(1000, PENDING ? PENDING.at + UNDO_MS - clock() + 500 : UNDO_MS + 500))); }
   // Undo = expense_void_v1 on the row just saved. The form comes back as it was, with a NEW key, so a second save is a new request (never the first one replayed).
   function doUndo() {
-    var u = S.undo; if (!u || u.busy) return; if (undoLeft(u, clock()) == null) { S.undo = null; draw(); return; }
+    var u = S.undo; if (!u || u.busy) return; if (undoLeft(u, clock()) == null) { S.undo = null; PENDING = null; draw(); return; }
     if (!online()) { u.msg = NO_CONNECTION; draw(); return; }
     u.busy = true; u.msg = ''; draw(); var gen = S.gen;
     callRpc('expense_void_v1', { p_property_id: pid(), p_id: u.id, p_reason: 'Undone right after saving' }).then(function (res) {
-      if (!live(gen)) return; u.busy = false;
+      var x = res.data, done = !res.error && !(x && x.ok === false);
+      if (!live(gen)) { if (done && PENDING === u) PENDING = null; return; } // the screen was left while it ran: the row is voided, so the bar must not come back
+      u.busy = false;
       if (res.error) { u.msg = plainError(res.error); draw(); return; }
-      var x = res.data; if (x && x.ok === false) { u.msg = saveWords(x); draw(); return; }
-      S.undo = null; buzz('success'); tell('Undone.'); refresh(); openOther(u.f); S.opts.sub = 'other'; try { if (S.opts.navigate) S.opts.navigate('#expenses/other'); } catch (e) { /* ok */ }
+      if (!done) { u.msg = saveWords(x); draw(); return; }
+      S.undo = null; PENDING = null; buzz('success'); tell('Undone.');
+      // The form comes back as it was. The shell remounts on the route change, so the typed form is also parked in RESTORE for that mount to read.
+      RESTORE = { f: u.f, at: clock() }; var me = S; openOther(u.f); S.opts.sub = 'other'; try { if (S.opts.navigate) S.opts.navigate('#expenses/other'); } catch (e) { /* ok */ }
+      if (S === me) refresh(); else changed();
     });
   }
   function restoreHeld() {
@@ -570,24 +582,32 @@
   }
   function chips(field, list, cur, off) { return '<div class="MN_chips" role="group">' + list.map(function (c) { return '<button class="btn btn-secondary I_pk" type="button" data-e="pk" data-k="' + field + '" data-id="' + esc(c[0]) + '" aria-pressed="' + (cur === c[0]) + '"' + (off ? ' disabled' : '') + '>' + esc(c[1]) + '</button>'; }).join('') + '</div>'; }
   function otherLabel(l, id, extra) { return '<label' + (id ? ' for="' + id + '"' : '') + '>' + esc(l) + (extra || '') + '</label>'; }
+  // Frame 8's Take a photo / Choose a photo pair: two real file pickers (the camera one asks for the back camera); the picked file goes through the same upload as the chooser.
+  function photoPair(sh) {
+    var off = sh.upl || sh.busy ? ' disabled' : '';
+    return '<div class="MN_photo"><label class="btn btn-secondary">' + ic('camera', 's20') + (sh.upl ? 'Reading the receipt…' : 'Take a photo') + '<input class="E_file" type="file" data-e="file" accept="image/*" capture="environment"' + off + '></label>' +
+      '<label class="btn btn-secondary">' + ic('image', 's20') + 'Choose a photo<input class="E_file" type="file" data-e="file" accept="image/*,application/pdf"' + off + '></label></div>';
+  }
   function pageOther(sh) {
     var f = sh.f, e = sh.errs || {}, ck = sh.checks || {}, dis = sh.busy ? ' disabled' : '', cats = catList(S.data && S.data.categories).map(function (c) { return [c.slug, c.label]; });
     var nb = billNudge(f.category, sh.openBills), err = function (k) { return e[k] ? '<p class="err" role="alert">' + esc(e[k]) + '</p>' : ''; }, a = parseAmount(f.amount);
-    var h = '<div class="I_band I_hue_use"><button class="btn btn-ghost I_bk" type="button" data-e="close" aria-label="Back"><span aria-hidden="true">‹</span></button><div class="I_bandt"><h2 class="hd I_sht" id="E_sh" tabindex="-1">🧺 Other expense</h2><p class="I_bsub">Anything that is not a bill or stock</p></div><span class="I_bigem" aria-hidden="true">🧺</span></div>';
+    var h = '<div class="I_band I_hue_use"><button class="btn btn-ghost I_bk" type="button" data-e="close" aria-label="Back"><span aria-hidden="true">‹</span></button><div class="I_bandt"><h2 class="hd I_sht" id="E_sh" tabindex="-1">💸 Other expense</h2><p class="I_bsub">' + (sh.rc ? 'From the receipt · check it' : 'Anything that is not a bill or stock') + '</p></div><span class="I_bigem" aria-hidden="true">🧾</span></div>';
     h += '<div class="field">' + otherLabel('Amount paid', 'E_amt', ck.amount ? ' <span class="E_mark">check this</span>' : '') + '<div class="input I_money MN_amount"><b aria-hidden="true">₱</b><input id="E_amt" data-f="amount" inputmode="decimal" autocomplete="off" placeholder="0.00" value="' + esc(f.amount) + '"' + dis + '></div>' + err('amount') + '</div>';
     h += '<div class="field">' + otherLabel('What for') + chips('category', cats, f.category, sh.busy) + err('category') + '</div>';
     if (nb) h += '<div class="MN_row" role="status"><span>ℹ️ ' + esc(nb.length === 1 ? nb[0].label + ' is waiting to be paid. Pay it from Pay a bill so it is counted once.' : nb.length + ' bills are waiting to be paid. Pay them from Pay a bill so each is counted once.') + '</span><button class="btn btn-secondary btn-sm" type="button" data-e="go-pay" data-id="' + (nb.length === 1 ? esc(nb[0].id) : '') + '">Pay a bill</button></div>';
     h += '<div class="field">' + otherLabel('Paid to (optional)', 'E_payee') + '<div class="input"><input id="E_payee" data-f="payee" autocomplete="off" value="' + esc(f.payee) + '"' + dis + '></div></div>';
     h += '<div class="field">' + otherLabel('Paid on', 'E_date') + '<div class="input"><input id="E_date" data-f="date" type="date" max="' + esc(S.today) + '" value="' + esc(f.date) + '"' + dis + '></div>' + err('date') + '</div>';
-    h += '<div class="field">' + otherLabel('How you paid') + chips('method', METHODS, f.method, sh.busy) + err('method') + '</div>';
-    h += '<div class="field">' + otherLabel('Receipt (optional)') + (sh.rc ? receiptTile(sh) : '<button class="btn btn-secondary" type="button" data-e="chooser"' + (sh.upl ? ' disabled aria-busy="true"' : '') + '>' + ic('camera', 's20') + esc(sh.upl ? 'Reading the receipt…' : 'Add a receipt') + '</button>') + (sh.scanMsg ? '<p class="help" role="status">' + esc(sh.scanMsg) + '</p>' : '') + '</div>';
-    h += '<div class="field">' + otherLabel('Note (optional)', 'E_notes') + '<div class="input"><input id="E_notes" data-f="notes" autocomplete="off" value="' + esc(f.notes) + '"' + dis + '></div></div>';
-    h += (sh.msg ? '<div class="errbox" role="alert"><span>' + esc(sh.msg) + '</span></div>' : '') + '<button class="btn btn-block I_save" type="button" data-e="other-save"' + (sh.busy ? ' disabled aria-busy="true"' : '') + '>' + esc(sh.busy ? 'Saving…' : 'Save expense' + (a === null ? '' : ' · ' + peso(a))) + '</button><p class="help I_sfoot">Counted in the books at once. You can undo it for 15 minutes.</p>';
-    return '<div class="I_sheet MN_page I_uf"><form data-i-form class="I_uform I_hue_use MN_cnt" novalidate>' + h + '</form></div>';
+    h += '<div class="field">' + otherLabel('How you paid') + chips('method', PAY_CHIPS, f.method, sh.busy) + err('method') + '</div>';
+    h += '<div class="field">' + otherLabel('Receipt (optional)') + (sh.rc ? receiptTile(sh) : photoPair(sh)) + (sh.scanMsg ? '<p class="help" role="status">' + esc(sh.scanMsg) + '</p>' : '') + '</div>';
+    h += '<div class="field">' + otherLabel('Note (optional)', 'E_notes') + '<div class="I_picks">' + NOTE_PICKS.map(function (n) { return '<button class="btn btn-secondary I_pk" type="button" data-e="note-pick" data-id="' + esc(n) + '" aria-pressed="' + (String(f.notes || '').trim() === n) + '"' + dis + '>' + esc(n) + '</button>'; }).join('') + '</div><div class="input"><input id="E_notes" data-f="notes" autocomplete="off" value="' + esc(f.notes) + '"' + dis + '></div></div>';
+    h += (sh.msg ? '<div class="errbox" role="alert"><span>' + esc(sh.msg) + '</span></div>' : '') + '<button class="btn btn-block I_save" type="button" data-e="other-save"' + (sh.busy ? ' disabled aria-busy="true"' : '') + '>' + esc(sh.busy ? 'Saving…' : 'Save expense' + (a === null ? '' : ' · ' + peso(a))) + '</button><p class="help I_sfoot">Undo for 15 minutes after saving</p>';
+    return '<div class="I_sheet MN_page I_uf"><form data-i-form class="I_uform I_hue_use MN_form" novalidate>' + h + '</form></div>';
   }
+  // "₱480" for a whole peso, "₱480.50" otherwise
+  function pesoShort(v) { var c = toC(v); return c !== null && c % 100 === 0 ? peso(v, true) : peso(v); }
   function undoBar() {
     var u = S.undo, m = u && undoLeft(u, clock()); if (!u || m == null) return '';
-    return '<div class="I_undo" role="status"><span class="I_undot">' + esc(u.msg || ('Saved ' + peso(u.amount) + '. Undo for ' + m + (m === 1 ? ' minute.' : ' minutes.'))) + '</span><button class="btn btn-secondary I_undob" type="button" data-e="undo"' + (u.busy ? ' disabled' : '') + '>' + esc(u.busy ? 'Undoing…' : 'Undo') + '</button></div>';
+    return '<div class="I_undo" role="status"><span class="I_undot">' + esc(u.msg || ('Saved · ' + pesoShort(u.amount) + (u.payee ? ' ' + u.payee : ''))) + '</span><button class="btn btn-secondary I_undob" type="button" data-e="undo"' + (u.busy ? ' disabled' : '') + '>' + esc(u.busy ? 'Undoing…' : 'Undo') + '</button></div>';
   }
   function sheetAdd(sh) {
     var h = errBox(sh);
@@ -729,7 +749,7 @@
     if (!S) return;
     var sh = S.sheet, body = viewScreen(), sheet = '';
     if (sh) sheet = sh.kind === 'add' ? sheetAdd(sh) : sh.kind === 'edit' ? sheetEdit(sh) : sh.kind === 'detail' ? sheetDetail(sh) : sh.kind === 'review' ? sheetReview(sh) : sh.kind === 'void' ? sheetVoid(sh) : sh.kind === 'rm' ? sheetRm(sh) : sh.kind === 'same' ? sheetSame(sh) : '';
-    if (sh && sh.kind === 'other') { S.el.innerHTML = pageOther(sh) + (S.chooser ? chooserHtml() : ''); return; }
+    if (sh && sh.kind === 'other') { S.el.innerHTML = pageOther(sh) + undoBar() + (S.chooser ? chooserHtml() : ''); return; }
     S.el.innerHTML = '<div class="E_page">' + body + '</div>' + sheet + undoBar() + (S.chooser ? chooserHtml() : '');
   }
 
@@ -767,6 +787,7 @@
       case 'other-save': doOther(); return;
       case 'undo': doUndo(); return;
       case 'go-pay': { var bid = id; closeSheet(); nav(bid ? '#bills/pay/' + encodeURIComponent(bid) : '#money'); return; }
+      case 'note-pick': { if (sh && sh.kind === 'other' && sh.f && !sh.busy) { sh.f.notes = id; draw(); } return; }
       case 'pk': { var k = node.getAttribute('data-k'); if (sh && sh.kind === 'other' && sh.f && (k === 'category' || k === 'method') && !sh.busy) { sh.f[k] = id; if (sh.errs) delete sh.errs[k]; draw(); } return; }
       case 'scan': openAdd(true); return;
       case 'open': { var r = rowOf(id); if (!r) return; var s2 = { kind: 'detail', id: r.id, msg: '', busy: false }; S.sheet = s2; S.chooser = false; draw(); loadLink(s2); return; }
@@ -812,22 +833,24 @@
   function mount(el, opts) {
     opts = opts || {}; if (S) unmount();
     if (!/^(owner|admin|finance)$/.test(String(opts.role || ''))) { if (opts.navigate) opts.navigate('#home'); return; }
-    var sub = String(opts.sub || ''), back = sub === 'add/back', carry = CARRY; CARRY = null;
+    var sub = String(opts.sub || ''), back = sub === 'add/back', carry = CARRY, rest = RESTORE; CARRY = null; RESTORE = null;
+    if (PENDING && undoLeft(PENDING, clock()) == null) PENDING = null;
     if (!back) clearHeld();
     S = { el: el, opts: opts, client: opts.client, role: opts.role, gen: ++G, today: manilaToday(), month: monthOf(manilaToday()), chip: 'all', cat: null, data: null, err: '', sheet: null, chooser: false, timers: [] };
     S.onClick = onClick; S.onInput = onInput;
     el.addEventListener('click', S.onClick); el.addEventListener('input', S.onInput); el.addEventListener('change', S.onInput);
     el.addEventListener('submit', function (e) { if (e && e.preventDefault) e.preventDefault(); });
     if (sub === 'review') S.chip = 'review'; // the Today card's "n to review": the server's needs-review filter
-    if (back) restoreHeld(); else if (carry && !sub && clock() - carry.at < 10000) S.sheet = carry.sheet; else if (sub === 'add') openAdd(false); else if (sub === 'other') openOther();
-    draw(); load(false);
+    if (back) restoreHeld(); else if (carry && !sub && clock() - carry.at < 10000) S.sheet = carry.sheet; else if (sub === 'add') openAdd(false); else if (sub === 'other') openOther(rest && clock() - rest.at < 10000 ? rest.f : undefined);
+    if (PENDING) { PENDING.busy = false; S.undo = PENDING; }
+    draw(); load(false); if (S.undo) armUndo();
   }
   function unmount() {
     if (!S) return;
     try { S.el.removeEventListener('click', S.onClick); S.el.removeEventListener('input', S.onInput); S.el.removeEventListener('change', S.onInput); } catch (e) { /* ok */ }
     if (S.sheet) revoke(S.sheet.thumb); (S.timers || []).forEach(function (t) { clearTimeout(t); }); G++; S = null; // HELD survives: the person is in Inventory
   }
-  function reset() { unmount(); clearHeld(); CARRY = null; }
+  function reset() { unmount(); clearHeld(); CARRY = null; PENDING = null; RESTORE = null; }
 
   var api = {
     mount: mount, unmount: unmount, reset: reset,
@@ -835,7 +858,7 @@
     _setRpcTimeout: function (ms) { RPC_TIMEOUT_MS = ms; }, _setClock: function (fn) { clock = fn || function () { return Date.now(); }; },
     lib: { esc: esc, peso: peso, parseAmount: parseAmount, toC: toC, monthOf: monthOf, monthShift: monthShift, monthName: monthName, fmtDate: fmtDate, dayLabel: dayLabel, chipLabel: chipLabel, chipKey: chipKey, needsReview: needsReview, incomplete: incomplete, titleOf: titleOf, catList: catList, catLabel: catLabel,
       validateExpense: validateExpense, expenseTxn: expenseTxn, editPayload: editPayload, changedKeys: changedKeys, suggestion: suggestion, suggestPrefill: suggestPrefill, refText: refText, dupMsg: dupMsg, fileCheck: fileCheck, isPdf: isPdf, basisText: basisText,
-      METHODS: METHODS, UNDO_MS: UNDO_MS, methodLabel: methodLabel, methodOk: methodOk, rangeText: rangeText, rowMeta: rowMeta, validateOther: validateOther, otherTxn: otherTxn, undoLeft: undoLeft, billNudge: billNudge,
+      METHODS: METHODS, UNDO_MS: UNDO_MS, methodLabel: methodLabel, methodOk: methodOk, rangeText: rangeText, rowMeta: rowMeta, validateOther: validateOther, otherTxn: otherTxn, PAY_CHIPS: PAY_CHIPS, NOTE_PICKS: NOTE_PICKS, pesoShort: pesoShort, undoLeft: undoLeft, billNudge: billNudge,
       canRoute: canRoute, routeVisible: routeVisible, nudgeFor: nudgeFor, dayGroups: dayGroups, expenseCats: expenseCats, lookText: lookText, receiptWords: receiptWords, saveWords: saveWords, plainError: plainError, FILTERS: FILTERS, MESSAGES: M, MAX_FILE: MAX_FILE, manilaToday: manilaToday }
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;

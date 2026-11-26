@@ -15,7 +15,7 @@ const flush = async () => { for (let i = 0; i < 8; i++) await new Promise((r) =>
 const clone = (x) => JSON.parse(JSON.stringify(x));
 
 async function sheet(rpc) {
-  const h = {}, nodes = { '#BL_done': { disabled: false, textContent: '' }, '#BL_amthelp': { textContent: '' }, '#BL_file': { click() {} }, '#BL_cam': { click() {} } };
+  const h = {}, nodes = { '#BL_done': { disabled: false, textContent: '' }, '#BL_amthelp': { textContent: '' }, '#BL_file': { click() {} }, '#BL_cam': { click() {} }, '[data-i-flow]': { innerHTML: '' }, '[data-i-confirm]': { innerHTML: '' }, '[data-i-covers]': { innerHTML: '' } };
   const box = { innerHTML: '', addEventListener: (t, f) => { h[t] = f; }, removeEventListener() {}, querySelector: (s) => nodes[s] || null, querySelectorAll: () => [] };
   const calls = [], st = { changes: 0, box, calls, h, nodes };
   const o = { box, sub: 'pay/b', propertyId: 'p', client: { rpc: (n, a) => { calls.push([n, plain(a)]); return Promise.resolve(rpc(n, a)).then((d) => ({ error: null, data: d })); } }, upload: async (f) => ({ path: 'cleaning/' + f.name, sha256: 'a'.repeat(64) }), onChange() { st.changes++; }, navigate() {}, toast() {} };
@@ -61,7 +61,9 @@ test('BL lib: payReady needs a way paid, a paid-on day that is not after today a
 test('BL lib: the two new refusals and the reading date refusal with a day are plain sentences', () => {
   assert.equal(L.refusal(FX.settle_refusals.paid_on_invalid), 'The day you paid cannot be after today or before the reading date on the bill. Check the two dates.');
   assert.equal(L.refusal(FX.settle_refusals.bad_method), 'Choose how you paid: GCash, Bank or Cash.');
-  assert.equal(L.refusal({ reason: 'reading_date_invalid', after: '2026-11-21' }), 'The reading date must be after 2026-11-21, the reading date of the last bill, and not in the future. Check the date on the bill.');
+  assert.equal(L.refusal({ reason: 'reading_date_invalid', after: '2026-11-21' }), 'The reading date must be after 21 Nov, the reading date of the last bill, and not in the future. Check the date on the bill.');
+  assert.equal(L.refusal({ reason: 'reading_date_invalid', before: '2026-12-23' }), 'The reading date must be before 23 Dec, the reading date of a later bill that is already paid. Check the date on the bill.');
+  for (const r of [{ after: '2026-11-21' }, { before: '2026-12-23' }]) assert.doesNotMatch(L.refusal({ reason: 'reading_date_invalid', ...r }), /20\d\d-\d\d-\d\d/, 'no raw day in a sentence');
 });
 test('BL lib: the success category follows the kind (CONTRACT)', () => {
   assert.deepEqual(plain(L.CATEGORY), { electric: 'Utilities', water: 'Utilities', internet: 'Internet', netflix: 'Subscription' });
@@ -70,7 +72,7 @@ test('BL lib: the success category follows the kind (CONTRACT)', () => {
 test('frame 6: the new form is the I_uform I_hue_cnt skin with Pay to first, the amount, "Matches the estimate", the covers row and the way paid', async () => {
   const s = await sheet(serve(FX.open.water)); const h = s.box.innerHTML;
   assert.match(h, /class="I_uform I_hue_cnt"/); assert.match(h, /class="I_band"/); assert.match(h, /class="I_bsub">Water · Gensan Water District</);
-  const at = ['Pay to', 'Amount paid', 'Matches the estimate (₱212).', 'Paid on', 'Reading date on bill', 'This payment covers', 'How you paid', 'Payment screenshot', 'Mark water paid'].map((t) => h.indexOf(t));
+  const at = ['Pay to', 'Amount paid', 'Matches the estimate (₱212).', 'Paid on', 'Reading date on bill', 'This payment covers', 'How you paid', 'Payment screenshot', 'Mark Water paid · ₱212'].map((t) => h.indexOf(t));
   assert.ok(at.every((v, i) => v >= 0 && (i === 0 || v > at[i - 1])), at.join(','));
   assert.match(h, /This payment covers <b>21 Oct – 21 Nov<\/b>/); assert.doesNotMatch(h, /I_flow"/, 'no estimate row while the amount matches');
   assert.match(h, /aria-pressed="true"[^>]*>GCash/); assert.match(h, /class="btn btn-block I_save"[^>]*disabled/, 'no screenshot yet');
@@ -80,7 +82,11 @@ test('frame 6: the new form is the I_uform I_hue_cnt skin with Pay to first, the
 test('frame 6: an assumed reading date is labelled assumed and its covers end carries a tilde; typing another amount draws the estimate row', async () => {
   const s = await sheet(serve(FX.open.electric)); let h = s.box.innerHTML;
   assert.match(h, /Reading date on bill \(assumed\)/); assert.match(h, /This payment covers <b>21 Oct – ~21 Nov<\/b>/); assert.match(h, /Assumed from the usual day/);
-  await s.type('BL_amt', '4,000'); assert.match(s.box.innerHTML, /Check|<h2/); // live update only: the shell of the page is not redrawn
+  assert.equal(s.nodes['[data-i-flow]'].innerHTML, '', 'the amount starts on the estimate: no estimate row');
+  await s.type('BL_amt', '4,000'); const flow = s.nodes['[data-i-flow]'].innerHTML; // live update only: the shell of the page is not redrawn
+  assert.match(flow, /class="I_flow"/); assert.match(flow, /<b>₱4,269\.51<\/b><small>estimate<\/small>/); assert.match(flow, /<b>₱4,000<\/b><small>you pay<\/small>/);
+  await s.type('BL_amt', '4269.51'); assert.equal(s.nodes['[data-i-flow]'].innerHTML, '', 'back on the estimate: the row goes away');
+  await s.type('BL_amt', '4,500'); assert.match(s.nodes['[data-i-flow]'].innerHTML, /<b>₱4,500<\/b><small>you pay<\/small>/); await s.type('BL_amt', ''); assert.equal(s.nodes['[data-i-flow]'].innerHTML, '', 'no amount: no row');
   BL.unmount();
 });
 test('frame 6: Mark paid sends paid_on (today) and method, keeps path sha256 amount confirmed reading_date, and never reading_value', async () => {
@@ -106,7 +112,7 @@ test('frame 6: with no default way paid the button stays off until one is chosen
 test('frame 7: over the band is an info row from the estimate (not an errbox); the button then says Yes and resends confirmed true', async () => {
   const s = await sheet(serve(FX.open.electric, FX.settle_refusals.confirm_amount)); await s.file('shot.jpg'); await s.type('BL_amt', '9100'); await s.click('settle');
   let h = s.box.innerHTML; assert.match(h, /class="MN_row"/); assert.match(h, /₱9,100 is more than twice the estimate\. Check the bill, then confirm\./); assert.doesNotMatch(h, /errbox/);
-  assert.match(h, /Yes, mark electricity paid/);
+  assert.match(h, /Yes, mark Electricity paid · ₱9,100/); assert.doesNotMatch(h, /mark electricity|Mark electricity/);
   await s.click('settle'); assert.deepEqual(s.bodies().map((b) => [b.amount, b.confirmed]), [[9100, false], [9100, true]]);
   BL.unmount();
 });
@@ -119,6 +125,14 @@ test('frame 7: every refusal is one plain sentence and the typed amount stays', 
   await net.file('shot.jpg'); await net.type('BL_amt', '210'); await net.click('settle');
   assert.match(net.box.innerHTML, /This may not be logged yet\. Check the card before paying again\./); BL.unmount();
 });
+test('finding 7: reading_warn is a boolean: only true draws the plain sentence; a refusal on screen shows d Mon', async () => {
+  for (const [w, shown] of [[true, true], [false, false], [null, false], [undefined, false]]) {
+    const open = clone(FX.open.electric); const s = await sheet(serve(open, { ok: true, bill_id: 'x', reading_warn: w, category: 'Utilities' })); await s.file('shot.jpg'); await s.click('settle');
+    assert.equal(/far from the meter log|Check that it was typed right/.test(s.box.innerHTML), shown, String(w)); BL.unmount();
+  }
+  const r = await sheet(serve(FX.open.electric, { ok: false, reason: 'reading_date_invalid', after: '2026-11-21' })); await r.file('shot.jpg'); await r.click('settle');
+  assert.match(r.box.innerHTML, /must be after 21 Nov, the reading date of the last bill/); assert.doesNotMatch(r.box.innerHTML, /after 2026-/); BL.unmount();
+});
 test('an old server payload still draws the old sheet and sends no paid_on or method', async () => {
   const s = await sheet(serve(FX.open.old_server_water)); const h = s.box.innerHTML;
   assert.doesNotMatch(h, /I_uform/); assert.match(h, /Mark as paid/); assert.match(h, /id="BL_rdate"/);
@@ -126,8 +140,8 @@ test('an old server payload still draws the old sheet and sends no paid_on or me
   assert.equal('paid_on' in b, false); assert.equal('method' in b, false); assert.equal(b.amount, 212);
   BL.unmount();
 });
-test('the CSS adds only the page override and the MN_ pieces the form uses, with tokens only', () => {
+test('the CSS (R1): bills css defines no MN_ piece (they live once in money/MN_money.css), tokens only', () => {
   const css = read('bills/BL_bills.css').replace(/\/\*[^]*?\*\//g, '');
-  assert.doesNotMatch(css, /#[0-9a-fA-F]{3,8}\b/); assert.doesNotMatch(css, /rgba?\(|hsla?\(/);
-  for (const c of ['MN_cnt', 'MN_chips', 'MN_cover', 'MN_covers', 'MN_copy', 'MN_req', 'MN_photo', 'MN_amount']) assert.match(css, new RegExp('#v-bills \\.' + c + '\\b'), c);
+  assert.doesNotMatch(css, /MN_/); assert.doesNotMatch(css, /#[0-9a-fA-F]{3,8}\b/); assert.doesNotMatch(css, /rgba?\(|hsla?\(/);
+  const mn = read('money/MN_money.css'); for (const c of ['MN_cnt', 'MN_chips', 'MN_cover', 'MN_covers', 'MN_copy', 'MN_req', 'MN_photo', 'MN_amount']) assert.match(mn, new RegExp('\\.' + c + '\\b'), c);
 });

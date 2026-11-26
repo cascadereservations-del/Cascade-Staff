@@ -1,19 +1,21 @@
-/* s143 (Staff): the Money screens (money/MN_money.js): the Log money options and the reading-date form. Loaded with the module, scoped to #v-money. Tokens only. */
-
-/* s143: the Inventory Update look (I_uform, I_band, I_uopt, I_pk, I_flow, I_undo) comes from stock/I_stock.css, which the shell loads with this module. Only the page override and the MN_* pieces live here. Tokens only. */
-#v-money .I_sheet { display: block; max-height: none; overflow: visible; }
-#v-money .MN_cnt { display: grid; gap: 14px; }
-#v-money .MN_chips { display: flex; flex-wrap: wrap; gap: 8px; }
-#v-money .MN_amount { min-height: 52px; }
-#v-money .MN_amount input { font-size: var(--v5-t-num); font-variant-numeric: tabular-nums; }
-#v-money .MN_fixed { font: 700 var(--v5-t-num)/1 var(--font-ui); font-variant-numeric: tabular-nums; }
-#v-money .MN_helprow { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: -6px; }
-#v-money .MN_cover { display: grid; gap: 12px; }
-#v-money .MN_stack { grid-template-columns: minmax(0, 1fr); }
-#v-money .MN_covers { display: flex; gap: 8px; align-items: center; padding: 12px; border-radius: var(--v5-r-card); background: var(--v5-sunk); font-size: var(--v5-t-label); }
-#v-money .MN_copy { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 12px; border-radius: var(--v5-r-field); background: var(--v5-sunk); overflow-wrap: anywhere; }
-#v-money .MN_req { font-weight: 700; color: var(--v5-ink-2); }
-#v-money .MN_photo { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-#v-money .MN_photo .btn { min-height: 48px; white-space: normal; }
-#v-money .MN_row { display: flex; gap: 8px; align-items: center; justify-content: space-between; padding: 12px; border-radius: var(--v5-r-card); background: var(--v5-info-w); color: var(--v5-info-t); font-size: var(--v5-t-label); }
-#v-money [data-i-flow]:empty, #v-money [data-i-confirm]:empty, #v-money [data-i-covers]:empty { display: none; }
+/* s143 (Staff): every MN_ piece of the Money consolidation lives HERE, once (ruling R1). The shell loads this file with the money, bills and expenses modules
+   (css: ['stock/I_stock.css', 'money/MN_money.css', own css]), so the three screens share one definition. The Inventory Update look (I_uform, I_band, I_uopt, I_seg, I_pk, I_flow, I_info, I_undo)
+   comes from stock/I_stock.css. MN_row, MN_set, MN_last and the other Today-card pieces are owned by styles.css and are not defined here. Tokens only. */
+:is(#v-money, #v-bills, #v-expenses) .I_sheet { display: block; max-height: none; overflow: visible; }
+:is(#v-money, #v-bills, #v-expenses) .MN_form { display: grid; gap: 14px; }
+.MN_cnt { flex: none; min-width: 28px; padding: 2px 10px; border-radius: 999px; background: var(--u-w, var(--v5-sunk)); color: var(--u-t, var(--v5-ink-2)); font: 700 var(--v5-t-label)/1.4 var(--font-ui); font-variant-numeric: tabular-nums; text-align: center; }
+.MN_chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.MN_amount { min-height: 52px; }
+.MN_amount input { font-size: var(--v5-t-num); font-variant-numeric: tabular-nums; }
+.MN_fixed { font: 700 var(--v5-t-num)/1 var(--font-ui); font-variant-numeric: tabular-nums; }
+.MN_helprow { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: -6px; }
+.MN_cover { display: grid; gap: 12px; }
+.MN_stack { grid-template-columns: minmax(0, 1fr); }
+.MN_covers { display: flex; gap: 8px; align-items: center; padding: 12px; border-radius: var(--v5-r-card); background: var(--v5-sunk); font-size: var(--v5-t-label); }
+.MN_copy { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 12px; border-radius: var(--v5-r-field); background: var(--v5-sunk); overflow-wrap: anywhere; }
+.MN_req { font-weight: 700; color: var(--v5-ink-2); }
+.MN_photo { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.MN_photo .btn { position: relative; min-height: 48px; white-space: normal; }
+.MN_photo .btn:has(input[type="file"]) { cursor: pointer; }
+.MN_photo .E_file { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; }
+:is(#v-money, #v-bills, #v-expenses) [data-i-flow]:empty, :is(#v-money, #v-bills, #v-expenses) [data-i-confirm]:empty, :is(#v-money, #v-bills, #v-expenses) [data-i-covers]:empty { display: none; }
