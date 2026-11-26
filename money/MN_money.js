@@ -92,7 +92,7 @@
   function band(hue, title, sub, em, back) { return '<div class="I_band ' + hue + '"><button class="btn btn-ghost I_bk" type="button" data-mact="' + back + '" aria-label="Back"><span aria-hidden="true">‹</span></button><div class="I_bandt"><h2 class="hd I_sht" id="MN_t" tabindex="-1">' + esc(title) + '</h2><p class="I_bsub">' + esc(sub) + '</p></div><span class="I_bigem" aria-hidden="true">' + em + '</span></div>'; }
   // One coloured option row (a button, or a link when href is given); badge is a count, drawn only when it is above zero.
   function opt(hue, em, title, sub, act, data, badge, href) {
-    var inner = '<span class="I_uob" aria-hidden="true">' + em + '</span><span class="I_uopt_t"><b>' + esc(title) + '</b><small>' + esc(sub) + '</small></span>' + (badge > 0 ? '<span class="MN_cnt" aria-label="' + esc('due ' + badge) + '">' + badge + '</span>' : '') + '<span class="I_chev" aria-hidden="true">›</span>';
+    var inner = '<span class="I_uob" aria-hidden="true">' + em + '</span><span class="I_uopt_t"><b>' + esc(title) + '</b><small>' + esc(sub) + '</small></span>' + (badge > 0 ? '<span class="MN_cnt" aria-label="' + esc(act === 'staff' ? badge + ' waiting' : 'due ' + badge) + '">' + badge + '</span>' : '') + '<span class="I_chev" aria-hidden="true">›</span>';
     return href ? '<a class="I_uopt ' + hue + '" href="' + esc(href) + '">' + inner + '</a>' : '<button class="I_uopt ' + hue + '" type="button" data-mact="' + act + '"' + (data || '') + '>' + inner + '</button>';
   }
 
@@ -104,7 +104,7 @@
       '<div class="I_hero I_uhero"><span class="I_bigem" aria-hidden="true">₱</span><div class="I_herob"><b class="I_uname">' + esc(month) + '</b><p class="help">' + esc(line || 'What did you pay?') + '</p></div></div>' +
       (S.msg ? box('info', S.msg) : '') +
       '<div class="I_uopts">' + opt('I_hue_cnt', '🧾', 'Pay a bill', payBill, 'bills', '', n || 0) + opt('I_hue_buy', '🛒', 'Bought stock', 'Scan a receipt or pick the item', 'stock') +
-      opt('I_hue_use', '💸', 'Other expense', 'Repairs, fees, anything else', 'other') + opt('I_hue_lin', '👤', 'Pay staff', 'Cleaning fees and extras', 'staff', '', 0, payUrl()) + '</div>' +
+      opt('I_hue_use', '💸', 'Other expense', 'Repairs, fees, anything else', 'other') + opt('I_hue_lin', '👤', 'Pay staff', 'Cleaning fees and extras', 'staff', '', Number(S.o.payWait) || 0, payUrl()) + '</div>' +
       '<div class="I_umore"><button class="btn btn-secondary" type="button" data-mact="reading">📅 Reading date</button><button class="btn btn-secondary" type="button" data-mact="all">🕘 See all</button></div>');
   }
   function renderBills() {

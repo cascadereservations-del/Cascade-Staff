@@ -1327,7 +1327,6 @@ a.T_call { min-height: var(--touch); display: inline-flex; align-items: center; 
 .MN_paidline { display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: center; margin: 0; padding: 8px 0 0; font: 400 var(--v5-t-2)/1.35 var(--v5-font-ui); color: var(--v5-ink-2); }
 .MN_paidline .MN_ok { font-size: var(--v5-t-2); }
 .MN_row { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 8px 8px 12px; border-radius: var(--v5-r-card); background: var(--v5-info-w); color: var(--v5-info-t); font: 500 var(--v5-t-2)/1.35 var(--v5-font-ui); }
-.MN_row .btn { flex: none; min-height: 44px; }
 .MN_set { flex: none; padding: 0 8px; color: var(--v5-info-t); font-weight: 600; text-decoration: underline; min-height: 44px; display: inline-flex; align-items: center; }
 /* the bills card keeps its old type until the server sends the Money keys (data-money); then figures lead and the rest recedes */
 #T_bills[data-money] .K_sub { color: var(--v5-ink-3); font: 400 var(--v5-t-min)/1.35 var(--v5-font-ui); }

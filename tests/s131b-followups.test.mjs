@@ -53,8 +53,10 @@ test('s131b: reading_date_invalid with before names the later paid bill date', (
   const src = readFileSync(new URL('../bills/BL_bills.js', import.meta.url), 'utf8');
   const m = src.match(/function refusal\(res, ctx\) \{[\s\S]*?\r?\n  \}\r?\n/);
   assert.ok(m, 'refusal() not found');
-  const refusal = new Function('peso', 'BAD_AMOUNT', 'OPENFAIL', 'STEPFAIL', 'UNKNOWN', m[0] + '; return refusal;')(String, '', '', '', 'U');
-  assert.match(refusal({ reason: 'reading_date_invalid', before: '2026-11-05' }), /before 2026-11-05, the reading date of a later bill/);
+  const MON =['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  const shortDay = (iso) => { const d = /^\d{4}-(\d{2})-(\d{2})$/.exec(String(iso || '')); return d ? (+d[2]) + ' ' + MON[+d[1] - 1] : ''; };
+  const refusal = new Function('peso', 'BAD_AMOUNT', 'OPENFAIL', 'STEPFAIL', 'UNKNOWN', 'shortDay', m[0] + '; return refusal;')(String, '', '', '', 'U', shortDay);
+  assert.match(refusal({ reason: 'reading_date_invalid', before: '2026-11-05' }), /before 5 Nov, the reading date of a later bill/);
   assert.match(refusal({ reason: 'reading_date_invalid' }), /after the last bill/);
   assert.match(refusal({ reason: 'reading_date_invalid', before: '<b>x' }), /after the last bill/);
 });
