@@ -231,7 +231,7 @@
   // s77: owner and admin may receive the guest's phone and e-mail on the two guest cards, nowhere else. Money keys stay refused for
   // every role, and a contact key anywhere else (or for any other role) still blocks the page.
   var CONTACT_OK = /^\$\.(current_guest|next_guest)\.(phone|email)$/;
-  var ARRIVAL_OK = /\.arrival_ready\.paid#bool$/; // s82: whether the balance is received, as true or false, for owner and admin; never an amount
+  var ARRIVAL_OK = /\.arrival_ready\.paid#bool$/; // s82: whether the stay is paid, as true or false, for owner and admin; never an amount
   function canSeeGuestContact(role) { return role === 'owner' || role === 'admin'; }
   function assertNoMoney(payload, opts) {
     var allow = !!(opts && opts.allowContact);
@@ -1586,7 +1586,7 @@
     items.push(['Fewer kitchen photos', 'The kitchen photo card now asks for two photos, and Today shows no button on a day without a turnover.']);
     items.push(['A calmer look', 'Solid cards, one clear accent colour and an easier-to-read font. Today, Notices and Pay staff are easier to scan.']);
     if (admin) items.push(['Admin hub', 'More lists the dashboard pages the app does not have itself, in short groups.']);
-    if (mgr) items.push(['Arrival checks', 'Each arriving guest shows whether the ID, the balance and the door code are in place.']);
+    if (mgr) items.push(['Arrival checks', 'Each arriving guest shows whether the ID, the payment and the door code are in place.']);
     if (flags.notices && mgr) items.push(['Tell the guest', 'On a notice, copy a ready message to send to the guest yourself.']);
     return items.map(function (i) { return { title: i[0], text: i[1] }; });
   }
@@ -1804,7 +1804,7 @@
   function H_readyChips(r) {
     if (!r) return [];
     var out = []; if (r.id !== null) out.push({ key: 'id', ok: r.id, word: r.id ? 'ID on file' : 'No ID yet' });
-    if (r.paid !== null) out.push({ key: 'paid', ok: r.paid, word: r.paid ? 'Balance received' : 'Balance due' });
+    if (r.paid !== null) out.push({ key: 'paid', ok: r.paid, word: r.paid ? 'Paid' : 'Not paid yet' });
     if (r.door_code !== null) out.push({ key: 'door_code', ok: r.door_code, word: r.door_code ? 'Door code set' : 'No door code' });
     return out;
   }

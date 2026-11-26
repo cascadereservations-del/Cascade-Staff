@@ -229,7 +229,7 @@
         { date: d(-20), mark: 2, suggestion: true, text: 'A full-length mirror near the door would help.' },
         { date: d(-100), mark: 1, text: 'Likes two extra pillows and the AC at 24.' },
         { date: d(-20), mark: 0, text: 'Arrived late, around 10 pm. Self check-in went fine.' },
-        { date: d(-100), mark: 0, text: 'Travels for work, usually three nights. Books direct after the first Airbnb stay and pays the balance by GCash the day before.' },
+        { date: d(-100), mark: 0, text: 'Travels for work, usually three nights. Books direct after the first Airbnb stay and pays by GCash when booking.' },
         { date: d(-200), mark: 0, text: 'First stay. Left the unit very tidy.' },
         { date: d(-200), mark: 0, suggestion: true, text: 'The shower drain was slow.', addressed: true, addressedOn: d(-100) }
       ])

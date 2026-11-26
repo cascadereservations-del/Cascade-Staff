@@ -35,7 +35,7 @@ test('H_ lib: the agenda lists arrivals and departures in the next 14 days, by t
 test('H_ lib: arrival checks are owner and admin only, three states each, and an unknown draws nothing', () => {
   assert.equal(CS.H_ready({ id: true, paid: true, door_code: true }, 'cleaner'), null); assert.equal(CS.H_ready({ id: true }, 'finance'), null); assert.equal(CS.H_ready(null, 'admin'), null); assert.equal(CS.H_ready({ id: null, paid: null, door_code: null }, 'owner'), null);
   const r = CS.H_ready({ id: true, paid: null, door_code: null }, 'admin'); assert.deepEqual(CS.H_readyChips(r).map((c) => c.word), ['ID on file']); assert.equal(CS.H_readyLine(r), 'ID on file'); assert.equal(CS.H_readyOk(r), true);
-  const m = CS.H_ready({ id: false, paid: false, door_code: true }, 'owner'); assert.deepEqual(CS.H_readyChips(m).map((c) => c.word), ['No ID yet', 'Balance due', 'Door code set']); assert.equal(CS.H_readyLine(m), 'No ID yet · balance due · door code set'); assert.equal(CS.H_readyOk(m), false);
+  const m = CS.H_ready({ id: false, paid: false, door_code: true }, 'owner'); assert.deepEqual(CS.H_readyChips(m).map((c) => c.word), ['No ID yet', 'Not paid yet', 'Door code set']); assert.equal(CS.H_readyLine(m), 'No ID yet · not paid yet · door code set'); assert.equal(CS.H_readyOk(m), false);
 });
 
 test('H_ lib: cleaning progress is owner and admin only; a finished clean says so; nothing after 15 minutes is amber', () => {
@@ -148,7 +148,7 @@ test('H_ home: pay links carry the badge counts in their hash, the cleaner home 
 test('H_ home: the admin Turnover card is a verdict (clean, arrival, house); rows with no data are not drawn; a cleaner gets the staff card', async () => {
   const handlers = (ready, prog) => baseHandlers('admin', { staff_home_v1: turnover(ready), cleaning_progress_v1: prog || (() => ({ error: { code: 'PGRST202', message: 'x' }, data: null })) });
   const a = await boot({ role: 'admin', hash: '#home', handlers: handlers({ id: true, paid: false, door_code: null }, () => ({ error: null, data: { ok: true, active: { step: 4, of: 9, cleaner_name: 'Honey Cruz', updated_at: '2026-10-15T04:20:00Z' } } })) });
-  const h = a.els['v-home'].innerHTML; assert.match(h, /Today · out 12:00 noon · in 2:00 pm/); assert.match(h, /<span class="k">Clean<\/span><b>Honey · step 4 of 9 · 12:20<\/b>/); assert.match(h, /<span class="k">Arrival<\/span><b>Balance due<\/b>/); assert.match(h, /<span class="k">House<\/span><b>Clear<\/b>/);
+  const h = a.els['v-home'].innerHTML; assert.match(h, /Today · out 12:00 noon · in 2:00 pm/); assert.match(h, /<span class="k">Clean<\/span><b>Honey · step 4 of 9 · 12:20<\/b>/); assert.match(h, /<span class="k">Arrival<\/span><b>Not paid yet<\/b>/); assert.match(h, /<span class="k">House<\/span><b>Clear<\/b>/);
   assert.match(h, /Open booking|Set the door code/, 'a missing item has its action'); assert.equal(a.calls.filter((c) => c[0] === 'cleaning_progress_v1').length, 1);
   const none = await boot({ role: 'admin', hash: '#home', handlers: handlers(null) }); const nh = none.els['v-home'].innerHTML;
   assert.doesNotMatch(nh, /<span class="k">Clean<\/span>/, 'the RPC is absent: no Clean row'); assert.doesNotMatch(nh, /<span class="k">Arrival<\/span>/, 'the field is absent: no Arrival row'); assert.match(nh, /<span class="k">House<\/span>/);

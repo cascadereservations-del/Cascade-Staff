@@ -180,7 +180,7 @@ test('Good to know on the Today card: call link and guest count for admin, ID pi
   const adm = html(await boot({ role: 'admin', hash: '#home', handlers: baseHandlers('admin', { staff_home_v1: () => HOMEWITH([stayRow('Ana Reyes', TODAY, '2026-10-17')], { current_guest: g }) }) }));
   assert.match(adm, /<div class="T_tile"><span class="T_tk">Call<\/span><span class="T_tv num"><a class="T_call" href="tel:09175550100" aria-label="Call 0917 555 0100">0917 555 0100<\/a>/); // s109: phone and guest count are fact-grid tiles
   assert.match(adm, /2 guests/); assert.match(adm, /ID on file/); assert.equal((adm.match(/ID on file/g) || []).length, 1, 'the ID state is said once on Today');
-  assert.match(adm, /Balance due/, 'the Turnover Arrival row keeps the other checks');
+  assert.match(adm, /Not paid yet/, 'the Turnover Arrival row keeps the other checks');
   const none = html(await boot({ role: 'admin', hash: '#home', handlers: baseHandlers('admin', { staff_home_v1: homeOf(GUEST({ id_photo_path: null, arrival_ready: { id: false, paid: true, door_code: true } })) }) }));
   assert.match(none, /p-warn[^>]*>[^]*?No ID yet/); assert.equal((none.match(/No ID yet/g) || []).length, 1);
   const cl = html(await boot({ role: 'cleaner', hash: '#home', handlers: baseHandlers('cleaner', { staff_home_v1: homeOf(GUEST({ id_photo_path: null })) }) }));
