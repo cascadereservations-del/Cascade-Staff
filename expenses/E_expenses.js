@@ -4,6 +4,7 @@
    stored or cached. The expense form lives here and nowhere else (Manage opens #expenses/add).
    Mounted by the shell: window.E_Expenses.mount(el, { client, demo, role, sub, propertyId, navigate, toast, haptic, onChange }). Plain script, no build step. */
 (function () {
+  // s143: Other expense (#expenses/other) in the Inventory Update skin with a 15 minute Undo, the way paid, and log rows that show the title, the period covered and the way paid.
   'use strict';
   var W = typeof window !== 'undefined' ? window : {};
 
@@ -65,7 +66,7 @@
   function chipKey(c) { return Object.prototype.hasOwnProperty.call(CHIPS, c) ? c : 'manual'; }
   function incomplete(r) { return !!r && r.s134_incomplete === true; }
   function needsReview(r) { return !!r && r.status === 'pending_review'; }
-  function titleOf(r) { return str(r && r.payee) || str(r && r.label) || 'Expense'; }
+  function titleOf(r) { return str(r && r.title) || str(r && r.payee) || str(r && r.label) || 'Expense'; }
   function catList(list) {
     var out = [], seen = {}, src = Array.isArray(list) && list.length ? list : FALLBACK_CATS.map(function (c) { return { slug: c, label: c.replace(/_/g, ' ') }; });
     src.forEach(function (c) { var s = c && str(c.slug); if (!s || s === 'unaccounted' || seen[s]) return; seen[s] = 1; out.push({ slug: s, label: str(c.label) || s.replace(/_/g, ' ') }); });
@@ -151,6 +152,31 @@
     if (cat === 'supplies') return 'If this went into stock, use Inventory > Bought';
     return '';
   }
+  // s143 helpers (pure).
+  var METHODS = [['gcash', 'GCash'], ['bank', 'Bank'], ['cash', 'Cash'], ['card', 'Card']];
+  var UNDO_MS = 15 * 60 * 1000;
+  function methodLabel(m) { for (var i = 0; i < METHODS.length; i++) if (METHODS[i][0] === m) return METHODS[i][1]; return m === 'other' ? 'Other' : ''; }
+  function methodOk(m) { return METHODS.some(function (x) { return x[0] === m; }); }
+  function rangeText(from, to) { var a = fmtDate(from), b = fmtDate(to); return a !== '—' && b !== '—' ? a + ' – ' + b : ''; }
+  // The extra words a log row carries from the new server: "21 Oct – 21 Nov · GCash". '' for an old row.
+  function rowMeta(r) {
+    var out = [], c = r && r.covers && typeof r.covers === 'object' ? rangeText(r.covers.from, r.covers.to) : '';
+    if (c) out.push(c); var m = methodLabel(r && r.method); if (m) out.push(m); return out.join(' · ');
+  }
+  // The Other expense form: date (not in the future), an amount, a category and the way paid. What it was for is a note, optional here.
+  function validateOther(f, cats, today) {
+    var e = {};
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(f.date || '')) e.date = 'Choose the day you paid.'; else if (today && f.date > today) e.date = 'The day you paid cannot be in the future.';
+    if (parseAmount(f.amount) === null) e.amount = 'Enter the amount, more than zero, with at most two decimal places.';
+    if (!catOk(f.category, cats)) e.category = 'Choose what it was for.';
+    if (!methodOk(f.method)) e.method = 'Choose how you paid: GCash, Bank, Cash or Card.';
+    return e;
+  }
+  function otherTxn(f, rc) { var t = expenseTxn(f, rc); t.payment_method = f.method; return t; }
+  // The Undo window: seconds are not shown, a minute count is. null once the window has passed.
+  function undoLeft(u, now) { if (!u || !u.at) return null; var left = u.at + UNDO_MS - now; return left > 0 ? Math.ceil(left / 60000) : null; }
+  // Utilities, Internet or Subscription while a bill is open: pay the bill so it is counted once.
+  function billNudge(cat, openBills) { return (cat === 'utilities' || cat === 'internet' || cat === 'subscription') && openBills && openBills.length ? openBills : null; }
   // day groups for the list: [{date, total, rows}] newest first, in the order the server sent them
   function dayGroups(rows) {
     var out = [], idx = {};
@@ -336,7 +362,7 @@
   }
   function pickFile(file) {
     var sh = S.sheet; S.chooser = false; if (!sh || sh.busy || sh.upl) return;
-    if (sh.kind === 'add') {
+    if (sh.kind === 'add' || sh.kind === 'other') {
       var gen = S.gen; sh.upl = true; sh.msg = ''; sh.scanMsg = ''; draw();
       uploadReceipt(file).then(function (r) {
         if (!live(gen, sh)) { revoke(r.thumb); return; } sh.upl = false;
@@ -402,7 +428,7 @@
       buzz('success');
       if (x.lookalike && x.lookalike.id && x.id) { // the question has to outlive the move off #expenses/add: it is carried through the remount
         var q = { kind: 'same', id: x.id, look: x.lookalike, key: newKey('exp-void'), keyPrefix: 'exp-void', reason: '', msg: '' };
-        revoke(sh0.thumb); S.sheet = q; S.chooser = false; if (S.opts.sub && /^add/.test(S.opts.sub)) CARRY = { sheet: q, at: clock() }; leaveAddRoute(); refresh(); draw(); return;
+        revoke(sh0.thumb); S.sheet = q; S.chooser = false; if (S.opts.sub && /^(add|other)/.test(S.opts.sub)) CARRY = { sheet: q, at: clock() }; leaveAddRoute(); refresh(); draw(); return;
       }
       closeSheet(); refresh(); tell('Saved.');
     }, { fail: function (s0) { s0.step = 'form'; } });
@@ -454,12 +480,48 @@
 
   // ------------------------------------------------------------------------------------------------ sheets
   function openSheet(sh) { S.sheet = sh; S.chooser = false; draw(); }
-  function leaveAddRoute() { if (S && S.opts.sub && /^add/.test(S.opts.sub)) { S.opts.sub = ''; try { if (S.opts.navigate) S.opts.navigate('#expenses'); } catch (e) { /* ok */ } } }
+  function leaveAddRoute() { if (S && S.opts.sub && /^(add|other)/.test(S.opts.sub)) { S.opts.sub = ''; try { if (S.opts.navigate) S.opts.navigate('#expenses'); } catch (e) { /* ok */ } } }
   function closeSheet() { if (S.sheet) { revoke(S.sheet.thumb); } CARRY = null; S.sheet = null; S.chooser = false; draw(); leaveAddRoute(); }
   function blankForm() { return { date: S.today, amount: '', category: '', payee: '', notes: '' }; }
   function openAdd(chooser) {
     S.sheet = { kind: 'add', f: blankForm(), errs: {}, checks: {}, rc: null, thumb: null, pdf: false, stockHint: null, key: newKey('exp-add'), keyPrefix: 'exp-add', msg: '', busy: false, upl: false, step: 'form' };
     S.chooser = !!chooser; draw();
+  }
+  function otherForm() { return { date: S.today, amount: '', category: '', payee: '', notes: '', method: '' }; }
+  function openOther(f, openBills) {
+    S.sheet = { kind: 'other', f: f || otherForm(), errs: {}, checks: {}, rc: null, thumb: null, pdf: false, stockHint: null, key: newKey('exp-other'), keyPrefix: 'exp-other', msg: '', busy: false, upl: false, openBills: openBills || S.openBills || [] };
+    S.chooser = false; draw(); if (!S.openBills) loadOpenBills();
+  }
+  // Which bills are open (to nudge Utilities toward Pay a bill). A failure only means no nudge.
+  function loadOpenBills() {
+    var gen = S.gen; callRpc('today_bills_v1', { p_property_id: pid() }).then(function (res) {
+      if (!live(gen)) return; var d = res && res.data, due = d && Array.isArray(d.due) ? d.due : [];
+      S.openBills = due.filter(function (b) { return b && b.id && b.can_pay === true; }).map(function (b) { return { id: String(b.id), label: String(b.label || b.kind || 'Bill') }; });
+      if (S.sheet && S.sheet.kind === 'other') { S.sheet.openBills = S.openBills; draw(); }
+    });
+  }
+  function doOther() {
+    var sh = S.sheet, cats = S.data && S.data.categories; sh.errs = validateOther(sh.f, cats, S.today);
+    if (Object.keys(sh.errs).length) { sh.msg = 'Please fix the items marked below.'; draw(); return; }
+    var f = JSON.parse(JSON.stringify(sh.f)); sh.keyPrefix = 'exp-other';
+    write('admin_save_transaction_v2', { p_property_id: pid(), p_txn: otherTxn(sh.f, sh.rc), p_idempotency_key: sh.key }, function (x, sh0) {
+      buzz('success'); revoke(sh0.thumb);
+      S.undo = x && x.id ? { id: x.id, at: clock(), f: f, amount: parseAmount(f.amount), msg: '', busy: false } : null; S.sheet = null; S.chooser = false; S.openBills = null;
+      leaveAddRoute(); draw(); refresh(); tell('Saved.'); if (S.undo) armUndo();
+    });
+  }
+  function armUndo() { var gen = S.gen; S.timers.push(setTimeout(function () { if (live(gen) && S.undo) { S.undo = null; draw(); } }, UNDO_MS + 500)); }
+  // Undo = expense_void_v1 on the row just saved. The form comes back as it was, with a NEW key, so a second save is a new request (never the first one replayed).
+  function doUndo() {
+    var u = S.undo; if (!u || u.busy) return; if (undoLeft(u, clock()) == null) { S.undo = null; draw(); return; }
+    if (!online()) { u.msg = NO_CONNECTION; draw(); return; }
+    u.busy = true; u.msg = ''; draw(); var gen = S.gen;
+    callRpc('expense_void_v1', { p_property_id: pid(), p_id: u.id, p_reason: 'Undone right after saving' }).then(function (res) {
+      if (!live(gen)) return; u.busy = false;
+      if (res.error) { u.msg = plainError(res.error); draw(); return; }
+      var x = res.data; if (x && x.ok === false) { u.msg = saveWords(x); draw(); return; }
+      S.undo = null; buzz('success'); tell('Undone.'); refresh(); openOther(u.f); S.opts.sub = 'other'; try { if (S.opts.navigate) S.opts.navigate('#expenses/other'); } catch (e) { /* ok */ }
+    });
   }
   function restoreHeld() {
     var h = HELD; HELD = null; if (!h) return false;
@@ -505,6 +567,27 @@
     h += fld('E_payee', edit ? 'Paid to' : 'Paid to (optional)', inp('E_payee', 'payee', f.payee, lock ? 'disabled' : ''), e.payee, ck.payee);
     if (edit) h += fld('E_why', 'Why the change?', inp('E_why', 'reason', sh.reason || '', 'placeholder="A few words"'), e.reason);
     return h;
+  }
+  function chips(field, list, cur, off) { return '<div class="MN_chips" role="group">' + list.map(function (c) { return '<button class="btn btn-secondary I_pk" type="button" data-e="pk" data-k="' + field + '" data-id="' + esc(c[0]) + '" aria-pressed="' + (cur === c[0]) + '"' + (off ? ' disabled' : '') + '>' + esc(c[1]) + '</button>'; }).join('') + '</div>'; }
+  function otherLabel(l, id, extra) { return '<label' + (id ? ' for="' + id + '"' : '') + '>' + esc(l) + (extra || '') + '</label>'; }
+  function pageOther(sh) {
+    var f = sh.f, e = sh.errs || {}, ck = sh.checks || {}, dis = sh.busy ? ' disabled' : '', cats = catList(S.data && S.data.categories).map(function (c) { return [c.slug, c.label]; });
+    var nb = billNudge(f.category, sh.openBills), err = function (k) { return e[k] ? '<p class="err" role="alert">' + esc(e[k]) + '</p>' : ''; }, a = parseAmount(f.amount);
+    var h = '<div class="I_band I_hue_use"><button class="btn btn-ghost I_bk" type="button" data-e="close" aria-label="Back"><span aria-hidden="true">‹</span></button><div class="I_bandt"><h2 class="hd I_sht" id="E_sh" tabindex="-1">🧺 Other expense</h2><p class="I_bsub">Anything that is not a bill or stock</p></div><span class="I_bigem" aria-hidden="true">🧺</span></div>';
+    h += '<div class="field">' + otherLabel('Amount paid', 'E_amt', ck.amount ? ' <span class="E_mark">check this</span>' : '') + '<div class="input I_money MN_amount"><b aria-hidden="true">₱</b><input id="E_amt" data-f="amount" inputmode="decimal" autocomplete="off" placeholder="0.00" value="' + esc(f.amount) + '"' + dis + '></div>' + err('amount') + '</div>';
+    h += '<div class="field">' + otherLabel('What for') + chips('category', cats, f.category, sh.busy) + err('category') + '</div>';
+    if (nb) h += '<div class="MN_row" role="status"><span>ℹ️ ' + esc(nb.length === 1 ? nb[0].label + ' is waiting to be paid. Pay it from Pay a bill so it is counted once.' : nb.length + ' bills are waiting to be paid. Pay them from Pay a bill so each is counted once.') + '</span><button class="btn btn-secondary btn-sm" type="button" data-e="go-pay" data-id="' + (nb.length === 1 ? esc(nb[0].id) : '') + '">Pay a bill</button></div>';
+    h += '<div class="field">' + otherLabel('Paid to (optional)', 'E_payee') + '<div class="input"><input id="E_payee" data-f="payee" autocomplete="off" value="' + esc(f.payee) + '"' + dis + '></div></div>';
+    h += '<div class="field">' + otherLabel('Paid on', 'E_date') + '<div class="input"><input id="E_date" data-f="date" type="date" max="' + esc(S.today) + '" value="' + esc(f.date) + '"' + dis + '></div>' + err('date') + '</div>';
+    h += '<div class="field">' + otherLabel('How you paid') + chips('method', METHODS, f.method, sh.busy) + err('method') + '</div>';
+    h += '<div class="field">' + otherLabel('Receipt (optional)') + (sh.rc ? receiptTile(sh) : '<button class="btn btn-secondary" type="button" data-e="chooser"' + (sh.upl ? ' disabled aria-busy="true"' : '') + '>' + ic('camera', 's20') + esc(sh.upl ? 'Reading the receipt…' : 'Add a receipt') + '</button>') + (sh.scanMsg ? '<p class="help" role="status">' + esc(sh.scanMsg) + '</p>' : '') + '</div>';
+    h += '<div class="field">' + otherLabel('Note (optional)', 'E_notes') + '<div class="input"><input id="E_notes" data-f="notes" autocomplete="off" value="' + esc(f.notes) + '"' + dis + '></div></div>';
+    h += (sh.msg ? '<div class="errbox" role="alert"><span>' + esc(sh.msg) + '</span></div>' : '') + '<button class="btn btn-block I_save" type="button" data-e="other-save"' + (sh.busy ? ' disabled aria-busy="true"' : '') + '>' + esc(sh.busy ? 'Saving…' : 'Save expense' + (a === null ? '' : ' · ' + peso(a))) + '</button><p class="help I_sfoot">Counted in the books at once. You can undo it for 15 minutes.</p>';
+    return '<div class="I_sheet MN_page I_uf"><form data-i-form class="I_uform I_hue_use MN_cnt" novalidate>' + h + '</form></div>';
+  }
+  function undoBar() {
+    var u = S.undo, m = u && undoLeft(u, clock()); if (!u || m == null) return '';
+    return '<div class="I_undo" role="status"><span class="I_undot">' + esc(u.msg || ('Saved ' + peso(u.amount) + '. Undo for ' + m + (m === 1 ? ' minute.' : ' minutes.'))) + '</span><button class="btn btn-secondary I_undob" type="button" data-e="undo"' + (u.busy ? ' disabled' : '') + '>' + esc(u.busy ? 'Undoing…' : 'Undo') + '</button></div>';
   }
   function sheetAdd(sh) {
     var h = errBox(sh);
@@ -594,7 +677,7 @@
   // ------------------------------------------------------------------------------------------------ screen
   function rowHtml(r, cats) {
     var cl = catLabel(r.category, cats), icon = CAT_ICON[r.category] || 'wallet', lk = !needsReview(r) && lookText(r, S.data && S.data.rows);
-    return '<div class="E_lr" role="button" tabindex="0" data-e="open" data-id="' + esc(r.id) + '"><span class="E_ic" aria-hidden="true">' + ic(icon, 's20') + '</span><span><span class="E_t">' + esc(titleOf(r)) + '</span><span class="E_sub">' + esc(cl + ' · ' + chipLabel(r.chip)) + (r.has_receipt ? ' <span class="E_clip" aria-label="Has a receipt">' + ic('paperclip', 's16') + '</span>' : '') + '</span>' + (lk ? '<span class="E_sub E_lookm">' + esc(lk) + '</span>' : '') + (incomplete(r) ? '<span class="E_sub E_look E_inc">' + esc(M.incomplete) + '</span>' : '') + '</span><span class="E_a"><b>' + esc(peso(r.amount)) + '</b>' + (r.locked ? '<span class="E_lock" aria-label="Locked">' + ic('lock', 's16') + '</span>' : '') + '</span></div>';
+    return '<div class="E_lr" role="button" tabindex="0" data-e="open" data-id="' + esc(r.id) + '"><span class="E_ic" aria-hidden="true">' + ic(icon, 's20') + '</span><span><span class="E_t">' + esc(titleOf(r)) + '</span><span class="E_sub">' + esc(cl + ' · ' + chipLabel(r.chip) + (rowMeta(r) ? ' · ' + rowMeta(r) : '')) + (r.has_receipt ? ' <span class="E_clip" aria-label="Has a receipt">' + ic('paperclip', 's16') + '</span>' : '') + '</span>' + (lk ? '<span class="E_sub E_lookm">' + esc(lk) + '</span>' : '') + (incomplete(r) ? '<span class="E_sub E_look E_inc">' + esc(M.incomplete) + '</span>' : '') + '</span><span class="E_a"><b>' + esc(peso(r.amount)) + '</b>' + (r.locked ? '<span class="E_lock" aria-label="Locked">' + ic('lock', 's16') + '</span>' : '') + '</span></div>';
   }
   function viewScreen() {
     var d = S.data, h = '', cur = S.month === monthOf(S.today);
@@ -646,7 +729,8 @@
     if (!S) return;
     var sh = S.sheet, body = viewScreen(), sheet = '';
     if (sh) sheet = sh.kind === 'add' ? sheetAdd(sh) : sh.kind === 'edit' ? sheetEdit(sh) : sh.kind === 'detail' ? sheetDetail(sh) : sh.kind === 'review' ? sheetReview(sh) : sh.kind === 'void' ? sheetVoid(sh) : sh.kind === 'rm' ? sheetRm(sh) : sh.kind === 'same' ? sheetSame(sh) : '';
-    S.el.innerHTML = '<div class="E_page">' + body + '</div>' + sheet + (S.chooser ? chooserHtml() : '');
+    if (sh && sh.kind === 'other') { S.el.innerHTML = pageOther(sh) + (S.chooser ? chooserHtml() : ''); return; }
+    S.el.innerHTML = '<div class="E_page">' + body + '</div>' + sheet + undoBar() + (S.chooser ? chooserHtml() : '');
   }
 
   // ------------------------------------------------------------------------------------------------ events
@@ -680,12 +764,16 @@
       case 'go-items': closeSheet(); nav('#stock'); return;
       case 'to-review': { var el = S.el.querySelector ? S.el.querySelector('#E_review') : null; if (el && el.scrollIntoView) { try { el.scrollIntoView({ block: 'start' }); } catch (e) { /* ok */ } } return; }
       case 'add': openAdd(false); return;
+      case 'other-save': doOther(); return;
+      case 'undo': doUndo(); return;
+      case 'go-pay': { var bid = id; closeSheet(); nav(bid ? '#bills/pay/' + encodeURIComponent(bid) : '#money'); return; }
+      case 'pk': { var k = node.getAttribute('data-k'); if (sh && sh.kind === 'other' && sh.f && (k === 'category' || k === 'method') && !sh.busy) { sh.f[k] = id; if (sh.errs) delete sh.errs[k]; draw(); } return; }
       case 'scan': openAdd(true); return;
       case 'open': { var r = rowOf(id); if (!r) return; var s2 = { kind: 'detail', id: r.id, msg: '', busy: false }; S.sheet = s2; S.chooser = false; draw(); loadLink(s2); return; }
       case 'close': closeSheet(); return;
       case 'chooser': S.chooser = true; draw(); return;
       case 'chooser-x': S.chooser = false; draw(); return;
-      case 'rc-clear': if (sh && sh.kind === 'add') { revoke(sh.thumb); sh.thumb = null; sh.rc = null; sh.pdf = false; sh.stockHint = null; sh.scanMsg = ''; sh.checks = {}; draw(); } return;
+      case 'rc-clear': if (sh && (sh.kind === 'add' || sh.kind === 'other')) { revoke(sh.thumb); sh.thumb = null; sh.rc = null; sh.pdf = false; sh.stockHint = null; sh.scanMsg = ''; sh.checks = {}; draw(); } return;
       case 'route': doRoute(); return;
       case 'review-add': doReviewAdd(); return;
       case 'add-back': if (sh && sh.kind === 'add') { sh.step = 'form'; sh.msg = ''; draw(); } return;
@@ -731,7 +819,7 @@
     el.addEventListener('click', S.onClick); el.addEventListener('input', S.onInput); el.addEventListener('change', S.onInput);
     el.addEventListener('submit', function (e) { if (e && e.preventDefault) e.preventDefault(); });
     if (sub === 'review') S.chip = 'review'; // the Today card's "n to review": the server's needs-review filter
-    if (back) restoreHeld(); else if (carry && !sub && clock() - carry.at < 10000) S.sheet = carry.sheet; else if (sub === 'add') openAdd(false);
+    if (back) restoreHeld(); else if (carry && !sub && clock() - carry.at < 10000) S.sheet = carry.sheet; else if (sub === 'add') openAdd(false); else if (sub === 'other') openOther();
     draw(); load(false);
   }
   function unmount() {
@@ -747,6 +835,7 @@
     _setRpcTimeout: function (ms) { RPC_TIMEOUT_MS = ms; }, _setClock: function (fn) { clock = fn || function () { return Date.now(); }; },
     lib: { esc: esc, peso: peso, parseAmount: parseAmount, toC: toC, monthOf: monthOf, monthShift: monthShift, monthName: monthName, fmtDate: fmtDate, dayLabel: dayLabel, chipLabel: chipLabel, chipKey: chipKey, needsReview: needsReview, incomplete: incomplete, titleOf: titleOf, catList: catList, catLabel: catLabel,
       validateExpense: validateExpense, expenseTxn: expenseTxn, editPayload: editPayload, changedKeys: changedKeys, suggestion: suggestion, suggestPrefill: suggestPrefill, refText: refText, dupMsg: dupMsg, fileCheck: fileCheck, isPdf: isPdf, basisText: basisText,
+      METHODS: METHODS, UNDO_MS: UNDO_MS, methodLabel: methodLabel, methodOk: methodOk, rangeText: rangeText, rowMeta: rowMeta, validateOther: validateOther, otherTxn: otherTxn, undoLeft: undoLeft, billNudge: billNudge,
       canRoute: canRoute, routeVisible: routeVisible, nudgeFor: nudgeFor, dayGroups: dayGroups, expenseCats: expenseCats, lookText: lookText, receiptWords: receiptWords, saveWords: saveWords, plainError: plainError, FILTERS: FILTERS, MESSAGES: M, MAX_FILE: MAX_FILE, manilaToday: manilaToday }
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;

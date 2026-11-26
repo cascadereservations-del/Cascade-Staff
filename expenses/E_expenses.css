@@ -97,3 +97,21 @@
 .E_opt[disabled] { color: var(--v5-ink-2); background: transparent; border-style: dashed; cursor: not-allowed; } /* a disabled choice reads as off, in both themes (Count it on an incomplete amount) */
 .E_unl { color: var(--v5-ink-2); }
 .E_sticky .btn-primary { background: var(--v5-gold); border-color: var(--v5-gold); color: var(--v5-gold-fg); }
+
+/* s143: the Inventory Update look (I_uform, I_band, I_uopt, I_pk, I_flow, I_undo) comes from stock/I_stock.css, which the shell loads with this module. Only the page override and the MN_* pieces live here. Tokens only. */
+#v-expenses .I_sheet { display: block; max-height: none; overflow: visible; }
+#v-expenses .MN_cnt { display: grid; gap: 14px; }
+#v-expenses .MN_chips { display: flex; flex-wrap: wrap; gap: 8px; }
+#v-expenses .MN_amount { min-height: 52px; }
+#v-expenses .MN_amount input { font-size: var(--v5-t-num); font-variant-numeric: tabular-nums; }
+#v-expenses .MN_fixed { font: 700 var(--v5-t-num)/1 var(--font-ui); font-variant-numeric: tabular-nums; }
+#v-expenses .MN_helprow { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: -6px; }
+#v-expenses .MN_cover { display: grid; gap: 12px; }
+#v-expenses .MN_stack { grid-template-columns: minmax(0, 1fr); }
+#v-expenses .MN_covers { display: flex; gap: 8px; align-items: center; padding: 12px; border-radius: var(--v5-r-card); background: var(--v5-sunk); font-size: var(--v5-t-label); }
+#v-expenses .MN_copy { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 12px; border-radius: var(--v5-r-field); background: var(--v5-sunk); overflow-wrap: anywhere; }
+#v-expenses .MN_req { font-weight: 700; color: var(--v5-ink-2); }
+#v-expenses .MN_photo { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+#v-expenses .MN_photo .btn { min-height: 48px; white-space: normal; }
+#v-expenses .MN_row { display: flex; gap: 8px; align-items: center; justify-content: space-between; padding: 12px; border-radius: var(--v5-r-card); background: var(--v5-info-w); color: var(--v5-info-t); font-size: var(--v5-t-label); }
+#v-expenses [data-i-flow]:empty, #v-expenses [data-i-confirm]:empty, #v-expenses [data-i-covers]:empty { display: none; }
