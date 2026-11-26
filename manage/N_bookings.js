@@ -106,7 +106,7 @@
     if (b.calOnly || b.paid === null) return 'Not on file';
     if (b.kind === 'airbnb') return (b.paid ? 'Paid through Airbnb' : 'Guest payment not reported') + (b.payout === 'recorded' ? '; payout received ' + fmtDate(b.payoutDate, 'long') : b.payout === 'expected' ? '; payout expected' : '');
     if (b.state === 'cancelled') return 'Not applicable';
-    return b.paid ? (b.state === 'pending' ? 'Receipt uploaded, waiting for review' : 'Reservation fee received') : 'Reservation fee not recorded yet';
+    return b.paid ? (b.state === 'pending' ? 'Receipt uploaded, waiting for review' : 'Payment received') : 'Payment not recorded yet';
   }
   function companions(b) { return b.pax == null ? null : Math.max(0, b.pax - 1); }
   // [label, value] pairs for the detail sheet; money rows only when allowed
@@ -116,7 +116,7 @@
     if (money) {
       rows.push(['Payment', paymentText(b)]);
       if (b.amount != null) rows.push([b.kind === 'airbnb' ? 'Guest paid' : 'Total', formatPHP(b.amount)]);
-      if (b.due != null) rows.push(['Reservation fee due', formatPHP(b.due)]);
+      if (b.due != null) rows.push(['Due to confirm', formatPHP(b.due)]);
       if (b.code) rows.push(['Code', b.code]);
       if (b.notes) rows.push(['Notes', b.notes]);
     }

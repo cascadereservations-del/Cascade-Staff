@@ -107,8 +107,8 @@ test('L5 payment status words', () => {
   const list = lib.buildBookings({ res: RES, inq: INQ, cal: [] }, true), by = (id) => list.find((b) => b.id === id);
   assert.match(lib.paymentText(by('r1')), /Paid through Airbnb; payout expected/);
   assert.match(lib.paymentText(by('r2')), /payout received 6 Sep 2026/);
-  assert.equal(lib.paymentText(by(INQ[0].id)), 'Reservation fee not recorded yet');
-  assert.equal(lib.paymentText(by(INQ[1].id)), 'Reservation fee received');
+  assert.equal(lib.paymentText(by(INQ[0].id)), 'Payment not recorded yet');
+  assert.equal(lib.paymentText(by(INQ[1].id)), 'Payment received');
 });
 
 test('L5 money gating: owner/admin/finance see amounts; cleaner never sees money, notes or guests, and reads only calendar_events', async () => {
@@ -147,7 +147,7 @@ test('L5 detail sheet: opens on tap, escapes text, shows companions, notes and r
   const x = t.text();
   assert.match(x, /Guests 2 guests · 1 companion/);
   assert.match(x, /Notes late arrival/);
-  assert.match(x, /Reservation fee due ₱2,500\.00/);
+  assert.match(x, /Due to confirm ₱2,500\.00/);
   assert.match(x, /Waiting for decision/);
   await t.click('inq');
   assert.deepEqual(JSON.parse(JSON.stringify(t.nav)), ['#manage/inquiries']);

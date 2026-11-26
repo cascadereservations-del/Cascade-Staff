@@ -197,7 +197,7 @@ test('N confirm (receipt on file): form, then review restating guest, dates and 
   await t.click('cf-send'); // forged tap on the form step: nothing may be sent
   assert.equal(t.sent('staff_confirm_direct_booking_v1').length, 0, 'a write never skips the review step');
   await t.click('cf-review');
-  assert.match(t.text(), /Ella Tan/); assert.match(t.text(), /20 October to 22 October/); assert.match(t.text(), /The guest will be told by e-mail: the address, parking, the ID request and how to pay the balance/); assert.match(t.text(), /2,500\.00/); assert.match(t.text(), /This cannot be undone here/);
+  assert.match(t.text(), /Ella Tan/); assert.match(t.text(), /20 October to 22 October/); assert.match(t.text(), /The guest will be told by e-mail: the address, parking, the ID request and how to send the security deposit/); assert.match(t.text(), /2,500\.00/); assert.match(t.text(), /This cannot be undone here/);
   assert.equal(t.sent('staff_confirm_direct_booking_v1').length, 0, 'review alone sends nothing');
   await t.click('cf-send');
   const s = t.sent('staff_confirm_direct_booking_v1'); assert.equal(s.length, 1);
@@ -504,7 +504,7 @@ test('N no client, not demo: every tab shows the calm error with Try again, neve
   }
 });
 test('N review wording: each review step says what happens next, as the SQL does', async () => {
-  const t = await boot({}); await reviewed(t); assert.match(t.text(), /The guest will be told by e-mail: the address, parking, the ID request and how to pay the balance\./);
+  const t = await boot({}); await reviewed(t); assert.match(t.text(), /The guest will be told by e-mail: the address, parking, the ID request and how to send the security deposit\./);
   const d = await boot({}); await declineReviewed(d);
   assert.match(d.text(), /The dates are released and the income row is voided\. This cannot be undone here\./); assert.match(d.text(), /No message is sent for a duplicate request\./);
 });
@@ -817,7 +817,7 @@ test('N mismatch: warn line on the form, Difference row on the review step, pill
 });
 
 test('N confirm review: who is told, by contact_channel; an old server keeps today\'s words; the success sentence follows the channel', async () => {
-  const cases = [['email', /told by e-mail: the address, parking, the ID request and how to pay the balance\./, 'The guest is being told by e-mail.'], ['messenger', /told on Messenger: the address, parking/, 'The guest is being told on Messenger.'],
+  const cases = [['email', /told by e-mail: the address, parking, the ID request and how to send the security deposit\./, 'The guest is being told by e-mail.'], ['messenger', /told on Messenger: the address, parking/, 'The guest is being told on Messenger.'],
     ['none', /No e-mail or Messenger is on file for this guest\. Nothing is sent\. Message them yourself after you confirm\./, 'Message the guest yourself.'], [null, /The guest is messaged when you confirm\./, null]];
   for (const [ch, re, tail] of cases) {
     const t = await boot({ handlers: { staff_inquiry_payments_v1: () => [row({ contact_channel: ch, receipt_sent: ch === null ? null : true })], staff_confirm_direct_booking_v1: () => ({ ok: true, outcome: 'confirmed', guest_name: 'Ella Tan', checkin: '2026-10-20', checkout: '2026-10-22' }) } });
