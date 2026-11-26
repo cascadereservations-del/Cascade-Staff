@@ -27,3 +27,5 @@
 #v-bills .field label { text-wrap: balance; }
 #v-bills .BL_kv .btn { margin-left: auto; }
 #v-bills .help { text-wrap: pretty; }
+
+/* s143: the Inventory Update look and every MN_ piece come from stock/I_stock.css and money/MN_money.css, which the shell loads with this module (ruling R1). Nothing of theirs is defined here. */
