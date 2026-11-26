@@ -26,7 +26,7 @@
         return peso(read) + ' is well ' + (read > est ? 'above' : 'below') + ' the estimate of ' + peso(est) + '. Check the receipt, then tap Mark as paid again to log it.';
       }
       case 'bad_amount': return BAD_AMOUNT;
-      case 'paid_on_invalid': return 'The day you paid cannot be after today or before the reading date on the bill. Check the two dates.'; // s143
+      case 'paid_on_invalid': return 'The day you paid cannot be after today, before the reading date on the bill, or more than a month before the bill month. Check the date.'; // s143
       case 'bad_method': return 'Choose how you paid: GCash, Bank or Cash.'; // s143
       case 'reading_date_required': return 'Enter the meter reading date shown on the bill.'; // s131
       case 'reading_date_invalid': if (/^\d{4}-\d{2}-\d{2}$/.test(String(res.before || ''))) return 'The reading date must be before ' + shortDay(res.before) + ', the reading date of a later bill that is already paid. Check the date on the bill.'; // s131b
@@ -140,7 +140,7 @@
     draw('<div class="skel" style="height:320px;margin-top:16px"></div>');
     call('bill_pay_open_v1', { p_bill_id: S.id }).then(live(function (d) {
       if (!d.ok || !d.bill || !d.pay) { if (d.reason === 'already_paid' && S.o.onChange) S.o.onChange(); return stop(say(d, { act: 'open' })); }
-      S.d = d; S.amountText = d.pay.amount_editable ? two(Number(d.pay.amount_php) || 0) : String(Number(d.pay.amount_php) || 0);
+      S.d = d; S.amountText = d.pay.amount_php == null && d.pay.amount_editable ? '' : d.pay.amount_editable ? two(Number(d.pay.amount_php) || 0) : String(Number(d.pay.amount_php) || 0);
       S.meter = d.bill.kind === 'electric' || d.bill.kind === 'water'; S.today = CS.manilaToday(); S.readDate = S.meter ? defaultReadDate(d.bill.period, S.today) : ''; S.readVal = ''; // s131: a meter bill carries its reading date
       S.newSrv = srvNew(d); S.readAssumed = false; // s143: the new server also sends the bill's period, reading date (maybe assumed), the day paid and the way paid; the old one draws the old sheet
       if (S.newSrv) { var pre = S.meter ? readPrefill(d.bill, S.today) : { date: '', assumed: false }; S.readDate = pre.date; S.readDate0 = pre.date; S.readAssumed = pre.assumed; S.paidOn = S.today; S.needMethod = true; S.method = methodOk(d.pay.method_default) ? d.pay.method_default : ''; }
@@ -153,8 +153,8 @@
   function estOf(d) { return Number(d.bill.estimate_php) > 0 ? Number(d.bill.estimate_php) : Number(d.pay.amount_php) || 0; }
   function amountNow() { return sheetParts(S.d).editable ? amountOf(S.amountText) : Number(S.d.pay.amount_php); }
   function coversText() { var b = S.d.bill; if (!S.meter || !b.from) return ''; var ok = dateOk(S.readDate); return rangeLabel(b.from, ok ? S.readDate : b.to, ok ? S.readAssumed && S.readDate === S.readDate0 : b.to_assumed === true); }
-  function amtHelpNew() { var a = amountOf(S.amountText); return a == null ? BAD_AMOUNT : matchesEstimate(a, estOf(S.d)) ? 'Matches the estimate (' + peso(estOf(S.d)) + ').' : ''; }
-  function flowHtml() { var a = amountOf(S.amountText); if (!sheetParts(S.d).editable || a == null || matchesEstimate(a, estOf(S.d))) return ''; return '<div class="I_flow"><div class="I_fn"><b>' + esc(peso(estOf(S.d))) + '</b><small>estimate</small></div><span class="I_farr" aria-hidden="true">→</span><div class="I_fn I_fto"><b>' + esc(peso(a)) + '</b><small>you pay</small></div></div>'; }
+  function amtHelpNew() { var a = amountOf(S.amountText); return a == null ? BAD_AMOUNT : estOf(S.d) > 0 && matchesEstimate(a, estOf(S.d)) ? 'Matches the estimate (' + peso(estOf(S.d)) + ').' : ''; }
+  function flowHtml() { var a = amountOf(S.amountText); if (!sheetParts(S.d).editable || a == null || !(estOf(S.d) > 0) || matchesEstimate(a, estOf(S.d))) return ''; return '<div class="I_flow"><div class="I_fn"><b>' + esc(peso(estOf(S.d))) + '</b><small>estimate</small></div><span class="I_farr" aria-hidden="true">→</span><div class="I_fn I_fto"><b>' + esc(peso(a)) + '</b><small>you pay</small></div></div>'; }
   function confirmHtml() { var a = amountNow(); return S.confirmedFor != null && S.confirmedFor === a ? '<div class="MN_row" role="status"><span>ℹ️ ' + esc(overBandCopy(a, S.confirmEst)) + '</span></div>' : ''; }
   function coversHtml() { var c = coversText(); return c ? '<div class="MN_covers">📆 <span>This payment covers <b>' + esc(c) + '</b></span></div>' : ''; }
   function saveLabel() { if (S.busy) return 'Saving…'; var a = amountNow(), w = kindWord(S.d.bill); return (S.confirmedFor != null && S.confirmedFor === a ? 'Yes, mark ' + w + ' paid' : 'Mark ' + w + ' paid') + (a == null ? '' : ' · ' + peso(a)); }

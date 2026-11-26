@@ -59,7 +59,7 @@ test('BL lib: payReady needs a way paid, a paid-on day that is not after today a
   assert.equal(L.payReady(old), true);
 });
 test('BL lib: the two new refusals and the reading date refusal with a day are plain sentences', () => {
-  assert.equal(L.refusal(FX.settle_refusals.paid_on_invalid), 'The day you paid cannot be after today or before the reading date on the bill. Check the two dates.');
+  assert.equal(L.refusal(FX.settle_refusals.paid_on_invalid), 'The day you paid cannot be after today, before the reading date on the bill, or more than a month before the bill month. Check the date.');
   assert.equal(L.refusal(FX.settle_refusals.bad_method), 'Choose how you paid: GCash, Bank or Cash.');
   assert.equal(L.refusal({ reason: 'reading_date_invalid', after: '2026-11-21' }), 'The reading date must be after 21 Nov, the reading date of the last bill, and not in the future. Check the date on the bill.');
   assert.equal(L.refusal({ reason: 'reading_date_invalid', before: '2026-12-23' }), 'The reading date must be before 23 Dec, the reading date of a later bill that is already paid. Check the date on the bill.');
@@ -117,7 +117,7 @@ test('frame 7: over the band is an info row from the estimate (not an errbox); t
   BL.unmount();
 });
 test('frame 7: every refusal is one plain sentence and the typed amount stays', async () => {
-  for (const [key, sentence] of [['paid_on_invalid', /cannot be after today or before the reading date/], ['bad_method', /Choose how you paid/], ['already_paid', /already logged as paid/], ['not_payer', /Ben is paying this now/]]) {
+  for (const [key, sentence] of [['paid_on_invalid', /cannot be after today, before the reading date on the bill, or more than a month before the bill month/], ['bad_method', /Choose how you paid/], ['already_paid', /already logged as paid/], ['not_payer', /Ben is paying this now/]]) {
     const s = await sheet(serve(FX.open.water, FX.settle_refusals[key])); await s.file('shot.jpg'); await s.type('BL_amt', '210'); await s.click('settle');
     assert.match(s.box.innerHTML, sentence, key); if (/^(paid_on_invalid|bad_method)$/.test(key)) assert.match(s.box.innerHTML, /id="BL_amt"[^>]*value="210"/, key + ' keeps the amount (the form stays open)'); BL.unmount();
   }

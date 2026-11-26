@@ -59,11 +59,13 @@
       case 'bad_kind': return 'Choose Electricity or Water.';
       case 'reading_date_invalid':
         if (/^\d{4}-\d{2}-\d{2}$/.test(String(res.after || ''))) return 'The reading date must be after ' + shortDay(res.after) + ', the day of the last reading, and not in the future. Check the date on the bill.';
+        if (/^\d{4}-\d{2}-\d{2}$/.test(String(res.before || '')) && CS.manilaToday && res.before > CS.manilaToday()) return 'The reading date cannot be in the future. Check the date on the bill.'; // s143: a date at or past "before" is in the future
         if (/^\d{4}-\d{2}-\d{2}$/.test(String(res.before || ''))) return 'The reading date must be before ' + shortDay(res.before) + ', the day of the next reading. Check the date on the bill.';
         return 'That reading date does not fit. Check the date on the bill.';
       case 'reading_value_invalid': return 'The reading looks wrong. Enter the number on the meter, or leave it empty.';
       case 'already_paid': return 'This bill is already paid, so its reading date is locked. A correction needs the admin.';
       case 'older_bill_open': return 'An older bill is still open. Pay or skip it first, then set this reading date.';
+      case 'not_ready': return 'Setting reading dates is not available yet. Try again after the next update.';
       case 'paying_by_other': return 'Someone else is paying this bill now. Set the reading date once they finish.';
       default: return res && res.sentence ? String(res.sentence) : NET;
     }
@@ -82,6 +84,7 @@
   function later(fn, ms) { if (typeof setTimeout === 'function') return setTimeout(fn, ms); fn(); return 0; }
   function call(name, args) {
     return Promise.resolve().then(function () { return S.o.client.rpc(name, args); }).then(function (r) {
+      if (r && r.error && CS.rpcMissing && CS.rpcMissing(r.error)) return { ok: false, reason: 'not_ready' }; // s143: server not updated yet
       if (r && r.error) return r.error.code === '55000' && r.error.message ? { ok: false, sentence: String(r.error.message) } : { ok: false, reason: 'unknown' };
       return (r && r.data) || { ok: false, reason: 'unknown' };
     }, function () { return { ok: false, reason: 'unknown' }; });
@@ -112,7 +115,7 @@
     var list = S.bills, body;
     if (list == null) body = S.billsErr ? box('info', S.billsErr) : '<p class="help" role="status">Loading the bills…</p>';
     else if (!list.length) body = box('info', S.billsErr || 'No bills are waiting to be paid right now.');
-    else body = '<div class="I_uopts">' + list.map(function (b) { return opt('I_hue_cnt', billEm(b.kind), b.label, (b.estimate_php ? peso(b.estimate_php) + ' · ' : '') + (b.due_day ? 'due the ' + b.due_day + 'th' : 'open') + (b.paying_by_name ? ' · ' + b.paying_by_name + ' is paying' : ''), 'bill', ' data-id="' + esc(b.id) + '"'); }).join('') + '</div>';
+    else body = '<div class="I_uopts">' + list.map(function (b) { return opt('I_hue_cnt', billEm(b.kind), b.label, (b.estimate_php ? peso(b.estimate_php) + ' · ' : '') + (b.due_day ? 'due the ' + ordinal(b.due_day) : 'open') + (b.paying_by_name ? ' · ' + b.paying_by_name + ' is paying' : ''), 'bill', ' data-id="' + esc(b.id) + '"'); }).join('') + '</div>';
     draw(band('I_hue_cnt', '🧾 Pay a bill', 'Pick the bill', '🧾', 'options') + body);
   }
   // Frame 9: Reading date
