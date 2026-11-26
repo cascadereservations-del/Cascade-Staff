@@ -166,7 +166,8 @@
     // newest first by (created_at, id), the cursor the server pages on (p_before + p_before_id)
     rows.sort(function (a, b) { return a.created_at === b.created_at ? (a.id < b.id ? 1 : -1) : (a.created_at < b.created_at ? 1 : -1); });
     var paged = args && args.p_before ? rows.filter(function (r) { return r.created_at < args.p_before || (r.created_at === args.p_before && (!args.p_before_id || r.id < args.p_before_id)); }) : rows, lim = args && args.p_limit > 0 ? args.p_limit : 100, more = paged.length > lim;
-    rows = paged.slice(0, lim);
+    rows = paged.slice(0, lim).map(function (r) { var bill = r.chip === 'bill'; // s143: who paid, how, the period a bill covers and a plain title
+      return Object.assign({}, r, { title: bill ? 'Electricity bill' : r.notes, by: bill ? 'Zz Finance' : 'Zz Ana', method: bill ? 'gcash' : null, covers: bill ? { from: CS.addDays(r.date, -35), to: CS.addDays(r.date, -4) } : null }); });
     var cats = [{ slug: 'supplies', label: 'Supplies' }, { slug: 'cleaning', label: 'Cleaning' }, { slug: 'utilities', label: 'Utilities' }, { slug: 'maintenance', label: 'Maintenance' }, { slug: 'other', label: 'Other' }];
     return { ok: true, month: month, total: 7010, count: 4, prev_total: 41200, basis: 47413, basis_months: [d(-90).slice(0, 7), d(-30).slice(0, 7)], pending: { count: 2, total: 1340 }, pending_all: { count: 2, total: 1340 },
       by_category: [{ category: 'supplies', label: 'Supplies', txn_type: 'expense', total: 3960, count: 2 }, { category: 'utilities', label: 'Utilities', txn_type: 'expense', total: 1850, count: 1 }, { category: 'cleaning', label: 'Cleaning', txn_type: 'expense', total: 1200, count: 1 }],
@@ -246,7 +247,12 @@
     var done = function (data) { return Promise.resolve({ data: clone(data), error: null }); };
     // s127: the bills of the demo. Invented names and numbers, kept in memory for this page load. Refusals can be seen: a second payment with the same demo screenshot is a duplicate,
     // and an amount more than a quarter away from the estimate asks once. Owner, admin and finance may pay; only owner and admin may edit.
-    var bills = null, usedShot = {}, mayPay = view === 'owner' || view === 'admin' || view === 'finance', mayEdit = view === 'owner' || view === 'admin';
+    var BS = (/[?&]bills=([ABC])(?:&|$)/.exec(String(root.location && root.location.search || '')) || [0, ''])[1], assumed = { electric: BS !== 'B', water: BS === 'C' }, rdate = {}, usedShot = {};
+    // s143: a reading date is the day on the paper bill. addMonths keeps the anchor day and clamps at month end (31 Jan -> 28 Feb).
+    var addMonths = function (iso, n) { var y = +iso.slice(0, 4), m = +iso.slice(5, 7) - 1, d = +iso.slice(8, 10), last = new Date(Date.UTC(y, m + n + 1, 0)).getUTCDate(); return new Date(Date.UTC(y, m + n, Math.min(d, last))).toISOString().slice(0, 10); };
+    var mSince = function (today) { var c = cycleOf(today); return new Date(Date.UTC(+c.from.slice(0, 4), +c.from.slice(5, 7) - 2, 21)).toISOString().slice(0, 10); }; // the day the open cycle began (the older demo's "since")
+    var mTo = function (kind, today) { return rdate[kind] || mSince(today); };
+    var bills = null, mayPay = view === 'owner' || view === 'admin' || view === 'finance', mayEdit = view === 'owner' || view === 'admin';
     var SCHED = { electric: { label: 'Electricity', payee_name: 'Zz Power Co', number_label: 'Account number', number: 'Account ••••••', note: 'Electricity', amount_php: null, remind_day: 27, amount_fixed: false },
       water: { label: 'Water', payee_name: 'Zz Water Co', number_label: 'Account number', number: 'Account ••••••', note: 'Water', amount_php: null, remind_day: 28, amount_fixed: false },
       internet: { label: 'Internet', payee_name: 'Zz Internet Co', number_label: 'GCash number', number: '09•• ••• ••••', note: 'Internet', amount_php: 1500, remind_day: 27, amount_fixed: true },
@@ -255,7 +261,12 @@
     function seedBills(today) {
       if (bills) return bills; var ago = new Date(Date.parse(today + 'T04:00:00Z') - 10 * 86400000).toISOString();
       var mk = function (id, kind, est, due, isEst, o) { return Object.assign({ id: 'demo-bill-' + id, kind: kind, label: SCHED[kind].label, period: (kind === 'electric' || kind === 'water' ? cycleOf(today).from : today).slice(0, 7), status: 'due', estimate_php: est, paid_php: null, is_estimate: isEst, due_day: due, paying_by_name: null, paid_by_name: null, paid_at: null }, o || {}); };
-      return (bills = [mk('e', 'electric', 2140, 27, true), mk('w', 'water', 430, 30, true, { status: 'paying', paying_by_name: 'Zz Payer' }), mk('i', 'internet', 1500, 28, false), mk('n', 'netflix', 449, 10, false, { status: 'paid', paid_php: 449, paid_by_name: 'Zz Finance', paid_at: ago })]);
+      var list = [mk('e', 'electric', 2140, 27, true), mk('w', 'water', 430, 30, true, { status: 'paying', paying_by_name: 'Zz Payer' }), mk('i', 'internet', 1500, 28, false), mk('n', 'netflix', 449, 10, false, { status: 'paid', paid_php: 449, paid_by_name: 'Zz Finance', paid_at: ago })];
+      var pay = function (b) { b.status = 'paid'; b.paying_by_name = null; b.paid_php = b.estimate_php; b.paid_by_name = 'Zz Finance'; b.paid_at = ago; };
+      if (BS === 'A') pay(list[1]); if (BS === 'B') list.forEach(pay);
+      if (BS === 'C') list.forEach(function (b) { b.status = 'due'; b.paying_by_name = null; b.paid_php = null; b.paid_by_name = null; b.paid_at = null; });
+      list.forEach(function (b) { b.paid_on = b.paid_at ? b.paid_at.slice(0, 10) : null; if (b.kind === 'electric' || b.kind === 'water') { b.to = mTo(b.kind, today); b.from = addMonths(b.to, -1); b.to_assumed = assumed[b.kind]; } else { b.from = null; b.to = null; b.to_assumed = false; } });
+      return (bills = list);
     }
     function ent(b) { return Object.assign({}, b, { can_pay: mayPay && (b.status === 'due' || (b.status === 'paying' && b.paying_by_name === me)) }); }
     function billList(today) { return seedBills(today).map(ent); }
@@ -266,7 +277,8 @@
       if (name === 'bill_pay_open_v1') {
         if (b.status === 'paid') return { ok: false, reason: 'already_paid', bill: ent(b) }; if (b.status === 'paying' && b.paying_by_name !== me) return { ok: false, reason: 'paying_by_other', name: b.paying_by_name };
         b.status = 'paying'; b.paying_by_name = me; var sc = SCHED[b.kind], month = new Date(b.period + '-01T00:00:00Z').toLocaleString('en-US', { month: 'long', timeZone: 'UTC' });
-        return { ok: true, bill: ent(b), pay: { payee_name: sc.payee_name, number_label: sc.number_label, number: sc.number, note: sc.note + ', ' + month, amount_php: b.estimate_php, amount_editable: b.is_estimate }, can_edit: mayEdit };
+        var meterB = b.kind === 'electric' || b.kind === 'water';
+        return { ok: true, bill: Object.assign(ent(b), { reading_date: meterB ? b.to : null, reading_date_assumed: meterB ? b.to_assumed : false }), pay: { payee_name: sc.payee_name, number_label: sc.number_label, number: sc.number, note: sc.note + ', ' + month, amount_php: b.estimate_php, amount_editable: b.is_estimate, method_default: 'gcash' }, can_edit: mayEdit };
       }
       if (name === 'bill_pay_cancel_v1' || name === 'bill_pay_skip_v1') {
         if (b.status === 'paid') return { ok: false, reason: 'already_paid' }; if (b.status === 'paying' && b.paying_by_name !== me) return { ok: false, reason: 'not_payer', name: b.paying_by_name }; toast(NOTE);
@@ -275,16 +287,30 @@
       if (name === 'bill_pay_settle_v1') {
         var p = a.p_proof || {}; if (b.status === 'paid') return { ok: false, reason: 'already_paid', bill: ent(b) }; if (b.paying_by_name !== me) return { ok: false, reason: 'not_payer', name: b.paying_by_name };
         var meter = b.kind === 'electric' || b.kind === 'water', today1 = CS.manilaToday(), prev = CS.addDays(today1, -40);
-        if (meter && !p.reading_date) return { ok: false, reason: 'reading_date_required' }; if (meter && (!/^\d{4}-\d{2}-\d{2}$/.test(p.reading_date) || p.reading_date > today1 || p.reading_date <= prev)) return { ok: false, reason: 'reading_date_invalid' };
+        if (p.paid_on != null && (!/^\d{4}-\d{2}-\d{2}$/.test(p.paid_on) || p.paid_on > today1 || (meter && p.paid_on < (p.reading_date || b.to || '')))) return { ok: false, reason: 'paid_on_invalid' };
+        if (p.method != null && ['gcash', 'bank', 'cash', 'card', 'other'].indexOf(p.method) < 0) return { ok: false, reason: 'bad_method' };
+        if (meter && !p.reading_date && b.to_assumed) return { ok: false, reason: 'reading_date_required' }; if (meter && p.reading_date && (!/^\d{4}-\d{2}-\d{2}$/.test(p.reading_date) || p.reading_date > today1 || p.reading_date <= prev)) return { ok: false, reason: 'reading_date_invalid' };
         if (!(p.amount > 0)) return { ok: false, reason: 'bad_amount' }; if (usedShot[p.sha256]) return { ok: false, reason: 'duplicate_proof' };
-        if (Math.abs(p.amount - b.estimate_php) / b.estimate_php > 0.25 && p.confirmed !== true) return { ok: false, reason: 'confirm_amount', read: p.amount, estimate_php: b.estimate_php };
-        usedShot[p.sha256] = 1; b.status = 'paid'; b.paid_php = p.amount; b.paid_by_name = me; b.paid_at = new Date().toISOString(); toast(NOTE); return Object.assign({ ok: true, bill: ent(b), paid_php: p.amount }, meter && p.reading_value != null && Math.abs(p.reading_value - (b.kind === 'electric' ? 4655 : 48)) > (b.kind === 'electric' ? 30 : 3) ? { reading_warn: true } : {});
+        if ((p.amount < b.estimate_php * 0.5 || p.amount > b.estimate_php * 2) && p.confirmed !== true) return { ok: false, reason: 'confirm_amount', read: p.amount, estimate_php: b.estimate_php };
+        usedShot[p.sha256] = 1; b.status = 'paid'; b.paid_php = p.amount; b.paid_by_name = me; b.paid_at = new Date().toISOString(); b.paid_on = p.paid_on || today1; b.method = p.method || null; if (meter && p.reading_date) { b.to = p.reading_date; b.to_assumed = false; assumed[b.kind] = false; rdate[b.kind] = p.reading_date; } toast(NOTE); return Object.assign({ ok: true, bill: ent(b), paid_php: p.amount }, meter && p.reading_value != null && Math.abs(p.reading_value - (b.kind === 'electric' ? 4655 : 48)) > (b.kind === 'electric' ? 30 : 3) ? { reading_warn: true } : {});
       }
       if (!mayEdit) return { ok: false, reason: 'not_authorized' }; var c = SCHED[a.p_kind]; if (!c) return { ok: false, reason: 'bad_kind' };
       if (name === 'bill_schedule_get_v1') return Object.assign({ ok: true, kind: a.p_kind }, c);
       var keys = Object.keys(a.p_patch || {}), bad = keys.filter(function (k) { return ['payee_name', 'number', 'note', 'amount_php', 'remind_day'].indexOf(k) < 0; })[0]; if (bad) return { ok: false, reason: 'bad_key', key: bad };
       var rd = a.p_patch.remind_day; if (rd != null && !(rd >= 1 && rd <= 28)) return { ok: false, reason: 'bad_value', key: 'remind_day' };
       keys.forEach(function (k) { c[k] = a.p_patch[k]; }); toast(NOTE); return { ok: true, kind: a.p_kind, changed: keys };
+    }
+    // s143: bill_reading_set_v1, the contract's refusals and shapes (tests/fixtures/s143_pay_open.json reading_set). The target is the oldest bill of the kind that is not paid; none open = a new cycle row.
+    function readingSet(a, today) {
+      if (!mayPay) return { ok: false, reason: 'not_authorized' }; if (a.p_kind !== 'electric' && a.p_kind !== 'water') return { ok: false, reason: 'bad_kind' };
+      var list = seedBills(today), open = list.filter(function (x) { return x.kind === a.p_kind && x.status !== 'paid'; })[0], d = a.p_reading_date, from = open ? open.from : mTo(a.p_kind, today);
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(String(d || ''))) return { ok: false, reason: 'reading_date_invalid', before: today };
+      if (d > today) return { ok: false, reason: 'reading_date_invalid', before: today }; if (d <= from) return { ok: false, reason: 'reading_date_invalid', after: from };
+      if (a.p_reading_value != null && !(Number(a.p_reading_value) >= 0)) return { ok: false, reason: 'reading_value_invalid' };
+      var est = Math.round((a.p_kind === 'electric' ? 4270 : 212) * Math.max(1, CS.daysBetween(from, d)) / 30), out = { ok: true, bill_id: open ? open.id : 'demo-bill-new-' + a.p_kind, period: d.slice(0, 7), from: from, to: d, estimate_php: est, next_reading: addMonths(d, 1), reading_warn: null, preview: a.p_preview === true };
+      if (a.p_preview === true) return out;
+      if (!open) { open = { id: out.bill_id, kind: a.p_kind, label: SCHED[a.p_kind].label, period: out.period, status: 'due', estimate_php: est, paid_php: null, is_estimate: true, due_day: 27, paying_by_name: null, paid_by_name: null, paid_at: null, paid_on: null, from: from }; list.push(open); }
+      open.to = d; open.to_assumed = false; open.estimate_php = est; open.period = out.period; assumed[a.p_kind] = false; rdate[a.p_kind] = d; toast(NOTE); return out;
     }
     function rpc(name, args) {
       var X = D();
@@ -308,7 +334,15 @@
         case 'expenses_screen_v1': return done(admin_(view) || view === 'finance' ? expensesFixture(X.home.today, args) : { ok: false, error: 'forbidden' });
         case 'today_bills_v1': { // s131: the cycle stays open from the last bill's reading date (the 21st a month back) until the next bill is entered; staff who may not pay get one check row instead of the list
           var cb = cycleOf(X.home.today), sy = +cb.from.slice(0, 4), sm = +cb.from.slice(5, 7), since = new Date(Date.UTC(sy, sm - 2, 21)).toISOString().slice(0, 10), mon = new Date(Date.UTC(sy, sm - 1, 1)).toLocaleString('en-US', { month: 'long', timeZone: 'UTC' });
-          return done({ since: since, water_since: since, waiting_for: mon, water_waiting_for: mon, can_pay_list: mayPay, check_bills: !mayPay, last_reading_at: cb.last + 'T02:00:00Z', electric: { php: 4621, kwh: 383 }, water: { php: 212, m3: 7.2 }, due: mayPay ? billList(X.home.today) : [] }); }
+          var all = billList(X.home.today), meterOut = function (kind, php, use) { // s143: cycle_from, next_reading and the last bill of the meter (only for those who may pay)
+            var cf = mTo(kind, X.home.today), lb = all.filter(function (x) { return x.kind === kind; })[0], o = Object.assign({ php: php }, use, { cycle_from: cf, cycle_from_assumed: assumed[kind], next_reading: addMonths(cf, 1) });
+            if (mayPay && lb) o.last_bill = { id: lb.id, period: lb.period, from: lb.from, to: lb.to, to_assumed: lb.to_assumed, usage: kind === 'electric' ? 331 : 7.2, estimate_php: lb.estimate_php, paid_php: lb.paid_php, paid_on: lb.paid_on || null, paid_by_name: lb.paid_by_name, status: lb.status, has_proof: lb.status === 'paid' };
+            return o; };
+          var out = { since: since, water_since: since, waiting_for: mon, water_waiting_for: mon, can_pay_list: mayPay, check_bills: !mayPay, last_reading_at: cb.last + 'T02:00:00Z', electric: meterOut('electric', 4621, { kwh: 383 }), water: meterOut('water', 212, { m3: 7.2 }), due: mayPay ? all.filter(function (x) { return x.status !== 'paid'; }) : [] };
+          if (mayPay) out.last_paid = all.filter(function (x) { return x.status === 'paid'; }).map(function (x) { return { kind: x.kind, period: x.period, paid_php: x.paid_php, paid_on: x.paid_on }; });
+          if (BS) { out.waiting_for = null; out.water_waiting_for = null; out.since = mTo('electric', X.home.today); out.water_since = mTo('water', X.home.today); } // a mockup frame: the Money keys carry the cycle, nothing waits
+          return done(out); }
+        case 'bill_reading_set_v1': return done(readingSet(args || {}, X.home.today));
         case 'bill_pay_open_v1': case 'bill_pay_settle_v1': case 'bill_pay_cancel_v1': case 'bill_pay_skip_v1': case 'bill_proof_v1': case 'bill_schedule_get_v1': case 'bill_schedule_set_v1': return done(billCall(name, args || {}, X.home.today));
         case 'get_inventory_catalogue_v1': return done({ ok: true, items: X.items });
         case 'admin_report_blocks_v1': return admin_(view) ? done([{ reading_id: 'demo-reading-1', session_id: 'demo-s1', cleaner_name: 'Demo Cleaner', checkout_date: CS.addDays(X.home.today, -1), recorded_at: X.home.today + 'T02:00:00Z', typed_electric: 4310, typed_water: 812, prev_electric: 4272, prev_water: 805, photo_electric: 4301, photo_water: 812, photo_note_electric: 'Last digit unclear', photo_note_water: null, photo_path_electric: null, photo_path_water: null, resend_requested_at: null }]) : Promise.resolve({ data: null, error: { code: '42501', message: 'not authorized' } });
