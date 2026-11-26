@@ -1,0 +1,384 @@
+{
+  "_note": "Fixture for s143 (docs/s143/CONTRACT.md). Names, ids and account numbers are fictional; amounts follow the live 26 Nov 2026 payload. Lanes read, never edit. Shape per CONTRACT today_bills_v1 (additive). States: A = frame 1 (26 Nov, water paid), B = frame 2 (1 Dec, all paid), C = frame 3 (23 Dec, dates assumed), staff = frame 11 (cleaner: can_pay_list false, so no last_bill / last_paid). due[] holds status due/paying only.",
+  "today": {
+    "A": "2026-11-26",
+    "B": "2026-12-01",
+    "C": "2026-12-23",
+    "staff": "2026-12-01"
+  },
+  "A": {
+    "due": [
+      {
+        "can_pay": true,
+        "paid_at": null,
+        "paid_php": null,
+        "paid_by_name": null,
+        "paying_by_name": null,
+        "from": "2026-10-21",
+        "to": "2026-11-21",
+        "to_assumed": true,
+        "paid_on": null,
+        "id": "00000000-0000-4000-8000-000000000001",
+        "kind": "electric",
+        "label": "Electricity (SOCOTECO II)",
+        "period": "2026-11",
+        "status": "due",
+        "due_day": 27,
+        "is_estimate": true,
+        "estimate_php": 4269.51
+      },
+      {
+        "can_pay": true,
+        "paid_at": null,
+        "paid_php": null,
+        "paid_by_name": null,
+        "paying_by_name": null,
+        "from": null,
+        "to": null,
+        "to_assumed": false,
+        "paid_on": null,
+        "id": "00000000-0000-4000-8000-000000000002",
+        "kind": "internet",
+        "label": "Internet",
+        "period": "2026-11",
+        "status": "due",
+        "due_day": 28,
+        "is_estimate": false,
+        "estimate_php": 1500
+      },
+      {
+        "can_pay": true,
+        "paid_at": null,
+        "paid_php": null,
+        "paid_by_name": null,
+        "paying_by_name": null,
+        "from": null,
+        "to": null,
+        "to_assumed": false,
+        "paid_on": null,
+        "id": "00000000-0000-4000-8000-000000000003",
+        "kind": "netflix",
+        "label": "Netflix",
+        "period": "2026-11",
+        "status": "due",
+        "due_day": 25,
+        "is_estimate": false,
+        "estimate_php": 449
+      }
+    ],
+    "since": "2026-11-21",
+    "water": {
+      "m3": 0,
+      "php": 212,
+      "cycle_from": "2026-11-21",
+      "cycle_from_assumed": false,
+      "next_reading": "2026-12-21",
+      "last_bill": {
+        "paid_php": 212,
+        "paid_on": "2026-11-25",
+        "paid_by_name": "Ana",
+        "status": "paid",
+        "has_proof": true,
+        "id": "00000000-0000-4000-8000-000000000004",
+        "period": "2026-11",
+        "from": "2026-10-21",
+        "to": "2026-11-21",
+        "to_assumed": false,
+        "usage": 0,
+        "estimate_php": 212
+      }
+    },
+    "electric": {
+      "kwh": 26,
+      "php": 310,
+      "cycle_from": "2026-11-21",
+      "cycle_from_assumed": true,
+      "next_reading": "2026-12-21",
+      "last_bill": {
+        "paid_php": null,
+        "paid_on": null,
+        "paid_by_name": null,
+        "status": "due",
+        "has_proof": false,
+        "id": "00000000-0000-4000-8000-000000000001",
+        "period": "2026-11",
+        "from": "2026-10-21",
+        "to": "2026-11-21",
+        "to_assumed": true,
+        "usage": 331,
+        "estimate_php": 4269.51
+      }
+    },
+    "check_bills": false,
+    "waiting_for": null,
+    "water_since": "2026-11-21",
+    "can_pay_list": true,
+    "last_reading_at": "2026-11-25T10:00:00+00:00",
+    "water_waiting_for": null,
+    "last_paid": [
+      {
+        "kind": "water",
+        "period": "2026-11",
+        "paid_php": 212,
+        "paid_on": "2026-11-25"
+      }
+    ]
+  },
+  "B": {
+    "due": [],
+    "since": "2026-11-21",
+    "water": {
+      "m3": 4.1,
+      "php": 212,
+      "cycle_from": "2026-11-21",
+      "cycle_from_assumed": false,
+      "next_reading": "2026-12-21",
+      "last_bill": {
+        "paid_php": 212,
+        "paid_on": "2026-11-25",
+        "paid_by_name": "Ana",
+        "status": "paid",
+        "has_proof": true,
+        "id": "00000000-0000-4000-8000-000000000004",
+        "period": "2026-11",
+        "from": "2026-10-21",
+        "to": "2026-11-21",
+        "to_assumed": false,
+        "usage": 0,
+        "estimate_php": 212
+      }
+    },
+    "electric": {
+      "kwh": 126,
+      "php": 1520,
+      "cycle_from": "2026-11-21",
+      "cycle_from_assumed": false,
+      "next_reading": "2026-12-21",
+      "last_bill": {
+        "paid_php": 4270,
+        "paid_on": "2026-11-27",
+        "paid_by_name": "Ana",
+        "status": "paid",
+        "has_proof": true,
+        "id": "00000000-0000-4000-8000-000000000001",
+        "period": "2026-11",
+        "from": "2026-10-21",
+        "to": "2026-11-21",
+        "to_assumed": false,
+        "usage": 331,
+        "estimate_php": 4269.51
+      }
+    },
+    "check_bills": false,
+    "waiting_for": null,
+    "water_since": "2026-11-21",
+    "can_pay_list": true,
+    "last_reading_at": "2026-12-01T09:00:00+00:00",
+    "water_waiting_for": null,
+    "last_paid": [
+      {
+        "kind": "electric",
+        "period": "2026-11",
+        "paid_php": 4270,
+        "paid_on": "2026-11-27"
+      },
+      {
+        "kind": "water",
+        "period": "2026-11",
+        "paid_php": 212,
+        "paid_on": "2026-11-25"
+      },
+      {
+        "kind": "internet",
+        "period": "2026-11",
+        "paid_php": 1500,
+        "paid_on": "2026-11-28"
+      },
+      {
+        "kind": "netflix",
+        "period": "2026-11",
+        "paid_php": 449,
+        "paid_on": "2026-11-25"
+      }
+    ]
+  },
+  "C": {
+    "due": [
+      {
+        "can_pay": true,
+        "paid_at": null,
+        "paid_php": null,
+        "paid_by_name": null,
+        "paying_by_name": null,
+        "from": "2026-11-21",
+        "to": "2026-12-21",
+        "to_assumed": true,
+        "paid_on": null,
+        "id": "00000000-0000-4000-8000-0000000000e2",
+        "kind": "electric",
+        "label": "Electricity (SOCOTECO II)",
+        "period": "2026-12",
+        "status": "due",
+        "due_day": 27,
+        "is_estimate": true,
+        "estimate_php": 3980
+      },
+      {
+        "can_pay": true,
+        "paid_at": null,
+        "paid_php": null,
+        "paid_by_name": null,
+        "paying_by_name": null,
+        "from": "2026-11-21",
+        "to": "2026-12-21",
+        "to_assumed": true,
+        "paid_on": null,
+        "id": "00000000-0000-4000-8000-0000000000a2",
+        "kind": "water",
+        "label": "Water (Gensan Water District)",
+        "period": "2026-12",
+        "status": "due",
+        "due_day": 27,
+        "is_estimate": true,
+        "estimate_php": 212
+      },
+      {
+        "can_pay": true,
+        "paid_at": null,
+        "paid_php": null,
+        "paid_by_name": null,
+        "paying_by_name": null,
+        "from": null,
+        "to": null,
+        "to_assumed": false,
+        "paid_on": null,
+        "id": "00000000-0000-4000-8000-0000000000b2",
+        "kind": "internet",
+        "label": "Internet",
+        "period": "2026-12",
+        "status": "due",
+        "due_day": 28,
+        "is_estimate": false,
+        "estimate_php": 1500
+      },
+      {
+        "can_pay": true,
+        "paid_at": null,
+        "paid_php": null,
+        "paid_by_name": null,
+        "paying_by_name": null,
+        "from": null,
+        "to": null,
+        "to_assumed": false,
+        "paid_on": null,
+        "id": "00000000-0000-4000-8000-0000000000c2",
+        "kind": "netflix",
+        "label": "Netflix",
+        "period": "2026-12",
+        "status": "due",
+        "due_day": 25,
+        "is_estimate": false,
+        "estimate_php": 449
+      }
+    ],
+    "since": "2026-12-21",
+    "water": {
+      "m3": 0.6,
+      "php": 212,
+      "cycle_from": "2026-12-21",
+      "cycle_from_assumed": true,
+      "next_reading": "2027-01-21",
+      "last_bill": {
+        "paid_php": null,
+        "paid_on": null,
+        "paid_by_name": null,
+        "status": "due",
+        "has_proof": false,
+        "id": "00000000-0000-4000-8000-0000000000a2",
+        "period": "2026-12",
+        "from": "2026-11-21",
+        "to": "2026-12-21",
+        "to_assumed": true,
+        "usage": 3.4,
+        "estimate_php": 212
+      }
+    },
+    "electric": {
+      "kwh": 15,
+      "php": 180,
+      "cycle_from": "2026-12-21",
+      "cycle_from_assumed": true,
+      "next_reading": "2027-01-21",
+      "last_bill": {
+        "paid_php": null,
+        "paid_on": null,
+        "paid_by_name": null,
+        "status": "due",
+        "has_proof": false,
+        "id": "00000000-0000-4000-8000-0000000000e2",
+        "period": "2026-12",
+        "from": "2026-11-21",
+        "to": "2026-12-21",
+        "to_assumed": true,
+        "usage": 334,
+        "estimate_php": 3980
+      }
+    },
+    "check_bills": false,
+    "waiting_for": null,
+    "water_since": "2026-12-21",
+    "can_pay_list": true,
+    "last_reading_at": "2026-12-23T09:00:00+00:00",
+    "water_waiting_for": null,
+    "last_paid": [
+      {
+        "kind": "electric",
+        "period": "2026-11",
+        "paid_php": 4270,
+        "paid_on": "2026-11-27"
+      },
+      {
+        "kind": "water",
+        "period": "2026-11",
+        "paid_php": 212,
+        "paid_on": "2026-11-25"
+      },
+      {
+        "kind": "internet",
+        "period": "2026-11",
+        "paid_php": 1500,
+        "paid_on": "2026-11-28"
+      },
+      {
+        "kind": "netflix",
+        "period": "2026-11",
+        "paid_php": 449,
+        "paid_on": "2026-11-25"
+      }
+    ]
+  },
+  "staff": {
+    "due": [],
+    "since": "2026-11-21",
+    "water": {
+      "m3": 4.1,
+      "php": 212,
+      "cycle_from": "2026-11-21",
+      "cycle_from_assumed": false,
+      "next_reading": "2026-12-21"
+    },
+    "electric": {
+      "kwh": 126,
+      "php": 1520,
+      "cycle_from": "2026-11-21",
+      "cycle_from_assumed": false,
+      "next_reading": "2026-12-21"
+    },
+    "check_bills": true,
+    "waiting_for": null,
+    "water_since": "2026-11-21",
+    "can_pay_list": false,
+    "last_reading_at": "2026-12-01T09:00:00+00:00",
+    "water_waiting_for": null
+  }
+}

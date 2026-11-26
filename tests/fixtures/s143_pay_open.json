@@ -1,0 +1,232 @@
+{
+  "_note": "Fixture for s143 (docs/s143/CONTRACT.md). Names, ids and account numbers are fictional; amounts follow the live 26 Nov 2026 payload. Lanes read, never edit. bill_pay_open_v1 (new: bill.from, bill.reading_date, bill.reading_date_assumed, pay.method_default), bill_pay_settle_v1 request + refusals, bill_reading_set_v1 replies, per CONTRACT. old_server_water = the reply shape before s143.",
+  "open": {
+    "water": {
+      "ok": true,
+      "bill": {
+        "can_pay": true,
+        "paid_at": null,
+        "paid_php": null,
+        "paid_by_name": null,
+        "paying_by_name": "Ana",
+        "from": "2026-10-21",
+        "to": "2026-11-21",
+        "to_assumed": false,
+        "paid_on": null,
+        "id": "00000000-0000-4000-8000-000000000004",
+        "kind": "water",
+        "label": "Water (Gensan Water District)",
+        "period": "2026-11",
+        "status": "paying",
+        "due_day": 27,
+        "is_estimate": true,
+        "estimate_php": 212,
+        "reading_date": "2026-11-21",
+        "reading_date_assumed": false
+      },
+      "pay": {
+        "number_label": "Account number",
+        "number": "Account ••••••",
+        "method_default": "gcash",
+        "payee_name": "Gensan Water District",
+        "note": "Water, November",
+        "amount_php": 212,
+        "amount_editable": true
+      },
+      "can_edit": true
+    },
+    "electric": {
+      "ok": true,
+      "bill": {
+        "can_pay": true,
+        "paid_at": null,
+        "paid_php": null,
+        "paid_by_name": null,
+        "paying_by_name": "Ana",
+        "from": "2026-10-21",
+        "to": "2026-11-21",
+        "to_assumed": true,
+        "paid_on": null,
+        "id": "00000000-0000-4000-8000-000000000001",
+        "kind": "electric",
+        "label": "Electricity (SOCOTECO II)",
+        "period": "2026-11",
+        "status": "paying",
+        "due_day": 27,
+        "is_estimate": true,
+        "estimate_php": 4269.51,
+        "reading_date": "2026-11-21",
+        "reading_date_assumed": true
+      },
+      "pay": {
+        "number_label": "Account number",
+        "number": "Account ••••••",
+        "method_default": "gcash",
+        "payee_name": "SOCOTECO II",
+        "note": "Electricity, November",
+        "amount_php": 4269.51,
+        "amount_editable": true
+      },
+      "can_edit": true
+    },
+    "internet": {
+      "ok": true,
+      "bill": {
+        "can_pay": true,
+        "paid_at": null,
+        "paid_php": null,
+        "paid_by_name": null,
+        "paying_by_name": "Ana",
+        "from": null,
+        "to": null,
+        "to_assumed": false,
+        "paid_on": null,
+        "id": "00000000-0000-4000-8000-000000000002",
+        "kind": "internet",
+        "label": "Internet",
+        "period": "2026-11",
+        "status": "paying",
+        "due_day": 28,
+        "is_estimate": false,
+        "estimate_php": 1500,
+        "reading_date": null,
+        "reading_date_assumed": false
+      },
+      "pay": {
+        "number_label": "GCash number",
+        "number": "09•• ••• ••••",
+        "method_default": "gcash",
+        "payee_name": "Internet provider",
+        "note": "Internet, November",
+        "amount_php": 1500,
+        "amount_editable": false
+      },
+      "can_edit": true
+    },
+    "old_server_water": {
+      "ok": true,
+      "bill": {
+        "id": "00000000-0000-4000-8000-000000000004",
+        "kind": "water",
+        "label": "Water (Gensan Water District)",
+        "period": "2026-11",
+        "status": "paying",
+        "can_pay": true,
+        "due_day": 27,
+        "paid_at": null,
+        "paid_php": null,
+        "is_estimate": true,
+        "estimate_php": 212,
+        "paid_by_name": null,
+        "paying_by_name": "Ana"
+      },
+      "pay": {
+        "payee_name": "Gensan Water District",
+        "number_label": "Account number",
+        "number": "Account ••••••",
+        "note": "Water, November",
+        "amount_php": 212,
+        "amount_editable": true
+      },
+      "can_edit": true
+    }
+  },
+  "settle_request": {
+    "p_bill_id": "00000000-0000-4000-8000-000000000004",
+    "p_proof": {
+      "path": "<property>/<user>/bill-proof.jpg",
+      "sha256": "<sha256>",
+      "amount": 212,
+      "confirmed": false,
+      "paid_on": "2026-11-25",
+      "method": "gcash"
+    }
+  },
+  "settle_refusals": {
+    "paid_on_invalid": {
+      "ok": false,
+      "reason": "paid_on_invalid"
+    },
+    "bad_method": {
+      "ok": false,
+      "reason": "bad_method"
+    },
+    "confirm_amount": {
+      "ok": false,
+      "reason": "confirm_amount",
+      "estimate_php": 4269.51
+    },
+    "already_paid": {
+      "ok": false,
+      "reason": "already_paid"
+    },
+    "not_payer": {
+      "ok": false,
+      "reason": "not_payer",
+      "name": "Ben"
+    }
+  },
+  "reading_set": {
+    "request": {
+      "p_property_id": "00000000-0000-4000-8000-0000000000aa",
+      "p_kind": "electric",
+      "p_reading_date": "2026-12-19",
+      "p_reading_value": null,
+      "p_preview": true
+    },
+    "preview": {
+      "ok": true,
+      "bill_id": "00000000-0000-4000-8000-0000000000e2",
+      "period": "2026-12",
+      "from": "2026-11-21",
+      "to": "2026-12-19",
+      "estimate_php": 3980,
+      "next_reading": "2027-01-19",
+      "reading_warn": null,
+      "preview": true
+    },
+    "saved": {
+      "ok": true,
+      "bill_id": "00000000-0000-4000-8000-0000000000e2",
+      "period": "2026-12",
+      "from": "2026-11-21",
+      "to": "2026-12-19",
+      "estimate_php": 3980,
+      "next_reading": "2027-01-19",
+      "reading_warn": null,
+      "preview": false
+    },
+    "refusals": {
+      "not_authorized": {
+        "ok": false,
+        "reason": "not_authorized"
+      },
+      "bad_kind": {
+        "ok": false,
+        "reason": "bad_kind"
+      },
+      "reading_date_invalid_after": {
+        "ok": false,
+        "reason": "reading_date_invalid",
+        "after": "2026-11-21"
+      },
+      "reading_date_invalid_before": {
+        "ok": false,
+        "reason": "reading_date_invalid",
+        "before": "2026-12-23"
+      },
+      "reading_value_invalid": {
+        "ok": false,
+        "reason": "reading_value_invalid"
+      },
+      "already_paid": {
+        "ok": false,
+        "reason": "already_paid"
+      },
+      "older_bill_open": {
+        "ok": false,
+        "reason": "older_bill_open"
+      }
+    }
+  }
+}

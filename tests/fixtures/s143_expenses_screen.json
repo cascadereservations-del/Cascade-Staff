@@ -1,0 +1,596 @@
+{
+  "_note": "Fixture for s143 (docs/s143/CONTRACT.md). Names, ids and account numbers are fictional; amounts follow the live 26 Nov 2026 payload. Lanes read, never edit. expenses_screen_v1 for Nov 2026. old = live capture before s143 (scrubbed); new = rows + by, method, covers {from,to}|null, title.",
+  "old": {
+    "ok": true,
+    "more": true,
+    "rows": [
+      {
+        "id": "00000000-0000-4000-8000-000000000005",
+        "chip": "bill",
+        "date": "2026-11-25",
+        "label": "Utilities",
+        "notes": "Utility bill water 2026-11 (Water (Gensan Water District)). Bill 00000000.",
+        "payee": "Water (Gensan Water District)",
+        "stock": null,
+        "amount": 212,
+        "hidden": false,
+        "locked": true,
+        "source": "bill",
+        "status": "confirmed",
+        "category": "utilities",
+        "lookalike": null,
+        "created_at": "2026-11-25T11:52:36.237405+00:00",
+        "has_receipt": true,
+        "receipt_can": {
+          "add": false,
+          "remove": false,
+          "replace": false
+        },
+        "receipt_ref": {
+          "id": "00000000-0000-4000-8000-000000000004",
+          "kind": "bill",
+          "mime": "image/jpeg"
+        },
+        "lookalike_id": null,
+        "amount_locked": true,
+        "s134_incomplete": false
+      },
+      {
+        "id": "00000000-0000-4000-8000-000000000006",
+        "chip": "stock",
+        "date": "2026-11-24",
+        "label": "Supplies",
+        "notes": "Stock bought: Kitchen cloth (reusable)",
+        "payee": "Shopee",
+        "stock": {
+          "items": 1,
+          "lines": 1
+        },
+        "amount": 433,
+        "hidden": false,
+        "locked": false,
+        "source": "inventory",
+        "status": "confirmed",
+        "category": "supplies",
+        "lookalike": null,
+        "created_at": "2026-11-23T18:16:55.497193+00:00",
+        "has_receipt": true,
+        "receipt_can": {
+          "add": false,
+          "remove": true,
+          "replace": true
+        },
+        "receipt_ref": {
+          "id": "00000000-0000-4000-8000-000000000006",
+          "kind": "txn",
+          "mime": "image/jpeg"
+        },
+        "lookalike_id": null,
+        "amount_locked": true,
+        "s134_incomplete": false
+      },
+      {
+        "id": "00000000-0000-4000-8000-000000000007",
+        "chip": "staff_pay",
+        "date": "2026-11-19",
+        "label": "Cleaning",
+        "notes": "Cleaning fee - Ben, 2026-11-19, Turnover + transport. Pay request 00000000.",
+        "payee": "Ben",
+        "stock": null,
+        "amount": 650,
+        "hidden": false,
+        "locked": true,
+        "source": "cleaner_fee",
+        "status": "confirmed",
+        "category": "cleaning",
+        "lookalike": null,
+        "created_at": "2026-11-21T04:04:05.114411+00:00",
+        "has_receipt": false,
+        "receipt_can": {
+          "add": false,
+          "remove": false,
+          "replace": false
+        },
+        "receipt_ref": null,
+        "lookalike_id": null,
+        "amount_locked": true,
+        "s134_incomplete": false
+      },
+      {
+        "id": "00000000-0000-4000-8000-000000000008",
+        "chip": "staff_pay",
+        "date": "2026-11-18",
+        "label": "Cleaning",
+        "notes": "Cleaning fee - Ben, 2026-11-18, Turnover + transport. Pay request 00000000.",
+        "payee": "Ben",
+        "stock": null,
+        "amount": 650,
+        "hidden": false,
+        "locked": true,
+        "source": "cleaner_fee",
+        "status": "confirmed",
+        "category": "cleaning",
+        "lookalike": null,
+        "created_at": "2026-11-21T04:04:05.114411+00:00",
+        "has_receipt": false,
+        "receipt_can": {
+          "add": false,
+          "remove": false,
+          "replace": false
+        },
+        "receipt_ref": null,
+        "lookalike_id": null,
+        "amount_locked": true,
+        "s134_incomplete": false
+      },
+      {
+        "id": "00000000-0000-4000-8000-000000000009",
+        "chip": "staff_pay",
+        "date": "2026-11-17",
+        "label": "Cleaning",
+        "notes": "Cleaning fee - Ben, 2026-11-17, Turnover + transport. Pay request 00000000.",
+        "payee": "Ben",
+        "stock": null,
+        "amount": 650,
+        "hidden": false,
+        "locked": true,
+        "source": "cleaner_fee",
+        "status": "confirmed",
+        "category": "cleaning",
+        "lookalike": null,
+        "created_at": "2026-11-21T04:04:05.114411+00:00",
+        "has_receipt": false,
+        "receipt_can": {
+          "add": false,
+          "remove": false,
+          "replace": false
+        },
+        "receipt_ref": null,
+        "lookalike_id": null,
+        "amount_locked": true,
+        "s134_incomplete": false
+      },
+      {
+        "id": "00000000-0000-4000-8000-000000000010",
+        "chip": "staff_pay",
+        "date": "2026-11-12",
+        "label": "Cleaning",
+        "notes": "Cleaning fee - Ben, 2026-11-12, Turnover + transport. Pay request 00000000.",
+        "payee": "Ben",
+        "stock": null,
+        "amount": 650,
+        "hidden": false,
+        "locked": true,
+        "source": "cleaner_fee",
+        "status": "confirmed",
+        "category": "cleaning",
+        "lookalike": null,
+        "created_at": "2026-11-14T07:49:45.504281+00:00",
+        "has_receipt": false,
+        "receipt_can": {
+          "add": false,
+          "remove": false,
+          "replace": false
+        },
+        "receipt_ref": null,
+        "lookalike_id": null,
+        "amount_locked": true,
+        "s134_incomplete": false
+      }
+    ],
+    "basis": 47412.88,
+    "count": 14,
+    "month": "2026-11-01",
+    "total": 7835,
+    "pending": {
+      "count": 0,
+      "total": 0
+    },
+    "unlinked": 0,
+    "unpriced": {
+      "count": 2,
+      "items": [
+        {
+          "date": "2026-11-23",
+          "name": "Kitchen towel - Disposable",
+          "item_id": "00000000-0000-4000-8000-000000000011"
+        },
+        {
+          "date": "2026-11-23",
+          "name": "Toiletries (toothbrush, toothpaste, soap)",
+          "item_id": "00000000-0000-4000-8000-000000000012"
+        }
+      ]
+    },
+    "can_write": true,
+    "categories": [
+      {
+        "slug": "supplies",
+        "label": "Supplies"
+      },
+      {
+        "slug": "utilities",
+        "label": "Utilities"
+      },
+      {
+        "slug": "cleaning",
+        "label": "Cleaning"
+      },
+      {
+        "slug": "maintenance",
+        "label": "Maintenance"
+      },
+      {
+        "slug": "repairs",
+        "label": "Repairs"
+      },
+      {
+        "slug": "platform_fees",
+        "label": "Platform Fees"
+      },
+      {
+        "slug": "internet",
+        "label": "Internet"
+      },
+      {
+        "slug": "subscription",
+        "label": "Subscription"
+      },
+      {
+        "slug": "furnishing",
+        "label": "Furnishing"
+      },
+      {
+        "slug": "cohost_fee",
+        "label": "Co-host fee"
+      },
+      {
+        "slug": "loan",
+        "label": "Loan"
+      },
+      {
+        "slug": "other",
+        "label": "Other"
+      }
+    ],
+    "prev_total": 9240,
+    "by_category": [
+      {
+        "count": 11,
+        "label": "Cleaning",
+        "total": 7150,
+        "category": "cleaning",
+        "txn_type": "expense"
+      },
+      {
+        "count": 2,
+        "label": "Supplies",
+        "total": 473,
+        "category": "supplies",
+        "txn_type": "expense"
+      },
+      {
+        "count": 1,
+        "label": "Utilities",
+        "total": 212,
+        "category": "utilities",
+        "txn_type": "expense"
+      }
+    ],
+    "pending_all": {
+      "count": 0,
+      "total": 0
+    },
+    "basis_months": 3
+  },
+  "new": {
+    "ok": true,
+    "more": true,
+    "rows": [
+      {
+        "id": "00000000-0000-4000-8000-000000000005",
+        "chip": "bill",
+        "date": "2026-11-25",
+        "label": "Utilities",
+        "notes": "Utility bill water 2026-11 (Water (Gensan Water District)). Bill 00000000.",
+        "payee": "Water (Gensan Water District)",
+        "stock": null,
+        "amount": 212,
+        "hidden": false,
+        "locked": true,
+        "source": "bill",
+        "status": "confirmed",
+        "category": "utilities",
+        "lookalike": null,
+        "created_at": "2026-11-25T11:52:36.237405+00:00",
+        "has_receipt": true,
+        "receipt_can": {
+          "add": false,
+          "remove": false,
+          "replace": false
+        },
+        "receipt_ref": {
+          "id": "00000000-0000-4000-8000-000000000004",
+          "kind": "bill",
+          "mime": "image/jpeg"
+        },
+        "lookalike_id": null,
+        "amount_locked": true,
+        "s134_incomplete": false,
+        "by": "Ana",
+        "method": "gcash",
+        "covers": {
+          "from": "2026-10-21",
+          "to": "2026-11-21"
+        },
+        "title": "Water bill"
+      },
+      {
+        "id": "00000000-0000-4000-8000-000000000006",
+        "chip": "stock",
+        "date": "2026-11-24",
+        "label": "Supplies",
+        "notes": "Stock bought: Kitchen cloth (reusable)",
+        "payee": "Shopee",
+        "stock": {
+          "items": 1,
+          "lines": 1
+        },
+        "amount": 433,
+        "hidden": false,
+        "locked": false,
+        "source": "inventory",
+        "status": "confirmed",
+        "category": "supplies",
+        "lookalike": null,
+        "created_at": "2026-11-23T18:16:55.497193+00:00",
+        "has_receipt": true,
+        "receipt_can": {
+          "add": false,
+          "remove": true,
+          "replace": true
+        },
+        "receipt_ref": {
+          "id": "00000000-0000-4000-8000-000000000006",
+          "kind": "txn",
+          "mime": "image/jpeg"
+        },
+        "lookalike_id": null,
+        "amount_locked": true,
+        "s134_incomplete": false,
+        "by": "Cara",
+        "method": null,
+        "covers": null,
+        "title": "Kitchen cloth (reusable)"
+      },
+      {
+        "id": "00000000-0000-4000-8000-000000000007",
+        "chip": "staff_pay",
+        "date": "2026-11-19",
+        "label": "Cleaning",
+        "notes": "Cleaning fee - Ben, 2026-11-19, Turnover + transport. Pay request 00000000.",
+        "payee": "Ben",
+        "stock": null,
+        "amount": 650,
+        "hidden": false,
+        "locked": true,
+        "source": "cleaner_fee",
+        "status": "confirmed",
+        "category": "cleaning",
+        "lookalike": null,
+        "created_at": "2026-11-21T04:04:05.114411+00:00",
+        "has_receipt": false,
+        "receipt_can": {
+          "add": false,
+          "remove": false,
+          "replace": false
+        },
+        "receipt_ref": null,
+        "lookalike_id": null,
+        "amount_locked": true,
+        "s134_incomplete": false,
+        "by": "Ana",
+        "method": "cash",
+        "covers": null,
+        "title": "Cleaning fee"
+      },
+      {
+        "id": "00000000-0000-4000-8000-000000000008",
+        "chip": "staff_pay",
+        "date": "2026-11-18",
+        "label": "Cleaning",
+        "notes": "Cleaning fee - Ben, 2026-11-18, Turnover + transport. Pay request 00000000.",
+        "payee": "Ben",
+        "stock": null,
+        "amount": 650,
+        "hidden": false,
+        "locked": true,
+        "source": "cleaner_fee",
+        "status": "confirmed",
+        "category": "cleaning",
+        "lookalike": null,
+        "created_at": "2026-11-21T04:04:05.114411+00:00",
+        "has_receipt": false,
+        "receipt_can": {
+          "add": false,
+          "remove": false,
+          "replace": false
+        },
+        "receipt_ref": null,
+        "lookalike_id": null,
+        "amount_locked": true,
+        "s134_incomplete": false,
+        "by": "Ana",
+        "method": "cash",
+        "covers": null,
+        "title": "Cleaning fee"
+      },
+      {
+        "id": "00000000-0000-4000-8000-000000000009",
+        "chip": "staff_pay",
+        "date": "2026-11-17",
+        "label": "Cleaning",
+        "notes": "Cleaning fee - Ben, 2026-11-17, Turnover + transport. Pay request 00000000.",
+        "payee": "Ben",
+        "stock": null,
+        "amount": 650,
+        "hidden": false,
+        "locked": true,
+        "source": "cleaner_fee",
+        "status": "confirmed",
+        "category": "cleaning",
+        "lookalike": null,
+        "created_at": "2026-11-21T04:04:05.114411+00:00",
+        "has_receipt": false,
+        "receipt_can": {
+          "add": false,
+          "remove": false,
+          "replace": false
+        },
+        "receipt_ref": null,
+        "lookalike_id": null,
+        "amount_locked": true,
+        "s134_incomplete": false,
+        "by": "Ana",
+        "method": "cash",
+        "covers": null,
+        "title": "Cleaning fee"
+      },
+      {
+        "id": "00000000-0000-4000-8000-000000000010",
+        "chip": "staff_pay",
+        "date": "2026-11-12",
+        "label": "Cleaning",
+        "notes": "Cleaning fee - Ben, 2026-11-12, Turnover + transport. Pay request 00000000.",
+        "payee": "Ben",
+        "stock": null,
+        "amount": 650,
+        "hidden": false,
+        "locked": true,
+        "source": "cleaner_fee",
+        "status": "confirmed",
+        "category": "cleaning",
+        "lookalike": null,
+        "created_at": "2026-11-14T07:49:45.504281+00:00",
+        "has_receipt": false,
+        "receipt_can": {
+          "add": false,
+          "remove": false,
+          "replace": false
+        },
+        "receipt_ref": null,
+        "lookalike_id": null,
+        "amount_locked": true,
+        "s134_incomplete": false,
+        "by": "Ana",
+        "method": "cash",
+        "covers": null,
+        "title": "Cleaning fee"
+      }
+    ],
+    "basis": 47412.88,
+    "count": 14,
+    "month": "2026-11-01",
+    "total": 7835,
+    "pending": {
+      "count": 0,
+      "total": 0
+    },
+    "unlinked": 0,
+    "unpriced": {
+      "count": 2,
+      "items": [
+        {
+          "date": "2026-11-23",
+          "name": "Kitchen towel - Disposable",
+          "item_id": "00000000-0000-4000-8000-000000000011"
+        },
+        {
+          "date": "2026-11-23",
+          "name": "Toiletries (toothbrush, toothpaste, soap)",
+          "item_id": "00000000-0000-4000-8000-000000000012"
+        }
+      ]
+    },
+    "can_write": true,
+    "categories": [
+      {
+        "slug": "supplies",
+        "label": "Supplies"
+      },
+      {
+        "slug": "utilities",
+        "label": "Utilities"
+      },
+      {
+        "slug": "cleaning",
+        "label": "Cleaning"
+      },
+      {
+        "slug": "maintenance",
+        "label": "Maintenance"
+      },
+      {
+        "slug": "repairs",
+        "label": "Repairs"
+      },
+      {
+        "slug": "platform_fees",
+        "label": "Platform Fees"
+      },
+      {
+        "slug": "internet",
+        "label": "Internet"
+      },
+      {
+        "slug": "subscription",
+        "label": "Subscription"
+      },
+      {
+        "slug": "furnishing",
+        "label": "Furnishing"
+      },
+      {
+        "slug": "cohost_fee",
+        "label": "Co-host fee"
+      },
+      {
+        "slug": "loan",
+        "label": "Loan"
+      },
+      {
+        "slug": "other",
+        "label": "Other"
+      }
+    ],
+    "prev_total": 9240,
+    "by_category": [
+      {
+        "count": 11,
+        "label": "Cleaning",
+        "total": 7150,
+        "category": "cleaning",
+        "txn_type": "expense"
+      },
+      {
+        "count": 2,
+        "label": "Supplies",
+        "total": 473,
+        "category": "supplies",
+        "txn_type": "expense"
+      },
+      {
+        "count": 1,
+        "label": "Utilities",
+        "total": 212,
+        "category": "utilities",
+        "txn_type": "expense"
+      }
+    ],
+    "pending_all": {
+      "count": 0,
+      "total": 0
+    },
+    "basis_months": 3
+  }
+}

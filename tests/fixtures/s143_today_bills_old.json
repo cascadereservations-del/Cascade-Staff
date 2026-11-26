@@ -1,0 +1,82 @@
+{
+  "_note": "Fixture for s143 (docs/s143/CONTRACT.md). Names, ids and account numbers are fictional; amounts follow the live 26 Nov 2026 payload. Lanes read, never edit. Captured read-only from production today_bills_v1 before s143 (a paid row still sits in due[] on the old server).",
+  "payload": {
+    "due": [
+      {
+        "id": "00000000-0000-4000-8000-000000000001",
+        "kind": "electric",
+        "label": "Electricity (SOCOTECO II)",
+        "period": "2026-11",
+        "status": "due",
+        "can_pay": true,
+        "due_day": 27,
+        "paid_at": null,
+        "paid_php": null,
+        "is_estimate": true,
+        "estimate_php": 4269.51,
+        "paid_by_name": null,
+        "paying_by_name": null
+      },
+      {
+        "id": "00000000-0000-4000-8000-000000000002",
+        "kind": "internet",
+        "label": "Internet",
+        "period": "2026-11",
+        "status": "due",
+        "can_pay": true,
+        "due_day": 27,
+        "paid_at": null,
+        "paid_php": null,
+        "is_estimate": false,
+        "estimate_php": 1500,
+        "paid_by_name": null,
+        "paying_by_name": null
+      },
+      {
+        "id": "00000000-0000-4000-8000-000000000003",
+        "kind": "netflix",
+        "label": "Netflix",
+        "period": "2026-11",
+        "status": "due",
+        "can_pay": true,
+        "due_day": 27,
+        "paid_at": null,
+        "paid_php": null,
+        "is_estimate": false,
+        "estimate_php": 449,
+        "paid_by_name": null,
+        "paying_by_name": null
+      },
+      {
+        "id": "00000000-0000-4000-8000-000000000004",
+        "kind": "water",
+        "label": "Water (Gensan Water District)",
+        "period": "2026-11",
+        "status": "paid",
+        "can_pay": false,
+        "due_day": 27,
+        "paid_at": "2026-11-25T11:52:36.237405+00:00",
+        "paid_php": 212,
+        "is_estimate": true,
+        "estimate_php": 212,
+        "paid_by_name": "Ana",
+        "paying_by_name": null
+      }
+    ],
+    "since": "2026-10-21",
+    "water": {
+      "m3": 0,
+      "php": 212
+    },
+    "electric": {
+      "kwh": 331,
+      "php": 3994.41
+    },
+    "check_bills": false,
+    "waiting_for": "November",
+    "water_since": "2026-11-21",
+    "can_pay_list": true,
+    "last_reading_at": "2026-11-19T10:17:09.248+00:00",
+    "water_waiting_for": null
+  }
+}
