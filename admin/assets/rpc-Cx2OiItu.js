@@ -1,1 +1,0 @@
-import{S as e,_t as t,ut as n}from"./index-hVqTjSsB.js";async function r(r,i){e(r);let{data:a,error:o}=await n.rpc(r,i);if(o)throw t(o);return a}function i(e){if(e.error)throw t(e.error);let n=e.data??[];return{rows:n,total:e.count??n.length}}export{i as n,r as t};

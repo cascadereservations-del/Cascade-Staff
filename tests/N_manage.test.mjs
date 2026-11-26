@@ -950,7 +950,7 @@ test('N live lists: the Today and Inquiries lists are read again after a minute,
 
 test('N version: the confirm flow ships as Staff 3.4.55', () => {
   const app = fs.readFileSync(path.join(root, 'app.js'), 'utf8'), pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8')), sw = fs.readFileSync(path.join(root, 'sw.js'), 'utf8');
-  assert.match(app, /3\.4\.55/); assert.equal(pkg.version, '3.4.55'); assert.match(sw, /cs-shell-v80/);
+  assert.match(app, /3\.4\.55/); assert.equal(pkg.version, '3.4.55'); assert.match(sw, /cs-shell-v81/);
 });
 
 // ------------------------------------------------------------------------------------------------ confirm flow fix round r1

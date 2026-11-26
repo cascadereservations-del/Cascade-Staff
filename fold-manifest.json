@@ -3,10 +3,10 @@
   "surfaces": {
     "admin": {
       "source": "dist",
-      "head": "0047882",
-      "files": 101,
-      "bytes": 2149706,
-      "time": "2026-11-18T13:30:56.919Z"
+      "head": "f931c07",
+      "files": 104,
+      "bytes": 2175177,
+      "time": "2026-11-26T06:28:50.383Z"
     },
     "checklist": {
       "source": "s94-checklist",
@@ -16,18 +16,18 @@
       "time": "2026-10-19T22:44:57.593Z"
     },
     "manual": {
-      "source": "s80-manual",
-      "head": "fc61adb",
+      "source": "s138-l3-manual",
+      "head": "3608bd7",
       "files": 16,
-      "bytes": 1404870,
-      "time": "2026-10-12T16:43:34.625Z"
+      "bytes": 1406773,
+      "time": "2026-11-26T06:28:50.383Z"
     },
     "guide": {
-      "source": "system-guide",
-      "head": "11709aa",
-      "files": 48,
-      "bytes": 3820632,
-      "time": "2026-10-12T16:43:34.625Z",
+      "source": "s138-l3-system-guide",
+      "head": "b66747f",
+      "files": 50,
+      "bytes": 3839351,
+      "time": "2026-11-26T06:28:50.383Z",
       "adminGuide": true
     }
   }

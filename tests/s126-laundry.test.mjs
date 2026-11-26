@@ -58,8 +58,8 @@ test('s126 laundry words: the tour and What\'s new name no tab she lacks; the to
   assert.match(read('app.js'), /function H_tourSteps\(\) \{ return CS\.isLaundry\(role\(\)\) \? \[\['Today'/);
 });
 
-test('s126 release: 3.4.55 with cs-shell-v80', () => {
-  assert.match(read('app.js'), /version: '3.4.55'/); assert.match(read('sw.js'), /CACHE_NAME = 'cs-shell-v80'/); assert.match(read('package.json'), /"version": "3.4.55"/); assert.match(read('README.md'), /cs-shell-v80/);
+test('s126 release: 3.4.55 with cs-shell-v81', () => {
+  assert.match(read('app.js'), /version: '3.4.55'/); assert.match(read('sw.js'), /CACHE_NAME = 'cs-shell-v81'/); assert.match(read('package.json'), /"version": "3.4.55"/); assert.match(read('README.md'), /cs-shell-v81/);
 });
 
 // ---- fix round 1

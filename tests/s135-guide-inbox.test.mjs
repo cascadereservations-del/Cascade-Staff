@@ -279,9 +279,9 @@ test('s135 storage: the Guide adds no storage key, no session storage and no con
   await typeG(el, 'Draft only'); await el.click('gsend'); await settle();
   assert.deepEqual([...new Set(env.store.local.map((x) => x[1]))], ['cs_x_filter']); assert.equal(env.store.session.length, 0); assert.equal(env.store.console.length, 0);
 });
-test('s135 release pins: 3.4.55, cs-shell-v80, Guide CSS and no new top-level global', () => {
+test('s135 release pins: 3.4.55, cs-shell-v81, Guide CSS and no new top-level global', () => {
   const read = (f) => fs.readFileSync(new URL('../' + f, import.meta.url), 'utf8');
-  assert.equal(JSON.parse(read('package.json')).version, '3.4.55'); assert.match(read('app.js'), /version: '3.4.55'/); assert.match(read('app.js'), /var PC_SHELL = 'cs-shell-v80';/); assert.match(read('sw.js'), /CACHE_NAME = 'cs-shell-v80'/); assert.match(read('README.md'), /cs-shell-v80/);
+  assert.equal(JSON.parse(read('package.json')).version, '3.4.55'); assert.match(read('app.js'), /version: '3.4.55'/); assert.match(read('app.js'), /var PC_SHELL = 'cs-shell-v81';/); assert.match(read('sw.js'), /CACHE_NAME = 'cs-shell-v81'/); assert.match(read('README.md'), /cs-shell-v81/);
   const css = read('inbox/X_inbox.css'); for (const k of ['.X_badge', '.X_gfail', '.X_rule']) assert.ok(css.includes(k), k);
   assert.equal((css.match(/\{/g) || []).length, (css.match(/\}/g) || []).length);
   const { newGlobals } = load(); assert.deepEqual(newGlobals.filter((k) => !/^X_|^window$/.test(k)), []);
