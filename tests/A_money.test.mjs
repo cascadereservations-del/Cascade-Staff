@@ -51,13 +51,26 @@ test('billsToday: the new keys pass through, per meter, and an old payload has n
   assert.equal(j.meters.electric.last, null); assert.deepEqual(plain(j.lastPaid), []);
 });
 
-test('billLast: paid, assumed estimate, real To pay, skipped', () => {
+test('billLast: paid, assumed end (frame 1 and frame 3 words), real To pay, skipped; whole pesos', () => {
   const m = (o) => ({ last: Object.assign({ from: '2026-10-21', to: '2026-11-21', toAssumed: false, status: 'due', est: 4269.51, paid: null }, o) });
   assert.deepEqual(plain(CS.billLast(m({ status: 'paid', paid: 212 }))), { range: '21 Oct – 21 Nov', tone: 'ok', text: '✓ Paid ₱212' });
-  assert.deepEqual(plain(CS.billLast(m({ toAssumed: true }))), { range: '21 Oct – ~21 Nov', tone: 'due', text: '₱4,269.51 est.' });
-  assert.equal(CS.billLast(m({})).text, 'To pay ₱4,269.51');
+  // frame 1: an assumed end marks the range "· est." and the amount is still To pay, in whole pesos (4,269.51 -> 4,270)
+  assert.deepEqual(plain(CS.billLast(m({ toAssumed: true }))), { range: '21 Oct – ~21 Nov · est.', tone: 'due', text: 'To pay ₱4,270' });
+  // frame 3: when every last bill is assumed (the Dates assumed row shows) the range stays plain and the amount says est.
+  assert.deepEqual(plain(CS.billLast(m({ toAssumed: true, from: '2026-11-21', to: '2026-12-21', est: 3980 }), true)), { range: '21 Nov – ~21 Dec', tone: 'due', text: '₱3,980 est.' });
+  assert.equal(CS.billLast(m({})).text, 'To pay ₱4,270'); assert.equal(CS.billLast(m({}), true).text, 'To pay ₱4,270', 'a real end date is never est.');
+  assert.equal(CS.billLast(m({ est: null })).text, '');
   assert.equal(CS.billLast(m({ status: 'skipped' })), null);
   assert.equal(CS.billLast({ last: null }), null);
+});
+test('billsAssumedKinds: only when every meter that has a last bill is assumed', () => {
+  const b = (e, w) => CS.billsToday({ since: '2026-11-21', electric: { php: 1, kwh: 1, cycle_from: '2026-11-21', last_bill: e }, water: { php: 1, m3: 1, cycle_from: '2026-11-21', last_bill: w } });
+  const lb = (to_assumed, status) => ({ id: 'x', period: '2026-11', from: '2026-10-21', to: '2026-11-21', to_assumed, status: status || 'due', estimate_php: 100 });
+  assert.deepEqual(plain(CS.billsAssumedKinds(b(lb(true), lb(true)))), ['electric', 'water']);
+  assert.deepEqual(plain(CS.billsAssumedKinds(b(lb(true), lb(false)))), []);
+  assert.deepEqual(plain(CS.billsAssumedKinds(b(lb(true), null))), ['electric'], 'a meter with no last bill does not count');
+  assert.deepEqual(plain(CS.billsAssumedKinds(b(lb(true), lb(true, 'skipped')))), ['electric']);
+  assert.deepEqual(plain(CS.billsAssumedKinds(CS.billsToday(OLD))), []);
 });
 
 // ---- the hard requirement: an old server payload draws exactly as on base ----
@@ -91,9 +104,9 @@ test('old payload: card carries no new markup and billRow keeps its old sub-line
 // ---- bills card, states A / B / C ----
 test('state A: since about, LAST BILL lines, a paid meter leaves To pay', async () => {
   const { html } = await today('owner', NEW.A, { day: NEW.today.A }); const t = text(card(html));
-  assert.match(t, /Last bill/); assert.match(t, /21 Oct – 21 Nov/); assert.match(t, /✓ Paid ₱212/); assert.match(t, /~21 Nov/); assert.match(t, /₱4,269\.51 est\./);
+  assert.match(t, /Last bill/); assert.match(t, /21 Oct – 21 Nov/); assert.match(t, /✓ Paid ₱212/); assert.match(t, /21 Oct – ~21 Nov · est\. To pay ₱4,270/); assert.ok(!/MN_ln">[^<]*<\/span><span class="MN_due">[^<]*4,269/.test(card(html)) && !/MN_due">[^<]*\.\d\d/.test(card(html)), 'whole pesos on the Last bill line'); assert.match(t, /Last bill 21 Oct – 21 Nov ✓ Paid ₱212/);
   assert.match(t, /since about 21 Nov/);
-  assert.match(t, /To pay/); assert.match(t, /Due 27th · estimate/); assert.match(t, /November · due 28th/);
+  assert.match(t, /To pay/); assert.match(t, /Due 27th · estimate ₱4,270 Pay/, 'the estimate row is a whole-peso figure like its Last bill line'); assert.match(t, /November · due 28th ₱1,500/); assert.match(t, /November · due 28th/);
   assert.ok(!/Water[^]*Pay Water/.test(card(html)), 'the paid water bill is not a To pay row');
   assert.ok(card(html).includes('href="#bills/pay/00000000-0000-4000-8000-000000000001"'), 'Pay keeps its route');
   assert.ok(!card(html).includes('Dates assumed'), 'A: water is real, so no assumed row');
@@ -108,7 +121,21 @@ test('state C: dates assumed, one sentence and a Set dates link', async () => {
   const { html } = await today('owner', NEW.C, { day: NEW.today.C }); const c = card(html);
   assert.ok(c.includes('Dates assumed (the 21st). Type the real ones from the bills.'));
   assert.ok(c.includes('href="#money/reading"') && c.includes('Set dates'));
-  assert.match(text(c), /~21 Dec|~21 Nov/);
+  const t = text(c); assert.match(t, /Last bill 21 Nov – ~21 Dec ₱3,980 est\./); assert.match(t, /Last bill 21 Nov – ~21 Dec ₱212 est\./); assert.ok(!/· est\./.test(t), 'frame 3: the range stays plain');
+  assert.ok(c.includes('class="MN_set"') && !/btn[^"]*"[^>]*>Set dates/.test(c), 'the Set dates control is the MN_set link');
+});
+test('Set dates: one assumed meter opens that meter, two open the reading screen', async () => {
+  const one = JSON.parse(JSON.stringify(NEW.C)); delete one.water.last_bill;
+  const a = card((await today('owner', one, { day: NEW.today.C })).html); assert.ok(a.includes('href="#money/reading/electric"') && a.includes('Set dates'));
+  const w = JSON.parse(JSON.stringify(NEW.C)); delete w.electric.last_bill;
+  assert.ok(card((await today('owner', w, { day: NEW.today.C })).html).includes('href="#money/reading/water"'));
+  assert.ok(card((await today('owner', NEW.C, { day: NEW.today.C })).html).includes('href="#money/reading"'));
+});
+test('frame 11: the cleaner card stays the old-style card (no data-money), the payer card carries it', async () => {
+  for (const role of ['cleaner', 'laundry']) { const c = card((await today(role, NEW.staff, { day: NEW.today.staff })).html); assert.ok(c.length > 100 && !c.includes('data-money'), role); assert.match(text(c), /This bill so far · since 21 Nov/); assert.ok(!c.includes('MN_last') && !c.includes('MN_row'), role); }
+  assert.ok(card((await today('owner', NEW.A, { day: NEW.today.A })).html).includes('data-money="1"'));
+  // a v2 payload that says can_pay_list false draws no money rules even for an owner login
+  assert.ok(!card((await today('owner', NEW.staff, { day: NEW.today.staff })).html).includes('data-money'));
 });
 test('staff view of the new payload: no pay links, no Set dates, no Money card, no Log money', async () => {
   for (const role of ['cleaner', 'laundry']) {
@@ -159,7 +186,7 @@ test('routes: a cleaner never loads Money', async () => {
 test('modules table: money entry, and bills and expenses css arrays add the Inventory css', () => {
   const flat = read('app.js').replace(/\s+/g, ' ');
   assert.ok(flat.includes("money: { src: 'money/MN_money.js', css: ['stock/I_stock.css', 'money/MN_money.css'], global: 'MN_Money', title: 'Money', roles: ['owner', 'admin', 'finance'], demoClient: true }"));
-  assert.match(flat, /bills: \{[^}]*css: \['stock\/I_stock\.css', 'bills\/BL_bills\.css'\]/); assert.match(flat, /expenses: \{[^}]*css: \['stock\/I_stock\.css', 'expenses\/E_expenses\.css'\]/);
+  assert.match(flat, /bills: \{[^}]*css: \['stock\/I_stock\.css', 'money\/MN_money\.css', 'bills\/BL_bills\.css'\]/); assert.match(flat, /expenses: \{[^}]*css: \['stock\/I_stock\.css', 'money\/MN_money\.css', 'expenses\/E_expenses\.css'\]/);
 });
 test('H_domLoad: css as a string or an array makes one link each; a failed script removes them all', async () => {
   const src = read('app.js'), i = src.indexOf('function H_domLoad(m)'), j = src.indexOf('function H_loadModule'), fn = src.slice(i, j);
@@ -241,4 +268,43 @@ test('demo: ?bills=A|B|C picks a frame of the mockup', async () => {
   assert.equal(A.electric.cycle_from_assumed, true); assert.equal(A.water.cycle_from_assumed, false); assert.equal(A.water.last_bill.status, 'paid'); assert.ok(A.due.every((x) => x.kind !== 'water'));
   assert.deepEqual(B.due, []); assert.ok(B.last_paid.length >= 3); assert.equal(B.electric.cycle_from_assumed, false);
   assert.equal(C.electric.cycle_from_assumed && C.water.cycle_from_assumed, true); assert.ok(C.due.length >= 3); assert.equal(C.waiting_for, null);
+});
+
+// ---- fix round 1 ----
+test('v-money lives inside #app like every other view (index.html), and setView builds nothing on document.body', () => {
+  const html = read('index.html'), app = html.indexOf('id="app"'), money = html.indexOf('id="v-money"'), door = html.indexOf('id="v-door"'), tabbar = html.indexOf('id="tabbar"');
+  assert.ok(app > 0 && money > app && money < door && tabbar > app, 'v-money sits between the shell opening and the door view');
+  for (const v of ['expenses', 'bills', 'home']) assert.ok(html.indexOf('id="v-' + v + '"') > app && html.indexOf('id="v-' + v + '"') < door, v);
+  const upto = html.slice(html.lastIndexOf('<div', app), money), opens = (upto.match(/<div\b/g) || []).length, closes = (upto.match(/<\/div>/g) || []).length; assert.ok(opens - closes >= 1, 'v-money is still inside the #app div');
+  const src = read('app.js'), fn = src.slice(src.indexOf('function setView(name)'), src.indexOf('// lane P: every link into pay/'));
+  assert.ok(!/document\.body|appendChild|createElement/.test(fn), 'setView does not append a view to the body');
+  assert.ok(!/id = 'v-money'/.test(src));
+});
+test('#money paints into the #v-money view that the page carries', async () => {
+  const loaded = []; const app = await boot({ role: 'owner', hash: '#money', winInit: (w) => { w.H_loadAsset = (m) => { loaded.push(m.global); w[m.global] = { mount(el) { el.innerHTML = '<p>ok</p>'; }, unmount() {} }; return Promise.resolve(); }; }, handlers: baseHandlers('owner') });
+  assert.deepEqual(loaded, ['MN_Money']); assert.match(app.els['v-money'].innerHTML, /class="ttl">Money</); assert.match(app.els['v-money'].innerHTML, /H_mod-money/);
+});
+test('demo ?bills=A|B|C reproduces the fixture frames whatever the demo date', async () => {
+  const { createRequire } = await import('node:module'), req = createRequire(path.join(root, 'demo.js'));
+  const get = async (f, day) => { const cx = { self: { location: { search: '?demo&bills=' + f } }, module: { exports: {} }, require: req, Date, console, Math, JSON, Promise }; vm.runInNewContext(read('demo.js'), cx); return plain((await cx.module.exports.client('owner', NOW(day)).rpc('today_bills_v1', { p_property_id: 'p' })).data); };
+  const pick = (m) => ({ cycle_from: m.cycle_from, cycle_from_assumed: m.cycle_from_assumed, next_reading: m.next_reading, last: m.last_bill && { from: m.last_bill.from, to: m.last_bill.to, to_assumed: m.last_bill.to_assumed, status: m.last_bill.status, estimate_php: m.last_bill.estimate_php, paid_php: m.last_bill.paid_php, paid_on: m.last_bill.paid_on, period: m.last_bill.period } });
+  const key = (e) => [e.kind, e.status, e.from || null, e.to || null, !!e.to_assumed].join('|');
+  for (const f of ['A', 'B', 'C']) for (const day of ['2026-10-15', '2026-11-26', '2027-03-02']) {
+    const d = await get(f, day), x = NEW[f], tag = f + ' on ' + day;
+    for (const k of ['electric', 'water']) assert.deepEqual(pick(d[k]), pick(x[k]), tag + ' ' + k);
+    assert.equal(d.since, x.since, tag); assert.deepEqual(d.due.map(key).sort(), x.due.map(key).sort(), tag + ' due');
+    const bd = CS.billsToday(d), bx = CS.billsToday(x);
+    for (const k of ['electric', 'water']) assert.deepEqual(plain(CS.billLast(bd.meters[k], CS.billsAssumedKinds(bd).length > 0)), plain(CS.billLast(bx.meters[k], CS.billsAssumedKinds(bx).length > 0)), tag + ' ' + k + ' words');
+  }
+  const A = CS.billsToday(await get('A', '2027-03-02')), C = CS.billsToday(await get('C', '2027-03-02'));
+  const la = CS.billLast(A.meters.electric, false), lc = CS.billLast(C.meters.electric, true);
+  assert.equal(la.range + ' | ' + la.text, '21 Oct – ~21 Nov · est. | To pay ₱4,270');
+  assert.equal(lc.range + ' | ' + lc.text, '21 Nov – ~21 Dec | ₱3,980 est.');
+});
+test('Money card: a row with no amount shows a dash, never ₱0', async () => {
+  const first = async (mut) => { const exp = JSON.parse(JSON.stringify(EXP.new)); mut(exp.rows[0]); const { html } = await today('owner', NEW.A, { day: NEW.today.A, h: { expenses_screen_v1: () => ({ error: null, data: exp }) } }); const i = html.indexOf('id="T_money"'), c = html.slice(i, html.indexOf('</section>', i)); return c.slice(c.indexOf('<li>'), c.indexOf('</li>')); };
+  for (const [name, mut] of [['null', (r) => { r.amount = null; }], ['missing', (r) => { delete r.amount; }], ['empty', (r) => { r.amount = ''; }], ['text', (r) => { r.amount = 'n/a'; }]]) {
+    const li = await first(mut); assert.match(li, /class="MN_amt">—</, name); assert.ok(!/₱0/.test(li), name + ': no peso zero');
+  }
+  assert.match(await first((r) => { r.amount = 0; }), /class="MN_amt">₱0</, 'a real zero stays ₱0');
 });

@@ -251,7 +251,11 @@
     // s143: a reading date is the day on the paper bill. addMonths keeps the anchor day and clamps at month end (31 Jan -> 28 Feb).
     var addMonths = function (iso, n) { var y = +iso.slice(0, 4), m = +iso.slice(5, 7) - 1, d = +iso.slice(8, 10), last = new Date(Date.UTC(y, m + n + 1, 0)).getUTCDate(); return new Date(Date.UTC(y, m + n, Math.min(d, last))).toISOString().slice(0, 10); };
     var mSince = function (today) { var c = cycleOf(today); return new Date(Date.UTC(+c.from.slice(0, 4), +c.from.slice(5, 7) - 2, 21)).toISOString().slice(0, 10); }; // the day the open cycle began (the older demo's "since")
-    var mTo = function (kind, today) { return rdate[kind] || mSince(today); };
+    // s143: ?bills=A|B|C reproduces the three frames of the mockup (tests/fixtures/s143_today_bills_new.json) whatever the demo date: the cycle, the last bills, the paid days and the so-far figures are the frame's own.
+    var FRAMES = { A: { to: '2026-11-21', per: '2026-11', est: { electric: 4269.51, water: 212 }, use: { electric: 331, water: 0 }, so: { electric: [310, 26], water: [212, 0] }, paidOn: { water: '2026-11-25' }, due: { electric: 27, water: 30, internet: 28, netflix: 25 }, lr: '2026-11-25T10:00:00+00:00' },
+      B: { to: '2026-11-21', per: '2026-11', est: { electric: 4269.51, water: 212 }, use: { electric: 331, water: 0 }, so: { electric: [1520, 126], water: [212, 4.1] }, paidOn: { electric: '2026-11-27', water: '2026-11-25', internet: '2026-11-28', netflix: '2026-11-25' }, paid: { electric: 4270 }, due: { electric: 27, water: 30, internet: 28, netflix: 25 }, lr: '2026-12-01T09:00:00+00:00' },
+      C: { to: '2026-12-21', per: '2026-12', est: { electric: 3980, water: 212 }, use: { electric: 334, water: 3.4 }, so: { electric: [180, 15], water: [212, 0.6] }, paidOn: {}, due: { electric: 27, water: 27, internet: 28, netflix: 25 }, lr: '2026-12-23T09:00:00+00:00' } }, FR = BS ? FRAMES[BS] : null;
+    var mTo = function (kind, today) { return rdate[kind] || (FR ? FR.to : mSince(today)); };
     var bills = null, mayPay = view === 'owner' || view === 'admin' || view === 'finance', mayEdit = view === 'owner' || view === 'admin';
     var SCHED = { electric: { label: 'Electricity', payee_name: 'Zz Power Co', number_label: 'Account number', number: 'Account ••••••', note: 'Electricity', amount_php: null, remind_day: 27, amount_fixed: false },
       water: { label: 'Water', payee_name: 'Zz Water Co', number_label: 'Account number', number: 'Account ••••••', note: 'Water', amount_php: null, remind_day: 28, amount_fixed: false },
@@ -263,9 +267,11 @@
       var mk = function (id, kind, est, due, isEst, o) { return Object.assign({ id: 'demo-bill-' + id, kind: kind, label: SCHED[kind].label, period: (kind === 'electric' || kind === 'water' ? cycleOf(today).from : today).slice(0, 7), status: 'due', estimate_php: est, paid_php: null, is_estimate: isEst, due_day: due, paying_by_name: null, paid_by_name: null, paid_at: null }, o || {}); };
       var list = [mk('e', 'electric', 2140, 27, true), mk('w', 'water', 430, 30, true, { status: 'paying', paying_by_name: 'Zz Payer' }), mk('i', 'internet', 1500, 28, false), mk('n', 'netflix', 449, 10, false, { status: 'paid', paid_php: 449, paid_by_name: 'Zz Finance', paid_at: ago })];
       var pay = function (b) { b.status = 'paid'; b.paying_by_name = null; b.paid_php = b.estimate_php; b.paid_by_name = 'Zz Finance'; b.paid_at = ago; };
-      if (BS === 'A') pay(list[1]); if (BS === 'B') list.forEach(pay);
-      if (BS === 'C') list.forEach(function (b) { b.status = 'due'; b.paying_by_name = null; b.paid_php = null; b.paid_by_name = null; b.paid_at = null; });
+      var unpay = function (b) { b.status = 'due'; b.paying_by_name = null; b.paid_php = null; b.paid_by_name = null; b.paid_at = null; };
+      if (BS === 'A') { list.forEach(unpay); pay(list[1]); } if (BS === 'B') list.forEach(pay);
+      if (BS === 'C') list.forEach(unpay);
       list.forEach(function (b) { b.paid_on = b.paid_at ? b.paid_at.slice(0, 10) : null; if (b.kind === 'electric' || b.kind === 'water') { b.to = mTo(b.kind, today); b.from = addMonths(b.to, -1); b.to_assumed = assumed[b.kind]; } else { b.from = null; b.to = null; b.to_assumed = false; } });
+      if (FR) list.forEach(function (b) { b.period = FR.per; b.due_day = FR.due[b.kind]; if (FR.est[b.kind] != null) b.estimate_php = FR.est[b.kind]; if (b.status === 'paid') { b.paid_php = FR.paid && FR.paid[b.kind] != null ? FR.paid[b.kind] : b.estimate_php; b.paid_on = FR.paidOn[b.kind] || b.paid_on; b.paid_at = b.paid_on + 'T04:00:00Z'; } });
       return (bills = list);
     }
     function ent(b) { return Object.assign({}, b, { can_pay: mayPay && (b.status === 'due' || (b.status === 'paying' && b.paying_by_name === me)) }); }
@@ -335,12 +341,12 @@
         case 'today_bills_v1': { // s131: the cycle stays open from the last bill's reading date (the 21st a month back) until the next bill is entered; staff who may not pay get one check row instead of the list
           var cb = cycleOf(X.home.today), sy = +cb.from.slice(0, 4), sm = +cb.from.slice(5, 7), since = new Date(Date.UTC(sy, sm - 2, 21)).toISOString().slice(0, 10), mon = new Date(Date.UTC(sy, sm - 1, 1)).toLocaleString('en-US', { month: 'long', timeZone: 'UTC' });
           var all = billList(X.home.today), meterOut = function (kind, php, use) { // s143: cycle_from, next_reading and the last bill of the meter (only for those who may pay)
-            var cf = mTo(kind, X.home.today), lb = all.filter(function (x) { return x.kind === kind; })[0], o = Object.assign({ php: php }, use, { cycle_from: cf, cycle_from_assumed: assumed[kind], next_reading: addMonths(cf, 1) });
-            if (mayPay && lb) o.last_bill = { id: lb.id, period: lb.period, from: lb.from, to: lb.to, to_assumed: lb.to_assumed, usage: kind === 'electric' ? 331 : 7.2, estimate_php: lb.estimate_php, paid_php: lb.paid_php, paid_on: lb.paid_on || null, paid_by_name: lb.paid_by_name, status: lb.status, has_proof: lb.status === 'paid' };
+            var so = FR ? FR.so[kind] : null, cf = mTo(kind, X.home.today), lb = all.filter(function (x) { return x.kind === kind; })[0], o = Object.assign({ php: so ? so[0] : php }, so ? (kind === 'electric' ? { kwh: so[1] } : { m3: so[1] }) : use, { cycle_from: cf, cycle_from_assumed: assumed[kind], next_reading: addMonths(cf, 1) });
+            if (mayPay && lb) o.last_bill = { id: lb.id, period: lb.period, from: lb.from, to: lb.to, to_assumed: lb.to_assumed, usage: FR ? FR.use[kind] : kind === 'electric' ? 331 : 7.2, estimate_php: lb.estimate_php, paid_php: lb.paid_php, paid_on: lb.paid_on || null, paid_by_name: lb.paid_by_name, status: lb.status, has_proof: lb.status === 'paid' };
             return o; };
           var out = { since: since, water_since: since, waiting_for: mon, water_waiting_for: mon, can_pay_list: mayPay, check_bills: !mayPay, last_reading_at: cb.last + 'T02:00:00Z', electric: meterOut('electric', 4621, { kwh: 383 }), water: meterOut('water', 212, { m3: 7.2 }), due: mayPay ? all.filter(function (x) { return x.status !== 'paid'; }) : [] };
           if (mayPay) out.last_paid = all.filter(function (x) { return x.status === 'paid'; }).map(function (x) { return { kind: x.kind, period: x.period, paid_php: x.paid_php, paid_on: x.paid_on }; });
-          if (BS) { out.waiting_for = null; out.water_waiting_for = null; out.since = mTo('electric', X.home.today); out.water_since = mTo('water', X.home.today); } // a mockup frame: the Money keys carry the cycle, nothing waits
+          if (BS) { out.last_reading_at = FR.lr; out.waiting_for = null; out.water_waiting_for = null; out.since = mTo('electric', X.home.today); out.water_since = mTo('water', X.home.today); } // a mockup frame: the Money keys carry the cycle, nothing waits
           return done(out); }
         case 'bill_reading_set_v1': return done(readingSet(args || {}, X.home.today));
         case 'bill_pay_open_v1': case 'bill_pay_settle_v1': case 'bill_pay_cancel_v1': case 'bill_pay_skip_v1': case 'bill_proof_v1': case 'bill_schedule_get_v1': case 'bill_schedule_set_v1': return done(billCall(name, args || {}, X.home.today));

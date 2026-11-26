@@ -917,13 +917,15 @@
   }
   // s143: "21 Oct \u2013 21 Nov"; assumed marks an end date the app worked out itself: "21 Oct \u2013 ~21 Nov". Empty when either date is missing.
   function rangeLabel(from, to, assumed) { var f = billDay(from), t = billDay(to); return f && t ? dayLabel(f) + ' \u2013 ' + (assumed ? '~' : '') + dayLabel(t) : ''; }
-  // s143: the LAST BILL line under a meter on the bills card: {range, tone 'ok'|'due', text}. Paid shows what was paid; an open bill whose end date is assumed shows its estimate ("est."), a real one "To pay". null draws nothing.
-  function billLast(m) {
+  // s143: the LAST BILL line under a meter on the bills card: {range, tone 'ok'|'due', text}. Whole pesos (frames 1-3). Paid shows what was paid. An open bill is "To pay" with its range marked "· est." while its end date is assumed (frame 1);
+  // when every last bill ends on an assumed date (the "Dates assumed" row is showing, frame 3) the range stays plain and the amount reads "<peso> est.". null draws nothing.
+  function billLast(m, allAssumed) {
     var l = m && m.last; if (!l || l.status === 'skipped') return null;
     var range = rangeLabel(l.from, l.to, l.toAssumed); if (!range) return null;
-    if (l.status === 'paid') return { range: range, tone: 'ok', text: '\u2713 Paid' + (l.paid == null ? '' : ' ' + billPeso(l.paid)) };
-    var amt = l.est == null ? '' : billPeso(l.est);
-    return { range: range, tone: 'due', text: !amt ? '' : l.toAssumed ? amt + ' est.' : 'To pay ' + amt };
+    if (l.status === 'paid') return { range: range, tone: 'ok', text: '✓ Paid' + (l.paid == null ? '' : ' ' + billPeso(l.paid)) };
+    var amt = l.est == null ? '' : billPeso(Math.round(l.est));
+    if (allAssumed && l.toAssumed) return { range: range, tone: 'due', text: amt ? amt + ' est.' : '' };
+    return { range: range + (l.toAssumed ? ' · est.' : ''), tone: 'due', text: amt ? 'To pay ' + amt : '' };
   }
   // s143: where each meter's cycle starts. null for an old payload (the card keeps its old since logic). same: both meters share one date and one assumed flag, so the card title carries it; else each column says its own.
   function billsCycle(b) {
@@ -933,11 +935,15 @@
   }
   function sinceWord(from, assumed) { return 'since ' + (assumed ? 'about ' : '') + dayLabel(from); }
   // s143: the state C row ("Dates assumed (the 21st)"): shown to those who may set the dates, when every meter that has a last bill ends it on an assumed date. Returns the sentence or ''.
+  function billsAssumedKinds(b) { // the meters whose last bill ends on an assumed date, when that holds for every meter that has a last bill; else []
+    if (!b || !b.v2 || !b.meters) return [];
+    var ks = ['electric', 'water'].filter(function (k) { return billLast(b.meters[k]); });
+    return ks.length && ks.every(function (k) { return b.meters[k].last.toAssumed; }) ? ks : [];
+  }
   function billsAssumedRow(b, role) {
     if (!b || !b.v2 || b.canPayList === false || !billsMayPay(role)) return '';
-    var ls = ['electric', 'water'].map(function (k) { return billLast(b.meters[k]) ? b.meters[k].last : null; }).filter(Boolean);
-    if (!ls.length || ls.some(function (l) { return !l.toAssumed; })) return '';
-    var days = [], d; ls.forEach(function (l) { d = +l.to.slice(8, 10); if (days.indexOf(d) < 0) days.push(d); });
+    var ks = billsAssumedKinds(b); if (!ks.length) return '';
+    var days = [], d; ks.forEach(function (k) { d = +b.meters[k].last.to.slice(8, 10); if (days.indexOf(d) < 0) days.push(d); });
     return 'Dates assumed (the ' + days.map(ordinal).join(' and ') + '). Type the real ones from the bills.';
   }
   // s143: a paid row leaves To pay (the server keeps only due and paying there); the paid ones that have no Last bill line (internet, subscription) show as one quiet line.
@@ -968,7 +974,7 @@
       r.sub = ['Paid ' + (e.paid == null ? '' : billPeso(e.paid)), day ? (day === (ctx && ctx.today) ? 'today' : dayLabel(day)) : '', e.paidBy].filter(Boolean).join(' · ');
       r.action = ctx && ctx.mayProof ? 'proof' : ''; return r;
     }
-    r.amount = e.est == null ? '' : billPeso(e.est);
+    r.amount = e.est == null ? '' : billPeso(e.v2 && e.isEst ? Math.round(e.est) : e.est); // s143: an estimate is a whole-peso figure, the same as its Last bill line
     if (e.status === 'paying') { r.sub = e.canPay ? 'You are paying this now' : (e.payingBy || 'Someone') + ' is paying this now'; r.action = e.canPay ? 'pay' : ''; return r; }
     if (e.v2) { // s143 (frame 1): meters say "Due 27th · estimate", the rest "November · due 28th"
       var meter = e.kind === 'electric' || e.kind === 'water', mon = /^\d{4}-\d{2}$/.test(e.period) ? MONTHS[+e.period.slice(5, 7) - 1] : '';
@@ -2065,7 +2071,7 @@
     fmtTime: fmtTime, fmt24: fmt24, ordinal: ordinal, plural: plural, agoLabel: agoLabel, clockLabel: clockLabel,
     monthGrid: monthGrid, dayState: dayState, dayStatus: dayStatus, mergeStays: mergeStays, sameGuest: sameGuest, dayMoves: dayMoves, blockWhy: blockWhy, flagName: flagName, FLAG_KINDS: FLAG_KINDS, blockedLines: blockedLines, blockedLineText: blockedLineText,
     canFlagDays: canFlagDays, guestContact: guestContact, canSeeGuestContact: canSeeGuestContact, MESSENGER_INBOX: MESSENGER_INBOX, rpcMissing: rpcMissing, tgLink: tgLink, warningInfo: warningInfo, findingKey: findingKey, initialOf: initialOf, sourceLabel: sourceLabel, stayDates: stayDates, monthInRange: monthInRange,
-    billRow: billRow, billPeso: billPeso, billsMayPay: billsMayPay, tierRibbon: tierRibbon, tierBadge: tierBadge, stayNames: stayNames, stayNamesProblem: stayNamesProblem, canEditStaying: canEditStaying, stayErrorText: stayErrorText, stayingView: stayingView, wxHazards: wxHazards, wxHourly: wxHourly, nextPrep: nextPrep, utilAlerts: utilAlerts, isInternetNotice: isInternetNotice, tierPerks: tierPerks, tierGuide: tierGuide, TIER_RULES: TIER_RULES, tierRule: tierRule, tierFromCounts: tierFromCounts, tierProgress: tierProgress, phoneCheckSummary: phoneCheckSummary, phoneCheckRows: phoneCheckRows, phoneFixPlan: phoneFixPlan, phoneCheckDue: phoneCheckDue, phoneCheckSave: phoneCheckSave, phoneCheckTried: phoneCheckTried, phoneCheckSettle: phoneCheckSettle, phoneCheckOpen: phoneCheckOpen, phoneCheckRead: phoneCheckRead, phoneBlockedSteps: phoneBlockedSteps, PHONE_CHECK_KEY: PHONE_CHECK_KEY, PHONE_CHECK_VER: PHONE_CHECK_VER, IOS_A2HS: IOS_A2HS, zoomClamp: zoomClamp, zoomStep: zoomStep, zoomToggle: zoomToggle, zoomPan: zoomPan, zoomAt: zoomAt, ZOOM_MAX: ZOOM_MAX, faceFrame: faceFrame, billsToday: billsToday, rangeLabel: rangeLabel, billLast: billLast, billsCycle: billsCycle, sinceWord: sinceWord, billsAssumedRow: billsAssumedRow, billsPaidLine: billsPaidLine, parseNotes: parseNotes, returningLabel: returningLabel, tierLabel: tierLabel, tierLine: tierLine, tierParts: tierParts, keyNote: keyNote, TOPIC_LABELS: TOPIC_LABELS, notableLine: notableLine, weatherIcon: weatherIcon, rainAlert: rainAlert, wxCard: wxCard, goodToKnow: goodToKnow, earlierLine: earlierLine, companionsLine: companionsLine, photoOwnerName: photoOwnerName, nameKey: nameKey, stayingLine: stayingLine, idOfLine: idOfLine, todayCardState: todayCardState,
+    billRow: billRow, billPeso: billPeso, billsAssumedKinds: billsAssumedKinds, billsMayPay: billsMayPay, tierRibbon: tierRibbon, tierBadge: tierBadge, stayNames: stayNames, stayNamesProblem: stayNamesProblem, canEditStaying: canEditStaying, stayErrorText: stayErrorText, stayingView: stayingView, wxHazards: wxHazards, wxHourly: wxHourly, nextPrep: nextPrep, utilAlerts: utilAlerts, isInternetNotice: isInternetNotice, tierPerks: tierPerks, tierGuide: tierGuide, TIER_RULES: TIER_RULES, tierRule: tierRule, tierFromCounts: tierFromCounts, tierProgress: tierProgress, phoneCheckSummary: phoneCheckSummary, phoneCheckRows: phoneCheckRows, phoneFixPlan: phoneFixPlan, phoneCheckDue: phoneCheckDue, phoneCheckSave: phoneCheckSave, phoneCheckTried: phoneCheckTried, phoneCheckSettle: phoneCheckSettle, phoneCheckOpen: phoneCheckOpen, phoneCheckRead: phoneCheckRead, phoneBlockedSteps: phoneBlockedSteps, PHONE_CHECK_KEY: PHONE_CHECK_KEY, PHONE_CHECK_VER: PHONE_CHECK_VER, IOS_A2HS: IOS_A2HS, zoomClamp: zoomClamp, zoomStep: zoomStep, zoomToggle: zoomToggle, zoomPan: zoomPan, zoomAt: zoomAt, ZOOM_MAX: ZOOM_MAX, faceFrame: faceFrame, billsToday: billsToday, rangeLabel: rangeLabel, billLast: billLast, billsCycle: billsCycle, sinceWord: sinceWord, billsAssumedRow: billsAssumedRow, billsPaidLine: billsPaidLine, parseNotes: parseNotes, returningLabel: returningLabel, tierLabel: tierLabel, tierLine: tierLine, tierParts: tierParts, keyNote: keyNote, TOPIC_LABELS: TOPIC_LABELS, notableLine: notableLine, weatherIcon: weatherIcon, rainAlert: rainAlert, wxCard: wxCard, goodToKnow: goodToKnow, earlierLine: earlierLine, companionsLine: companionsLine, photoOwnerName: photoOwnerName, nameKey: nameKey, stayingLine: stayingLine, idOfLine: idOfLine, todayCardState: todayCardState,
     orderWarnings: orderWarnings, brownoutText: brownoutText, lowStockText: lowStockText, foldLowStock: foldLowStock, warningSummary: warningSummary,
     weatherLine: weatherLine, rainLine: rainLine, weatherStale: weatherStale, WEATHER_STALE_MIN: WEATHER_STALE_MIN, esc: esc,
     A_HOUSE_FALLBACK: A_HOUSE_FALLBACK, A_houseTimes: A_houseTimes, A_turnoverClock: A_turnoverClock, A_turnoverLine: A_turnoverLine, A_hm: A_hm, A_NOTICE_TYPES: A_NOTICE_TYPES, A_noticesView: A_noticesView, A_noticeFilters: A_noticeFilters, A_dayMarks: A_dayMarks, A_noticeDay: A_noticeDay, A_guestMessage: A_guestMessage, A_CAL_TABS: A_CAL_TABS, A_calTab: A_calTab, A_stayShade: A_stayShade, A_hubGroups: A_hubGroups, A_hubNative: A_hubNative, A_hubRoutes: A_hubRoutes, A_hubRouteOk: A_hubRouteOk, A_hubDoorUrl: A_hubDoorUrl, A_whatsNew: A_whatsNew, A_shortTime: A_shortTime, A_PINNED: A_PINNED, A_noticeAddError: A_noticeAddError, A_NOTICE_HINT: A_NOTICE_HINT, A_flagDup: A_flagDup, A_facebookUrl: A_facebookUrl, A_fbPluginUrl: A_fbPluginUrl, A_noticeAddProblem: A_noticeAddProblem, A_noticeAddArgs: A_noticeAddArgs, A_plainRefusal: A_plainRefusal, A_hour12: A_hour12, A_timeRange: A_timeRange,

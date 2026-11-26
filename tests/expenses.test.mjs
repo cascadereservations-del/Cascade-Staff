@@ -141,7 +141,7 @@ test('E screen: Show more asks for the next 100 after the last row; See all open
 test('E access: owner, admin and finance mount; cleaner, inspector, maintenance and laundry are sent home and nothing is read', async () => {
   for (const role of ['owner', 'admin', 'finance']) { const b = await boot({ role }); assert.equal(b.sent('expenses_screen_v1').length, 1, role); }
   for (const role of ['cleaner', 'inspector', 'maintenance', 'laundry', 'viewer', '']) { const b = await boot({ role }); assert.deepEqual(b.nav, ['#home'], String(role)); assert.equal(b.client.calls.length, 0); assert.equal(b.html(), ''); }
-  assert.match(APP, /expenses: \{ src: 'expenses\/E_expenses\.js', css: \['stock\/I_stock\.css', 'expenses\/E_expenses\.css'\], global: 'E_Expenses', title: 'Expenses', roles: \['owner', 'admin', 'finance'\], demoClient: true \}/);
+  assert.match(APP, /expenses: \{ src: 'expenses\/E_expenses\.js', css: \['stock\/I_stock\.css', 'money\/MN_money\.css', 'expenses\/E_expenses\.css'\], global: 'E_Expenses', title: 'Expenses', roles: \['owner', 'admin', 'finance'\], demoClient: true \}/);
   assert.match(APP, /function A_loadExpenses\(\) \{\n\s+if \(!state\.access \|\| state\.expensesAbsent \|\| state\.layout !== 'admin' \|\| !\/\^\(owner\|admin\|finance\)\$\/\.test\(role\(\) \|\| ''\)\) return;/);
   assert.match(APP, /function A_moneyCard\(\) \{\n\s+var e = state\.expenses; if \(!e \|\| state\.layout !== 'admin' \|\| !\/\^\(owner\|admin\|finance\)\$\/\.test\(role\(\) \|\| ''\)\) return '';/);
   assert.match(APP, /p_property_id: pid\(\), p_limit: 3 \}/); assert.match(APP, /A_billsCard\(\) \+ A_moneyCard\(\) \+ \(BD\.top/); // s143: the Money card replaced the Expenses card

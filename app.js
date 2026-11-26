@@ -112,7 +112,6 @@
     return '<header class="appbar">' + left + mid + right + '</header>';
   }
   function setView(name) {
-    if (!$('v-money') && document.createElement && document.body && document.body.appendChild) { var mv = document.createElement('section'); mv.className = 'view'; mv.id = 'v-money'; document.body.appendChild(mv); } // s143: the Money screen's own view, made once when the page does not carry it
     VIEWS.forEach(function (v) { $('v-' + v).classList.toggle('on', v === name); });
     $('tabbar').hidden = name === 'signin' || name === 'door' || !state.layout;
     var shellEl = $('app'); if (shellEl && shellEl.classList) shellEl.classList.toggle('F_nav', !$('tabbar').hidden); // the rail's room is kept only while the rail is there
@@ -366,19 +365,21 @@
     // s143: with the Money keys each meter says where its own cycle starts ("since about 21 Nov" when the date is assumed) and what its last bill was; an old payload keeps the s131 logic and draws exactly as before.
     var cy = CS.billsCycle(b), split = cy ? !cy.same : !!b.waterSince && b.waterSince !== b.since, since = function (d) { return '<span class="K_sub K_since">' + esc('since ' + A_nb(CS.dayLabel(d))) + '</span>'; },
       sinceM = function (c) { return '<span class="K_sub K_since">' + esc(A_nb(CS.sinceWord(c.from, c.assumed))) + '</span>'; },
-      lastLine = function (m) { var l = cy ? CS.billLast(m) : null; return l ? '<span class="MN_last"><span class="MN_ln MN_lk">Last bill</span><span class="MN_ln">' + esc(A_nb(l.range)) + '</span>' + (l.text ? '<span class="' + (l.tone === 'ok' ? 'MN_ok' : 'MN_due') + '">' + esc(A_nb(l.text)) + '</span>' : '') + '</span>' : ''; };
+      lastLine = function (m) { var l = cy ? CS.billLast(m, !!assumed) : null; return l ? '<span class="MN_last"><span class="MN_ln MN_lk">Last bill</span><span class="MN_ln">' + esc(A_nb(l.range)) + '</span>' + (l.text ? '<span class="' + (l.tone === 'ok' ? 'MN_ok' : 'MN_due') + '">' + esc(A_nb(l.text)) + '</span>' : '') + '</span>' : ''; };
     var wait = b.waiting && b.waterWaiting && b.waiting === b.waterWaiting ? [['', b.waiting]] : [['electricity ', b.waiting], ['water ', b.waterWaiting]].filter(function (x) { return x[1]; });
     var waiting = wait.map(function (x) { return '<p class="K_sub K_wait">' + pill('info', 'clock', 'Waiting for the ' + x[1] + ' ' + x[0] + 'bill') + ' ' + esc('Counting goes on until its reading date is entered.') + '</p>'; }).join('');
     var hasUse = (b.eKwh > 0) || (b.wM3 > 0), assumed = CS.billsAssumedRow(b, role());
     var title = cy ? 'This bill so far' + (cy.same ? ' · ' + A_nb(CS.sinceWord(cy.e.from, cy.e.assumed)) : '') : split ? 'This bill so far' : 'This bill so far · since ' + A_nb(CS.dayLabel(b.since));
-    return '<section class="card glass A_card F_span K_bills" id="T_bills"' + (cy ? ' data-money="1"' : '') + ' aria-label="Bills so far"><span class="K_lab">' + esc(title) + '</span><div class="K_two">' +
+    return '<section class="card glass A_card F_span K_bills" id="T_bills"' + (cy && b.canPayList !== false ? ' data-money="1"' : '') + ' aria-label="Bills so far"><span class="K_lab">' + esc(title) + '</span><div class="K_two">' +
       '<div><i class="K_e">⚡ Electricity</i>' + e[0] + '<span class="K_sub">' + esc(e[1]) + '</span>' + (split ? (cy ? sinceM(cy.e) : since(b.since)) : '') + lastLine(b.meters && b.meters.electric) + '</div>' +
       '<div><i class="K_w">💧 Water</i>' + w[0] + '<span class="K_sub">' + esc(w[1]) + '</span>' + (split ? (cy ? sinceM(cy.w) : since(b.waterSince)) : '') + lastLine(b.meters && b.meters.water) + '</div></div>' +
       (b.last || !hasUse ? '<p class="K_sub">' + esc(b.last ? 'From the meter readings up to ' + A_nb(CS.dayLabel(b.last)) + (b.ePhp != null && b.wPhp != null ? ', at the latest rates.' : '.') : 'No meter reading in this bill yet.') + '</p>' : '') + waiting +
-      (assumed ? '<div class="MN_row"><span>' + ICON('calendar', 's16') + ' ' + esc(assumed) + '</span><a class="btn btn-secondary btn-sm" href="#money/reading">Set dates</a></div>' : '') + A_billDues(b) + '</section>';
+      (assumed ? '<div class="MN_row"><span>' + ICON('calendar', 's16') + ' ' + esc(assumed) + '</span><a class="MN_set" href="' + esc(A_setDatesHref(b)) + '">Set dates</a></div>' : '') + A_billDues(b) + '</section>';
   }
   // s127: the To pay list. Every role sees the rows and amounts; Pay shows only where the server said can_pay, and only owner, admin and finance open a paid row's screenshot.
   // s131: where the server says this caller may not pay (can_pay_list false) there are no To pay rows at all; from the 25th one plain row (no link: a bill photo must not be read as a supply receipt) asks the person at the property to look for the paper bills and hand them to the admin. An old payload without the key behaves as before.
+  // s143: Set dates opens that meter's own reading screen when exactly one meter's last bill is assumed, else the one reading screen with both.
+  function A_setDatesHref(b) { var k = CS.billsAssumedKinds(b); return k.length === 1 ? '#money/reading/' + k[0] : '#money/reading'; }
   function A_billCheck(b) {
     if (!b.checkBills) return '';
     return '<span class="K_lab BL_lab">Bills to check</span><div class="BL_dues"><div class="K_line BL_check"><span class="BL_tile BL_tile-e" aria-hidden="true">📬</span><span class="BL_who"><b>Check for the bills</b><span class="K_sub">' + esc('Look for the SOCOTECO and water bills at the gate and give them to the admin.') + '</span></span></div></div>';
@@ -429,7 +430,7 @@
   var H_eSeq = 0, MN_METHOD = { gcash: 'GCash', bank: 'Bank', cash: 'Cash', card: 'Card', other: 'Other' };
   function A_moneyRow(r) {
     var cv = r.covers && r.covers.from && r.covers.to ? CS.rangeLabel(r.covers.from, r.covers.to) : '', meta = (cv ? ['covers ' + cv, MN_METHOD[r.method]] : [r.label, r.payee]).filter(Boolean).join(' · ');
-    return '<li><span>' + esc(r.date ? A_nb(CS.dayLabel(String(r.date).slice(0, 10))) : '') + '</span><span><b>' + esc(r.title || r.payee || r.label || 'Expense') + '</b>' + (meta ? '<span>' + esc(meta) + '</span>' : '') + '</span><span><span class="MN_amt">' + esc(A_peso(Number(r.amount) || 0)) + '</span>' + esc(r.by || '') + '</span></li>';
+    return '<li><span>' + esc(r.date ? A_nb(CS.dayLabel(String(r.date).slice(0, 10))) : '') + '</span><span><b>' + esc(r.title || r.payee || r.label || 'Expense') + '</b>' + (meta ? '<span>' + esc(meta) + '</span>' : '') + '</span><span><span class="MN_amt">' + esc(r.amount == null || r.amount === '' || !isFinite(Number(r.amount)) ? '—' : A_peso(Number(r.amount))) + '</span>' + esc(r.by || '') + '</span></li>';
   }
   function A_moneyCard() {
     var e = state.expenses; if (!e || state.layout !== 'admin' || !/^(owner|admin|finance)$/.test(role() || '')) return '';
@@ -2069,9 +2070,9 @@
     guests:  { src: 'guests/G_guests.js',   css: 'guests/G_guests.css',   global: 'G_Guests',  title: 'Guests', roles: ['owner', 'admin'] },
     inbox:   { src: 'inbox/X_inbox.js',     css: 'inbox/X_inbox.css',     global: 'X_Inbox',   title: 'Inbox', roles: ['owner', 'admin'] },
     // s127: pay a bill and edit its details (#bills/pay/<id>, #bills/edit/<kind>). The pay helpers of pay/ (C_PayAdmin) load first; the server decides who may pay or edit.
-    bills:   { src: 'bills/BL_bills.js',    css: ['stock/I_stock.css', 'bills/BL_bills.css'],    global: 'BL_Bills',  title: 'Bills', roles: ['owner', 'admin', 'finance'], demoClient: true, deps: [{ src: 'pay/C_admin-lib.js', global: 'C_PayAdmin' }] },
+    bills:   { src: 'bills/BL_bills.js',    css: ['stock/I_stock.css', 'money/MN_money.css', 'bills/BL_bills.css'],    global: 'BL_Bills',  title: 'Bills', roles: ['owner', 'admin', 'finance'], demoClient: true, deps: [{ src: 'pay/C_admin-lib.js', global: 'C_PayAdmin' }] },
     // s134: the expense log, its add and edit sheets and the receipts (#expenses, #expenses/add). Read by owner, admin and finance; the server decides who may write.
-    expenses: { src: 'expenses/E_expenses.js', css: ['stock/I_stock.css', 'expenses/E_expenses.css'], global: 'E_Expenses', title: 'Expenses', roles: ['owner', 'admin', 'finance'], demoClient: true },
+    expenses: { src: 'expenses/E_expenses.js', css: ['stock/I_stock.css', 'money/MN_money.css', 'expenses/E_expenses.css'], global: 'E_Expenses', title: 'Expenses', roles: ['owner', 'admin', 'finance'], demoClient: true },
     // s143: Log money (#money), the reading date (#money/reading, #money/reading/<kind>) and the pay and expense forms in the Inventory look. mount(box, opts) gets opts.sub '' | 'reading' | 'reading/<kind>'.
     money:   { src: 'money/MN_money.js',   css: ['stock/I_stock.css', 'money/MN_money.css'], global: 'MN_Money', title: 'Money', roles: ['owner', 'admin', 'finance'], demoClient: true }
   };
